@@ -85,6 +85,23 @@ it('unions downloaded rows when includeDownloaded is true', async () => {
   expect(result.current[0]?.[1]).toMatchObject({ source: 'downloaded', projectId: 'proj-kjn' });
 });
 
+it('lists only the downloaded rows, and stops loading, when there is no project', async () => {
+  // No project, no referenced lists to wait for: a list that never loads would leave the tab
+  // spinning instead of showing the resource it was asked to show.
+  vi.mocked(useEffectiveResourceReferenceList).mockReturnValue({ status: 'loading' });
+  vi.mocked(fetchDownloadedResources).mockResolvedValue([
+    { projectId: 'proj-kjn', name: 'KJN', fullName: 'King James New', language: 'English' },
+  ]);
+
+  const { result } = renderHook(() =>
+    useResourcePickerResources(undefined, { includeDownloaded: true }, [], true),
+  );
+
+  await waitFor(() => expect(result.current[0]).toHaveLength(1));
+  expect(result.current[0]?.[0]).toMatchObject({ source: 'downloaded', projectId: 'proj-kjn' });
+  expect(result.current[1]).toBe(false);
+});
+
 it('orders admin-locked rows first when adminLockedFirst is set', async () => {
   vi.mocked(useEffectiveResourceReferenceList).mockReturnValue(
     readyState([

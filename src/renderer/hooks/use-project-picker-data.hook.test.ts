@@ -89,6 +89,7 @@ type MetadataFixture = {
   languageTag?: string;
   isEditable?: boolean;
   projectInterfaces?: string[];
+  unsupportedReason?: string;
 };
 
 // Fixtures provide the scripture-editor projectInterface by default because that is what the
@@ -284,6 +285,41 @@ describe('useProjectPickerData', () => {
       shortName: 'Short p2',
       language: 'English',
     });
+  });
+
+  it('carries unsupportedReason through to the ProjectItem when metadata has one', async () => {
+    const { projectLookupService } = await importMocks();
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([
+        {
+          id: 'sba',
+          fullName: 'Full sba',
+          name: 'Short sba',
+          unsupportedReason: '%project_unsupported_studyBibleAdditions%',
+        },
+      ]) as never,
+    );
+
+    const { result } = renderHook(() => useProjectPickerData());
+
+    await settle(result);
+    expect(result.current.allProjects).toHaveLength(1);
+    expect(result.current.allProjects[0].unsupportedReason).toBe(
+      '%project_unsupported_studyBibleAdditions%',
+    );
+  });
+
+  it('leaves unsupportedReason undefined on the ProjectItem when metadata has none', async () => {
+    const { projectLookupService } = await importMocks();
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([{ id: 'p1', fullName: 'Full p1', name: 'Short p1' }]) as never,
+    );
+
+    const { result } = renderHook(() => useProjectPickerData());
+
+    await settle(result);
+    expect(result.current.allProjects).toHaveLength(1);
+    expect(result.current.allProjects[0].unsupportedReason).toBeUndefined();
   });
 
   it.each([

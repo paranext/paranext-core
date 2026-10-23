@@ -1,3 +1,4 @@
+using Paranext.DataProvider.Projects;
 using Paratext.Data;
 using PtxUtils;
 
@@ -15,11 +16,12 @@ namespace Paranext.DataProvider.ManageBooks;
 // Dispatches on ProjectFilterPurpose to enumerate a filtered subset of
 // ScrTextCollection projects. The five purposes are:
 //
-//   AllScripture    -> scripture projects (any editability)
-//   EditableTexts   -> scripture projects that are editable targets
+//   AllScripture    -> scripture projects Platform.Bible can open (any
+//                      editability)
+//   EditableTexts   -> those that are editable targets
 //                      (Settings.Editable, excluding resources)
-//   ModelProject    -> all scripture projects (same as AllScripture; read-only
-//                      access is sufficient for a "model" project)
+//   ModelProject    -> same as AllScripture (read-only access is
+//                      sufficient for a "model" project)
 //   DeleteSource    -> editable scripture projects (same predicate as
 //                      EditableTexts; admin-on-shared-project is a separate
 //                      check at the wire-layer call site)
@@ -86,7 +88,7 @@ public static class ProjectFilterService
 
     /// <summary>
     /// Builds the project list for <see cref="ProjectFilterPurpose.AllScripture"/> and
-    /// <see cref="ProjectFilterPurpose.ModelProject"/> — every scripture project, with no
+    /// <see cref="ProjectFilterPurpose.ModelProject"/> — every openable scripture project, with no
     /// editability filter. ModelProject uses the same predicate because read-only access
     /// is sufficient when picking a model.
     /// </summary>
@@ -131,9 +133,12 @@ public static class ProjectFilterService
         new(scrTexts.Select(ProjectSummary.FromScrText).ToList());
 
     /// <summary>
-    /// Enumerates all scripture-type projects from <see cref="ScrTextCollection"/>.
-    /// Matches PT9 <c>ScrTextComboBox.LoadAllScripture()</c>:
-    /// <c>scrText.Settings.TranslationInfo.Type.IsScripture()</c>.
+    /// Enumerates the scripture-type projects from <see cref="ScrTextCollection"/> for
+    /// AllScripture, ModelProject, EditableTexts and DeleteSource. Matches PT9
+    /// <c>ScrTextComboBox.LoadAllScripture()</c>
+    /// (<c>scrText.Settings.TranslationInfo.Type.IsScripture()</c>), except that it also leaves
+    /// out a project <see cref="ScrTextExtensions.GetOpenBlockedReason(ScrText)"/> reports as one
+    /// Platform.Bible can't open.
     /// </summary>
     /// <remarks>
     /// TODO(future): candidate for unification with
@@ -144,5 +149,6 @@ public static class ProjectFilterService
     private static IEnumerable<ScrText> EnumerateScriptureProjects() =>
         ScrTextCollection
             .ScrTexts(IncludeProjects.ScriptureOnly)
-            .Where(scrText => scrText.Settings.TranslationInfo.Type.IsScripture());
+            .Where(scrText => scrText.Settings.TranslationInfo.Type.IsScripture())
+            .Where(scrText => scrText.GetOpenBlockedReason() is null);
 }

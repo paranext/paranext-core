@@ -23,7 +23,9 @@ import {
   REPEATED_WORDS_INVENTORY_STRING_KEYS,
 } from './checks/inventories/repeated-words-inventory.component';
 import { useInventory } from './hooks/use-inventory';
+import { getProjectOpenBlockedReasonKeyFromResult } from './project-open-blocked.util';
 import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
+import { useProjectOpenBlockedMessage } from './hooks/use-project-open-blocked-message';
 
 const VALID_ITEMS_DEFAULT = '';
 const INVALID_ITEMS_DEFAULT = '';
@@ -210,9 +212,23 @@ global.webViewComponent = function InventoryWebView({
   const {
     inventoryItems,
     isLoading: areInventoryItemsLoading,
+    error: inventoryError,
     getItemOccurrences,
     cleanup,
   } = useInventory(checkId, inventoryInputRange, projectId);
+
+  // When the backend refuses the project because it cannot be opened, the empty table says why
+  // instead of reporting that nothing was found.
+  const openBlockedMessage = useProjectOpenBlockedMessage(
+    getProjectOpenBlockedReasonKeyFromResult(inventoryError),
+  );
+  const inventoryLocalizedStrings = useMemo(
+    () =>
+      openBlockedMessage
+        ? { ...localizedStrings, '%webView_inventory_no_results%': openBlockedMessage }
+        : localizedStrings,
+    [localizedStrings, openBlockedMessage],
+  );
 
   useEffect(() => {
     return () => {
@@ -376,7 +392,7 @@ global.webViewComponent = function InventoryWebView({
   const sharedProps = {
     inventoryItems: enhancedInventoryItems,
     setVerseRef,
-    localizedStrings,
+    localizedStrings: inventoryLocalizedStrings,
     approvedItems,
     onApprovedItemsChange: handleApprovedItemsChange,
     unapprovedItems,

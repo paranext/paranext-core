@@ -84,6 +84,40 @@ public static class Program
 
             var paratextProjects = new LocalParatextProjects(papi);
 
+            // The persisted settings below read from the settings service, which the extension host
+            // can still be starting. Reading too soon throws and ends this process. Starting with
+            // empty values instead would let the next save wipe what is stored. Both settings have
+            // contributed defaults, so any answer is non-null. Each is waited for: a stored setting
+            // is answered as soon as the service registers, but an unstored one only after the
+            // extension host's contributions load.
+            var settingsWaitTimeout = TimeSpan.FromSeconds(60);
+            var settingsRetryDelay = TimeSpan.FromMilliseconds(250);
+            StartupTiming.Mark("settings-wait-start");
+            using var settingsWaitDeadline = new CancellationTokenSource(settingsWaitTimeout);
+            var settingsServiceAnswered =
+                await SettingsService.WaitForSettingAsync<SerializableStringDictionary>(
+                    papi,
+                    Settings.PARATEXT_DATA_LAST_REGISTRY_DATA_CACHED_TIMES,
+                    settingsRetryDelay,
+                    settingsWaitDeadline.Token
+                )
+                && await SettingsService.WaitForSettingAsync<SerializableStringDictionary>(
+                    papi,
+                    Settings.PTX_UTILS_MEMENTO_DATA,
+                    settingsRetryDelay,
+                    settingsWaitDeadline.Token
+                );
+            if (papi.DisconnectTask.IsCompleted)
+                return;
+            if (!settingsServiceAnswered)
+            {
+                Console.Error.WriteLine(
+                    $"The settings service did not answer within {settingsWaitTimeout.TotalSeconds}s; "
+                        + "continuing startup, so reading the persisted settings will likely fail"
+                );
+            }
+            StartupTiming.Mark("settings-wait-end");
+
             // Adapted from Paratext's `Program.StaticInitialization`
             ParatextDataSettings.Initialize(new PersistedParatextDataSettings(papi));
             PtxUtilsDataSettings.Initialize(new PersistedPtxUtilsSettings(papi));

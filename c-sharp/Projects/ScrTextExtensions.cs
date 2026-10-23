@@ -2,11 +2,18 @@ using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.Services;
 using Paratext.Data;
 using Paratext.Data.Languages;
+using PtxUtils;
 
 namespace Paranext.DataProvider.Projects;
 
 internal static class ScrTextExtensions
 {
+    /// <summary>
+    /// Localize key explaining that Study Bible Additions projects cannot be opened.
+    /// </summary>
+    internal const string OPEN_BLOCKED_REASON_STUDY_BIBLE_ADDITIONS =
+        "%project_unsupported_studyBibleAdditions%";
+
     internal static ProjectDetails GetProjectDetails(this ScrText scrText)
     {
         return new(
@@ -27,11 +34,71 @@ internal static class ScrTextExtensions
                 // platform.isPublished has no Settings.xml key; it's computed directly from
                 // IsResourceProject, matching the platform.isPublished getter in
                 // ParatextProjectDataProvider.
-                isPublished: scrText.IsResourceProject
+                isPublished: scrText.IsResourceProject,
+                // Not one of the six: computed from the project type, with no platform.* setting
+                // to mirror.
+                unsupportedReason: scrText.GetOpenBlockedReason()
             ),
             scrText.Directory
         );
     }
+
+    /// <summary>
+    /// Why Platform.Bible cannot open this project, as a localize key, or null when it can. The
+    /// project stays enumerated, so it can still be synced: pickers leave it out or show it disabled
+    /// with this reason (see <see cref="ProjectMetadata.UnsupportedReason"/>), and
+    /// <see cref="ThrowIfOpenBlocked"/> refuses its text. Returning a
+    /// <c>Paratext.Data.UnsupportedReason</c> from <c>MigrateProjectIfNeeded</c> would instead make
+    /// ScrTextCollection drop the project everywhere.
+    /// </summary>
+    /// <remarks>
+    /// Only Study Bible Additions today. A merged Study Bible publication
+    /// (<c>ProjectType.StudyBible</c>) is ordinary Scripture and stays openable.
+    /// </remarks>
+    internal static string? GetOpenBlockedReason(this ScrText scrText) =>
+        GetOpenBlockedReason(scrText.Settings.TranslationInfo.Type);
+
+    /// <summary>
+    /// Refuses this project's Scripture text when Platform.Bible can't open the project
+    /// (<see cref="GetOpenBlockedReason(ScrText)"/> is non-null), by throwing
+    /// <see cref="ProjectOpenBlockedException"/>. Does nothing for an openable project.
+    /// </summary>
+    /// <remarks>
+    /// Guards every entry that reads or writes a project's text for the user: the project data
+    /// provider's USFM, USX and plain-text getters and setters, comment creation and conflict
+    /// resolution, checks, inventories, the checklist and Manage Books. The web views already keep
+    /// such projects out of their pickers; this makes the refusal hold for every caller, including
+    /// other extensions and direct PAPI requests.
+    /// <para>
+    /// It is deliberately not in <see cref="LocalParatextProjects.GetParatextProject"/>.
+    /// Send/Receive, project settings, titles and metadata share that lookup and must keep working,
+    /// because such a project can still be synced. ParatextData's own reads, such as a merged Study
+    /// Bible reading its additions, are unaffected.
+    /// </para>
+    /// </remarks>
+    internal static void ThrowIfOpenBlocked(this ScrText scrText)
+    {
+        string? reasonKey = scrText.GetOpenBlockedReason();
+        if (reasonKey != null)
+            throw new ProjectOpenBlockedException(
+                scrText.Guid.ToString().ToUpperInvariant(),
+                reasonKey
+            );
+    }
+
+    /// <summary>
+    /// Why Platform.Bible cannot open a project of this type, as a localize key, or null when it
+    /// can. For callers that know a project's type without a local <see cref="ScrText"/>, such as a
+    /// project that exists only on the Send/Receive server.
+    /// </summary>
+    /// <remarks>
+    /// Called by <see cref="GetOpenBlockedReason(ScrText)"/>; also meant for the Send/Receive service
+    /// in the paratext-10-studio repo, to fill <c>SharedProjectInfo.unsupportedReason</c>.
+    /// </remarks>
+    internal static string? GetOpenBlockedReason(Enum<ProjectType> projectType) =>
+        projectType == ProjectType.StudyBibleAdditions
+            ? OPEN_BLOCKED_REASON_STUDY_BIBLE_ADDITIONS
+            : null;
 
     /// <summary>
     /// Reads a raw Paratext project setting value straight from the settings parameter dictionary -

@@ -25,8 +25,11 @@ import {
 } from '@papi/frontend/react';
 import {
   getErrorMessage,
+  getProjectOpenBlockedReasonKey,
   isPlatformError,
   LegacyCommentThread,
+  notifyProjectOpenBlocked,
+  NotifyProjectOpenBlockedDependencies,
   serialize,
 } from 'platform-bible-utils';
 import { VerseRef } from '@sillsdev/scripture';
@@ -77,6 +80,12 @@ import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-block
 import { gateCommentWriteCapabilities } from './comment-list-capability-gating.util';
 
 const DEFAULT_LEGACY_COMMENT_THREADS: LegacyCommentThread[] = [];
+
+const PROJECT_OPEN_BLOCKED_NOTIFY_DEPENDENCIES: NotifyProjectOpenBlockedDependencies = {
+  getLocalizedStrings: (localizeKeys) => papi.localization.getLocalizedStrings({ localizeKeys }),
+  sendNotification: (notification) => papi.notifications.send(notification),
+  logWarning: (message) => logger.warn(message),
+};
 
 /**
  * The selection to seed a freshly mounted view with when it opened plain (no mount-time override):
@@ -958,11 +967,18 @@ global.webViewComponent = function CommentListWebView({
           await pdp.resolveConflict(threadId, resolution);
           return true;
         } catch (error) {
+          const openBlockedReasonKey = getProjectOpenBlockedReasonKey(error);
           // A write-gate rejection (an automatic Send/Receive is syncing this project) gets the
           // shared "editing paused" notice rather than the generic resolve-failed toast. Defense-in-
           // depth behind the disabled resolve affordance.
           if (isSyncEditBlockedError(error)) {
             notifySyncEditBlocked();
+          } else if (openBlockedReasonKey) {
+            // Resolving writes verse text, which a project that cannot be opened refuses.
+            notifyProjectOpenBlocked(
+              openBlockedReasonKey,
+              PROJECT_OPEN_BLOCKED_NOTIFY_DEPENDENCIES,
+            );
           } else {
             logger.error(`Failed to resolve conflict thread ${threadId}:`, error);
             sonner.error(

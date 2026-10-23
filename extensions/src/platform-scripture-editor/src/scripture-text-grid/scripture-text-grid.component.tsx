@@ -3,8 +3,16 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Button, ResizableHandle, ResizablePanel, ResizablePanelGroup } from 'platform-bible-react';
 import { formatReplacementString, formatScrRef } from 'platform-bible-utils';
 import { X } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { ResourceCell, GridResource } from './resource-cell.component';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type SyntheticEvent,
+} from 'react';
+import type { GridResource } from './grid-resources.utils';
+import { ResourceCell } from './resource-cell.component';
 import type { ZoomMenuLabels } from './resource-cell-view.component';
 import { AlignedGrid } from './aligned-grid.component';
 import { ResourceColumn, type ResourceColumnReorder } from './resource-column.component';
@@ -22,6 +30,15 @@ export type ChapterContextResource = GridResource;
 
 /** Resource ids already logged as yielding no zoom area id, so each one is logged once. */
 const resourceIdsWarnedWithoutZoomArea = new Set<string>();
+
+/**
+ * Whether an event happened inside the element handling it. A window opened from a cell (its
+ * copyright details) renders outside the grid, but React still delivers its events to the cell's
+ * ancestors, so a handler that acts on its own element checks this first.
+ */
+function isFromWithinHandlingElement(event: SyntheticEvent): boolean {
+  return event.target instanceof Node && event.currentTarget.contains(event.target);
+}
 
 type ScriptureTextGridProps = {
   resources: GridResource[];
@@ -214,13 +231,15 @@ export function ScriptureTextGrid({
   }, [resources]);
 
   // Reorder wiring for one column, shared by the chapter row and the aligned grid. `undefined` when
-  // the host did not enable reorder, which renders a column with no drag affordances.
+  // the host did not enable reorder, which renders a column with no drag affordances. A drag in a
+  // window opened from the cell is not a reorder; ending one still clears, whatever its source.
   const buildReorder = (resource: GridResource): ResourceColumnReorder | undefined =>
     onReorder
       ? {
           isDropTarget:
             dragOverId === resource.resourceId && draggedIdRef.current !== resource.resourceId,
-          onDragStart: () => {
+          onDragStart: (event) => {
+            if (!isFromWithinHandlingElement(event)) return;
             draggedIdRef.current = resource.resourceId;
           },
           onDragEnd: () => {
@@ -228,10 +247,14 @@ export function ScriptureTextGrid({
             setDragOverId(undefined);
           },
           onDragOver: (event) => {
+            if (!isFromWithinHandlingElement(event)) return;
             event.preventDefault();
             setDragOverId(resource.resourceId);
           },
-          onDrop: () => handleReorderDrop(resource.resourceId),
+          onDrop: (event) => {
+            if (!isFromWithinHandlingElement(event)) return;
+            handleReorderDrop(resource.resourceId);
+          },
           handleLabel: getReorderHandleLabel?.(resource.label),
           hint: reorderHint,
           onKeyDown: (event) => handleReorderKeyDown(event, resource),
@@ -432,10 +455,20 @@ export function ScriptureTextGrid({
             aria-label={verseItemName(resource.label)}
             tabIndex={activate ? 0 : undefined}
             draggable={reorder ? true : undefined}
-            onClick={activate}
+            // A window opened from a cell (its copyright details) renders outside the row, but React
+            // still delivers its events here; only what happens inside the row activates it
+            onClick={
+              activate
+                ? (event) => {
+                    if (isFromWithinHandlingElement(event)) activate();
+                  }
+                : undefined
+            }
             onKeyDown={
               activate
                 ? (event) => {
+                    // Enter and Space on a control inside the row belong to that control
+                    if (event.target !== event.currentTarget) return;
                     if (event.key === 'Enter' || event.key === ' ') {
                       event.preventDefault();
                       activate();

@@ -8,6 +8,7 @@ import {
   ReactNode,
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -638,13 +639,16 @@ function ProjectRowView({
   // truncation-driven open state.
   const [isExtraContentHovered, setIsExtraContentHovered] = useState(false);
 
+  const disabledReasonId = useId();
+  const hasDisabledReason = row.isDisabled && Boolean(row.disabledReason);
+
   // Tooltip lines that convey information NOT visible in the row text. These rows should
   // always show a tooltip on hover, regardless of whether the visible text is truncated.
   const hasExtraTooltipContent =
     Boolean(row.scrollGroupScrRefLabel) ||
     row.isBoundButClosed ||
     Boolean(indicator?.label) ||
-    (row.isDisabled && Boolean(row.disabledReason));
+    hasDisabledReason;
 
   const isHovered = isTruncatedHovered || isExtraContentHovered;
 
@@ -666,7 +670,8 @@ function ProjectRowView({
     <Check className={cn('tw:h-4 tw:w-4', row.isSelected ? 'tw:opacity-100' : 'tw:opacity-0')} />
   );
 
-  // Right-side content: chip(s) and, for bound-but-closed rows, an "Open" button.
+  // Right-side content: chip(s) and, for bound-but-closed rows that are not disabled, an "Open"
+  // button. A disabled row still takes the pointer (for its tooltip), so the button must not render.
   let rightContent: ReactNode;
   if (mode === 'project') {
     if (row.openGroups.length > 0) {
@@ -687,7 +692,7 @@ function ProjectRowView({
           scrollGroupId={row.scrollGroupId}
           isBoundButClosed={row.isBoundButClosed}
         />
-        {row.isBoundButClosed && onOpen && (
+        {row.isBoundButClosed && !row.isDisabled && onOpen && (
           <Button
             size="sm"
             variant="ghost"
@@ -718,7 +723,16 @@ function ProjectRowView({
       disabled={row.isDisabled}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
-      className="tw:flex tw:items-center tw:gap-2 tw:pe-4"
+      // Spread rather than passed as `undefined`: this node is a Radix `Slot` child, whose props win
+      // over the trigger's, so an explicit `undefined` would erase the `aria-describedby` Radix
+      // points at the open tooltip on every other row.
+      {...(hasDisabledReason && { 'aria-describedby': disabledReasonId })}
+      className={cn(
+        'tw:flex tw:items-center tw:gap-2 tw:pe-4',
+        // `CommandItem` turns pointer events off on disabled items, which would keep the tooltip
+        // explaining why from ever opening. cmdk itself still ignores clicks on disabled items.
+        'tw:data-[disabled=true]:pointer-events-auto tw:data-[disabled=true]:cursor-not-allowed',
+      )}
     >
       <span className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center">
         {leftCheck}
@@ -753,6 +767,13 @@ function ProjectRowView({
         )}
       </span>
       {rightContent}
+      {/* `hidden` rather than `sr-only`: the option's name comes from its content, which must not
+          include the reason. A hidden element still supplies the text `aria-describedby` points at. */}
+      {hasDisabledReason && (
+        <span id={disabledReasonId} hidden>
+          {row.disabledReason}
+        </span>
+      )}
     </CommandItem>
   );
 
@@ -810,7 +831,7 @@ function ProjectRowView({
           </div>
         )}
         {row.isDisabled && row.disabledReason && (
-          <div className="tw:text-sm tw:italic tw:text-muted-foreground">{row.disabledReason}</div>
+          <div className="tw:text-sm tw:italic">{row.disabledReason}</div>
         )}
       </TooltipContent>
     </Tooltip>
