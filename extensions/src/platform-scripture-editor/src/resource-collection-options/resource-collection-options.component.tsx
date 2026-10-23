@@ -40,7 +40,7 @@ const localize = (
  * PAPI/popover/persistence state — callers pass the computed rows and callbacks — so the same
  * component renders inside the Scripture Text Grid popover and inside a resource-sharing dialog.
  *
- * Chapter is disabled with a "coming soon" hint unless `isChapterEnabled` is set. The hover-✕
+ * Chapter is disabled with a "not yet available" hint unless `isChapterEnabled` is set. The hover-✕
  * renders only on rows with `isUserRemovable === true`.
  *
  * Per UX: admin-chosen resources always stay visible in the top grouping of View Options — a user
@@ -186,7 +186,7 @@ export function ResourceCollectionOptions({
           </ToggleGroup>
           {!isChapterEnabled && (
             <span className="tw:text-xs tw:text-muted-foreground tw:italic">
-              {localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.chapterComingSoon)}
+              {localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.chapterNotYetAvailable)}
             </span>
           )}
         </div>

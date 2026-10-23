@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 type LocalizedStringsFile = {
   localizedStrings: Record<string, Record<string, string>>;
-  metadata: Record<string, { fallbackKey?: string }>;
+  metadata: Record<string, { fallbackKey?: string; deprecationInfo?: { message: string } }>;
 };
 
 function readLocalizedStringsFile(): LocalizedStringsFile {
@@ -98,5 +98,49 @@ describe('all-shared delete confirmation', () => {
     expect(value).toBeTruthy();
     expect(value).toContain('sync');
     expect(value).not.toMatch(/send\/receive/i);
+  });
+});
+
+/**
+ * The tooltips on Manage Books entries that are shown but do not work yet. Each key replaces one
+ * that said "coming soon", which promised a delivery date nobody has set, and falls back to it — so
+ * a dropped value would silently bring that wording back.
+ *
+ * The sidebar rows' keys are English-only, like the keys they replace; the toolbar stub has `es`.
+ */
+const NOT_YET_AVAILABLE_KEYS = {
+  '%manageBooks_view_disabledStub_notYetAvailable_2%': {
+    replaces: '%manageBooks_view_disabledStub_notYetAvailable%',
+    locales: ['en', 'es'],
+  },
+  '%manageBooks_progressTracking_notYetAvailable_2%': {
+    replaces: '%manageBooks_progressTracking_notYetAvailable%',
+    locales: ['en'],
+  },
+  '%manageBooks_bookNames_notYetAvailable_2%': {
+    replaces: '%manageBooks_bookNames_notYetAvailable%',
+    locales: ['en'],
+  },
+};
+
+describe.each(Object.entries(NOT_YET_AVAILABLE_KEYS))(
+  'not-yet-available tooltip %s',
+  (key, { replaces, locales }) => {
+    it.each(locales)('has a %s string that does not promise a delivery date', (locale) => {
+      const value = localizedStrings[locale][key];
+      expect(value).toBeTruthy();
+      expect(value).not.toMatch(/coming soon|próximamente|pronto/i);
+    });
+
+    it('marks the key it replaces as deprecated', () => {
+      expect(metadata[replaces].deprecationInfo?.message).toContain(key);
+    });
+  },
+);
+
+describe('not-yet-available toolbar tooltip', () => {
+  it('Spanish string differs from English', () => {
+    const key = '%manageBooks_view_disabledStub_notYetAvailable_2%';
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
   });
 });
