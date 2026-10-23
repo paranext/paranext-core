@@ -408,6 +408,15 @@
       "message": "Renamed to \"Internet & connectivity\" to match the internet settings panel. The new key is %userProfile_networkSettings_2%."
     }
   },
+  "%userProfile_server_badge_development%": {
+    "notes": "Usually left untranslated (falling back to the English \"Development\") since this badge targets a dev/support audience who will likely recognize the terse English environment name regardless of interface language. Translate it if that reasoning doesn't hold in your language or script — it is not required to match the English string. The tooltip, %userProfile_server_tooltip_development%, should still be translated: it carries the full explanation for anyone who ends up on this server."
+  },
+  "%userProfile_server_badge_qualityAssurance%": {
+    "notes": "Usually left untranslated (falling back to the English \"QA\") since this badge targets a dev/support audience who will likely recognize the terse English environment abbreviation regardless of interface language. Translate it if that reasoning doesn't hold in your language or script — it is not required to match the English string. The tooltip, %userProfile_server_tooltip_qualityAssurance%, should still be translated: it carries the full explanation for anyone who ends up on this server."
+  },
+  "%userProfile_server_badge_test%": {
+    "notes": "Usually left untranslated (falling back to the English \"Test\") since this badge targets a dev/support audience who will likely recognize the terse English environment name regardless of interface language. Translate it if that reasoning doesn't hold in your language or script — it is not required to match the English string. The tooltip, %userProfile_server_tooltip_test%, should still be translated: it carries the full explanation for anyone who ends up on this server."
+  },
   "%yes%": {
     "notes": "A confirmation word used in many places. For example, this may be used as the label on a button on a dialog.",
     "fallbackKey": "%confirm%"

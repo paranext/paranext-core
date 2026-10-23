@@ -355,6 +355,24 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     ],
   },
   {
+    id: 'reveal-server-picker',
+    purpose:
+      'Reveal the hidden server-selection control when opening Internet & connectivity settings',
+    category: 'Developer',
+    context: 'User profile popover',
+    // Both Enter and Space on a focused native <button> trigger a browser-synthesized activation
+    // click that carries Chromium's live modifier state (see the row Button's own comment), so
+    // Shift+Space reaches the unlock there too, with no Space-specific handling of its own. The
+    // badge is a role="button" span, not a real button, so it has no such native activation — its
+    // onKeyDown claims Enter and Space explicitly instead.
+    keys: {
+      macOS: '⇧⏎ / ⇧␣',
+      windows: 'Shift+Enter / Shift+Space',
+      linux: 'Shift+Enter / Shift+Space',
+    },
+    locations: ['src/renderer/components/user-profile-popover/user-profile-popover.component.tsx'],
+  },
+  {
     id: 'scripture-markers-menu',
     purpose:
       'Open the inline markers menu. Does nothing while the editor’s right-click menu is open, in every view',
