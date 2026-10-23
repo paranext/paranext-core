@@ -13,11 +13,12 @@ import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
  * since the app started.
  *
  * The wizard's Internet & connectivity step asks for an explicit choice rather than accepting the
- * stored value, because nobody may have chosen it: ParatextData saves "Disable access to some Bible
- * translation services" on first startup when no setting exists, and an upgrade from Paratext 9
- * carries over whatever that app had, often its own unchosen default. That option turns off sync
- * and the Digital Bible Library, so accepting it silently would turn them off for a user who never
- * asked for that.
+ * stored value, because nobody may have chosen it: ParatextData saves `VpnRequired` ("Block
+ * internet when in sensitive locations") when no setting exists, which the C# startup migration
+ * (`InternetSettingsDataProvider.MigrateVpnRequiredToDisabled`) replaces with `Disabled`, and an
+ * upgrade from Paratext 9 carries over whatever that app had, often its own unchosen default.
+ * `Disabled` turns off sync and the Digital Bible Library, so accepting it silently would turn them
+ * off for a user who never asked for that.
  *
  * Kept outside the step so the choice survives the wizard shell unmounting the step on Back and
  * Next. It lasts for the renderer's lifetime: the identify step's restart clears it, but the wizard
@@ -66,9 +67,10 @@ export function markInternetUseChoiceSaved(): void {
  * Digital Bible Library stay off without their having chosen it.
  *
  * Asks only when the saved value is one that turns those services off — the same values
- * `InternetServicesGate` blocks on. Either way it records that the question is settled, so it never
- * asks again; a choice saved in the wizard records the same. If the provider cannot be read or the
- * settings cannot be opened, nothing is recorded and the next launch tries again.
+ * `InternetServicesGate` blocks on — and is not a `Disabled` the user already chose as "Disable
+ * access to some Bible translation services". Either way it records that the question is settled,
+ * so it never asks again; a choice saved in the wizard records the same. If the provider cannot be
+ * read or the settings cannot be opened, nothing is recorded and the next launch tries again.
  */
 export async function askForInternetUseChoiceIfNeeded(): Promise<void> {
   if (hasStartedAskingForChoice) return;
@@ -87,7 +89,15 @@ export async function askForInternetUseChoiceIfNeeded(): Promise<void> {
       return;
     }
     const { permittedInternetUse } = await provider.getInternetSettings(undefined);
-    if (permittedInternetUse === 'VpnRequired' || permittedInternetUse === 'Disabled')
+    // A Disabled the user chose as "Disable access to some Bible translation services" is already
+    // a choice; any other Disabled is "Disable all Internet access", which needs a new one.
+    const hasChosenDisableSomeServices =
+      permittedInternetUse === 'Disabled' &&
+      (await settingsService.get('platform.internetUseDisableSomeServicesChosen')) === true;
+    if (
+      (permittedInternetUse === 'VpnRequired' || permittedInternetUse === 'Disabled') &&
+      !hasChosenDisableSomeServices
+    )
       await sendCommand('paratextRegistration.showInternetSettings');
     persistInternetUseChoiceAsked();
   } catch (e) {

@@ -249,10 +249,19 @@ internal class RegistryAccessTokenServiceTests : PapiTestBase
         Assert.That(_tokenClient.PostCount, Is.Zero);
     }
 
-    [Test]
-    public async Task VpnRequiredInARestrictedLocation_FailsWithFailedPreconditionNamingTheSetting()
+    // The app does not implement "Block internet when in sensitive locations" yet, so a saved
+    // VpnRequired fails closed wherever the computer is, as InternetServicesGate does for
+    // Send/Receive and the DBL.
+    [TestCase(true, TestName = "VpnRequired_InARestrictedLocation_FailsWithFailedPrecondition")]
+    [TestCase(false, TestName = "VpnRequired_InAnUnrestrictedLocation_FailsWithFailedPrecondition")]
+    public async Task VpnRequired_FailsWithFailedPreconditionNamingTheSetting(
+        bool isLocationRestricted
+    )
     {
-        _userContext.Snapshot = ValidUser(isInternetDisabled: true, isVpnRequired: true);
+        _userContext.Snapshot = ValidUser(
+            isInternetDisabled: isLocationRestricted,
+            isVpnRequired: true
+        );
 
         var result = await Get();
 
@@ -261,16 +270,9 @@ internal class RegistryAccessTokenServiceTests : PapiTestBase
             result.Message,
             Does.Contain("Block internet when in sensitive locations")
                 .And.Not.Contain("Bible translation services")
+                .And.Not.Contain("location is restricted")
         );
         Assert.That(_tokenClient.PostCount, Is.Zero);
-    }
-
-    [Test]
-    public async Task VpnRequiredInAnUnrestrictedLocation_GetsAToken()
-    {
-        _userContext.Snapshot = ValidUser(isVpnRequired: true);
-
-        Assert.That((await Get()).AccessToken, Is.EqualTo(CANARY_TOKEN));
     }
 
     [Test]
