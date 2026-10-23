@@ -121,7 +121,7 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
   const getStarted = useCallback(() => {
     papi.commands.sendCommand(
       'platform.openWindow',
-      'https://github.com/paranext/paranext/wiki/Getting-Started-with-Platform.Bible-and-Paratext-10-Studio',
+      'https://paratext.org/tutorial-article/paratext-10/',
     );
   }, []);
 

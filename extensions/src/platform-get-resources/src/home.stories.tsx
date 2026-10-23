@@ -13,8 +13,7 @@ import {
   type RemoteProjectsState,
 } from './home.component';
 
-const GET_STARTED_URL =
-  'https://github.com/paranext/paranext/wiki/Getting-Started-with-Platform.Bible-and-Paratext-10-Studio';
+const GET_STARTED_URL = 'https://paratext.org/tutorial-article/paratext-10/';
 
 // Get all localized strings needed by the Home component
 const localizedStrings = getLocalizedStrings([...HOME_STRING_KEYS]);
