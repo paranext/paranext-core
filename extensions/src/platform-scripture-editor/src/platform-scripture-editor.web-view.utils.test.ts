@@ -298,10 +298,11 @@ describe('getChapterKey', () => {
 describe('restoreSelectionIfLost', () => {
   const snapshot: SelectionRange = { start: { jsonPath: '$.content[0].content[1]', offset: 4 } };
 
-  /** Editor stub exposing only the two selection methods the helper consults. */
-  function makeEditor(liveSelection: SelectionRange | undefined) {
+  /** Editor stub exposing only the selection methods the helper consults. */
+  function makeEditor(liveSelection: SelectionRange | undefined, selectedParaMarker?: string) {
     return {
       getSelection: vi.fn((): SelectionRange | undefined => liveSelection),
+      getSelectedParaMarker: vi.fn((): string | undefined => selectedParaMarker),
       setSelection: vi.fn(),
     };
   }
@@ -320,6 +321,17 @@ describe('restoreSelectionIfLost', () => {
       start: { jsonPath: '$.content[2].content[0]', offset: 0 },
     };
     const editor = makeEditor(liveSelection);
+
+    restoreSelectionIfLost(editor, snapshot);
+
+    expect(editor.setSelection).not.toHaveBeenCalled();
+  });
+
+  it('leaves a selected paragraph marker alone rather than restoring a caret over it', () => {
+    // A selected gutter marker has no text range, so `getSelection()` reports nothing. Restoring
+    // the snapshot would replace the marker selection with an older caret, and a paragraph retag
+    // would then land on whichever paragraph that caret was in.
+    const editor = makeEditor(undefined, 'q1');
 
     restoreSelectionIfLost(editor, snapshot);
 

@@ -150,7 +150,9 @@ export function getChapterKey(
  * re-asserts it, so a mouse commit applies exactly like a keyboard one.
  *
  * A still-live selection is left completely alone, and with no snapshot there is nothing to restore
- * (`focus()` keeps its default behavior).
+ * (`focus()` keeps its default behavior). A selected paragraph marker counts as a live selection:
+ * it has no text range, so `getSelection()` reports nothing, and restoring a caret over it would
+ * send a paragraph retag (or any other apply) to whichever paragraph that caret was in.
  *
  * @param editor The live editor handle (e.g. `editorRef.current`); no-op when not mounted
  * @param lastFocusOutSelection The selection captured when focus last left the editor (a focusout
@@ -158,10 +160,10 @@ export function getChapterKey(
  *   been captured
  */
 export function restoreSelectionIfLost(
-  editor: Pick<EditorRef, 'getSelection' | 'setSelection'> | null,
+  editor: Pick<EditorRef, 'getSelection' | 'getSelectedParaMarker' | 'setSelection'> | null,
   lastFocusOutSelection: SelectionRange | undefined,
 ): void {
-  if (!editor || editor.getSelection()) return;
+  if (!editor || editor.getSelection() || editor.getSelectedParaMarker()) return;
   if (lastFocusOutSelection) editor.setSelection(lastFocusOutSelection);
 }
 
