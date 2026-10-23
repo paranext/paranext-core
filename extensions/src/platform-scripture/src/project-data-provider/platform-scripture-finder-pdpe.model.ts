@@ -31,7 +31,6 @@ import {
 import { buildSearchRegex, CharacterCategorizer } from '../find/find.utils';
 import { STRUCTURE_PROTECTED_ERROR, usfmChangesStructure } from '../find/structure-protection.util';
 import { USFM_VERSE_TEXT_MARKERS_SET } from '../find/usfm-verse-text-markers';
-import { correctUsjVersion } from './scripture.util';
 
 /**
  * Extracts the book ID and chapter number from a scripture location without needing a reader
@@ -1071,7 +1070,7 @@ export class ScriptureFinderProjectDataProviderEngine
         }
         /* eslint-enable no-await-in-loop */
 
-        const scripture: Usj | undefined = correctUsjVersion(usxStringToUsj(usx));
+        const scripture: Usj | undefined = usxStringToUsj(usx);
         const usjReaderWriter = new UsjReaderWriter(scripture, {
           markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
         });

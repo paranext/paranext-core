@@ -24,7 +24,7 @@ import {
   type UsjDocumentLocation,
 } from '@eten-tech-foundation/scripture-utilities';
 import { USFM_MARKERS_MAP_PARATEXT_3_0, UsjReaderWriter } from 'platform-bible-utils';
-import { correctEditorUsjVersion, deepEqualAcrossIframes } from './platform-scripture-editor.utils';
+import { deepEqualAcrossIframes } from './platform-scripture-editor.utils';
 
 /** How often a caret placement that could not be made yet is retried. */
 const CARET_RESTORE_RETRY_MS = 50;
@@ -141,7 +141,7 @@ export function isCaretPlacedAt(
   if (deepEqualAcrossIframes(canonicalLocation(usj, caret), canonicalLocation(usj, target)))
     return true;
   try {
-    const usjReaderWriter = new UsjReaderWriter(correctEditorUsjVersion(usj), {
+    const usjReaderWriter = new UsjReaderWriter(usj, {
       markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
     });
     const indexOf = (location: UsjDocumentLocation) =>

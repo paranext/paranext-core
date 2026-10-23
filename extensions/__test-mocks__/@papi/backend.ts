@@ -31,6 +31,12 @@ export class DataProviderEngine {
 }
 
 const papi = {
+  // The decorator only flags a method; the mock needs none of that, just a no-op to apply.
+  dataProviders: {
+    decorators: {
+      doNotNotify: vi.fn(),
+    },
+  },
   projectDataProviders: {
     get: vi.fn().mockResolvedValue({
       getSetting: vi.fn().mockResolvedValue(undefined),

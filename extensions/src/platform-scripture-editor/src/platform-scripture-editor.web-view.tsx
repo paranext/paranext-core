@@ -28,12 +28,7 @@ import {
   UsjNodeOptions,
   ViewOptions,
 } from '@eten-tech-foundation/platform-editor';
-import {
-  MarkerObject,
-  Usj,
-  USJ_TYPE,
-  USJ_VERSION,
-} from '@eten-tech-foundation/scripture-utilities';
+import { MarkerObject, Usj, USJ_TYPE } from '@eten-tech-foundation/scripture-utilities';
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
@@ -203,7 +198,6 @@ import {
   availableScrollGroupIds,
   buildChapterScaffoldOps,
   canAddChapterNumber,
-  correctEditorUsjVersion,
   decideNoteCallerClickAction,
   decideNoteSessionUpdate,
   deepEqualAcrossIframes,
@@ -412,11 +406,17 @@ const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availabl
  */
 // scripture text extraction now handled by legacyCommentManager.createCommentUsj
 
-const defaultUsj: Usj = correctEditorUsjVersion({
+/**
+ * Stands in for the chapter until the PDP delivers it. "3.0" because that is the version
+ * ParatextData serves, and this web view reads the editor's documents with a 3.0 markers map that
+ * warns on any other version. The editor reports the version of the document it was handed, so
+ * while it shows this placeholder it reports 3.0, like every chapter.
+ */
+const defaultUsj: Usj = {
   type: USJ_TYPE,
-  version: USJ_VERSION,
+  version: '3.0',
   content: [],
-});
+};
 
 const defaultEditorDecorations: EditorDecorations = {};
 
@@ -684,7 +684,7 @@ function PlatformScriptureEditor({
       pendingComment?.anchoredText === undefined ||
       !hasPendingCommentTextChanged(
         { range: pendingComment.range, anchoredText: pendingComment.anchoredText },
-        correctEditorUsjVersion(usj),
+        usj,
       )
     )
       return;
@@ -1215,8 +1215,7 @@ function PlatformScriptureEditor({
    * Publishes the editor's document to the pane, but only when the NOTES in it differ from what the
    * pane already holds — see {@link shouldPublishPaneDocument} for why, and for the rule itself.
    */
-  const publishLiveEditorUsjIfNotesChanged = useCallback((editorUsj: Usj) => {
-    const usj = correctEditorUsjVersion(editorUsj);
+  const publishLiveEditorUsjIfNotesChanged = useCallback((usj: Usj) => {
     let notes: MarkerObject[] | undefined;
     try {
       notes = findEditorUsjNotes(usj);
@@ -1239,7 +1238,7 @@ function PlatformScriptureEditor({
    */
   const replacePaneDocument = useCallback((editorUsj: Usj | undefined) => {
     publishedPaneNotesRef.current = undefined;
-    setLiveEditorUsj(editorUsj && correctEditorUsjVersion(editorUsj));
+    setLiveEditorUsj(editorUsj);
   }, []);
 
   /**
@@ -1975,10 +1974,9 @@ function PlatformScriptureEditor({
     // document end). The validation turns either case into a warning instead of a mis-anchored
     // comment or a crash.
     const editorUsj = editorRef.current?.getUsj();
-    const editorUsjCorrected = editorUsj ? correctEditorUsjVersion(editorUsj) : undefined;
     let anchoredText: string | undefined;
-    if (editorUsjCorrected) {
-      const validation = validateCommentSelection(selection, editorUsjCorrected);
+    if (editorUsj) {
+      const validation = validateCommentSelection(selection, editorUsj);
       if ('notice' in validation) {
         if (validation.warning) logger.warn(validation.warning);
         papi.notifications.send({ message: validation.notice, severity: 'warning' });
@@ -1986,7 +1984,7 @@ function PlatformScriptureEditor({
       }
       annotationRange.start = { ...validation.range.start };
       annotationRange.end = { ...validation.range.end };
-      anchoredText = readCommentRangeText(validation.range, editorUsjCorrected);
+      anchoredText = readCommentRangeText(validation.range, editorUsj);
     }
 
     // Try to find the selected text element to anchor the popover to. No rendered editor content
@@ -3698,7 +3696,7 @@ function PlatformScriptureEditor({
       // (`setTransientInput`), so what arrives here is already the document we mean to save.
       const { usjToSave, shouldAnnounceRepairOnWrite } = applyChapterSavePreparation({
         preparation: prepareUsjForChapterSave(
-          correctEditorUsjVersion(usjFromEditor),
+          usjFromEditor,
           usjFromPdp,
           savedChapterSelector.chapterNum,
           // Only acted on when the repair is pushed back, which happens only while this editor
@@ -3818,9 +3816,7 @@ function PlatformScriptureEditor({
           hasLoadedDocument: () => {
             if (outgoingFirstBlock && editorRoot?.contains(outgoingFirstBlock)) return false;
             const editorUsj = editorRef.current?.getUsj();
-            return (
-              !!editorUsj && deepEqualAcrossIframes(correctEditorUsjVersion(editorUsj), repairedUsj)
-            );
+            return !!editorUsj && deepEqualAcrossIframes(editorUsj, repairedUsj);
           },
           setSelection: (selection) => editorRef.current?.setSelection(selection),
           isCaretAt: (target) => {
@@ -4005,8 +4001,7 @@ function PlatformScriptureEditor({
             );
             return true;
           }
-          let editorUsj = editorRef.current?.getUsj();
-          if (editorUsj) editorUsj = correctEditorUsjVersion(editorUsj);
+          const editorUsj = editorRef.current?.getUsj();
           if (!deepEqualAcrossIframes(editorUsj, newUsj)) saveUsjToPdpIfUpdatedInternal(editorUsj);
         }
         return true;

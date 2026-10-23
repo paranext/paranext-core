@@ -56,10 +56,9 @@ export interface EditorDocumentSelector {
  * Whether the editor's USJ holds the same content as a PDP document, IGNORING the `version` field.
  *
  * `areUsjContentsEqualExceptWhitespace` shallow-compares every top-level property except `content`
- * — `version` included — while the editor always reports its USJ as 3.1 and the PDP serves 3.0
- * (which is why every save path runs `correctEditorUsjVersion` on the way out). Comparing the two
- * documents raw is therefore FALSE whatever the content says, so an editor-vs-PDP equality check
- * that does not neutralize `version` can never report a converged round trip.
+ * — `version` included. Convergence is a question about content: the editor reports the version of
+ * the document it was loaded with, which normally is the PDP's, but a version-only difference must
+ * not keep a round trip that converged from being reported as converged.
  */
 function areUsjContentsEqualIgnoringVersion(
   editorUsj: Usj | undefined,

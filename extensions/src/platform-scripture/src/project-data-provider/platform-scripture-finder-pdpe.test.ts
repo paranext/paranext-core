@@ -8,7 +8,6 @@ import {
   ScriptureFinderOverlayPDPs,
 } from './platform-scripture-finder-pdpe.model';
 import { STRUCTURE_PROTECTED_ERROR } from '../find/structure-protection.util';
-import { correctUsjVersion } from './scripture.util';
 
 // Simple USFM test data for Matthew chapter 1
 const TEST_BOOK_USFM = String.raw`\id MAT
@@ -2476,7 +2475,7 @@ describe('ScriptureFinderProjectDataProviderEngine whitespace matching', () => {
 describe('ScriptureFinderProjectDataProviderEngine replaces only the matched text', () => {
   /** The chapter USFM the engine itself replaces into, read from `usx` the way it reads it. */
   function usfmOf(usx: string): string {
-    return new UsjReaderWriter(correctUsjVersion(usxStringToUsj(usx)), {
+    return new UsjReaderWriter(usxStringToUsj(usx), {
       markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
     }).toUsfm();
   }

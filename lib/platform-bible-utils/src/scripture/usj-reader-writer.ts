@@ -3455,9 +3455,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
           UsjReaderWriter.isTopLevelUsjMarker(nodeOrClosingFragment, workingStack) &&
           !topLevelUsjMarker
         ) {
-          // The USJ types aren't set up to know about 3.0 right now, but we should handle it anyway
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          if ((nodeOrClosingFragment.version as string) !== '3.0') {
+          if (nodeOrClosingFragment.version !== '3.0') {
             // Don't output the USJ marker if it is 3.0 (3.0 is assumed and should not appear in
             // the USFM)
             topLevelUsjMarker = nodeOrClosingFragment;

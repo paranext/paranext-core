@@ -90,27 +90,26 @@ namespace TestParanextDataProvider
     ///    upgraded ParatextData distinguishes generated refs (USFM 3.1 defines <c>\ref</c>),
     ///    revisit emitting real <c>ref</c>-type USX (see the decision comment in
     ///    ConvertUsfmToUsx).
-    /// 11. USX/USJ version stamps are hard-coded to "3.0" on the TypeScript side. This
-    ///    ParatextData stamps every USX <c>version="3.0"</c> (<c>UsfmToUsx.UsxVersionNumber</c>,
-    ///    even for USFM 2 projects); scripture-utilities' <c>usxStringToUsj</c> discards that
-    ///    value (USJ <c>version</c> is always its <c>USJ_VERSION</c>, "3.1", and the editor's
-    ///    <c>getUsj</c> regenerates it, so no USJ field can carry the source version through an
-    ///    edit), and <c>usjToUsxString</c> stamps "3.1" unless the caller passes
-    ///    <c>{ usxVersion }</c>. platform-scripture pins both directions to its
-    ///    <c>PARATEXT_USX_EXPECTED_VERSION</c> ("3.0", scripture.util.ts): USJ reads via
-    ///    <c>correctUsjVersion</c> (and the editor web view via <c>correctEditorUsjVersion</c>, which
-    ///    its USJ equality checks depend on), and the extender PDPE's <c>setBookUSJ</c> /
-    ///    <c>setChapterUSJ</c> writes via <c>correctUsxStringVersion</c> (a string replace that
-    ///    keys on <c>USJ_VERSION</c>, so it silently no-ops if scripture-utilities ever moves
-    ///    <c>USX_VERSION</c> apart from it) or, once core consumes it, the <c>usxVersion</c>
-    ///    option. <c>ConvertUsxToUsfm</c> never reads the attribute, so the stamp is inert on this
-    ///    PDP's own write path today; Paratext 9's plugin API does reject a mismatch
-    ///    (ProjectWrapper.cs:477, against <c>UsfmToUsx.UsxVersionNumber</c>). On upgrade, a 3.1
-    ///    project's USX would be relabelled "3.0" on every round trip: replace the constant with
-    ///    the version the project's USX was actually served at (read the root <c>version</c> on
-    ///    the get, or derive it from the project's UsfmVersion), confirm what the upgraded
-    ///    <c>UsfmToUsx</c> stamps for 3.1 projects, and decide whether USJ <c>version</c> should
-    ///    keep being forced at all.
+    /// 11. USX/USJ version: preserved end to end, never derived. This ParatextData stamps every
+    ///    USX <c>version="3.0"</c> (<c>UsfmToUsx.UsxVersionNumber</c>, a static constant, even for
+    ///    USFM 2 projects), and the TypeScript pipeline carries whatever it is served: scripture-
+    ///    utilities' <c>usxStringToUsj</c> keeps the root <c>version</c>, the editor reports the
+    ///    version of the USJ it was handed on every USJ it produces, and <c>usjToUsxString</c>
+    ///    writes the USJ's own version back — so the extender PDPE's <c>setBookUSJ</c> /
+    ///    <c>setChapterUSJ</c> write the version the getters read, with no TypeScript-side constant.
+    ///    The version is NOT derived from a <c>\usfm</c> header: usfm.sty defines <c>\usfm</c> as an
+    ///    ordinary paragraph marker, so it round-trips as <c>&lt;para style="usfm"&gt;</c> (never
+    ///    USX's <c>&lt;usfm&gt;</c> element, which <c>UsxFragmenter</c> ignores) and is independent of
+    ///    the stamp (UsfmVersionMarkerRoundTripCaptureTests pins both). <c>ConvertUsxToUsfm</c> never
+    ///    reads the stamp, so it is inert on this PDP's own write path; Paratext 9's plugin API does
+    ///    reject a mismatch (ProjectWrapper.cs:477, against <c>UsfmToUsx.UsxVersionNumber</c>). On
+    ///    upgrade: confirm what the upgraded <c>UsfmToUsx</c> stamps for a 3.1 project (expected
+    ///    "3.1", which then flows through unchanged), and audit the TypeScript readers that still
+    ///    assume 3.0 — <c>UsjReaderWriter</c> (platform-bible-utils) throws on a non-3.0 USJ unless
+    ///    given a markers map, the editor web view reads with <c>USFM_MARKERS_MAP_PARATEXT_3_0</c>
+    ///    (which warns on any other version), and the web view's loading placeholder
+    ///    <c>defaultUsj</c> is pinned to "3.0" — each must pick its markers map (and the
+    ///    placeholder its version) from the document's version.
     /// </para>
     ///
     /// <para>
