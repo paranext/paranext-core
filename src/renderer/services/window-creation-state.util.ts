@@ -12,6 +12,10 @@
  *
  * `history.replaceState` rewrites the query in place — same document, no navigation, no reload — so
  * the URL a reload replays carries what this window last heard instead.
+ *
+ * The URL therefore changes for as long as the window is open, so nothing may be keyed by it (see
+ * `adr-interface-scaling-is-per-window-zoom` for how interface scaling avoids Chromium's URL-keyed
+ * zoom).
  */
 
 import { logger } from '@shared/services/logger.service';

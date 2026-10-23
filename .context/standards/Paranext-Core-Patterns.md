@@ -1183,6 +1183,9 @@ export function setScrRefSync(/* ... */): boolean {
   `performance.getEntriesByType('navigation')[0].type === 'reload'` to choose between two seeds:
   seeds that are always fresh never disagree, and a `localStorage` key is profile-wide where the URL
   is per window.
+- Never key anything by a window's URL: the seed above rewrites it for as long as the window is
+  open. Chromium keys a `file://` page's zoom by its URL, which is why interface scaling does not
+  use that zoom (`adr-interface-scaling-is-per-window-zoom`).
 - Make `papi.{service}` in the renderer resolve to the cache rather than to the shared network proxy.
   Web views take `window.papi` from the window hosting them, so two authorities in one window means
   the hook and `papi` can disagree about the same instant.
