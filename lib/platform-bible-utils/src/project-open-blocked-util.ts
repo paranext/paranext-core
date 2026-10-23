@@ -55,11 +55,14 @@ export function getProjectOpenBlockedReasonKey(error: unknown): LocalizeKey | un
 
 /** What {@link notifyProjectOpenBlocked} needs from PAPI, passed in so it runs in any process. */
 export type NotifyProjectOpenBlockedDependencies = {
+  /** Looks up the localized strings for the given keys, e.g. the localization service's lookup */
   getLocalizedStrings: (localizeKeys: LocalizeKey[]) => Promise<LanguageStrings>;
+  /** Shows the user a notification, e.g. the notification service's `send` */
   sendNotification: (notification: {
     message: LocalizeKey;
     severity: 'warning';
   }) => Promise<unknown>;
+  /** Logs a warning when localizing or notifying fails */
   logWarning: (message: string) => void;
 };
 
