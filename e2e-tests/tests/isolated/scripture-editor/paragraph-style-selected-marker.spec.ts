@@ -5,9 +5,10 @@
  *
  * A selected marker has no text range, so `EditorRef.getSelection()` reports nothing. The
  * dropdown's popover takes focus from the editor, and the host puts back the caret it captured at
- * focus-out when the selection looks lost; treating a selected marker as lost restored the older
- * caret over it and retagged the wrong paragraph. Unit tests pin the host's rules; this spec pins
- * what they cannot — that the marker selection survives the popover taking focus in a real window.
+ * focus-out when the selection looks lost; treating a selected marker as lost would restore the
+ * older caret over it and retag the wrong paragraph. Unit tests pin the host's rules; this spec
+ * pins what they cannot — that the marker selection survives the popover taking focus in a real
+ * window.
  *
  * ONE test() per spec file (isolated-fixture / second-Electron-instance constraint — see
  * standard-default-power-mode.spec.ts). Run: `npm run test:e2e:isolated scripture-editor`.
