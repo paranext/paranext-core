@@ -2613,10 +2613,11 @@ function PlatformScriptureEditor({
   // moment of the steal, ahead of that nulling, so the selection read here is the caret the user
   // last saw; the palette commit paths restore it (restoreSelectionIfLost) when they find the
   // live selection gone. Only overwrite when readable: if the selection is already gone at
-  // focusout, the previous capture is the best remaining approximation. Scoped to the main
-  // editor's own input inside editorContainerRef — the footnote popover's editor renders in a
-  // portal outside it and keeps its own capture. Cleared on book/chapter change: the capture is
-  // in content coordinates, so it must never be restored into different chapter content.
+  // focusout, the previous capture is the best remaining approximation — except while a paragraph
+  // marker is selected, when the capture is cleared so no older caret can replace it. Scoped to
+  // the main editor's own input inside editorContainerRef — the footnote popover's editor renders
+  // in a portal outside it and keeps its own capture. Cleared on book/chapter change: the capture
+  // is in content coordinates, so it must never be restored into different chapter content.
   useMarkerPaletteFocusOutCapture({
     containerRef: editorContainerRef,
     editorRef,
