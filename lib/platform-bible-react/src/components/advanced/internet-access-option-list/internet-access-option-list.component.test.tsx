@@ -246,6 +246,26 @@ describe('InternetAccessOptionList', () => {
     });
   });
 
+  // The first-run wizard passes `undefined` until the user picks an option, so a stored value they
+  // never chose is not presented as their choice.
+  describe('no value', () => {
+    test('selects no option and shows no banner', () => {
+      renderList({ value: undefined });
+      expect(screen.queryByRole('radio', { checked: true })).not.toBeInTheDocument();
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+
+    // The list stays controlled with nothing selected: the click goes to onChange, and the row
+    // only shows as selected once the caller passes that value back.
+    test('clicking an option reports it without selecting it', () => {
+      const onChange = vi.fn();
+      renderList({ value: undefined, onChange });
+      fireEvent.click(screen.getByLabelText('Disable access sentinel'));
+      expect(onChange).toHaveBeenCalledWith('VpnRequired');
+      expect(screen.queryByRole('radio', { checked: true })).not.toBeInTheDocument();
+    });
+  });
+
   // Consumers that gate on a usable selection (the first-run wizard's Next button) read this
   // instead of re-deriving which options the app implements.
   describe('isSupportedInternetUse', () => {

@@ -49,6 +49,31 @@ declare module 'papi-shared-types' {
 
   // #region Commands
 
+  /**
+   * What `platform.resetFirstRun` does with the Paratext registration in Platform.Bible's own
+   * ParatextData folder. Paratext 9's registration is never changed.
+   *
+   * - `keep`: leave the registration as it is
+   * - `copyFromParatext9`: on the restart, replace Platform.Bible's registration and internet
+   *   settings with fresh copies of Paratext 9's, the way a Paratext 9 user's first launch does.
+   *   With no registered Paratext 8 or 9 on the machine, this leaves Platform.Bible unregistered
+   *   and on default internet settings.
+   * - `clear`: remove the registration, like a Paratext 9 user who never registered
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  export type ResetFirstRunRegistration = 'keep' | 'copyFromParatext9' | 'clear';
+
+  /**
+   * Options for `platform.resetFirstRun`
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  export type ResetFirstRunOptions = {
+    /** What to do with the registration. Defaults to `keep`. */
+    registration?: ResetFirstRunRegistration;
+  };
+
   // TODO: Adding an index type removes type checking on the key :( How do we make sure extensions provide only functions?
   /**
    * Function types for each command available on the papi. Each extension can extend this interface
@@ -108,6 +133,24 @@ declare module 'papi-shared-types' {
     'platform.getLogFileContent': () => Promise<string>;
     /** If the browser window is in full screen */
     'platform.isFullScreen': () => Promise<boolean>;
+    /**
+     * Whether the first-run sync consent gate allows an automatic Simple-mode Send/Receive to start
+     * now: `granted`; `unconfirmed` when the first-run wizard has not been answered or its
+     * completion flag could not be read; or `deferred` when the user chose "Don't sync yet" earlier
+     * in this app session. Only meaningful in Simple mode: the completion flag is never written in
+     * Power mode, so a Power-mode sync must not consult this.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.getAutomaticSyncConsent': () => Promise<'granted' | 'unconfirmed' | 'deferred'>;
+    /**
+     * Withhold automatic Simple-mode Send/Receive for the rest of this app session. Called when the
+     * user chooses "Don't sync yet" in the first-run wizard; the next launch syncs as usual.
+     * One-way on purpose: nothing lifts the deferral before a restart.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.deferAutomaticSyncForSession': () => Promise<void>;
     /**
      * Create a new application window.
      *
@@ -312,6 +355,22 @@ declare module 'papi-shared-types' {
      */
     'platform.showOnboardingTour': () => Promise<void>;
 
+    // This command is provided in `first-run.service-router.ts` (main)
+    /**
+     * Developer and tester tool, not for extensions to call: it can delete the user's registration.
+     *
+     * Forget first-run progress and restart into the first-run wizard, in Simple mode, as a new
+     * user — or a Paratext 9 user launching Platform.Bible for the first time — would see it. Also
+     * clears the orientation tour's completion and whether the user was asked for an internet-use
+     * choice (`platform.internetUseChoiceAsked`), and turns `platform.syncOnStartup` and
+     * `platform.showRegistrationReminderOnStartup` back on. Works in installed builds: press F12
+     * and run `await papi.commands.sendCommand('platform.resetFirstRun')` in the console.
+     *
+     * @param options What to do with the Paratext registration; see {@link ResetFirstRunOptions}
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.resetFirstRun': (options?: ResetFirstRunOptions) => Promise<void>;
+
     // These commands are provided in `scroll-group-navigation.commands.ts` (main)
     /**
      * Navigate the active scroll group to the next chapter (rolls into the next book)
@@ -509,10 +568,14 @@ declare module 'papi-shared-types' {
      */
     'platform.firstRunComplete': boolean;
     /**
-     * Whether to perform automatic startup sync. Hidden; written once by the first-run store when
-     * the user chooses "Skip automatic sync" on the sync-consent step (sets it to `false`). Read by
-     * startup-tasks on each launch; absent or `true` means sync, `false` means skip. Only the
-     * automatic startup sync is affected; manual Send/Receive is unaffected. Never reset by core.
+     * Whether to perform automatic startup sync. Hidden; not exposed in the settings UI. Read on
+     * each launch by the Simple-mode startup sync only — Power mode never reads it. Absent or
+     * `true` means sync, `false` means skip. Only the automatic startup sync is affected; manual
+     * Send/Receive is unaffected. The first-run wizard does not write it: declining there ("Don't
+     * sync yet") withholds automatic sync for that session only. A `false` can be left over from an
+     * earlier first-run wizard, which wrote it on decline, and nothing in core resets it.
+     *
+     * TODO(PT-4607): give profiles left with that `false` a way back to automatic startup sync.
      */
     'platform.syncOnStartup': boolean;
     /**
@@ -522,6 +585,14 @@ declare module 'papi-shared-types' {
      * checkbox). Only consulted for completed users; the fresh-user onboarding flow ignores it.
      */
     'platform.showRegistrationReminderOnStartup': boolean;
+    /**
+     * Whether the user has been asked to choose how Paratext accesses the internet, or did not need
+     * to be. Hidden; set by the first-run wizard when it saves the user's internet-use choice, and
+     * by Power-mode startup once it has checked the saved value (opening the Internet &
+     * connectivity settings if that value turns off sync and the Digital Bible Library). `false`
+     * (default) means the next Power-mode startup checks.
+     */
+    'platform.internetUseChoiceAsked': boolean;
   }
 
   /**

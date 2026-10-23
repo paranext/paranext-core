@@ -159,7 +159,8 @@ test.describe('comment list content zoom', () => {
 
     await waitForAppReady(mainPage);
 
-    // Threads span several chapters so the BCV-sync step has a distinguishable target, and the six
+    // Threads span several chapters so the BCV-sync step has a distinguishable target (the list is
+    // opened on all books because a fresh list shows only the current chapter), and the six
     // after GEN 3:1 guarantee at least a zoomed viewport's worth of content below that target — a
     // thread at the very end of the list can never be scrolled to the top of the view.
     const threadIds = await createCommentThreads(
@@ -189,7 +190,7 @@ test.describe('comment list content zoom', () => {
         'Zoom test comment 10',
       ],
     );
-    await openCommentList(mainPage, projectA);
+    await openCommentList(mainPage, projectA, { scopeFilterToSet: 'all-books' });
     const listId = await waitForOpenWebViewIdByType(mainPage, COMMENT_LIST_WEBVIEW_TYPE);
     const editorId = await waitForOpenWebViewIdByType(mainPage, SCRIPTURE_EDITOR_WEBVIEW_TYPE);
     const listFrame = await getEditorFrame(mainPage, listId);

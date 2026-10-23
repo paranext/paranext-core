@@ -1,11 +1,16 @@
-import { getResourceReferenceBareId, getResourceReferenceRowId } from './resource-reference.utils';
+import {
+  getProjectRowId,
+  getResourceReferenceBareId,
+  getResourceReferenceRowId,
+} from './resource-reference.utils';
 import type { PickerResource } from './downloaded-resources.utils';
 
 /** What the panel should do with its persisted selection on this render. */
 export type ResourceSelectionResolution = {
   /**
    * The row id to persist, or `undefined` to leave the stored selection alone. Always the
-   * namespaced form, so a legacy bare id is rewritten the first time its row is seen.
+   * namespaced form, so a legacy bare id is rewritten the first time its row is seen — as is a
+   * selection found only by its project (see {@link findSelectedRow}), to its row's own id.
    */
   nextSelectedResourceId: string | undefined;
   /** Whether the in-flight pick has arrived in the list and can stop suppressing auto-correct. */
@@ -38,6 +43,34 @@ export function matchesSelectedResourceId(
 }
 
 /**
+ * Finds the row a persisted selection refers to: the row it names (see
+ * {@link matchesSelectedResourceId}), or — only when no row is named by it — a row showing the
+ * project a `project:` selection names.
+ *
+ * The fallback is for a resource selected by its project before the catalog arrived, as one opened
+ * from Home while the catalog is still loading, whose row the catalog has since identified as a DBL
+ * resource. It is the same resource, so the selection holds, and is then rewritten to the row's own
+ * id. It never applies while a row matches exactly, so a list listing one resource under both kinds
+ * of reference keeps whichever of the two the user picked.
+ *
+ * @param rows The panel's filtered rows
+ * @param selectedResourceId The persisted selection
+ * @returns The selected row, or `undefined` if no row is selected
+ */
+export function findSelectedRow(
+  rows: PickerResource[],
+  selectedResourceId: string | undefined,
+): PickerResource | undefined {
+  if (selectedResourceId === undefined) return undefined;
+  return (
+    rows.find((row) => matchesSelectedResourceId(row, selectedResourceId)) ??
+    rows.find(
+      (row) => row.projectId !== undefined && selectedResourceId === getProjectRowId(row.projectId),
+    )
+  );
+}
+
+/**
  * Decides the panel's selection from the rows currently in its filtered list.
  *
  * Three jobs, in priority order, so that they cannot fight each other across renders:
@@ -49,9 +82,10 @@ export function matchesSelectedResourceId(
  *    project reference whose id is the project id, not the UID.
  * 2. Hold still while a pick is in flight. Auto-correct must not overwrite the selection before the
  *    new resource shows up.
- * 3. Auto-correct otherwise — rewrite a legacy bare id to its namespaced form, or fall back to the
- *    first row that has something to display when the selection has left the list. A row with no
- *    `projectId` has no content, so selecting it would spin forever.
+ * 3. Auto-correct otherwise — rewrite a legacy bare id to its namespaced form (and a selection found
+ *    only by its project to its row's own id), or fall back to the first row that has something to
+ *    display when the selection has left the list. A row with no `projectId` has no content, so
+ *    selecting it would spin forever.
  *
  * @param rows The panel's filtered rows
  * @param selectedResourceId The persisted selection, namespaced or legacy-bare
@@ -63,7 +97,7 @@ export function resolveResourceSelection(
   selectedResourceId: string | undefined,
   pendingResourceId: string | undefined,
 ): ResourceSelectionResolution {
-  const selectedRow = rows.find((row) => matchesSelectedResourceId(row, selectedResourceId));
+  const selectedRow = findSelectedRow(rows, selectedResourceId);
   const displayRow = selectedRow ?? rows[0];
 
   if (pendingResourceId !== undefined) {

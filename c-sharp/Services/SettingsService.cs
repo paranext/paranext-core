@@ -1,4 +1,6 @@
 using System.Text.Json;
+using StreamJsonRpc;
+using StreamJsonRpc.Protocol;
 
 namespace Paranext.DataProvider.Services;
 
@@ -149,6 +151,64 @@ internal static class SettingsService
     public static Task<T?> GetSettingAsync<T>(PapiClient papiClient, string key)
     {
         return papiClient.SendRequestAsync<T?>(SERVICE_GET, [key]);
+    }
+
+    /// <summary>
+    /// Waits until the settings service answers a read of the setting with a value. The extension
+    /// host brings the settings service up after this process starts, and main gives up on a request
+    /// whose handler isn't registered after about 9 seconds. Retries only while the service isn't
+    /// answering yet: no handler or a <see langword="null"/> answer (see
+    /// <see cref="GetSettingAsync"/>). No read starts once <paramref name="deadline"/> is canceled,
+    /// and one still unanswered then is abandoned: its own request timeout doesn't end it, as main
+    /// ignores cancellation.
+    /// </summary>
+    /// <typeparam name="T">
+    /// A reference type or <see cref="Nullable{T}"/>. For any other value type, a
+    /// <see langword="null"/> answer reads as <see langword="default"/> and counts as answered.
+    /// </typeparam>
+    /// <returns>
+    /// <see langword="false"/> when <paramref name="deadline"/> is canceled or the client
+    /// disconnects first.
+    /// </returns>
+    /// <exception cref="Exception">Any other failure of a read, as thrown by the read.</exception>
+    public static async Task<bool> WaitForSettingAsync<T>(
+        PapiClient papiClient,
+        string key,
+        TimeSpan retryDelay,
+        CancellationToken deadline
+    )
+    {
+        var hasLoggedWait = false;
+        try
+        {
+            while (!deadline.IsCancellationRequested && !papiClient.DisconnectTask.IsCompleted)
+            {
+                string reason;
+                try
+                {
+                    if (await GetSettingAsync<T>(papiClient, key).WaitAsync(deadline) != null)
+                        return true;
+                    reason = "no value returned";
+                }
+                // StreamJsonRpc throws this type for invalid params too, which retrying won't fix.
+                catch (RemoteMethodNotFoundException ex)
+                    when (ex.ErrorCode == JsonRpcErrorCode.MethodNotFound)
+                {
+                    reason = ex.Message;
+                }
+                if (!hasLoggedWait)
+                {
+                    Console.WriteLine(
+                        $"Waiting for the settings service to answer {key}: {reason}"
+                    );
+                    hasLoggedWait = true;
+                }
+                await Task.Delay(retryDelay, deadline);
+            }
+        }
+        catch (OperationCanceledException) when (deadline.IsCancellationRequested) { }
+        catch (Exception) when (papiClient.DisconnectTask.IsCompleted) { }
+        return false;
     }
 
     public static bool SetSetting(PapiClient papiClient, string key, object? settingData)

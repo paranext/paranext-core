@@ -77,6 +77,11 @@ import {
   waitForOverlayGone,
 } from '../../../fixtures/helpers';
 import {
+  getScrollGroupRef,
+  SerializedVerseRef,
+  setScrollGroupRef,
+} from '../../../fixtures/settled-positions-helpers';
+import {
   APP_QUITTING_LOG,
   DUPLICATE_REGISTRATION_PATTERN,
   FAULT_MARKERS,
@@ -177,9 +182,6 @@ function webViewIdFromFocusSubject(focus: FocusSubjectLike): string | undefined 
   return undefined;
 }
 
-/** Minimal shape of a serialized verse reference, as seen over JSON-RPC. */
-type VerseRefLike = { book?: string; chapterNum?: number; verseNum?: number } | undefined;
-
 /** Minimal shape of an expanded theme definition, as seen over JSON-RPC. */
 type ThemeLike = { id?: string; type?: string; cssVariables?: Record<string, string> } | undefined;
 
@@ -247,30 +249,6 @@ async function expectWindowToRenderTheme(page: Page, themeId: string, timeoutMs:
   }).toPass({ timeout: timeoutMs, intervals: [500, 1_000] });
 }
 
-/** Read scroll group 0's verse reference from the app-global scroll group service. */
-async function getScrollGroupRef(): Promise<VerseRefLike> {
-  return sendPapiRequestOnce<VerseRefLike>(
-    'object:ScrollGroupService.getScrRef',
-    [0],
-    WEBSOCKET_PORT,
-    PAPI_ATTEMPT_TIMEOUT_MS,
-  );
-}
-
-/** Set scroll group 0's verse reference through the app-global scroll group service. */
-async function setScrollGroupRef(scrRef: {
-  book: string;
-  chapterNum: number;
-  verseNum: number;
-}): Promise<boolean> {
-  return sendPapiRequestOnce<boolean>(
-    'object:ScrollGroupService.setScrRef',
-    [0, scrRef],
-    WEBSOCKET_PORT,
-    PAPI_ATTEMPT_TIMEOUT_MS,
-  );
-}
-
 /** Whether a theme response is a real expanded theme (and not an error shape or undefined). */
 function isThemeShaped(theme: ThemeLike): boolean {
   return (
@@ -281,7 +259,7 @@ function isThemeShaped(theme: ThemeLike): boolean {
 }
 
 /** Whether a verse-ref response is a real serialized verse reference. */
-function isVerseRefShaped(ref: VerseRefLike): boolean {
+function isVerseRefShaped(ref: Partial<SerializedVerseRef> | undefined): boolean {
   return typeof ref?.book === 'string' && typeof ref.chapterNum === 'number';
 }
 

@@ -171,7 +171,9 @@ export function DictionaryEntryDisplay({
               <ContentZoomRoot as="span">{formattedGlosses}</ContentZoomRoot>
             </DescriptionComponent>
           </span>
-          <ul className="tw:flex tw:flex-row tw:gap-1">
+          {/* Many Strong's codes wrap within this list, staying beside the lemma, rather than
+              pushing the header wider than a narrow pane. */}
+          <ul className="tw:flex tw:flex-row tw:flex-wrap tw:justify-end tw:gap-1">
             {dictionaryEntry.strongsCodes.map((strongsCode) => (
               <li
                 key={strongsCode}
@@ -191,7 +193,10 @@ export function DictionaryEntryDisplay({
           {localizedStrings['%platformLexicalTools_dictionary_sensesLabel%']}
         </h3>
         {/* Each sense's glosses and definition zoom with the pane; the sense card, its number and
-            its domains keep interface size. */}
+            its domains keep interface size. The toggle primitives default to `w-fit` and
+            `whitespace-nowrap`, which would size each card to its longest line and push a long
+            definition past the pane's edge, so the group fills the pane and the cards wrap. Each
+            card is a button, so its wrapped lines would center unless aligned to the start. */}
         <ToggleGroup
           type="single"
           value={
@@ -205,7 +210,7 @@ export function DictionaryEntryDisplay({
             setSelectedSenseIndex(index >= 0 ? index + 1 : undefined);
             setSelectedSense(index >= 0 ? sensesFlat[index] : undefined);
           }}
-          className="tw:flex tw:flex-col tw:gap-3"
+          className="tw:flex tw:w-full tw:flex-col tw:gap-3"
         >
           {Object.values(sensesFilteredByScrRef)
             .flat()
@@ -214,7 +219,7 @@ export function DictionaryEntryDisplay({
               <ToggleGroupItem
                 key={`${sense.lexicalReferenceTextId}-sense-${sense.id}`}
                 value={`${sense.lexicalReferenceTextId}-sense-${sense.id}`}
-                className="tw:flex tw:w-full tw:h-fit tw:flex-col tw:items-start tw:border tw:rounded-lg tw:shadow-sm tw:p-4 tw:cursor-pointer tw:data-[state=on]:border-accent tw:data-[state=on]:shadow-md tw:transition-colors"
+                className="tw:flex tw:w-full tw:h-fit tw:flex-col tw:items-start tw:whitespace-normal tw:text-start tw:border tw:rounded-lg tw:shadow-sm tw:p-4 tw:cursor-pointer tw:data-[state=on]:border-accent tw:data-[state=on]:shadow-md tw:transition-colors"
               >
                 <div className="tw:flex tw:items-baseline tw:gap-2">
                   <span className="tw:font-bold tw:text-accent-foreground">{senseIndex + 1}</span>

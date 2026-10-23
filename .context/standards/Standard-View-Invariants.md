@@ -362,3 +362,170 @@ each after a bug. **Do not add another private exclusion; extend the shared one.
 
 The caret/selection half is unified in the editor repo. The collab half is not yet — the ops stream
 and the delta-doc length side still keep separate predicates.
+
+These rules follow from that one language, and a host has to get every one of them right:
+
+**Every public editor position is a SETTLED coordinate.** `getSelection`, `onSelectionChange`,
+`setSelection`, `setAnnotation` and `insertNote` all address the document `getUsj()` returns, never
+the live Lexical tree — the editor does the live↔settled translation once, at its own API boundary.
+So a host may resolve a jsonPath it received from the editor against the USJ it already holds. Not
+every location is text: a property, closing-marker or attribute location (an empty `\b`'s
+`['marker']`, a line-final verse's `['number']`) is a legitimate caret, so check
+`UsjReaderWriter.isUsjDocumentLocationForTextContent` before resolving a location as text. A TEXT
+path that fails to resolve, or a text offset past the end of its string, is a bug or a race, not an
+expected state — except one past the end of the document's last text, which is the document end
+(rule 3 below). Keep those host-side checks as fail-safes, log them, and do not write code that
+compensates for an expected divergence — there isn't one.
+
+One report is the exception: an update that creates the document's FIRST pending edit and moves the
+selection within itself sends that one `onSelectionChange` report in live coordinates, immediately
+followed by a settled one. So a host that needs a position it can resolve against `getUsj()` at
+that moment calls `getSelection()` (which always answers settled) rather than reusing a cached
+`onSelectionChange` report — `insertCommentAtCurrentSelection` does.
+
+**An annotation may cover display bytes, and the host keeps its anchor.** `setAnnotation` accepts
+a range over a marker glyph, a verse or chapter number, a note caller, or an attribute value
+(`['lemma'] propertyOffset …`); the editor holds it on those bytes and never changes the document
+for it. An annotation holds exactly the bytes its range names; a range into part of a char span,
+note or figure holds only that part — the text is marked piece by piece, and the span's own marker
+glyphs the range passes over without covering the span whole hold the annotation as display bytes
+instead. `getUsj()` never carries it, and `setUsj` drops every annotation, so the host re-applies
+from its own anchors — `annotationInfoByIdRef` in `platform-scripture-editor.web-view.tsx` keeps
+each range.
+
+**An annotation paints exactly what it holds, so find it by its ranges, never its class.** A display
+byte held in full gets the same CSS classes as a `<mark>`, plus `display-annotation`; one held only
+in part is painted with a CSS Custom Highlight that the editor styles from the host's own class
+rules — `background-color`, `color`, `text-decoration` and `text-shadow` carry over and a bottom
+border becomes an underline, while every other property and `:hover` apply only to bytes painted as
+elements. Whitespace between two held bytes in one block is painted; whitespace at the edges never
+is, and bytes the view does not display paint nothing. So no element carries `annotationId-<id>`
+where a highlight paints: measure, scroll to or hit-test an annotation with
+`EditorRef.getAnnotationRanges(type, id)`, as `editor-dom.util.ts` does. CSS keyed on the class
+keeps working. An annotation inside a collapsed note's content — its undisplayed `\cat` included —
+is not shown and never paints the caller, as in Paratext 9; it reappears when the note is expanded
+and still reports its removal. Rationale: `adr-editor-annotations-paint-exactly` and
+`adr-editor-collapsed-note-hides-its-annotations` in
+[`Architecture-Decisions.md`](Architecture-Decisions.md).
+
+`onRemove`: each `<mark>` reports its own removal when it goes away — one call per `<mark>`, whatever
+else still holds the annotation — and only once; a `<mark>` an undo brings back stays quiet when it
+goes again. Beyond that, the annotation's last holder — a `<mark>` or a display byte — leaving the
+document without any `<mark>` having reported the annotation's removal since it was set fires ONE
+more report through its display bytes: `"removed"` when `removeAnnotation` or setting the same id
+again takes it away, `"destroyed"` when it drops out of the document (an edit, a collaborator's
+edit, or a settle that discards those bytes). An annotation split across several carriers that all
+leave in the same edit reports their text joined in document order; carriers lost across separate
+edits report only the text of the piece(s) still present at the last one. A collapsed note caller's
+text is reported as the note's caller. Undo, redo, and a `setUsj` reload report nothing; setting the
+id again starts a fresh reporting cycle. An `onRemove` that throws while the editor reports a
+`"destroyed"` after an edit does not stop that edit or the other reports: the error is handed to the
+editor's error handler, which rethrows it, in a microtask once the edit has been committed.
+
+**A position names the byte in front of which it sits, and snaps LEFT in BOTH directions.** It maps
+through whatever contains that byte on its own side; where one side has bytes the other lacks, the
+position in front of them snaps to the nearest byte both sides share, and the position just past
+them is exact. There is no separate outbound-snap/inbound-refuse split — one aligner serves both
+directions, each end of a range resolved on its own. Outbound: `getSelection` and `onSelectionChange`
+answer `undefined` only when there is no selection, never because a position could not be
+translated — every real caret has a location. While an edit is
+pending, typed bytes the settled document carries as an attribute are reported as that attribute's
+location (a typed `\cat x\cat*` is the note's `category`; a typed figure's `|src="…"` is its
+`file`). With `|lemma="grace"` pending (settles to `|grace`), the settled value start
+(`['lemma'] propertyOffset 0`) lands at the start of the VALUE — before `grace`, not just after `|`
+— because the position sits in front of `grace`, and `grace` is a byte both sides carry. A host
+should treat `undefined` as a cleared selection, not as an error. Inbound: `setSelection`,
+`setAnnotation` and `insertNote` refuse (and log the refusal) ONLY a location that names nothing in
+the settled document at all; a location inside a scope the editor can pair only in part is not a
+whole-scope refusal — it snaps LEFT the same as outbound. A position basis the live tree has moved
+on from is rebuilt, and the rebuild logged as an error, never refused. Rationale:
+`adr-editor-outbound-positions-snap-left` in [`Architecture-Decisions.md`](Architecture-Decisions.md).
+
+That holds across Standard view's space-run collapse too. A run the user types stays on screen while
+`getUsj()` carries one space (ratified in the editor repo's invariants, §4), and the editor's
+position model drops the run's extra spaces exactly where serialization does, from one shared
+definition. The editor's position functions therefore take its view options; pass the view the
+editor is running, never a default.
+
+**`getUsj()` while an edit is pending equals the document after it settles.** A host never has to
+wait for a settle to read the document. A char opener renamed while pending (`\w grace\w*` typed to
+`\wx grace\w*`) renames its closer too — on screen, in `getUsj()`, and once settled. The editor
+repo holds this, the screen equal to the saved file byte for byte, and every pending caret position
+exact (or the closest one to its left), with an oracle generated from single keystrokes. Rationale:
+`adr-editor-opener-rename-renames-closer`.
+
+**`onUsjChange`'s `usj` payload is a SETTLED, synchronous snapshot.** It equals `getUsj()` at the
+moment of emission, fires synchronously within the commit's own listener pass, once per commit that
+changes the settled document or carries delta ops, in commit order — including once, not twice,
+after a `setUsj` reload. A commit that does neither emits nothing, and so does a selection-only
+commit or one tagged as an annotation, cursor, or selection change. The block verse layout emits
+nothing: it is read-only. `ops` stay a LIVE view of the same commit, so a host that needs both reads
+`usj` for content and `ops` for the tree-level change; neither substitutes for the other.
+
+**Notes are counted in the SETTLED document.** `selectNote(index)` counts and selects against
+`getUsj()`'s notes; a note still pending as a typed literal gets the caret placed at the literal's
+`\`, not at a note index that does not exist yet. `getNoteOps` stays LIVE for both key and index, so
+`getNoteOps(i)` and `selectNote(i)` can legitimately name different notes while a whole note literal
+is pending — a host that keys UI state off one must not assume the other agrees.
+
+**A typed table cell settles as `table:cell` under ParatextData parity.** The settle applies
+`UsfmParser.IsCell`'s own rule: a Character-typed or undeclared cell-named marker inside an open row
+is a cell; the same marker `+`-nested under another marker is never a cell; with no open row, it is
+an ordinary character marker. The position and note-counting rules above apply to a settled cell the
+same as to any other settled content.
+
+The tokenizer folds each `\ca`, `\cp`, `\va`, `\vp` and `\cat` once, in ParatextData's order
+(`ParatextData/UsfmParser.cs:320-339`, `:548-576`): after a chapter one `\ca` then one `\cp`, after
+a verse one `\va` then one `\vp`, after a note one `\cat`. A later span of the same marker stays
+content — `\c 1 \ca 2\ca*\ca 3\ca*` is altnumber `2` followed by a `\ca 3\ca*` char span — so no
+typed byte is lost to a second fold overwriting the first.
+
+Recorded as-is, not position defects: `\c 2 made` settles to a chapter followed by a bare root
+string `"made"` — ParatextData produces the same USJ from that input. The settle keeps the space
+before a typed `\c`, `\tr`, `\esb` or `\esbe` that ParatextData trims on save; positions count only
+non-whitespace bytes, so the kept space never moves one.
+
+**A position has one spelling.** Every USFM position has exactly ONE canonical
+`UsjDocumentLocation`; `UsjReaderWriter.usfmVerseLocationToUsjDocumentLocation` is the oracle. One
+alias is allowed: the end of a text string directly followed by a marker or closer may also be
+spelled as that string's `offset` at its length, and the editor reports a caret held at the end of
+the text that way (`{ <text>, offset: 16 }` at the end of `In the beginning` before `\f`, where the
+oracle says the note's own location). So compare two locations by converting them with
+`usjDocumentLocationToUsfmVerseRefVerseLocation`, never by their shape. `offset` means an index into text only, so a caret with no text beside it is never a
+container plus a content index and never `$` plus one:
+
+1. A gap in front of a marker object is that marker's location (`{ jsonPath: <item> }`).
+2. The character after a token with no other home — the space after a marker name, a line's newline
+   — is addressed on that token at its length: text `offset: length`, `['marker']` at
+   `propertyOffset: marker.length` (inside an empty `\b`), `['number']` at the number's length (a
+   line ending in `\v 1`), `closingMarkerOffset` at the closer's length (a paragraph ending in a
+   note is `\f*` at 3). An `optbreak` has no location inside it, so every position from its start
+   to the end of its line is its own marker location.
+3. The end of the document is one past the final newline, on the last token: rule 2's form plus one.
+   A text offset one past its string's end is therefore legitimate on the document's last text
+   only — it is the document end — and the comment-insertion guard brings it onto the text's end (`withDocumentEndOnText`) rather than
+   treating it as a contract violation.
+4. A root point between two blocks is the start of the next block.
+
+The editor still accepts the older container-and-index shapes from a host. The full rule set, with
+an example of each tricky position, is on the location model (`UsjDocumentLocation` in
+`@eten-tech-foundation/scripture-utilities`, re-exported by `platform-bible-utils`) and in the editor
+repo's invariants. Rationale:
+`adr-usj-locations-have-one-spelling` in [`Architecture-Decisions.md`](Architecture-Decisions.md).
+
+**The USJ document-location types have one declaration, owned by the editor package.**
+`ContentJsonPath`, `PropertyJsonPath`, `UsjDocumentLocation` and its seven member location types are
+declared in `@eten-tech-foundation/scripture-utilities`
+(`packages/utilities/src/converters/usj/usj-document-location.model.ts` in the `scripture-editors`
+repo, with its depth test beside it). `platform-bible-utils` re-exports them from
+`src/scripture/usj-reader-writer.model.ts` rather than declaring its own, so core and the editor
+always agree on what a location is. Widening `ContentJsonPath` (or changing any of these types)
+happens in the editor package; core picks it up when it stages that editor build. The seven member
+types are `interface`s, so a location value is not assignable to an index-signature type such as
+`Record<string, unknown>`. `PropertyJsonPath` has a catch-all `` `$.${string}` `` member, so its
+depth members document shapes rather than bound them. Rationale:
+`adr-usj-location-types-come-from-scripture-utilities` in
+[`Architecture-Decisions.md`](Architecture-Decisions.md).
+
+Rationale and history: `adr-editor-positions-are-settled-coordinates` in
+[`Architecture-Decisions.md`](Architecture-Decisions.md).

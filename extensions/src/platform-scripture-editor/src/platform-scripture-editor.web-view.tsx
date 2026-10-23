@@ -98,18 +98,14 @@ import {
 } from 'platform-bible-react/experimental';
 import {
   ABORTED,
-  compareScrRefs,
   formatReplacementString,
   getErrorMessage,
   getLocalizeKeysForScrollGroupIds,
+  getProjectOpenBlockedReasonKey,
   isPlatformError,
-  isString,
-  isWhiteSpace,
   LocalizeKey,
   serialize,
-  USFM_MARKERS_MAP_PARATEXT_3_0,
   usfmMarkers,
-  UsjReaderWriter,
 } from 'platform-bible-utils';
 import {
   BOOKS_PRESENT_DEFAULT,
@@ -146,6 +142,8 @@ import {
   BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS,
   type ManageBooksDisabledReason,
 } from './book-not-available-view.component';
+import { NO_PROJECT_VIEW_STRING_KEYS } from './no-project-view.component';
+import { NoProjectPanel } from './no-project-panel.component';
 import { ResourceBookNotAvailable } from './resource-book-not-available.component';
 import { TeamLayoutButton, TEAM_LAYOUT_BUTTON_STRING_KEYS } from './team-layout-button.component';
 import {
@@ -157,6 +155,7 @@ import {
   createNoteAnchorSource,
   createPendingCommentAnchorSource,
   createPendingCommentCenterAnchorSource,
+  EDITOR_LOAD_DELAY_TIME,
   focusPaneSelectedRow,
   getVerseElement,
   keepScrollPositionAcross,
@@ -174,6 +173,7 @@ import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useSelectionSnapshot } from './use-selection-snapshot.hook';
 import { useEditorPdpSync } from './use-editor-pdp-sync.hook';
 import { toBookChapterKey, useScrollToRange } from './use-scroll-to-range.hook';
+import { applyEditorScrRefReport } from './editor-scr-ref-report.util';
 import { useProjectStylesheet } from './use-project-stylesheet.hook';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import {
@@ -205,8 +205,12 @@ import {
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   selectableParagraphMarkers,
   selectCommentThreadInPanelSafe,
+  validateCommentSelection,
+  readCommentRangeText,
+  hasPendingCommentTextChanged,
   shouldEndPaneNoteEditOnRowSelect,
   shouldPublishPaneDocument,
+  UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY,
 } from './platform-scripture-editor.utils';
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.component';
@@ -248,6 +252,12 @@ import {
   SyncBlockedBanner,
   SYNC_BLOCKED_BANNER_STRING_KEYS,
 } from './sync-blocked-banner.component';
+import { COPYRIGHT_NOTICE_STRING_KEYS } from './copyright-notice/copyright-notice.const';
+import { ProjectCopyrightNotice } from './copyright-notice/project-copyright-notice.component';
+import {
+  LocalizedUnsupportedProjectMessage,
+  UnsupportedProjectGate,
+} from './unsupported-project-gate.component';
 import {
   createHiddenContentDeleteHandler,
   HIDDEN_CONTENT_DELETE_PROMPT_KEY,
@@ -262,15 +272,6 @@ import {
 function PortalContents({ children }: PropsWithChildren) {
   return children;
 }
-
-/**
- * Time in ms to delay taking action to wait for the editor to load. Hope to be obsoleted by a way
- * to listen for the editor to finish loading
- *
- * This is best used for when the editor is transitioning between loads. For the first time the
- * editor loads, use {@link runOnFirstLoad} instead
- */
-const EDITOR_LOAD_DELAY_TIME = 200;
 
 /**
  * Trailing-edge debounce for the keystroke-driven PDP save, in milliseconds. Chosen to kill the
@@ -290,8 +291,10 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
   ...EMPTY_CHAPTER_VIEW_STRING_KEYS,
   ...BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS,
+  ...NO_PROJECT_VIEW_STRING_KEYS,
   ...TEAM_LAYOUT_BUTTON_STRING_KEYS,
   ...SYNC_BLOCKED_BANNER_STRING_KEYS,
+  ...COPYRIGHT_NOTICE_STRING_KEYS,
   HIDDEN_CONTENT_DELETE_PROMPT_KEY,
   // Not read by this file. Loaded here so that whichever component mounts the character-marker menu
   // gets its remove row localized through the `localizedStrings` this web view already resolves.
@@ -325,7 +328,6 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%versionHistoryCommit_beforeInsertCrossReference%',
   '%versionHistoryCommit_beforeInsertEndnote%',
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
-  '%webView_platformScriptureEditor_emptyState_noProject%',
   '%webView_platformScriptureEditor_error_permissions_format%',
   // The one listing of this key. Named via the const so the sync-blocked message, its severity, and
   // its self-catching stay in one place (`editor-side-effects.utils.ts`) — the character-marker
@@ -335,7 +337,9 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   // Same reasoning as SYNC_EDIT_BLOCKED_KEY above, for the Edit flyout's blocked-action notice.
   EDIT_ACTION_BLOCKED_KEY,
   '%webView_platformScriptureEditor_error_noTextSelected%',
+  '%webView_platformScriptureEditor_warning_pendingCommentTextChanged%',
   '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
+  '%webView_platformScriptureEditor_error_selectionNotResolved%',
   ...PARAGRAPH_STYLE_TRIGGER_STRING_KEYS,
   ...INSERT_CONTEXT_MENU_STRING_KEYS,
   '%webView_footnoteList_close%',
@@ -502,7 +506,7 @@ const PERMISSIONS_EXCEPTION_REGEX = /Permissions exception for projectId/;
 // when a project write is rejected because an automatic Send/Receive is syncing that project.
 const SYNC_EDIT_BLOCKED_REGEX = /\(SR_EDIT_BLOCKED\)/;
 
-globalThis.webViewComponent = function PlatformScriptureEditor({
+function PlatformScriptureEditor({
   id: webViewId,
   projectId,
   title,
@@ -621,11 +625,38 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   /**
    * Stores the annotation range for the pending comment being created. This is captured when the
    * user initiates comment creation and used to create the annotation highlight and to extract
-   * selection info when saving the comment.
+   * selection info when saving the comment. `anchoredText` is the text the range named when it was
+   * captured; the pending comment is discarded if the settled document stops naming that text.
    */
   const pendingCommentAnnotationRange = useRef<
-    { range: AnnotationRange; verseRef: SerializedVerseRef } | undefined
+    { range: AnnotationRange; verseRef: SerializedVerseRef; anchoredText?: string } | undefined
   >(undefined);
+
+  /** Latest `onCommentEditorCancel`, readable from the editor's change callback defined before it. */
+  const discardPendingCommentRef = useRef<() => void>(() => {});
+
+  /**
+   * A pending comment is saved against its frozen range, so it cannot outlive a change to the text
+   * that range names — local typing or a remote apply. Discards it, with a notice, when `usj` no
+   * longer has the captured text there. Only a pending comment with a captured text pays for the
+   * comparison.
+   */
+  const discardPendingCommentIfAnchorChanged = useRef((usj: Usj) => {
+    const pendingComment = pendingCommentAnnotationRange.current;
+    if (
+      pendingComment?.anchoredText === undefined ||
+      !hasPendingCommentTextChanged(
+        { range: pendingComment.range, anchoredText: pendingComment.anchoredText },
+        correctEditorUsjVersion(usj),
+      )
+    )
+      return;
+    discardPendingCommentRef.current();
+    papi.notifications.send({
+      message: '%webView_platformScriptureEditor_warning_pendingCommentTextChanged%',
+      severity: 'warning',
+    });
+  });
 
   /** Map from annotationId -> info about the annotation that we need to keep to perform some actions */
   const annotationInfoByIdRef = useRef<
@@ -1724,6 +1755,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // editor had not applied yet is overwritten, exactly as the incoming document overwrites the
     // rest of the chapter.
     if (editingNoteKey.current) closeFootnoteEditorRef.current(false);
+    // An external apply never reaches `onUsjChange`, so a pending comment is checked here too.
+    discardPendingCommentIfAnchorChanged.current(usj);
     editorRef.current?.setUsj(usj);
     // A hidden pane is left without a document; showing it fetches the editor's, which is this one
     // from here on (`getUsj()` returns what `setUsj` was just handed).
@@ -1738,13 +1771,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // `computeRangeScrollTop` in editor-dom.util.ts for exactly where it lands.
   //
   // Hidden case: those panels drive this editor from elsewhere, and in Power mode they can share its
-  // tab stack. The selection is applied at once; the scroll waits for this tab to be shown, then
-  // runs once, instantly, for the latest request. See `useScrollToRange`.
-  const { requestScrollToRange, consumeRangeScrollClaimFor } = useScrollToRange({
-    editorRef,
-    editorChapterKey,
-    isViewVisible,
-  });
+  // tab stack. The selection is applied as soon as this web view shows the range's verse, hidden or
+  // not (it is data, with no geometry); the scroll waits for this tab to be shown, then runs once,
+  // instantly, for the latest request. See `useScrollToRange`.
+  const { requestScrollToRange, consumeRangeScrollClaimFor, onEditorScrRefChange } =
+    useScrollToRange({
+      editorRef,
+      editorChapterKey,
+      isViewVisible,
+      scrRef,
+    });
   /**
    * Reverse portal node for the editor. Using this allows us to mount the editor once and re-parent
    * it without the editor unmounting and remounting. We need to re-parent the editor when container
@@ -1813,7 +1849,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
 
   const insertCommentAtCurrentSelection = useCallback(() => {
-    const selection = currentSelectionRef.current;
+    // The editor's own read flushes pending marker edits, so it is always the settled selection;
+    // the cached ref can lag a change that has not been reported yet.
+    const selection = editorRef.current?.getSelection();
 
     // Comment creation is gated by canUserCreateComments (not read-only), so it must be blocked
     // separately during an automatic Send/Receive. Guarding here covers both the hotkey and the
@@ -1833,124 +1871,26 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     };
 
     // Validate that the selection doesn't contain markers, and that there is meaningful content.
-    // `selection`'s jsonPaths address the LIVE tree (EditorRef.getSelection's contract), while
-    // `getUsj()` returns the SETTLED document — identical when nothing is pending, but while a
-    // command surface has in-progress input elsewhere in the document, settled indices can shift
-    // out from under a jsonPath captured earlier. `jsonPathToUsjNodeAndDocumentLocation` throws
-    // outright when a path no longer resolves at all, and can otherwise resolve to a
-    // still-valid-but-DIFFERENT node whose string is a different length than the live one the
-    // offsets below were computed against — both guarded here rather than trusted, since neither
-    // is distinguishable from a genuine marker-boundary case by the caller.
+    // `selection`'s jsonPaths address the SETTLED document per EditorRef.getSelection's contract
+    // — the same document `getUsj()` returns — so they should always resolve here and land on a
+    // node whose string is the length the offsets were computed against. For a TEXT location, a
+    // path that cannot be resolved, or an offset past its node, is a bug or a race, not a legitimate
+    // state (the one exception is one past the end of the document's last text, which is the
+    // document end). The validation turns either case into a warning instead of a mis-anchored
+    // comment or a crash.
     const editorUsj = editorRef.current?.getUsj();
     const editorUsjCorrected = editorUsj ? correctEditorUsjVersion(editorUsj) : undefined;
+    let anchoredText: string | undefined;
     if (editorUsjCorrected) {
-      const usjRW = new UsjReaderWriter(editorUsjCorrected, {
-        markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
-      });
-
-      let startNodeAndDocumentLocation;
-      let endNodeAndDocumentLocation;
-      try {
-        startNodeAndDocumentLocation = usjRW.jsonPathToUsjNodeAndDocumentLocation(
-          selection.start.jsonPath,
-        );
-        endNodeAndDocumentLocation = selection.end
-          ? usjRW.jsonPathToUsjNodeAndDocumentLocation(selection.end.jsonPath)
-          : startNodeAndDocumentLocation;
-      } catch {
-        // A path that no longer resolves at all against the settled tree: same fail-safe response
-        // as an unresolvable selection below, not a crash.
-        papi.notifications.send({
-          message: '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
-          severity: 'warning',
-        });
+      const validation = validateCommentSelection(selection, editorUsjCorrected);
+      if ('notice' in validation) {
+        if (validation.warning) logger.warn(validation.warning);
+        papi.notifications.send({ message: validation.notice, severity: 'warning' });
         return;
       }
-
-      const startNode = startNodeAndDocumentLocation?.node;
-      const isStartNodeAString = isString(startNode);
-
-      // Make sure the selection is in a string and doesn't span multiple USJ nodes
-      const selectionHasMarker =
-        !isStartNodeAString ||
-        startNodeAndDocumentLocation?.node !== endNodeAndDocumentLocation?.node;
-
-      if (selectionHasMarker) {
-        papi.notifications.send({
-          message: '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
-          severity: 'warning',
-        });
-        return;
-      }
-
-      // If the selection is collapsed (cursor with no range), require a non-whitespace character
-      // on at least one side of the cursor position so the backend code can select the word
-      const startTextDocumentLocation = selection.start;
-      const endTextDocumentLocation = selection.end ?? selection.start;
-      const isCollapsed =
-        UsjReaderWriter.isUsjDocumentLocationForTextContent(startTextDocumentLocation) &&
-        UsjReaderWriter.isUsjDocumentLocationForTextContent(endTextDocumentLocation) &&
-        startTextDocumentLocation.jsonPath === endTextDocumentLocation.jsonPath &&
-        startTextDocumentLocation.offset === endTextDocumentLocation.offset;
-      // A live-tree offset that no longer fits the settled string it resolved to: concrete
-      // evidence the two snapshots disagree about this node's content, not just a stale offset —
-      // proceeding would either mis-anchor the comment or (for offset > length) walk off the end
-      // of `startNode` below. Bail out the same way an unresolvable path already does.
-      if (
-        isCollapsed &&
-        'offset' in startTextDocumentLocation &&
-        startTextDocumentLocation.offset > startNode.length
-      ) {
-        papi.notifications.send({
-          message: '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
-          severity: 'warning',
-        });
-        return;
-      }
-      if (isCollapsed) {
-        if (!('offset' in startTextDocumentLocation)) {
-          papi.notifications.send({
-            message: '%webView_platformScriptureEditor_error_noTextSelected%',
-            severity: 'warning',
-          });
-          return;
-        }
-        const { offset } = startTextDocumentLocation;
-        let charBefore = offset > 0 ? startNode[offset - 1] : '';
-        let charAfter = offset < startNode.length ? startNode[offset] : '';
-        if (
-          (charBefore.length === 0 || isWhiteSpace(charBefore)) &&
-          (charAfter.length === 0 || isWhiteSpace(charAfter))
-        ) {
-          papi.notifications.send({
-            message: '%webView_platformScriptureEditor_error_noTextSelected%',
-            severity: 'warning',
-          });
-          return;
-        }
-
-        // Expand the annotation range to include surrounding non-whitespace characters.
-        // This is a quick and dirty way to do this; the backend will do this properly with the
-        // definition of whitespace according to the project
-        let tempOffset = offset; // Start at the cursor position because that is charAfter
-        while (charAfter.length > 0 && !isWhiteSpace(charAfter)) {
-          charAfter = tempOffset + 1 < startNode.length ? startNode[tempOffset + 1] : '';
-          tempOffset += 1;
-        }
-        annotationRange.end = {
-          ...annotationRange.end,
-          offset: tempOffset,
-        };
-        tempOffset = offset - 1; // Start at the character before the cursor since charBefore is already one step before the offset
-        while (charBefore.length > 0 && !isWhiteSpace(charBefore)) {
-          charBefore = tempOffset > 0 ? startNode[tempOffset - 1] : '';
-          tempOffset -= 1;
-        }
-        annotationRange.start = {
-          ...annotationRange.start,
-          offset: tempOffset + 1, // +1 to move back to the first non-whitespace character
-        };
-      }
+      annotationRange.start = { ...validation.range.start };
+      annotationRange.end = { ...validation.range.end };
+      anchoredText = readCommentRangeText(validation.range, editorUsjCorrected);
     }
 
     // Try to find the selected text element to anchor the popover to. No rendered editor content
@@ -1961,7 +1901,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     const editorContainer = document.querySelector<HTMLElement>('.usfm');
     if (!editorContainer) return;
 
-    pendingCommentAnnotationRange.current = { range: annotationRange, verseRef: scrRef };
+    pendingCommentAnnotationRange.current = {
+      range: annotationRange,
+      verseRef: scrRef,
+      anchoredText,
+    };
 
     // Create a temporary annotation to highlight the selected text
     editorRef.current?.setAnnotation(
@@ -1976,7 +1920,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     if (domSelection && domSelection.rangeCount > 0) {
       const range = domSelection.getRangeAt(0).cloneRange();
       commentPopoverAnchor.setSource(
-        createPendingCommentAnchorSource(range, PENDING_COMMENT_ANNOTATION_ID, editorContainer),
+        createPendingCommentAnchorSource(
+          range,
+          () =>
+            editorRef.current?.getAnnotationRanges(
+              ANNOTATION_TYPE_TRANSLATOR_COMMENT,
+              PENDING_COMMENT_ANNOTATION_ID,
+            ) ?? [],
+          editorContainer,
+        ),
       );
     } else {
       // Fallback to center of editor viewport
@@ -2100,8 +2052,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           // Requested before navigating, so the jump records the chapter it started from.
           requestScrollToRange(range, targetScrRef);
           // Keeps the scroll group on the range's verse. The verse scroll this sets off stands down
-          // for a reference a range scroll owns (see the scroll effect below).
-          if (compareScrRefs(scrRef, targetScrRef) !== 0) setScrRefWithScroll(targetScrRef);
+          // for a reference a range scroll owns (see the scroll effect below). Always asserted, even
+          // when this web view already shows the verse: the `scrRef` rendered here can lag the
+          // scroll group, which another view may have just moved elsewhere. A no-op when the group
+          // is already there.
+          setScrRefWithScroll(targetScrRef);
           break;
         }
         case 'updateDecorations': {
@@ -2283,7 +2238,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             // If this is a click action, set the editor selection to the annotation's range so the
             // user sees it when the command runs.
             if (action === 'clicked') {
-              scrollToAnnotation(annotationId);
+              scrollToAnnotation(
+                () => editorRef.current?.getAnnotationRanges(annotationType, annotationId) ?? [],
+              );
               editorRef.current?.setSelection(annotationRange);
             }
 
@@ -2979,19 +2936,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const setScrRefNoScroll = useCallback(
     (newVerseLocation: SerializedVerseRef) => {
-      // Preserve versificationStr so the PDP selector doesn't change on every click. Against
-      // platform-editor 0.8.15 the fallback is a no-op: `positionToScrRef` carries the host's
-      // `versificationStr` on every position report (a document states no versification of its
-      // own), and that plugin is the sole caller of this handler. Kept as cheap insurance in case
-      // that contract changes — versions before 0.8.15 reported positions without it.
-      const preservedLocation: SerializedVerseRef = {
-        ...newVerseLocation,
-        versificationStr: newVerseLocation.versificationStr ?? scrRef.versificationStr,
-      };
-      internalVerseLocationRef.current = preservedLocation;
-      setScrRefWithScroll(preservedLocation);
+      // A report of the user's own caret move gives up on any pending range jump now, so it cannot
+      // land later on top of wherever the user just clicked; the hook tells the engine's book
+      // correction apart and keeps the jump for that. Preserving `versificationStr` keeps the PDP
+      // selector from changing on every click.
+      applyEditorScrRefReport(newVerseLocation, {
+        currentVersificationStr: scrRef.versificationStr,
+        onEditorScrRefChange,
+        setScrRef: (preservedLocation) => {
+          internalVerseLocationRef.current = preservedLocation;
+          setScrRefWithScroll(preservedLocation);
+        },
+      });
     },
-    [setScrRefWithScroll, scrRef.versificationStr],
+    [onEditorScrRefChange, setScrRefWithScroll, scrRef.versificationStr],
   );
 
   /**
@@ -3056,6 +3014,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       message: getErrorMessage(usjFromPdpPossiblyError),
       isMissingBook: isMissingBookError(usjFromPdpPossiblyError),
       identities: parseMissingBookError(usjFromPdpPossiblyError),
+      // The backend refusing a project that cannot be opened. Needs no check against the project on
+      // screen: this subscription is for one project, and changing it reloads the web view.
+      openBlockedReasonKey: getProjectOpenBlockedReasonKey(usjFromPdpPossiblyError),
     };
   }, [usjFromPdpPossiblyError]);
 
@@ -4114,10 +4075,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // updates report, while programmatic applies (e.g. the footnote popover's
       // `replaceEmbedUpdate` save) report `'remote'`. An EXTERNAL apply (`setEditorUsj` →
       // `EditorRef.setUsj`) must never refresh this stamp, and it cannot: the editor loads
-      // external content under its change-suppression tag (`EXTERNAL_USJ_MUTATION_TAG`, excluded
-      // by `DeltaOnChangePlugin`'s ignore list), so it never reaches this callback at all — the
-      // source gate is belt-and-braces on top of that.
+      // external content under its change-suppression tag (`EXTERNAL_USJ_MUTATION_TAG`, skipped by
+      // the editor's own single commit listener, `handleCommit` in `Editor.tsx`), so it never
+      // reaches this callback at all — the source gate is belt-and-braces on top of that.
       if (source === 'local') lastLocalEditTimestamp.current = Date.now();
+      discardPendingCommentIfAnchorChanged.current(usj);
       // The editor changed under an open palette. Close it rather than leave it floating over text
       // it no longer describes: a commit applies at the caret, and that caret may have moved with
       // the content. The spine refuses such a commit too, but refusing LOOKS like nothing
@@ -4131,31 +4093,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // Capture the current chapter's save fn and chapter key into the debounce payload so a
       // pending trailing save always targets the chapter this content was typed in.
       //
-      // Schedule the SETTLED, transient-excluded snapshot (`EditorRef.getUsj()`), not the raw
-      // `usj` this callback was invoked with: `onUsjChange`'s payload is the unsettled document as
-      // typed, and `setTransientInput`'s exclusion applies only to `getUsj()`. A pending trailing
-      // save can fire via the cross-chapter flush (`performDebouncedPdpSave`'s `capturedSave`
-      // branch) or via the editor-unavailable fallback in its same-chapter branch — neither of
-      // those can re-read the editor safely at fire time (the chapter has moved on, or the editor
-      // is gone), so the snapshot captured HERE, at schedule time, is what they replay. Reading it
-      // settled and transient-excluded now means both replay paths carry canonical bytes instead
-      // of a stray palette trigger literal. Falls back to the raw `usj` only if the editor is
-      // unavailable at this exact keystroke (should not happen in practice — `onUsjChange` only
-      // fires from a mounted editor).
+      // Schedule the settled, transient-excluded snapshot (`EditorRef.getUsj()`): `onUsjChange`'s
+      // `usj` payload is itself this same settled, transient-excluded document, so this call
+      // returns an equal value — `readSettledUsj` is memoized, so re-deriving it here is free. A
+      // pending trailing save can fire via the cross-chapter flush (`performDebouncedPdpSave`'s
+      // `capturedSave` branch) or via the editor-unavailable fallback in its same-chapter branch —
+      // neither of those can re-read the editor safely at fire time (the chapter has moved on, or
+      // the editor is gone), so the snapshot captured HERE, at schedule time, is what they replay.
+      // Falls back to the raw `usj` argument only if the editor is unavailable at this exact
+      // keystroke (should not happen in practice — `onUsjChange` only fires from a mounted editor).
       //
-      // Read ONCE and shared with the pane's live-document publish below: both need the same
-      // settled snapshot, and a second `getUsj()` would re-serialize the whole chapter per
-      // keystroke.
-      //
-      // LOAD-BEARING: reverting `settledUsj` back to the plain `usj`
-      // argument compiles and passes every existing test — this web view has no component-level
-      // test harness for its save-scheduling path — but silently reopens a live corruption class:
-      // a save that fires mid-keystroke (the debounce timer, a window-blur flush, or the
-      // cross-chapter flush) would then schedule the UNSETTLED bytes directly, bypassing
-      // `setTransientInput`'s exclusion entirely, so an in-progress command-surface literal (e.g. a
-      // marker-palette trigger) could reach disk as a phantom marker even when the exclusion itself
-      // is working correctly. Only a live check (type a trigger literal, force a save before the
-      // surface consumes it, inspect the saved bytes) catches a regression on this line.
+      // Read once and shared with the pane's live-document publish below: both need the same
+      // settled snapshot.
       const settledUsj = editorRef.current?.getUsj() ?? usj;
       saveUsjToPdpDebounced.schedule(
         settledUsj,
@@ -4242,6 +4191,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   // #endregion Debounced Save Scheduling
 
+  // Looked up once per web view and reused: a lookup per selection change would be a PAPI round
+  // trip each time. Awaited rather than read from a hook so the editor's first reports, made while
+  // the web view is still loading, are not dropped before the controller is found.
+  const webViewControllerPromiseRef = useRef<
+    | ReturnType<typeof papi.webViews.getWebViewController<typeof SCRIPTURE_EDITOR_WEBVIEW_TYPE>>
+    | undefined
+  >(undefined);
+
   /**
    * Handle selection changes in the editor. Updates the local ref and notifies the backend so it
    * can track the current selection and emit events.
@@ -4272,14 +4229,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
       // Notify the backend of the selection change via WebViewController method
       try {
-        const webViewController = await papi.webViews.getWebViewController(
-          'platformScriptureEditor.react',
+        webViewControllerPromiseRef.current ??= papi.webViews.getWebViewController(
+          SCRIPTURE_EDITOR_WEBVIEW_TYPE,
           webViewId,
         );
-        if (webViewController) {
-          await webViewController.updateSelectionInternal(scriptureSelection);
-        }
+        const webViewController = await webViewControllerPromiseRef.current;
+        if (webViewController) await webViewController.updateSelectionInternal(scriptureSelection);
+        // Not found yet, so look again next time
+        else webViewControllerPromiseRef.current = undefined;
       } catch (e) {
+        webViewControllerPromiseRef.current = undefined;
         logger.debug(`Failed to notify backend of selection change: ${getErrorMessage(e)}`);
       }
     },
@@ -4425,6 +4384,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
     setShowCommentEditor(false);
   }, []);
+
+  discardPendingCommentRef.current = onCommentEditorCancel;
 
   /** Flag to indicate if a comment submission is in progress so we don't submit multiple times */
   const isSubmittingComment = useRef(false);
@@ -4690,15 +4651,23 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // When not rendering the editor component itself, make sure not to try to apply the scripture-font
     // in the useEffect above
 
-    // No project selected — render an empty state instead of the loading spinner. Without this
-    // branch the editor would stay on the spinner forever in Platform.Bible's simple mode when
-    // started without a pre-selected project.
+    // No project — render an empty state instead of the loading spinner. Without this branch the
+    // editor would stay on the spinner forever in Platform.Bible's simple mode when started without
+    // a pre-selected project. `NoProjectPanel` also tells a user with no projects at all how to get
+    // one.
+    //
+    // Hidden case: `NoProjectPanel` pauses its lookups while hidden and asks again on activation.
     if (!projectId) {
       return (
-        <div className="tw:flex tw:items-center tw:justify-center tw:h-full tw:px-4">
+        <>
           {workaround}
-          {localizedStrings['%webView_platformScriptureEditor_emptyState_noProject%']}
-        </div>
+          <NoProjectPanel
+            localizedStrings={localizedStrings}
+            isPowerMode={isPowerMode}
+            isInterfaceModeLoading={isInterfaceModeLoading}
+            isViewVisible={isViewVisible}
+          />
+        </>
       );
     }
     if (!bookExists) {
@@ -4758,6 +4727,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   logger.warn(`Failed to open Manage Books from the book-not-available view: ${e}`),
                 );
             }}
+          />
+        </>
+      );
+    }
+    // Reached when the tab opened without the factory's reason (its lookup failed open). The
+    // refusal is not a missing book, so without this the editor would wait on the spinner below
+    // for text that never arrives.
+    if (usjFromPdpError?.openBlockedReasonKey) {
+      return (
+        <>
+          {workaround}
+          <LocalizedUnsupportedProjectMessage
+            unsupportedReason={usjFromPdpError.openBlockedReasonKey}
+            announcementKey={projectId}
           />
         </>
       );
@@ -4990,6 +4973,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       {/* Slim, non-covering banner while an automatic Send/Receive freezes editing. Shown only when
           sync-blocked and not genuinely read-only (a real viewer shouldn't say "editing paused"). */}
       {isSyncBlocked && !isReadOnly && <SyncBlockedBanner localizedStrings={localizedStrings} />}
+      {/* Outside the zoomed, scrolling text area, so the notice stays put while the text scrolls.
+          Every project is asked, because a "Notification:" copyright shows its banner on any text,
+          as in Paratext 9. */}
+      <ProjectCopyrightNotice
+        projectId={projectId}
+        localizedStrings={localizedStrings}
+        useWebViewState={useWebViewState}
+      />
       {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state.
           The zoom area is inside `renderEditor()`, around the editor tree only. */}
       <InPortal node={editorPortalNode}>
@@ -5157,5 +5148,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         </PopoverContent>
       </Popover>
     </div>
+  );
+}
+
+/**
+ * Entry point. The web-view factory writes the project's `unsupportedReason` into this view's state
+ * on every build, including a layout restore; see {@link UnsupportedProjectGate}.
+ */
+globalThis.webViewComponent = function PlatformScriptureEditorWebView(props: WebViewProps) {
+  // Destructured here rather than in the parameter list because the editor receives every prop.
+  const { projectId, useWebViewState } = props;
+  const [unsupportedReason] = useWebViewState<string>(UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY, '');
+  return (
+    <UnsupportedProjectGate unsupportedReason={unsupportedReason} announcementKey={projectId}>
+      <PlatformScriptureEditor {...props} />
+    </UnsupportedProjectGate>
   );
 };

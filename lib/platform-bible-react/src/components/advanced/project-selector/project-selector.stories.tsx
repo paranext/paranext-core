@@ -3,6 +3,7 @@
 // fits production code better than story fixtures.
 /* eslint-disable no-type-assertion/no-type-assertion */
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { expect, userEvent, within } from 'storybook/test';
 import { useMemo, useState } from 'react';
 import { BookOpen, FileText } from 'lucide-react';
 import type { ScrollGroupId } from 'platform-bible-utils';
@@ -510,6 +511,19 @@ export const Loading: Story = {
 // #region per-row disabled
 
 export const PerRowDisabled: Story = {
+  // Runs in a real browser: jsdom applies no CSS, so it cannot see the shared `CommandItem`'s
+  // `pointer-events: none` on disabled rows that would stop this hover from reaching the row.
+  tags: ['test'],
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(body.getByRole('combobox', { name: /^Project/ }));
+
+    await userEvent.hover(await body.findByRole('option', { name: /ESV16UK/ }));
+
+    await expect(await body.findByRole('tooltip')).toHaveTextContent(
+      'Read-only — cannot copy into this project',
+    );
+  },
   render: () => {
     const projectsWithDisabled: ProjectSelectorProject[] = sampleProjects.map((p) =>
       p.id === 'esv16uk' || p.id === 'tp1'
@@ -532,7 +546,7 @@ export const PerRowDisabled: Story = {
     docs: {
       description: {
         story:
-          'Two projects (`ESV16UK`, `TP1`) are marked disabled with a `disabledReason`. They render muted, are not selectable (Up/Down navigation skips them), and the reason surfaces in the row tooltip. Use this to surface read-only or otherwise-unusable projects without filtering them out of the list.',
+          'Two projects (`ESV16UK`, `TP1`) are marked disabled with a `disabledReason`. They render muted, are not selectable (Up/Down navigation skips them), and the reason surfaces in the row tooltip on hover and in the row description screen readers announce. Use this to surface read-only or otherwise-unusable projects without filtering them out of the list.',
       },
     },
   },

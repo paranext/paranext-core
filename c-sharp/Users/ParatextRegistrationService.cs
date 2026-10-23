@@ -1,3 +1,4 @@
+using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Services;
 using Paratext.Data;
 using Paratext.Data.Repository;
@@ -44,6 +45,14 @@ internal class ParatextRegistrationService(
         await PapiClient.RegisterRequestHandlerAsync(
             "command:paratextRegistration.validateParatextRegistrationData",
             ValidateParatextRegistrationData
+        );
+        await PapiClient.RegisterRequestHandlerAsync(
+            "command:paratextRegistration.resetForFirstRun",
+            (string mode) => ResetForFirstRun(mode)
+        );
+        await PapiClient.RegisterRequestHandlerAsync(
+            "command:paratextRegistration.isRegistrationCopiedFromParatext9",
+            IsRegistrationCopiedFromParatext9
         );
 
         // Deprecated: retained as thin wrappers that delegate to InternetSettingsDataProvider so
@@ -212,6 +221,7 @@ internal class ParatextRegistrationService(
 
             // Actually change the registration info
             RegistrationInfo.ChangeRegistrationData(newRegistrationData);
+            (ParatextInfo.Default as PlatformParatextInfo)?.ForgetCopiedFromParatext9();
 
             // registration code may have changed, so reset the registry server with the new user data
             Paratext.Data.RegistryServerAccess.RegistryServer.Default?.ResetServer(
@@ -226,6 +236,58 @@ internal class ParatextRegistrationService(
                     ? e.Message
                     : $"Setting Paratext Registration data failed! {e.Message}"
             );
+        }
+    }
+
+    /// <summary>
+    /// Whether Platform.Bible's current registration was copied from Paratext 9 when its own
+    /// ParatextData folder was first set up (false if it was entered in Platform.Bible instead).
+    /// </summary>
+    internal static bool IsRegistrationCopiedFromParatext9() =>
+        ParatextInfo.Default is PlatformParatextInfo platformParatextInfo
+        && platformParatextInfo.IsRegistrationCopiedFromParatext9;
+
+    /// <summary>
+    /// Developer reset: puts Platform.Bible's own registration into the state a Paratext 9 user has
+    /// on their first Platform.Bible launch. The app must be restarted afterwards. Only ever touches
+    /// Platform.Bible's pinned ParatextData folder — Paratext 9's registration is never changed.
+    /// </summary>
+    /// <param name="mode">
+    /// <c>copyFromParatext9</c>: have the next startup replace Platform.Bible's copies of the
+    /// registration and internet settings with fresh copies from Paratext 9. <c>clear</c>: remove
+    /// only Platform.Bible's registration (an unregistered Paratext 9 user). <c>keep</c>: do
+    /// nothing.
+    /// </param>
+    internal static void ResetForFirstRun(string mode)
+    {
+        if (mode == "keep")
+            return;
+
+        // Refuse unless ParatextData is using PlatformParatextInfo: its own folder resolution can
+        // create or seed a Paratext 9 folder, and the registration there belongs to Paratext 9.
+        if (ParatextInfo.Default is not PlatformParatextInfo platformParatextInfo)
+            throw new InvalidOperationException(
+                "Refusing to reset registration: ParatextData is not using Platform.Bible's own "
+                    + "app-data folder"
+            );
+
+        switch (mode)
+        {
+            case "copyFromParatext9":
+                platformParatextInfo.RequestReseedFromParatext9();
+                break;
+            case "clear":
+                RegistrationInfo.DeleteRegistration();
+                platformParatextInfo.ForgetCopiedFromParatext9();
+                // An earlier copyFromParatext9 reset whose restart never happened would otherwise
+                // bring the registration back.
+                platformParatextInfo.CancelReseedFromParatext9();
+                break;
+            default:
+                throw new ArgumentException(
+                    $"Unknown registration reset mode: {mode}",
+                    nameof(mode)
+                );
         }
     }
 

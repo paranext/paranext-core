@@ -18,6 +18,7 @@ describe('isolatedFixtureBaseSettings', () => {
       'platform.interfaceMode': 'power',
       'platform.interfaceLanguage': ['en'],
       'platform.showRegistrationReminderOnStartup': false,
+      'platform.internetUseChoiceAsked': true,
     });
   });
 
@@ -26,6 +27,7 @@ describe('isolatedFixtureBaseSettings', () => {
       'platform.interfaceMode': 'simple',
       'platform.interfaceLanguage': ['en'],
       'platform.showRegistrationReminderOnStartup': false,
+      'platform.internetUseChoiceAsked': true,
     });
   });
 });
