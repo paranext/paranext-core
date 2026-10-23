@@ -101,6 +101,7 @@ import {
   formatReplacementString,
   getErrorMessage,
   getLocalizeKeysForScrollGroupIds,
+  getProjectOpenBlockedReasonKey,
   isPlatformError,
   LocalizeKey,
   serialize,
@@ -142,6 +143,8 @@ import {
   BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS,
   type ManageBooksDisabledReason,
 } from './book-not-available-view.component';
+import { NO_PROJECT_VIEW_STRING_KEYS } from './no-project-view.component';
+import { NoProjectPanel } from './no-project-panel.component';
 import { ResourceBookNotAvailable } from './resource-book-not-available.component';
 import { TeamLayoutButton, TEAM_LAYOUT_BUTTON_STRING_KEYS } from './team-layout-button.component';
 import {
@@ -208,6 +211,7 @@ import {
   hasPendingCommentTextChanged,
   shouldEndPaneNoteEditOnRowSelect,
   shouldPublishPaneDocument,
+  UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY,
 } from './platform-scripture-editor.utils';
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.component';
@@ -251,6 +255,12 @@ import {
   SyncBlockedBanner,
   SYNC_BLOCKED_BANNER_STRING_KEYS,
 } from './sync-blocked-banner.component';
+import { COPYRIGHT_NOTICE_STRING_KEYS } from './copyright-notice/copyright-notice.const';
+import { ProjectCopyrightNotice } from './copyright-notice/project-copyright-notice.component';
+import {
+  LocalizedUnsupportedProjectMessage,
+  UnsupportedProjectGate,
+} from './unsupported-project-gate.component';
 
 /**
  * Pass-through wrapper for the editor inside {@link InPortal}. `react-reverse-portal`'s `InPortal`
@@ -280,8 +290,10 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
   ...EMPTY_CHAPTER_VIEW_STRING_KEYS,
   ...BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS,
+  ...NO_PROJECT_VIEW_STRING_KEYS,
   ...TEAM_LAYOUT_BUTTON_STRING_KEYS,
   ...SYNC_BLOCKED_BANNER_STRING_KEYS,
+  ...COPYRIGHT_NOTICE_STRING_KEYS,
   // Not read by this file. Loaded here so that whichever component mounts the character-marker menu
   // gets its remove row localized through the `localizedStrings` this web view already resolves.
   ...CHARACTER_MARKER_MENU_STRING_KEYS,
@@ -314,7 +326,6 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%versionHistoryCommit_beforeInsertCrossReference%',
   '%versionHistoryCommit_beforeInsertEndnote%',
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
-  '%webView_platformScriptureEditor_emptyState_noProject%',
   '%webView_platformScriptureEditor_error_permissions_format%',
   // The one listing of this key. Named via the const so the sync-blocked message, its severity, and
   // its self-catching stay in one place (`editor-side-effects.utils.ts`) — the character-marker
@@ -493,7 +504,7 @@ const PERMISSIONS_EXCEPTION_REGEX = /Permissions exception for projectId/;
 // when a project write is rejected because an automatic Send/Receive is syncing that project.
 const SYNC_EDIT_BLOCKED_REGEX = /\(SR_EDIT_BLOCKED\)/;
 
-globalThis.webViewComponent = function PlatformScriptureEditor({
+function PlatformScriptureEditor({
   id: webViewId,
   projectId,
   title,
@@ -2989,6 +3000,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       message: getErrorMessage(usjFromPdpPossiblyError),
       isMissingBook: isMissingBookError(usjFromPdpPossiblyError),
       identities: parseMissingBookError(usjFromPdpPossiblyError),
+      // The backend refusing a project that cannot be opened. Needs no check against the project on
+      // screen: this subscription is for one project, and changing it reloads the web view.
+      openBlockedReasonKey: getProjectOpenBlockedReasonKey(usjFromPdpPossiblyError),
     };
   }, [usjFromPdpPossiblyError]);
 
@@ -4623,15 +4637,23 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // When not rendering the editor component itself, make sure not to try to apply the scripture-font
     // in the useEffect above
 
-    // No project selected — render an empty state instead of the loading spinner. Without this
-    // branch the editor would stay on the spinner forever in Platform.Bible's simple mode when
-    // started without a pre-selected project.
+    // No project — render an empty state instead of the loading spinner. Without this branch the
+    // editor would stay on the spinner forever in Platform.Bible's simple mode when started without
+    // a pre-selected project. `NoProjectPanel` also tells a user with no projects at all how to get
+    // one.
+    //
+    // Hidden case: `NoProjectPanel` pauses its lookups while hidden and asks again on activation.
     if (!projectId) {
       return (
-        <div className="tw:flex tw:items-center tw:justify-center tw:h-full tw:px-4">
+        <>
           {workaround}
-          {localizedStrings['%webView_platformScriptureEditor_emptyState_noProject%']}
-        </div>
+          <NoProjectPanel
+            localizedStrings={localizedStrings}
+            isPowerMode={isPowerMode}
+            isInterfaceModeLoading={isInterfaceModeLoading}
+            isViewVisible={isViewVisible}
+          />
+        </>
       );
     }
     if (!bookExists) {
@@ -4691,6 +4713,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   logger.warn(`Failed to open Manage Books from the book-not-available view: ${e}`),
                 );
             }}
+          />
+        </>
+      );
+    }
+    // Reached when the tab opened without the factory's reason (its lookup failed open). The
+    // refusal is not a missing book, so without this the editor would wait on the spinner below
+    // for text that never arrives.
+    if (usjFromPdpError?.openBlockedReasonKey) {
+      return (
+        <>
+          {workaround}
+          <LocalizedUnsupportedProjectMessage
+            unsupportedReason={usjFromPdpError.openBlockedReasonKey}
+            announcementKey={projectId}
           />
         </>
       );
@@ -4927,6 +4963,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       {/* Slim, non-covering banner while an automatic Send/Receive freezes editing. Shown only when
           sync-blocked and not genuinely read-only (a real viewer shouldn't say "editing paused"). */}
       {isSyncBlocked && !isReadOnly && <SyncBlockedBanner localizedStrings={localizedStrings} />}
+      {/* Outside the zoomed, scrolling text area, so the notice stays put while the text scrolls.
+          Every project is asked, because a "Notification:" copyright shows its banner on any text,
+          as in Paratext 9. */}
+      <ProjectCopyrightNotice
+        projectId={projectId}
+        localizedStrings={localizedStrings}
+        useWebViewState={useWebViewState}
+      />
       {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state.
           The zoom area is inside `renderEditor()`, around the editor tree only. */}
       <InPortal node={editorPortalNode}>
@@ -5094,5 +5138,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         </PopoverContent>
       </Popover>
     </div>
+  );
+}
+
+/**
+ * Entry point. The web-view factory writes the project's `unsupportedReason` into this view's state
+ * on every build, including a layout restore; see {@link UnsupportedProjectGate}.
+ */
+globalThis.webViewComponent = function PlatformScriptureEditorWebView(props: WebViewProps) {
+  // Destructured here rather than in the parameter list because the editor receives every prop.
+  const { projectId, useWebViewState } = props;
+  const [unsupportedReason] = useWebViewState<string>(UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY, '');
+  return (
+    <UnsupportedProjectGate unsupportedReason={unsupportedReason} announcementKey={projectId}>
+      <PlatformScriptureEditor {...props} />
+    </UnsupportedProjectGate>
   );
 };

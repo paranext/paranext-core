@@ -57,7 +57,8 @@ async function getAllProjectOptions(): Promise<
   { projectId: string; projectName: string; projectFullName?: string }[]
 > {
   const allMetadata = await projectLookupService.getMetadataForAllProjects();
-  return allMetadata.map((metadata) => ({
+  const openableMetadata = allMetadata.filter((metadata) => !metadata.unsupportedReason);
+  return openableMetadata.map((metadata) => ({
     projectId: metadata.id,
     // `name` is optional on the metadata contract, and the id is its documented fallback. A
     // present-but-blank name falls back too: the short name is the field that identifies a project

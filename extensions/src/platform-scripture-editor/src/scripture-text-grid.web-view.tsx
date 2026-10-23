@@ -68,11 +68,21 @@ import {
   ChapterContextResource,
   ScriptureTextGrid,
 } from './scripture-text-grid/scripture-text-grid.component';
-import { GridResource } from './scripture-text-grid/resource-cell.component';
-import { toGridResources } from './scripture-text-grid/grid-resources.utils';
-import { getGridBodyState } from './scripture-text-grid/grid-body-state.utils';
+import { toGridResources, type GridResource } from './scripture-text-grid/grid-resources.utils';
+import {
+  CATALOG_ERROR_KEY,
+  CATALOG_RETRY_KEY,
+} from './scripture-text-grid/catalog-retry-banner.const';
+import { useCatalogRetryState } from './scripture-text-grid/use-catalog-retry-state.hook';
+import {
+  getGridBodyState,
+  shouldShowCatalogRetryBanner,
+} from './scripture-text-grid/grid-body-state.utils';
+import { useDblInstallLookup } from './scripture-text-grid/use-dbl-install-lookup.hook';
+import { CatalogRetryBanner } from './scripture-text-grid/catalog-retry-banner.component';
 import { isNonDblResource } from './resource-reference.utils';
 import { buildChapterContextOpenedMessage } from './scripture-text-grid/announcements.utils';
+import { isEscapeForChapterContext } from './scripture-text-grid/chapter-context-escape.utils';
 import {
   useResourceContentZoom,
   type ResourceZoomController,
@@ -100,8 +110,6 @@ const NOT_SUPPORTED_KEY = '%webView_scriptureTextGrid_viewOptions_notSupported%'
 const SETTINGS_UNAVAILABLE_KEY = '%webView_scriptureTextGrid_viewOptions_settingsUnavailable%';
 const CHAPTER_CONTEXT_CLOSE_KEY = '%webView_scriptureTextGrid_chapterContext_close%';
 const EMPTY_STATE_KEY = '%webView_scriptureTextGrid_emptyState_prompt%';
-const CATALOG_ERROR_KEY = '%webView_scriptureTextGrid_catalogUnavailable%';
-const CATALOG_RETRY_KEY = '%webView_scriptureTextGrid_retry%';
 const CELL_ACCESSIBLE_NAME_KEY = '%webView_scriptureTextGrid_cell_accessibleName%';
 // Screen-reader announcements for the chapter-context split opening/closing.
 const ARIA_OPENED_KEY = '%webView_scriptureTextGrid_aria_chapterContextOpened%';
@@ -164,8 +172,12 @@ type ScriptureTextGridProjectViewProps = {
   /** The cached DBL resource catalog, or `undefined` until it has been delivered. */
   cachedResources: DblResourceData[] | undefined;
   isLoadingCachedResources: boolean;
+  /** Whether the catalog fetch has answered since it last started, successfully or not. */
+  hasCatalogSettled: boolean;
   hasCatalogError: boolean;
   refetchCatalog: () => void;
+  /** Bumped by each install from this web view, which changes what is on disk. */
+  refreshCounter: number;
   installingResourceNames: string[];
   /** Installs a picked resource; resolves whether the install succeeded. */
   installPickedResource: (resource: DblResourceData) => Promise<boolean>;
@@ -200,8 +212,10 @@ function ScriptureTextGridProjectView({
   setViewMode,
   cachedResources,
   isLoadingCachedResources,
+  hasCatalogSettled,
   hasCatalogError,
   refetchCatalog,
+  refreshCounter,
   installingResourceNames,
   installPickedResource,
   initializeOverlayOnce,
@@ -239,7 +253,8 @@ function ScriptureTextGridProjectView({
   }, [localizedStrings, onAnnounce]);
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || chapterContext === undefined || viewMode !== 'verse') return;
+      if (chapterContext === undefined || viewMode !== 'verse' || !isEscapeForChapterContext(event))
+        return;
       event.preventDefault();
       event.stopPropagation();
       handleCloseChapterContext();
@@ -266,6 +281,13 @@ function ScriptureTextGridProjectView({
     };
   }, []);
 
+  // Keeps the retry banner (and the focused button) mounted through a retry it started: the
+  // refetch clears the error at once, which would otherwise remove the banner mid-click.
+  const { isRetrying: isRetryingCatalog, retry: retryCatalogFromBanner } = useCatalogRetryState(
+    hasCatalogSettled,
+    refetchCatalog,
+  );
+
   const { top, bottom } = useMemo(
     () =>
       sources
@@ -276,16 +298,26 @@ function ScriptureTextGridProjectView({
     [sources, cachedResources],
   );
 
+  const orderedReferences = useMemo(
+    () => (sources ? getOrderedScriptureTextGridContents(sources) : []),
+    [sources],
+  );
+
+  const installLookup = useDblInstallLookup({
+    references: orderedReferences,
+    cachedResources,
+    isCatalogLoading: isLoadingCachedResources,
+    hasCatalogSettled,
+    refreshCounter,
+  });
+
   // The grid body's cells: the `getOrderedScriptureTextGridContents` selector over the Text
   // Collection sources, resolved to the row's `{ resourceId, projectId, label }` shape. The selector returns
   // already-filtered, ordered Bible-text refs.
   const resources = useMemo<GridResource[]>(
     () =>
-      toGridResources(
-        sources ? getOrderedScriptureTextGridContents(sources) : [],
-        cachedResources ?? [],
-      ),
-    [sources, cachedResources],
+      toGridResources(orderedReferences, cachedResources ?? [], { installLookup, hasCatalogError }),
+    [orderedReferences, cachedResources, installLookup, hasCatalogError],
   );
 
   // Ctrl+F opens Find for the resource the caret is in. Unlike the single-resource reference panels,
@@ -309,13 +341,13 @@ function ScriptureTextGridProjectView({
   });
 
   // The grid is one web view hosting many projects, so its members are invisible to global
-  // navigation UI unless declared here.
-  // `resources` — and so `displayedProjectIds` — is transiently empty until the sources and the
-  // cached DBL list have both loaded, which is indistinguishable from "every project was removed".
+  // navigation UI unless declared here. `resources` — and so `displayedProjectIds` — is incomplete
+  // until the sources, the cached DBL list and the disk lookup have all answered, which is
+  // indistinguishable from "those projects were removed".
   usePublishNavigableProjectIds(
     useWebViewState,
     displayedProjectIds,
-    sources !== undefined && !isLoadingCachedResources,
+    sources !== undefined && !isLoadingCachedResources && installLookup.status !== 'pending',
     // A project switch re-points this panel by reloading it, which reuses the web view id, so the
     // published list would otherwise outlive the project it was built for.
     projectId,
@@ -521,11 +553,22 @@ function ScriptureTextGridProjectView({
           </PopoverContent>
         </Popover>
       </div>
+      {/* A persistent live region, so the banner is announced when it appears inside it. */}
+      <div role="status">
+        {gridBodyState === 'grid' &&
+          (isRetryingCatalog || shouldShowCatalogRetryBanner({ hasCatalogError, resources })) && (
+            <CatalogRetryBanner
+              message={localizedStrings[CATALOG_ERROR_KEY]}
+              retryLabel={localizedStrings[CATALOG_RETRY_KEY]}
+              onRetry={retryCatalogFromBanner}
+              isRetrying={isRetryingCatalog}
+            />
+          )}
+      </div>
       {/* Grid body: a message when nothing is renderable, otherwise the verse-cell rows.
           Gate the message on loading being finished so it can't flash before data arrives —
           `sources` undefined and `cachedResources` still loading each make `resources` transiently
-          empty (a DBL ref resolves to a cell only once the cached list loads). The
-          `!isLoadingLocalizedStrings` guard also avoids flashing a raw `%key%`.
+          empty. The `!isLoadingLocalizedStrings` guard also avoids flashing a raw `%key%`.
 
           The body itself is not a zoom area: each cell marks only its resource's text, with that
           resource's own area (`resource-<id>`, see `resource-zoom-area.utils.ts`), so the cells'
@@ -678,7 +721,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // catalog's flags to be brought up to date — this read itself does not wait for them.
   const {
     data: catalog,
-    isLoading: isCatalogLoading,
+    isLoading: isCatalogFetchInFlight,
     hasError: hasCatalogFetchError,
     hasSettled: hasCatalogSettled,
     refetch: refetchCatalog,
@@ -705,7 +748,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 
   // `!hasCatalogSettled` counts as loading, not just `isLoading`, so the render between a retry
   // click and the effect that restarts the fetch cannot paint a settled-looking empty grid.
-  const isLoadingCachedResources = isCatalogLoading || !hasCatalogSettled;
+  const isLoadingCachedResources = isCatalogFetchInFlight || !hasCatalogSettled;
 
   // An installation with no DBL credentials is a catalog with nothing in it — an answer this grid
   // can render, because it only reads the catalog to resolve long names and installed project ids.
@@ -718,7 +761,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   useEffect(() => {
     if (hasCatalogError)
       logger.warn(
-        'Scripture Text Grid: the DBL resource catalog is unavailable, so DBL references cannot be resolved',
+        'Scripture Text Grid: the DBL resource catalog is unavailable; resolving DBL references from disk',
       );
   }, [hasCatalogError]);
 
@@ -843,8 +886,10 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
         setViewMode={setViewMode}
         cachedResources={cachedResources}
         isLoadingCachedResources={isLoadingCachedResources}
+        hasCatalogSettled={hasCatalogSettled}
         hasCatalogError={hasCatalogError}
         refetchCatalog={refetchCatalog}
+        refreshCounter={refreshCounter}
         installingResourceNames={installingResourceNames}
         installPickedResource={installPickedResource}
         initializeOverlayOnce={initializeOverlayOnce}

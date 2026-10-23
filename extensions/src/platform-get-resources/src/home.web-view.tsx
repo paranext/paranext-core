@@ -16,7 +16,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Home, HOME_STRING_KEYS, type RemoteProjectsState } from './home.component';
 import { parseUnsyncedProjectIds } from './home-unsynced.util';
 import { getInternetBlockedNotification } from './internet-block-notification.utils';
+import { isProjectResourceFilterValue } from './project-resource-filter.component';
+import { useUnsupportedReasonStrings } from './use-unsupported-reason-strings.hook';
 import { useLocalProjects } from './use-local-projects.hook';
+import { openHomeItem } from './open-home-item';
 
 const defaultInterfaceLanguages: string[] = ['en'];
 
@@ -26,10 +29,19 @@ const SEND_RECEIVE_ATTEMPTS = 4;
 const SEND_RECEIVE_RETRY_MS = 2000;
 
 globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewProps) {
-  // Seeded by the web view provider from the caller's open options, and scrubbed back to `false` on
-  // every open that does not ask for it — so a projects-only launch cannot survive into a later
-  // menu open or a restored layout. See `buildHomeWebViewState`.
-  const [shouldShowProjectsOnly] = useWebViewState<boolean>('shouldShowProjectsOnly', false);
+  // Set by the web view provider from an opener's preset, and otherwise kept as the user left it.
+  // The user's changes are written back so it survives window moves and reloads, and so `openHome`
+  // can tell whether the filter on screen matches what a later caller asks for. See
+  // `buildHomeWebViewState`.
+  const [savedProjectResourceFilter, setProjectResourceFilter] = useWebViewState<string>(
+    'projectResourceFilter',
+    'all',
+  );
+  // Saved state is untyped at rest, and a layout from another build may carry a value this one does
+  // not know. Filtering on it would hide items behind a trigger that reads "All".
+  const projectResourceFilter = isProjectResourceFilterValue(savedProjectResourceFilter)
+    ? savedProjectResourceFilter
+    : 'all';
 
   const isMounted = useRef(false);
   useEffect(() => {
@@ -77,31 +89,6 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
   const openGetResources = useCallback(() => {
     papi.commands.sendCommand('platformGetResources.openGetResources');
   }, []);
-
-  const openProject = async (projectId: string, isPublished: boolean) => {
-    await papi.commands.sendCommand(
-      isPublished
-        ? 'platformScriptureEditor.openResourceViewer'
-        : 'platformScriptureEditor.openScriptureEditor',
-      projectId,
-    );
-
-    // Recorded for editable projects only, matching what the title bar's picker lists. Home is the
-    // title bar's route to a project that is not in that list yet, so a project opened here has to
-    // join it — otherwise the escape hatch for finding a non-recent project never makes it recent.
-    if (isPublished) return;
-    try {
-      const recentlyOpenedProjects = await papi.dataProviders.get(
-        'platformScripture.recentlyOpenedProjects',
-      );
-      await recentlyOpenedProjects?.recordProjectOpened(projectId);
-    } catch (e) {
-      // The project did open; failing to remember it is not worth reporting to the user.
-      logger.warn(
-        `Home web view could not record project ${projectId} as recently opened: ${getErrorMessage(e)}`,
-      );
-    }
-  };
 
   const [isSendReceiveAvailable, setIsSendReceiveAvailable] = useState<boolean | undefined>(
     undefined,
@@ -420,12 +407,17 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
 
   const dialogTitleText: string = localizedStringsWithLoadingState[0]['%home_dialog_title%'];
 
+  const localizedUnsupportedReasons = useUnsupportedReasonStrings(
+    localProjectsInfo,
+    sharedProjectsInfo,
+  );
+
   return (
     <Home
       localizedStringsWithLoadingState={localizedStringsWithLoadingState}
       uiLocales={uiLocales}
       onOpenGetResources={openGetResources}
-      onOpenProject={openProject}
+      onOpenProject={openHomeItem}
       onSendReceiveProject={sendReceiveProject}
       onGetStarted={getStarted}
       showGetResourcesButton={showGetResourcesButton}
@@ -433,10 +425,12 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
       isLoadingLocalProjects={isLoadingLocalProjects}
       unsyncedProjectIds={unsyncedProjectIds}
       remoteProjectsState={remoteProjectsState}
-      shouldShowProjectsOnly={shouldShowProjectsOnly}
+      initialProjectResourceFilter={projectResourceFilter}
+      onProjectResourceFilterChange={setProjectResourceFilter}
       localProjectsInfo={localProjectsInfo}
       sharedProjectsInfo={sharedProjectsInfo}
       activeSendReceiveProjects={activeSendReceiveProjects}
+      localizedUnsupportedReasons={localizedUnsupportedReasons}
       headerContent={
         <>
           <HomeIcon size={36} />

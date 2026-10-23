@@ -12,6 +12,7 @@ import {
   within,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { createPortal } from 'react-dom';
 import {
   BOOK_NOT_AVAILABLE_KEY,
   EMPTY_KEY,
@@ -21,6 +22,7 @@ import {
   UNAVAILABLE_KEY,
   ResourceCellView,
   COPY_KEY,
+  INSTALL_UNVERIFIED_KEY,
 } from './resource-cell-view.component';
 
 // jsdom doesn't ship a ResizeObserver (needed by Radix portal content). A stub is sufficient since
@@ -55,6 +57,7 @@ const localizedStrings = {
   [FAILED_KEY]: 'Download failed',
   [EMPTY_KEY]: 'No text for this verse',
   [BOOK_NOT_AVAILABLE_KEY]: 'Book not in this text',
+  [INSTALL_UNVERIFIED_KEY]: "Couldn't check whether this resource is installed",
 };
 
 /** The zoom area the cells under test mark their text with. */
@@ -154,6 +157,25 @@ describe('ResourceCellView row smoke', () => {
     expect(screen.queryByText('Resource unavailable')).not.toBeInTheDocument();
     expect(screen.queryByText('Resource not installed')).not.toBeInTheDocument();
     expect(screen.queryByText('Resource is loading\u2026')).not.toBeInTheDocument();
+  });
+
+  it('unverified: says it could not check \u2014 not "not installed", no retry wording, no editor', () => {
+    renderCells(
+      <ResourceCellView
+        state="unverified"
+        zoomArea={ZOOM_AREA}
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={undefined}
+      />,
+    );
+    expect(screen.getByText('Resource unavailable')).toBeInTheDocument();
+    expect(
+      screen.getByText("Couldn't check whether this resource is installed"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Resource not installed')).not.toBeInTheDocument();
+    expect(screen.queryByText('Download failed')).not.toBeInTheDocument();
   });
 
   it('mixed direction: LTR and RTL cells apply independent dir', () => {
@@ -451,20 +473,31 @@ describe('ResourceCellView right-click menu', () => {
     expect(screen.getAllByRole('button')).toHaveLength(1);
   });
 
-  it('leaves the browser menu alone on a cell whose resource is not installed', () => {
+  it.each([
+    ['whose resource is not installed', 'unavailable', 'Resource not installed'],
+    [
+      'whose install could not be checked',
+      'unverified',
+      "Couldn't check whether this resource is installed",
+    ],
+  ] as const)('leaves the browser menu alone on a cell %s', (_, state, text) => {
     renderCells(
       <ResourceCellView
-        state="unavailable"
+        state={state}
         zoomArea={ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
-        localizedStrings={{ ...menuStrings, [NOT_INSTALLED_KEY]: 'Resource not installed' }}
+        localizedStrings={{
+          ...menuStrings,
+          [NOT_INSTALLED_KEY]: 'Resource not installed',
+          [INSTALL_UNVERIFIED_KEY]: "Couldn't check whether this resource is installed",
+        }}
         copyLimit={undefined}
         editor={undefined}
       />,
     );
-    const event = createEvent.contextMenu(screen.getByText('Resource not installed'));
-    fireEvent(screen.getByText('Resource not installed'), event);
+    const event = createEvent.contextMenu(screen.getByText(text));
+    fireEvent(screen.getByText(text), event);
     expect(event.defaultPrevented).toBe(false);
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
@@ -1564,5 +1597,80 @@ describe('ResourceCellView content scroll ownership', () => {
     const { container } = renderCells(<ResourceCellView {...baseProps} />);
 
     expect(container.querySelector('[data-cell-content] [data-cell-header]')).toBeNull();
+  });
+});
+
+describe('ResourceCellView copyright indicator', () => {
+  const INDICATOR = <span data-testid="copyright-indicator" />;
+
+  it('puts the indicator in the header next to the name', () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<span>In the beginning</span>}
+        copyrightIndicator={INDICATOR}
+      />,
+    );
+
+    expect(screen.getByText('NIV').parentElement).toContainElement(
+      screen.getByTestId('copyright-indicator'),
+    );
+  });
+
+  it('puts the indicator beside the hanging name in inline mode, outside the verse text', () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        copyrightIndicator={INDICATOR}
+      />,
+    );
+
+    const indicator = screen.getByTestId('copyright-indicator');
+    expect(screen.getByText('NIV').parentElement).toContainElement(indicator);
+    expect(screen.getByText('In the beginning').parentElement).not.toContainElement(indicator);
+  });
+});
+
+describe('ResourceCellView right-click inside something opened from the cell', () => {
+  it('leaves the right-click menu closed for a right-click in a window portalled out of the cell', async () => {
+    // The copyright details window renders into document.body, but React still delivers its
+    // events to the cell it was opened from
+    const portalledWindow = createPortal(
+      <div role="dialog" aria-label="Copyright for NIV">
+        Copyright text
+      </div>,
+      document.body,
+    );
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={menuStrings}
+        editor={<span>verse</span>}
+        zoomMenuLabels={zoomMenuLabels}
+        copyrightIndicator={portalledWindow}
+      />,
+    );
+
+    const isNotCancelled = fireEvent.contextMenu(screen.getByText('Copyright text'));
+
+    expect(isNotCancelled).toBe(true);
+    expect(screen.queryByRole('menuitem', { name: 'Copy' })).not.toBeInTheDocument();
+
+    // The same right-click on the verse text does open it
+    fireEvent.contextMenu(screen.getByText('verse'));
+    expect(await screen.findByRole('menuitem', { name: 'Copy' })).toBeInTheDocument();
   });
 });

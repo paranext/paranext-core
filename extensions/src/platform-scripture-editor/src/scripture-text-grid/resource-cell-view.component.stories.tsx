@@ -12,6 +12,8 @@ import {
   ZOOM_OPTIONS_KEY,
   ZOOM_OUT_KEY,
 } from './resource-cell-view.component';
+import { CopyrightNoticeIndicatorView } from '../copyright-notice/copyright-notice-indicator.component';
+import { COPYRIGHT_NOTICE_STRING_KEYS } from '../copyright-notice/copyright-notice.const';
 
 /**
  * One cell of the Scripture Text Grid: a single resource's focused chapter. In the app the
@@ -173,6 +175,27 @@ export const NotInstalled: Story = {
     <CellBox>
       <ResourceCellView
         state="unavailable"
+        zoomArea={STORY_ZOOM_AREA}
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        copyLimit={undefined}
+        editor={undefined}
+      />
+    </CellBox>
+  ),
+};
+
+/**
+ * The resource could not be verified — the catalog failed to load AND the disk scan did not answer.
+ * Shows "Resource unavailable" with an explanation. Unlike `unavailable` (which claims "not
+ * installed"), this avoids directing a user to reinstall something already on disk.
+ */
+export const Unverified: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="unverified"
         zoomArea={STORY_ZOOM_AREA}
         label="NIV"
         textDirection="ltr"
@@ -357,6 +380,24 @@ export const VerseNotInstalled: Story = {
   ),
 };
 
+/** Verse mode, unverified — the inline name stays beside the "couldn't check" placeholder. */
+export const VerseUnverified: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="unverified"
+        zoomArea={STORY_ZOOM_AREA}
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        copyLimit={undefined}
+        nameDisplay="inline"
+        editor={undefined}
+      />
+    </CellBox>
+  ),
+};
+
 /** Verse mode, downloading — the inline name stays beside the unavailable placeholder + spinner. */
 export const VerseDownloading: Story = {
   render: () => (
@@ -475,9 +516,10 @@ export const VerseLongNameNarrowPaneRightToLeft: Story = {
 };
 
 /**
- * Partial-failure row smoke: ready, failed, unavailable, and downloading cells side by side.
- * Neighbors stay independent — one non-ready cell does not blank its siblings. The `unavailable`
- * cell shows "Resource not installed" (not "Download failed") so the two failure modes are
+ * Partial-failure row smoke: ready, failed, unavailable, unverified, and downloading cells side by
+ * side. Neighbors stay independent — one non-ready cell does not blank its siblings. The
+ * `unavailable` cell shows "Resource not installed" (not "Download failed") and the `unverified`
+ * cell shows "Resource unavailable" with its own explanation, so the three failure-like states are
  * distinguishable at a glance.
  */
 export const PartialFailureRow: Story = {
@@ -510,6 +552,17 @@ export const PartialFailureRow: Story = {
           state="unavailable"
           zoomArea={STORY_ZOOM_AREA}
           label="NIV"
+          textDirection="ltr"
+          localizedStrings={localizedStrings}
+          copyLimit={undefined}
+          editor={undefined}
+        />
+      </div>
+      <div style={CELL_BOX_STYLE}>
+        <ResourceCellView
+          state="unverified"
+          zoomArea={STORY_ZOOM_AREA}
+          label="NLT"
           textDirection="ltr"
           localizedStrings={localizedStrings}
           copyLimit={undefined}
@@ -732,6 +785,56 @@ export const LongLabel: Story = {
         copyLimit={undefined}
         editor={<SampleChapter />}
         zoomMenuLabels={zoomMenuLabels}
+      />
+    </CellBox>
+  ),
+};
+
+/** The info button a cell shows beside the name of a text that carries a copyright notice */
+const copyrightIndicator = (
+  <CopyrightNoticeIndicatorView
+    notice={{
+      kind: 'restrictedLicense',
+      name: 'NIV11',
+      fullName: 'New International Version 2011',
+      copyrightYears: '1973, 1978, 1984, 2011',
+    }}
+    localizedStrings={getLocalizedStrings([...COPYRIGHT_NOTICE_STRING_KEYS])}
+  />
+);
+
+/** A text with a copyright notice: its info button sits in the header beside the name. */
+export const ReadyWithCopyrightNotice: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="ready"
+        zoomArea={STORY_ZOOM_AREA}
+        label="NIV11"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        copyLimit={undefined}
+        editor={<SampleChapter />}
+        copyrightIndicator={copyrightIndicator}
+      />
+    </CellBox>
+  ),
+};
+
+/** Verse mode: the info button sits beside the hanging name, outside the verse text. */
+export const VerseWithCopyrightNotice: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="ready"
+        zoomArea={STORY_ZOOM_AREA}
+        label="NIV11"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        copyLimit={undefined}
+        editor={<SampleVerse />}
+        copyrightIndicator={copyrightIndicator}
       />
     </CellBox>
   ),
