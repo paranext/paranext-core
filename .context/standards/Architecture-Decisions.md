@@ -8769,7 +8769,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   request, the error boundary's retry, a PAPI-triggered reload — never calls
   `waitForWebViewProviderToRegister` and so uses the shorter 20-second wait. Whether the
   extension-reload re-fetch should keep this same scope, or be narrowed to only the tabs whose
-  extension is actually still activating, is a separate, still-open question.
+  extension is actually still activating, is a separate, still-open question. As of 2026-10-22, it
+  was confirmed reachable through `paratext-bible-internal-extensions`'
+  `paratext-bible-marketplace` extension's "Manage extensions" menu, which can fire
+  `onDidReloadExtensions` while other tabs are open. As of 2026-10-23, that menu item is being
+  removed for unrelated product-priority reasons, so this question's near-term urgency is lower,
+  but the underlying race returns whenever that menu does (or possibly sooner).
 - **Alternatives:** Re-arm the wait uniformly inside `getWebViewProvider` itself, with no caller-side
   opt-in — rejected because it would apply the same ~2-minute patience to a fresh, explicit
   `openWebView()` request too: a Power-mode user choosing "Open X" from a menu would see that request
