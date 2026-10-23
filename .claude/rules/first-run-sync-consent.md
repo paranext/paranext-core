@@ -8,7 +8,8 @@ declined.
 ## The rule
 
 Every code path that starts a Send/Receive **without the user asking for it right then** must first
-get `granted` from the one consent gate, and skip the sync on any other answer:
+get `granted` from the one consent gate, and skip the sync on any other answer (one exception: the
+switch from Simple to Power, below):
 
 - **Main process** — `getAutomaticSyncConsent()` in `src/main/first-run-consent.util.ts`.
 - **Extension host** — the `platform.getAutomaticSyncConsent` command, which calls that same
@@ -19,7 +20,8 @@ get `granted` from the one consent gate, and skip the sync on any other answer:
 Log the skip at `info` with the reason, so a support log can explain a session that did not sync.
 
 **Fail closed.** An unreadable flag or a rejected consent request means *do not sync*: syncing
-unasked cannot be undone, while a missed automatic sync is picked up at the next opportunity.
+unasked cannot be undone, while a missed automatic sync is picked up at the next opportunity. (The
+Simple-to-Power switch, below, fails closed only on a rejected request.)
 
 **"Don't sync yet" lasts the session.** Declining completes the wizard, but the gate answers
 `deferred` until the app restarts.
@@ -29,6 +31,12 @@ the Simple-mode wizard, so in Power mode it stays `false` forever. Gating a Powe
 would permanently disable that path with no UI to recover — `startup-tasks.test.ts` carries a
 regression test naming this trap. An interface mode that cannot be read must not become a way past
 the gate: skip the sync, or treat the mode as Simple.
+
+**The switch from Simple to Power is the one exception.** Its sync (`syncOnSwitchToPower` in
+`platform-scripture-editor`) runs in Power mode and skips only on `deferred`, because a user who
+started in Power mode reads `unconfirmed` for the whole session — see
+`adr-switch-to-power-sends-unsent-changes`. So an unreadable first-run flag, which also reads
+`unconfirmed`, does not stop it either; only a rejected consent request does.
 
 ## What is NOT gated
 

@@ -9,7 +9,10 @@ import type {
   SavedTabInfo,
   WebViewTabProps,
 } from '@shared/models/docking-framework.model';
-import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
+import {
+  SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+  type WebViewDefinition,
+} from '@shared/models/web-view.model';
 import {
   EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
   EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
@@ -1570,6 +1573,175 @@ describe('handleSwitchToSimpleMode', () => {
     expect(sendCommandMock).not.toHaveBeenCalledWith(
       'platformScriptureEditor.finalizeProjectSwitch',
       expect.anything(),
+    );
+  });
+});
+
+describe('a switch from Simple to Power mode syncs what was typed in Simple', () => {
+  const SYNC_ON_SWITCH_TO_POWER = 'platformScriptureEditor.syncOnSwitchToPower';
+  // The id the mocked `buildSimpleLayoutForProject` mints for the Simple editor slot, so the switch
+  // to Simple tracks it as the Simple-mode Scripture Editor tab
+  const SIMPLE_EDITOR_TAB_ID = 'bible-texts-tab';
+
+  let interfaceMode: 'simple' | 'power';
+  let interfaceModeCallback: ((newMode: unknown) => Promise<void>) | undefined;
+  /** What happened, in order: each dock layout load, and each switch-to-Power sync request */
+  let events: string[];
+
+  beforeEach(() => {
+    vi.resetModules();
+    localStorage.clear();
+    interfaceMode = 'power';
+    interfaceModeCallback = undefined;
+    events = [];
+    settingsGetMock.mockReset();
+    settingsGetMock.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? interfaceMode : false,
+    );
+    settingsSubscribeMock.mockReset();
+    settingsSubscribeMock.mockImplementation(async (_key, callback) => {
+      interfaceModeCallback = callback;
+      return async () => true;
+    });
+    getMetadataForProjectMock.mockReset();
+    getMetadataForProjectMock.mockResolvedValue({});
+    dataProviderGetMock.mockReset();
+    dataProviderGetMock.mockResolvedValue(undefined);
+    sendCommandMock.mockReset();
+    sendCommandMock.mockImplementation(async (command: string, ...args: unknown[]) => {
+      if (command === SYNC_ON_SWITCH_TO_POWER) events.push(`sync ${String(args[0])}`);
+      return command === 'platform.getWindows'
+        ? [{ windowId: '1', label: '', isMain: true }]
+        : undefined;
+    });
+    globalThis.windowId = '1';
+    buildSimpleLayoutForProjectMock.mockClear();
+    visibleSimpleLayoutTabIdsMock.length = 0;
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  /**
+   * A window whose dock holds a Scripture Editor tab with the given id, showing `projectId`, and
+   * which records each layout load into `events`.
+   */
+  async function registerWindowShowingEditor(editorTabId: string, projectId: string) {
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    vi.mocked(fakeDockLayout.getAllWebViewDefinitions).mockImplementation(() => [
+      // Partial: the switch reads only these fields
+      {
+        id: editorTabId,
+        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+        projectId,
+      } as WebViewDefinition,
+    ]);
+    vi.mocked(fakeDockLayout.loadLayout).mockImplementation(() => {
+      events.push('load');
+    });
+    host.registerDockLayout(fakeDockLayout);
+    await vi.waitFor(() => expect(interfaceModeCallback).toBeDefined());
+    return host;
+  }
+
+  async function changeModeTo(mode: 'simple' | 'power') {
+    if (!interfaceModeCallback) throw new Error('interface mode subscription never registered');
+    interfaceMode = mode;
+    await interfaceModeCallback(mode);
+  }
+
+  /** Switch to Simple mode on the project-bound path, so the Simple editor tab is tracked */
+  async function switchToSimpleShowing(projectId: string) {
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: projectId });
+    await changeModeTo('simple');
+  }
+
+  it('asks for the Simple editor’s project to be synced once the Power layout has loaded', async () => {
+    await registerWindowShowingEditor(SIMPLE_EDITOR_TAB_ID, 'proj-1');
+    await switchToSimpleShowing('proj-1');
+    events = [];
+
+    await changeModeTo('power');
+
+    expect(events).toEqual(['load', 'sync proj-1']);
+  });
+
+  it('asks for no such sync on a switch to Simple', async () => {
+    await registerWindowShowingEditor(SIMPLE_EDITOR_TAB_ID, 'proj-1');
+
+    await switchToSimpleShowing('proj-1');
+
+    expect(events.filter((event) => event.startsWith('sync'))).toEqual([]);
+  });
+
+  it('asks for no sync when no tracked Simple editor is open, even with a cached project', async () => {
+    // A window left in Simple mode by a failed close never loaded the Simple layout, and the cache
+    // is one key for the whole application: syncing its project would duplicate the primary's sync
+    await registerWindowShowingEditor(SIMPLE_EDITOR_TAB_ID, 'proj-1');
+    // No cached project and no recents, so the switch loads the bare layout and tracks no editor
+    await changeModeTo('simple');
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: 'proj-cached' });
+    events = [];
+
+    await changeModeTo('power');
+
+    expect(events).toContain('load');
+    expect(events.filter((event) => event.startsWith('sync'))).toEqual([]);
+  });
+
+  it('asks for no sync when the user switches back to Simple before the Power layout loads', async () => {
+    await registerWindowShowingEditor(SIMPLE_EDITOR_TAB_ID, 'proj-1');
+    await switchToSimpleShowing('proj-1');
+    events = [];
+
+    if (!interfaceModeCallback) throw new Error('interface mode subscription never registered');
+    interfaceMode = 'power';
+    const toPower = interfaceModeCallback('power');
+    interfaceMode = 'simple';
+    const backToSimple = interfaceModeCallback('simple');
+    await Promise.all([toPower, backToSimple]);
+
+    expect(events.filter((event) => event.startsWith('sync'))).toEqual([]);
+  });
+
+  it('still switches, and asks for no sync, when the dock cannot say what was open', async () => {
+    await registerWindowShowingEditor(SIMPLE_EDITOR_TAB_ID, 'proj-1');
+    await switchToSimpleShowing('proj-1');
+    const { getDockLayoutSync } = await importHost();
+    // Only the first read fails: the Power layout load reads the dock too, and must still work
+    vi.mocked(getDockLayoutSync().getAllWebViewDefinitions).mockImplementationOnce(() => {
+      throw new Error('dock unavailable');
+    });
+    const { logger } = await import('@shared/services/logger.service');
+    vi.mocked(logger.warn).mockClear();
+    events = [];
+
+    await changeModeTo('power');
+
+    expect(events).toEqual(['load']);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Could not read which project'),
+    );
+  });
+
+  it('does not let a failed sync request escape the switch', async () => {
+    await registerWindowShowingEditor(SIMPLE_EDITOR_TAB_ID, 'proj-1');
+    await switchToSimpleShowing('proj-1');
+    sendCommandMock.mockImplementation(async (command: string) => {
+      if (command === SYNC_ON_SWITCH_TO_POWER) throw new Error('extension not loaded');
+      return undefined;
+    });
+    const { logger } = await import('@shared/services/logger.service');
+    vi.mocked(logger.warn).mockClear();
+
+    await changeModeTo('power');
+
+    await vi.waitFor(() =>
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('proj-1')),
     );
   });
 });
