@@ -33,10 +33,20 @@ export const SYNC_EDIT_BLOCKED_KEY: LocalizeKey =
  * @param message The already-localized message to show.
  * @param context Named in the log line when the notification itself fails, so a swallowed failure
  *   is still attributable to the edit that tried to report it.
+ * @param notificationId Optional fixed id, so repeated sends update one notification instead of
+ *   stacking a new one each time.
  */
-export async function notifyEditorWarning(message: string, context: string): Promise<void> {
+export async function notifyEditorWarning(
+  message: string,
+  context: string,
+  notificationId?: string,
+): Promise<void> {
   try {
-    await papi.notifications.send({ message, severity: 'warning' });
+    await papi.notifications.send({
+      message,
+      severity: 'warning',
+      ...(notificationId !== undefined && { notificationId }),
+    });
   } catch (e) {
     logger.warn(`Failed to send the ${context} notification: ${getErrorMessage(e)}`);
   }
@@ -86,6 +96,24 @@ export async function notifyEditMenuActionBlocked(
   await notifyEditorWarning(
     localizedStrings[EDIT_ACTION_BLOCKED_KEY] ?? EDIT_ACTION_BLOCKED_KEY,
     'edit-menu-action-blocked',
+  );
+}
+
+/** The fixed id of the structure-locked notification; see {@link notifyStructureProtected}. */
+export const STRUCTURE_PROTECTED_NOTIFICATION_ID = 'platformScriptureEditor.structureProtected';
+
+/**
+ * Show the "structure is protected" warning, for a paragraph or marker change the structure lock
+ * refuses.
+ *
+ * Always under {@link STRUCTURE_PROTECTED_NOTIFICATION_ID}: a held key repeats the refused request
+ * many times a second, and each repeat updates the one notification instead of stacking another.
+ */
+export async function notifyStructureProtected(): Promise<void> {
+  await notifyEditorWarning(
+    '%webView_platformScriptureEditor_error_structureProtected%',
+    'structure-protected',
+    STRUCTURE_PROTECTED_NOTIFICATION_ID,
   );
 }
 
