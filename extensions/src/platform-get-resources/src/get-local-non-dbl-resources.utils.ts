@@ -13,8 +13,7 @@ type ProjectInfo = {
 
 /**
  * DBL UIDs identifying locally-installed commentaries. Mirrors the C# CommentariesWhiteList in
- * DblDownloadableDataProvider.cs, plus the legacy TNN UID retained for installs before the DBL UID
- * reassignment.
+ * DblDownloadableDataProvider.cs.
  */
 export const LOCAL_COMMENTARY_UIDS: ReadonlySet<string> = new Set([
   // UBS Translator's Handbook
@@ -25,8 +24,7 @@ export const LOCAL_COMMENTARY_UIDS: ReadonlySet<string> = new Set([
   '24daa5f24f0020b3', // HBKPT — Portuguese
   '1ff24938918bd69e', // HBKESP — Spanish
   // UBS/SIL Translator's Notes
-  '72dd0b9b0f2b4024', // TNN — English (current UID)
-  '090f7cbf7924b245', // TNN — English (old UID; kept for installs predating the DBL UID reassignment)
+  '090f7cbf7924b245', // TNN — English
   '0617c397f003127c', // TNNESP — Spanish
   '233345361843ce8b', // TNNPTG — Portuguese
   'd95fde28b4346e61', // TNNFR — French
