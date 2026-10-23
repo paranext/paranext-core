@@ -6,6 +6,7 @@
       "platformEnhancedResources.showMarbleGuide": {
         "label": "%settings_platformEnhancedResources_showMarbleGuide_label%",
         "description": "%settings_platformEnhancedResources_showMarbleGuide_description%",
+        "isHidden": true,
         "default": true
       }
     }

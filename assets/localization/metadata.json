@@ -225,6 +225,15 @@
   "%settings_platform_group1_label_alternative%": {
     "fallbackKey": "%settings_platform_group1_label%"
   },
+  "%settings_platform_showRegistrationReminderOnStartup_label%": {
+    "deprecationInfo": {
+      "date": "2026-10-23",
+      "message": "UX renamed this setting to say what it reminds you about. The new key is %settings_platform_showRegistrationReminderOnStartup_label_2%."
+    }
+  },
+  "%settings_platform_showRegistrationReminderOnStartup_label_2%": {
+    "fallbackKey": "%settings_platform_showRegistrationReminderOnStartup_label%"
+  },
   "%settings_platform_webViewContentZoom_description%": {
     "deprecationInfo": {
       "date": "2026-09-23",
