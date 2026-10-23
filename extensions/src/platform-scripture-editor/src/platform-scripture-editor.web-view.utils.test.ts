@@ -98,6 +98,28 @@ describe('generateInlineMarkerMenuListItems', () => {
     expect(markers).not.toContain('imt');
   });
 
+  it('while a chapter is loading: a pick closes the menu without inserting', () => {
+    const { ref, insertMarker } = makeMockEditorRef();
+    const close = vi.fn();
+    const restoreSelection = vi.fn();
+    const items = generateInlineMarkerMenuListItems(
+      ref,
+      close,
+      {},
+      false,
+      vi.fn(),
+      restoreSelection,
+      PARENT,
+      () => true,
+    );
+
+    items.find((item) => item.marker === 'nd')?.action();
+
+    expect(insertMarker).not.toHaveBeenCalled();
+    expect(restoreSelection).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
   it('sorts by marker code', () => {
     const { ref } = makeMockEditorRef();
     const markers = generateInlineMarkerMenuListItems(

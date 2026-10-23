@@ -43,6 +43,7 @@ function renderRemove(
     editorRef?: MutableRefObject<EditorRef | null>;
     projectId?: string;
     isSyncBlocked?: boolean;
+    isChapterLoading?: () => boolean;
   } = {},
 ) {
   const { ref } = makeEditorRef();
@@ -52,6 +53,7 @@ function renderRemove(
       projectId: 'projectId' in overrides ? overrides.projectId : 'project-1',
       isSyncBlocked: overrides.isSyncBlocked ?? false,
       localizedStrings: STRINGS,
+      isChapterLoading: overrides.isChapterLoading,
     }),
   );
   return result;
@@ -143,6 +145,31 @@ describe('useRemoveCharacterMarker', () => {
     expect(sendNotification).toHaveBeenCalledWith(
       expect.objectContaining({ message: 'Editing paused', severity: 'warning' }),
     );
+  });
+
+  it('does nothing while a chapter is loading, taking no snapshot', async () => {
+    const { ref, removeCharacterMarker } = makeEditorRef();
+    const result = renderRemove({ editorRef: ref, isChapterLoading: () => true });
+
+    await result.current('nd');
+
+    expect(sendCommand).not.toHaveBeenCalled();
+    expect(removeCharacterMarker).not.toHaveBeenCalled();
+  });
+
+  it('does not remove when a chapter load starts while the snapshot is being committed', async () => {
+    let isLoading = false;
+    sendCommand.mockImplementationOnce(async () => {
+      isLoading = true;
+      return undefined;
+    });
+    const { ref, removeCharacterMarker } = makeEditorRef();
+    const result = renderRemove({ editorRef: ref, isChapterLoading: () => isLoading });
+
+    await result.current('nd');
+
+    expect(sendCommand).toHaveBeenCalledTimes(1);
+    expect(removeCharacterMarker).not.toHaveBeenCalled();
   });
 
   it('reports a throwing editor instead of letting it escape into the menu', async () => {

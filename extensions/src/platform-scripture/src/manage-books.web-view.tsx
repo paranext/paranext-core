@@ -38,6 +38,8 @@ import {
   makeProjectSelectorCustomData,
   normalizeFullName,
   normalizeProjectId,
+  notifyProjectOpenBlocked,
+  NotifyProjectOpenBlockedDependencies,
 } from 'platform-bible-utils';
 import { getBookIdsFromBooksPresent } from 'platform-bible-utils/experimental';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
@@ -62,11 +64,18 @@ import {
   GreekEstherTemplatePicker,
   GreekEstherTemplatePickerLocalizedStrings,
 } from './greek-esther-template-picker.component';
+import { getProjectOpenBlockedReasonKeyFromResult } from './project-open-blocked.util';
 import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 
 const NETWORK_OBJECT_ID = 'platformScripture.manageBooks';
 const BOOKS_PRESENT_DEFAULT = '0'.repeat(123);
+
+const PROJECT_OPEN_BLOCKED_NOTIFY_DEPENDENCIES: NotifyProjectOpenBlockedDependencies = {
+  getLocalizedStrings: (localizeKeys) => papi.localization.getLocalizedStrings({ localizeKeys }),
+  sendNotification: (notification) => papi.notifications.send(notification),
+  logWarning: (message) => logger.warn(message),
+};
 
 // Only Scripture Editor tabs should mark a project as "open" in the ProjectSelector.
 // Other project-bound tabs (Manage Books itself, Checks side panel, etc.) carry a `projectId`
@@ -988,6 +997,11 @@ global.webViewComponent = function ManageBooksWebView({
       // of leaking the raw technical message at error severity.
       if (isSyncEditBlockedError(entry.text)) {
         notifySyncEditBlocked();
+        return;
+      }
+      const openBlockedReasonKey = getProjectOpenBlockedReasonKeyFromResult(entry.text);
+      if (openBlockedReasonKey) {
+        notifyProjectOpenBlocked(openBlockedReasonKey, PROJECT_OPEN_BLOCKED_NOTIFY_DEPENDENCIES);
         return;
       }
       // notificationService is exposed on @papi/frontend; per ui-spec-manage-books.md:118 toasts

@@ -4,7 +4,12 @@ declare module 'platform-get-resources' {
   import type { DblResourceData } from 'platform-bible-utils';
 
   export type GetResourcesDataTypes = {
-    /** List of information about resources that are available from the DBL */
+    /**
+     * List of information about resources that are available from the DBL.
+     *
+     * Rejects when the DBL cannot be reached (for example offline) or the user registration is not
+     * valid. An empty list never stands in for "offline".
+     */
     DblResources: DataProviderDataType<undefined, DblResourceData[], never>;
   };
 
@@ -171,13 +176,16 @@ declare module 'papi-shared-types' {
     'platformGetResources.openGetResources': () => Promise<string | undefined>;
 
     /**
-     * Opens a new Home web view and returns the WebView id
+     * Opens Home, or raises it if it is already open, and returns its WebView id
      *
-     * @param shouldShowProjectsOnly Open Home scoped to editable projects, leaving out the
-     *   published resources that otherwise share its list. Set by entry points that are asking "get
-     *   me to one of my projects"; Home's own entry points omit it and list both. Applies to the
-     *   open it is passed on only — it does not stick to the tab.
-     * @returns WebView id for new Home WebView or `undefined` if not created
+     * @param shouldShowProjectsOnly `true` sets Home's type filter to Paratext projects, leaving
+     *   out the published resources that otherwise share its list, and reloads an already-open Home
+     *   that is showing another filter. Set by entry points that are asking "get me to one of my
+     *   projects". Omitted or any other value asks for Home as it is: a new Home starts on
+     *   everything, and an open one is raised showing whatever filter it last had. In Simple mode
+     *   Home always starts on Paratext projects, whatever this says. The user can change the filter
+     *   either way.
+     * @returns WebView id for the Home WebView or `undefined` if none was opened
      */
     'platformGetResources.openHome': (
       shouldShowProjectsOnly?: boolean,
@@ -205,7 +213,7 @@ declare module 'papi-shared-types' {
      * Returns DBL resources from memory cache.
      *
      * If no cached value exists, attempts to fetch them. Failed refresh attempts do NOT clear
-     * existing cached data.
+     * existing cached data. Concurrent calls share one fetch.
      *
      * Each row's `isRestrictedAsModelText` is set from the backend's model-text restrictions. Until
      * the backend first answers, the rows are returned without the flag, and a later read carries
@@ -216,7 +224,8 @@ declare module 'papi-shared-types' {
      *   reads `isRestrictedAsModelText`, such as a model or base text picker; every other caller
      *   would wait on a flag it ignores.
      * @returns The cached catalog, or an `unavailable` result when this build cannot produce one.
-     * @throws When the fetch itself fails. Callers that render an error state with a retry should
+     * @throws When the fetch itself fails — including when the DBL cannot be reached, for example
+     *   offline — and no catalog is cached. Callers that render an error state with a retry should
      *   key it on the rejection, never on an `unavailable` result — retrying the latter cannot
      *   change the answer.
      */
@@ -254,13 +263,21 @@ declare module 'papi-shared-types' {
      * `isRestrictedAsModelText` is set the same way as in `getCachedResources`.
      *
      * @param shouldWaitForModelTextRestrictions As in `getCachedResources`.
+     * @param catalogWaitMs The longest to wait for the DBL catalog, in milliseconds, before
+     *   building the list without it — in which case it can include installed DBL resources too.
+     *   Without one it waits for the catalog however long it takes; a caller that lists these
+     *   beside the catalog should leave it out.
      * @returns Synthetic resource entries for locally-installed non-DBL resources. Also returns
-     *   `[]` when the C# data provider has not registered its projects yet or the lookup threw —
-     *   callers cannot distinguish those from a genuine "no local non-DBL resources" result, so a
-     *   caller that needs a retry or loading affordance must get that signal from elsewhere.
+     *   `[]` when the C# data provider has not registered its projects yet — callers cannot
+     *   distinguish that from a genuine "no local non-DBL resources" result, so a caller that needs
+     *   a retry or loading affordance must get that signal from elsewhere.
+     * @throws When the local projects could not be read. A failed catalog does not throw: the list
+     *   is then built without it.
+     * @experimental The `catalogWaitMs` parameter may change or disappear without notice.
      */
     'platformGetResources.getLocalNonDblResources': (
       shouldWaitForModelTextRestrictions?: boolean,
+      catalogWaitMs?: number,
     ) => Promise<DblResourceData[]>;
 
     // `paratextBibleSendReceive.*` commands are deliberately NOT declared here. This file is

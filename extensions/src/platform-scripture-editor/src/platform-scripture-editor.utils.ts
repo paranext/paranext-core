@@ -72,6 +72,13 @@ export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 export const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptureTextGrid';
 
 /**
+ * `objectType` of a project data provider factory's network object. Mirrors core's
+ * `PDP_FACTORY_OBJECT_TYPE` (`project-data-provider-factory.interface.ts`), which is not exposed to
+ * extensions. Keep in sync with it.
+ */
+const PDP_FACTORY_OBJECT_TYPE = 'pdpFactory';
+
+/**
  * Resolves the view type the editor is allowed to show under the current `platform.interfaceMode`.
  * Standard view is a power-mode-only surface: its PT9-parity editing affordances (the `\`/Enter
  * marker palettes, paragraph-marker editing) assume paragraph markers can be edited, but simple
@@ -886,17 +893,21 @@ export async function openCommentListAndSelectThreadSafe(
  * @param bringToFront Whether to also bring the panel's tab to the front. Pass `false` for
  *   background confirmation (e.g. after inserting a comment, so the user's current Column 3 tab
  *   isn't interrupted) or `true` for an explicit "show me this comment" navigation.
+ * @param editorWebViewId The editor the thread belongs to. If given, the panel is first pointed at
+ *   that editor's project when it shows another one.
  */
 export async function selectCommentThreadInPanelSafe(
   papi: typeof PapiBackend | typeof PapiFrontend,
   threadId: string,
   bringToFront: boolean,
+  editorWebViewId?: string,
 ): Promise<void> {
   try {
     const panelWebViewId = await papi.commands.sendCommand(
       'legacyCommentManager.selectCommentThreadInPanel',
       threadId,
       bringToFront,
+      editorWebViewId,
     );
     if (!panelWebViewId) throw new Error('No WebView ID returned');
   } catch (e) {
@@ -904,6 +915,36 @@ export async function selectCommentThreadInPanelSafe(
       `Failed to select thread ${threadId} in the Comment List panel: ${getErrorMessage(e)}`,
     );
   }
+}
+
+/**
+ * Brings a comment thread into view where the current interface mode keeps comments. Power mode
+ * opens (or focuses) the editor-anchored comment list on the thread. Simple mode has no such list —
+ * its comments live in the fixed Column 3 Comments tab — so that tab is brought to the front with
+ * the thread selected instead, after pointing that tab at the editor's project if it shows another
+ * one; opening the editor-anchored list there would add a second Comments column. Logs and swallows
+ * any failure, like the two functions it chooses between.
+ *
+ * @param papi The PAPI to send the navigation command through
+ * @param options.isPowerMode Whether the app is in Power interface mode
+ * @param options.editorWebViewId The ID of the editor web view the thread belongs to, which decides
+ *   the project whose comments are shown
+ * @param options.threadId The ID of the thread to show
+ */
+export async function showCommentThreadForInterfaceMode(
+  papi: typeof PapiBackend | typeof PapiFrontend,
+  {
+    isPowerMode,
+    editorWebViewId,
+    threadId,
+  }: { isPowerMode: boolean; editorWebViewId: string; threadId: string },
+): Promise<void> {
+  if (isPowerMode) {
+    await openCommentListAndSelectThreadSafe(papi, editorWebViewId, threadId);
+    return;
+  }
+
+  await selectCommentThreadInPanelSafe(papi, threadId, true, editorWebViewId);
 }
 
 // #region USJ location conversion helper functions
@@ -1141,6 +1182,9 @@ export function getParagraphMarkerTitle(
  *   extension-host-reachable module may not import (see the note at the bottom of this file).
  *   Omitting it leaves the retag exposed to the lost-caret failure, so callers that can lose focus
  *   to the menu should always pass it.
+ * @param isChapterLoading Reports whether another chapter is loading, during which the editor still
+ *   shows the chapter being left and an edit would be dropped. A pick does nothing while it returns
+ *   `true`. Omitting it never blocks.
  * @returns List of marker menu items to be used for the paragraph menu
  */
 export function generateParagraphMenuListItems(
@@ -1149,6 +1193,7 @@ export function generateParagraphMenuListItems(
   isStructureProtected: boolean,
   notifyStructureProtected: () => void,
   restoreSelection?: () => void,
+  isChapterLoading?: () => boolean,
 ): MarkerMenuItem[] {
   return selectableParagraphMarkers.map((marker) => {
     // The trailing detail column would otherwise sit empty for exactly the menu this feature is
@@ -1161,6 +1206,7 @@ export function generateParagraphMenuListItems(
       title: getParagraphMarkerTitle(marker, localizedStrings) ?? marker,
       subtitle: descriptionKey ? localizedStrings[descriptionKey] : undefined,
       action: () => {
+        if (isChapterLoading?.()) return;
         // Defense-in-depth: unreachable while the paragraph control is disabled
         // (`disabled={isStructureProtected}` in the web view), so the popover never opens and this
         // action never runs. Kept as a second layer of protection in case that disabled state is
@@ -1363,10 +1409,11 @@ export function selectProjectIdsForOpenMode(
  *   is unavailable or hasn't activated yet. Expected on Platform.Bible on first launch (no recents
  *   yet, no S/R). Logged at debug.
  * - `'failed'` — the open command rejected; logged at warn. The driver may retry on the next trigger.
- * - `'no-candidate'` — S/R was reachable, but no shared project passed the activity / `editedStatus`
- *   filter. Projects with `editedStatus` of `'new'` (not yet downloaded locally) or
- *   `'unregistered'` (limited/provisional license) are excluded. The driver may retry after a sync
- *   completes or the project set changes.
+ * - `'no-candidate'` — S/R was reachable, but no shared project is a candidate. Projects with
+ *   `editedStatus` of `'new'` (not yet downloaded locally) or `'unregistered'` (limited/provisional
+ *   license) are excluded, and so is any project that cannot be opened (see
+ *   {@link createUnsupportedProjectIdsCache}). The driver may retry after a sync completes or the
+ *   project set changes.
  * - `'filled'` — the picker successfully called the open command for the top candidate.
  */
 export type DefaultProjectPickerOutcome =
@@ -1380,17 +1427,20 @@ export type DefaultProjectPickerOutcome =
 /**
  * Try to open the most-recently-used project from the `platformScripture.recentlyOpenedProjects`
  * data provider. Returns `'filled'` if a recent project was successfully opened, or `undefined` if
- * the service is unavailable, the recents list is empty, or every recent project fails to open (in
- * which case the caller should fall through to the S/R-based picker).
+ * the service is unavailable, the recents list is empty, every recent project is unsupported (see
+ * {@link createUnsupportedProjectIdsCache}), or every recent project fails to open (in which case
+ * the caller should fall through to the S/R-based picker).
  */
 async function tryOpenFromRecentlyOpened(
   papi: typeof PapiBackend,
+  unsupportedProjectIds: UnsupportedProjectIdsCache,
 ): Promise<DefaultProjectPickerOutcome | undefined> {
   try {
     const service = await papi.dataProviders.get('platformScripture.recentlyOpenedProjects');
     if (!service) return undefined;
     // Data-provider getter requires an explicit selector argument, even though the value is ignored.
     const recentProjects = (await service.getRecentProjects(undefined)) ?? [];
+    const unsupported = await unsupportedProjectIds.getUnsupportedProjectIds(recentProjects);
     // Try each recent project in order until one opens successfully — in almost all cases the first
     // entry opens and the loop exits immediately. `reduce` with a Promise accumulator is used instead
     // of `for...of + await` to satisfy the no-await-in-loop ESLint rule; each callback awaits the
@@ -1400,6 +1450,12 @@ async function tryOpenFromRecentlyOpened(
       async (prev: Promise<DefaultProjectPickerOutcome | undefined>, projectId: string) => {
         const outcome = await prev;
         if (outcome !== undefined) return outcome;
+        if (unsupported.has(normalizeProjectId(projectId))) {
+          papi.logger.debug(
+            `Default active project picker: recent project ${projectId} is unsupported, trying next`,
+          );
+          return undefined;
+        }
         try {
           await papi.commands.sendCommand('platformScriptureEditor.openScriptureEditor', projectId);
           papi.logger.info(
@@ -1434,20 +1490,24 @@ async function tryOpenFromRecentlyOpened(
  * Attempt to fill the empty Scripture Editor in the simple layout with the most-recently-active
  * project. Candidates come first from `recentlyOpenedProjects` (tried in order, most-recent first);
  * `paratextBibleSendReceive.getSharedProjects` is the fallback when recents is empty or all entries
- * fail to open. The picker partitions remaining candidates by `canUserEditScripture` and prefers
- * editable projects, falling back to the most-recently-S/R'd Observer-only project so an
- * Observer-only user is not stranded with an empty editor (Observer projects are otherwise
- * reachable via the project switcher).
+ * fail to open. A project that cannot be opened (see {@link createUnsupportedProjectIdsCache}) is
+ * never picked, from either source, however recent. The picker partitions remaining candidates by
+ * `canUserEditScripture` and prefers editable projects, falling back to the most-recently-S/R'd
+ * Observer-only project so an Observer-only user is not stranded with an empty editor (Observer
+ * projects are otherwise reachable via the project switcher).
  *
  * Idempotent: each invocation re-reads the dock and the shared-projects list. The driver in
  * {@link startDefaultProjectPicker} is responsible for re-invoking on events that change those
  * inputs (web-view opens, sync completions, project-set changes).
  *
  * @param papi The PAPI backend handle. Injected for testability.
+ * @param unsupportedProjectIds Which projects cannot be opened. The driver passes one that lives as
+ *   long as it does; by default each run looks up once.
  * @returns The outcome of this attempt — see {@link DefaultProjectPickerOutcome}.
  */
 export async function openDefaultActiveProjectIfApplicable(
   papi: typeof PapiBackend,
+  unsupportedProjectIds: UnsupportedProjectIdsCache = createUnsupportedProjectIdsCache(papi),
 ): Promise<DefaultProjectPickerOutcome> {
   const interfaceMode = await papi.settings.get('platform.interfaceMode');
   if (isPlatformError(interfaceMode)) {
@@ -1466,7 +1526,7 @@ export async function openDefaultActiveProjectIfApplicable(
 
   // Before consulting S/R, try the recently-opened-projects list. If a recent project opens
   // successfully, return immediately without touching the S/R service at all.
-  const recentsOutcome = await tryOpenFromRecentlyOpened(papi);
+  const recentsOutcome = await tryOpenFromRecentlyOpened(papi, unsupportedProjectIds);
   if (recentsOutcome !== undefined) return recentsOutcome;
 
   // Try `paratextBibleSendReceive.getSharedProjects` directly. If S/R hasn't activated yet (cold
@@ -1500,13 +1560,18 @@ export async function openDefaultActiveProjectIfApplicable(
     (info) => info.editedStatus !== 'new' && info.editedStatus !== 'unregistered',
   );
 
+  const unsupported = await unsupportedProjectIds.getUnsupportedProjectIds(
+    filtered.map((info) => info.id),
+  );
+  const openable = filtered.filter((info) => !unsupported.has(normalizeProjectId(info.id)));
+
   // Annotate each surviving candidate with the current user's role. Per-candidate PDP lookups or
   // method rejections are treated as Observer-equivalent — they fall to the `observerOnly` group
   // and only matter if no editable candidate exists. A missing PDP (e.g., a project that doesn't
   // advertise `platformScripture.scriptureEditPermissions`) is likewise Observer-equivalent.
   // Mirrors the C# method's "false on exception" semantics.
   const annotated = await Promise.all(
-    filtered.map(async (info) => {
+    openable.map(async (info) => {
       try {
         const pdp = await papi.projectDataProviders.get(
           'platformScripture.scriptureEditPermissions',
@@ -1597,9 +1662,10 @@ export async function openDefaultActiveProjectIfApplicable(
  *   a project's metadata changes (a rename, its language, whether it is editable), which re-runs
  *   the picker for nothing. Once the editor has a project, such a run exits early (`'no-empty'`).
  *   While an empty editor exists, each one repeats the recently-opened lookup,
- *   `paratextBibleSendReceive.getSharedProjects` and a permission lookup per candidate; that is
- *   bounded by the emitter's debounce and by the coalescing below. Not debounced here: its emitter
- *   (`LocalParatextProjects`, C#) already debounces it.
+ *   `paratextBibleSendReceive.getSharedProjects`, a permission lookup per candidate and the lookup
+ *   of which candidates cannot be opened; that is bounded by the emitter's debounce and by the
+ *   coalescing below. Not debounced here: its emitter (`LocalParatextProjects`, C#) already
+ *   debounces it.
  *
  * Cold-start gap: there is no explicit "S/R command registered" signal, so if
  * `paratextBibleSendReceive` activates after `platformScriptureEditor` but before any of the
@@ -1611,6 +1677,16 @@ export async function openDefaultActiveProjectIfApplicable(
  * eligible project yet). At most one run is in flight at a time; concurrent triggers coalesce into
  * a single follow-up run.
  *
+ * Whether a candidate can be opened is looked up once for the driver's lifetime, and again only
+ * after `platform.onDidChangeProjects`, a project data provider factory registering, or a failed
+ * lookup's retry delay, since a user whose every candidate is unsupported keeps an empty editor,
+ * and so re-runs the picker, on every trigger.
+ *
+ * After a `'no-candidate'` run, the web-view triggers are skipped until something that can add a
+ * candidate happens: a sync ending, `platform.onDidChangeProjects`, a project data provider factory
+ * registering, or a Scripture Editor showing a project (which records it as recent). Each skipped
+ * run would otherwise ask for the shared projects again for the same answer.
+ *
  * Mirrors the simple-function pattern used in `home.web-view.tsx` rather than a class wrapper.
  */
 export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscriber {
@@ -1620,9 +1696,23 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
   // booleans) makes the impossible 'idle + retry-queued' combination unrepresentable; see
   // Code-Style-Guide.md "Prefer string unions over multiple interdependent booleans".
   let pickerState: 'idle' | 'running' | 'running-with-retry-queued' = 'idle';
+  const unsupportedProjectIds = createUnsupportedProjectIdsCache(papi);
   // Read via a helper to defeat TypeScript's flow narrowing — the listeners below can mutate
   // pickerState concurrently across awaits, which TS's flow analysis can't model.
   const getPickerState = () => pickerState;
+  // Bumped by each event that can add a candidate. A run that found none records the version it
+  // started at, so an event landing while it is in flight is not swallowed by its result.
+  let candidateInputsVersion = 0;
+  let noCandidateAtVersion: number | undefined;
+  const candidateInputsChanged = () => {
+    candidateInputsVersion += 1;
+  };
+  /** Whether a web view opening or updating should run the picker. */
+  const shouldRunForWebView = (webView: SavedWebViewDefinition) => {
+    if (webView.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && webView.projectId)
+      candidateInputsChanged();
+    return noCandidateAtVersion !== candidateInputsVersion;
+  };
 
   const tryPicker = async (): Promise<void> => {
     if (pickerState !== 'idle') {
@@ -1630,8 +1720,10 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
       return;
     }
     pickerState = 'running';
+    const versionAtStart = candidateInputsVersion;
     try {
-      const outcome = await openDefaultActiveProjectIfApplicable(papi);
+      const outcome = await openDefaultActiveProjectIfApplicable(papi, unsupportedProjectIds);
+      noCandidateAtVersion = outcome === 'no-candidate' ? versionAtStart : undefined;
       if (outcome !== 'filled') {
         papi.logger.debug(
           `Default active project picker: unexpected outcome received: '${outcome}'`,
@@ -1640,6 +1732,7 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
     } catch (e) {
       // `openDefaultActiveProjectIfApplicable` catches its own errors and returns 'failed'; this
       // catch only fires on unexpected throws (e.g. PAPI plumbing bugs).
+      noCandidateAtVersion = undefined;
       papi.logger.warn(
         `Default active project picker: tryPicker threw unexpectedly: ${getErrorMessage(e)}`,
       );
@@ -1659,7 +1752,8 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
 
   // `tryPicker()` catches its own errors internally; the `.catch` blocks below are defensive
   // against a future change that could leak a rejection — matches the `finally`-block retry above.
-  const unsubFromWebViewOpen = papi.webViews.onDidOpenWebView(() => {
+  const unsubFromWebViewOpen = papi.webViews.onDidOpenWebView(({ webView }) => {
+    if (!shouldRunForWebView(webView)) return;
     tryPicker().catch((e) =>
       papi.logger.warn(
         `Default active project picker: webView-open handler threw unexpectedly: ${getErrorMessage(e)}`,
@@ -1670,7 +1764,8 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
   const unsubFromWebViewUpdate = papi.webViews.onDidUpdateWebView(({ webView }) => {
     // Only Scripture Editor updates can change the picker's outcome — any other webview's update
     // can't reveal or remove an empty editor.
-    if (webView.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE) return;
+    if (webView.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE || !shouldRunForWebView(webView))
+      return;
     tryPicker().catch((e) =>
       papi.logger.warn(
         `Default active project picker: webView-update handler threw unexpectedly: ${getErrorMessage(e)}`,
@@ -1681,16 +1776,19 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
   const unsubFromSync = papi.network.getNetworkEvent<{ isSyncing: boolean }>(
     'paratextBibleSendReceive.onSyncStateChanged',
   )(({ isSyncing }) => {
-    if (!isSyncing)
-      tryPicker().catch((e) =>
-        papi.logger.warn(
-          `Default active project picker: sync-state handler threw unexpectedly: ${getErrorMessage(e)}`,
-        ),
-      );
+    if (isSyncing) return;
+    candidateInputsChanged();
+    tryPicker().catch((e) =>
+      papi.logger.warn(
+        `Default active project picker: sync-state handler threw unexpectedly: ${getErrorMessage(e)}`,
+      ),
+    );
   });
 
   const unsubFromProjectsChanged = papi.network.getNetworkEvent('platform.onDidChangeProjects')(
     () => {
+      unsupportedProjectIds.invalidate();
+      candidateInputsChanged();
       tryPicker().catch((e) =>
         papi.logger.warn(
           `Default active project picker: projects-changed handler threw unexpectedly: ${getErrorMessage(e)}`,
@@ -1698,6 +1796,15 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
       );
     },
   );
+  // A factory that registers late changes which projects are known, but raises no projects-changed
+  // event. Invalidating only drops held answers, so a burst of registrations costs no lookups.
+  const unsubFromNetworkObjectCreated = papi.network.getNetworkEvent(
+    'object:onDidCreateNetworkObject',
+  )(({ objectType }) => {
+    if (objectType !== PDP_FACTORY_OBJECT_TYPE) return;
+    unsupportedProjectIds.invalidate();
+    candidateInputsChanged();
+  });
 
   // Cover the case where the empty editor and an eligible synced project are already in place
   // (e.g., second startup after a successful first run).
@@ -1712,6 +1819,7 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
     unsubFromWebViewUpdate,
     unsubFromSync,
     unsubFromProjectsChanged,
+    unsubFromNetworkObjectCreated,
   ]);
 }
 
@@ -1882,6 +1990,166 @@ export async function finalizeProjectSwitch(
 }
 
 // #endregion Finalize Project Switch
+
+// #region Unsupported Projects
+
+/**
+ * The localize key explaining why `projectId` cannot be opened, or `''` when it can.
+ *
+ * A metadata lookup is a fan-out, so keep this out of reactive loops. Any failure counts as
+ * openable, so a transient error never replaces a real project's text with the reason.
+ *
+ * Asks through an interface every Paratext project serves and only the C# factory provides, so at
+ * startup the lookup waits for that factory, whose answer carries the reason, instead of polling
+ * whichever factory registered first.
+ */
+export async function getProjectUnsupportedReason(
+  papi: typeof PapiBackend,
+  projectId: string,
+): Promise<string> {
+  try {
+    const metadata = await papi.projectLookup.getMetadataForProject(
+      projectId,
+      'platformScripture.scriptureEditPermissions',
+    );
+    return metadata.unsupportedReason ?? '';
+  } catch (e) {
+    papi.logger.warn(
+      `Could not look up whether ${projectId} can be opened (${getErrorMessage(e)}); treating it as openable`,
+    );
+    return '';
+  }
+}
+
+/**
+ * The editor web view state key holding the project's `unsupportedReason`: a localize key, or `''`
+ * when the project can be opened. Written by the web view factory, read by the web view.
+ */
+export const UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY = 'unsupportedReason';
+
+/**
+ * The editor web view's state for one build of its definition: `state` with the project's
+ * {@link UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY} set last, so a reason carried in by a saved layout
+ * or by open options never outlives the project's current metadata.
+ *
+ * Lives here rather than in the provider so a test can reach it: `main.ts` is the extension entry
+ * point, and no test imports it.
+ *
+ * @param papi The instance of papi to look the project up with.
+ * @param projectId The project the view shows, if any; no project means nothing to look up.
+ * @param state The rest of the state, already merged from the saved layout and the open options.
+ * @returns `state` with the reason applied.
+ */
+export async function buildScriptureEditorWebViewState(
+  papi: typeof PapiBackend,
+  projectId: string | undefined,
+  state: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const unsupportedReason = projectId ? await getProjectUnsupportedReason(papi, projectId) : '';
+  return { ...state, [UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY]: unsupportedReason };
+}
+
+/** Which projects cannot be opened, held across calls. See {@link createUnsupportedProjectIdsCache}. */
+export type UnsupportedProjectIdsCache = {
+  /**
+   * Which of `candidateIds` cannot be opened, as ids normalized with `normalizeProjectId`, so
+   * callers must normalize the id they test with too: ids from recents or shared-project lists may
+   * differ in case from the metadata's. Looks up only the candidates it holds no answer for, and
+   * nothing at all when it holds an answer for every one.
+   */
+  getUnsupportedProjectIds: (candidateIds: readonly string[]) => Promise<ReadonlySet<string>>;
+  /** Drop every held answer, so the next call looks up afresh. */
+  invalidate: () => void;
+};
+
+/**
+ * How long a failed {@link createUnsupportedProjectIdsCache} lookup is answered as "every project
+ * openable" before the next call looks up again.
+ */
+export const UNSUPPORTED_PROJECT_IDS_RETRY_DELAY_MS = 30_000;
+
+/**
+ * Holds, per project id, whether it can be opened, until {@link UnsupportedProjectIdsCache}'s
+ * `invalidate`. Each lookup names its candidates (`includeProjectIds`), so the lookup service's
+ * startup retry applies: while no factory knows any of the named candidates, and only within its
+ * startup grace period, it waits for one rather than answering "none". A lookup that names a
+ * candidate some factory already knows gets no such wait.
+ *
+ * A failed lookup counts as its candidates openable until
+ * {@link UNSUPPORTED_PROJECT_IDS_RETRY_DELAY_MS} has passed; the first call after that drops every
+ * held answer, successes included, and looks up again.
+ */
+export function createUnsupportedProjectIdsCache(
+  papi: typeof PapiBackend,
+): UnsupportedProjectIdsCache {
+  /** Normalized id → whether that project cannot be opened. Holds the promise, not the value. */
+  let isUnsupportedById = new Map<string, Promise<boolean>>();
+  let failedAt: number | undefined;
+  // Bumped by `invalidate`, so a late failure from a superseded lookup stamps nothing.
+  let generation = 0;
+
+  /** The normalized ids among `projectIds` that cannot be opened, or `undefined` on failure. */
+  const lookUp = async (projectIds: string[]): Promise<Set<string> | undefined> => {
+    const lookupGeneration = generation;
+    try {
+      const metadata = await papi.projectLookup.getMetadataForAllProjects({
+        includeProjectIds: projectIds,
+      });
+      return new Set(
+        metadata.filter((m) => m.unsupportedReason).map((m) => normalizeProjectId(m.id)),
+      );
+    } catch (e) {
+      papi.logger.warn(
+        `Could not look up which projects can be opened (${getErrorMessage(e)}); treating them as openable`,
+      );
+      if (lookupGeneration === generation) failedAt = Date.now();
+      return undefined;
+    }
+  };
+
+  return {
+    getUnsupportedProjectIds: async (candidateIds) => {
+      // A failure is retried in place after a delay, not held for good nor retried on every call:
+      // see `.claude/rules/architecture/provider-lookups-fan-out.md`, rule 3.
+      if (
+        failedAt !== undefined &&
+        Date.now() - failedAt >= UNSUPPORTED_PROJECT_IDS_RETRY_DELAY_MS
+      ) {
+        isUnsupportedById = new Map();
+        failedAt = undefined;
+      }
+      const unanswered = new Map<string, string>();
+      candidateIds.forEach((id) => {
+        const normalizedId = normalizeProjectId(id);
+        if (!isUnsupportedById.has(normalizedId)) unanswered.set(normalizedId, id);
+      });
+      if (unanswered.size > 0) {
+        const lookup = lookUp([...unanswered.values()]);
+        unanswered.forEach((_id, normalizedId) =>
+          isUnsupportedById.set(
+            normalizedId,
+            lookup.then((unsupported) => unsupported?.has(normalizedId) ?? false),
+          ),
+        );
+      }
+      const answers = await Promise.all(
+        candidateIds.map(async (id) => {
+          const normalizedId = normalizeProjectId(id);
+          const isUnsupported = await isUnsupportedById.get(normalizedId);
+          return isUnsupported ? normalizedId : undefined;
+        }),
+      );
+      return new Set(answers.filter((id): id is string => id !== undefined));
+    },
+    invalidate: () => {
+      generation += 1;
+      isUnsupportedById = new Map();
+      failedAt = undefined;
+    },
+  };
+}
+
+// #endregion Unsupported Projects
 
 // #region Text Connection Panels
 

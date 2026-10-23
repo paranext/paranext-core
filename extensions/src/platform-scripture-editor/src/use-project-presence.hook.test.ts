@@ -134,6 +134,16 @@ describe('useProjectPresence', () => {
     await waitFor(() => expect(result.current).toBe('none'));
   });
 
+  it('does not count a project that cannot be opened, so its owner is shown how to get one', async () => {
+    getMetadataForAllProjects.mockResolvedValue([
+      { ...PROJECT, unsupportedReason: '%project_unsupported_studyBibleAdditions%' },
+    ]);
+
+    const { result } = renderHook(() => useProjectPresence({ enabled: true }));
+
+    await waitFor(() => expect(result.current).toBe('none'));
+  });
+
   it('recognizes the sample project by its ID whatever the case', async () => {
     getMetadataForAllProjects.mockResolvedValue([
       { ...SAMPLE_WEB, id: SAMPLE_WEB.id.toLowerCase() },

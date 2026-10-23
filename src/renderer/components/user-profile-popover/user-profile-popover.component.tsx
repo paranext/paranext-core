@@ -38,6 +38,7 @@ import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
 import { themeServiceDataProviderName } from '@shared/services/theme.service-model';
 import {
+  formatReplacementString,
   getErrorMessage,
   isPlatformError,
   LocalizeKey,
@@ -53,9 +54,10 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%userProfile_header_defaultName%',
   '%userProfile_header_notRegistered%',
   '%userProfile_interfaceMode_simple_label%',
-  '%userProfile_interfaceMode_simple_description%',
+  '%userProfile_interfaceMode_simple_description_2%',
   '%userProfile_interfaceMode_power_label%',
-  '%userProfile_interfaceMode_power_description%',
+  '%userProfile_interfaceMode_power_labelWithPreview%',
+  '%userProfile_interfaceMode_power_description_2%',
   '%userProfile_profileAndRegistration%',
   '%userProfile_registrationNeeded%',
   '%userProfile_networkSettings_2%',
@@ -132,6 +134,9 @@ function ReminderDot({ testId, className }: { testId: string; className?: string
  * email), interface mode, registration / network settings shortcuts, language, and appearance
  * (theme) controls. Replaces the previous standalone theme-toggle, internet-settings, and
  * Paratext-registration buttons in the toolbar.
+ *
+ * The Power option's label is marked as a preview: Power mode ships with features still missing, so
+ * users should read the gaps as "not built yet" rather than as bugs.
  *
  * When the user's Paratext registration is missing or invalid, an unobtrusive reminder dot appears
  * on the toolbar trigger and on the "Profile & registration" row. The dot is never the only signal:
@@ -425,7 +430,7 @@ export function UserProfilePopover() {
               {localizedStrings['%userProfile_interfaceMode_simple_label%']}
             </span>
             <span className="user-profile-popover-text-3xs tw:leading-tight tw:text-muted-foreground">
-              {localizedStrings['%userProfile_interfaceMode_simple_description%']}
+              {localizedStrings['%userProfile_interfaceMode_simple_description_2%']}
             </span>
           </ToggleGroupItem>
           <ToggleGroupItem
@@ -444,10 +449,13 @@ export function UserProfilePopover() {
                 safeInterfaceMode === 'power' && 'tw:text-accent-foreground',
               )}
             >
-              {localizedStrings['%userProfile_interfaceMode_power_label%']}
+              {formatReplacementString(
+                localizedStrings['%userProfile_interfaceMode_power_labelWithPreview%'],
+                { label: localizedStrings['%userProfile_interfaceMode_power_label%'] },
+              )}
             </span>
             <span className="user-profile-popover-text-3xs tw:leading-tight tw:text-muted-foreground">
-              {localizedStrings['%userProfile_interfaceMode_power_description%']}
+              {localizedStrings['%userProfile_interfaceMode_power_description_2%']}
             </span>
           </ToggleGroupItem>
         </ToggleGroup>

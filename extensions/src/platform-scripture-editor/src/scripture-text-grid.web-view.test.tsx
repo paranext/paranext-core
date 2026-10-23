@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { useRef, useState } from 'react';
 import type { WebViewProps } from '@papi/core';
@@ -134,6 +135,8 @@ vi.mock('@papi/frontend', () => ({
     // The web view swaps its tab icon on theme change; these tests never exercise that, so the
     // subscription resolves to a no-op unsubscriber and never delivers a theme.
     themes: { subscribeCurrentTheme: () => Promise.resolve(() => undefined) },
+    // The DBL install lookup re-asks on project changes; these tests never fire one.
+    network: { getNetworkEvent: () => undefined },
   },
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
@@ -354,7 +357,11 @@ async function openViewOptions() {
 
 /** The polite live region the web view announces chapter-split open/close through. */
 function liveRegionText() {
-  return screen.getByRole('status').textContent;
+  // The catalog retry banner has a status region of its own; the announcer is the atomic one.
+  const [announcer] = screen
+    .getAllByRole('status')
+    .filter((region) => region.getAttribute('aria-atomic') === 'true');
+  return announcer?.textContent;
 }
 
 const UNINSTALLED_RESOURCE: DblResourceData = {
@@ -457,6 +464,35 @@ describe('chapter-context split across a project change', () => {
     await waitFor(() => expect(screen.queryByTestId('chapter-split')).not.toBeInTheDocument());
     // …and a screen reader must not be left holding the stale "opened" message.
     expect(liveRegionText()).toBe('Chapter view closed');
+  });
+
+  it('lets each Escape close only the topmost layer, so the split closes last', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    hookResultsByProjectId.set(
+      'projectOne',
+      readyResult(twoResourceSources([]), createFakeTextConnectionPdp()),
+    );
+    await renderWebView({ projectId: 'projectOne' });
+    fireEvent.click(screen.getByTestId('open-chapter-split'));
+    expect(screen.getByTestId('chapter-split')).toBeInTheDocument();
+
+    // Any pop-up over the grid — the View Options popover here, and equally a verse row's tooltip
+    // or right-click menu — is the innermost layer, so Escape is its to handle.
+    await openViewOptions();
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByText(TEXTS_HEADER)).not.toBeInTheDocument());
+    expect(screen.getByTestId('chapter-split')).toBeInTheDocument();
+
+    // Closing the popover returns focus to its trigger, whose tooltip then opens as a layer of its
+    // own, so the second Escape closes that tooltip and the split still stays open.
+    await screen.findByRole('tooltip');
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+    expect(screen.getByTestId('chapter-split')).toBeInTheDocument();
+
+    // Positive control: with nothing left open, the third Escape closes the split.
+    await user.keyboard('{Escape}');
+    expect(screen.queryByTestId('chapter-split')).not.toBeInTheDocument();
   });
 
   it('leaves in-flight installs running when the project changes', async () => {

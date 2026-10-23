@@ -73,12 +73,24 @@ export const SYNC_ACTIVITY_RECHECK_INTERVAL_MS = 30 * 1000;
 export const SAMPLE_PROJECT_ID = '32664DC3288A28DF2E2BB75DED887FC8F17A15FB';
 
 /**
- * Whether the metadata is a project of the user's own: neither a resource (`isPublished`) nor the
- * sample project. A factory that omits `isPublished` is treated as unpublished, matching the
- * `platform.isPublished` default.
+ * Whether the metadata is a project of the user's own that they can open: neither a resource
+ * (`isPublished`), the sample project, nor a project that cannot be opened (`unsupportedReason`). A
+ * factory that omits `isPublished` is treated as unpublished, matching the `platform.isPublished`
+ * default.
+ *
+ * A user whose only projects cannot be opened is shown how to get a project, even though the
+ * toolbar's project picker lists those projects (disabled, with the reason).
  */
-function isOwnProject(metadata: { id: string; isPublished?: boolean }): boolean {
-  return metadata.isPublished !== true && metadata.id.toUpperCase() !== SAMPLE_PROJECT_ID;
+function isOwnProject(metadata: {
+  id: string;
+  isPublished?: boolean;
+  unsupportedReason?: string;
+}): boolean {
+  return (
+    metadata.isPublished !== true &&
+    !metadata.unsupportedReason &&
+    metadata.id.toUpperCase() !== SAMPLE_PROJECT_ID
+  );
 }
 
 // Checked rather than trusted: the sync-activity types were declared ahead of the Paratext 10 change

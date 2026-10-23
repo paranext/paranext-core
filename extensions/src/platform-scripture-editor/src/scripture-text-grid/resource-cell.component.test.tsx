@@ -84,6 +84,8 @@ vi.mock('@papi/frontend/react', () => ({
       '%webView_scriptureTextGrid_cell_not_installed%': 'Resource not installed',
       '%webView_scriptureTextGrid_cell_status_loading%': 'Resource is loading…',
       '%webView_scriptureTextGrid_cell_status_failed%': 'Download failed',
+      '%webView_scriptureTextGrid_cell_status_installUnverified%':
+        "Couldn't check whether this resource is installed",
       '%webView_scriptureTextGrid_cell_status_bookNotAvailable%': 'Book not in this text',
       '%webView_scriptureTextGrid_cell_verse_empty%': 'No text for this verse',
       '%webView_scriptureTextGrid_cell_copy%': 'Copy',
@@ -298,6 +300,45 @@ describe('ResourceCell', () => {
     expect(screen.queryByText('Resource is loading…')).not.toBeInTheDocument();
     expect(screen.queryByText('Download failed')).not.toBeInTheDocument();
     expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+  });
+  it('shows the loading spinner, not "Resource not installed", while the install check is pending', () => {
+    setUsjResult(undefined, true);
+    render(
+      <ResourceCell
+        resourceRef={{
+          resourceId: 'r',
+          projectId: undefined,
+          label: 'R',
+          unresolvedReason: 'checking',
+        }}
+        zoomArea="resource-r"
+        scrRef={scrRef}
+        setScrRef={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Resource is loading…')).toBeInTheDocument();
+    expect(screen.queryByText('Resource not installed')).not.toBeInTheDocument();
+  });
+  it('says it could not check, not "not installed", when the install check had no answer', () => {
+    setUsjResult(undefined, true);
+    render(
+      <ResourceCell
+        resourceRef={{
+          resourceId: 'r',
+          projectId: undefined,
+          label: 'R',
+          unresolvedReason: 'unverified',
+        }}
+        zoomArea="resource-r"
+        scrRef={scrRef}
+        setScrRef={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Resource unavailable')).toBeInTheDocument();
+    expect(
+      screen.getByText("Couldn't check whether this resource is installed"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Resource not installed')).not.toBeInTheDocument();
   });
   it('shows the Spinner and neutral loading message while downloading', () => {
     setUsjResult(undefined, true);
@@ -708,8 +749,10 @@ describe('ResourceCell name display', () => {
     const name = screen.getByText('WEB');
     const editorial = await screen.findByTestId('editorial');
     // Inline: name and editor share an intermediate row, not the cell root directly.
-    expect(name.parentElement).not.toBe(cellRoot);
-    expect(name.parentElement).toContainElement(editorial);
+    const row = name.closest('.stg-verse-row');
+    expect(row).not.toBeNull();
+    expect(row).not.toBe(cellRoot);
+    expect(row).toContainElement(editorial);
   });
 
   it('chapter mode uses the header band (name sits in the band atop the cell root)', () => {
@@ -720,6 +763,26 @@ describe('ResourceCell name display', () => {
     // Header mode: the name sits in a header band that is a direct child of the cell root, not an
     // inline row shared with the editor.
     expect(name.parentElement?.parentElement).toBe(cellRoot);
+  });
+
+  it('forwards the disclosure props, so verse mode renders the name as the disclosure control', () => {
+    setUsjResult(chapter, false);
+    const onDisclosureActivate = vi.fn();
+    render(
+      <ResourceCell
+        {...props}
+        viewMode="verse"
+        onDisclosureActivate={onDisclosureActivate}
+        disclosureAccessibleName="WEB, GEN 1:1"
+        isDisclosureExpanded
+        disclosureControlsId="chapter-context-panel"
+      />,
+    );
+    const control = screen.getByRole('button', { name: 'WEB, GEN 1:1' });
+    expect(control).toHaveAttribute('aria-expanded', 'true');
+    expect(control).toHaveAttribute('aria-controls', 'chapter-context-panel');
+    fireEvent.click(control);
+    expect(onDisclosureActivate).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -873,6 +936,40 @@ describe('ResourceCell zoom menu', () => {
     // Positive control: the cell rendered its not-installed placeholder.
     expect(screen.getByText('Resource not installed')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /zoom options/i })).not.toBeInTheDocument();
+  });
+
+  // The readable cell beside it is the control proving the zoom surfaces can render.
+  it('offers no zoom surfaces for a resource whose install could not be checked', () => {
+    setUsjResult(chapter, false);
+    render(
+      <>
+        <ResourceCell
+          {...props}
+          viewMode="chapter"
+          zoom={makeZoom()}
+          zoomMenuLabels={zoomMenuLabels}
+        />
+        <ResourceCell
+          resourceRef={{
+            resourceId: 'dbl-uid-2',
+            projectId: undefined,
+            label: 'NIV',
+            unresolvedReason: 'unverified',
+          }}
+          zoomArea="resource-dbl-uid-2"
+          scrRef={scrRef}
+          setScrRef={vi.fn()}
+          viewMode="chapter"
+          zoom={makeZoom()}
+          zoomMenuLabels={zoomMenuLabels}
+        />
+      </>,
+    );
+    expect(screen.getByRole('button', { name: 'Zoom options for WEB' })).toBeInTheDocument();
+    expect(
+      screen.getByText("Couldn't check whether this resource is installed"),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Zoom options for NIV' })).not.toBeInTheDocument();
   });
 });
 
