@@ -12,6 +12,10 @@ import { initAutoSyncBlockingService } from '@renderer/services/auto-sync-blocki
 import { initSyncActivityService } from '@renderer/services/sync-activity-service';
 import { initAutoSyncEditBlockDriver } from '@renderer/services/auto-sync-edit-block-driver';
 import { initConnectionLostService } from '@renderer/services/connection-lost-service';
+import {
+  catchUpExtensionHostStoppedState,
+  initExtensionHostStoppedService,
+} from '@renderer/services/extension-host-stopped-service';
 import { startBookChapterControlServiceShard } from '@renderer/services/book-chapter-control.service-shard';
 import { startDialogServiceShard } from '@renderer/services/dialog.service-shard';
 import { startNotificationServiceShard } from '@renderer/services/notification.service-shard';
@@ -26,6 +30,7 @@ import {
 import { rememberLaunchInterfaceLanguage } from '@renderer/services/interface-language-restart-prompt';
 import { initializeUsersnapApi } from '@renderer/services/usersnap.service';
 import { startUsersnapServiceShard } from '@renderer/services/usersnap.service-shard';
+import { startFirstRunServiceShard } from '@renderer/services/first-run.service-shard';
 import { startOnboardingTourServiceShard } from '@renderer/services/onboarding-tour.service-shard';
 import { isWindowInputBlocked } from '@renderer/services/window-input-blocked.util';
 import { registerContentZoomChromeKeys } from '@renderer/services/web-view-content-zoom.chrome-keys';
@@ -119,6 +124,9 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
 // is missed for good — and this store is the one thing that tells the user the app has stopped
 // working. Returns an unsubscriber we intentionally never call; it runs for the renderer's lifetime.
 initConnectionLostService();
+// Same reasoning as above, for main's lifecycle events: `getNetworkEvent` returns a subscribable
+// before the network service has connected, and neither event replays to a late subscriber.
+initExtensionHostStoppedService();
 
 // App-wide service setup
 // We are not awaiting these service startups for a few reasons:
@@ -131,6 +139,8 @@ initConnectionLostService();
     // The network service has to start first, and it uses the shared store after initialization
     await networkService.initialize();
     markStartup('papi-connected');
+    // Not awaited: nothing at startup needs the answer, and it never rejects.
+    catchUpExtensionHostStoppedState();
     await initializeSharedStoreService(networkService);
 
     // Read as early as possible, before anything can switch the language, so the restart prompt
@@ -177,6 +187,7 @@ initConnectionLostService();
       startUsersnapServiceShard(),
       startBookChapterControlServiceShard(),
       startOnboardingTourServiceShard(),
+      startFirstRunServiceShard(),
       startOverlayService(),
       startThemeService(),
       initializeWindowService(),

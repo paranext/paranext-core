@@ -16,10 +16,11 @@ export type TextCollectionProjectCandidate = {
  * Opened from the default layout the grid has no explicit `projectId`, so it takes the first
  * project the window's active editor reports and keeps it. Only an explicit `projectId` moves it
  * after that — a project switch supplies one by reloading the panel (see
- * `updateRelatedTextCollectionPanel`). The grid must never change project in place: it reads its
- * admin-shared list through `useBufferedLayoutSetting`, which re-arms only on `onSharedLayoutApply`
- * (Simple mode only) and so would leave that list on the previous project while the per-user list
- * and overlay moved on.
+ * `updateRelatedTextCollectionPanel`). Whatever moves it, no hook instance below the grid's project
+ * choice survives the change: `ScriptureTextGridProjectView` is keyed by this id. That matters
+ * because the grid reads its admin-shared list through `useBufferedLayoutSetting`, which re-arms
+ * only on `onSharedLayoutApply` (Simple mode only) and so would otherwise leave that list on the
+ * previous project while the per-user list and overlay moved on.
  *
  * @param previous The project the grid already shows (undefined before the first one resolves).
  * @param candidate See {@link TextCollectionProjectCandidate}.

@@ -5,6 +5,8 @@ import { createServer } from 'net';
 import { WebSocket } from 'ws';
 import { retryUntil } from 'platform-bible-utils';
 import { RpcWebSocketListener } from '@main/services/rpc-websocket-listener';
+import { REGISTRY_TOKEN_REQUEST_TYPE } from '@node/services/request-registry-tokens.service-model';
+import { createFakeWebSocket } from './fake-web-socket-test.util';
 
 /**
  * Companion to `rpc-websocket-listener.listening.test.ts`, which proves the `listening` handshake
@@ -129,5 +131,138 @@ describe('the PAPI websocket against a real socket', () => {
     } finally {
       await squatter.disconnect();
     }
+  });
+});
+
+type JsonRpcReply = { id: number; result?: unknown; error?: { code: number; message: string } };
+
+/**
+ * A bare JSON-RPC client on a real `ws` socket. Passing `origin` makes its handshake carry the
+ * `Origin` header a browser always sends; leaving it out connects the way the extension host and
+ * the .NET data provider do.
+ */
+async function openRawClient(port: number, origin?: string) {
+  const socket = new WebSocket(`ws://localhost:${port}`, origin === undefined ? {} : { origin });
+  await new Promise<void>((resolve, reject) => {
+    socket.once('open', () => resolve());
+    socket.once('error', reject);
+  });
+  const received: { id?: number; method?: string }[] = [];
+  const replies = new Map<number, (reply: JsonRpcReply) => void>();
+  socket.on('message', (data) => {
+    const message = JSON.parse(data.toString());
+    received.push(message);
+    replies.get(message.id)?.(message);
+  });
+  let nextId = 1;
+  return {
+    received,
+    request(method: string, params: unknown[]): Promise<JsonRpcReply> {
+      const id = nextId;
+      nextId += 1;
+      return new Promise((resolve) => {
+        replies.set(id, resolve);
+        socket.send(JSON.stringify({ jsonrpc: '2.0', id, method, params }));
+      });
+    },
+    notify(method: string, params: unknown[]): void {
+      socket.send(JSON.stringify({ jsonrpc: '2.0', method, params }));
+    },
+    close(): void {
+      socket.close();
+    },
+  };
+}
+
+describe('the Registry token request type over real connections', () => {
+  let listener: RpcWebSocketListener | undefined;
+  const clients: { close(): void }[] = [];
+  const issueToken = vi.fn(() => 'token');
+
+  async function listenerServingTokens(): Promise<number> {
+    const bound = await bindOnAFreePort();
+    listener = bound.listener;
+    await listener.registerMethod(REGISTRY_TOKEN_REQUEST_TYPE, issueToken);
+    await listener.registerMethod('test:ping', () => 'pong');
+    return bound.port;
+  }
+
+  async function connect(port: number, origin?: string) {
+    const client = await openRawClient(port, origin);
+    clients.push(client);
+    return client;
+  }
+
+  afterEach(async () => {
+    clients.splice(0).forEach((client) => client.close());
+    await listener?.disconnect();
+    listener = undefined;
+    issueToken.mockClear();
+  });
+
+  it('serves a connection whose handshake carried no Origin, as the extension host connects', async () => {
+    const port = await listenerServingTokens();
+    const extensionHost = await connect(port);
+
+    const reply = await extensionHost.request(REGISTRY_TOKEN_REQUEST_TYPE, ['ext', 'res', []]);
+
+    expect(reply.result).toBe('token');
+    expect(issueToken).toHaveBeenCalledTimes(1);
+  });
+
+  // `null` is what a sandboxed iframe or other opaque origin sends: still a browser
+  it.each(['http://localhost:1212', 'https://example.com', 'null'])(
+    'refuses a connection whose handshake carried Origin %s',
+    async (origin) => {
+      const port = await listenerServingTokens();
+      const browserPage = await connect(port, origin);
+
+      const reply = await browserPage.request(REGISTRY_TOKEN_REQUEST_TYPE, ['ext', 'res', []]);
+
+      expect(reply.error?.message).toContain('not available');
+      expect(issueToken).not.toHaveBeenCalled();
+    },
+  );
+
+  it('still serves every other request type to a browser connection', async () => {
+    const port = await listenerServingTokens();
+    const browserPage = await connect(port, 'http://localhost:1212');
+
+    await expect(browserPage.request('test:ping', [])).resolves.toMatchObject({ result: 'pong' });
+  });
+
+  it('does not pass the request type on as an event from a browser connection', async () => {
+    const port = await listenerServingTokens();
+    // Stands in for the .NET data provider, which StreamJsonRpc would hand a matching event to
+    const dataProvider = await connect(port);
+    const browserPage = await connect(port, 'http://localhost:1212');
+
+    browserPage.notify(REGISTRY_TOKEN_REQUEST_TYPE, [{}]);
+    browserPage.notify('test:event', [{}]);
+    // Main forwards to the data provider in order, so a reply to its own request arrives after
+    // anything forwarded before it
+    await browserPage.request('test:ping', []);
+    await dataProvider.request('test:ping', []);
+
+    const forwarded = dataProvider.received.map((message) => message.method);
+    expect(forwarded).toContain('test:event');
+    expect(forwarded).not.toContain(REGISTRY_TOKEN_REQUEST_TYPE);
+  });
+
+  it('refuses a renderer connection, which reaches main over a MessagePort', async () => {
+    await listenerServingTokens();
+    const renderer = createFakeWebSocket();
+    listener?.acceptLocalClient(renderer.webSocket, 'renderer:w1');
+
+    renderer.receiveMessage({
+      jsonrpc: '2.0',
+      id: 1,
+      method: REGISTRY_TOKEN_REQUEST_TYPE,
+      params: ['ext', 'res', []],
+    });
+
+    await vi.waitFor(() => expect(renderer.sentPayloads).toHaveLength(1));
+    expect(renderer.sentPayloads[0]).toContain('not available');
+    expect(issueToken).not.toHaveBeenCalled();
   });
 });

@@ -1,13 +1,12 @@
-import { EMPTY_USJ } from '@eten-tech-foundation/scripture-utilities';
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
   useDataProvider,
   useDialogCallback,
   useLocalizedStrings,
-  useProjectData,
   useProjectDataProvider,
   useProjectSetting,
+  useScrollGroupScrRef,
   useSetting,
 } from '@papi/frontend/react';
 import { useTabIconSelection, type TabIconUrls } from 'platform-bible-react';
@@ -21,6 +20,7 @@ import {
 } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ResourceReferenceList } from 'platform-scripture';
+import { useChapterUsjWithCopyLimit } from './copy-limit/use-chapter-usj-with-copy-limit.hook';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { useResourcePickerResources } from './use-resource-picker-resources.hook';
@@ -40,13 +40,20 @@ import {
   isDblResourceReference,
   isProjectReference,
 } from './resource-reference.utils';
-import { resolveResourceSelection } from './resource-selection.utils';
+import {
+  findSelectedRow,
+  matchesSelectedResourceId,
+  resolveResourceSelection,
+  type ResourceSelectionResolution,
+} from './resource-selection.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { resolveResourcePanelStringKeys } from './resource-panel-strings.utils';
 import { selectTextConnection } from './select-dbl-resource';
 import { ResourceTextPanel } from './resource-text-panel.component';
 import { RESOURCE_PANEL_STRING_KEYS } from './resource-text-panel.const';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
+import { COPYRIGHT_NOTICE_STRING_KEYS } from './copyright-notice/copyright-notice.const';
+import { ProjectCopyrightNotice } from './copyright-notice/project-copyright-notice.component';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -54,7 +61,10 @@ const DEFAULT_TEXT_DIRECTION = 'ltr';
 // must keep a stable identity across renders — a fresh array every render re-runs its lookup — and
 // `RESOURCE_PANEL_STRING_KEYS` is a frozen readonly tuple, so it is spread into a mutable
 // `LocalizeKey[]` exactly once here.
-const ALL_STRING_KEYS: LocalizeKey[] = [...RESOURCE_PANEL_STRING_KEYS];
+const ALL_STRING_KEYS: LocalizeKey[] = [
+  ...RESOURCE_PANEL_STRING_KEYS,
+  ...COPYRIGHT_NOTICE_STRING_KEYS,
+];
 
 const BIBLE_TEXTS_ICON_URLS: TabIconUrls = {
   lightDefault: 'papi-extension://platformScriptureEditor/assets/book-open.svg',
@@ -86,13 +96,11 @@ const RESOURCE_PICKER_OPTIONS = { includeDownloaded: true } as const;
 globalThis.webViewComponent = function ResourceTextPanelWebView({
   id: webViewId,
   projectId,
+  scrollGroupScrRef,
   updateWebViewDefinition,
   useWebViewState,
-  useWebViewScrollGroupScrRef,
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(ALL_STRING_KEYS);
-
-  const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
 
   // #region Web view state
 
@@ -216,8 +224,22 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   // This panel also offers locally-downloaded resources that are not referenced yet, so an empty
   // referenced list is only genuinely empty once those rows have arrived and none of them matched.
   let readiness: ResourcePanelReadiness = listReadiness;
-  if (listReadiness === 'empty') {
+  // A saved DBL reference has no row while the catalog is down, since only the catalog resolves it.
+  const hasRowForSavedSelection =
+    selectedResourceId === undefined ||
+    filteredResources.some((row) => matchesSelectedResourceId(row, selectedResourceId));
+  if (!projectId) {
+    // No project, so no referenced list to wait for: the rows are the downloaded resources alone.
     if (arePickerResourcesLoading) readiness = 'loading';
+    else if (hasCatalogError && !hasRowForSavedSelection) readiness = 'catalogError';
+    else readiness = filteredResources.length > 0 ? 'configured' : 'empty';
+  } else if (listReadiness === 'empty' || listReadiness === 'catalogError') {
+    // Neither an empty referenced list nor a failed catalog may hide the downloaded extras: they are
+    // read straight off disk, so they can be correct even while the catalog fetch is down. A failed
+    // catalog still shows its error view when the saved selection is not among them, so the panel
+    // never swaps the user's choice for some other downloaded resource without saying so.
+    if (arePickerResourcesLoading) readiness = 'loading';
+    else if (hasCatalogError && !hasRowForSavedSelection) readiness = 'catalogError';
     else if (filteredResources.length > 0) readiness = 'configured';
   }
 
@@ -245,18 +267,34 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   // the `usjPossiblyError` this passes DOWN to the panel, so a callback would close a cycle. That
   // constraint is what fixes the direction of the whole boundary, and it is why there is exactly
   // one answer to "which resource is on screen" rather than two derivations to keep in step.
-  const selection = resolveResourceSelection(
-    filteredResources,
-    selectedResourceId,
-    pendingResourceId,
-  );
-  const selectedRef = selection.selectedRow;
+  //
+  // With no project open the panel shows only a resource it was asked for — one opened from Home —
+  // and never picks one by itself: there is no list of the user's texts to pick from, so a fallback
+  // would put an arbitrary download on screen instead of "open a project".
+  const selection: ResourceSelectionResolution = projectId
+    ? resolveResourceSelection(filteredResources, selectedResourceId, pendingResourceId)
+    : {
+        nextSelectedResourceId: undefined,
+        shouldClearPending: false,
+        selectedRow: findSelectedRow(filteredResources, selectedResourceId),
+      };
+  // Behind the catalog-error view nothing is on screen, so the first-row fallback must not keep a
+  // chapter subscription open or become what Ctrl+F searches.
+  const selectedRef = readiness === 'catalogError' ? undefined : selection.selectedRow;
+
+  // Falling back to another row while the catalog is down would overwrite a saved DBL selection
+  // that only lacks a row until the catalog returns. Committing a pick and migrating a legacy bare
+  // id still go through.
+  const isFallbackWhileCatalogFailed =
+    hasCatalogError && pendingResourceId === undefined && !hasRowForSavedSelection;
+  const nextSelectedResourceId = isFallbackWhileCatalogFailed
+    ? undefined
+    : selection.nextSelectedResourceId;
 
   useEffect(() => {
-    if (selection.nextSelectedResourceId !== undefined)
-      setSelectedResourceId(selection.nextSelectedResourceId);
+    if (nextSelectedResourceId !== undefined) setSelectedResourceId(nextSelectedResourceId);
     if (selection.shouldClearPending) setPendingResourceId(undefined);
-  }, [selection.nextSelectedResourceId, selection.shouldClearPending, setSelectedResourceId]);
+  }, [nextSelectedResourceId, selection.shouldClearPending, setSelectedResourceId]);
 
   const [isSelecting, setIsSelecting] = useState(false);
 
@@ -264,6 +302,34 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   // is displaying, NOT the panel's own `projectId` prop (that is the container project whose
   // reference list is shown). `PickerResource` resolves it for every reference kind.
   const resourceProjectId = selectedRef?.projectId;
+
+  // Follow the scroll group in the DISPLAYED RESOURCE's versification, not this panel's own
+  // (container) project's. This web view's definition `projectId` is the container project (it
+  // reads that project's reference list and text-connection settings), but it renders the selected
+  // resource — so passing the resource's id as the conversion project makes `scrRef` come back
+  // converted into the resource's versification and makes a verse click here stamp the resource as
+  // the scroll group's source project (other web views then convert FROM it). We call
+  // `useScrollGroupScrRef` directly (rather than the `useWebViewScrollGroupScrRef` prop) so we can
+  // pass that resource id instead of this web view's own `projectId`; the `scrollGroupScrRef` prop
+  // is kept live by the web-view host re-rendering the component on definition updates.
+  // `undefined` until a resource with a local project resolves — no conversion, and there is
+  // nothing to display yet anyway.
+  //
+  // This call must stay below the selection region: `resourceProjectId` is what it converts into.
+  //
+  // TODO(PT-4896): a project-reference row resolves to its project id even when that project is not
+  // on this machine, so each verse change repeats a failing versification lookup.
+  // TODO(PT-4898): on mount and on a resource switch the hook still returns the reference last shown
+  // for the previous conversion project, costing one extra chapter fetch.
+  const [scrRef, setScrRef] = useScrollGroupScrRef(
+    scrollGroupScrRef,
+    useCallback(
+      (newScrollGroupScrRef) =>
+        updateWebViewDefinition({ scrollGroupScrRef: newScrollGroupScrRef }),
+      [updateWebViewDefinition],
+    ),
+    resourceProjectId,
+  );
 
   // The catalog entry behind the selection, for the dynamic title's display name.
   const dblMatch =
@@ -305,7 +371,9 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
     resourceProjectId ? [resourceProjectId] : [],
     canPublishResourcePanelProjectIds(
       effectiveResourcesState,
-      isCatalogReady,
+      // Rows resolved locally despite a failed catalog (the readiness override above) are an
+      // answer; a failed catalog alone is not, and publishing then would wipe the saved list.
+      isCatalogReady || readiness === 'configured',
       pickerResources !== undefined,
     ),
     // These panels are re-pointed by reloading them, which reuses the web view id, so the
@@ -356,27 +424,16 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
 
   // #endregion
 
-  // #region USJ Fetch
+  // #region USJ Fetch and copy limit
 
   // Chapter view: the whole chapter goes to Editorial, which navigates to scrRef. Deliberately NOT
   // sliced by scripture-text-grid/verse-display.utils — slicing would blank the verse-0 front
   // matter (intros, Psalm superscriptions) this view exists to show. Single-verse surfaces resolve
   // verse 0 to verse 1; whole-chapter surfaces like this one must not (see
   // `adr-single-verse-surfaces-resolve-verse-zero-to-one`).
-  const [usjPossiblyError, , isUsjLoading] = useProjectData(
-    'platformScripture.USJ_Chapter',
+  const { usjPossiblyError, isUsjLoading, copyLimit } = useChapterUsjWithCopyLimit(
     resourceProjectId,
-  ).ChapterUSJ(
-    useMemo(
-      () => ({
-        book: scrRef.book,
-        chapterNum: scrRef.chapterNum,
-        verseNum: 1,
-        versificationStr: scrRef.versificationStr,
-      }),
-      [scrRef.book, scrRef.chapterNum, scrRef.versificationStr],
-    ),
-    EMPTY_USJ,
+    scrRef,
   );
 
   // #endregion
@@ -497,6 +554,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
       usjPossiblyError={usjPossiblyError}
       isUsjLoading={isUsjLoading}
       textDirection={textDirection}
+      copyLimit={copyLimit}
       isSelecting={isSelecting}
       isInstalling={isInstalling}
       installFailed={installFailed}
@@ -505,6 +563,13 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
       isOnline={isOnline}
       onShowResourcePicker={showResourcePicker}
       logger={logger}
+      copyrightNotice={
+        <ProjectCopyrightNotice
+          projectId={resourceProjectId}
+          localizedStrings={localizedStrings}
+          useWebViewState={useWebViewState}
+        />
+      }
     />
   );
 };

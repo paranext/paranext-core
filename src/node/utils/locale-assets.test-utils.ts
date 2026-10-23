@@ -76,6 +76,19 @@ export function readShippedLocale(locale: string): LanguageStrings {
 }
 
 /**
+ * Reads the shell's `metadata.json` sidecar, which holds each key's `fallbackKey` and
+ * `deprecationInfo` rather than any localized value.
+ *
+ * @returns The metadata entry for each key that has one.
+ */
+export function readShippedLocalizationMetadata(): Record<
+  string,
+  { fallbackKey?: string; deprecationInfo?: { date: string; message: string } } | undefined
+> {
+  return readJsonFile(resolve(LOCALIZATION_DIR, 'metadata.json'));
+}
+
+/**
  * Reads the keys the shell's `metadata.json` sidecar redirects to an English value they can
  * actually resolve to, via `fallbackKey`. A key served entirely through a working redirect
  * localizes correctly while holding no value of its own in any locale file — the documented way to
@@ -96,9 +109,7 @@ export function readShippedLocale(locale: string): LanguageStrings {
  * @returns Every key whose `fallbackKey` redirect resolves to one of `englishKeys`.
  */
 export function getFallbackRedirectedKeys(englishKeys: ReadonlySet<string>): Set<string> {
-  const metadata = readJsonFile<Record<string, { fallbackKey?: string } | undefined>>(
-    resolve(LOCALIZATION_DIR, 'metadata.json'),
-  );
+  const metadata = readShippedLocalizationMetadata();
   const keys = new Set<string>();
   Object.entries(metadata).forEach(([key, entry]) => {
     if (entry?.fallbackKey && englishKeys.has(entry.fallbackKey)) keys.add(key);

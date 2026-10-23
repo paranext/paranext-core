@@ -6,6 +6,7 @@ using System.Xml.Linq;
 using System.Xml.XPath;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.NetworkObjects.Documentation;
+using Paranext.DataProvider.Projects.DigitalBibleLibrary;
 using Paranext.DataProvider.Projects.SendReceive;
 using Paranext.DataProvider.Services;
 using Paratext.Data;
@@ -115,6 +116,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     {
         var retVal = base.GetFunctions();
 
+        // Serves ProjectInterfaces.EXTENSION_DATA_ENUMERATION, which every Paratext project
+        // advertises, published or not. The base class registers only the platform.base methods.
+        retVal.Add(("listExtensionDataQualifiers", ListExtensionDataQualifiers));
+
         retVal.Add(("getBookUSFM", GetBookUsfm));
         retVal.Add(("setBookUSFM", SetBookUsfm));
         retVal.Add(("getChapterUSFM", GetChapterUsfm));
@@ -181,6 +186,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(("setFinalChapter", SetFinalChapter));
         retVal.Add(("getFinalVerseNumbersInBook", GetFinalVerseNumbersInBook));
         retVal.Add(("setFinalVerseNumbersInBook", SetFinalVerseNumbersInBook));
+
+        retVal.Add(("getBookCopyLimits", GetBookCopyLimits));
+        retVal.Add(("setBookCopyLimits", SetBookCopyLimits));
 
         // PT9 interlinear methods are only registered when this PDP advertises
         // platformScripture.Pt9Interlinear. Published PDPs do not advertise it, so they skip
@@ -405,22 +413,38 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Adds <see cref="ProjectDataType.BOOK_COPY_LIMITS"/> to every update this provider sends that
+    /// names data types, so copy limits are refetched whenever any project data changes.
+    /// </summary>
+    protected override List<string> ExpandDataUpdateScope(List<string> dataTypes)
+    {
+        dataTypes = base.ExpandDataUpdateScope(dataTypes);
+        if (!dataTypes.Contains(ProjectDataType.BOOK_COPY_LIMITS))
+            dataTypes.Add(ProjectDataType.BOOK_COPY_LIMITS);
+        return dataTypes;
+    }
+
     #endregion
 
     #region Extension Data
 
     public override object? GetExtensionData(ProjectDataScope scope)
     {
-        if (string.IsNullOrEmpty(scope.ExtensionName))
+        if (string.IsNullOrWhiteSpace(scope.ExtensionName))
             throw new InvalidDataException("Must provide an extension name");
         if (string.IsNullOrEmpty(scope.DataQualifier))
             throw new InvalidDataException("Must provide a data qualifier");
 
-        scope.ProjectID = ProjectDetails.Metadata.Id;
+        // A read must not create the document it looked for: a file under shared/** is committed by
+        // Send/Receive to every clone, and there is no delete API to take it back. An absent
+        // document reads as "" - the same answer as an empty one - because that is the contract
+        // callers were written against; distinguishing the two (the TS type permits undefined) is a
+        // separate contract change.
+        Stream? dataStream = GetExtensionStream(scope, createIfNotExists: false);
+        if (dataStream == null)
+            return "";
 
-        Stream? dataStream =
-            GetExtensionStream(scope, true)
-            ?? throw new InvalidDataException("Extension data not found");
         using (dataStream)
         {
             return new StreamReader(dataStream, Encoding.UTF8).ReadToEnd();
@@ -430,24 +454,29 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     public override bool SetExtensionData(ProjectDataScope scope, string data)
     {
         using var _ = EnterSyncWriteScope();
-        if (string.IsNullOrEmpty(scope.ExtensionName))
+        if (string.IsNullOrWhiteSpace(scope.ExtensionName))
             throw new InvalidDataException("Must provide an extension name");
         if (string.IsNullOrEmpty(scope.DataQualifier))
             throw new InvalidDataException("Must provide a data qualifier");
 
-        scope.ProjectID = ProjectDetails.Metadata.Id;
-
-        Stream? dataStream =
-            GetExtensionStream(scope, true)
-            ?? throw new InvalidDataException("Unable to create extension data");
-
         ScrText scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        // Refused before the lock is taken: a resource's extension data is what it was published
+        // with (see ResourceProjectStreamManager)
+        if (scrText.IsResourceProject)
+            throw new InvalidOperationException(
+                "Cannot write extension data to resource projects."
+            );
         RunWithinLock(
             WriteScope.EntireProject(scrText),
             writeLock =>
             {
                 if (!writeLock.Active)
                     throw new InvalidOperationException("Write lock is not active");
+                // Opened only once the lock is held: opening creates the document, and one created
+                // for a write that then cannot proceed is an empty file Send/Receive would commit
+                using Stream dataStream =
+                    GetExtensionStream(scope, createIfNotExists: true)
+                    ?? throw new InvalidDataException("Unable to create extension data");
                 dataStream.SetLength(0);
                 using TextWriter textWriter = new StreamWriter(dataStream, Encoding.UTF8);
                 textWriter.Write(data);
@@ -458,20 +487,155 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return true;
     }
 
-    private Stream? GetExtensionStream(ProjectDataScope scope, bool createIfNotExists)
+    /// <summary>
+    /// List the DataQualifiers that exist for the extension identified by
+    /// <paramref name="scope"/>. This is the one method of
+    /// <see cref="ProjectInterfaces.EXTENSION_DATA_ENUMERATION"/>, which every Paratext project
+    /// advertises.
+    ///
+    /// Listing creates nothing, so an extension that has never written any data gets an empty
+    /// array.
+    /// </summary>
+    /// <remarks>
+    /// Takes no sync write scope and no project write lock: this is a read, like
+    /// <see cref="GetExtensionData"/>.
+    /// </remarks>
+    /// <param name="scope">Whose data to list: ExtensionName selects the extension.</param>
+    /// <returns>
+    /// Every DataQualifier that exists for that extension, sorted with
+    /// <see cref="StringComparer.Ordinal"/>. Each is a valid DataQualifier for
+    /// <see cref="GetExtensionData"/> under the same ExtensionName, exactly as it would be passed:
+    /// forward slashes, relative to the extension's own data, nested paths included. Empty
+    /// documents are included; an extension with no data at all gets an empty array.
+    /// </returns>
+    /// <exception cref="InvalidDataException">
+    /// The scope has no extension name, or one that would root the listing at the shared extensions
+    /// directory or above it. See <see cref="EnsureExtensionNameStaysInItsOwnDirectory"/>.
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// The ExtensionName composes into a stream path the project's
+    /// <see cref="IProjectStreamManager"/> refuses — a name containing ".." anywhere, even without a
+    /// separator ("a..b"), is rejected before the filesystem is touched — exactly as
+    /// <see cref="GetExtensionData"/> and <see cref="SetExtensionData"/> reject the same name.
+    /// </exception>
+    public string[] ListExtensionDataQualifiers(ProjectDataScope scope)
     {
-        ProjectDetails projectDetails = _paratextProjects.GetProjectDetails(scope.ProjectID!);
+        if (string.IsNullOrWhiteSpace(scope.ExtensionName))
+            throw new InvalidDataException("Must provide an extension name");
+        EnsureExtensionNameStaysInItsOwnDirectory(scope.ExtensionName);
 
-        IProjectStreamManager extensionStreamManager = CreateStreamManager(projectDetails);
-        return extensionStreamManager.GetDataStream(
-            $"{LocalParatextProjects.EXTENSION_DATA_SUBDIRECTORY}/{scope.ExtensionName}/{scope.DataQualifier}",
-            createIfNotExists
-        );
+        // Scoped to the named extension's directory so the listing is confined to that extension's
+        // data and a project's thousands of other files are never walked
+        return CreateExtensionStreamManager()
+            .GetExistingDataStreamNames(GetExtensionDataRoot(scope));
     }
 
-    protected virtual IProjectStreamManager CreateStreamManager(ProjectDetails projectDetails)
+    private Stream? GetExtensionStream(ProjectDataScope scope, bool createIfNotExists)
     {
-        return new RawDirectoryProjectStreamManager(projectDetails);
+        return CreateExtensionStreamManager()
+            .GetDataStream(
+                $"{GetExtensionDataRoot(scope)}/{scope.DataQualifier}",
+                createIfNotExists
+            );
+    }
+
+    /// <summary>
+    /// Where an extension's data lives, relative to the project. Listing and reading both compose
+    /// their stream names from this, which is what makes each name
+    /// <see cref="ListExtensionDataQualifiers"/> returns refer to the same document when passed to
+    /// <see cref="GetExtensionData"/> — change the layout here and both sides move together.
+    ///
+    /// It deliberately validates nothing. The callers' checks differ — see
+    /// <see cref="EnsureExtensionNameStaysInItsOwnDirectory"/> for why the listing's check must not
+    /// be shared here — so composition and validation stay separate on purpose.
+    /// </summary>
+    private static string GetExtensionDataRoot(ProjectDataScope scope) =>
+        $"{LocalParatextProjects.EXTENSION_DATA_SUBDIRECTORY}/{scope.ExtensionName}";
+
+    /// <summary>
+    /// Reject an extension name that would root the listing at the shared extensions directory or
+    /// above it — "." or "./" alone, or any ".." segment — because enumerating there hands back every
+    /// extension's data instead of the one asked about. Nothing else is rejected: a nested name such
+    /// as "acme/tools" stays within its own subtree and is valid on every path, and Windows trims a
+    /// trailing space or dot, so such a name aliases the trimmed one and still round-trips.
+    ///
+    /// This check belongs to the listing alone and must not move into
+    /// <see cref="GetExtensionDataRoot"/>, tempting as sharing it looks. An extension name is
+    /// caller-supplied and lands directly in a path, but for <see cref="GetExtensionData"/> and
+    /// <see cref="SetExtensionData"/> a bad name reaches nothing a caller could not reach by naming
+    /// the other extension outright — so a shared check would close no access there, while rejecting
+    /// names those methods accept would strand whatever was written under them.
+    /// </summary>
+    /// <exception cref="InvalidDataException">The name escapes its own directory.</exception>
+    private static void EnsureExtensionNameStaysInItsOwnDirectory(string extensionName)
+    {
+        // Split on both separators, as GetFileNameFromStreamName normalizes both. Trimming is for the
+        // check only — a whitespace-only segment names no directory — and does not alter the path.
+        var segments = extensionName.Split(
+            ['/', '\\'],
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
+        );
+        // All(...) is true for no segments at all, so a bare separator is rejected too
+        if (segments.All(segment => segment == ".") || segments.Contains(".."))
+            throw new InvalidDataException(
+                $"Extension name '{extensionName}' must stay within its own extension-data directory"
+            );
+    }
+
+    private IProjectStreamManager CreateExtensionStreamManager() =>
+        CreateStreamManager(_paratextProjects.GetProjectDetails(ProjectDetails.Metadata.Id));
+
+    protected virtual IProjectStreamManager CreateStreamManager(ProjectDetails projectDetails) =>
+        CreateDefaultStreamManager(
+            LocalParatextProjects.GetParatextProject(projectDetails.Metadata.Id),
+            projectDetails
+        );
+
+    /// <summary>
+    /// A resource's streams are the entries of its archive; every other project's are files under
+    /// its own directory. A resource has no directory of its own — its
+    /// <see cref="ProjectDetails.HomeDirectory"/> is the folder holding its archive, shared with
+    /// every other resource there — so resolving its streams against that would give all of them
+    /// one bucket.
+    /// </summary>
+    internal static IProjectStreamManager CreateDefaultStreamManager(
+        ScrText scrText,
+        ProjectDetails projectDetails
+    ) =>
+        scrText.IsResourceProject
+            ? new ResourceProjectStreamManager(
+                scrText.FileManager,
+                GetResourceArchivePath(scrText),
+                // What PlatformScrTextCollection gives every resource's file manager, so this
+                // manager's checks use the file manager's password and rule
+                passwordProvider: new DblResourcePasswordProvider()
+            )
+            : new RawDirectoryProjectStreamManager(projectDetails);
+
+    /// <summary>
+    /// The archive a resource's <see cref="ScrText.FileManager"/> reads, or null if it cannot be
+    /// determined.
+    ///
+    /// Usually the resource's own <see cref="ScrText.FullPath"/>. A joined text is the exception:
+    /// when HEB and GRK (or LXX and GRK, or OHEB and OGRK) are both installed, the project list
+    /// holds one text standing for the pair, which has no path of its own but shares its
+    /// file manager with its Old Testament text, so the archive is that text's. The project list
+    /// can join a text that is already joined, so this unwraps until it reaches a text with a path.
+    ///
+    /// ParatextData derives the archive path differently only for a dictionary resource, and
+    /// <see cref="ParatextUtils.PlatformScrTextCollection"/> creates no resource as a dictionary.
+    /// </summary>
+    internal static string? GetResourceArchivePath(ScrText scrText)
+    {
+        var archiveOwner = scrText;
+        while (archiveOwner is JoinedScrText joined)
+            // Genesis is an Old Testament book, so this is the text whose file manager it shares
+            archiveOwner = joined.GetJoinedText(1);
+        // Should ParatextData ever change which text's file manager a joined text uses, report the
+        // archive as unknown rather than list a different archive than reads come from
+        return ReferenceEquals(archiveOwner.FileManager, scrText.FileManager)
+            ? archiveOwner.FullPath
+            : null;
     }
 
     #endregion
@@ -608,10 +772,14 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <returns>The auto-generated comment ID (format: "threadId/userName/date")</returns>
     /// <exception cref="InvalidOperationException">If the selected text is invalid or the comment's
     /// assigned (<see cref="PlatformCommentWrapper.AssignedUser"/>) cannot be assigned to threads
-    /// in this project.
+    /// in this project.</exception>
+    /// <exception cref="ProjectOpenBlockedException">If Platform.Bible can't open this project
+    /// (see <see cref="ScrTextExtensions.ThrowIfOpenBlocked"/>).</exception>
     public string CreateComment(PlatformCommentWrapper comment)
     {
         using var _ = EnterSyncWriteScope();
+        // A comment is anchored to verse text, which a project that can't be opened doesn't serve
+        ThrowIfProjectOpenBlocked();
         VerifyUserCanCreateComments();
 
         // Never let the "content could not be displayed" placeholder become a note's real content.
@@ -860,6 +1028,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // Named (not `_`) because this method later uses `out _` discards, which would bind to a
         // using variable named `_` and fail to compile.
         using var syncWriteScope = EnterSyncWriteScope();
+        ThrowIfProjectOpenBlocked();
         if (resolution != "accept" && resolution != "reject" && resolution != "merge")
             throw new InvalidDataException(
                 $"Invalid resolution '{resolution}' for ResolveConflict; expected 'accept', 'reject', or 'merge'."
@@ -1019,6 +1188,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             // PT9 reads verse-only USFM via Parser.GetVerseUsfmText (CommentHtmlBuilder
             // .GetResolutionOptions); ScrText.GetText returns the whole chapter, which never
             // matches the verse-only text recorded on Comment.Verse. A missing verse -> stale.
+            // open-block: exempt — reached only via ResolveConflict and GetConflictResolutionOptions, which refuse
             string? currentRaw = scrText.Parser.GetVerseUsfmText(vref, true, true);
             if (currentRaw == null)
                 return true;
@@ -1053,15 +1223,18 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// This resolvability policy mirrors a slice of PT9's <c>CommentHtmlBuilder.GetResolutionOptions</c>
     /// (the canonical version lives in ParatextInternalShared and is not referenceable here).
     /// Intentional divergences to keep in mind if that upstream method changes: (1) a Team-assigned
-    /// conflict is resolvable by any team member (see <see cref="IsThreadAssignedToUser"/>); (2) there
-    /// is no study-bible-additions gate; (3) staleness regularizes and trims whitespace before
-    /// comparing (see <see cref="IsConflictVerseStale"/>), so a pure leading/trailing whitespace
-    /// change is not treated as stale.
+    /// conflict is resolvable by any team member (see <see cref="IsThreadAssignedToUser"/>); (2)
+    /// staleness regularizes and trims whitespace before comparing (see
+    /// <see cref="IsConflictVerseStale"/>), so a pure leading/trailing whitespace change is not
+    /// treated as stale.
     /// </remarks>
     public string GetConflictResolutionOptions(string threadId)
     {
         try
         {
+            // A project that can't be opened offers no resolution. Its refusal is an
+            // InvalidOperationException, caught below as "none" before any verse text is read.
+            ThrowIfProjectOpenBlocked();
             // Verify proves the thread exists (throws otherwise) and returns it, so no re-find here.
             CommentThread thread = VerifyUserCanResolveConflict(threadId);
             if (IsConflictVerseStale(thread))
@@ -1273,14 +1446,17 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     }
 
     /// <summary>
-    /// Determines if the current user can create new comment threads in this project.
+    /// Determines if the current user can create new comment threads in this project. False for a
+    /// project Platform.Bible can't open, because <see cref="CreateComment"/> refuses it.
     /// </summary>
-    /// <param name="allowInSba">Allow creating comments in Study Bible Additions projects (default: false)</param>
+    /// <param name="allowInSba">Allow creating comments in Study Bible Additions projects (default:
+    /// false). Has no effect while such projects can't be opened.</param>
     /// <returns>True if the user can create comments, false otherwise</returns>
     public bool CanUserCreateComments(bool allowInSba = false)
     {
         try
         {
+            ThrowIfProjectOpenBlocked();
             VerifyUserCanCreateComments(allowInSba);
             return true;
         }
@@ -1708,6 +1884,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (settingName == ProjectSettingsNames.PB_IS_PUBLISHED)
             return scrText.IsResourceProject;
 
+        // The copyright notice is computed from several settings; no Settings.xml key holds it
+        if (settingName == ProjectSettingsNames.PB_COPYRIGHT_NOTICE)
+            return CopyrightNotice.FromScrText(scrText);
+
         // Text direction comes from the project's ldml file, not from Settings.xml
         if (paratextSettingName == ProjectSettingsNames.PT_TEXT_DIRECTION)
             return scrText.RightToLeft ? "rtl" : "ltr";
@@ -1829,6 +2009,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (settingName == ProjectSettingsNames.PB_IS_PUBLISHED)
             throw new InvalidOperationException(
                 $"{ProjectSettingsNames.PB_IS_PUBLISHED} is a read-only computed setting."
+            );
+        if (settingName == ProjectSettingsNames.PB_COPYRIGHT_NOTICE)
+            throw new InvalidOperationException(
+                $"{ProjectSettingsNames.PB_COPYRIGHT_NOTICE} is a read-only computed setting."
             );
 
         // Figure out which setting name to use (resolved early so the admin gate below can use it
@@ -2532,6 +2716,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     public bool SetBookUsfm(VerseRef verseRef, string data)
     {
         using var _ = EnterSyncWriteScope();
+        ThrowIfProjectOpenBlocked();
         return SetBookUsfmInScope(verseRef, data);
     }
 
@@ -2557,6 +2742,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 BookSet localBooksPresentSet = scrText.Settings.LocalBooksPresentSet;
                 isNewBook = !localBooksPresentSet.IsSelected(verseRef.BookNum);
                 // Set with chapter 0 sets the whole book
+                // open-block: exempt — un-gated core; reached only via SetBookUsfm/SetBookUsx, which refuse
                 // SR-write-gate: exempt — un-gated core; the whole mutation runs inside SetBookUsfm/SetBookUsx's write scope (nesting a 2nd gate is unsafe; see SendReceiveWriteLock).
                 scrText.PutText(verseRef.BookNum, 0, false, data, writeLock);
             }
@@ -2575,6 +2761,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     public bool SetChapterUsfm(VerseRef verseRef, string data)
     {
         using var _ = EnterSyncWriteScope();
+        ThrowIfProjectOpenBlocked();
         try
         {
             var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
@@ -2712,6 +2899,34 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// </summary>
     public bool SetFinalVerseNumbersInBook(int bookNum, int[] value) =>
         throw new NotSupportedException(VersificationReadOnlyMessage);
+
+    #endregion
+
+    #region Copy Limit (platformScripture.CopyLimit)
+
+    /// <summary>
+    /// Where <see cref="GetBookCopyLimits"/> gets its answer: always
+    /// <see cref="ResourceCopyLimit.GetBookCopyLimits"/> outside tests, which replace it to see
+    /// what is asked for.
+    /// </summary>
+    internal Func<ScrText, int, int?[]?> BookCopyLimitsSource { get; set; } =
+        ResourceCopyLimit.GetBookCopyLimits;
+
+    /// <summary>
+    /// Maximum number of UTF-16 code units that may be copied at once from each chapter of the book
+    /// <paramref name="verseRef"/> names, or <c>null</c> for no limit. Indexed like the chapter-text
+    /// endpoints, by the project's own chapter numbers (index 0 unused);
+    /// <paramref name="verseRef"/>'s versification, chapter and verse are ignored. Read-only.
+    /// </summary>
+    public int?[]? GetBookCopyLimits(VerseRef verseRef) =>
+        BookCopyLimitsSource(
+            LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id),
+            verseRef.BookNum
+        );
+
+    /// <summary>Read-only — always throws.</summary>
+    public bool SetBookCopyLimits(VerseRef verseRef, int?[]? value) =>
+        throw new NotSupportedException("Copy limits are read-only.");
 
     #endregion
 
@@ -2881,6 +3096,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // SetBookUsfmInScope (NOT the public SetBookUsfm) so the whole mutation sits under a single
         // scope — nesting is unsafe under an arm race; see SetBookUsfmInScope. Inert in public core.
         using var _ = EnterSyncWriteScope();
+        ThrowIfProjectOpenBlocked();
         // The ParatextData project write lock (RunWithinLock) is taken inside SetBookUsfmInScope —
         // unrelated to the S/R gate scope above, despite the similar name.
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
@@ -2891,6 +3107,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     public bool SetChapterUsx(VerseRef verseRef, string data)
     {
         using var _ = EnterSyncWriteScope();
+        ThrowIfProjectOpenBlocked();
         string? failedMessage = null;
         bool didChange = true;
         try
@@ -2960,6 +3177,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         try
         {
             var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+            // Before the book check, so a refused project isn't reported as missing a book
+            scrText.ThrowIfOpenBlocked();
             if (verseRef.Versification == null)
                 verseRef.Versification = scrText.Settings.Versification;
             if (!scrText.BookPresent(verseRef.BookNum))
@@ -2985,6 +3204,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     private static VerseRef FindMatchingVerseRefInScrText(VerseRef verseRef, ScrText scrText)
     {
         // Limit the search scope to the chapter of the provided VerseRef
+        // open-block: exempt — reached only via GetFromScrText, which refuses
         var allVerses = scrText.Parser.GetVersesInText(verseRef, true);
         foreach (var v in allVerses)
         {
@@ -3008,6 +3228,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     private static string ConvertUsfmToUsx(ScrText scrText, VerseRef verseRef, bool chapterOnly)
     {
+        // open-block: exempt — reached only via GetFromScrText, which refuses
         string usfmData = scrText.GetText(verseRef, chapterOnly, true) ?? string.Empty;
         XmlDocument xmlDoc = UsfmToUsx.ConvertToXmlDocument(
             scrText,
@@ -3098,6 +3319,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // It's more likely that a successful approach would require walking the XmlDocument DOM
 
         vRef = FindMatchingVerseRefInScrText(vRef, scrText);
+        // open-block: exempt — reached only via GetFromScrText, which refuses
         string usfmData = scrText.GetText(vRef, true, true) ?? string.Empty;
         XmlDocument usxData = UsfmToUsx.ConvertToXmlDocument(scrText, vRef.BookNum, usfmData);
         var chapterNode = usxData.SelectSingleNode(VerseXPath(vRef.ChapterNum, 1));
@@ -3165,6 +3387,27 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     private IDisposable EnterSyncWriteScope()
     {
         return SendReceiveWriteLock.EnterWrite(ProjectDetails.Metadata.Id);
+    }
+
+    /// <summary>
+    /// Refuses this project's text when Platform.Bible can't open the project (see
+    /// <see cref="ScrTextExtensions.ThrowIfOpenBlocked"/>). Methods that write text call it right
+    /// after <see cref="EnterSyncWriteScope"/>, which stays their first statement; the scope's
+    /// <c>using</c> releases it when the refusal throws. A project that can't be found passes, so
+    /// each method's own lookup reports it.
+    /// </summary>
+    private void ThrowIfProjectOpenBlocked()
+    {
+        ScrText scrText;
+        try
+        {
+            scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        }
+        catch (Exception e) when (e is ArgumentException or ProjectNotFoundException)
+        {
+            return;
+        }
+        scrText.ThrowIfOpenBlocked();
     }
 
     #endregion

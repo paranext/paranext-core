@@ -2,13 +2,15 @@
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon } from '@sillsdev/scripture';
 import { VERSE_NUMBER_SCROLL_OFFSET } from '../editor-dom.util';
 import { ResourceCell } from './resource-cell.component';
 import type { ResourceZoomController } from './use-resource-content-zoom.hook';
+import { useChapterCopyLimit } from '../copy-limit/use-chapter-copy-limit.hook';
+import { resetCopyLimitLookupsBeforeEach } from '../copy-limit/copy-limit.test-utils';
 
 const {
   mockUseProjectData,
@@ -52,21 +54,50 @@ vi.mock('./reference-scroll.utils', async (importOriginal) => {
   };
 });
 
-vi.mock('@papi/frontend', () => ({ logger: { warn: vi.fn(), info: vi.fn() } }));
+const providersByKey = new Map<string, { key: string }>();
+function providerFor(key: string) {
+  let provider = providersByKey.get(key);
+  if (!provider) {
+    provider = { key };
+    providersByKey.set(key, provider);
+  }
+  return provider;
+}
+
+vi.mock('@papi/frontend', () => ({
+  default: {
+    projectLookup: {
+      getMetadataForProject: async () => ({ projectInterfaces: ['platformScripture.CopyLimit'] }),
+    },
+  },
+  logger: { warn: vi.fn(), info: vi.fn() },
+}));
 vi.mock('@papi/frontend/react', () => ({
   useProjectData: (...a: unknown[]) => mockUseProjectData(...a),
   useProjectSetting: (...a: unknown[]) => mockUseProjectSetting(...a),
+  // One stable provider object per project, as the real hook resolves one per project.
+  useProjectDataProvider: (projectInterface: string, projectId?: string) =>
+    providerFor(`${projectInterface}:${projectId}`),
   useLocalizedStrings: () => [
     {
       '%webView_scriptureTextGrid_cell_unavailable%': 'Resource unavailable',
       '%webView_scriptureTextGrid_cell_not_installed%': 'Resource not installed',
       '%webView_scriptureTextGrid_cell_status_loading%': 'Resource is loading…',
       '%webView_scriptureTextGrid_cell_status_failed%': 'Download failed',
+      '%webView_scriptureTextGrid_cell_status_installUnverified%':
+        "Couldn't check whether this resource is installed",
       '%webView_scriptureTextGrid_cell_status_bookNotAvailable%': 'Book not in this text',
       '%webView_scriptureTextGrid_cell_verse_empty%': 'No text for this verse',
       '%webView_scriptureTextGrid_cell_copy%': 'Copy',
       '%webView_scriptureTextGrid_cell_noVersesToShow%':
         'No verses to show in this chapter. Switch to Verse or Chapter view to read this text.',
+      '%platformScripture_copyrightNotice_restrictedLicense_banner%':
+        '{label}: may not be used as a base text.',
+      '%platformScripture_copyrightNotice_restrictedLicense_details%':
+        '{fullName} copyright © {years}. {permissionsLink}',
+      '%platformScripture_copyrightNotice_details_title%': 'Copyright for {name}',
+      '%platformScripture_copyrightNotice_details_close%': 'Close',
+      '%platformScripture_copyrightNotice_indicator_label%': 'Copyright notice for {name}',
     },
     false,
   ],
@@ -190,9 +221,18 @@ const combinedOpeningChapterUsj = usxStringToUsj(`<?xml version="1.0" encoding="
 </usx>
 `);
 
-// 3-tuple [data, setData, isLoading].
-function setUsjResult(value: unknown, isLoading = false) {
-  mockUseProjectData.mockReturnValue({ ChapterUSJ: () => [value, vi.fn(), isLoading] });
+// 3-tuple [data, setData, isLoading]. `copyLimits` defaults to an unlimited (`undefined` value)
+// result so existing tests that don't care about the copy limit keep seeing `copyLimit: undefined`
+// in the editor options.
+function setUsjResult(
+  value: unknown,
+  isLoading = false,
+  copyLimits: [unknown, unknown, boolean] = [undefined, vi.fn(), false],
+) {
+  mockUseProjectData.mockReturnValue({
+    ChapterUSJ: () => [value, vi.fn(), isLoading],
+    BookCopyLimits: () => copyLimits,
+  });
 }
 
 /**
@@ -222,6 +262,19 @@ function renderResourceCell(
   render(<ResourceCell {...props} {...rest} />);
 }
 
+resetCopyLimitLookupsBeforeEach();
+
+// The copy limit looks up each project's metadata once per web view. Settle that lookup for this
+// file's project before each test, so no test starts or ends with it still in flight.
+beforeEach(async () => {
+  setUsjResult(chapter, false);
+  const { unmount } = renderHook(() =>
+    useChapterCopyLimit(props.resourceRef.projectId, scrRef, 'applied-by-caller'),
+  );
+  await act(async () => {});
+  unmount();
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
   // The captured handler lives in a plain hoisted closure, which `clearAllMocks` does not reset.
@@ -247,6 +300,45 @@ describe('ResourceCell', () => {
     expect(screen.queryByText('Resource is loading…')).not.toBeInTheDocument();
     expect(screen.queryByText('Download failed')).not.toBeInTheDocument();
     expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+  });
+  it('shows the loading spinner, not "Resource not installed", while the install check is pending', () => {
+    setUsjResult(undefined, true);
+    render(
+      <ResourceCell
+        resourceRef={{
+          resourceId: 'r',
+          projectId: undefined,
+          label: 'R',
+          unresolvedReason: 'checking',
+        }}
+        zoomArea="resource-r"
+        scrRef={scrRef}
+        setScrRef={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Resource is loading…')).toBeInTheDocument();
+    expect(screen.queryByText('Resource not installed')).not.toBeInTheDocument();
+  });
+  it('says it could not check, not "not installed", when the install check had no answer', () => {
+    setUsjResult(undefined, true);
+    render(
+      <ResourceCell
+        resourceRef={{
+          resourceId: 'r',
+          projectId: undefined,
+          label: 'R',
+          unresolvedReason: 'unverified',
+        }}
+        zoomArea="resource-r"
+        scrRef={scrRef}
+        setScrRef={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Resource unavailable')).toBeInTheDocument();
+    expect(
+      screen.getByText("Couldn't check whether this resource is installed"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Resource not installed')).not.toBeInTheDocument();
   });
   it('shows the Spinner and neutral loading message while downloading', () => {
     setUsjResult(undefined, true);
@@ -305,6 +397,100 @@ describe('ResourceCell', () => {
     expect(screen.getByText('WEB')).toBeInTheDocument();
     expect(screen.queryByRole('gridcell')).toBeNull();
     expect(screen.queryByRole('button')).toBeNull();
+  });
+});
+
+describe('ResourceCell copy limit', () => {
+  it('passes the resolved chapter copy limit into the editor options', async () => {
+    setUsjResult(chapter, false, [[undefined, 7], vi.fn(), false]);
+    render(<ResourceCell {...props} scrRef={{ ...scrRef, chapterNum: 1 }} />);
+    await waitFor(() =>
+      expect(capturedEditorOptions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ copyLimit: 7 }),
+      ),
+    );
+  });
+
+  it('passes the copy limit into the editor options in aligned mode too, beside the view', async () => {
+    setUsjResult(twoVerseChapterUsj, false, [[undefined, 7], vi.fn(), false]);
+    render(
+      <ResourceCell
+        {...props}
+        viewMode="aligned"
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 2 }}
+      />,
+    );
+    await waitFor(() =>
+      expect(capturedEditorOptions).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          copyLimit: 7,
+          view: expect.objectContaining({ viewOptionsFor: 'block-verse' }),
+        }),
+      ),
+    );
+  });
+
+  it('blocks copying on the render that changes chapter, before the new chapter text is asked for', async () => {
+    // The mocked fetch never reports loading, as on the render before `useProjectData`'s effect
+    // marks the new chapter as loading.
+    setUsjResult(chapter, false, [[undefined, 7, 12], vi.fn(), false]);
+    const { rerender } = render(<ResourceCell {...props} scrRef={{ ...scrRef, chapterNum: 1 }} />);
+    await waitFor(() =>
+      expect(capturedEditorOptions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ copyLimit: 7 }),
+      ),
+    );
+    const rendersBeforeChange = capturedEditorOptions.mock.calls.length;
+
+    rerender(<ResourceCell {...props} scrRef={{ ...scrRef, chapterNum: 2 }} />);
+
+    // The previous chapter's text is not shown on that render, and any editor render there was
+    // could copy nothing.
+    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+    capturedEditorOptions.mock.calls
+      .slice(rendersBeforeChange)
+      .forEach(([options]) => expect(options).toEqual(expect.objectContaining({ copyLimit: 0 })));
+
+    rerender(<ResourceCell {...props} scrRef={{ ...scrRef, chapterNum: 2 }} />);
+    expect(capturedEditorOptions).toHaveBeenLastCalledWith(
+      expect.objectContaining({ copyLimit: 12 }),
+    );
+  });
+
+  // `useChapterCopyLimit` resolves the NEW chapter's limit immediately (book-level limits are
+  // pre-loaded), while the chapter TEXT keeps showing the PREVIOUS chapter until its own fetch
+  // resolves — the round trip during which the old text must not be copyable under the new
+  // chapter's (possibly larger) limit. `deriveCellState` already forces `'downloading'` whenever
+  // the chapter fetch's own `isLoading` is true, regardless of whether stale content is in hand
+  // (see the "re-feeds the editor when a read finishes with the same chapter already in hand" test
+  // above), so Editorial never mounts during that window and no limit — right or wrong — can leak
+  // through it. This pins that guarantee for the copy-limit round trip specifically, with a real
+  // (non-zero) limit already resolved, so a future change to `deriveCellState` that let a loading
+  // cell fall through to `'ready'` would be caught here rather than silently exposing stale text
+  // under the wrong limit.
+  it("does not show the previous resource's text under a new resource before the new text has loaded", () => {
+    setUsjResult(chapter, false);
+    const { rerender } = render(<ResourceCell {...props} />);
+    expect(screen.getByTestId('editorial')).toBeInTheDocument();
+
+    // The chapter fetch still holds the previous resource's text and reports it settled.
+    const otherResource = { ...props.resourceRef, projectId: 'other-project' };
+    rerender(<ResourceCell {...props} resourceRef={otherResource} />);
+    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+
+    // The new resource's text loads and arrives.
+    setUsjResult(chapter, true);
+    rerender(<ResourceCell {...props} resourceRef={otherResource} />);
+    setUsjResult(chapter, false);
+    rerender(<ResourceCell {...props} resourceRef={otherResource} />);
+    expect(screen.getByTestId('editorial')).toBeInTheDocument();
+  });
+
+  it('never mounts the editor while the chapter text is loading, even once the limit is known', () => {
+    setUsjResult(chapter, true, [[undefined, 7], vi.fn(), false]);
+    render(<ResourceCell {...props} scrRef={{ ...scrRef, chapterNum: 1 }} />);
+    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+    expect(capturedEditorOptions).not.toHaveBeenCalled();
   });
 });
 
@@ -563,8 +749,10 @@ describe('ResourceCell name display', () => {
     const name = screen.getByText('WEB');
     const editorial = await screen.findByTestId('editorial');
     // Inline: name and editor share an intermediate row, not the cell root directly.
-    expect(name.parentElement).not.toBe(cellRoot);
-    expect(name.parentElement).toContainElement(editorial);
+    const row = name.closest('.stg-verse-row');
+    expect(row).not.toBeNull();
+    expect(row).not.toBe(cellRoot);
+    expect(row).toContainElement(editorial);
   });
 
   it('chapter mode uses the header band (name sits in the band atop the cell root)', () => {
@@ -575,6 +763,26 @@ describe('ResourceCell name display', () => {
     // Header mode: the name sits in a header band that is a direct child of the cell root, not an
     // inline row shared with the editor.
     expect(name.parentElement?.parentElement).toBe(cellRoot);
+  });
+
+  it('forwards the disclosure props, so verse mode renders the name as the disclosure control', () => {
+    setUsjResult(chapter, false);
+    const onDisclosureActivate = vi.fn();
+    render(
+      <ResourceCell
+        {...props}
+        viewMode="verse"
+        onDisclosureActivate={onDisclosureActivate}
+        disclosureAccessibleName="WEB, GEN 1:1"
+        isDisclosureExpanded
+        disclosureControlsId="chapter-context-panel"
+      />,
+    );
+    const control = screen.getByRole('button', { name: 'WEB, GEN 1:1' });
+    expect(control).toHaveAttribute('aria-expanded', 'true');
+    expect(control).toHaveAttribute('aria-controls', 'chapter-context-panel');
+    fireEvent.click(control);
+    expect(onDisclosureActivate).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -728,6 +936,40 @@ describe('ResourceCell zoom menu', () => {
     // Positive control: the cell rendered its not-installed placeholder.
     expect(screen.getByText('Resource not installed')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /zoom options/i })).not.toBeInTheDocument();
+  });
+
+  // The readable cell beside it is the control proving the zoom surfaces can render.
+  it('offers no zoom surfaces for a resource whose install could not be checked', () => {
+    setUsjResult(chapter, false);
+    render(
+      <>
+        <ResourceCell
+          {...props}
+          viewMode="chapter"
+          zoom={makeZoom()}
+          zoomMenuLabels={zoomMenuLabels}
+        />
+        <ResourceCell
+          resourceRef={{
+            resourceId: 'dbl-uid-2',
+            projectId: undefined,
+            label: 'NIV',
+            unresolvedReason: 'unverified',
+          }}
+          zoomArea="resource-dbl-uid-2"
+          scrRef={scrRef}
+          setScrRef={vi.fn()}
+          viewMode="chapter"
+          zoom={makeZoom()}
+          zoomMenuLabels={zoomMenuLabels}
+        />
+      </>,
+    );
+    expect(screen.getByRole('button', { name: 'Zoom options for WEB' })).toBeInTheDocument();
+    expect(
+      screen.getByText("Couldn't check whether this resource is installed"),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Zoom options for NIV' })).not.toBeInTheDocument();
   });
 });
 
@@ -1030,5 +1272,27 @@ describe('ResourceCell reference scroll wiring', () => {
     rerender(<ResourceCell {...props} viewMode="chapter" scrRef={clicked} />);
 
     expect(port.scrollTop).toBe(0);
+  });
+});
+
+describe('ResourceCell copyright notice', () => {
+  it("offers the notice of the cell's own text beside its name", () => {
+    setUsjResult(undefined, true);
+    mockUseProjectSetting.mockImplementation((projectId: unknown, key: unknown) => {
+      if (key === 'platformScripture.copyrightNotice')
+        return [
+          projectId === props.resourceRef.projectId
+            ? { kind: 'restrictedLicense', name: 'NIV11', fullName: 'NIV', copyrightYears: '2011' }
+            : { kind: 'none' },
+          vi.fn(),
+          vi.fn(),
+          false,
+        ];
+      return ['ltr', vi.fn(), vi.fn(), false];
+    });
+
+    render(<ResourceCell {...props} />);
+
+    expect(screen.getByRole('button', { name: 'Copyright notice for NIV11' })).toBeInTheDocument();
   });
 });

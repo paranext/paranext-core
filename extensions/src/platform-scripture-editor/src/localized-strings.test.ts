@@ -8,6 +8,7 @@ import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control
 import { REMOVE_CHARACTER_MARKER_STRING_KEYS } from './character-marker-bar/use-remove-character-marker.hook';
 import { BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS } from './book-not-available-view.const';
 import { EMPTY_CHAPTER_VIEW_STRING_KEYS } from './empty-chapter-view.const';
+import { NO_PROJECT_VIEW_CONTRIBUTED_STRING_KEYS } from './no-project-view.const';
 import { RESOURCE_CELL_STRING_KEYS } from './scripture-text-grid/resource-cell.const';
 import { RESOURCE_COLLECTION_OPTIONS_STRING_KEYS } from './resource-collection-options/resource-collection-options.types';
 import { MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.const';
@@ -15,6 +16,7 @@ import { RESOURCE_PANEL_STRING_KEYS } from './resource-text-panel.const';
 import { VIEW_OPTIONS_NOTICE_STRING_KEYS } from './scripture-text-grid/view-options-notice.utils';
 import { TEAM_LAYOUT_BUTTON_STRING_KEYS } from './team-layout-button.component';
 import { STRUCTURE_PROTECTION_BUTTON_STRING_KEYS } from './structure-protection-button.component';
+import { HIDDEN_CONTENT_DELETE_STRING_KEYS } from './hidden-content-delete-confirm.utils';
 import {
   paragraphMarkerNameKey,
   PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
@@ -145,10 +147,11 @@ describe.each(CHARACTER_MARKER_CONTROL_FORMAT_KEYS)(
   },
 );
 
-// The one notification string the removal action can show. The commit-message and sync-blocked
-// keys in that list are excluded here: `%versionHistoryCommit_*%` is en-only across the whole file
-// (its insert-footnote and insert-cross-reference siblings are too), and the sync-blocked key is
-// already shipped and paired.
+// The one notification string the removal action owns. The commit-message keys in that list are
+// excluded here: `%versionHistoryCommit_*%` is en-only across the whole file (its insert-footnote
+// and insert-cross-reference siblings are too). The sync-blocked key is not in
+// `REMOVE_CHARACTER_MARKER_STRING_KEYS` at all (see the hook's TSDoc); its parity is checked by
+// the sync edit-blocked block below.
 const REMOVE_CHARACTER_MARKER_PARITY_KEYS = REMOVE_CHARACTER_MARKER_STRING_KEYS.filter(
   (key) => key === '%webView_platformScriptureEditor_error_removeCharacterMarkerFailed%',
 );
@@ -168,6 +171,26 @@ describe('character marker removal notifications', () => {
     });
   });
 });
+
+// The notification shown when an edit is rejected because an automatic sync is in progress. The key
+// falls back to the old Send/Receive key, so a dropped `es` value would silently show the
+// old wording; this block is what notices.
+describe.each(['%webView_platformScriptureEditor_error_syncEditBlocked_2%'])(
+  'sync edit-blocked notification %s',
+  (key) => {
+    it('has an English label', () => {
+      expect(localizedStrings.en[key]).toBeTruthy();
+    });
+
+    it('has a Spanish label', () => {
+      expect(localizedStrings.es[key]).toBeTruthy();
+    });
+
+    it('Spanish label differs from English', () => {
+      expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+    });
+  },
+);
 
 // Same guard for the book-not-available zero-state. This one matters more than most: the string family
 // it replaced (`%webView_platformScriptureEditor_error_bookNotFoundProject%`) already shipped with a
@@ -409,6 +432,45 @@ describe.each([...EMPTY_CHAPTER_VIEW_STRING_KEYS])('empty chapter view label %s'
   });
 });
 
+// The notices comment insertion sends. They are inline in the web view, which exports no key list,
+// so they are listed here. The unresolved-selection notice exists so a failure the user did not
+// cause is never reported as a problem with what they selected.
+describe.each([
+  '%webView_platformScriptureEditor_error_noTextSelected%',
+  '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
+  '%webView_platformScriptureEditor_error_selectionNotResolved%',
+  '%webView_platformScriptureEditor_warning_pendingCommentTextChanged%',
+])('comment insertion notice %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+// What the editor shows when it has no project, including the guidance for a user who has no
+// projects at all. For that user this is the only text on screen, so it has to exist in every
+// shipped language.
+describe.each([...NO_PROJECT_VIEW_CONTRIBUTED_STRING_KEYS])('no project view label %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
 // The toolbar button that opens the team layout dialog. Its label names the dialog, so it has to
 // stay in step with the dialog's own title in the platform shell's locale assets.
 describe.each([...TEAM_LAYOUT_BUTTON_STRING_KEYS])('team layout button label %s', (key) => {
@@ -443,6 +505,30 @@ describe.each([...STRUCTURE_PROTECTION_BUTTON_STRING_KEYS])(
     });
   },
 );
+
+// The confirmation shown before an edit removes content the view does not show: its title, prompt,
+// and buttons.
+describe.each([...HIDDEN_CONTENT_DELETE_STRING_KEYS])('hidden content delete label %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+// The prompt names the hidden content through `{markers}`; a translation that drops it would stop
+// saying what is about to be deleted.
+it.each(['en', 'es'] as const)('hidden content delete prompt keeps {markers} in %s', (locale) => {
+  expect(
+    localizedStrings[locale]['%webView_platformScriptureEditor_hiddenContentDelete_prompt%'],
+  ).toContain('{markers}');
+});
 
 // Markers whose Khmer label is a legitimate exception to the differs-from-English check: `h1`,
 // `h2`, `h3` are deprecated markers not worth translating (Crowdin itself leaves them in English);
