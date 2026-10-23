@@ -3297,7 +3297,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     main no longer updates. For a hidden window this is a change: main reveals it at its own
     `ready-to-show`, before the setting reaches the page, so its first visible frame is at the
     starting zoom, where it used to take the setting at `did-finish-load`, before being shown.
-    Alternative (f) would close this.
+    Follow-up: PT-4889, which weighs (f) against showing the window only after it takes the zoom.
   - **Stale entries:** existing profiles keep whatever per-URL entries they had, and nothing
     overwrites them any more. A packaged window whose launch URL happens to match one starts at that
     zoom until it takes the setting.
