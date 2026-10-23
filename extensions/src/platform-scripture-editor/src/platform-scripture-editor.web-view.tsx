@@ -258,6 +258,10 @@ import {
   LocalizedUnsupportedProjectMessage,
   UnsupportedProjectGate,
 } from './unsupported-project-gate.component';
+import {
+  createHiddenContentDeleteHandler,
+  HIDDEN_CONTENT_DELETE_PROMPT_KEY,
+} from './hidden-content-delete-confirm.utils';
 
 /**
  * Pass-through wrapper for the editor inside {@link InPortal}. `react-reverse-portal`'s `InPortal`
@@ -291,6 +295,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...TEAM_LAYOUT_BUTTON_STRING_KEYS,
   ...SYNC_BLOCKED_BANNER_STRING_KEYS,
   ...COPYRIGHT_NOTICE_STRING_KEYS,
+  HIDDEN_CONTENT_DELETE_PROMPT_KEY,
   // Not read by this file. Loaded here so that whichever component mounts the character-marker menu
   // gets its remove row localized through the `localizedStrings` this web view already resolves.
   ...CHARACTER_MARKER_MENU_STRING_KEYS,
@@ -510,6 +515,26 @@ function PlatformScriptureEditor({
   updateWebViewDefinition,
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => EDITOR_LOCALIZED_STRINGS, []));
+  const localizedStringsRef = useRef(localizedStrings);
+  useEffect(() => {
+    localizedStringsRef.current = localizedStrings;
+  }, [localizedStrings]);
+
+  /**
+   * Asks before an edit removes a figure, sidebar, or other construct the editor carries as an
+   * unknown node, which every view but Standard hides. Milestones (`\qt-s`/`\qt-e` and the like)
+   * are hidden too, but the editor does not guard them. Reads the strings through a ref, so its
+   * identity never changes.
+   */
+  const handleHiddenContentDelete = useMemo(
+    () =>
+      createHiddenContentDeleteHandler(
+        () => localizedStringsRef.current,
+        (localizeKey) => papi.localization.getLocalizedString({ localizeKey }),
+        (confirmOptions) => papi.dialogs.showDialog('platform.confirm', confirmOptions),
+      ),
+    [],
+  );
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
   // The footnote editor popover and the live anchor it is placed against
@@ -1965,6 +1990,8 @@ function PlatformScriptureEditor({
     () => ({
       isReadonly: isReadOnlyEffective,
       structureProtectionMode,
+      // A read-only editor makes no edits, so there is nothing to ask about.
+      onHiddenContentDelete: isReadOnlyEffective ? undefined : handleHiddenContentDelete,
       hasSpellCheck: false,
       nodes: nodeOptions,
       textDirection: textDirectionEffective,
@@ -1998,6 +2025,7 @@ function PlatformScriptureEditor({
     [
       isReadOnlyEffective,
       structureProtectionMode,
+      handleHiddenContentDelete,
       canUserCreateComments,
       isSyncBlocked,
       textDirectionEffective,
