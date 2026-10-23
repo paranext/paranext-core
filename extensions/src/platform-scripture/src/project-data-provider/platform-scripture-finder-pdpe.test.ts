@@ -2467,9 +2467,11 @@ describe('ScriptureFinderProjectDataProviderEngine whitespace matching', () => {
 
 /**
  * Find & Replace must replace exactly the text the user was shown, with exactly what they asked
- * for, and change nothing else. The expected failures below pin two ways it does not yet; their
- * fixes are tracked as a separate bug (PT-4197 data-fidelity audit, FR-2 and FR-5). When a fix
- * lands its pin starts failing: turn it into a plain `it`.
+ * for, and change nothing else. The expected failures below pin two ways it does not yet. When a
+ * fix lands its pin starts failing: update it to the chosen behavior.
+ *
+ * TODO(PT-4910): stale ranges write into other characters, and a match across a boundary deletes
+ * the markers between its ends; how a cross-boundary match should behave is a product decision.
  */
 describe('ScriptureFinderProjectDataProviderEngine replaces only the matched text', () => {
   /** The chapter USFM the engine itself replaces into, read from `usx` the way it reads it. */

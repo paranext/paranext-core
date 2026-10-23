@@ -2,31 +2,13 @@
   "about": "Shrink-only list of the bytes UsfmUsxRoundTripCorpusSweepTests sees change. See that suite's summary for the legs and the rules.",
   "entries": [
     {
-      "fixture": "testUSFM-2SA-1.usfm",
-      "chapter": 1,
-      "leg": "trip1",
-      "line": 5,
-      "before": "\r\n",
-      "after": "",
-      "reason": "UsfmToken.NormalizeTokenUsfm starts a line only at \\id, \\c, paragraph and \\v markers, so the line break between \\c 1 and the chapter's \\ca (a character marker) becomes the following space. Whitespace layout only; stable from the first save."
-    },
-    {
-      "fixture": "testUSFM-2SA-2.usfm",
-      "chapter": 2,
+      "fixture": "testUSFM-2SA-5.usfm",
+      "chapter": 5,
       "leg": "trip1",
       "line": 1,
-      "before": "\r\n",
-      "after": "",
-      "reason": "UsfmToken.NormalizeTokenUsfm starts a line only at \\id, \\c, paragraph and \\v markers, so the line break between \\c 2 and the chapter's unclosed \\ca (a character marker) becomes the following space. Whitespace layout only; stable from the first save."
-    },
-    {
-      "fixture": "testUSFM-2SA-3.usfm",
-      "chapter": 3,
-      "leg": "trip1",
-      "line": 1,
-      "before": "\r\n",
-      "after": "",
-      "reason": "UsfmToken.NormalizeTokenUsfm starts a line only at \\id, \\c, paragraph and \\v markers, so the line break between \\c 3 and the chapter's \\ca (a character marker) becomes the following space. Whitespace layout only; stable from the first save."
+      "before": "",
+      "after": "\r\n",
+      "reason": "ChapterMarkerCorrection (the port of Paratext 9's UsfmEditorTextLoader.FixChapterNumbers wired into SetChapterUsx) puts a chapter's \\ca run on the line after \\c N, as Paratext 9 saves it. Layout whitespace only; stable after the first save."
     }
   ]
 }
