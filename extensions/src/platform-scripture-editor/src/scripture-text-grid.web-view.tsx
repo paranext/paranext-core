@@ -677,6 +677,8 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   );
 
   // The shared scroll-group scrRef is owned here (WebViewProps) and passed down to the grid.
+  // TODO(PT-4897): this converts into the container project's versification, so a resource row
+  // whose versification differs shows the wrong verse; each row needs its own conversion frame.
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
 
   // Owned here for the same reason `scrRef` is: it is one fact about this web view, and the grid
