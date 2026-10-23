@@ -108,6 +108,13 @@ const localize = (strings: ModelTextPanelLocalizedStrings, key: ModelTextPanelLo
 
 const DEFAULT_SCR_REF: SerializedVerseRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
 
+/**
+ * How long a written pick waits for the list it wrote to arrive. An update normally lands within
+ * moments of the write; this bounds the wait for one that never comes (the settings subscription
+ * failed, say), which would otherwise leave "Selecting…" up until the panel is reloaded.
+ */
+export const WRITTEN_PICK_MAX_WAIT_MS = 10_000;
+
 export type ModelTextPanelProps = {
   /** Localized strings; import `MODEL_TEXT_PANEL_STRING_KEYS` to resolve them. */
   localizedStrings: ModelTextPanelLocalizedStrings;
@@ -474,6 +481,8 @@ export function ModelTextPanel({
   // text being replaced again, so the pick still counts as in progress. It waits for a newer list
   // rather than for the picked id, because an admin item listed first would keep that id off screen.
   // "Newer" is by identity: every update from `useEffectiveResourceReferenceList` is a new object.
+  // If none arrives within `WRITTEN_PICK_MAX_WAIT_MS`, the panel stops waiting and shows the list it
+  // has.
   const [listBeforeWrittenPick, setListBeforeWrittenPick] = useState<
     EffectiveResourceReferenceList | undefined
   >(undefined);
@@ -481,8 +490,13 @@ export function ModelTextPanel({
     isSelecting ||
     (listBeforeWrittenPick !== undefined && listBeforeWrittenPick === effectiveModelTexts);
   useEffect(() => {
-    if (listBeforeWrittenPick !== undefined && listBeforeWrittenPick !== effectiveModelTexts)
+    if (listBeforeWrittenPick === undefined) return undefined;
+    if (listBeforeWrittenPick !== effectiveModelTexts) {
       setListBeforeWrittenPick(undefined);
+      return undefined;
+    }
+    const timeout = setTimeout(() => setListBeforeWrittenPick(undefined), WRITTEN_PICK_MAX_WAIT_MS);
+    return () => clearTimeout(timeout);
   }, [listBeforeWrittenPick, effectiveModelTexts]);
 
   // Read when a pick lands rather than when the picker opened, since the list can change while the
@@ -541,30 +555,26 @@ export function ModelTextPanel({
   const isPickingRef = useRef(false);
 
   // A pick from the missing-book message replaces its button with "Selecting…", so focus falls to
-  // `body`; once the pick is over it goes to the header. A header pick keeps focus, since the header
-  // stays mounted. A catalog refresh can hide the whole panel, header included, until after the
-  // pick, so the check runs again when the header mounts.
+  // `body`; once the pick is over and the content below the header has arrived, it goes to the
+  // header. Waiting for the content lets a message that arrives instead (the picked text lacks this
+  // book too, say) take focus itself, so it is announced rather than appearing silently beside a
+  // focused header. A header pick keeps focus, since the header stays mounted.
+  //
+  // Runs after every commit, rather than on a change of the conditions below, so a header that only
+  // comes back after the pick (a catalog refresh can hide the whole panel) is still found. A passive
+  // effect runs after its children's, so a message mounted in the same commit has already taken
+  // focus by then.
   // Using null for React ref compatibility
   // eslint-disable-next-line no-null/no-null
   const headerButtonRef = useRef<HTMLButtonElement | null>(null);
   const shouldFocusHeaderAfterPickRef = useRef(false);
-  const isPickInProgressRef = useRef(isPickInProgress);
-  isPickInProgressRef.current = isPickInProgress;
-  const focusHeaderIfFocusDropped = useCallback((header: HTMLButtonElement | null) => {
-    if (!header || isPickInProgressRef.current || !shouldFocusHeaderAfterPickRef.current) return;
+  useEffect(() => {
+    const header = headerButtonRef.current;
+    if (!header || !shouldFocusHeaderAfterPickRef.current) return;
+    if (isPickInProgress || !isAnswerCurrent || isUsjLoading) return;
     shouldFocusHeaderAfterPickRef.current = false;
     if (isFocusDroppedInThisDocument()) header.focus();
-  }, []);
-  const setHeaderButton = useCallback(
-    (header: HTMLButtonElement | null) => {
-      headerButtonRef.current = header;
-      focusHeaderIfFocusDropped(header);
-    },
-    [focusHeaderIfFocusDropped],
-  );
-  useEffect(() => {
-    focusHeaderIfFocusDropped(headerButtonRef.current);
-  }, [isPickInProgress, focusHeaderIfFocusDropped]);
+  });
 
   // Called from click handlers, which nothing awaits, so a failure is caught here or nowhere. The
   // log names the resource once one was picked, so a failed settings read or write (which has no UI
@@ -626,6 +636,16 @@ export function ModelTextPanel({
         <p>{localize(localizedStrings, '%webView_modelTextPanel_noProject%')}</p>
       </div>
     );
+  }
+
+  // A pick with no text on screen to keep: from the empty state, from a not-found state, or with the
+  // panel hidden by a catalog refresh. Checked before those states return, because a picked text
+  // that isn't installed downloads before the pick is written, and until then the state the user
+  // picked from would stay on screen, Pick button included. A pick made while a text is on screen
+  // waits in the content area instead (see `renderContent`), so the header and the hidden editor
+  // stay mounted.
+  if (isPickInProgress && !resourceProjectId) {
+    return <LoadingView label={localize(localizedStrings, '%webView_modelTextPanel_selecting%')} />;
   }
 
   // Front of the state machine: still resolving, an unreadable setting, a catalog that failed, or
@@ -708,12 +728,10 @@ export function ModelTextPanel({
     );
   }
 
-  // Installing: resource found but not yet installed. Distinguish the two causes so the label is
-  // accurate: a user pick reads "Selecting…", while an auto-install of a configured resource — where
-  // the user picked nothing and it's just downloading — reads "Installing…". A pick made while a
-  // text is on screen waits in the content area instead (see `renderContent`), so the header and the
-  // hidden editor stay mounted.
-  if (isInstalling || (isPickInProgress && !resourceProjectId)) {
+  // Installing: an auto-install of a configured resource, where the user picked nothing and it's
+  // just downloading, reads "Installing…". One that overlaps a pick reads "Selecting…", like the
+  // pick.
+  if (isInstalling) {
     return (
       <LoadingView
         label={localize(
@@ -911,7 +929,7 @@ export function ModelTextPanel({
             >
               {isUserChosenModelText ? (
                 <Button
-                  ref={setHeaderButton}
+                  ref={headerButtonRef}
                   variant="ghost"
                   // The picker is a modal dialog. This also turns off `Button`'s 1px press nudge,
                   // which would shift the whole row out of line with the editor toolbar.

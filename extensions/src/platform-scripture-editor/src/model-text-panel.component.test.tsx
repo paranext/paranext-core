@@ -14,7 +14,9 @@ import {
   MODEL_TEXT_EDITOR_CONTAINER_TEST_ID,
   ModelTextPanel,
   ModelTextPanelProps,
+  WRITTEN_PICK_MAX_WAIT_MS,
 } from './model-text-panel.component';
+import { RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID } from './resource-book-not-available.component';
 
 /**
  * Records every `setUsj` the panel pushes into the editor, across editor instances.
@@ -537,10 +539,9 @@ describe('ModelTextPanel', () => {
     expect(showResourcePicker).toHaveBeenCalledTimes(2);
   });
 
-  // The empty state keeps its Pick button on screen while a picked resource installs, so this is
-  // the race the guard exists for: a second pick finishing first, then the first one's write
-  // landing last and replacing it.
-  it('ignores a second pick while the first pick’s resource is still installing', async () => {
+  // A picked text that isn't installed downloads before the pick is written, so the empty state
+  // would otherwise stay up through the download, with a Pick button that ignores every click.
+  it('replaces the empty state with "Selecting…" while a picked text downloads', async () => {
     let finishInstall: () => void = () => {};
     const installResource = vi.fn(
       () =>
@@ -548,13 +549,14 @@ describe('ModelTextPanel', () => {
           finishInstall = resolve;
         }),
     );
-    const showResourcePicker = vi.fn(async () => UNINSTALLED_RESOURCE);
-    renderPanel({ showResourcePicker, installResource });
+    renderPanel({ showResourcePicker: vi.fn(async () => UNINSTALLED_RESOURCE), installResource });
 
     fireEvent.click(screen.getByRole('button', { name: 'Pick a text…' }));
     await waitFor(() => expect(installResource).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole('button', { name: 'Pick a text…' }));
-    expect(showResourcePicker).toHaveBeenCalledTimes(1);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Selecting resource…');
+    expect(screen.queryByRole('button', { name: 'Pick a text…' })).not.toBeInTheDocument();
+    expect(screen.queryByText(EMPTY_PROMPT)).not.toBeInTheDocument();
 
     await act(async () => finishInstall());
   });
@@ -1337,6 +1339,34 @@ describe('ModelTextPanel changing a model text the user chose', () => {
       expect(screen.getByRole('button', { name: CHANGE_WEB })).toBeInTheDocument();
     });
 
+    // The header stays on screen while a picked text downloads, so this is the race the one-pick
+    // guard exists for: a second pick finishing first, then the first one's write landing last and
+    // replacing it.
+    it('ignores a second pick while the first pick’s text is still downloading', async () => {
+      const uninstalledKjv = { ...KJV, installed: false };
+      let finishInstall: () => void = () => {};
+      const installResource = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishInstall = resolve;
+          }),
+      );
+      const showResourcePicker = vi.fn(async () => uninstalledKjv);
+      renderUserChosenWeb({
+        dblResources: [INSTALLED_RESOURCE, uninstalledKjv],
+        showResourcePicker,
+        installResource,
+      });
+      const header = await screen.findByRole('button', { name: CHANGE_WEB });
+
+      fireEvent.click(header);
+      await waitFor(() => expect(installResource).toHaveBeenCalled());
+      fireEvent.click(header);
+      expect(showResourcePicker).toHaveBeenCalledTimes(1);
+
+      await act(async () => finishInstall());
+    });
+
     it('stops waiting once the write is done when the pick leaves the list unchanged', async () => {
       // Picking the text already first in the user's list writes an identical list, and an identical
       // list sends no update, so waiting for one would leave "Selecting…" up for good.
@@ -1379,6 +1409,33 @@ describe('ModelTextPanel changing a model text the user chose', () => {
       expect(screen.getByText('Selecting resource…')).toBeInTheDocument();
     });
 
+    it('stops waiting, and shows the text it has, when no list arrives after the write', async () => {
+      const write = heldWrite();
+      renderUserChosenWeb({
+        showResourcePicker: vi.fn(async () => KJV),
+        setUserModelTexts: write.setUserModelTexts,
+      });
+      await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
+      fireEvent.click(await screen.findByRole('button', { name: CHANGE_WEB }));
+      expect(await screen.findByText('Selecting resource…')).toBeInTheDocument();
+
+      vi.useFakeTimers();
+      try {
+        await write.finish();
+        await act(async () => vi.advanceTimersByTimeAsync(WRITTEN_PICK_MAX_WAIT_MS - 1));
+        expect(screen.getByText('Selecting resource…')).toBeInTheDocument();
+
+        await act(async () => vi.advanceTimersByTimeAsync(1));
+        expect(screen.queryByText('Selecting resource…')).not.toBeInTheDocument();
+        expect(screen.getByTestId(MODEL_TEXT_EDITOR_CONTAINER_TEST_ID)).not.toHaveClass(
+          'tw:hidden',
+        );
+        expect(screen.getByRole('button', { name: CHANGE_WEB })).toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('waits for the picked text instead of showing the old one again', async () => {
       vi.spyOn(document, 'hasFocus').mockReturnValue(true);
       const write = heldWrite();
@@ -1408,12 +1465,16 @@ describe('ModelTextPanel changing a model text the user chose', () => {
        * Picks KJV from WEB's missing-book message, whose button the "Selecting…" view replaces,
        * then delivers the new list once the write finishes.
        */
-      async function pickFromMessage(deliver: (props: ModelTextPanelProps) => React.ReactElement) {
+      async function pickFromMessage(
+        deliver: (props: ModelTextPanelProps) => React.ReactElement,
+        overrides: Partial<ModelTextPanelProps> = {},
+      ) {
         const write = heldWrite();
         const { props, rerender } = renderUserChosenWeb({
           getResourceChapter: webLacksBook(),
           showResourcePicker: vi.fn(async () => KJV),
           setUserModelTexts: write.setUserModelTexts,
+          ...overrides,
         });
         const messageButton = await screen.findByRole('button', { name: 'Pick model text…' });
         messageButton.focus();
@@ -1431,6 +1492,26 @@ describe('ModelTextPanel changing a model text the user chose', () => {
         await pickFromMessage((props) => <ModelTextPanel {...props} />);
 
         await waitFor(() => expect(screen.getByRole('button', { name: CHANGE_KJV })).toHaveFocus());
+      });
+
+      // The message mounts with its text already in its status region, which several screen readers
+      // do not announce, so focus moving to it is what tells the user this text lacks the book too.
+      it('lets the message take focus when the picked text lacks the book too', async () => {
+        vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+        const noTextHasBook = vi.fn(
+          async (projectId: string): Promise<{ usj: Usj | undefined; textDirection: string }> => {
+            throw new Error(`Book number 1 not found in project ${projectId}.`);
+          },
+        );
+
+        await pickFromMessage((props) => <ModelTextPanel {...props} />, {
+          getResourceChapter: noTextHasBook,
+        });
+
+        await waitFor(() =>
+          expect(screen.getByTestId(RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID)).toHaveFocus(),
+        );
+        expect(noTextHasBook).toHaveBeenCalledWith('project-kjv', expect.anything());
       });
 
       it('puts focus on the header when it only comes back after the pick', async () => {
@@ -1482,6 +1563,36 @@ describe('ModelTextPanel changing a model text the user chose', () => {
     );
     expect(await screen.findByRole('button', { name: CHANGE_WEB })).toBeInTheDocument();
     expect(screen.queryByText('Selecting resource…')).not.toBeInTheDocument();
+  });
+
+  // A picked text that isn't installed downloads before the pick is written, so the message would
+  // otherwise stay up through the download, with a Pick button that ignores every click.
+  it('replaces the not-found message with "Selecting…" while a picked text downloads', async () => {
+    const uninstalledKjv = { ...KJV, installed: false };
+    let finishInstall: () => void = () => {};
+    const installResource = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishInstall = resolve;
+        }),
+    );
+    renderUserChosenWeb({
+      // Not in the catalog
+      modelTextsState: readyState(userChosenModelTexts('unknown-uid')),
+      dblResources: [INSTALLED_RESOURCE, uninstalledKjv],
+      showResourcePicker: vi.fn(async () => uninstalledKjv),
+      installResource,
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Pick model text…' }));
+    await waitFor(() => expect(installResource).toHaveBeenCalledWith('uid-kjv'));
+
+    expect(screen.getByRole('status')).toHaveTextContent('Selecting resource…');
+    expect(
+      screen.queryByText('The selected model text could not be found.'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Pick model text…' })).not.toBeInTheDocument();
+
+    await act(async () => finishInstall());
   });
 
   describe('the full-name tooltip on a clipped header', () => {
