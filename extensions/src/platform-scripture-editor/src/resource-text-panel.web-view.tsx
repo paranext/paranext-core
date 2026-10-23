@@ -6,6 +6,7 @@ import {
   useLocalizedStrings,
   useProjectDataProvider,
   useProjectSetting,
+  useScrollGroupScrRef,
   useSetting,
 } from '@papi/frontend/react';
 import { useTabIconSelection, type TabIconUrls } from 'platform-bible-react';
@@ -95,13 +96,11 @@ const RESOURCE_PICKER_OPTIONS = { includeDownloaded: true } as const;
 globalThis.webViewComponent = function ResourceTextPanelWebView({
   id: webViewId,
   projectId,
+  scrollGroupScrRef,
   updateWebViewDefinition,
   useWebViewState,
-  useWebViewScrollGroupScrRef,
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(ALL_STRING_KEYS);
-
-  const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
 
   // #region Web view state
 
@@ -303,6 +302,34 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   // is displaying, NOT the panel's own `projectId` prop (that is the container project whose
   // reference list is shown). `PickerResource` resolves it for every reference kind.
   const resourceProjectId = selectedRef?.projectId;
+
+  // Follow the scroll group in the DISPLAYED RESOURCE's versification, not this panel's own
+  // (container) project's. This web view's definition `projectId` is the container project (it
+  // reads that project's reference list and text-connection settings), but it renders the selected
+  // resource — so passing the resource's id as the conversion project makes `scrRef` come back
+  // converted into the resource's versification and makes a verse click here stamp the resource as
+  // the scroll group's source project (other web views then convert FROM it). We call
+  // `useScrollGroupScrRef` directly (rather than the `useWebViewScrollGroupScrRef` prop) so we can
+  // pass that resource id instead of this web view's own `projectId`; the `scrollGroupScrRef` prop
+  // is kept live by the web-view host re-rendering the component on definition updates.
+  // `undefined` until a resource with a local project resolves — no conversion, and there is
+  // nothing to display yet anyway.
+  //
+  // This call must stay below the selection region: `resourceProjectId` is what it converts into.
+  //
+  // TODO(PT-4896): a project-reference row resolves to its project id even when that project is not
+  // on this machine, so each verse change repeats a failing versification lookup.
+  // TODO(PT-4898): on mount and on a resource switch the hook still returns the reference last shown
+  // for the previous conversion project, costing one extra chapter fetch.
+  const [scrRef, setScrRef] = useScrollGroupScrRef(
+    scrollGroupScrRef,
+    useCallback(
+      (newScrollGroupScrRef) =>
+        updateWebViewDefinition({ scrollGroupScrRef: newScrollGroupScrRef }),
+      [updateWebViewDefinition],
+    ),
+    resourceProjectId,
+  );
 
   // The catalog entry behind the selection, for the dynamic title's display name.
   const dblMatch =

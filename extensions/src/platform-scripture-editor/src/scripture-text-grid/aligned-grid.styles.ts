@@ -38,17 +38,25 @@ const PLATFORM_ZOOM_VARIABLE_PREFIX = '--platform-content-zoom-';
 const PLATFORM_DEFAULT_ZOOM_VARIABLE = '--platform-content-zoom-default';
 
 /**
- * The style that hands one column's zoom level to its verse blocks: the platform's variable for the
- * column's zoom area, else the pane default — the same fallback the platform's own rule for a
- * marker uses, so a column shows the level its zoom menu reports.
+ * A CSS value that resolves to a zoom area's current level: the platform's variable for the area,
+ * else the pane default — the same fallback the platform's own rule for a marker uses, so a reader
+ * of this value sees the level the area's zoom menu reports.
+ *
+ * @param zoomArea The resource's content zoom area id.
+ * @returns A `var(...)` expression for a `style` value.
+ */
+export function getContentZoomLevelValue(zoomArea: string): string {
+  return `var(${PLATFORM_ZOOM_VARIABLE_PREFIX}${zoomArea},var(${PLATFORM_DEFAULT_ZOOM_VARIABLE},1))`;
+}
+
+/**
+ * The style that hands one column's zoom level to its verse blocks.
  *
  * @param zoomArea The resource's content zoom area id.
  * @returns The style to set on the column's content wrapper.
  */
 export function buildAlignedZoomStyle(zoomArea: string): AlignedZoomStyle {
-  return {
-    [ALIGNED_ZOOM_PROPERTY]: `var(${PLATFORM_ZOOM_VARIABLE_PREFIX}${zoomArea},var(${PLATFORM_DEFAULT_ZOOM_VARIABLE},1))`,
-  };
+  return { [ALIGNED_ZOOM_PROPERTY]: getContentZoomLevelValue(zoomArea) };
 }
 
 /**

@@ -255,6 +255,11 @@ function ScriptureTextGridProjectView({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (chapterContext === undefined || viewMode !== 'verse' || !isEscapeForChapterContext(event))
         return;
+      // An open pop-up that holds no focus — a tooltip, or a popover whose trigger keeps focus — is
+      // still the innermost layer, so Escape is its to dismiss; this capture-phase listener would
+      // otherwise take the key before Radix sees it. Every Radix pop-up renders inside this wrapper
+      // while open.
+      if (document.querySelector('[data-radix-popper-content-wrapper]')) return;
       event.preventDefault();
       event.stopPropagation();
       handleCloseChapterContext();
@@ -672,6 +677,8 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   );
 
   // The shared scroll-group scrRef is owned here (WebViewProps) and passed down to the grid.
+  // TODO(PT-4897): this converts into the container project's versification, so a resource row
+  // whose versification differs shows the wrong verse; each row needs its own conversion frame.
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
 
   // Owned here for the same reason `scrRef` is: it is one fact about this web view, and the grid

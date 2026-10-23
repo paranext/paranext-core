@@ -5,7 +5,7 @@ import * as React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import type { DblResourceData } from 'platform-bible-utils';
-import type { UseWebViewScrollGroupScrRefHook, WebViewProps } from '@papi/core';
+import type { WebViewProps } from '@papi/core';
 import { usePromise } from 'platform-bible-react';
 import { NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY } from 'platform-bible-utils/experimental';
 import type { EffectiveResourceReference } from 'platform-scripture';
@@ -28,6 +28,7 @@ const {
   mockFindCachedDblResource,
   capturedResourceTextPanelProps,
   realUsePromise,
+  mockUseScrollGroupScrRef,
   copyrightNoticesByProject,
 } = vi.hoisted(() => ({
   mockUseEffectiveResourceReferenceList: vi.fn(),
@@ -42,6 +43,7 @@ const {
   capturedResourceTextPanelProps: vi.fn(),
   /** The real `usePromise`, which the copy-limit tests need in place of the stub below. */
   realUsePromise: { current: undefined as unknown },
+  mockUseScrollGroupScrRef: vi.fn(),
   copyrightNoticesByProject: new Map<string, unknown>(),
 }));
 
@@ -110,6 +112,7 @@ vi.mock('@papi/frontend/react', () => ({
   useSetting: vi.fn(() => ['simple', false]),
   useDialogCallback: vi.fn(() => vi.fn()),
   usePromise: vi.fn(() => [undefined, false]),
+  useScrollGroupScrRef: (...args: unknown[]) => mockUseScrollGroupScrRef(...args),
 }));
 
 // platform-bible-react — keep UI components real; stub hooks that hit runtime
@@ -247,10 +250,6 @@ function makeProps(
         return [defaultValue, vi.fn()];
       },
     ),
-    useWebViewScrollGroupScrRef: vi.fn(() => [
-      { book: 'GEN', chapterNum: 1, verseNum: 1, versificationStr: 'English' },
-      vi.fn(),
-    ]),
     ...overrides,
   } as unknown as WebViewProps;
 }
@@ -347,6 +346,10 @@ function resetPanelHooks() {
   });
   mockUseProjectDataProvider.mockReturnValue(undefined);
   mockFindCachedDblResource.mockReturnValue(undefined);
+  mockUseScrollGroupScrRef.mockReturnValue([
+    { book: 'GEN', chapterNum: 1, verseNum: 1, versificationStr: 'English' },
+    vi.fn(),
+  ]);
   // Module-scoped, so it outlives `restoreAllMocks` and has to be cleared explicitly.
   setUsjSpy.mockClear();
 }
@@ -599,16 +602,15 @@ function renderSelectedResource(projectDataMethods: Record<string, unknown>, cha
     list: { dataVersion: '1.0.0', items: [] },
   });
 
-  const propsAt = (chapter: number) =>
-    makeProps({
-      useWebViewScrollGroupScrRef: vi.fn<UseWebViewScrollGroupScrRefHook>(() => [
-        { book: 'GEN', chapterNum: chapter, verseNum: 1, versificationStr: 'English' },
-        vi.fn(),
-        undefined,
-        vi.fn(),
-        undefined,
-      ]),
-    });
+  // The panel follows the scroll group through `useScrollGroupScrRef` (in the displayed resource's
+  // versification), so the chapter is set on that mock rather than through a web-view prop.
+  const propsAt = (chapter: number) => {
+    mockUseScrollGroupScrRef.mockReturnValue([
+      { book: 'GEN', chapterNum: chapter, verseNum: 1, versificationStr: 'English' },
+      vi.fn(),
+    ]);
+    return makeProps();
+  };
   const ResourceTextPanel = getResourceTextPanel();
   const { rerender } = render(<ResourceTextPanel {...propsAt(chapterNum)} />);
   return (chapter: number) => rerender(<ResourceTextPanel {...propsAt(chapter)} />);
@@ -692,6 +694,87 @@ describe('ResourceTextPanel — copy limit', () => {
     expect(capturedResourceTextPanelProps).toHaveBeenLastCalledWith(
       expect.objectContaining({ copyLimit: 12 }),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Versification conversion frame
+// ---------------------------------------------------------------------------
+
+/**
+ * A picker row for a project-reference resource whose project is `projectId` — i.e. a resource that
+ * lives in a DIFFERENT project from the panel's own container project.
+ */
+function makeProjectRow(projectId: string | undefined): PickerResource {
+  return {
+    reference: { type: 'project', name: 'Vulgate', id: 'resource-reference-id' },
+    source: 'user',
+    isAdminLocked: false,
+    type: 'ScriptureResource',
+    installed: true,
+    projectId,
+  };
+}
+
+/** Renders the panel over `rows`, with the referenced list settled so selection can resolve. */
+function renderWithRows(rows: PickerResource[], propOverrides: Partial<WebViewProps> = {}) {
+  mockUseEffectiveResourceReferenceList.mockReturnValue({
+    status: 'ready',
+    list: { dataVersion: '1.0.0', items: [] },
+  });
+  mockUseResourcePickerResources.mockReturnValue([rows, false]);
+
+  const ResourceTextPanel = getResourceTextPanel();
+  return render(<ResourceTextPanel {...makeProps(propOverrides)} />);
+}
+
+/** The conversion-frame argument of every `useScrollGroupScrRef` call made during a render. */
+function conversionFrames(): unknown[] {
+  return mockUseScrollGroupScrRef.mock.calls.map((call) => call[2]);
+}
+
+// The panel's own `projectId` prop is the CONTAINER project whose reference list is shown; the
+// chapter on screen comes from the selected resource's project, which may use a different
+// versification. Converting into the container's frame would show the wrong verse and would stamp
+// the container as the scroll group's source on a verse click. Asserted on the conversion-frame
+// argument rather than on rendered text because the conversion itself lives in the platform hook,
+// which is mocked here — what belongs to this consumer is which project it asks to convert into.
+describe('ResourceTextPanel — versification conversion frame', () => {
+  it('follows the scroll group in the displayed resource’s versification, not the container project’s', () => {
+    renderWithRows([makeProjectRow('resource-project-id')]);
+
+    expect(mockUseScrollGroupScrRef).toHaveBeenCalled();
+    expect(conversionFrames()).toContain('resource-project-id');
+    expect(conversionFrames()).not.toContain('test-project-id');
+  });
+
+  it('passes no conversion frame before a resource resolves', () => {
+    renderWithRows([]);
+
+    expect(mockUseScrollGroupScrRef).toHaveBeenCalled();
+    conversionFrames().forEach((frame) => expect(frame).toBeUndefined());
+  });
+
+  // A row can be in the list with no local project yet (a DBL resource still installing). There is
+  // nothing to convert into, and passing the container project would reintroduce the wrong frame.
+  it('passes no conversion frame for a selected row that has no project yet', () => {
+    renderWithRows([makeProjectRow(undefined)]);
+
+    expect(mockUseScrollGroupScrRef).toHaveBeenCalled();
+    conversionFrames().forEach((frame) => expect(frame).toBeUndefined());
+  });
+
+  // The hook falls back to scroll group 0 when its first argument is `undefined`, so a panel set to
+  // another group would silently follow group 0; and an independent-reference write that never
+  // reaches the definition is lost on the next render.
+  it('follows its own scroll group and writes changes back to its definition', () => {
+    const updateWebViewDefinition = vi.fn(() => true);
+    renderWithRows([], { scrollGroupScrRef: 1, updateWebViewDefinition });
+
+    const [scrollGroupArg, setScrollGroupScrRef] = mockUseScrollGroupScrRef.mock.calls[0];
+    expect(scrollGroupArg).toBe(1);
+    setScrollGroupScrRef(2);
+    expect(updateWebViewDefinition).toHaveBeenCalledWith({ scrollGroupScrRef: 2 });
   });
 });
 

@@ -89,7 +89,7 @@ describe('content zoom markers (Text Collection grid)', () => {
     // caller's `contentRef`), which the right-click Copy reads its selection within, so the resource
     // name beside it is not copied.
     expect(cell).toMatch(
-      /<div ref={copyAreaRef} className={`tw:min-w-0 tw:flex-1 \$\{contentOverflowClass\}`} style={contentStyle} ?> <ContentZoomRoot area={zoomArea}/,
+      /<div ref={copyAreaRef} className={`stg-verse-content tw:min-w-0 tw:flex-1 \$\{contentOverflowClass\}`} style={contentStyle} ?> <ContentZoomRoot area={zoomArea}/,
     );
     expect(cell).toMatch(
       /<div ref={setHeaderContentElement} data-cell-content className={`tw:flex-1 \$\{contentOverflowClass\}`} style={contentStyle}/,
