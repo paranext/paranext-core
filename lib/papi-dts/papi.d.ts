@@ -6047,8 +6047,9 @@ declare module 'shared/services/web-view-provider.service' {
    * @param webViewType Type of webview provider to get
    * @param shouldWaitPatiently Whether to keep re-arming the wait, allowing much longer overall for
    *   the provider's extension to finish activating, instead of failing after the default timeout.
-   *   Set this only for a tab-restore request; leave it `false` (the default) for a fresh
-   *   `openWebView()` request. Defaults to `false`
+   *   Set this for `retrieveWebViewContent`'s callers — a tab-restore request and the
+   *   extension-reload re-fetch; leave it `false` (the default) for a fresh `openWebView()` request.
+   *   Defaults to `false`
    * @returns Web view provider with the given name if one exists, undefined otherwise
    */
   function getWebViewProvider(
