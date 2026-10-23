@@ -26,6 +26,7 @@ import {
   SEARCH_PLACEHOLDER_KEY,
   SYNC_BLOCKED_KEY,
 } from './character-marker-control.const';
+import { MARKER_MENU_POPOVER_WIDTH_CLASSES } from '../marker-menu-popover.const';
 
 export { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control.const';
 
@@ -80,10 +81,9 @@ export type CharacterMarkerControlProps = {
    * direction at all: nothing sets `document.dir`, `readDirection()` in `dir-helper.util.ts` is
    * localStorage-backed with no writer, and the only `dir` in the editor web view is on an inner
    * container the portal is not inside. So any default here resolves physically, and an RTL project
-   * whose placement wrapper passes `menuAlign="end"` but omits the direction gets a 200px menu
-   * pinned to the text column's trailing (left) edge, running off the iframe and shifted back over
-   * the trigger by Radix's collision handling. Making it required means a wrapper cannot forget
-   * it.
+   * whose placement wrapper passes `menuAlign="end"` but omits the direction gets a menu pinned to
+   * the text column's trailing (left) edge, running off the iframe and shifted back over the
+   * trigger by Radix's collision handling. Making it required means a wrapper cannot forget it.
    */
   menuDirection: 'ltr' | 'rtl';
   /**
@@ -277,12 +277,17 @@ export function CharacterMarkerControl({
                 dir={menuDirection}
                 // The prototype's `mt-1.5`. Placement-independent, so a constant rather than a prop.
                 sideOffset={6}
-                // 200px and a 220px list are the prototype's `min-w-[200px]` / `max-h-[220px]`.
+                // The `\` menu's width, so most descriptions and the search placeholder fit. The
+                // max-w cap shrinks it to fit a narrow pane instead of running off the iframe edge.
+                // The 220px list cap is the prototype's.
                 // The list cap is a descendant override on THIS popover, not a prop on MarkerMenu:
                 // MarkerMenu is shared with the `\` keydown menu and the footnote editor, both of
                 // which render in Power mode, so it must stay untouched. `CommandList` already
                 // emits `data-slot="command-list"`, so the selector is stable.
-                className="tw:w-[200px] tw:p-0 tw:**:data-[slot=command-list]:max-h-[220px]"
+                className={cn(
+                  MARKER_MENU_POPOVER_WIDTH_CLASSES,
+                  'tw:max-w-(--radix-popover-content-available-width) tw:p-0 tw:**:data-[slot=command-list]:max-h-[220px]',
+                )}
               >
                 <MarkerMenu
                   localizedStrings={localizedStrings}

@@ -215,6 +215,7 @@ import {
 } from './platform-scripture-editor.utils';
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.component';
+import { MARKER_MENU_POPOVER_WIDTH_CLASSES } from './marker-menu-popover.const';
 import {
   CONTEXT_MENU_ACTION_TO_NOTE_KIND,
   createInsertContextMenuItems,
@@ -5108,7 +5109,7 @@ function PlatformScriptureEditor({
       <Popover open={showMarkersMenu}>
         <PopoverAnchor virtualRef={markersMenuAnchor.virtualRef} />
         <PopoverContent
-          className="tw:w-[500px] tw:p-0"
+          className={`${MARKER_MENU_POPOVER_WIDTH_CLASSES} tw:p-0`}
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();

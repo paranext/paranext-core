@@ -1,18 +1,25 @@
 import type { EditorRef } from '@eten-tech-foundation/platform-editor';
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { MARKER_MENU_STRING_KEYS } from 'platform-bible-react';
+import { usfmMarkers } from 'platform-bible-utils';
 import type React from 'react';
 import { useRef } from 'react';
+import { userEvent, within } from 'storybook/test';
 import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from '../character-marker-control/character-marker-control.component';
 import type { CharacterMarkerSelection } from '../character-marker-coverage.utils';
+import { CHARACTER_MARKER_MENU_STRING_KEYS } from '../character-marker-menu.utils';
 import { CharacterMarkerBar } from './character-marker-bar.component';
 
-// Real `en` values, resolved from the contribution files — the control's keys and the menu's, since
-// the bar hands one strings object down through both.
+// Real `en` values, resolved from the contribution files — the control's keys, the menu's, and the
+// menu rows' (the remove rows and each marker's description), as the editor web view loads them.
 const STRINGS = getLocalizedStrings([
   ...CHARACTER_MARKER_CONTROL_STRING_KEYS,
   ...MARKER_MENU_STRING_KEYS,
+  ...CHARACTER_MARKER_MENU_STRING_KEYS,
+  ...Object.values(usfmMarkers)
+    .map((marker) => marker.description)
+    .filter((description) => !!description),
 ]);
 
 // Mirrors the reserved gutter from `_simple-mode.scss` so the bar is reviewed at the width it
@@ -102,3 +109,40 @@ export const SyncBlocked: Story = { args: { contextMarker: 'bd', isSyncBlocked: 
  * menu to check it opens toward the text rather than off the panel edge.
  */
 export const RightToLeft: Story = { args: { contextMarker: 'bd', textDirection: 'rtl' } };
+
+/** Puts the gutter on the canvas's right edge, where an LTR text column's trailing edge is. */
+const LTR_TRAILING_EDGE_STYLE: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'flex-end',
+};
+
+// The open-menu stories below opt out of autodocs: the docs page renders every story at once, so
+// both menus would open over it together.
+async function openMenu({ canvasElement }: { canvasElement: HTMLElement }) {
+  await userEvent.click(within(canvasElement).getByRole('button', { name: /Character marker/ }));
+  await within(canvasElement.ownerDocument.body).findByRole('dialog');
+}
+
+/**
+ * The open menu with the gutter on the text column's trailing edge, as in the editor: up to 500px
+ * wide, opening inline-start, and capped to the canvas width when the canvas is narrower.
+ */
+export const MenuOpen: Story = {
+  tags: ['!autodocs'],
+  args: { contextMarker: 'bd' },
+  decorators: [
+    (StoryComponent) => (
+      <div style={LTR_TRAILING_EDGE_STYLE}>
+        <StoryComponent />
+      </div>
+    ),
+  ],
+  play: openMenu,
+};
+
+/** The open menu in an RTL project. The gutter is already on the canvas's left (trailing) edge. */
+export const RightToLeftMenuOpen: Story = {
+  tags: ['!autodocs'],
+  args: { contextMarker: 'bd', textDirection: 'rtl' },
+  play: openMenu,
+};
