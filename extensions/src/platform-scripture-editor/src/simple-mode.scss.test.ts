@@ -58,24 +58,16 @@ describe('_simple-mode.scss', () => {
     expect(scss).not.toMatch(/--psc-character-marker-bar-width:\s*[\d.]+(em|rem|%|ch|ex)/);
   });
 
-  it('gates the bar on the same two conditions the reservation selects on', () => {
-    // The highest-coupling point in this feature, and the one failure it exists to prevent: a bar
-    // that renders where this stylesheet does not match paints over project text. The two halves
-    // live in different languages and different files, so nothing but this test can hold them
-    // together — the CSS side cannot be broadened to `!isPowerMode` alone, because this stylesheet
-    // is compiled into the resource-text and model-text panels too, and both apply
-    // `editor-container-simple` unconditionally to an editor with no gutter markers.
-    //
-    // Deliberately a source scan, in the same spirit as the scope guard above: the mount site is
-    // deep inside a web view that cannot be rendered in isolation, and a refactor that restates the
-    // gate differently SHOULD fail here rather than pass quietly.
+  it('reserves the bar on both conditions that show it: Simple mode and gutter markers', () => {
+    // The CSS half of the pairing with `shouldShowCharacterMarkerBar`, whose tests pin the React
+    // half: a bar that renders where this stylesheet does not match paints over project text. The
+    // CSS side cannot be broadened to Simple mode alone, because this stylesheet is compiled into
+    // the resource-text and model-text panels too, and both apply `editor-container-simple`
+    // unconditionally to an editor with no gutter markers.
     const scss = readFileSync(SIMPLE_MODE_SCSS_PATH, 'utf8');
-    const webView = readFileSync(join(__dirname, 'platform-scripture-editor.web-view.tsx'), 'utf8');
 
-    // CSS side: both classes on one compound selector, so BOTH are required.
+    // Both classes on one compound selector, so BOTH are required.
     expect(scss).toContain('.editor-container-simple .usfm.psc-gutter-markers {');
-    // React side: the bar slot is empty unless the same two conditions hold.
-    expect(webView).toContain('isPowerMode || !viewOptions.hasGutterParaMarkers ? undefined');
   });
 
   it('reserves the gutter in unzoomed pixels, in both directions, so the fixed-size bar never overlaps zoomed text', () => {

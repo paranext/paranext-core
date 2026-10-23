@@ -1,3 +1,4 @@
+import type { ViewOptions } from '@eten-tech-foundation/platform-editor';
 import { clampTopToVisibleArea, EDITOR_PARA_SELECTOR } from '../editor-dom.util';
 
 /** A rect whose every edge is 0 — what a Range reports when it has no layout to measure. */
@@ -88,4 +89,25 @@ export function computeBarTop(
     positionAnchor.getBoundingClientRect(),
     scrollContainer.getBoundingClientRect(),
   );
+}
+
+/**
+ * Whether the Scripture editor web view shows the character-marker bar: only in Simple mode, and
+ * only when the view draws its paragraph markers in the gutter.
+ *
+ * These are the same two conditions the bar's space is reserved on in `_simple-mode.scss`
+ * (`.editor-container-simple .usfm.psc-gutter-markers`), so the bar and the space it occupies
+ * appear and disappear together. Showing the bar on `!isPowerMode` alone would paint it over
+ * project text in any Simple view without gutter markers. The reservation cannot be broadened to
+ * `!isPowerMode` either: `_simple-mode.scss` is compiled into the resource-text and model-text
+ * panels too, which apply `editor-container-simple` to an editor that has no gutter markers.
+ *
+ * @param isPowerMode Whether the app is in Power mode
+ * @param viewOptions The view options the editor renders with
+ */
+export function shouldShowCharacterMarkerBar(
+  isPowerMode: boolean,
+  viewOptions: Pick<ViewOptions, 'hasGutterParaMarkers'>,
+): boolean {
+  return !isPowerMode && (viewOptions.hasGutterParaMarkers ?? false);
 }
