@@ -1,11 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
 import { FindResult, ScriptureRangeUsjChapterOrUsfmVerseLocation } from 'platform-scripture';
+import { USFM_MARKERS_MAP_PARATEXT_3_0, UsjReaderWriter } from 'platform-bible-utils';
 import papi from '@papi/backend';
 import {
   ScriptureFinderProjectDataProviderEngine,
   ScriptureFinderOverlayPDPs,
 } from './platform-scripture-finder-pdpe.model';
 import { STRUCTURE_PROTECTED_ERROR } from '../find/structure-protection.util';
+import { correctUsjVersion } from './scripture.util';
 
 // Simple USFM test data for Matthew chapter 1
 const TEST_BOOK_USFM = String.raw`\id MAT
@@ -2459,5 +2462,143 @@ describe('ScriptureFinderProjectDataProviderEngine whitespace matching', () => {
       });
       expect(results).toEqual([]);
     });
+  });
+});
+
+/**
+ * Find & Replace must replace exactly the text the user was shown, with exactly what they asked
+ * for, and change nothing else. The expected failures below pin two ways it does not yet. When a
+ * fix lands its pin starts failing: update it to the chosen behavior.
+ *
+ * TODO(PT-4910): stale ranges write into other characters, and a match across a boundary deletes
+ * the markers between its ends; how a cross-boundary match should behave is a product decision.
+ */
+describe('ScriptureFinderProjectDataProviderEngine replaces only the matched text', () => {
+  /** The chapter USFM the engine itself replaces into, read from `usx` the way it reads it. */
+  function usfmOf(usx: string): string {
+    return new UsjReaderWriter(correctUsjVersion(usxStringToUsj(usx)), {
+      markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
+    }).toUsfm();
+  }
+
+  /** Every USFM marker in document order (`\p`, `\v`, `\f`, `\fr`, `\nd*`, ...). */
+  function markerSequence(usfm: string): string[] {
+    return usfm.match(/\\[a-z0-9]+\*?/gi) ?? [];
+  }
+
+  /** The USFM the engine last wrote to the chapter, or `undefined` when it wrote nothing. */
+  function writtenChapterUsfm(pdps: ScriptureFinderOverlayPDPs): string | undefined {
+    const { calls } = vi.mocked(pdps['platformScripture.USFM_Chapter'].setChapterUSFM).mock;
+    return calls.length > 0 ? String(calls[calls.length - 1][1]) : undefined;
+  }
+
+  async function findInMat1(
+    engine: ScriptureFinderProjectDataProviderEngine,
+    searchString: string,
+  ) {
+    return pollFindJob(engine, {
+      searchString,
+      scope: [{ bookId: 'MAT', chapter: 1 }],
+      caseInsensitive: false,
+    });
+  }
+
+  // The search runs over every text node of the chapter concatenated with no separator, so a match
+  // can start in one paragraph, verse, note or character span and end in the next. Replace splices
+  // the replacement over all the USFM between the match's two ends, deleting every marker there.
+  // Paratext 9 matches within one text token, so it never does. Structure protection (Simple mode)
+  // rejects the paragraph and verse cases but not note or character markers; Power mode is
+  // unprotected.
+  describe('FR-5: Replace never deletes a marker the match runs across', () => {
+    const CROSS_MARKER_USX = `<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.0">
+  <book code="MAT" style="id">Matthew</book>
+  <chapter number="1" style="c" sid="MAT 1"/>
+  <para style="p"><verse number="1" style="v" sid="MAT 1:1"/>The first paragraph ends with b</para>
+  <para style="p">And the second paragraph goes on.<verse eid="MAT 1:1"/><verse number="2" style="v" sid="MAT 1:2"/>Verse two ends in c<verse eid="MAT 1:2"/><verse number="3" style="v" sid="MAT 1:3"/>Dverse three has a word<note caller="+" style="f"><char style="fr" closed="false">1:3 </char><char style="ft" closed="false">Note text</char></note> in it.<verse eid="MAT 1:3"/><verse number="4" style="v" sid="MAT 1:4"/>Say the <char style="nd">Lord</char> God.<verse eid="MAT 1:4"/></para>
+  <chapter eid="MAT 1"/>
+</usx>`;
+
+    let pdps: ScriptureFinderOverlayPDPs;
+    let engine: ScriptureFinderProjectDataProviderEngine;
+
+    beforeEach(() => {
+      vi.mocked(papi.settings.get).mockResolvedValue('power');
+      pdps = createSingleUsxMockPdps(CROSS_MARKER_USX);
+      engine = new ScriptureFinderProjectDataProviderEngine(pdps);
+    });
+
+    it.fails.each([
+      ['across a paragraph break', 'bAnd'],
+      ['across a verse boundary inside a paragraph', 'cDverse'],
+      ['into a footnote', 'word1:3'],
+      ['out of a character span', 'Lord God'],
+    ])('FR-5 (expected failure): %s', async (_case, searchString) => {
+      const results = await findInMat1(engine, searchString);
+      // Whether or not a fix keeps finding these, replacing what Find reports must not lose a
+      // marker.
+      if (results.length > 0)
+        await engine.replace(
+          results.map(({ start, end }) => ({ start, end })),
+          'X',
+        );
+
+      // Nothing written means the chapter is unchanged.
+      const after = writtenChapterUsfm(pdps) ?? usfmOf(CROSS_MARKER_USX);
+      expect(markerSequence(after)).toEqual(markerSequence(usfmOf(CROSS_MARKER_USX)));
+    });
+  });
+
+  // Replace re-resolves each range's verse-relative offsets against the chapter as it is when
+  // Replace runs, not as it was when Find reported the match. Text inserted earlier in the same
+  // verse in between shifts the offsets, and Replace overwrites whatever characters now sit there.
+  describe('FR-2: Replace never overwrites text other than the reported match', () => {
+    const verse = (text: string) => `<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.0">
+  <book code="MAT" style="id">Matthew</book>
+  <chapter number="1" style="c" sid="MAT 1"/>
+  <para style="p"><verse number="1" style="v" sid="MAT 1:1"/>${text}<verse eid="MAT 1:1"/></para>
+  <chapter eid="MAT 1"/>
+</usx>`;
+    const SEARCHED_USX = verse('Abraham was the father of Isaac.');
+    const EDITED_USX = verse('Then Abraham was the father of Isaac.');
+
+    let pdps: ScriptureFinderOverlayPDPs;
+    let engine: ScriptureFinderProjectDataProviderEngine;
+
+    beforeEach(() => {
+      vi.mocked(papi.settings.get).mockResolvedValue('power');
+      pdps = createSingleUsxMockPdps(SEARCHED_USX);
+      engine = new ScriptureFinderProjectDataProviderEngine(pdps);
+    });
+
+    it.fails(
+      'FR-2 (expected failure): text inserted earlier in the verse after Find does not move what Replace overwrites',
+      async () => {
+        const results = await findInMat1(engine, 'Isaac');
+        expect(results.map((result) => result.text)).toEqual(['Isaac']);
+
+        // The chapter changes after Find (e.g. an editor saves an edit) and the engine is told.
+        vi.mocked(pdps['platformScripture.USX_Chapter'].getChapterUSX).mockResolvedValue(
+          EDITED_USX,
+        );
+        // The mock records the engine's change callback untyped; it is the second argument.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const notifyChapterChanged = vi.mocked(
+          pdps['platformScripture.USX_Chapter'].subscribeChapterUSX,
+        ).mock.calls[0][1] as () => void;
+        notifyChapterChanged();
+
+        await engine.replace(
+          results.map(({ start, end }) => ({ start, end })),
+          'Jacob',
+        );
+
+        // Either Isaac (and only Isaac) became Jacob, or Replace refused the stale range and left the
+        // edited chapter as it was.
+        const after = writtenChapterUsfm(pdps) ?? usfmOf(EDITED_USX);
+        expect(after).toMatch(/Then Abraham was the father of (Jacob|Isaac)\./);
+      },
+    );
   });
 });

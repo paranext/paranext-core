@@ -1,0 +1,6 @@
+\c 5 \ca 5a\ca* \ca 5b\ca* Stray text on the chapter line after a second ca, before any paragraph.
+\p
+\v 1 Chapter 5 holds deliberately damaged USFM that can still exist at rest in a Paratext 9 project. A nameless marker follows this sentence. \ 2
+\v 2 A bare backslash after a character marker \bd \ text after it.
+\v 3 A bare backslash at the end of a verse \
+\b Stray text after a blank-line marker.

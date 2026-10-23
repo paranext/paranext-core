@@ -744,7 +744,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   },
   {
     id: 'footnote-new-paragraph',
-    purpose: 'Insert a new paragraph (\\fp) within the footnote being edited',
+    purpose:
+      'Insert a new paragraph (\\fp) within the footnote being edited. In views other than Standard, Enter and Shift+Enter do nothing there',
     category: 'Editing',
     context: 'Footnote editor',
     keys: { macOS: '⏎', windows: 'Enter', linux: 'Enter' },

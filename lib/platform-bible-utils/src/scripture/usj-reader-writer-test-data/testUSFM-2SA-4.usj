@@ -1,0 +1,248 @@
+{
+  "type": "USJ",
+  "version": "3.0",
+  "content": [
+    {
+      "type": "chapter",
+      "marker": "c",
+      "number": "4",
+      "sid": " 4"
+    },
+    {
+      "type": "para",
+      "marker": "cl",
+      "content": ["Chapter Four"]
+    },
+    {
+      "type": "para",
+      "marker": "cd",
+      "content": [
+        "This chapter description (cd) follows the chapter label (cl). Chapter 4 exercises standard USFM that chapters 1 through 3 do not use, plus shapes that pin known converter bugs. Chapter 5 holds deliberately damaged USFM."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "s1",
+      "content": ["A section heading before verse 1"]
+    },
+    {
+      "type": "para",
+      "marker": "r",
+      "content": ["(2 Sam 4.1-12)"]
+    },
+    {
+      "type": "para",
+      "marker": "b"
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "1",
+          "sid": ""
+        },
+        "A cross reference",
+        {
+          "type": "note",
+          "marker": "x",
+          "caller": "+",
+          "content": [
+            {
+              "type": "char",
+              "marker": "xo",
+              "closed": "false",
+              "content": ["4.1: "]
+            },
+            {
+              "type": "char",
+              "marker": "xt",
+              "closed": "false",
+              "content": ["1 Sam 31.4; 2 Sam 1.1"]
+            }
+          ]
+        },
+        " sits mid-verse. This verse ends with a footnote butted against the next verse marker with no space between them.",
+        {
+          "type": "note",
+          "marker": "f",
+          "caller": "+",
+          "content": [
+            {
+              "type": "char",
+              "marker": "fr",
+              "closed": "false",
+              "content": ["4.1 "]
+            },
+            {
+              "type": "char",
+              "marker": "ft",
+              "closed": "false",
+              "content": ["A footnote that ends right before the next verse marker."]
+            }
+          ]
+        },
+        " ",
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "2-3",
+          "pubnumber": "2-3a",
+          "sid": ""
+        },
+        " Verse bridge 2-3 carrying a published verse number (vp). ",
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "4a",
+          "sid": ""
+        },
+        "Verse segment 4a. ",
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "4b",
+          "sid": ""
+        },
+        "Verse segment 4b. ",
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "5",
+          "sid": ""
+        },
+        "An endnote",
+        {
+          "type": "note",
+          "marker": "fe",
+          "caller": "+",
+          "content": [
+            {
+              "type": "char",
+              "marker": "fr",
+              "closed": "false",
+              "content": ["4.5 "]
+            },
+            {
+              "type": "char",
+              "marker": "ft",
+              "closed": "false",
+              "content": ["Endnote text."]
+            }
+          ]
+        },
+        " then a footnote with no caller",
+        {
+          "type": "note",
+          "marker": "f",
+          "caller": "-",
+          "content": [
+            {
+              "type": "char",
+              "marker": "fr",
+              "closed": "false",
+              "content": ["4.5 "]
+            },
+            {
+              "type": "char",
+              "marker": "ft",
+              "closed": "false",
+              "content": ["The minus caller means no caller is shown."]
+            }
+          ]
+        },
+        " then one with a custom caller",
+        {
+          "type": "note",
+          "marker": "f",
+          "caller": "a",
+          "content": [
+            {
+              "type": "char",
+              "marker": "fr",
+              "closed": "false",
+              "content": ["4.5 "]
+            },
+            {
+              "type": "char",
+              "marker": "ft",
+              "closed": "false",
+              "content": ["Custom caller a."]
+            }
+          ]
+        },
+        " end. ",
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "6",
+          "sid": ""
+        },
+        "Non-breaking spaces: a character span whose whole content is a NBSP ",
+        {
+          "type": "char",
+          "marker": "nd",
+          "content": [" "]
+        },
+        ", one with a leading NBSP ",
+        {
+          "type": "char",
+          "marker": "nd",
+          "content": [" lead"]
+        },
+        ", one with a trailing NBSP ",
+        {
+          "type": "char",
+          "marker": "nd",
+          "content": ["trail "]
+        },
+        ", a NBSP before punctuation mot : and one inside a number 1 000."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "vid": "",
+      "content": [" "]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "vid": "",
+      "content": [
+        "The paragraph above has a lone NBSP as its only content. This paragraph ends with a space before an unknown marker "
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "zunk",
+      "vid": "",
+      "content": ["Unknown marker content."]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "vid": "",
+      "content": ["Authored references: a closed "]
+    },
+    {
+      "type": "para",
+      "marker": "ref",
+      "content": [
+        "1 Sam 1.1|1SA 1:1",
+        {
+          "type": "unmatched",
+          "marker": "ref*"
+        },
+        " and an unclosed "
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "ref",
+      "content": ["1 Sam 2.1|1SA 2:1 that runs to the end of the paragraph."]
+    }
+  ]
+}
