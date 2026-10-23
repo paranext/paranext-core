@@ -11,7 +11,8 @@ import {
   type KeyboardEvent,
   type SyntheticEvent,
 } from 'react';
-import { ResourceCell, GridResource } from './resource-cell.component';
+import type { GridResource } from './grid-resources.utils';
+import { ResourceCell } from './resource-cell.component';
 import type { ZoomMenuLabels } from './resource-cell-view.component';
 import { AlignedGrid } from './aligned-grid.component';
 import { ResourceColumn, type ResourceColumnReorder } from './resource-column.component';

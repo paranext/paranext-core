@@ -41,6 +41,7 @@ import {
 } from './resource-reference.utils';
 import {
   findSelectedRow,
+  matchesSelectedResourceId,
   resolveResourceSelection,
   type ResourceSelectionResolution,
 } from './resource-selection.utils';
@@ -224,12 +225,22 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   // This panel also offers locally-downloaded resources that are not referenced yet, so an empty
   // referenced list is only genuinely empty once those rows have arrived and none of them matched.
   let readiness: ResourcePanelReadiness = listReadiness;
+  // A saved DBL reference has no row while the catalog is down, since only the catalog resolves it.
+  const hasRowForSavedSelection =
+    selectedResourceId === undefined ||
+    filteredResources.some((row) => matchesSelectedResourceId(row, selectedResourceId));
   if (!projectId) {
     // No project, so no referenced list to wait for: the rows are the downloaded resources alone.
     if (arePickerResourcesLoading) readiness = 'loading';
+    else if (hasCatalogError && !hasRowForSavedSelection) readiness = 'catalogError';
     else readiness = filteredResources.length > 0 ? 'configured' : 'empty';
-  } else if (listReadiness === 'empty') {
+  } else if (listReadiness === 'empty' || listReadiness === 'catalogError') {
+    // Neither an empty referenced list nor a failed catalog may hide the downloaded extras: they are
+    // read straight off disk, so they can be correct even while the catalog fetch is down. A failed
+    // catalog still shows its error view when the saved selection is not among them, so the panel
+    // never swaps the user's choice for some other downloaded resource without saying so.
     if (arePickerResourcesLoading) readiness = 'loading';
+    else if (hasCatalogError && !hasRowForSavedSelection) readiness = 'catalogError';
     else if (filteredResources.length > 0) readiness = 'configured';
   }
 
@@ -268,13 +279,23 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
         shouldClearPending: false,
         selectedRow: findSelectedRow(filteredResources, selectedResourceId),
       };
-  const selectedRef = selection.selectedRow;
+  // Behind the catalog-error view nothing is on screen, so the first-row fallback must not keep a
+  // chapter subscription open or become what Ctrl+F searches.
+  const selectedRef = readiness === 'catalogError' ? undefined : selection.selectedRow;
+
+  // Falling back to another row while the catalog is down would overwrite a saved DBL selection
+  // that only lacks a row until the catalog returns. Committing a pick and migrating a legacy bare
+  // id still go through.
+  const isFallbackWhileCatalogFailed =
+    hasCatalogError && pendingResourceId === undefined && !hasRowForSavedSelection;
+  const nextSelectedResourceId = isFallbackWhileCatalogFailed
+    ? undefined
+    : selection.nextSelectedResourceId;
 
   useEffect(() => {
-    if (selection.nextSelectedResourceId !== undefined)
-      setSelectedResourceId(selection.nextSelectedResourceId);
+    if (nextSelectedResourceId !== undefined) setSelectedResourceId(nextSelectedResourceId);
     if (selection.shouldClearPending) setPendingResourceId(undefined);
-  }, [selection.nextSelectedResourceId, selection.shouldClearPending, setSelectedResourceId]);
+  }, [nextSelectedResourceId, selection.shouldClearPending, setSelectedResourceId]);
 
   const [isSelecting, setIsSelecting] = useState(false);
 
@@ -323,7 +344,9 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
     resourceProjectId ? [resourceProjectId] : [],
     canPublishResourcePanelProjectIds(
       effectiveResourcesState,
-      isCatalogReady,
+      // Rows resolved locally despite a failed catalog (the readiness override above) are an
+      // answer; a failed catalog alone is not, and publishing then would wipe the saved list.
+      isCatalogReady || readiness === 'configured',
       pickerResources !== undefined,
     ),
     // These panels are re-pointed by reloading them, which reuses the web view id, so the

@@ -134,6 +134,8 @@ vi.mock('@papi/frontend', () => ({
     // The web view swaps its tab icon on theme change; these tests never exercise that, so the
     // subscription resolves to a no-op unsubscriber and never delivers a theme.
     themes: { subscribeCurrentTheme: () => Promise.resolve(() => undefined) },
+    // The DBL install lookup re-asks on project changes; these tests never fire one.
+    network: { getNetworkEvent: () => undefined },
   },
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
@@ -354,7 +356,11 @@ async function openViewOptions() {
 
 /** The polite live region the web view announces chapter-split open/close through. */
 function liveRegionText() {
-  return screen.getByRole('status').textContent;
+  // The catalog retry banner has a status region of its own; the announcer is the atomic one.
+  const [announcer] = screen
+    .getAllByRole('status')
+    .filter((region) => region.getAttribute('aria-atomic') === 'true');
+  return announcer?.textContent;
 }
 
 const UNINSTALLED_RESOURCE: DblResourceData = {
