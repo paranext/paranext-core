@@ -8,8 +8,9 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// renderer has a backend-authoritative view of whether a Send/Receive run is currently active, and
 /// for which projects.
 /// <para>
-/// Two surfaces, both carrying the same wire shape <c>{ isSyncing, projectIds }</c> (a
-/// <see cref="SyncActivityState"/> serialized via the shared camelCase PAPI JSON options):
+/// Two surfaces, both carrying the same wire shape <c>{ isSyncing, projectIds }</c> plus an optional
+/// <c>outcome</c> (a <see cref="SyncActivityState"/> serialized via the shared camelCase PAPI JSON
+/// options):
 /// <list type="bullet">
 /// <item><description>
 /// A <c>paratextBibleSendReceive.onSyncActivityChanged</c> event, pushed on every transition of the
@@ -70,7 +71,12 @@ internal class SyncActivityNotifierService(
                     + "every transition of the backend's sync run marker. Covers every sync path, "
                     + "including callers that reach the dotnet commands directly and raise no "
                     + "extension-side claim. projectIds is empty while isSyncing is true and the "
-                    + "scheduled path has not yet resolved its merge set.",
+                    + "scheduled path has not yet resolved its merge set. The optional outcome "
+                    + "('succeeded' or 'failed') describes the most recently completed run, and "
+                    + "completedAt says when that run finished so a consumer can tell it apart from "
+                    + "a verdict it holds for an earlier sync; both are absent while a run is in "
+                    + "progress, before any run has completed, and from builds that cannot report "
+                    + "them, and their absence is never a verdict.",
                 Params =
                 [
                     new()
@@ -96,7 +102,10 @@ internal class SyncActivityNotifierService(
                 "Returns whether a Send/Receive run is currently active ({ isSyncing, projectIds }) so a "
                     + "renderer can seed its sync status on demand instead of waiting for the next "
                     + "onSyncActivityChanged transition. Covers every sync path, including callers that "
-                    + "reach the dotnet commands directly.",
+                    + "reach the dotnet commands directly. The optional outcome describes the most "
+                    + "recently completed run and stays until the next run opens, so a renderer that "
+                    + "seeds after a run ended still learns how it went; its absence is never a "
+                    + "verdict.",
                 result: ResultOf("object", "The current sync-activity snapshot")
             )
         );
