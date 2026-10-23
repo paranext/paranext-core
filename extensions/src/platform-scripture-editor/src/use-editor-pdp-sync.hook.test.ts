@@ -1097,12 +1097,10 @@ describe('useEditorPdpSync', () => {
     expect(mockLoggerWarn).not.toHaveBeenCalled();
   });
 
-  // The editor reports USJ version 3.1 while the PDP serves 3.0, and
   // `areUsjContentsEqualExceptWhitespace` shallow-compares every top-level property except
-  // `content` — `version` included. Comparing a RAW editor document against PDP content is
-  // therefore false whatever the content says, which made the convergence branch unreachable in
-  // the app while every fixture here used 3.1 on both sides and passed. Pin the real pairing.
-  it('treats a converged round trip as converged even though the editor reports 3.1 and the PDP 3.0', () => {
+  // `content` — `version` included — so a raw comparison would call this round trip unconverged on
+  // the version alone, with the content identical.
+  it('treats a converged round trip as converged even when the versions differ', () => {
     const editorContent: Usj = { ...makeChapterUsj('14', 'match'), version: '3.1' };
     const differentInitial: Usj = { ...makeChapterUsj('14', 'other'), version: '3.0' };
     const convergedEcho: Usj = { ...makeChapterUsj('14', 'match'), version: '3.0' };
