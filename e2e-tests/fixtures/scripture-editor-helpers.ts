@@ -187,6 +187,26 @@ export async function makeSampleProjectEditable(): Promise<void> {
 }
 
 /**
+ * Turn off the current user's paragraph-structure lock on the installed sample WEB project. Simple
+ * mode treats an unset preference as locked, which disables the toolbar's paragraph-style dropdown
+ * and refuses structural edits, so a Simple-mode spec that changes paragraph markers needs this.
+ * Writes through the same PDP method the editor's lock toggle uses.
+ *
+ * Writes project data, so it refuses to run unless the app was launched with `isolatedProjectRoot:
+ * true`, for the reason {@link makeSampleProjectEditable} gives.
+ */
+export async function unlockSampleProjectStructure(): Promise<void> {
+  requireIsolatedProjectRoot();
+  const pdpId = await getSampleProjectDataProviderId();
+  await sendPapiRequestOnce<boolean>(
+    `object:${pdpId}.setUserStructureProtected`,
+    [false],
+    WEBSOCKET_PORT,
+    COMMAND_TIMEOUT_MS,
+  );
+}
+
+/**
  * Resolves the sample WEB project's data provider id once the Paratext factory has registered AND
  * the sample project is installed and advertised — see waitForSampleProjectMetadata for why a
  * generic any-project wait is racy, and LAUNCH_PHASE_TIMEOUT_MS for why this factory in particular

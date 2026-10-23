@@ -4,7 +4,7 @@ import type PapiBackend from '@papi/backend';
 import { newPlatformError, normalizeProjectId, UsjTextContentLocation } from 'platform-bible-utils';
 import type { SavedWebViewDefinition } from '@papi/core';
 import { MutableRefObject } from 'react';
-import type { EditorRef } from '@eten-tech-foundation/platform-editor';
+import type { EditorRef, SelectionRange } from '@eten-tech-foundation/platform-editor';
 import {
   USJ_TYPE,
   USJ_VERSION,
@@ -65,6 +65,7 @@ import {
   selectableParagraphMarkers,
   PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
 } from './platform-scripture-editor.utils';
+import { restoreSelectionIfLost } from './platform-scripture-editor.web-view.utils';
 
 /** Build a mock editor ref exposing spies for the methods the generators call. */
 function makeMockEditorRef() {
@@ -3599,6 +3600,36 @@ describe('generateParagraphMenuListItems', () => {
     expect(restoreSelection.mock.invocationCallOrder[0]).toBeLessThan(
       formatPara.mock.invocationCallOrder[0],
     );
+  });
+
+  it('retags a selected paragraph marker in place rather than restoring an older caret first', () => {
+    // Wired as the web view wires it: the real restore, over an editor whose gutter marker is
+    // selected. A selected marker has no text range, and the caret captured before it was selected
+    // is in another paragraph — restoring it would make `formatPara` retag that paragraph instead.
+    const olderCaret: SelectionRange = {
+      start: { jsonPath: '$.content[2].content[1]', offset: 5 },
+    };
+    const formatPara = vi.fn();
+    const setSelection = vi.fn();
+    // Mock literal cannot satisfy the full EditorRef interface — cast for test isolation.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const ref = {
+      current: {
+        getSelection: () => undefined,
+        getSelectedParaMarker: () => 'q1',
+        setSelection,
+        formatPara,
+      },
+    } as unknown as MutableRefObject<EditorRef | null>;
+    const items = generateParagraphMenuListItems(ref, {}, false, vi.fn(), () =>
+      restoreSelectionIfLost(ref.current, olderCaret),
+    );
+
+    const item = items[0];
+    item.action?.();
+
+    expect(setSelection).not.toHaveBeenCalled();
+    expect(formatPara).toHaveBeenCalledWith(item.marker);
   });
 
   it('when protected: does not restore the caret either (nothing is applied)', () => {
