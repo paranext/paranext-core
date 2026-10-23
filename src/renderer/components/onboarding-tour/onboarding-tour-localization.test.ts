@@ -13,8 +13,9 @@ function readJson(fileName: string) {
 }
 const english: { [key: string]: unknown } = readJson('en.json');
 const spanish: { [key: string]: unknown } = readJson('es.json');
-const metadata: { [key: string]: { deprecationInfo?: { date: string; message: string } } } =
-  readJson('metadata.json');
+const metadata: {
+  [key: string]: { fallbackKey?: string; deprecationInfo?: { date: string; message: string } };
+} = readJson('metadata.json');
 
 // en and es are the two languages maintained in this repo, and nothing in the build enforces parity
 // between them, so every key a tour stop requests is checked in both. A missing or echoed value
@@ -51,6 +52,14 @@ describe('onboarding tour profile stop', () => {
     );
     expect(spanish['%onboardingTour_step_profile_description%']).toBe(
       '¿Necesita cambiar su conexión a internet o su registro? Están aquí, bajo el botón Perfil.',
+    );
+  });
+
+  // A language that has translated the retired description but not its replacement keeps showing
+  // its own translation instead of falling back to English.
+  it('falls back to the retired description where the new one is not translated', () => {
+    expect(metadata['%onboardingTour_step_profile_description_2%']?.fallbackKey).toBe(
+      '%onboardingTour_step_profile_description%',
     );
   });
 });

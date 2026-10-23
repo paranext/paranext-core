@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { LocalizeKey } from 'platform-bible-utils';
-import { readShippedLocale } from '@node/utils/locale-assets.test-utils';
+import {
+  readShippedLocale,
+  readShippedLocalizationMetadata,
+} from '@node/utils/locale-assets.test-utils';
 
 const english = readShippedLocale('en');
 const spanish = readShippedLocale('es');
+const metadata = readShippedLocalizationMetadata();
 
 const AGREED_ENGLISH_TEXT: [LocalizeKey, string][] = [
   [
@@ -37,5 +41,20 @@ describe('interface mode switcher strings', () => {
     ['Spanish', spanish],
   ])('the %s Power label keeps the {label} placeholder', (_, strings) => {
     expect(strings['%userProfile_interfaceMode_power_labelWithPreview%']).toMatch(/\{label\}/);
+  });
+
+  // A language that has translated a retired description but not its replacement keeps showing
+  // its own translation instead of falling back to English.
+  it.each([
+    [
+      '%userProfile_interfaceMode_simple_description_2%',
+      '%userProfile_interfaceMode_simple_description%',
+    ],
+    [
+      '%userProfile_interfaceMode_power_description_2%',
+      '%userProfile_interfaceMode_power_description%',
+    ],
+  ])('%s falls back to the description it replaces', (newKey, retiredKey) => {
+    expect(metadata[newKey]?.fallbackKey).toBe(retiredKey);
   });
 });

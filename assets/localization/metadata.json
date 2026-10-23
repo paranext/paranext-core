@@ -146,6 +146,9 @@
       "message": "The tour's profile stop now also names the Simple / Power switch in the User menu. The new key is %onboardingTour_step_profile_description_2%."
     }
   },
+  "%onboardingTour_step_profile_description_2%": {
+    "fallbackKey": "%onboardingTour_step_profile_description%"
+  },
   "%onboardingTour_step_sendReceive_description%": {
     "deprecationInfo": {
       "date": "2026-10-13",
@@ -387,11 +390,17 @@
       "message": "Power mode is now described as a configurable interface to use alongside Paratext 9 rather than the full Paratext interface. The new key is %userProfile_interfaceMode_power_description_2%."
     }
   },
+  "%userProfile_interfaceMode_power_description_2%": {
+    "fallbackKey": "%userProfile_interfaceMode_power_description%"
+  },
   "%userProfile_interfaceMode_simple_description%": {
     "deprecationInfo": {
       "date": "2026-10-20",
       "message": "Simple mode is now described by what it supports (basic exegesis, drafting and AI checks) rather than as focused translation work. The new key is %userProfile_interfaceMode_simple_description_2%."
     }
+  },
+  "%userProfile_interfaceMode_simple_description_2%": {
+    "fallbackKey": "%userProfile_interfaceMode_simple_description%"
   },
   "%userProfile_networkSettings%": {
     "deprecationInfo": {
