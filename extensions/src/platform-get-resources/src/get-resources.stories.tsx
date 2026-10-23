@@ -8,6 +8,7 @@ import {
   GetResourcesProps,
   GET_RESOURCES_STRING_KEYS,
   ResourceAction,
+  RESOURCE_TYPES,
 } from './get-resources.component';
 
 // Get all localized strings needed by the GetResources component
@@ -60,14 +61,14 @@ const staticResources: DblResourceData[] = [
   },
   {
     dblEntryUid: 'uid-5',
-    displayName: 'SDBG',
-    fullName: 'Semantic Dictionary of Biblical Greek',
+    displayName: 'SBLGNT',
+    fullName: 'SBL Greek New Testament',
     bestLanguageName: 'Greek',
-    type: 'EnhancedResource',
+    type: 'SourceLanguageResource',
     size: 800,
     installed: false,
     updateAvailable: false,
-    projectId: 'project-sdbg',
+    projectId: 'project-sblgnt',
   },
 ];
 
@@ -220,7 +221,7 @@ function createDecorator(config: DecoratorConfig) {
   return function GetResourcesDecorator(
     Story: (update?: { args: GetResourcesProps }) => ReactElement,
   ) {
-    const [selectedTypes, setSelectedTypes] = useState<string[]>(['ScriptureResource']);
+    const [selectedTypes, setSelectedTypes] = useState<string[]>(RESOURCE_TYPES);
     const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
     const [resources, setResources] = useState<DblResourceData[]>(
       config.resources ?? staticResources,
