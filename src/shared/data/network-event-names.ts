@@ -45,7 +45,7 @@ const INTERNAL_MULTI_SOURCE_EVENT_NAMES = [
 /**
  * Source of truth for which event names use multi-source semantics at the central registry. Must
  * stay in sync with `MultiSourceNetworkEvents` (the public events) plus the platform-internal
- * multi-source events — the test `network.service.shared-events.test.ts` checks the contents.
+ * multi-source events.
  *
  * Add entries to {@link PUBLIC_MULTI_SOURCE_EVENT_NAMES} when adding a new public multi-source event
  * to `MultiSourceNetworkEvents`, or to {@link INTERNAL_MULTI_SOURCE_EVENT_NAMES} for a new internal

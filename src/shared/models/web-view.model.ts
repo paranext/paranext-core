@@ -439,8 +439,7 @@ export const CONTENT_ZOOM_DEFAULT_CSS_VARIABLE = '--platform-content-zoom-defaul
  * The `webViewType` of the Scripture editor web views provided by the `platform-scripture-editor`
  * extension. Must match `SCRIPTURE_EDITOR_WEBVIEW_TYPE` in
  * `scripture-editor-web-view-type.const.ts` — core code cannot import extension source, so the
- * value is mirrored here as the single core-side copy. `web-view.model.test.ts` fails if the two
- * drift.
+ * value is mirrored here as the single core-side copy.
  */
 export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 
@@ -448,7 +447,6 @@ export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
  * The `webViewType` of the Find web view provided by the `platform-scripture` extension. Must match
  * `findWebViewType` in `extensions/src/platform-scripture/src/find-web-view-type.const.ts` — core
  * code cannot import extension source, so the value is mirrored here as the single core-side copy.
- * `web-view.model.test.ts` fails if the two drift.
  */
 export const FIND_WEBVIEW_TYPE = 'platformScripture.find';
 

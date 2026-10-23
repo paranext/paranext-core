@@ -752,15 +752,13 @@ declare module 'shared/models/web-view.model' {
    * The `webViewType` of the Scripture editor web views provided by the `platform-scripture-editor`
    * extension. Must match `SCRIPTURE_EDITOR_WEBVIEW_TYPE` in
    * `scripture-editor-web-view-type.const.ts` — core code cannot import extension source, so the
-   * value is mirrored here as the single core-side copy. `web-view.model.test.ts` fails if the two
-   * drift.
+   * value is mirrored here as the single core-side copy.
    */
   export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
   /**
    * The `webViewType` of the Find web view provided by the `platform-scripture` extension. Must match
    * `findWebViewType` in `extensions/src/platform-scripture/src/find-web-view-type.const.ts` — core
    * code cannot import extension source, so the value is mirrored here as the single core-side copy.
-   * `web-view.model.test.ts` fails if the two drift.
    */
   export const FIND_WEBVIEW_TYPE = 'platformScripture.find';
   /**
@@ -3169,7 +3167,7 @@ declare module 'shared/data/network-event-names' {
   /**
    * Source of truth for which event names use multi-source semantics at the central registry. Must
    * stay in sync with `MultiSourceNetworkEvents` (the public events) plus the platform-internal
-   * multi-source events — the test `network.service.shared-events.test.ts` checks the contents.
+   * multi-source events.
    *
    * Add entries to {@link PUBLIC_MULTI_SOURCE_EVENT_NAMES} when adding a new public multi-source event
    * to `MultiSourceNetworkEvents`, or to {@link INTERNAL_MULTI_SOURCE_EVENT_NAMES} for a new internal
