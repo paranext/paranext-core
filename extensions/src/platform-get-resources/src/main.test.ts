@@ -136,6 +136,7 @@ describe('platformGetResources activation', () => {
     mocks.readUserData.mockResolvedValue(undefined);
     mocks.writeUserData.mockResolvedValue(undefined);
     mocks.dataProvidersGet.mockResolvedValue(provider);
+    mocks.getMetadataForAllProjects.mockResolvedValue([]);
     provider.recomputeDblResourcesInstallStatus.mockResolvedValue({});
     provider.listModelTextRestrictions.mockResolvedValue({ dblIds: [], projectIds: [] });
     // A resource installed outside the DBL catalog, such as one copied in by hand
@@ -281,5 +282,71 @@ describe('platformGetResources activation', () => {
     await registrations.runAllUnsubscribers();
 
     expect(mocks.projectsChangedHandlers.size).toBe(0);
+  });
+
+  it('single-flights concurrent getCachedResources calls into one DBL fetch and rejects both together when it rejects', async () => {
+    // Let the startup background fetch make and fail its one attempt first, so it doesn't count
+    // toward the on-demand fetch this test is pinning.
+    provider.getDblResources.mockRejectedValueOnce(new Error('startup fetch failed'));
+    await activateWithFreshModule();
+    await vi.waitFor(() => expect(provider.getDblResources).toHaveBeenCalledTimes(1));
+    provider.getDblResources.mockClear();
+
+    let rejectFetch: (error: Error) => void = () => {};
+    provider.getDblResources.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectFetch = reject;
+        }),
+    );
+
+    const first = getCachedResources();
+    const second = getCachedResources();
+
+    // Both readers must have joined the single in-flight fetch before it settles, not queued
+    // independent ones behind it.
+    await vi.waitFor(() => expect(provider.getDblResources).toHaveBeenCalledTimes(1));
+
+    rejectFetch(new Error('on-demand fetch failed'));
+
+    await expect(first).rejects.toThrow('on-demand fetch failed');
+    await expect(second).rejects.toThrow('on-demand fetch failed');
+    expect(provider.getDblResources).toHaveBeenCalledTimes(1);
+  });
+
+  it('fetches again on the next call after an on-demand fetch rejects', async () => {
+    provider.getDblResources.mockRejectedValueOnce(new Error('startup fetch failed'));
+    await activateWithFreshModule();
+    await vi.waitFor(() => expect(provider.getDblResources).toHaveBeenCalledTimes(1));
+
+    provider.getDblResources.mockRejectedValueOnce(new Error('on-demand fetch failed'));
+    await expect(getCachedResources()).rejects.toThrow('on-demand fetch failed');
+
+    const freshRow = row('cccc', '');
+    provider.getDblResources.mockResolvedValueOnce([freshRow]);
+    await expect(getCachedResources()).resolves.toEqual({
+      status: 'available',
+      resources: [{ ...freshRow, isRestrictedAsModelText: false }],
+    });
+
+    // One background attempt, one rejected on-demand attempt, one successful on-demand attempt.
+    expect(provider.getDblResources).toHaveBeenCalledTimes(3);
+  });
+
+  it('still returns locally-installed non-DBL resources when the DBL fetch rejects', async () => {
+    provider.getDblResources.mockRejectedValue(new Error('DBL unreachable'));
+    mocks.getMetadataForAllProjects.mockResolvedValue([
+      { id: 'local-read-only-proj', isEditable: false },
+    ]);
+    await activateWithFreshModule();
+
+    const resources = await getLocalNonDblResources();
+
+    expect(resources).toEqual([
+      expect.objectContaining({
+        dblEntryUid: 'local-read-only-proj',
+        projectId: 'local-read-only-proj',
+      }),
+    ]);
   });
 });
