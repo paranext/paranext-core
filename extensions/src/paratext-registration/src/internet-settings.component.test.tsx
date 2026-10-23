@@ -44,7 +44,9 @@ const mockLocalizedStrings: LanguageStrings = {
   '%paratextRegistration_description_internetUse_option_Enabled_2%': 'Unrestricted',
   '%paratextRegistration_description_internetUse_option_Enabled_details_2%': '',
   '%paratextRegistration_description_internetUse_option_VpnRequired_2%': 'Disable access sentinel',
-  '%paratextRegistration_description_internetUse_option_VpnRequired_details_2%': '',
+  '%paratextRegistration_description_internetUse_option_DisableSomeServices_details%': '',
+  '%paratextRegistration_description_internetUse_option_Disabled_2%': 'Disable all sentinel',
+  '%paratextRegistration_description_internetUse_option_Disabled_details%': '',
   '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%':
     'Sensitive sentinel',
   '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%': '',
@@ -75,6 +77,9 @@ function renderForm(overrides: Partial<InternetSettingsFormProps> = {}) {
     saveError: '',
     onSaveAndRestart: vi.fn(),
     canEditServer: false,
+    hasChosenDisableSomeServices: true,
+    savedHasChosenDisableSomeServices: true,
+    onHasChosenDisableSomeServicesChange: vi.fn(),
   };
   return render(<InternetSettingsForm {...defaults} {...overrides} />);
 }
@@ -169,6 +174,69 @@ describe('InternetSettingsForm', () => {
     expect(screen.getByRole('button', { name: /Developer only/ })).toBeInTheDocument();
   });
 
+  // In Paratext 9, Disabled is "Disable all Internet access", which the app cannot honor yet. It
+  // shows as "Disable access to some Bible translation services" only once the user chose that.
+  describe('a saved Disabled', () => {
+    const notChosen = {
+      hasChosenDisableSomeServices: false,
+      savedHasChosenDisableSomeServices: false,
+    };
+
+    test('shows as "Disable all Internet access" unless the user chose "Disable access…"', () => {
+      renderForm(notChosen);
+      expect(screen.getByRole('radio', { name: 'Disable all sentinel' })).toBeChecked();
+      expect(screen.getByRole('radio', { name: 'Disable access sentinel' })).not.toBeChecked();
+    });
+
+    test('shows as "Disable access…" once the user chose it', () => {
+      renderForm();
+      expect(screen.getByRole('radio', { name: 'Disable access sentinel' })).toBeChecked();
+    });
+
+    test.each([
+      ['Disable access sentinel', 'Disabled', true],
+      ['Unrestricted', 'Enabled', false],
+    ] as const)(
+      'choosing "%s" stages %s and whether it is "Disable access…"',
+      (label, internetUse, isDisableSome) => {
+        const onInternetSettingsChange = vi.fn();
+        const onHasChosenDisableSomeServicesChange = vi.fn();
+        renderForm({
+          ...notChosen,
+          onInternetSettingsChange,
+          onHasChosenDisableSomeServicesChange,
+        });
+
+        fireEvent.click(screen.getByRole('radio', { name: label }));
+
+        expect(onInternetSettingsChange).toHaveBeenCalledWith({
+          ...defaultSettings,
+          permittedInternetUse: internetUse,
+        });
+        expect(onHasChosenDisableSomeServicesChange).toHaveBeenCalledWith(isDisableSome);
+      },
+    );
+
+    // Choosing "Disable access…" leaves the saved value Disabled, so the choice itself has to count
+    // as the change to save.
+    test('a staged choice of "Disable access…" alone enables Save and Discard', () => {
+      renderForm({ hasChosenDisableSomeServices: true, savedHasChosenDisableSomeServices: false });
+      expect(screen.getByRole('button', { name: 'Discard changes sentinel' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Save and restart sentinel' })).toBeEnabled();
+    });
+
+    test('Discard puts back the saved choice', () => {
+      const onHasChosenDisableSomeServicesChange = vi.fn();
+      renderForm({
+        hasChosenDisableSomeServices: true,
+        savedHasChosenDisableSomeServices: false,
+        onHasChosenDisableSomeServicesChange,
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Discard changes sentinel' }));
+      expect(onHasChosenDisableSomeServicesChange).toHaveBeenCalledWith(false);
+    });
+  });
+
   describe('focus management', () => {
     function buildProps(
       overrides: Partial<InternetSettingsFormProps> = {},
@@ -183,6 +251,9 @@ describe('InternetSettingsForm', () => {
         saveError: '',
         onSaveAndRestart: vi.fn(),
         canEditServer: false,
+        hasChosenDisableSomeServices: true,
+        savedHasChosenDisableSomeServices: true,
+        onHasChosenDisableSomeServicesChange: vi.fn(),
         ...overrides,
       };
     }

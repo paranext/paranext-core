@@ -23,9 +23,9 @@ namespace Paranext.DataProvider.Users;
 /// than turning these services on outside sensitive locations. Startup replaces it with
 /// <see cref="InternetUse.Disabled"/> (<see cref="InternetSettingsDataProvider.MigrateVpnRequiredToDisabled"/>),
 /// so this matters only if that fails or something saves <see cref="InternetUse.VpnRequired"/>
-/// later in the session. Only Send/Receive and the DBL fail closed: other ParatextData internet
-/// use, such as Registry access tokens, still resolves it by location.
-/// <see cref="InternetUse.ProxyOnly"/> is not blocked: ParatextData sends its requests through the
+/// later in the session. Registry access tokens fail closed on it too
+/// (<see cref="RegistryAccessTokenService"/>); other ParatextData internet use still resolves it by
+/// location. <see cref="InternetUse.ProxyOnly"/> is not blocked: ParatextData sends its requests through the
 /// proxy carried over from Paratext 9, even though Platform.Bible cannot configure one yet.
 /// </para>
 /// </remarks>

@@ -21,17 +21,15 @@ public class InternetSettingsDataProviderTests
         Assert.That(saved, Is.EqualTo(new[] { InternetUse.Disabled }));
     }
 
-    [TestCase(InternetUse.Enabled)]
-    [TestCase(InternetUse.Disabled)]
-    [TestCase(InternetUse.ProxyOnly)]
-    public void MigrateVpnRequiredToDisabled_AnyOtherSavedValue_SavesNothing(
-        InternetUse savedInternetUse
-    )
+    // Which values migrate is covered by InternetSettingsLogicTests.MigratedRawStatus_*; this only
+    // checks that a value that does not migrate is not saved.
+    [Test]
+    public void MigrateVpnRequiredToDisabled_OtherSavedValue_SavesNothing()
     {
         var saved = new List<InternetUse>();
 
         InternetSettingsDataProvider.MigrateVpnRequiredToDisabled(
-            () => savedInternetUse,
+            () => InternetUse.Enabled,
             saved.Add
         );
 

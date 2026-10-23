@@ -150,7 +150,8 @@ export async function selectTheOtherConnectivityOption(frame: FrameLocator): Pro
     .getAttribute('id');
   const original = frame.locator(`[id="${originalId}"]`);
   const target = (await unrestricted.isChecked()) ? someServicesDisabled : unrestricted;
-  await target.click();
+  // The label, not the radio button: the label's click target covers the whole row, radio included.
+  await frame.locator(`label[for="${await target.getAttribute('id')}"]`).click();
   await expect(target).toBeChecked();
   return original;
 }

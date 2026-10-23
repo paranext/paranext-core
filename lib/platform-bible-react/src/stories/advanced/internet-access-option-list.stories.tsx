@@ -13,8 +13,11 @@ const localizedStrings = {
     'Allows Paratext to use the internet for all services: Registry, sync, and resource downloads.',
   '%paratextRegistration_description_internetUse_option_VpnRequired_2%':
     'Disable access to some Bible translation services',
-  '%paratextRegistration_description_internetUse_option_VpnRequired_details_2%':
-    'Disables access to Registry, sync, and the Digital Bible Library within the Paratext app. Other internet features and other applications are not affected.',
+  '%paratextRegistration_description_internetUse_option_DisableSomeServices_details%':
+    'Disables access to Registry, Send-Receive (sync), and the Digital Bible Library within Paratext 10. Paratext may connect to other internet services! This option will automatically change to “Disable all Internet access” once available.',
+  '%paratextRegistration_description_internetUse_option_Disabled_2%': 'Disable all Internet access',
+  '%paratextRegistration_description_internetUse_option_Disabled_details%':
+    'Blocks all internet access within the Paratext app. Other applications on your computer are not affected.',
   '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%':
     'Block internet when in sensitive locations',
   '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%':
@@ -23,10 +26,10 @@ const localizedStrings = {
   '%paratextRegistration_description_internetUse_option_ProxyOnly_details%':
     'Routes Paratext internet traffic through a configured proxy server.',
   '%paratextRegistration_internetUse_comingSoon%': 'Coming soon',
-  '%paratextRegistration_internetUse_unsupportedSelection_title%':
-    'This internet setting is not supported yet',
-  '%paratextRegistration_internetUse_unsupportedSelection_description%':
-    'Your Paratext internet settings have “{selectedOption}” selected. This version of Paratext does not support that option yet, so choose one of the available options to continue.',
+  '%paratextRegistration_internetUse_unsupportedSelection_title_2%':
+    '“{selectedOption}” is not supported yet',
+  '%paratextRegistration_internetUse_unsupportedSelection_description_2%':
+    'Choose one of the available options to continue or stop using Paratext 10 until it is supported.',
 };
 
 const ENABLED_DESCRIPTION =
@@ -37,9 +40,23 @@ function Controlled(
     initialValue: InternetUse | undefined;
   },
 ) {
-  const { initialValue, ...rest } = props;
+  const { initialValue, hasChosenDisableSomeServices: initialHasChosen, ...rest } = props;
   const [value, setValue] = useState<InternetUse | undefined>(initialValue);
-  return <InternetAccessOptionList {...rest} value={value} onChange={setValue} />;
+  // As the real callers do: any `Disabled` the user picks is "Disable access…".
+  const [hasChosenDisableSomeServices, setHasChosenDisableSomeServices] = useState(
+    initialHasChosen ?? false,
+  );
+  return (
+    <InternetAccessOptionList
+      {...rest}
+      value={value}
+      hasChosenDisableSomeServices={hasChosenDisableSomeServices}
+      onChange={(next) => {
+        setValue(next);
+        setHasChosenDisableSomeServices(next === 'Disabled');
+      }}
+    />
+  );
 }
 
 /**
@@ -106,13 +123,11 @@ export const DescriptionTooltipOnKeyboardFocus: Story = {
   render: (args) => <Controlled {...args} initialValue="Enabled" />,
   play: async ({ canvasElement, userEvent }) => {
     const comingSoonDescription =
-      localizedStrings[
-        '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%'
-      ];
+      localizedStrings['%paratextRegistration_description_internetUse_option_Disabled_details%'];
     await userEvent.tab(); // the checked radio
     await userEvent.tab(); // Unrestricted's info button
     await userEvent.tab(); // "Disable access to some Bible translation services" info button
-    // "Block internet when in sensitive locations" info button, on a "Coming soon" row
+    // "Disable all Internet access" info button, on a "Coming soon" row
     await userEvent.tab();
     await expect(
       within(canvasElement).getByRole('button', { name: comingSoonDescription }),
@@ -169,8 +184,21 @@ export const NarrowColumn: Story = {
   ),
 };
 
-/** Option 2 selected — "Disable access to some Bible translation services". */
+/**
+ * Option 2 selected — "Disable access to some Bible translation services", which the user chose. It
+ * saves `Disabled`, as "Disable all Internet access" would.
+ */
 export const DisabledAccess: Story = {
+  render: (args) => <Controlled {...args} initialValue="Disabled" />,
+  args: { hasChosenDisableSomeServices: true },
+};
+
+/**
+ * A stored `Disabled` the user did not choose here. In Paratext 9 that value means "Disable all
+ * Internet access", which the app cannot honor yet, so that row is selected under the banner until
+ * the user picks another option.
+ */
+export const DisabledShownAsDisableAll: Story = {
   render: (args) => <Controlled {...args} initialValue="Disabled" />,
 };
 
@@ -203,6 +231,6 @@ export const ComingSoonProxySelected: Story = {
  * since the descriptions explain the options rather than being part of the setting.
  */
 export const FormDisabled: Story = {
-  render: (args) => <Controlled {...args} initialValue="Disabled" />,
+  render: (args) => <Controlled {...args} initialValue="Enabled" />,
   args: { disabled: true },
 };

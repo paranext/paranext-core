@@ -34,8 +34,11 @@ const mockLocalizedStrings: LanguageStrings = {
   '%paratextRegistration_description_internetUse_option_Enabled_details_2%':
     'Desc Enabled sentinel',
   '%paratextRegistration_description_internetUse_option_VpnRequired_2%': 'Disable access sentinel',
-  '%paratextRegistration_description_internetUse_option_VpnRequired_details_2%':
+  '%paratextRegistration_description_internetUse_option_DisableSomeServices_details%':
     'Desc Disable access sentinel',
+  '%paratextRegistration_description_internetUse_option_Disabled_2%': 'Disable all sentinel',
+  '%paratextRegistration_description_internetUse_option_Disabled_details%':
+    'Desc Disable all sentinel',
   '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%':
     'Block sensitive sentinel',
   '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%':
@@ -43,9 +46,10 @@ const mockLocalizedStrings: LanguageStrings = {
   '%paratextRegistration_description_internetUse_option_ProxyOnly_2%': 'Configure proxy sentinel',
   '%paratextRegistration_description_internetUse_option_ProxyOnly_details%': 'Desc Proxy sentinel',
   '%paratextRegistration_internetUse_comingSoon%': 'Coming soon',
-  '%paratextRegistration_internetUse_unsupportedSelection_title%': 'Not supported sentinel',
-  '%paratextRegistration_internetUse_unsupportedSelection_description%':
+  '%paratextRegistration_internetUse_unsupportedSelection_title_2%':
     '{selectedOption} is not supported sentinel',
+  '%paratextRegistration_internetUse_unsupportedSelection_description_2%':
+    'Choose or stop sentinel',
 };
 
 function renderList(overrides: Partial<InternetAccessOptionListProps> = {}) {
@@ -58,12 +62,19 @@ function renderList(overrides: Partial<InternetAccessOptionListProps> = {}) {
   return render(<InternetAccessOptionList {...defaults} {...overrides} />);
 }
 
-/** The four [label, description] pairs, in render order. */
+/** The [label, description] pairs, in render order. */
 const ROWS: [label: string, description: string][] = [
   ['Unrestricted', 'Desc Enabled sentinel'],
   ['Disable access sentinel', 'Desc Disable access sentinel'],
+  ['Disable all sentinel', 'Desc Disable all sentinel'],
   ['Block sensitive sentinel', 'Desc Sensitive sentinel'],
   ['Configure proxy sentinel', 'Desc Proxy sentinel'],
+];
+
+const COMING_SOON_LABELS = [
+  'Disable all sentinel',
+  'Block sensitive sentinel',
+  'Configure proxy sentinel',
 ];
 
 /** A row's info button, found by the description it carries as its accessible name. */
@@ -72,7 +83,7 @@ function infoButtonFor(description: string) {
 }
 
 describe('InternetAccessOptionList', () => {
-  test('renders all 4 option labels', () => {
+  test('renders every option label', () => {
     renderList();
     ROWS.forEach(([label]) => expect(screen.getByLabelText(label)).toBeInTheDocument());
   });
@@ -158,11 +169,11 @@ describe('InternetAccessOptionList', () => {
     expect(screen.getByLabelText('Unrestricted')).toHaveFocus();
     await user.tab(); // Unrestricted's info button
     await user.tab(); // Disable access's info button
-    await user.tab(); // Block sensitive's info button, on the first coming-soon row
-    expect(infoButtonFor('Desc Sensitive sentinel')).toHaveFocus();
+    await user.tab(); // Disable all's info button, on the first coming-soon row
+    expect(infoButtonFor('Desc Disable all sentinel')).toHaveFocus();
 
     await waitFor(() => expect(visibleTooltips()).toHaveLength(1));
-    expect(visibleTooltips()[0]).toHaveTextContent('Desc Sensitive sentinel');
+    expect(visibleTooltips()[0]).toHaveTextContent('Desc Disable all sentinel');
   });
 
   test.each([
@@ -178,7 +189,7 @@ describe('InternetAccessOptionList', () => {
   test('coming-soon radio items are disabled (do not fire onChange)', () => {
     const onChange = vi.fn();
     renderList({ value: 'Enabled', onChange });
-    ['Block sensitive sentinel', 'Configure proxy sentinel'].forEach((label) => {
+    COMING_SOON_LABELS.forEach((label) => {
       expect(screen.getByLabelText(label)).toBeDisabled();
       fireEvent.click(screen.getByText(label));
     });
@@ -194,13 +205,10 @@ describe('InternetAccessOptionList', () => {
   // The radio sits directly in its row, beside the label and badge.
   const rowOf = (label: string) => screen.getByLabelText(label).parentElement;
 
-  test.each(['Block sensitive sentinel', 'Configure proxy sentinel'])(
-    '"%s" row has a coming-soon badge',
-    (label) => {
-      renderList();
-      expect(rowOf(label)).toHaveTextContent('Coming soon');
-    },
-  );
+  test.each(COMING_SOON_LABELS)('"%s" row has a coming-soon badge', (label) => {
+    renderList();
+    expect(rowOf(label)).toHaveTextContent('Coming soon');
+  });
 
   test.each(['Unrestricted', 'Disable access sentinel'])(
     '"%s" row has no coming-soon badge',
@@ -218,14 +226,14 @@ describe('InternetAccessOptionList', () => {
     // the user arrived, so announcing it must not interrupt whatever is being read.
     test.each(['VpnRequired', 'ProxyOnly'] as const)('%s is announced in a banner', (value) => {
       renderList({ value });
-      expect(screen.getByRole('status')).toHaveTextContent('Not supported sentinel');
+      expect(screen.getByRole('status')).toHaveTextContent('is not supported sentinel');
     });
 
-    test('the banner names the option that is selected', () => {
+    test('the banner names the option that is selected and asks for another choice', () => {
       renderList({ value: 'ProxyOnly' });
-      expect(screen.getByRole('status')).toHaveTextContent(
-        'Configure proxy sentinel is not supported sentinel',
-      );
+      const banner = screen.getByRole('status');
+      expect(banner).toHaveTextContent('Configure proxy sentinel is not supported sentinel');
+      expect(banner).toHaveTextContent('Choose or stop sentinel');
     });
 
     // A value with no row at all selects nothing, so without this the wizard would hold Next shut
@@ -248,8 +256,44 @@ describe('InternetAccessOptionList', () => {
       expect(radio).toBeDisabled();
     });
 
-    test.each(['Enabled', 'Disabled'] as const)('%s shows no banner', (value) => {
-      renderList({ value });
+    test('Enabled shows no banner', () => {
+      renderList({ value: 'Enabled' });
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+  });
+
+  // "Disable access to some Bible translation services" and "Disable all Internet access" both save
+  // Disabled. In Paratext 9, Disabled is "Disable all", which the app cannot honor yet, so Disabled
+  // shows as that option unless the user chose "Disable access…" here.
+  describe('a Disabled value', () => {
+    test('selects "Disable all" under the banner', () => {
+      renderList({ value: 'Disabled' });
+      const disableAll = screen.getByLabelText('Disable all sentinel');
+      expect(disableAll).toBeChecked();
+      expect(disableAll).toBeDisabled();
+      expect(screen.getByLabelText('Disable access sentinel')).not.toBeChecked();
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Disable all sentinel is not supported sentinel',
+      );
+    });
+
+    test('choosing "Disable access" from there reports Disabled', () => {
+      const onChange = vi.fn();
+      renderList({ value: 'Disabled', onChange });
+      fireEvent.click(screen.getByLabelText('Disable access sentinel'));
+      expect(onChange).toHaveBeenCalledWith('Disabled');
+    });
+
+    test('selects "Disable access" with no banner once the user has chosen it', () => {
+      renderList({ value: 'Disabled', hasChosenDisableSomeServices: true });
+      expect(screen.getByLabelText('Disable access sentinel')).toBeChecked();
+      expect(screen.getByLabelText('Disable all sentinel')).not.toBeChecked();
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+
+    test('that choice does not move other values off their own rows', () => {
+      renderList({ value: 'Enabled', hasChosenDisableSomeServices: true });
+      expect(screen.getByLabelText('Unrestricted')).toBeChecked();
       expect(screen.queryByRole('status')).not.toBeInTheDocument();
     });
   });
@@ -277,12 +321,18 @@ describe('InternetAccessOptionList', () => {
   // Consumers that gate on a usable selection (the first-run wizard's Next button) read this
   // instead of re-deriving which options the app implements.
   describe('isSupportedInternetUse', () => {
-    test.each(['Enabled', 'Disabled'] as const)('%s is supported', (value) => {
-      expect(isSupportedInternetUse(value)).toBe(true);
+    test('Enabled is supported', () => {
+      expect(isSupportedInternetUse('Enabled')).toBe(true);
+    });
+
+    test('Disabled is supported only once the user chose "Disable access…"', () => {
+      expect(isSupportedInternetUse('Disabled')).toBe(false);
+      expect(isSupportedInternetUse('Disabled', true)).toBe(true);
     });
 
     test.each(['VpnRequired', 'ProxyOnly'] as const)('%s is not supported', (value) => {
       expect(isSupportedInternetUse(value)).toBe(false);
+      expect(isSupportedInternetUse(value, true)).toBe(false);
     });
   });
 });

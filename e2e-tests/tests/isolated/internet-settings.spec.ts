@@ -32,7 +32,10 @@ import {
   openInternetSettingsPanel,
   openUserProfilePopover,
   optionInfoButton,
+  readSavedInternetSettings,
+  restoreSavedInternetSettings,
   saveAndRestartButton,
+  selectableConnectivityOptions,
   selectTheOtherConnectivityOption,
   serverBadge,
   serverBadgeTooltip,
@@ -89,7 +92,7 @@ test.describe('Internet & Connectivity settings', () => {
     }
   });
 
-  test('shows 2 active radio rows and 2 coming-soon rows with badges', async ({ mainPage }) => {
+  test('shows 2 active radio rows and 3 coming-soon rows with badges', async ({ mainPage }) => {
     const frame = await openInternetSettingsPanel(mainPage);
     await waitForSettingsLoaded(frame);
 
@@ -108,14 +111,15 @@ test.describe('Internet & Connectivity settings', () => {
     await expect(descriptionTooltip(frame)).toHaveCount(0);
 
     // Coming-soon rows have disabled radio buttons
+    await expect(internetUseRadio(frame, /Disable all Internet access/)).toBeDisabled();
     await expect(
       internetUseRadio(frame, /Block internet when in sensitive locations/),
     ).toBeDisabled();
     await expect(internetUseRadio(frame, /Configure proxy/)).toBeDisabled();
-    await expect(internetUseRadios(frame)).toHaveCount(4);
+    await expect(internetUseRadios(frame)).toHaveCount(5);
 
-    // Two "Coming soon" badges appear
-    await expect(frame.getByText('Coming soon')).toHaveCount(2);
+    // Three "Coming soon" badges appear
+    await expect(frame.getByText('Coming soon')).toHaveCount(3);
 
     // The per-row "Coming soon" badges above are the only marker of the unavailable options; the
     // list carries no footer note, which also keeps the first-run wizard's Next button in view.
@@ -202,6 +206,48 @@ test.describe('Internet & Connectivity settings', () => {
     await expect(originalOption).toBeChecked({ timeout: 5_000 });
     await expect(saveAndRestartButton(frame)).toBeDisabled({ timeout: 5_000 });
     await expect(discardChangesButton(frame)).toBeDisabled();
+  });
+
+  // In Paratext 9, Disabled is "Disable all Internet access", which the app cannot honor yet. It
+  // shows as "Disable access to some Bible translation services" only once the user chose that.
+  test.describe('a saved Disabled the user did not choose here', () => {
+    test.use({ seedSettings: { 'platform.internetUseDisableSomeServicesChosen': false } });
+
+    test('shows as "Disable all Internet access" until the user chooses "Disable access…"', async ({
+      mainPage,
+    }) => {
+      await waitForAppReady(mainPage);
+      // ParatextData's own InternetSettings.xml, which the fixture's settings restore does not
+      // cover, so this test puts it back itself.
+      const saved = await readSavedInternetSettings();
+      try {
+        await restoreSavedInternetSettings({ ...saved, permittedInternetUse: 'Disabled' });
+        const frame = await openInternetSettingsPanel(mainPage);
+        await waitForSettingsLoaded(frame);
+        const disableAll = internetUseRadio(frame, 'Disable all Internet access');
+        const { someServicesDisabled } = selectableConnectivityOptions(frame);
+        const banner = frame
+          .getByRole('status')
+          .filter({ hasText: '“Disable all Internet access” is not supported yet' });
+
+        await expect(disableAll).toBeChecked();
+        await expect(disableAll).toBeDisabled();
+        await expect(banner).toBeVisible();
+        await expect(saveAndRestartButton(frame)).toBeDisabled();
+
+        // The label, not the radio: the label's click target covers the row.
+        await frame
+          .locator('label', { hasText: /^Disable access to some Bible translation services$/ })
+          .click();
+
+        await expect(someServicesDisabled).toBeChecked();
+        await expect(banner).toHaveCount(0);
+        // The saved value stays Disabled, so the choice alone is what there is to save.
+        await expect(saveAndRestartButton(frame)).toBeEnabled();
+      } finally {
+        await restoreSavedInternetSettings(saved);
+      }
+    });
   });
 
   // The server-selection control is hidden unless the user held Shift while opening the panel, or
