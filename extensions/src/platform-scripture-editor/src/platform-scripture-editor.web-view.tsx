@@ -215,6 +215,7 @@ import {
   CONTEXT_MENU_ACTION_TO_NOTE_KIND,
   createInsertContextMenuItems,
   flushRowEditsThenSave,
+  forgetCaretSnapshotIfParaMarkerSelected,
   isEditorContextMenuOpen,
   generateInlineMarkerMenuListItems,
   getChapterKey,
@@ -228,7 +229,6 @@ import {
   parseCallerSequenceSetting,
   resolveEditingSessionActivity,
   restoreSelectionIfLost,
-  returnFocusToEditor,
   returnFocusToScriptureTextIfDocumentFocused,
   STALE_NOTE_EDITING_SESSION_MS,
 } from './platform-scripture-editor.web-view.utils';
@@ -243,6 +243,7 @@ import {
   commitVersionHistorySnapshot,
   EDIT_ACTION_BLOCKED_KEY,
   notifyEditMenuActionBlocked,
+  notifyStructureProtected as sendStructureProtectedNotification,
   notifySyncEditBlocked as sendSyncEditBlockedNotification,
   SYNC_EDIT_BLOCKED_KEY,
 } from './editor-side-effects.utils';
@@ -1768,14 +1769,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [],
   );
 
-  const notifyStructureProtected = useCallback(
-    () =>
-      papi.notifications.send({
-        message: '%webView_platformScriptureEditor_error_structureProtected%',
-        severity: 'warning',
-      }),
-    [],
-  );
+  const notifyStructureProtected = useCallback(() => sendStructureProtectedNotification(), []);
 
   /**
    * Show the standard "editing paused during Send/Receive" warning notification (the
@@ -1815,6 +1809,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [localizedStrings, isStructureProtected, notifyStructureProtected, restoreEditorSelection],
   );
 
+  const forgetCaretSnapshotForParagraphMenu = useCallback(
+    () => forgetCaretSnapshotIfParaMarkerSelected(editorRef.current, lastFocusOutSelectionRef),
+    [],
+  );
+
   const {
     isMenuOpen: isParagraphMenuOpen,
     setIsMenuOpen: setIsParagraphMenuOpen,
@@ -1824,16 +1823,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     isStructureProtected,
     hasBlockMarker: !!blockMarker,
     notifyStructureProtected,
+    onBeforeMenuOpen: forgetCaretSnapshotForParagraphMenu,
   });
-
-  // The editor keeps a selected paragraph marker while focus is in the paragraph menu; focusing it
-  // again makes that selection live for the next key. Opening the popover can also null a caret
-  // selection the same way the paragraph switcher does above, so the restore has to run before the
-  // focus, not just a plain `editorRef.current?.focus()`.
-  const restoreCaretAndFocusEditor = useCallback(
-    () => returnFocusToEditor(editorRef.current, lastFocusOutSelectionRef.current),
-    [],
-  );
 
   const insertCommentAtCurrentSelection = useCallback(() => {
     // The editor's own read flushes pending marker edits, so it is always the settled selection;
@@ -4903,7 +4894,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   localizedStrings={localizedStrings}
                   isMenuOpen={isParagraphMenuOpen}
                   onMenuOpenChange={setIsParagraphMenuOpen}
-                  onReturnFocusToEditor={restoreCaretAndFocusEditor}
+                  onReturnFocusToEditor={() => returnFocusToScriptureText()}
                 />
               </>
             )}

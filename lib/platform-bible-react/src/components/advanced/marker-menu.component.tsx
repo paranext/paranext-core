@@ -108,6 +108,13 @@ export interface MarkerMenuProps {
    * `%markerMenu_searchPlaceholder%` localized string.
    */
   searchPlaceholder?: string;
+  /**
+   * Optional marker whose row is highlighted when the menu opens, in place of the first row. Pass
+   * the marker the selection already has, so that Enter on a freshly opened menu re-applies it
+   * rather than picking whatever sorts first. Ignored when no selectable row has this marker, in
+   * which case the first row is highlighted as usual. Read only on mount.
+   */
+  defaultHighlightedMarker?: string;
 }
 
 /** Function to format the marker menu icon and size it accordingly */
@@ -140,6 +147,14 @@ function MarkerSelectionStateIndicator({ state }: { state: 'all' | 'partial' | '
 }
 
 /**
+ * The identity cmdk tracks a row's highlight by. Explicit rather than cmdk's default (the row's
+ * text content) so a default highlight can name the row up front.
+ */
+function getMarkerMenuItemValue(item: MarkerMenuItem) {
+  return `item-${item.marker ?? item.icon?.displayName}-${item.title.replaceAll(' ', '')}`;
+}
+
+/**
  * Function that renders the marker menu command item for both the marker matches and the title
  * matches
  */
@@ -165,6 +180,7 @@ function MarkerMenuCommandItem({
             // `aria-checked` prop type (boolean | 'false' | 'true' | 'mixed' | undefined).
             ({ all: true, partial: 'mixed', none: false } as const)[item.selectionState]
       }
+      value={getMarkerMenuItemValue(item)}
       onSelect={item.action}
     >
       {item.selectionState !== undefined && (
@@ -218,8 +234,22 @@ export function MarkerMenu({
   markerMenuItems,
   searchRef,
   searchPlaceholder,
+  defaultHighlightedMarker,
 }: MarkerMenuProps) {
   const [commandSearch, setCommandSearch] = useState<string>('');
+
+  // Computed once: cmdk reads its default only on mount, and the highlight is the user's to move
+  // from then on.
+  const [defaultHighlightedValue] = useState(() => {
+    const item = markerMenuItems.find(
+      (markerItem) =>
+        markerItem.marker === defaultHighlightedMarker &&
+        !markerItem.isDisallowed &&
+        !markerItem.isDeprecated &&
+        !markerItem.isDisabled,
+    );
+    return item ? getMarkerMenuItemValue(item) : undefined;
+  });
 
   const [codeMatchItems, titleMatchItems] = useMemo(() => {
     // A leading `+` is USFM nesting syntax (`\+nd` nests inside an open char span), not part of the
@@ -254,7 +284,7 @@ export function MarkerMenu({
   }, [commandSearch, markerMenuItems]);
 
   return (
-    <Command className="tw:p-1" shouldFilter={false} loop>
+    <Command className="tw:p-1" shouldFilter={false} loop defaultValue={defaultHighlightedValue}>
       <CommandInput
         className="marker-menu-search"
         ref={searchRef}
@@ -273,7 +303,7 @@ export function MarkerMenu({
             <MarkerMenuCommandItem
               item={item}
               localizedStrings={localizedStrings}
-              key={`item-${item.marker ?? item.icon?.displayName}-${item.title.replaceAll(' ', '')}`}
+              key={getMarkerMenuItemValue(item)}
             />
           ))}
         </CommandGroup>
@@ -285,7 +315,7 @@ export function MarkerMenu({
                 <MarkerMenuCommandItem
                   item={item}
                   localizedStrings={localizedStrings}
-                  key={`item-${item.marker ?? item.icon?.displayName}-${item.title.replaceAll(' ', '')}`}
+                  key={getMarkerMenuItemValue(item)}
                 />
               ))}
             </CommandGroup>

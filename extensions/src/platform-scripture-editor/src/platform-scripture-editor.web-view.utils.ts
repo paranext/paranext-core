@@ -163,27 +163,24 @@ export function restoreSelectionIfLost(
 }
 
 /**
- * Puts keyboard focus back in the editor, restoring a lost caret first.
+ * Forgets the caret captured at focus-out while a paragraph marker is the selection, so nothing can
+ * later restore that caret over it.
  *
- * Lexical's `focus()` falls back to selecting the document END when the editor-state selection is
- * null, and it cannot tell a genuinely-lost selection from one that was never there — so the
- * restore has to happen BEFORE `focus()` runs, never after. Calling `focus()` alone after a
- * selection has been nulled (e.g. a popover blur) would silently move the caret to the chapter
- * end.
+ * The focus-out capture keeps its previous snapshot when there is no readable selection, and a
+ * selected marker reads as none (see {@link restoreSelectionIfLost}), so the snapshot is an older
+ * caret, possibly in another paragraph. Call this as the paragraph menu opens. If the marker
+ * selection is then lost under the open menu (the document is replaced, or the editor becomes
+ * read-only), a pick finds nothing to restore and `formatPara` refuses with a logged warning,
+ * instead of retagging the paragraph that older caret was in.
  *
  * @param editor The live editor handle (e.g. `editorRef.current`); no-op when not mounted
- * @param lastFocusOutSelection The selection captured when focus last left the editor, passed
- *   straight through to {@link restoreSelectionIfLost}
+ * @param lastFocusOutSelectionRef The focus-out snapshot, cleared when a marker is selected
  */
-export function returnFocusToEditor(
-  editor: Pick<
-    EditorRef,
-    'getSelection' | 'setSelection' | 'getSelectedParaMarker' | 'focus'
-  > | null,
-  lastFocusOutSelection: SelectionRange | undefined,
+export function forgetCaretSnapshotIfParaMarkerSelected(
+  editor: Pick<EditorRef, 'getSelectedParaMarker'> | null,
+  lastFocusOutSelectionRef: MutableRefObject<SelectionRange | undefined>,
 ): void {
-  restoreSelectionIfLost(editor, lastFocusOutSelection);
-  editor?.focus();
+  if (editor?.getSelectedParaMarker()) lastFocusOutSelectionRef.current = undefined;
 }
 
 /**

@@ -12,6 +12,7 @@ import {
   ParagraphStyleTrigger,
   PARAGRAPH_STYLE_TRIGGER_STRING_KEYS,
 } from './paragraph-style-trigger.component';
+import { useParagraphMenuOpenState } from './use-paragraph-menu-open-state.hook';
 
 /**
  * The editor toolbar's paragraph-style control: a button showing the marker and style name of the
@@ -83,35 +84,56 @@ const MARKERS: { blockMarker: string; styleName: string }[] = [
 
 type TriggerArgs = ComponentProps<typeof ParagraphStyleTrigger>;
 
-/** Renders the trigger with the story's args, the shared menu items, and the shared strings. */
+/**
+ * Renders the trigger with the story's args, the shared menu items, and the shared strings. There
+ * is no editor here, so the focus the app would return to the editor goes back to the trigger
+ * instead of being dropped on the page.
+ */
 function Trigger({ blockMarker, isStructureProtected = false, styleName }: Partial<TriggerArgs>) {
-  // The web view owns this state in the app; each story instance keeps its own so clicking opens it.
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  // The web view owns this state in the app, through the same hook; each story instance keeps its
+  // own so clicking opens it.
+  const { isMenuOpen, setIsMenuOpen } = useParagraphMenuOpenState({
+    isReadOnly: false,
+    isStructureProtected,
+    hasBlockMarker: !!blockMarker,
+    notifyStructureProtected: () => {},
+  });
+  // The ref needs to start out with null for it to work as an element ref
+  // eslint-disable-next-line no-null/no-null
+  const wrapperRef = useRef<HTMLDivElement>(null);
   return (
-    <ParagraphStyleTrigger
-      blockMarker={blockMarker}
-      isStructureProtected={isStructureProtected}
-      localizedStrings={localizedStrings}
-      markerMenuItems={markerMenuItems}
-      styleName={styleName}
-      isMenuOpen={isMenuOpen}
-      onMenuOpenChange={setIsMenuOpen}
-      onReturnFocusToEditor={() => {}}
-    />
+    <div ref={wrapperRef} className="tw:contents">
+      <ParagraphStyleTrigger
+        blockMarker={blockMarker}
+        isStructureProtected={isStructureProtected}
+        localizedStrings={localizedStrings}
+        markerMenuItems={markerMenuItems}
+        styleName={styleName}
+        isMenuOpen={isMenuOpen}
+        onMenuOpenChange={setIsMenuOpen}
+        onReturnFocusToEditor={() => wrapperRef.current?.querySelector('button')?.focus()}
+      />
+    </div>
   );
 }
 
 /**
- * Renders the trigger beside a stand-in for the editor: a button that opens the menu through the
- * controlled `isMenuOpen`, as the web view does when the editor's `onParaMarkerMenuRequest` fires,
- * and a text box that takes focus back whenever the menu closes normally.
+ * Renders the trigger beside a stand-in for the editor: a button that asks for the menu the way the
+ * editor's `onParaMarkerMenuRequest` does, through the same hook the web view uses, and a text box
+ * that takes focus back when the menu returns focus to the editor.
  */
 function EditorRequestTrigger({
   blockMarker,
   isStructureProtected = false,
   styleName,
 }: Partial<TriggerArgs>) {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [lockNotificationCount, setLockNotificationCount] = useState(0);
+  const { isMenuOpen, setIsMenuOpen, requestMenuFromEditor } = useParagraphMenuOpenState({
+    isReadOnly: false,
+    isStructureProtected,
+    hasBlockMarker: !!blockMarker,
+    notifyStructureProtected: () => setLockNotificationCount((count) => count + 1),
+  });
   // The ref needs to start out with null for it to work as an element ref
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<HTMLTextAreaElement>(null);
@@ -133,9 +155,14 @@ function EditorRequestTrigger({
         className="tw:w-56 tw:rounded-sm tw:border tw:p-1 tw:text-sm"
         defaultValue="Focus returns here when the menu closes."
       />
-      <Button size="sm" variant="secondary" onClick={() => setIsMenuOpen(true)}>
+      <Button size="sm" variant="secondary" onClick={requestMenuFromEditor}>
         Open from the editor
       </Button>
+      {lockNotificationCount > 0 && (
+        <p role="status" className="tw:text-xs tw:text-muted-foreground">
+          Lock notification shown ({lockNotificationCount})
+        </p>
+      )}
     </div>
   );
 }
@@ -211,8 +238,11 @@ export const MarkerWidthsAtMinimum: Story = {
 
 /**
  * The menu opened by the editor rather than by a click on the trigger, as happens on Enter or
- * Alt+Down with a paragraph marker selected. Picking an item or pressing Escape returns focus to
- * the stand-in editor; with structure protected, the request is ignored.
+ * Alt+Down with a paragraph marker selected. The menu opens on the paragraph's own marker. Picking
+ * an item or pressing Escape returns focus to the stand-in editor; a menu opened by clicking the
+ * trigger returns focus to the trigger on Escape instead. With structure protected, the request
+ * shows the lock notification and the menu stays closed, and it does not open on its own when
+ * protection is turned off again.
  */
 export const OpenedFromTheEditor: Story = {
   render: (args) => <EditorRequestTrigger {...args} />,

@@ -1633,9 +1633,16 @@ export interface MarkerMenuProps {
 	 * `%markerMenu_searchPlaceholder%` localized string.
 	 */
 	searchPlaceholder?: string;
+	/**
+	 * Optional marker whose row is highlighted when the menu opens, in place of the first row. Pass
+	 * the marker the selection already has, so that Enter on a freshly opened menu re-applies it
+	 * rather than picking whatever sorts first. Ignored when no selectable row has this marker, in
+	 * which case the first row is highlighted as usual. Read only on mount.
+	 */
+	defaultHighlightedMarker?: string;
 }
 /** Marker menu component to render the list of markers and a few commands in the scripture editor */
-export declare function MarkerMenu({ localizedStrings, markerMenuItems, searchRef, searchPlaceholder, }: MarkerMenuProps): import("react/jsx-runtime").JSX.Element;
+export declare function MarkerMenu({ localizedStrings, markerMenuItems, searchRef, searchPlaceholder, defaultHighlightedMarker, }: MarkerMenuProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Whether a delta op is an UNCLOSED note: one written with no closing marker (`\f` with no `\f*`),
  * which USJ marks `closed: "false"`. Such a note is edited in place in the text, as PT9 does its

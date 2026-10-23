@@ -9,18 +9,20 @@ import {
 
 function renderOpenState(overrides: Partial<UseParagraphMenuOpenStateOptions> = {}) {
   const notifyStructureProtected = vi.fn();
+  const onBeforeMenuOpen = vi.fn();
   const initialProps: UseParagraphMenuOpenStateOptions = {
     isReadOnly: false,
     isStructureProtected: false,
     hasBlockMarker: true,
     notifyStructureProtected,
+    onBeforeMenuOpen,
     ...overrides,
   };
   const rendered = renderHook(
     (props: UseParagraphMenuOpenStateOptions) => useParagraphMenuOpenState(props),
     { initialProps },
   );
-  return { ...rendered, initialProps, notifyStructureProtected };
+  return { ...rendered, initialProps, notifyStructureProtected, onBeforeMenuOpen };
 }
 
 describe('useParagraphMenuOpenState', () => {
@@ -96,5 +98,26 @@ describe('useParagraphMenuOpenState', () => {
 
     rerender({ ...initialProps, hasBlockMarker: true });
     expect(result.current.isMenuOpen).toBe(false);
+  });
+
+  it('runs onBeforeMenuOpen before an open from the editor or from the button, never on a close', () => {
+    const { result, onBeforeMenuOpen } = renderOpenState();
+
+    act(() => result.current.requestMenuFromEditor());
+    expect(onBeforeMenuOpen).toHaveBeenCalledTimes(1);
+
+    act(() => result.current.setIsMenuOpen(false));
+    expect(onBeforeMenuOpen).toHaveBeenCalledTimes(1);
+
+    act(() => result.current.setIsMenuOpen(true));
+    expect(onBeforeMenuOpen).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not run onBeforeMenuOpen for an editor request it refuses', () => {
+    const { result, onBeforeMenuOpen } = renderOpenState({ isStructureProtected: true });
+
+    act(() => result.current.requestMenuFromEditor());
+
+    expect(onBeforeMenuOpen).not.toHaveBeenCalled();
   });
 });

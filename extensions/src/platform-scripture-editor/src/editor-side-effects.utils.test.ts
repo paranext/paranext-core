@@ -17,7 +17,9 @@ import papi, { logger } from '@papi/frontend';
 import {
   EDIT_ACTION_BLOCKED_KEY,
   notifyEditMenuActionBlocked,
+  notifyStructureProtected,
   notifySyncEditBlocked,
+  STRUCTURE_PROTECTED_NOTIFICATION_ID,
   SYNC_EDIT_BLOCKED_KEY,
 } from './editor-side-effects.utils';
 
@@ -73,5 +75,34 @@ describe('notifySyncEditBlocked', () => {
       message: 'Editing is paused for sync.',
       severity: 'warning',
     });
+  });
+});
+
+describe('notifyStructureProtected', () => {
+  it('sends the structure-locked message as a warning', async () => {
+    await notifyStructureProtected();
+
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: '%webView_platformScriptureEditor_error_structureProtected%',
+        severity: 'warning',
+      }),
+    );
+  });
+
+  it('reuses one notification id, so a held key updates one toast instead of stacking one per repeat', async () => {
+    await notifyStructureProtected();
+    await notifyStructureProtected();
+
+    const [first, second] = send.mock.calls.map(([notification]) => notification.notificationId);
+    expect(first).toBe(STRUCTURE_PROTECTED_NOTIFICATION_ID);
+    expect(second).toBe(STRUCTURE_PROTECTED_NOTIFICATION_ID);
+  });
+
+  it('logs rather than throws when sending the notification fails', async () => {
+    send.mockRejectedValueOnce(new Error('notification service is down'));
+
+    await expect(notifyStructureProtected()).resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('structure-protected'));
   });
 });

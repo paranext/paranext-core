@@ -13,13 +13,21 @@ export type UseParagraphMenuOpenStateOptions = {
   hasBlockMarker: boolean;
   /** Tells the user the structure is locked, for a request the lock refuses. */
   notifyStructureProtected: () => void;
+  /**
+   * Runs just before the menu opens, whether the toolbar button or the editor opened it. The web
+   * view forgets its focus-out caret snapshot here while a paragraph marker is selected.
+   */
+  onBeforeMenuOpen?: () => void;
 };
 
 /** Return type of {@link useParagraphMenuOpenState}. */
 export type ParagraphMenuOpenState = {
   /** Whether the toolbar paragraph menu is open; pass to `ParagraphStyleTrigger`'s `isMenuOpen`. */
   isMenuOpen: boolean;
-  /** Opens or closes the menu unconditionally; pass to `ParagraphStyleTrigger`'s `onMenuOpenChange`. */
+  /**
+   * Opens or closes the menu unconditionally (running `onBeforeMenuOpen` first when opening); pass
+   * to `ParagraphStyleTrigger`'s `onMenuOpenChange`.
+   */
   setIsMenuOpen: (isOpen: boolean) => void;
   /**
    * Opens the menu for the editor's keyboard request, or reports the structure lock if it refuses
@@ -46,13 +54,22 @@ export function useParagraphMenuOpenState({
   isStructureProtected,
   hasBlockMarker,
   notifyStructureProtected,
+  onBeforeMenuOpen,
 }: UseParagraphMenuOpenStateOptions): ParagraphMenuOpenState {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpenState] = useState(false);
   const isMenuAvailable = !isReadOnly && !isStructureProtected && hasBlockMarker;
 
   useEffect(() => {
-    if (!isMenuAvailable) setIsMenuOpen(false);
+    if (!isMenuAvailable) setIsMenuOpenState(false);
   }, [isMenuAvailable]);
+
+  const setIsMenuOpen = useCallback(
+    (isOpen: boolean) => {
+      if (isOpen) onBeforeMenuOpen?.();
+      setIsMenuOpenState(isOpen);
+    },
+    [onBeforeMenuOpen],
+  );
 
   const requestMenuFromEditor = useCallback(() => {
     if (isReadOnly || !hasBlockMarker) return;
@@ -61,7 +78,7 @@ export function useParagraphMenuOpenState({
       return;
     }
     setIsMenuOpen(true);
-  }, [isReadOnly, hasBlockMarker, isStructureProtected, notifyStructureProtected]);
+  }, [isReadOnly, hasBlockMarker, isStructureProtected, notifyStructureProtected, setIsMenuOpen]);
 
   return { isMenuOpen, setIsMenuOpen, requestMenuFromEditor };
 }

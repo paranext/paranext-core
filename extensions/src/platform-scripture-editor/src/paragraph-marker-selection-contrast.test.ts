@@ -31,15 +31,14 @@ const realThemes = Object.entries(themeFile).flatMap(([familyId, family]) =>
     })),
 );
 
-const scss = readFileSync(path.resolve(__dirname, '_usj-nodes.scss'), 'utf-8').replace(
-  /\/\*[\s\S]*?\*\//g,
-  '',
-);
+const scss = readFileSync(path.resolve(__dirname, '_editor-overrides.scss'), 'utf-8')
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/^\s*\/\/.*$/gm, '');
 
 /** The declarations of the rule with exactly this selector, or undefined if there is none. */
 const block = (selector: string) =>
   scss.match(
-    new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`),
+    new RegExp(`(?:^|\\})\\s*${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`),
   )?.[1];
 
 // `--foreground` is the bar token because it is the one that clears the minimum everywhere:
@@ -54,8 +53,8 @@ describe('selected paragraph marker bar contrast', () => {
     // The bar is the second (lower) box-shadow layer; the fill `--accent` layer covers all of it but
     // the leading 4px. A change to another token there fails here instead of passing silently.
     const bar = /box-shadow:[^;]*var\(--accent\)\s*,[^;]*var\(--foreground\)\s*;/;
-    expect(block('.psc-gutter-markers .psc-para-marker-selected')).toMatch(bar);
-    expect(block(".psc-gutter-markers[dir='rtl'] .psc-para-marker-selected")).toMatch(bar);
+    expect(block('.psc-gutter-markers .para.psc-para-marker-selected')).toMatch(bar);
+    expect(block(".psc-gutter-markers[dir='rtl'] .para.psc-para-marker-selected")).toMatch(bar);
   });
 
   // The bar sits over the fill's neighbour: the editor surface (`--background`) at its outer edge
@@ -77,12 +76,20 @@ describe('selected paragraph marker glyph contrast', () => {
   it('ties the sweep to the token the stylesheet actually paints the glyph with', () => {
     expect(
       block(
-        '.psc-gutter-markers .psc-para-marker-selected > .marker:not(.verse):not(.chapter):first-child',
+        '.psc-gutter-markers .para.psc-para-marker-selected > .marker:not(.verse):not(.chapter):first-child',
       ),
     ).toMatch(/(?:^|[\s;])color:\s*var\(--accent-foreground\)\s*;/);
   });
 
-  // The glyph sits on the row fill (`--accent`).
+  it('paints muted text in a selected row with the same swept token', () => {
+    // `--muted-foreground` (the \s1-\s3 headings, the empty-verse placeholder) falls short of
+    // 4.5:1 on `--accent` in the light themes; the row redefines it to the glyph's token instead.
+    expect(block('.psc-gutter-markers .para.psc-para-marker-selected')).toMatch(
+      /--muted-foreground:\s*var\(--accent-foreground\)\s*;/,
+    );
+  });
+
+  // The glyph, and muted text in the row, sit on the row fill (`--accent`).
   realThemes.forEach(({ name, cssVariables }) => {
     it(`clears ${MIN_TEXT_CONTRAST}:1 against --accent in ${name}`, () => {
       const contrast = chroma.contrast(

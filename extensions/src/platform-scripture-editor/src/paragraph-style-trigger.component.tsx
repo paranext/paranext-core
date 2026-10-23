@@ -11,7 +11,7 @@ import {
   SHRINK_STEP,
   useShrinkStepValue,
 } from 'platform-bible-react';
-import { useEffect, useMemo, useRef, type ElementRef } from 'react';
+import { useEffect, useMemo, useRef, type ElementRef, type KeyboardEvent } from 'react';
 import { wrapMarkerMenuItemsWithClose } from './marker-menu.utils';
 import { ParagraphStyleLabel } from './paragraph-style-label.component';
 
@@ -67,16 +67,19 @@ export type ParagraphStyleTriggerProps = {
    */
   isMenuOpen: boolean;
   /**
-   * Called with `true` when this button opens the menu, and with `false` when the menu closes —
-   * including right after an item is picked, since this is a single-select control.
+   * Called with `true` when this button opens the menu, and with `false` when the user closes it:
+   * by picking an item (this is a single-select control), Escape, clicking this button again, or
+   * interacting outside the menu. Not called when the menu closes because `isStructureProtected`
+   * turned on; the caller owns that state and closes it itself (`useParagraphMenuOpenState` does).
    */
   onMenuOpenChange: (isOpen: boolean) => void;
   /**
-   * Puts keyboard focus back in the editor. Called as the menu closes, in place of Radix's return
-   * to this button, so the user is back in the text — and a selected paragraph marker, which the
-   * editor keeps while focus is in the menu, is live again for the next key. Not called when the
-   * menu closed because the user clicked or focused something else: focus belongs where they put
-   * it.
+   * Puts keyboard focus back in the editor, so the user is back in the text and a selected
+   * paragraph marker, which the editor keeps while focus is in the menu, is live again for the next
+   * key. Called as the menu closes after a pick, and after any close of a menu the editor opened.
+   * Not called when the user dismisses a menu this button opened (Escape, or clicking the button
+   * again): focus goes back to the button, the opener. Not called either when the menu closed
+   * because the user clicked or focused something else: focus belongs where they put it.
    */
   onReturnFocusToEditor: () => void;
 };
@@ -85,7 +88,8 @@ export type ParagraphStyleTriggerProps = {
  * The toolbar's paragraph-style control: a button showing the marker and style name of the block
  * the cursor is in — or of the paragraph whose marker is selected — which opens the paragraph
  * marker menu. The menu is controlled by the caller so the editor can open it from the keyboard;
- * picking an item closes it, and closing returns focus to the editor.
+ * picking an item closes it and returns focus to the editor, and dismissing it returns focus to
+ * whichever opened it.
  *
  * A component rather than inline JSX in the web view because it reads `ShrinkStepContext`, which
  * `TabToolbarContainer` publishes. `PlatformScriptureEditor` _renders_ the `TabToolbar`, so a hook
@@ -124,29 +128,72 @@ export function ParagraphStyleTrigger({
   const isFloored = shrinkStep >= SHRINK_STEP.MINIMUM;
   const widthFloor = isFloored ? 'tw:min-w-min' : 'tw:min-w-0';
 
-  // Set by an outside interaction and read as the menu closes; each opening starts clear.
+  // How the current opening began and ended, read as the menu closes. Radix reports an opening
+  // only when this button opens the menu; an opening it did not report came from the editor.
+  const isButtonOpeningRef = useRef(false);
+  const wasOpenedByButtonRef = useRef(false);
+  const wasClosedByPickRef = useRef(false);
   const wasClosedByOutsideInteractionRef = useRef(false);
   useEffect(() => {
-    if (isMenuOpen) wasClosedByOutsideInteractionRef.current = false;
+    if (!isMenuOpen) return;
+    wasOpenedByButtonRef.current = isButtonOpeningRef.current;
+    isButtonOpeningRef.current = false;
+    wasClosedByPickRef.current = false;
+    wasClosedByOutsideInteractionRef.current = false;
   }, [isMenuOpen]);
+
+  const handleOpenChange = (isOpen: boolean) => {
+    if (isOpen) isButtonOpeningRef.current = true;
+    onMenuOpenChange(isOpen);
+  };
 
   // Radix reports a pointer-down on the trigger itself as an outside interaction, since it lands
   // outside the popover content. Read against this ref so closing that way still counts as a normal
-  // close and returns focus to the editor, rather than stranding it on the button.
+  // close, which returns focus to the opener rather than leaving it wherever it was.
   // The ref needs to start out with null for it to work as an element ref
   // eslint-disable-next-line no-null/no-null
   const triggerRef = useRef<ElementRef<typeof Button>>(null);
 
   // This is a single-select control, so picking a marker must close the menu.
   const closingMarkerMenuItems = useMemo(
-    () => wrapMarkerMenuItemsWithClose(markerMenuItems, () => onMenuOpenChange(false)),
+    () =>
+      wrapMarkerMenuItemsWithClose(markerMenuItems, () => {
+        wasClosedByPickRef.current = true;
+        onMenuOpenChange(false);
+      }),
     [markerMenuItems, onMenuOpenChange],
   );
 
+  // Where focus goes as the menu closes; see `onReturnFocusToEditor` and
+  // adr-marker-menu-close-focus-follows-the-opener. A pick acted on the text, so it goes back to the
+  // text. A dismissal goes back to whoever opened the menu, unless that is a button that is now
+  // disabled (protection turned on) or gone (the trigger unmounted), which cannot take focus.
   const handleCloseAutoFocus = (event: Event) => {
     if (wasClosedByOutsideInteractionRef.current) return;
+    const trigger = triggerRef.current;
+    const canReturnToButton =
+      wasOpenedByButtonRef.current &&
+      !wasClosedByPickRef.current &&
+      !!trigger?.isConnected &&
+      !trigger.disabled;
     event.preventDefault();
-    onReturnFocusToEditor();
+    // Explicit rather than Radix's own return to the trigger, which Radix skips after a pointer-down
+    // on the trigger because it counts that as an outside interaction.
+    if (canReturnToButton) trigger.focus();
+    else onReturnFocusToEditor();
+  };
+
+  // The Enter that opens the menu from a selected paragraph marker auto-repeats when held, and the
+  // repeats land in the menu, where Enter (and Space, in an empty search box) picks the highlighted
+  // row. Only a fresh press may pick.
+  const ignoreRepeatedPickKeys = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!event.repeat) return;
+    const isPickKey =
+      event.key === 'Enter' ||
+      (event.key === ' ' && event.target instanceof HTMLInputElement && !event.target.value);
+    if (!isPickKey) return;
+    event.preventDefault();
+    event.stopPropagation();
   };
 
   // Truthy, not just defined: an empty marker has nothing to put in the label, so the trigger would
@@ -168,7 +215,7 @@ export function ParagraphStyleTrigger({
         // Structure protection disables the button, so it must also keep an editor request from
         // opening the menu around it.
         open={isMenuOpen && !isStructureProtected}
-        onOpenChange={onMenuOpenChange}
+        onOpenChange={handleOpenChange}
       >
         <PopoverTrigger asChild>
           <Button
@@ -217,11 +264,15 @@ export function ParagraphStyleTrigger({
             wasClosedByOutsideInteractionRef.current = true;
           }}
           onCloseAutoFocus={handleCloseAutoFocus}
+          onKeyDownCapture={ignoreRepeatedPickKeys}
         >
           <MarkerMenu
             localizedStrings={localizedStrings}
             markerMenuItems={closingMarkerMenuItems}
             searchPlaceholder={localizedStrings[SEARCH_PLACEHOLDER_KEY]}
+            // Opening on the paragraph's own marker makes a second Enter re-apply it, which changes
+            // nothing, instead of picking whatever row sorts first.
+            defaultHighlightedMarker={blockMarker}
           />
         </PopoverContent>
       </Popover>

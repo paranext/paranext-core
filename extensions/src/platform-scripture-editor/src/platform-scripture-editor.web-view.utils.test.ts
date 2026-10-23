@@ -25,10 +25,10 @@ import {
   nextEditingNoteOps,
   noteKindForCtrlTChord,
   NOTE_INSERT_CONFIG,
+  forgetCaretSnapshotIfParaMarkerSelected,
   parseCallerSequenceSetting,
   resolveEditingSessionActivity,
   restoreSelectionIfLost,
-  returnFocusToEditor,
   returnFocusToScriptureTextIfDocumentFocused,
   shouldSkipNoteInsert,
   STALE_NOTE_EDITING_SESSION_MS,
@@ -277,13 +277,12 @@ describe('getChapterKey', () => {
 /** The caret position a focus-out captured, for the selection-restoring helpers below. */
 const snapshot: SelectionRange = { start: { jsonPath: '$.content[0].content[1]', offset: 4 } };
 
-/** Editor stub exposing only the selection and focus methods the selection-restoring helpers use. */
+/** Editor stub exposing only the selection methods the selection-restoring helpers use. */
 function makeEditor(liveSelection: SelectionRange | undefined, selectedParaMarker?: string) {
   return {
     getSelection: vi.fn((): SelectionRange | undefined => liveSelection),
     setSelection: vi.fn(),
     getSelectedParaMarker: vi.fn((): string | undefined => selectedParaMarker),
-    focus: vi.fn(),
   };
 }
 
@@ -334,34 +333,45 @@ describe('restoreSelectionIfLost', () => {
   });
 });
 
-describe('returnFocusToEditor', () => {
-  it('restores the snapshot before focusing, when the live selection is gone', () => {
-    // `focus()` falls back to selecting the document end when the editor-state selection is null, so
-    // the snapshot has to land first or the fallback wins.
-    const editor = makeEditor(undefined);
+describe('forgetCaretSnapshotIfParaMarkerSelected', () => {
+  it('forgets the snapshot while a paragraph marker is the selection', () => {
+    const snapshotRef: MutableRefObject<SelectionRange | undefined> = { current: snapshot };
 
-    returnFocusToEditor(editor, snapshot);
+    forgetCaretSnapshotIfParaMarkerSelected(makeEditor(undefined, 'p'), snapshotRef);
 
-    expect(editor.setSelection).toHaveBeenCalledWith(snapshot);
-    expect(editor.focus).toHaveBeenCalledTimes(1);
-    const setSelectionOrder = editor.setSelection.mock.invocationCallOrder[0];
-    const focusOrder = editor.focus.mock.invocationCallOrder[0];
-    expect(setSelectionOrder).toBeLessThan(focusOrder);
+    expect(snapshotRef.current).toBeUndefined();
   });
 
-  it('focuses without restoring when a paragraph marker is selected', () => {
-    const editor = makeEditor(undefined, 'li2');
+  it('keeps the snapshot when no paragraph marker is selected', () => {
+    // The paragraph menu opened over a caret: the snapshot is that caret, and a pick needs it back.
+    const snapshotRef: MutableRefObject<SelectionRange | undefined> = { current: snapshot };
 
-    returnFocusToEditor(editor, snapshot);
+    forgetCaretSnapshotIfParaMarkerSelected(makeEditor(undefined), snapshotRef);
 
-    expect(editor.setSelection).not.toHaveBeenCalled();
-    expect(editor.focus).toHaveBeenCalledTimes(1);
+    expect(snapshotRef.current).toBe(snapshot);
+  });
+
+  it('leaves nothing for a pick to restore once the document is replaced under an open menu', () => {
+    // The caret was last in paragraph C, then B's marker was selected and the menu opened. A reload
+    // (a Replace in Find, an automatic Send/Receive) drops B's marker selection while the menu is
+    // open; restoring the old snapshot then would retag C, which may be off-screen.
+    const snapshotRef: MutableRefObject<SelectionRange | undefined> = { current: snapshot };
+    forgetCaretSnapshotIfParaMarkerSelected(makeEditor(undefined, 'q1'), snapshotRef);
+    const reloadedEditor = makeEditor(undefined);
+
+    restoreSelectionIfLost(reloadedEditor, snapshotRef.current);
+
+    expect(reloadedEditor.setSelection).not.toHaveBeenCalled();
   });
 
   it('tolerates a null editor handle (ref not mounted)', () => {
+    const snapshotRef: MutableRefObject<SelectionRange | undefined> = { current: snapshot };
+
     // `editorRef.current` is genuinely `null` before the editor mounts — the exact value under test
     // eslint-disable-next-line no-null/no-null
-    expect(() => returnFocusToEditor(null, snapshot)).not.toThrow();
+    forgetCaretSnapshotIfParaMarkerSelected(null, snapshotRef);
+
+    expect(snapshotRef.current).toBe(snapshot);
   });
 });
 
