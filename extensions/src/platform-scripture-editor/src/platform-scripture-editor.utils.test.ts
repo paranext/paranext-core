@@ -71,12 +71,13 @@ import { restoreSelectionIfLost } from './platform-scripture-editor.web-view.uti
 function makeMockEditorRef() {
   const formatPara = vi.fn();
   const insertMarker = vi.fn();
+  const getSelectedParaMarker = vi.fn<() => string | undefined>();
   // Mock literal cannot satisfy the full EditorRef interface — cast for test isolation.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const ref = {
-    current: { formatPara, insertMarker },
+    current: { formatPara, insertMarker, getSelectedParaMarker },
   } as unknown as MutableRefObject<EditorRef | null>;
-  return { ref, formatPara, insertMarker };
+  return { ref, formatPara, insertMarker, getSelectedParaMarker };
 }
 
 // Sample USJ chapter data for Genesis chapter 1 with multiple verses
@@ -3517,6 +3518,20 @@ describe('generateParagraphMenuListItems', () => {
     expect(formatPara).toHaveBeenCalledTimes(1);
     expect(formatPara).toHaveBeenCalledWith(item.marker);
     expect(notify).not.toHaveBeenCalled();
+  });
+
+  it("skips formatPara when the pick is the selected paragraph marker's own marker", () => {
+    const { ref, formatPara, getSelectedParaMarker } = makeMockEditorRef();
+    getSelectedParaMarker.mockReturnValue('q1');
+    const restoreSelection = vi.fn();
+    const items = generateParagraphMenuListItems(ref, {}, false, vi.fn(), restoreSelection);
+
+    items.find((item) => item.marker === 'q1')?.action?.();
+    expect(formatPara).not.toHaveBeenCalled();
+    expect(restoreSelection).not.toHaveBeenCalled();
+
+    items.find((item) => item.marker === 'p')?.action?.();
+    expect(formatPara).toHaveBeenCalledWith('p');
   });
 
   // Equality, not spot checks: a partial-match assertion would miss both a marker silently dropped

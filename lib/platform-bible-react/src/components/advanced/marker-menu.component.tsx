@@ -240,6 +240,8 @@ export function MarkerMenu({
 
   // Computed once: cmdk reads its default only on mount, and the highlight is the user's to move
   // from then on.
+  // TODO(PT-4907): cmdk sets the search box's `aria-activedescendant` only when its value changes,
+  // which this default never does, so screen readers are not told the highlighted row on open.
   const [defaultHighlightedValue] = useState(() => {
     const item = markerMenuItems.find(
       (markerItem) =>

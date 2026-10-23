@@ -76,10 +76,11 @@ export type ParagraphStyleTriggerProps = {
   /**
    * Puts keyboard focus back in the editor, so the user is back in the text and a selected
    * paragraph marker, which the editor keeps while focus is in the menu, is live again for the next
-   * key. Called as the menu closes after a pick, and after any close of a menu the editor opened.
-   * Not called when the user dismisses a menu this button opened (Escape, or clicking the button
-   * again): focus goes back to the button, the opener. Not called either when the menu closed
-   * because the user clicked or focused something else: focus belongs where they put it.
+   * key. Called as the menu closes after a pick, and when the user dismisses a menu the editor
+   * opened (Escape, or clicking this button). Not called when the user dismisses a menu this button
+   * opened: focus goes back to the button, the opener, unless protection disabled it or it
+   * unmounted, when this is called instead. Never called when the menu closed because the user
+   * clicked or focused something else, whoever opened it: focus belongs where they put it.
    */
   onReturnFocusToEditor: () => void;
 };
@@ -270,8 +271,8 @@ export function ParagraphStyleTrigger({
             localizedStrings={localizedStrings}
             markerMenuItems={closingMarkerMenuItems}
             searchPlaceholder={localizedStrings[SEARCH_PLACEHOLDER_KEY]}
-            // Opening on the paragraph's own marker makes a second Enter re-apply it, which changes
-            // nothing, instead of picking whatever row sorts first.
+            // Opening on the paragraph's own marker makes a second Enter re-pick it, which the
+            // paragraph items skip, instead of picking whatever row sorts first.
             defaultHighlightedMarker={blockMarker}
           />
         </PopoverContent>

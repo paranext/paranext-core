@@ -55,7 +55,7 @@ describe('selected paragraph marker row', () => {
     // An unregistered `4em` resolves where it is used, so a `\mt1` (166%) would push the bar past
     // the editor's edge, where it is clipped, and an `\s1` (0.8rem) would stop it inside the gutter.
     expect(declarations).toMatch(
-      /@property --psc-para-marker-gutter-width\s*\{[^}]*syntax:\s*'<length>'[^}]*inherits:\s*true/,
+      /@property --psc-para-marker-gutter-width\s*\{[^}]*syntax:\s*'<length>'[^}]*inherits:\s*true[^}]*initial-value:/,
     );
     expect(block('.psc-gutter-markers')).toContain(
       '--psc-para-marker-gutter-width: var(--psc-gutter-width',
