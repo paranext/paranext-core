@@ -1,7 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { ScriptureRange } from 'platform-scripture-editor';
 import type PapiBackend from '@papi/backend';
-import { newPlatformError, UsjTextContentLocation } from 'platform-bible-utils';
+import { newPlatformError, normalizeProjectId, UsjTextContentLocation } from 'platform-bible-utils';
 import type { SavedWebViewDefinition } from '@papi/core';
 import { MutableRefObject } from 'react';
 import type { EditorRef } from '@eten-tech-foundation/platform-editor';
@@ -22,6 +22,11 @@ import {
   getTabTitleProjectName,
   generateParagraphMenuListItems,
   getNextViewTypeInCycle,
+  createUnsupportedProjectIdsCache,
+  getProjectUnsupportedReason,
+  buildScriptureEditorWebViewState,
+  UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY,
+  UNSUPPORTED_PROJECT_IDS_RETRY_DELAY_MS,
   openDefaultActiveProjectIfApplicable,
   resolveOpenEditorDispatch,
   resolveViewTypeForInterfaceMode,
@@ -568,6 +573,7 @@ interface PickerMocks {
   mockDebug: ReturnType<typeof vi.fn>;
   mockProjectDataProvidersGet: ReturnType<typeof vi.fn>;
   mockDataProvidersGet: ReturnType<typeof vi.fn>;
+  mockGetMetadataForAllProjects: ReturnType<typeof vi.fn>;
   mockRecordProjectOpened: ReturnType<typeof vi.fn>;
   mockRecentProjectsGet: ReturnType<typeof vi.fn>;
   /**
@@ -577,22 +583,40 @@ interface PickerMocks {
   setCanUserEditScripture: (projectId: string, canEdit: boolean) => void;
   /** Sets the list of recently opened project IDs. */
   setRecentProjects: (ids: string[]) => void;
-  /** Synthesize a `webViews.onDidOpenWebView` event from within a test. */
-  fireWebViewOpen: () => void;
+  /**
+   * Marks the given project ids as unsupported (`ProjectMetadata.unsupportedReason` set). The
+   * metadata lookup answers with these ids upper-cased, so a test that hands the picker lower-case
+   * candidate ids only passes if the picker normalizes them.
+   */
+  setUnsupportedIds: (ids: string[]) => void;
+  /** Synthesize an `object:onDidCreateNetworkObject` event for an object of this type. */
+  fireNetworkObjectCreated: (objectType: string) => void;
+  /** `true` once the driver has unsubscribed from `object:onDidCreateNetworkObject`. */
+  isNetworkObjectCreatedUnsubscribed: () => boolean;
+  /**
+   * Synthesize a `webViews.onDidOpenWebView` event from within a test. By default the opened web
+   * view is an empty Scripture Editor; pass `projectId` for one opened on a project.
+   */
+  fireWebViewOpen: (projectId?: string) => void;
   /**
    * Synthesize a `webViews.onDidUpdateWebView` event from within a test. The driver filters to
    * Scripture Editor updates, so the default `webViewType` is `SCRIPTURE_EDITOR_WEBVIEW_TYPE`; pass
-   * another value to simulate an unrelated webview update.
+   * another value to simulate an unrelated webview update, and `projectId` for an editor showing a
+   * project.
    */
-  fireWebViewUpdate: (webViewType?: string) => void;
+  fireWebViewUpdate: (webViewType?: string, projectId?: string) => void;
   /** Synthesize a `paratextBibleSendReceive.onSyncStateChanged` event from within a test. */
   fireSync: (event: { isSyncing: boolean }) => void;
+  /** Synthesize a `platform.onDidChangeProjects` event from within a test. */
+  fireProjectsChanged: () => void;
   /** `true` once the driver has unsubscribed from `onDidOpenWebView`. */
   isWebViewOpenUnsubscribed: () => boolean;
   /** `true` once the driver has unsubscribed from `onDidUpdateWebView`. */
   isWebViewUpdateUnsubscribed: () => boolean;
   /** `true` once the driver has unsubscribed from `onSyncStateChanged`. */
   isSyncUnsubscribed: () => boolean;
+  /** `true` once the driver has unsubscribed from `onDidChangeProjects`. */
+  isProjectsChangedUnsubscribed: () => boolean;
 }
 
 function createPickerMocks(): PickerMocks {
@@ -628,17 +652,14 @@ function createPickerMocks(): PickerMocks {
     };
   });
 
-  let syncListener: ((evt: { isSyncing: boolean }) => void) | undefined;
-  let syncUnsubscribed = false;
-  const mockGetNetworkEvent = vi.fn((eventName: string) => (listener: typeof syncListener) => {
-    if (eventName === 'paratextBibleSendReceive.onSyncStateChanged') {
-      syncListener = listener;
-    }
+  // Network-event listeners by event name, and the names the driver has unsubscribed from.
+  const networkEventListeners = new Map<string, (evt: unknown) => void>();
+  const unsubscribedNetworkEvents = new Set<string>();
+  const mockGetNetworkEvent = vi.fn((eventName: string) => (listener: (evt: unknown) => void) => {
+    networkEventListeners.set(eventName, listener);
     return () => {
-      if (eventName === 'paratextBibleSendReceive.onSyncStateChanged') {
-        syncUnsubscribed = true;
-        syncListener = undefined;
-      }
+      unsubscribedNetworkEvents.add(eventName);
+      networkEventListeners.delete(eventName);
     };
   });
 
@@ -653,6 +674,21 @@ function createPickerMocks(): PickerMocks {
   const mockProjectDataProvidersGet = vi.fn(async (_interface: string, projectId: string) => ({
     canUserEditScripture: async () => canUserEditScriptureByProjectId.get(projectId) ?? true,
   }));
+
+  // Backs the picker's unsupported-project lookup. Answers for each id it is asked about, with the
+  // id upper-cased.
+  const unsupportedProjectIds = new Set<string>();
+  const mockGetMetadataForAllProjects = vi.fn(
+    async ({ includeProjectIds }: { includeProjectIds: string[] }) =>
+      includeProjectIds.map((id) => ({
+        id: id.toUpperCase(),
+        projectInterfaces: [],
+        pdpFactoryInfo: {},
+        ...(unsupportedProjectIds.has(id.toUpperCase())
+          ? { unsupportedReason: '%project_unsupported_studyBibleAdditions%' }
+          : {}),
+      })),
+  );
 
   const mockRecentProjects: string[] = [];
   const mockRecentProjectsGet = vi.fn().mockImplementation(async () => [...mockRecentProjects]);
@@ -680,6 +716,7 @@ function createPickerMocks(): PickerMocks {
     network: { getNetworkEvent: mockGetNetworkEvent },
     projectDataProviders: { get: mockProjectDataProvidersGet },
     dataProviders: { get: mockDataProvidersGet },
+    projectLookup: { getMetadataForAllProjects: mockGetMetadataForAllProjects },
     logger: { warn: mockWarn, info: mockInfo, debug: mockDebug },
   } as unknown as typeof PapiBackend;
 
@@ -693,6 +730,7 @@ function createPickerMocks(): PickerMocks {
     mockDebug,
     mockProjectDataProvidersGet,
     mockDataProvidersGet,
+    mockGetMetadataForAllProjects,
     mockRecordProjectOpened,
     mockRecentProjectsGet,
     setCanUserEditScripture,
@@ -700,21 +738,43 @@ function createPickerMocks(): PickerMocks {
       mockRecentProjects.length = 0;
       mockRecentProjects.push(...ids);
     },
-    fireWebViewOpen: () => {
-      if (!webViewOpenListener) throw new Error('fireWebViewOpen: no listener captured');
-      webViewOpenListener({});
+    setUnsupportedIds: (ids: string[]) => {
+      ids.forEach((id) => unsupportedProjectIds.add(id.toUpperCase()));
     },
-    fireWebViewUpdate: (webViewType: string = SCRIPTURE_EDITOR_WEBVIEW_TYPE) => {
+    fireNetworkObjectCreated: (objectType: string) => {
+      const listener = networkEventListeners.get('object:onDidCreateNetworkObject');
+      if (!listener) throw new Error('fireNetworkObjectCreated: no listener captured');
+      listener({ id: `${objectType}-object`, objectType, functionNames: [] });
+    },
+    isNetworkObjectCreatedUnsubscribed: () =>
+      unsubscribedNetworkEvents.has('object:onDidCreateNetworkObject'),
+    fireWebViewOpen: (projectId?: string) => {
+      if (!webViewOpenListener) throw new Error('fireWebViewOpen: no listener captured');
+      webViewOpenListener({ webView: { webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId } });
+    },
+    fireWebViewUpdate: (
+      webViewType: string = SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+      projectId: string | undefined = undefined,
+    ) => {
       if (!webViewUpdateListener) throw new Error('fireWebViewUpdate: no listener captured');
-      webViewUpdateListener({ webView: { webViewType } });
+      webViewUpdateListener({ webView: { webViewType, projectId } });
     },
     fireSync: (event) => {
-      if (!syncListener) throw new Error('fireSync: no listener captured');
-      syncListener(event);
+      const listener = networkEventListeners.get('paratextBibleSendReceive.onSyncStateChanged');
+      if (!listener) throw new Error('fireSync: no listener captured');
+      listener(event);
+    },
+    fireProjectsChanged: () => {
+      const listener = networkEventListeners.get('platform.onDidChangeProjects');
+      if (!listener) throw new Error('fireProjectsChanged: no listener captured');
+      listener(undefined);
     },
     isWebViewOpenUnsubscribed: () => webViewOpenUnsubscribed,
     isWebViewUpdateUnsubscribed: () => webViewUpdateUnsubscribed,
-    isSyncUnsubscribed: () => syncUnsubscribed,
+    isSyncUnsubscribed: () =>
+      unsubscribedNetworkEvents.has('paratextBibleSendReceive.onSyncStateChanged'),
+    isProjectsChangedUnsubscribed: () =>
+      unsubscribedNetworkEvents.has('platform.onDidChangeProjects'),
   };
 }
 
@@ -1992,6 +2052,204 @@ describe('openDefaultActiveProjectIfApplicable', () => {
   });
 
   // #endregion Recents-first behavior (Tasks 2-4)
+
+  // #region Unsupported projects excluded from auto-open
+
+  it('skips an unsupported recent project and opens the next one', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      setRecentProjects,
+      setUnsupportedIds,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    setRecentProjects(['sba', 'p1']);
+    setUnsupportedIds(['sba']);
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'platformScriptureEditor.openScriptureEditor') return undefined;
+      throw new Error(`Unexpected command in test: ${commandName}`);
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'p1',
+    );
+    expect(
+      mockSendCommand.mock.calls
+        .filter(([cmd]) => cmd === 'platformScriptureEditor.openScriptureEditor')
+        .map(([, id]) => id),
+    ).toEqual(['p1']);
+  });
+
+  it('opens the first recent project when none is unsupported (positive control)', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      setRecentProjects,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    setRecentProjects(['sba', 'p1']);
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'platformScriptureEditor.openScriptureEditor') return undefined;
+      throw new Error(`Unexpected command in test: ${commandName}`);
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'sba',
+    );
+  });
+
+  it('never picks an unsupported shared project as the default, even the most recent', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      setUnsupportedIds,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    setUnsupportedIds(['sba']);
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          sba: {
+            id: 'sba',
+            name: 'SBA',
+            fullName: 'SBA',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-09-20T00:00:00Z',
+          },
+          p1: {
+            id: 'p1',
+            name: 'P1',
+            fullName: 'P1',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-01-01T00:00:00Z',
+          },
+        };
+      }
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'p1',
+    );
+  });
+
+  it('reports no-candidate when the only shared project is unsupported', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      setUnsupportedIds,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    setUnsupportedIds(['sba']);
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          sba: {
+            id: 'sba',
+            name: 'SBA',
+            fullName: 'SBA',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-09-20T00:00:00Z',
+          },
+        };
+      }
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('no-candidate');
+  });
+
+  it('never looks a candidate up twice in one run, even when it tries recents and then shared projects', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      mockGetMetadataForAllProjects,
+      setRecentProjects,
+      setUnsupportedIds,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    setRecentProjects(['sba']);
+    setUnsupportedIds(['sba']);
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          sba: {
+            id: 'sba',
+            name: 'SBA',
+            fullName: 'SBA',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-09-20T00:00:00Z',
+          },
+          p1: {
+            id: 'p1',
+            name: 'P1',
+            fullName: 'P1',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-01-01T00:00:00Z',
+          },
+        };
+      }
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'p1',
+    );
+    expect(mockGetMetadataForAllProjects.mock.calls).toEqual([
+      [{ includeProjectIds: ['sba'] }],
+      [{ includeProjectIds: ['p1'] }],
+    ]);
+  });
+
+  // #endregion Unsupported projects excluded from auto-open
 });
 
 // #endregion openDefaultActiveProjectIfApplicable
@@ -2365,6 +2623,20 @@ describe('startDefaultProjectPicker', () => {
     expect(mocks.mockGetSetting).toHaveBeenCalledTimes(1);
   });
 
+  it('re-runs the picker when the set of projects changes', async () => {
+    const mocks = createPickerMocks();
+    setUpFastNoOp(mocks);
+
+    startDefaultProjectPicker(mocks.papi);
+    await vi.waitFor(() => expect(mocks.mockGetSetting).toHaveBeenCalledTimes(1));
+
+    mocks.fireProjectsChanged();
+
+    await vi.waitFor(() => {
+      expect(mocks.mockGetSetting).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it('coalesces multiple triggers during an in-flight run into a single follow-up', async () => {
     const mocks = createPickerMocks();
     // Block the initial picker call on a controllable promise so we can fire triggers while it's
@@ -2407,6 +2679,231 @@ describe('startDefaultProjectPicker', () => {
     expect(mocks.isWebViewOpenUnsubscribed()).toBe(true);
     expect(mocks.isWebViewUpdateUnsubscribed()).toBe(true);
     expect(mocks.isSyncUnsubscribed()).toBe(true);
+    expect(mocks.isProjectsChangedUnsubscribed()).toBe(true);
+    expect(mocks.isNetworkObjectCreatedUnsubscribed()).toBe(true);
+  });
+
+  describe('when a project data provider factory registers after a lookup', () => {
+    /**
+     * Simple mode with an empty editor and one recent project, whose factory has not yet said it
+     * cannot be opened. The mocked dock stays empty, so every trigger runs the picker in full.
+     */
+    function setUpBeforeTheFactoryRegisters(mocks: PickerMocks) {
+      mocks.mockGetSetting.mockResolvedValue('simple');
+      mocks.mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+        asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+      );
+      mocks.setRecentProjects(['sba']);
+      mocks.mockSendCommand.mockImplementation(async (commandName: string) =>
+        commandName === 'paratextBibleSendReceive.getSharedProjects' ? {} : undefined,
+      );
+    }
+
+    const openedProjectIds = (mocks: PickerMocks) =>
+      mocks.mockSendCommand.mock.calls
+        .filter(([commandName]) => commandName === 'platformScriptureEditor.openScriptureEditor')
+        .map(([, projectId]) => projectId);
+
+    it('looks up again, and no longer opens a project the factory reports cannot be opened', async () => {
+      const mocks = createPickerMocks();
+      setUpBeforeTheFactoryRegisters(mocks);
+
+      startDefaultProjectPicker(mocks.papi);
+      await vi.waitFor(() => expect(openedProjectIds(mocks)).toEqual(['sba']));
+      mocks.setUnsupportedIds(['sba']);
+      mocks.fireNetworkObjectCreated('pdpFactory');
+      mocks.fireWebViewOpen();
+
+      await vi.waitFor(() =>
+        expect(mocks.mockDebug).toHaveBeenCalledWith(
+          "Default active project picker: unexpected outcome received: 'no-candidate'",
+        ),
+      );
+      expect(mocks.mockGetMetadataForAllProjects).toHaveBeenCalledTimes(2);
+      expect(openedProjectIds(mocks)).toEqual(['sba']);
+    });
+
+    it('keeps its answers when a network object that is not a factory is created', async () => {
+      const mocks = createPickerMocks();
+      setUpBeforeTheFactoryRegisters(mocks);
+
+      startDefaultProjectPicker(mocks.papi);
+      await vi.waitFor(() => expect(openedProjectIds(mocks)).toEqual(['sba']));
+      mocks.setUnsupportedIds(['sba']);
+      mocks.fireNetworkObjectCreated('networkObject');
+      mocks.fireWebViewOpen();
+
+      await vi.waitFor(() => expect(openedProjectIds(mocks)).toEqual(['sba', 'sba']));
+      expect(mocks.mockGetMetadataForAllProjects).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('for a user whose only projects cannot be opened', () => {
+    /** Simple mode with an empty editor that nothing can fill: every candidate is unsupported. */
+    function setUpOnlyUnsupportedProjects(mocks: PickerMocks) {
+      mocks.mockGetSetting.mockResolvedValue('simple');
+      mocks.mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+        asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+      );
+      mocks.setRecentProjects(['sba']);
+      mocks.setUnsupportedIds(['sba']);
+      mocks.mockSendCommand.mockImplementation(async (commandName: string) => {
+        if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+          return {
+            sba: {
+              id: 'sba',
+              name: 'SBA',
+              fullName: 'SBA',
+              language: 'en',
+              editedStatus: 'edited',
+              lastSendReceiveDate: '2026-09-20T00:00:00Z',
+            },
+          };
+        }
+        return undefined;
+      });
+    }
+
+    it('looks up which projects cannot be opened once, however many triggers fire', async () => {
+      const mocks = createPickerMocks();
+      setUpOnlyUnsupportedProjects(mocks);
+
+      // Each run ends by logging its outcome, so this counts completed runs.
+      const finishedRuns = () =>
+        mocks.mockDebug.mock.calls.filter(([message]) =>
+          String(message).includes("unexpected outcome received: 'no-candidate'"),
+        ).length;
+
+      startDefaultProjectPicker(mocks.papi);
+      await vi.waitFor(() => expect(finishedRuns()).toBe(1));
+      mocks.fireSync({ isSyncing: false });
+      await vi.waitFor(() => expect(finishedRuns()).toBe(2));
+      mocks.fireSync({ isSyncing: false });
+      await vi.waitFor(() => expect(finishedRuns()).toBe(3));
+
+      expect(mocks.mockGetMetadataForAllProjects).toHaveBeenCalledTimes(1);
+      expect(mocks.mockSendCommand).not.toHaveBeenCalledWith(
+        'platformScriptureEditor.openScriptureEditor',
+        expect.anything(),
+      );
+    });
+
+    const sharedProjectsQueries = (mocks: PickerMocks) =>
+      mocks.mockSendCommand.mock.calls.filter(
+        ([commandName]) => commandName === 'paratextBibleSendReceive.getSharedProjects',
+      ).length;
+
+    /** Lets any run a trigger started finish, so a count that should not move has had the chance. */
+    const settle = () =>
+      new Promise((resolve) => {
+        setTimeout(resolve, 20);
+      });
+
+    it('does not ask for shared projects again when an empty editor opens or updates', async () => {
+      const mocks = createPickerMocks();
+      setUpOnlyUnsupportedProjects(mocks);
+
+      startDefaultProjectPicker(mocks.papi);
+      await vi.waitFor(() => expect(sharedProjectsQueries(mocks)).toBe(1));
+      mocks.fireWebViewOpen();
+      mocks.fireWebViewUpdate();
+      await settle();
+
+      expect(sharedProjectsQueries(mocks)).toBe(1);
+    });
+
+    it.each([
+      {
+        label: 'a sync ends',
+        fire: (mocks: PickerMocks) => mocks.fireSync({ isSyncing: false }),
+      },
+      {
+        label: 'the set of projects changes',
+        fire: (mocks: PickerMocks) => mocks.fireProjectsChanged(),
+      },
+      {
+        label: 'a project data provider factory registers',
+        fire: (mocks: PickerMocks) => {
+          mocks.fireNetworkObjectCreated('pdpFactory');
+          mocks.fireWebViewOpen();
+        },
+      },
+      {
+        // Opening a project records it as recent, which can give the next empty editor a candidate.
+        label: 'a project opens in the editor',
+        fire: (mocks: PickerMocks) =>
+          mocks.fireWebViewUpdate(SCRIPTURE_EDITOR_WEBVIEW_TYPE, 'other-project'),
+      },
+    ])('asks for shared projects again once $label', async ({ fire }) => {
+      const mocks = createPickerMocks();
+      setUpOnlyUnsupportedProjects(mocks);
+
+      startDefaultProjectPicker(mocks.papi);
+      await vi.waitFor(() => expect(sharedProjectsQueries(mocks)).toBe(1));
+      fire(mocks);
+
+      await vi.waitFor(() => expect(sharedProjectsQueries(mocks)).toBe(2));
+    });
+
+    it('keeps reacting to a change of projects that lands while a run is finding no candidate', async () => {
+      const mocks = createPickerMocks();
+      setUpOnlyUnsupportedProjects(mocks);
+      let releaseSharedProjects: () => void = () => {};
+      const sendCommand = mocks.mockSendCommand.getMockImplementation();
+      mocks.mockSendCommand.mockImplementationOnce(
+        (commandName: string) =>
+          new Promise((resolve) => {
+            releaseSharedProjects = () => resolve(sendCommand?.(commandName));
+          }),
+      );
+
+      startDefaultProjectPicker(mocks.papi);
+      await vi.waitFor(() => expect(sharedProjectsQueries(mocks)).toBe(1));
+      mocks.fireProjectsChanged();
+      releaseSharedProjects();
+      await vi.waitFor(() =>
+        expect(mocks.mockDebug).toHaveBeenCalledWith(
+          "Default active project picker: unexpected outcome received: 'no-candidate'",
+        ),
+      );
+      mocks.fireWebViewOpen();
+
+      await vi.waitFor(() => expect(sharedProjectsQueries(mocks)).toBe(2));
+    });
+
+    it('looks up again once the set of projects changes', async () => {
+      const mocks = createPickerMocks();
+      setUpOnlyUnsupportedProjects(mocks);
+
+      startDefaultProjectPicker(mocks.papi);
+      await vi.waitFor(() => expect(mocks.mockGetMetadataForAllProjects).toHaveBeenCalledTimes(1));
+      mocks.fireProjectsChanged();
+
+      await vi.waitFor(() => expect(mocks.mockGetMetadataForAllProjects).toHaveBeenCalledTimes(2));
+    });
+
+    it('looks up again after a failed lookup once the set of projects changes, without waiting out the retry delay', async () => {
+      // Fake timers keep the clock from reaching the retry delay; `vi.waitFor` advances it by
+      // only its polling interval.
+      vi.useFakeTimers();
+      try {
+        const mocks = createPickerMocks();
+        setUpOnlyUnsupportedProjects(mocks);
+        mocks.mockGetMetadataForAllProjects.mockRejectedValueOnce(new Error('boom'));
+
+        startDefaultProjectPicker(mocks.papi);
+        await vi.waitFor(() =>
+          expect(mocks.mockGetMetadataForAllProjects).toHaveBeenCalledTimes(1),
+        );
+        mocks.fireProjectsChanged();
+
+        await vi.waitFor(() =>
+          expect(mocks.mockGetMetadataForAllProjects).toHaveBeenCalledTimes(2),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   it('warns and keeps running when openDefaultActiveProjectIfApplicable throws unexpectedly', async () => {
@@ -5191,3 +5688,316 @@ describe('hasPendingCommentTextChanged', () => {
     expect(hasPendingCommentTextChanged(pending, docWith(text))).toBe(expected);
   });
 });
+
+// #region unsupported projects
+
+/** A PAPI whose project lookup answers with the functions a test hands it. */
+function stubPapi(projectLookup: {
+  getMetadataForProject?: (projectId: string) => Promise<unknown>;
+  getMetadataForAllProjects?: (options: { includeProjectIds: string[] }) => Promise<unknown>;
+}) {
+  // Must cast since the mock only includes the papi properties these helpers use.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return {
+    projectLookup,
+    logger: { warn: vi.fn(), debug: vi.fn(), info: vi.fn() },
+  } as unknown as typeof PapiBackend;
+}
+
+describe('getProjectUnsupportedReason', () => {
+  it('returns the reason on the project’s metadata', async () => {
+    const papi = stubPapi({
+      getMetadataForProject: async () => ({
+        id: 'SBA',
+        projectInterfaces: [],
+        pdpFactoryInfo: {},
+        unsupportedReason: '%project_unsupported_studyBibleAdditions%',
+      }),
+    });
+    await expect(getProjectUnsupportedReason(papi, 'SBA')).resolves.toBe(
+      '%project_unsupported_studyBibleAdditions%',
+    );
+  });
+
+  it('treats a project with no reason as openable', async () => {
+    const papi = stubPapi({
+      getMetadataForProject: async () => ({ id: 'P1', projectInterfaces: [], pdpFactoryInfo: {} }),
+    });
+    await expect(getProjectUnsupportedReason(papi, 'P1')).resolves.toBe('');
+  });
+
+  it('treats a reason the lookup left present but undefined as openable', async () => {
+    const papi = stubPapi({
+      getMetadataForProject: async () => ({
+        id: 'P1',
+        projectInterfaces: [],
+        pdpFactoryInfo: {},
+        unsupportedReason: undefined,
+      }),
+    });
+    await expect(getProjectUnsupportedReason(papi, 'P1')).resolves.toBe('');
+  });
+
+  it('treats a failed lookup as openable, so an error never locks a user out', async () => {
+    const papi = stubPapi({
+      getMetadataForProject: async () => {
+        throw new Error('No project found');
+      },
+    });
+    await expect(getProjectUnsupportedReason(papi, 'P1')).resolves.toBe('');
+  });
+
+  // An interface only C#'s Paratext factory serves makes the lookup wait for that factory, whose
+  // answer carries the reason, rather than settling on whichever factory registered first.
+  it('asks for the project through the interface every Paratext project serves', async () => {
+    const getMetadataForProject = vi.fn(async () => ({
+      id: 'P1',
+      projectInterfaces: [],
+      pdpFactoryInfo: {},
+    }));
+    const papi = stubPapi({ getMetadataForProject });
+
+    await getProjectUnsupportedReason(papi, 'P1');
+
+    expect(getMetadataForProject).toHaveBeenCalledWith(
+      'P1',
+      'platformScripture.scriptureEditPermissions',
+    );
+  });
+});
+
+describe('buildScriptureEditorWebViewState', () => {
+  const SBA_REASON = '%project_unsupported_studyBibleAdditions%';
+
+  /** A lookup that answers every project with `unsupportedReason`. */
+  function papiReporting(unsupportedReason: string | undefined) {
+    return stubPapi({
+      getMetadataForProject: vi.fn(async (id: string) => ({
+        id,
+        projectInterfaces: [],
+        pdpFactoryInfo: {},
+        unsupportedReason,
+      })),
+    });
+  }
+
+  it('gives an unsupported project its reason, keeping the rest of the state', async () => {
+    const state = await buildScriptureEditorWebViewState(papiReporting(SBA_REASON), 'SBA', {
+      isReadOnly: false,
+    });
+
+    expect(state).toEqual({
+      isReadOnly: false,
+      [UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY]: SBA_REASON,
+    });
+  });
+
+  it('clears a reason saved in the layout once the project can be opened', async () => {
+    const state = await buildScriptureEditorWebViewState(papiReporting(undefined), 'P1', {
+      [UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY]: SBA_REASON,
+    });
+
+    expect(state[UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY]).toBe('');
+  });
+
+  it('treats a failed lookup as openable, even over a saved reason', async () => {
+    const papi = stubPapi({
+      getMetadataForProject: async () => {
+        throw new Error('No project found');
+      },
+    });
+
+    const state = await buildScriptureEditorWebViewState(papi, 'P1', {
+      [UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY]: SBA_REASON,
+    });
+
+    expect(state[UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY]).toBe('');
+  });
+
+  it('looks nothing up for a view with no project', async () => {
+    const papi = papiReporting(SBA_REASON);
+
+    const state = await buildScriptureEditorWebViewState(papi, undefined, {});
+
+    expect(state[UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY]).toBe('');
+    expect(papi.projectLookup.getMetadataForProject).not.toHaveBeenCalled();
+  });
+});
+
+describe('createUnsupportedProjectIdsCache', () => {
+  function unsupportedMetadata() {
+    return [
+      { id: 'SBA', projectInterfaces: [], pdpFactoryInfo: {}, unsupportedReason: '%x%' },
+      { id: 'P1', projectInterfaces: [], pdpFactoryInfo: {} },
+      { id: 'P2', projectInterfaces: [], pdpFactoryInfo: {}, unsupportedReason: undefined },
+    ];
+  }
+
+  /** A lookup that answers only for the ids it is asked about, as the lookup service does. */
+  function filteringLookup() {
+    return vi.fn(async ({ includeProjectIds }: { includeProjectIds: string[] }) =>
+      unsupportedMetadata().filter((m) => includeProjectIds.includes(m.id)),
+    );
+  }
+
+  it('names its candidates in one lookup, and reports which of them cannot be opened', async () => {
+    // Naming them is what lets the lookup service wait for a factory that has not registered yet.
+    const getMetadataForAllProjects = filteringLookup();
+    const cache = createUnsupportedProjectIdsCache(stubPapi({ getMetadataForAllProjects }));
+
+    await expect(cache.getUnsupportedProjectIds(['SBA', 'P1'])).resolves.toEqual(new Set(['SBA']));
+    expect(getMetadataForAllProjects.mock.calls).toEqual([[{ includeProjectIds: ['SBA', 'P1'] }]]);
+  });
+
+  it('reports only the candidates it was asked about', async () => {
+    const cache = createUnsupportedProjectIdsCache(
+      stubPapi({ getMetadataForAllProjects: async () => unsupportedMetadata() }),
+    );
+
+    await expect(cache.getUnsupportedProjectIds(['P1'])).resolves.toEqual(new Set());
+  });
+
+  it('returns normalized ids, so a candidate id in another case still finds its match', async () => {
+    // The metadata id is lower-cased here, unlike the upper-cased ids the data provider sends, so
+    // the result is normalized by the cache itself rather than by whoever built the metadata.
+    const cache = createUnsupportedProjectIdsCache(
+      stubPapi({
+        getMetadataForAllProjects: async () => [
+          { id: 'abc123', projectInterfaces: [], pdpFactoryInfo: {}, unsupportedReason: '%x%' },
+        ],
+      }),
+    );
+
+    const unsupported = await cache.getUnsupportedProjectIds(['abc123']);
+
+    expect(unsupported).toEqual(new Set([normalizeProjectId('abc123')]));
+  });
+
+  it('looks nothing up when there are no candidates', async () => {
+    const getMetadataForAllProjects = vi.fn(async () => unsupportedMetadata());
+    const cache = createUnsupportedProjectIdsCache(stubPapi({ getMetadataForAllProjects }));
+
+    await expect(cache.getUnsupportedProjectIds([])).resolves.toEqual(new Set());
+    expect(getMetadataForAllProjects).not.toHaveBeenCalled();
+  });
+
+  it('treats a failed lookup as every project openable', async () => {
+    const cache = createUnsupportedProjectIdsCache(
+      stubPapi({
+        getMetadataForAllProjects: async () => {
+          throw new Error('boom');
+        },
+      }),
+    );
+
+    await expect(cache.getUnsupportedProjectIds(['SBA'])).resolves.toEqual(new Set());
+  });
+
+  it('shares one lookup between concurrent calls naming the same project', async () => {
+    const getMetadataForAllProjects = filteringLookup();
+    const cache = createUnsupportedProjectIdsCache(stubPapi({ getMetadataForAllProjects }));
+
+    await Promise.all([
+      cache.getUnsupportedProjectIds(['SBA']),
+      cache.getUnsupportedProjectIds(['sba']),
+    ]);
+
+    expect(getMetadataForAllProjects).toHaveBeenCalledTimes(1);
+  });
+
+  it('looks up only the candidates it holds no answer for, until invalidated', async () => {
+    const getMetadataForAllProjects = filteringLookup();
+    const cache = createUnsupportedProjectIdsCache(stubPapi({ getMetadataForAllProjects }));
+
+    await cache.getUnsupportedProjectIds(['SBA']);
+    await expect(cache.getUnsupportedProjectIds(['SBA', 'P1'])).resolves.toEqual(new Set(['SBA']));
+    await cache.getUnsupportedProjectIds(['P1', 'SBA']);
+    expect(getMetadataForAllProjects.mock.calls).toEqual([
+      [{ includeProjectIds: ['SBA'] }],
+      [{ includeProjectIds: ['P1'] }],
+    ]);
+
+    cache.invalidate();
+    await cache.getUnsupportedProjectIds(['SBA']);
+    expect(getMetadataForAllProjects).toHaveBeenCalledTimes(3);
+  });
+
+  describe('after a failed lookup', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    function failOnceThenSucceed() {
+      return vi
+        .fn()
+        .mockRejectedValueOnce(new Error('boom'))
+        .mockResolvedValue(unsupportedMetadata());
+    }
+
+    it('answers every project openable, and looks nothing up again before the retry delay has passed', async () => {
+      const getMetadataForAllProjects = failOnceThenSucceed();
+      const cache = createUnsupportedProjectIdsCache(stubPapi({ getMetadataForAllProjects }));
+
+      await expect(cache.getUnsupportedProjectIds(['SBA'])).resolves.toEqual(new Set());
+      vi.advanceTimersByTime(UNSUPPORTED_PROJECT_IDS_RETRY_DELAY_MS - 1);
+
+      await expect(cache.getUnsupportedProjectIds(['SBA'])).resolves.toEqual(new Set());
+      expect(getMetadataForAllProjects).toHaveBeenCalledTimes(1);
+    });
+
+    it('looks up again once the retry delay has passed, and keeps a success from then on', async () => {
+      const getMetadataForAllProjects = failOnceThenSucceed();
+      const cache = createUnsupportedProjectIdsCache(stubPapi({ getMetadataForAllProjects }));
+      await cache.getUnsupportedProjectIds(['SBA']);
+
+      vi.advanceTimersByTime(UNSUPPORTED_PROJECT_IDS_RETRY_DELAY_MS);
+      await expect(cache.getUnsupportedProjectIds(['SBA'])).resolves.toEqual(new Set(['SBA']));
+      expect(getMetadataForAllProjects).toHaveBeenCalledTimes(2);
+
+      vi.advanceTimersByTime(UNSUPPORTED_PROJECT_IDS_RETRY_DELAY_MS * 2);
+      await cache.getUnsupportedProjectIds(['SBA']);
+      expect(getMetadataForAllProjects).toHaveBeenCalledTimes(2);
+    });
+
+    it('looks up again straight away once invalidated', async () => {
+      const getMetadataForAllProjects = failOnceThenSucceed();
+      const cache = createUnsupportedProjectIdsCache(stubPapi({ getMetadataForAllProjects }));
+      await cache.getUnsupportedProjectIds(['SBA']);
+
+      cache.invalidate();
+
+      await expect(cache.getUnsupportedProjectIds(['SBA'])).resolves.toEqual(new Set(['SBA']));
+      expect(getMetadataForAllProjects).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not let a failure from a lookup that invalidate superseded discard the newer answer', async () => {
+      let failSupersededLookup: (error: Error) => void = () => {};
+      const getMetadataForAllProjects = vi
+        .fn()
+        .mockImplementationOnce(
+          () =>
+            new Promise((_resolve, reject) => {
+              failSupersededLookup = reject;
+            }),
+        )
+        .mockResolvedValue(unsupportedMetadata());
+      const cache = createUnsupportedProjectIdsCache(stubPapi({ getMetadataForAllProjects }));
+      const superseded = cache.getUnsupportedProjectIds(['SBA']);
+      cache.invalidate();
+      await cache.getUnsupportedProjectIds(['SBA']);
+
+      failSupersededLookup(new Error('late failure'));
+      await superseded;
+      vi.advanceTimersByTime(UNSUPPORTED_PROJECT_IDS_RETRY_DELAY_MS);
+
+      await expect(cache.getUnsupportedProjectIds(['SBA'])).resolves.toEqual(new Set(['SBA']));
+      expect(getMetadataForAllProjects).toHaveBeenCalledTimes(2);
+    });
+  });
+});
+
+// #endregion

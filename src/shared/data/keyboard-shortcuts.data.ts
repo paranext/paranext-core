@@ -627,44 +627,47 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   // natural way is expected editor behavior, not a keyboard shortcut.
   {
     id: 'scripture-text-grid-open-chapter-context',
-    purpose: 'Open the chapter-context view for the focused cell',
+    purpose: "Open or close the chapter-context view from the focused row's name control",
     category: 'View',
-    context: 'Scripture Text Grid web view',
+    context: 'Scripture Text Grid web view (the cell itself focused, not a control inside it)',
     keys: { macOS: '⏎ / ␣', windows: 'Enter / Space', linux: 'Enter / Space' },
     locations: [
-      'extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid.component.tsx',
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/resource-cell-view.component.tsx',
     ],
   },
   {
     id: 'scripture-text-grid-move-between-cells',
-    purpose: 'Move to the next or previous cell in the Scripture Text Grid',
+    purpose: 'Move to the next or previous control in the Scripture Text Grid',
     category: 'Navigation',
     context: 'Scripture Text Grid web view',
     keys: { macOS: '⇥ / ⇧⇥', windows: 'Tab / Shift+Tab', linux: 'Tab / Shift+Tab' },
     locations: [
-      'extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid.component.tsx',
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/resource-cell-view.component.tsx',
     ],
   },
   {
     id: 'scripture-text-grid-close-chapter-context',
     purpose: 'Close the chapter-context view',
     category: 'View',
-    context: 'Scripture Text Grid web view',
+    context: 'Scripture Text Grid web view (not inside an open window or menu, which closes first)',
     keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
-    locations: ['extensions/src/platform-scripture-editor/src/scripture-text-grid.web-view.tsx'],
+    locations: [
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/chapter-context-escape.utils.ts',
+    ],
   },
   {
     id: 'scripture-text-grid-reorder-cell',
-    // The reorder grip is rendered only by the header-band layout, which is the chapter and grid
-    // views; the verse view hangs its resource name inline and shows no grip, so there is nothing
-    // to focus there and the arrow keys never reach the handler. Tracked as PT-4184 follow-up.
-    purpose: 'Reorder the focused Scripture Text Grid column one position (chapter and grid views)',
+    // One handler serves every view: ↑ and ← move toward the start, ↓ and → toward the end. The
+    // vertical pair suits the verse view's stacked rows, the horizontal pair the side-by-side columns.
+    purpose:
+      'Move the resource whose reorder grip has focus one position toward the start or the end',
     category: 'View',
     context: 'Scripture Text Grid web view',
     keys: {
-      macOS: '← / →',
-      windows: '← / →',
-      linux: '← / →',
+      macOS: '↑ / ↓ / ← / →',
+      windows: '↑ / ↓ / ← / →',
+      linux: '↑ / ↓ / ← / →',
     },
     locations: [
       'extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid.component.tsx',

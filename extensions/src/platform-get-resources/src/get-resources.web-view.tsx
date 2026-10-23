@@ -14,6 +14,7 @@ import {
   ResourceAction,
 } from './get-resources.component';
 import { getInternetBlockedNotification } from './internet-block-notification.utils';
+import { openResourceFrom } from './open-home-item';
 
 type InstallInfo = {
   dblEntryUid: string;
@@ -101,11 +102,19 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
 
   const [selectedLanguages, setSelectedLanguages] = useWebViewState<string[]>('languageFilter', []);
 
-  const openResource = useCallback(
-    (projectId: string) =>
-      papi.commands.sendCommand('platformScriptureEditor.openResourceViewer', projectId),
-    [],
-  );
+  // The same as Home's Open: in Simple mode the middle column keeps the project, and the resource
+  // goes to its reference tab instead. Repeat opens of a resource still opening are ignored, as in
+  // Home: each would queue another show behind it.
+  const openingResourceIdsRef = useRef(new Set<string>());
+  const openResource = useCallback(async (projectId: string) => {
+    if (openingResourceIdsRef.current.has(projectId)) return;
+    openingResourceIdsRef.current.add(projectId);
+    try {
+      await openResourceFrom('Get Resources', projectId);
+    } finally {
+      openingResourceIdsRef.current.delete(projectId);
+    }
+  }, []);
 
   // When no languages are selected on the first render of this component, set default selection to
   // languages that have resources installed

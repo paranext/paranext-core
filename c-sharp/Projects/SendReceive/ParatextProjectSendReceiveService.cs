@@ -71,18 +71,33 @@ internal class ParatextProjectSendReceiveService(
     public SyncActivityState GetSyncActivity() => new(false, Array.Empty<string>());
 
     /// <summary>
-    /// Whether <paramref name="scrText"/> holds local changes Send/Receive has not sent — see
-    /// <see cref="UnsyncedChangesRule"/>. Local repository reads only (an <c>hg status</c> and a tip
-    /// lookup); never contacts the server. Returns <see langword="null"/> when the repository cannot
-    /// be read (no Mercurial, a broken repository), so the caller can keep its previous answer; the
-    /// failure is logged once per project until a later check of that project succeeds. Read by
-    /// <see cref="UnsyncedChangesTracker"/>.
+    /// Whether <paramref name="scrText"/> holds local changes this user's Send/Receive would send —
+    /// see <see cref="UnsyncedChangesRule"/>. Local repository reads only (an <c>hg status</c> and a
+    /// tip lookup); never contacts the server. Read by <see cref="UnsyncedChangesTracker"/>.
     /// </summary>
+    /// <returns>
+    /// <see langword="true"/> when the project has uncommitted changes, or local commits made since
+    /// the last successful sync. <see langword="false"/> when it has none, when it is not shared, or
+    /// when the current user has no role that may change the project (see remarks).
+    /// <see langword="null"/> when the repository cannot be read (no Mercurial, a broken
+    /// repository), so the caller can keep its previous answer; the failure is logged once per
+    /// project until a later check of that project succeeds.
+    /// </returns>
+    /// <remarks>
+    /// Always <see langword="false"/> when the current user's role cannot change the project (an
+    /// Observer, or not a member): Send/Receive neither commits nor sends for such a user
+    /// (ParatextData's <c>VersionedText.ShareChanges</c> gates both on
+    /// <see cref="PermissionManager.HaveRoleNotObserver"/>), so anything waiting locally, such as
+    /// extension data written into the project's <c>shared</c> folder, could never be sent. The
+    /// role is read from the project's local user list, while Send/Receive decides from the member
+    /// list the server reports; the two can disagree after a role change made only on the server
+    /// (see the unsynced-changes ADR).
+    /// </remarks>
     public bool? HasUnsyncedLocalChanges(ScrText scrText)
     {
         try
         {
-            if (!scrText.IsProjectShared)
+            if (!scrText.IsProjectShared || !scrText.Permissions.HaveRoleNotObserver)
                 return false;
             bool hasUnsyncedChanges = ReadUnsyncedLocalChanges(scrText);
             _unsyncedCheckWarned.TryRemove(scrText.Guid.ToString(), out _);

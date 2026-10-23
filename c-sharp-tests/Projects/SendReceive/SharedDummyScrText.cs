@@ -12,15 +12,25 @@ namespace TestParanextDataProvider.Projects.SendReceive
     /// <c>HasPermissionsDefined</c>, and therefore <c>IsProjectShared</c>, true). Same shape as
     /// <c>NonAdminSharedScrText</c> in <c>DeleteBooksServiceTests</c>.
     /// </summary>
+    /// <param name="currentUserRole">The role of <see cref="RegistrationInfo.DefaultUser"/> on the
+    /// project, or <see langword="null"/> for a project the current user is not a member of.</param>
     [ExcludeFromCodeCoverage]
-    internal sealed class SharedDummyScrText : DummyScrText
+    internal sealed class SharedDummyScrText(UserRoles? currentUserRole = null) : DummyScrText
     {
-        private readonly SharedPermissionManager _permissions = new();
+        private readonly SharedPermissionManager _permissions = new(currentUserRole);
 
         public override PermissionManager Permissions => _permissions;
 
         private sealed class SharedPermissionManager : PermissionManager
         {
+            public SharedPermissionManager(UserRoles? currentUserRole)
+            {
+                if (currentUserRole is UserRoles role)
+                    Data.Users.Add(
+                        new InternalProjectUserAccess(RegistrationInfo.DefaultUser.Name, role)
+                    );
+            }
+
             protected override InternalProjectUserAccessData Data { get; set; } =
                 new InternalProjectUserAccessData();
         }

@@ -117,6 +117,10 @@ internal static class ChecklistService
             .ComparativeTextIds.Select(LocalParatextProjects.GetParatextProject)
             .ToList();
         List<ScrText> allScrTexts = [mainScrText, .. comparativeScrTexts];
+        // The checklist reads every column's text, so refuse if any project can't be opened. The
+        // network object reports this as ChecklistErrorCodes.ProjectOpenBlocked.
+        foreach (ScrText scrText in allScrTexts)
+            scrText.ThrowIfOpenBlocked();
 
         // Step 1: compute effective [startRef, endRef] (BHV-118) + VAL-003 adjustment.
         (VerseRef startRef, VerseRef endRef) = ResolveVerseRange(mainScrText, request.VerseRange);
@@ -724,6 +728,7 @@ internal static class ChecklistService
         HashSet<string> nonHeadingParagraphMarkers
     )
     {
+        // open-block: exempt — reached only via BuildChecklistData, which refuses every column's project
         List<UsfmToken> tokens = scrText.Parser.GetUsfmTokens(bookNum);
 
         var results = new List<ChecklistParagraphTokens>();

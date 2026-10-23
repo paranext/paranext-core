@@ -73,6 +73,8 @@ import {
   type LanguageStrings,
   LocalizeKey,
   normalizeProjectId,
+  PROJECT_OPEN_BLOCKED_FALLBACK_KEY,
+  PROJECT_OPEN_BLOCKED_FALLBACK_MESSAGE,
 } from 'platform-bible-utils';
 import { CSSProperties, useCallback, useMemo } from 'react';
 
@@ -84,6 +86,13 @@ const EMPTY_BOOK_IDS: string[] = [];
 
 // Stable identities so the selector does not re-partition or re-render on every toolbar render.
 const EMPTY_OPEN_TABS: never[] = [];
+
+// Stable key list for the common case of no unsupported project, so localization is not
+// resubscribed on every project-list refresh.
+const NO_UNSUPPORTED_REASON_KEYS: LocalizeKey[] = [];
+
+// Joins localize keys into one comparable value; no key contains a line break.
+const UNSUPPORTED_REASON_KEY_SEPARATOR = '\n';
 
 // The two buckets the toolbar's grouping partitions into. Keys, not headings — the headings are
 // localized in `getSectionHeading`.
@@ -140,6 +149,7 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%projectPicker_search_placeholder%',
   '%projectPicker_no_results%',
   '%projectPicker_readOnly_label%',
+  PROJECT_OPEN_BLOCKED_FALLBACK_KEY,
 ];
 
 /**
@@ -167,6 +177,7 @@ const PICKER_STRING_FALLBACKS = {
   '%projectPicker_toolbar_trigger_label_shortNameOnly%': 'Select project, {shortName}',
   '%projectPicker_toolbar_trigger_label_empty%': 'Select project, no projects on this computer',
   '%projectPicker_toolbar_trigger_label_error%': 'Select project, {errorMessage}',
+  [PROJECT_OPEN_BLOCKED_FALLBACK_KEY]: PROJECT_OPEN_BLOCKED_FALLBACK_MESSAGE,
 } as const;
 
 type PickerStringKey = keyof typeof PICKER_STRING_FALLBACKS;
@@ -204,6 +215,7 @@ function resolvePickerStrings(localizedStrings: LanguageStrings): Record<PickerS
     '%projectPicker_toolbar_trigger_label_error%': resolve(
       '%projectPicker_toolbar_trigger_label_error%',
     ),
+    [PROJECT_OPEN_BLOCKED_FALLBACK_KEY]: resolve(PROJECT_OPEN_BLOCKED_FALLBACK_KEY),
   };
 }
 
@@ -306,20 +318,58 @@ function ToolbarProjectSelector({
 
   const strings = useMemo(() => resolvePickerStrings(localizedStrings), [localizedStrings]);
 
+  // Reasons are localize keys chosen by each project's factory, so localize exactly the ones present.
+  // Every refresh brings a new `projects` list, so the key list is memoized on the set of keys:
+  // a new key list would resubscribe to localization.
+  const joinedUnsupportedReasonKeys = [...new Set(projects.map((p) => p.unsupportedReason))]
+    .filter((k): k is LocalizeKey => !!k && isLocalizeKey(k))
+    .sort()
+    .join(UNSUPPORTED_REASON_KEY_SEPARATOR);
+  const unsupportedReasonKeys = useMemo(
+    () =>
+      joinedUnsupportedReasonKeys
+        ? joinedUnsupportedReasonKeys.split(UNSUPPORTED_REASON_KEY_SEPARATOR).filter(isLocalizeKey)
+        : NO_UNSUPPORTED_REASON_KEYS,
+    [joinedUnsupportedReasonKeys],
+  );
+  const [unsupportedReasonStrings, isUnsupportedReasonLoading] =
+    useLocalizedStrings(unsupportedReasonKeys);
+
+  // A disabled row always explains itself: a reason that is not a key, or that settles on its bare
+  // key (as a failed lookup can), shows the generic reason rather than nothing or the raw key.
+  // Nothing is shown while a real key is still loading, so the tooltip does not flash the generic
+  // text before the specific one.
+  const getDisabledReason = useCallback(
+    (unsupportedReason: string | undefined) => {
+      if (!unsupportedReason) return undefined;
+      if (!isLocalizeKey(unsupportedReason)) return strings[PROJECT_OPEN_BLOCKED_FALLBACK_KEY];
+      if (isUnsupportedReasonLoading) return undefined;
+      const localizedReason = unsupportedReasonStrings[unsupportedReason];
+      return localizedReason && !isLocalizeKey(localizedReason)
+        ? localizedReason
+        : strings[PROJECT_OPEN_BLOCKED_FALLBACK_KEY];
+    },
+    [strings, unsupportedReasonStrings, isUnsupportedReasonLoading],
+  );
+
   // `ProjectItem` and `ProjectSelectorProject` invert the meaning of `language`: the item's is a
   // BCP-47 tag and its `languageDisplayName` is the readable name, while the selector's `language`
   // is the readable name and `languageCode` is the tag. Mapping them straight across type-checks
   // and is wrong.
   const selectorProjects = useMemo<ProjectSelectorProject[]>(
     () =>
-      projects.map((project) => ({
-        id: project.id,
-        shortName: project.shortName,
-        fullName: project.fullName,
-        language: project.languageDisplayName,
-        languageCode: project.language,
-      })),
-    [projects],
+      projects.map((project) => {
+        return {
+          id: project.id,
+          shortName: project.shortName,
+          fullName: project.fullName,
+          language: project.languageDisplayName,
+          languageCode: project.language,
+          isDisabled: !!project.unsupportedReason,
+          disabledReason: getDisabledReason(project.unsupportedReason),
+        };
+      }),
+    [projects, getDisabledReason],
   );
 
   const recentIndex = useMemo(() => {
@@ -865,8 +915,8 @@ export function PlatformBibleToolbar() {
 
   // Home lists local projects alongside the send/receive server's projects that are not on this
   // machine yet — the "rest of my projects" this picker cannot reach, since its own list is built
-  // from local metadata only. Projects only: this footer is the way out of a project picker, so the
-  // read-only resources Home otherwise lists are never an answer to it.
+  // from local metadata only. Home starts on Paratext Projects: this footer is the way out of a
+  // project picker, so that is what it asks for, though the user can widen the filter from there.
   const showMoreProjects = useCallback(() => {
     openHome(true);
   }, [openHome]);

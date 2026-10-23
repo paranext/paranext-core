@@ -238,3 +238,31 @@ describe('SettingsTab project names', () => {
     expect(projectDataProviders.get).not.toHaveBeenCalled();
   });
 });
+
+describe('SettingsTab unsupported projects', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useIsProjectAutoSyncBlocked).mockReturnValue(false);
+  });
+
+  it('excludes a project that cannot be opened from the project list', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([
+      { id: 'projA', name: 'WEB', projectInterfaces: [], pdpFactoryInfo: {} },
+      {
+        id: 'projB',
+        name: 'SBA',
+        projectInterfaces: [],
+        pdpFactoryInfo: {},
+        unsupportedReason: '%project_unsupported_studyBibleAdditions%',
+      },
+    ]);
+    render(<SettingsTab />);
+
+    const trigger = await screen.findByRole('combobox', { name: PROJECTS_GROUP_LABEL });
+    await user.click(trigger);
+
+    expect(await screen.findByText('WEB')).toBeInTheDocument();
+    expect(screen.queryByText('SBA')).not.toBeInTheDocument();
+  });
+});
