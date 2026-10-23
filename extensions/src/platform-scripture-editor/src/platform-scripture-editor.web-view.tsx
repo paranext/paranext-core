@@ -566,12 +566,19 @@ function PlatformScriptureEditor({
    */
   const editingNoteSessionRefreshedAt = useRef<number | undefined>(undefined);
   /**
-   * `Date.now()` of the last user edit inside the footnotes pane's row editor. The pane applies its
-   * edits to the text as they are made, so it claims the text against incoming PDP updates the way
-   * the Scripture editor does — for a window after an edit, not for the life of the session (see
-   * `resolveEditingSessionActivity`).
+   * `Date.now()` of the last user edit made in this view (`undefined` until the first one): a LOCAL
+   * edit in the Scripture editor (stamped in {@link handleEditorialUsjChange} for `'local'`-source
+   * changes only — the same signal that schedules the debounced PDP save), or an edit in the
+   * footnotes pane's row editor, which applies its edits to the text as they are made. One stamp
+   * for both, because the user moves between them without anything in between being an edit:
+   * inserting a footnote puts the caret in its pane row, and clicking a row or the text moves it
+   * back and forth. `useEditorPdpSync` and `resolveEditingSessionActivity` hold incoming PDP
+   * updates back while focus is in either and this edit is within `EDITOR_OWNERSHIP_WINDOW_MS`.
+   * External applies never refresh it (see the stamp site in `handleEditorialUsjChange`); edits in
+   * the footnote popover do not either, since the popover applies nothing until Save and holds
+   * updates back for its whole session instead.
    */
-  const lastPaneNoteEditAt = useRef<number | undefined>(undefined);
+  const lastLocalEditTimestamp = useRef<number | undefined>(undefined);
 
   // The comment editor popover and the live anchor it is placed against
   const [showCommentEditor, setShowCommentEditor] = useState<boolean>(false);
@@ -3688,7 +3695,7 @@ function PlatformScriptureEditor({
    */
   const onFootnoteEditorNoteEdit = useCallback(() => {
     editingNoteSessionRefreshedAt.current = Date.now();
-    if (paneEditingIndexRef.current !== undefined) lastPaneNoteEditAt.current = Date.now();
+    if (paneEditingIndexRef.current !== undefined) lastLocalEditTimestamp.current = Date.now();
   }, []);
 
   // A note-editing session belongs to the chapter it was opened in: the note's editor key does not
@@ -4030,15 +4037,6 @@ function PlatformScriptureEditor({
     [saveUsjToPdpDebounced],
   );
 
-  /**
-   * `Date.now()` of the last LOCAL editor edit (`undefined` until the first one). Stamped in
-   * {@link handleEditorialUsjChange} for `'local'`-source changes only — the same signal that
-   * schedules the debounced PDP save — and read by `useEditorPdpSync`, whose
-   * `EDITOR_OWNERSHIP_WINDOW_MS` contract lets the focused editor defer incoming PDP updates only
-   * while a local edit is recent. External applies never refresh it (see the stamp site).
-   */
-  const lastLocalEditTimestamp = useRef<number | undefined>(undefined);
-
   const handleEditorialUsjChange = useCallback(
     (usj: Usj, ops?: DeltaOp[], source?: DeltaSource, insertedNodeKey?: string) => {
       // Stamp the last LOCAL edit — the recency signal behind useEditorPdpSync's
@@ -4225,8 +4223,9 @@ function PlatformScriptureEditor({
   // Lexical key and kills the session (live-observed: the popover's Save no-oping, the editor
   // "jumping to the top" mid-insert). A footnotes-pane session claims less. Its row editor saves as it goes, like the Scripture
   // editor, so it holds updates back only on the Scripture editor's terms: focus in the pane and an
-  // edit there within the ownership window. Past that, a differing update replaces the document and
-  // ends the session (`setEditorUsj`) rather than being overwritten by this view's older copy.
+  // edit in this view (the text or a pane row) within the ownership window. Past that, a differing
+  // update replaces the document and ends the session (`setEditorUsj`) rather than being
+  // overwritten by this view's older copy.
   // A note session past its staleness bound is the exception — that key is orphaned bookkeeping
   // from a popover that died without cleanup, and until the time bound existed it wedged sync
   // until the user happened to click another note caller. `resolveEditingSessionActivity` makes
@@ -4248,7 +4247,7 @@ function PlatformScriptureEditor({
               // The row editor keeps DOM focus while the window itself is away (`paneHasFocusRef`
               // does not: it tracks the visible caret), and its typing is what deferral protects.
               hasFocus: paneHasFocusRef.current || !!paneNoteEditorRef.current?.containsFocus(),
-              lastEditAtMs: lastPaneNoteEditAt.current,
+              lastEditAtMs: lastLocalEditTimestamp.current,
             }
           : undefined,
     });
