@@ -3835,3 +3835,66 @@ describe('React web view bootstrap teardown', () => {
     expect(unsubscribeUpdateWebView).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent icon opt-in', () => {
+  const definition = {
+    id: 'icon-web-view',
+    webViewType: 'test.iconWebView',
+    iconUrl: 'a.svg',
+    isIconMonochrome: true,
+  };
+
+  it('clears isIconMonochrome when iconUrl is updated without it', async () => {
+    const { mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent } = await import(
+      '@renderer/services/web-view.service-shard'
+    );
+
+    const merged = mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent(definition, {
+      iconUrl: 'b.png',
+    });
+
+    expect(merged?.iconUrl).toBe('b.png');
+    expect(merged?.isIconMonochrome).toBeUndefined();
+  });
+
+  it('keeps isIconMonochrome when the update restates it', async () => {
+    const { mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent } = await import(
+      '@renderer/services/web-view.service-shard'
+    );
+
+    const merged = mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent(definition, {
+      iconUrl: 'b.svg',
+      isIconMonochrome: true,
+    });
+
+    expect(merged?.isIconMonochrome).toBe(true);
+  });
+
+  it('leaves isIconMonochrome alone when iconUrl is not in the update', async () => {
+    const { mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent } = await import(
+      '@renderer/services/web-view.service-shard'
+    );
+
+    const merged = mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent(definition, {
+      title: 'x',
+    });
+
+    expect(merged?.isIconMonochrome).toBe(true);
+  });
+});
+
+describe('saveTabInfoBase', () => {
+  it('strips isTabIconMonochrome', async () => {
+    const { saveTabInfoBase } = await import('@renderer/services/web-view.service-shard');
+
+    const saved = saveTabInfoBase({
+      id: 'icon-tab',
+      tabType: TAB_TYPE_WEBVIEW,
+      tabTitle: 'Icon tab',
+      content: undefined,
+      isTabIconMonochrome: true,
+    });
+
+    expect('isTabIconMonochrome' in saved).toBe(false);
+  });
+});

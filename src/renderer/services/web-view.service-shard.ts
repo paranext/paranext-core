@@ -2134,6 +2134,7 @@ export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo {
     tabTitle,
     tabTooltip,
     tabIconUrl,
+    isTabIconMonochrome,
     content,
     minWidth,
     minHeight,
@@ -2270,6 +2271,16 @@ export function mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent
       didUpdateAnyProperties = true;
     }
   });
+  // An icon opt-in must never outlive the icon it was set for: a new icon that doesn't restate it
+  // may be full-colour, and drawing that as a single-colour shape would erase it
+  if (
+    'iconUrl' in updateInfo &&
+    !('isIconMonochrome' in updateInfo) &&
+    updatedWebViewDefinition.isIconMonochrome !== undefined
+  ) {
+    updatedWebViewDefinition.isIconMonochrome = undefined;
+    didUpdateAnyProperties = true;
+  }
   return didUpdateAnyProperties ? updatedWebViewDefinition : undefined;
 }
 

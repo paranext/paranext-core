@@ -104,6 +104,17 @@ type WebViewDefinitionBase = {
    */
   iconUrl?: string;
   /**
+   * Whether the image at {@link WebViewDefinitionBase.iconUrl} is a single-colour shape. When
+   * `true`, the platform draws the icon's shape in the tab's current text colour, so it follows the
+   * theme and the tab's selection state without the WebView having to swap images. Leave unset for
+   * a full-colour icon.
+   *
+   * Ignored when there is no `iconUrl`. Setting `iconUrl` through `updateWebViewDefinition` without
+   * also setting this clears it, so a later full-colour icon is never drawn as a single-colour
+   * shape.
+   */
+  isIconMonochrome?: boolean;
+  /**
    * Name of the tab (or a localizeKey for the name that will automatically be localized) for the
    * WebView
    */
@@ -474,6 +485,7 @@ export function findFirstEditorWebViewDefinition(
 // `web-view.service.ts` -> `mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent`
 export const WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS = [
   'iconUrl',
+  'isIconMonochrome',
   'title',
   'tooltip',
   'projectId',

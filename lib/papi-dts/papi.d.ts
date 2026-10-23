@@ -442,6 +442,17 @@ declare module 'shared/models/web-view.model' {
      */
     iconUrl?: string;
     /**
+     * Whether the image at {@link WebViewDefinitionBase.iconUrl} is a single-colour shape. When
+     * `true`, the platform draws the icon's shape in the tab's current text colour, so it follows the
+     * theme and the tab's selection state without the WebView having to swap images. Leave unset for
+     * a full-colour icon.
+     *
+     * Ignored when there is no `iconUrl`. Setting `iconUrl` through `updateWebViewDefinition` without
+     * also setting this clears it, so a later full-colour icon is never drawn as a single-colour
+     * shape.
+     */
+    isIconMonochrome?: boolean;
+    /**
      * Name of the tab (or a localizeKey for the name that will automatically be localized) for the
      * WebView
      */
@@ -776,6 +787,7 @@ declare module 'shared/models/web-view.model' {
    */
   export const WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS: readonly [
     'iconUrl',
+    'isIconMonochrome',
     'title',
     'tooltip',
     'projectId',
@@ -4796,6 +4808,11 @@ declare module 'shared/models/docking-framework.model' {
      * Defaults to the software's standard logo.
      */
     tabIconUrl?: string;
+    /**
+     * Whether the image at {@link TabInfo.tabIconUrl} is a single-colour shape that should be drawn
+     * in the tab's current text colour. Ignored when there is no `tabIconUrl`.
+     */
+    isTabIconMonochrome?: boolean;
     /**
      * Text to show (or a localizeKey that will automatically be localized) on the title bar of the
      * tab

@@ -528,3 +528,21 @@ describe('the iframe asks for its tab to be focused when it loads', () => {
     expect(mocks.setFocus).not.toHaveBeenCalled();
   });
 });
+
+describe('updateWebViewTab', () => {
+  test('carries isIconMonochrome onto the tab as isTabIconMonochrome', async () => {
+    const { updateWebViewTab } = await import('./web-view.component');
+
+    const tab = updateWebViewTab(RESTORED_TAB, {
+      id: SAVED_WEB_VIEW_ID,
+      webViewType: SAVED_WEB_VIEW_TYPE,
+      contentType: WEB_VIEW_CONTENT_TYPE.REACT,
+      content: '',
+      iconUrl: 'a.svg',
+      isIconMonochrome: true,
+    });
+
+    expect(tab.tabIconUrl).toBe('a.svg');
+    expect(tab.isTabIconMonochrome).toBe(true);
+  });
+});
