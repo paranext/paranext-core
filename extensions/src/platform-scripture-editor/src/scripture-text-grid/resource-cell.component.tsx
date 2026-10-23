@@ -26,6 +26,7 @@ import {
   NO_VERSES_TO_SHOW_KEY,
   RESOURCE_CELL_STRING_KEYS,
   ResourceCellView,
+  type ResourceCellViewProps,
   type ZoomMenuLabels,
 } from './resource-cell-view.component';
 import type { ResourceZoomController } from './use-resource-content-zoom.hook';
@@ -76,7 +77,7 @@ type ResourceCellProps = {
   /** Localized zoom menu copy, passed straight to the view. */
   zoomMenuLabels?: ZoomMenuLabels;
   /**
-   * When true, show a focusable reorder-handle grip in the header (reorder logic lives in the
+   * When true, show a focusable reorder-handle grip before the name (reorder logic lives in the
    * parent).
    */
   showDragHandle?: boolean;
@@ -88,7 +89,13 @@ type ResourceCellProps = {
   onReorderKeyDown?: (event: KeyboardEvent) => void;
   /** Makes the cell's header band the drag source for a reorder; passed straight to the view. */
   headerDrag?: { onDragStart: (event: DragEvent) => void; onDragEnd: () => void };
-};
+} & Pick<
+  ResourceCellViewProps,
+  | 'onDisclosureActivate'
+  | 'disclosureAccessibleName'
+  | 'isDisclosureExpanded'
+  | 'disclosureControlsId'
+>;
 
 /**
  * One resource, the focused chapter or verse. Reuses the resource-text-panel render path: fetch the
@@ -112,6 +119,10 @@ export function ResourceCell({
   reorderHint,
   onReorderKeyDown,
   headerDrag,
+  onDisclosureActivate,
+  disclosureAccessibleName,
+  isDisclosureExpanded,
+  disclosureControlsId,
 }: ResourceCellProps) {
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
 
@@ -374,6 +385,10 @@ export function ResourceCell({
           localizedStrings={localizedStrings}
         />
       }
+      onDisclosureActivate={onDisclosureActivate}
+      disclosureAccessibleName={disclosureAccessibleName}
+      isDisclosureExpanded={isDisclosureExpanded}
+      disclosureControlsId={disclosureControlsId}
       editor={
         <Editorial
           ref={editorRef}

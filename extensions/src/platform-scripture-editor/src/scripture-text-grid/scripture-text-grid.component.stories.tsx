@@ -12,6 +12,10 @@ import {
 } from './resource-cell-view.component';
 import type { ResourceZoomController } from './use-resource-content-zoom.hook';
 import type { GridResource } from './grid-resources.utils';
+// The verse rows' grip and name positioning. The real app loads it through
+// `scripture-text-grid.web-view.scss`; Storybook loads story files lazily, so these stories import it
+// themselves rather than relying on another story file having been opened first.
+import '../_scripture-text-grid-verse.scss';
 
 /**
  * The Scripture Text Grid row: one cell per shown resource, all synced to the active scrRef, laid
