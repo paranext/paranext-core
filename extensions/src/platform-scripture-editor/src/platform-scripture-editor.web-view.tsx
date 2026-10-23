@@ -124,6 +124,8 @@ import { PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } 
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
 import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet.hook';
 import { useChapterCopyLimit } from './copy-limit/use-chapter-copy-limit.hook';
+import { isInsertCommentChord, runPaletteSessionKeyDown } from './insert-comment-chord.util';
+import { startPendingComment } from './start-pending-comment.util';
 import { useIsProjectDataLoading } from './copy-limit/use-is-project-data-loading.hook';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import {
@@ -1868,49 +1870,45 @@ function PlatformScriptureEditor({
       anchoredText = readCommentRangeText(validation.range, editorUsjCorrected);
     }
 
-    // Try to find the selected text element to anchor the popover to. No rendered editor content
-    // means there is nothing to anchor to — bail out before recording the pending range or setting
-    // the highlight annotation below, not just before opening the popover: either one left behind
-    // with no popover open to clear it would strand a highlight in the text with no way to remove
-    // it, and would misdirect the next comment actually saved to this stale range.
-    const editorContainer = document.querySelector<HTMLElement>('.usfm');
-    if (!editorContainer) return;
-
-    pendingCommentAnnotationRange.current = {
-      range: annotationRange,
-      verseRef: scrRef,
-      anchoredText,
-    };
-
-    // Create a temporary annotation to highlight the selected text
-    editorRef.current?.setAnnotation(
-      annotationRange,
-      ANNOTATION_TYPE_TRANSLATOR_COMMENT,
-      PENDING_COMMENT_ANNOTATION_ID,
-    );
-
-    // Position the popover near the annotation. Use the browser's selection to get the bounding
-    // rect of the selected text
-    const domSelection = window.getSelection();
-    if (domSelection && domSelection.rangeCount > 0) {
-      const range = domSelection.getRangeAt(0).cloneRange();
-      commentPopoverAnchor.setSource(
-        createPendingCommentAnchorSource(
-          range,
-          () =>
-            editorRef.current?.getAnnotationRanges(
-              ANNOTATION_TYPE_TRANSLATOR_COMMENT,
-              PENDING_COMMENT_ANNOTATION_ID,
-            ) ?? [],
-          editorContainer,
+    startPendingComment(document, {
+      recordPendingRange: () => {
+        pendingCommentAnnotationRange.current = {
+          range: annotationRange,
+          verseRef: scrRef,
+          anchoredText,
+        };
+      },
+      // A temporary annotation to highlight the selected text
+      highlightPendingRange: () =>
+        editorRef.current?.setAnnotation(
+          annotationRange,
+          ANNOTATION_TYPE_TRANSLATOR_COMMENT,
+          PENDING_COMMENT_ANNOTATION_ID,
         ),
-      );
-    } else {
-      // Fallback to center of editor viewport
-      commentPopoverAnchor.setSource(createPendingCommentCenterAnchorSource(editorContainer));
-    }
-
-    setShowCommentEditor(true);
+      // Position the popover near the annotation. Use the browser's selection to get the bounding
+      // rect of the selected text
+      anchorPopover: (editorContainer) => {
+        const domSelection = window.getSelection();
+        if (domSelection && domSelection.rangeCount > 0) {
+          const range = domSelection.getRangeAt(0).cloneRange();
+          commentPopoverAnchor.setSource(
+            createPendingCommentAnchorSource(
+              range,
+              () =>
+                editorRef.current?.getAnnotationRanges(
+                  ANNOTATION_TYPE_TRANSLATOR_COMMENT,
+                  PENDING_COMMENT_ANNOTATION_ID,
+                ) ?? [],
+              editorContainer,
+            ),
+          );
+        } else {
+          // Fallback to center of editor viewport
+          commentPopoverAnchor.setSource(createPendingCommentCenterAnchorSource(editorContainer));
+        }
+      },
+      openCommentEditor: () => setShowCommentEditor(true),
+    });
   }, [scrRef, canUserCreateComments, isSyncBlocked, notifySyncEditBlocked, commentPopoverAnchor]);
 
   /**
@@ -1959,56 +1957,6 @@ function PlatformScriptureEditor({
       );
     },
     [projectId, localizedStrings, isReadOnlyEffective, endPaneNoteEdit],
-  );
-
-  const options = useMemo<EditorOptions>(
-    () => ({
-      isReadonly: isReadOnlyEffective,
-      structureProtectionMode,
-      hasSpellCheck: false,
-      nodes: nodeOptions,
-      textDirection: textDirectionEffective,
-      markerMenuTrigger: '\\',
-      view: viewOptions,
-      styleInfo,
-      markerSettleDelayMs,
-      hasExternalUI: true,
-      contextMenu: createInsertContextMenuItems(
-        localizedStrings,
-        {
-          insertFootnote: runInsertFromContextMenu(
-            () => insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertFootnote),
-            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertFootnote].editDescription,
-          ),
-          insertCrossReference: runInsertFromContextMenu(
-            () =>
-              insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertCrossReference),
-            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertCrossReference]
-              .editDescription,
-          ),
-          insertEndnote: runInsertFromContextMenu(
-            () => insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertEndnote),
-            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertEndnote].editDescription,
-          ),
-          insertComment: insertCommentAtCurrentSelection,
-        },
-        { isReadOnly: isReadOnlyEffective, canUserCreateComments, isSyncBlocked },
-      ),
-    }),
-    [
-      isReadOnlyEffective,
-      structureProtectionMode,
-      canUserCreateComments,
-      isSyncBlocked,
-      textDirectionEffective,
-      nodeOptions,
-      viewOptions,
-      styleInfo,
-      markerSettleDelayMs,
-      localizedStrings,
-      insertCommentAtCurrentSelection,
-      insertNoteAtCurrentSelection,
-    ],
   );
 
   // listen to messages from the web view controller
@@ -2664,20 +2612,6 @@ function PlatformScriptureEditor({
   // insert a footnote/cross-reference, and for
   // Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at selection
   useEffect(() => {
-    /**
-     * Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux). Read by BOTH listeners below:
-     * the capture one claims it while a palette session is open, the bubble one acts on it
-     * otherwise.
-     */
-    const isInsertCommentChord = (event: KeyboardEvent) =>
-      isMac
-        ? event.metaKey &&
-          event.altKey &&
-          // In some cases, Mac interprets Option+M as 'µ', so check both 'm' just in case
-          (event.key.toLowerCase() === 'm' || event.key.toLowerCase() === 'µ')
-        : (event.ctrlKey && event.altKey && event.key.toLowerCase() === 'm') ||
-          (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'n');
-
     // CAPTURE phase: the Standard-view `\`/Enter marker palettes must run BEFORE Lexical's own
     // root-element keydown listener. Lexical dispatches KEY_ENTER_COMMAND synchronously from that
     // listener, so a window BUBBLE-phase handler runs too late — the paragraph has already split
@@ -2710,23 +2644,11 @@ function PlatformScriptureEditor({
         const session = paletteSession.current;
 
         if (session) {
-          // Decided BEFORE the table runs: the table treats this chord as an ordinary chord —
-          // dismiss the palette, decline the key — and a declined key keeps propagating with the
-          // session already cleared, so the bubble-phase handler below would insert a comment
-          // anyway. The dismissal's refocus then lands on the editor and pulls focus straight back
-          // out of the comment box the user is typing in.
-          //
-          // Claimed, so the chord only closes the palette. That is also what it does once the
-          // palette HAS focus, where the keystroke goes to the renderer and never reaches this web
-          // view at all — so the pre-focus window and the focused case now behave the same.
-          const closesPaletteOnly = isInsertCommentChord(event);
-          // Through the ref so this listener and the palette's forwarded keys provably run the
-          // same handler (and so this effect needs no dependency on it).
-          runPaletteSessionKeyRef.current(event);
-          if (closesPaletteOnly) {
-            event.preventDefault();
-            event.stopPropagation();
-          }
+          // Claims the insert-comment chord, so it only closes the palette rather than also
+          // reaching `handleKeyDown` below. Through the ref so this listener and the palette's
+          // forwarded keys provably run the same handler (and so this effect needs no dependency on
+          // it).
+          runPaletteSessionKeyDown(event, isMac, (key) => runPaletteSessionKeyRef.current(key));
           return;
         }
 
@@ -2793,11 +2715,11 @@ function PlatformScriptureEditor({
         }
       }
 
-      if (isInsertCommentChord(event)) {
+      if (isInsertCommentChord(event, isMac)) {
         // Nothing here excludes an open marker palette: the capture-phase listener above claims
         // this chord while a session is open, so a palette closes and this never runs. A check
         // here could not do it anyway — the table clears the session synchronously, ahead of this
-        // bubble phase.
+        // bubble phase. See `runPaletteSessionKeyDown`.
         event.preventDefault();
         event.stopPropagation();
         // Swallowed while the editor's right-click menu is up, like the Ctrl+T shortcuts below.
@@ -2972,10 +2894,59 @@ function PlatformScriptureEditor({
   // view's project changes only by reloading it, which remounts it.
   const isChapterTextLoading = useIsProjectDataLoading(chapterUsjSelector, isUsjFromPdpLoading);
   const copyLimit = useChapterCopyLimit(projectId, scrRef, isChapterTextLoading);
-  /** `options` with the chapter's copy limit, for every copy surface the editor's text reaches. */
-  const editorOptionsWithCopyLimit = useMemo<EditorOptions>(
-    () => ({ ...options, copyLimit }),
-    [options, copyLimit],
+  // Built here, below the copy limit, so the editor has one options object and every copy surface
+  // its text reaches — the editor, the footnote editors, the footnotes pane — gets the copy limit
+  // from it. There is no variant without the copy limit to pass by mistake.
+  const options = useMemo<EditorOptions>(
+    () => ({
+      isReadonly: isReadOnlyEffective,
+      structureProtectionMode,
+      hasSpellCheck: false,
+      nodes: nodeOptions,
+      textDirection: textDirectionEffective,
+      markerMenuTrigger: '\\',
+      view: viewOptions,
+      styleInfo,
+      markerSettleDelayMs,
+      hasExternalUI: true,
+      copyLimit,
+      contextMenu: createInsertContextMenuItems(
+        localizedStrings,
+        {
+          insertFootnote: runInsertFromContextMenu(
+            () => insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertFootnote),
+            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertFootnote].editDescription,
+          ),
+          insertCrossReference: runInsertFromContextMenu(
+            () =>
+              insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertCrossReference),
+            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertCrossReference]
+              .editDescription,
+          ),
+          insertEndnote: runInsertFromContextMenu(
+            () => insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertEndnote),
+            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertEndnote].editDescription,
+          ),
+          insertComment: insertCommentAtCurrentSelection,
+        },
+        { isReadOnly: isReadOnlyEffective, canUserCreateComments, isSyncBlocked },
+      ),
+    }),
+    [
+      isReadOnlyEffective,
+      structureProtectionMode,
+      canUserCreateComments,
+      isSyncBlocked,
+      textDirectionEffective,
+      nodeOptions,
+      viewOptions,
+      styleInfo,
+      markerSettleDelayMs,
+      localizedStrings,
+      insertCommentAtCurrentSelection,
+      insertNoteAtCurrentSelection,
+      copyLimit,
+    ],
   );
   // What the failure in hand IS, independent of what is on screen. Parsed once per failure, and
   // deliberately not keyed on the reference: the same held error is re-read on every navigation, and
@@ -3821,7 +3792,7 @@ function PlatformScriptureEditor({
         onClose={closePaneFootnoteEditorFromInside}
         onNoteEdit={onFootnoteEditorNoteEdit}
         scrRef={scrRef}
-        editorOptions={editorOptionsWithCopyLimit}
+        editorOptions={options}
         defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}
         localizedStrings={localizedStrings}
         parentEditorRef={editorRef}
@@ -3833,7 +3804,7 @@ function PlatformScriptureEditor({
       closePaneFootnoteEditorFromInside,
       onFootnoteEditorNoteEdit,
       scrRef,
-      editorOptionsWithCopyLimit,
+      options,
       localizedStrings,
       footnoteMarkerPalette,
     ],
@@ -4740,7 +4711,7 @@ function PlatformScriptureEditor({
               ref={editorRef}
               scrRef={scrRef}
               onScrRefChange={setScrRefNoScroll}
-              options={editorOptionsWithCopyLimit}
+              options={options}
               logger={logger}
               onUsjChange={isReadOnlyEffective ? undefined : handleEditorialUsjChange}
               onSelectionChange={handleSelectionChange}
@@ -5051,7 +5022,7 @@ function PlatformScriptureEditor({
                 // beside it shows a spinner.
                 isLoading={!liveEditorUsj && usjFromPdp === defaultUsj}
                 zoomAreaLabel={localizedStrings[FOOTNOTES_ZOOM_AREA_LABEL_KEY]}
-                copyLimit={editorOptionsWithCopyLimit.copyLimit}
+                copyLimit={copyLimit}
               >
                 {/* Render the editor inside the container decorations without re-mounting on re-parent */}
                 <OutPortal node={editorPortalNode} />
@@ -5095,7 +5066,7 @@ function PlatformScriptureEditor({
             onClose={onFootnoteEditorClose}
             onNoteEdit={onFootnoteEditorNoteEdit}
             scrRef={scrRef}
-            editorOptions={editorOptionsWithCopyLimit}
+            editorOptions={options}
             defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}
             localizedStrings={localizedStrings}
             parentEditorRef={editorRef}

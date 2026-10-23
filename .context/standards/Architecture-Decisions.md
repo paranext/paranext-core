@@ -9187,6 +9187,41 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   keeps showing the old wording.
 - **Source:** PT-4810.
 
+## adr-tests-exercise-behavior-not-source-text: Tests check what code does, not what its source text says
+
+- **Date:** 2026-10-22
+- **Status:** Accepted
+- **Context:** A pattern had spread across several authors: a test reads a production `.ts`/`.tsx`
+  file with `readFileSync` and asserts substrings or regexes in it — "the guard comes before the
+  open", "the app is wrapped in the boundary", "this file imports only the logger" — usually because
+  the code lived in a web view or entry point that could not be mounted. Such a test fails on a
+  reformat, rename or helper extraction, and passes on wrong behavior (a guard in a comment or a dead
+  branch, two strings in the right order that do not run in that order). Each one also became the
+  precedent its successor cited.
+- **Decision:** A test exercises the behavior it protects: a pure function or a function with
+  injected steps extracted from the call site, a component rendered with Testing Library, the real
+  function behind a narrow test seam, or an e2e step for wiring only the running app shows. An
+  import boundary is a lint rule, and two values that must match across bundles are compared by
+  importing both. Reading files stays fine where the file itself is the subject: data (JSON,
+  localized strings, manifests), stylesheets, built output, cross-language parity that cannot share
+  an import, and build-tooling invariants. The rule and its replacements are in `Testing-Guide.md`
+  ("Reading production source as text").
+- **Alternatives:** **(a) Keep source-reading tests, made whitespace-insensitive or AST-based** —
+  rejected: an AST still checks the code's shape, not its behavior, and a moved call passes it with
+  the bug back. **(b) Cover the wiring only by e2e** — rejected as the default: slower, and most of
+  these guards protected a decision that a unit test reaches directly once it is extracted.
+- **Consequences:** Code that a test could only reach by reading it gets a small extraction or seam
+  (for example `startPendingComment`, `runPaletteSessionKeyDown`, `renderWebViewInErrorBoundary`,
+  `testingExtensionService.setAvailableExtensions`). Some source scans remain where no behavioral
+  test was reachable yet — the renderer's startup order (`index.startup-order.test.ts`), the
+  DOM-globals polyfill's position in `extension-host.ts`, and the Scripture editor's popover and
+  non-text-state zoom checks (`content-zoom-markers.contract.test.ts`) — each with a comment naming
+  the smallest real fix. The source checks that `adr-packaged-extensions-are-discovered` and
+  `adr-web-view-error-boundary-placement` describe are among those replaced: the packaged list is
+  now checked by calling `getInstalledExtensions`, and the web view mount site is the typed
+  `renderWebViewInErrorBoundary` rather than a `createElement` call inside the generated script.
+  Revisit if a whole category turns out to need source reading.
+
 ## adr-text-collection-resources-are-zoom-areas: Each Text Collection resource is its own content zoom area; a click scope and an area label let the platform target and name it
 
 - **Date:** 2026-09-24

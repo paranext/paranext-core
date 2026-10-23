@@ -3644,8 +3644,8 @@ describe('React web view bootstrap teardown', () => {
       // The `imports` block of the web view captures this from the parent before it deletes the parent
       registerWebViewRootById,
       createRoot: vi.fn(() => root),
-      React: { createElement: vi.fn(() => ({})) },
-      WebViewErrorBoundary: () => undefined,
+      // Stands in for the real mount, which renders the component inside its error boundary
+      renderWebViewInErrorBoundary: vi.fn((webViewRoot: typeof root) => webViewRoot.render()),
       papi: { webViews: { onDidUpdateWebView: vi.fn(() => unsubscribeUpdateWebView) } },
       getSavedWebViewDefinition: () =>
         canRender ? { id: 'wv-react', webViewType: 'test.type' } : undefined,
@@ -3716,6 +3716,19 @@ describe('React web view bootstrap teardown', () => {
     // A replaced document's root would otherwise keep rendering inside the parent's React, with
     // `window` now resolving to the replacement document's half-initialized globals
     expect(root.unmount).toHaveBeenCalledTimes(1);
+  });
+
+  test('mounts the web view component through the error boundary mount, with its saved definition', async () => {
+    const { root, iframeWindow } = runReactBootstrap(await openReactWebViewContent());
+
+    // Every React web view mounts here; a bootstrap that rendered the component itself would leave
+    // a render throw to blank the pane.
+    expect(iframeWindow.renderWebViewInErrorBoundary).toHaveBeenCalledWith(
+      root,
+      iframeWindow.webViewComponent,
+      expect.objectContaining({ id: 'wv-react', webViewType: 'test.type' }),
+    );
+    expect(root.render).toHaveBeenCalledTimes(1);
   });
 
   test('captures the root registration function before it deletes the parent window', async () => {

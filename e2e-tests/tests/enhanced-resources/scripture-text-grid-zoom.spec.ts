@@ -16,8 +16,8 @@
  *   seeds the new tab from the same memory a restart reads).
  *
  * Not covered here: an app restart (on the live check list), and that a level stored under the
- * retired `scriptureTextGrid.zoomByResourceId` state key has no effect — the source contract test
- * `resource-panels-content-zoom.contract.test.ts` pins that no grid file reads that key.
+ * retired `scriptureTextGrid.zoomByResourceId` state key has no effect — the unit tests of
+ * `useResourceContentZoom` (`use-resource-content-zoom.hook.test.ts`) pin that.
  *
  * Runnability: local only, headless on WSL, attached over CDP to a running app
  * (`playwright-cdp.config.ts`). The tests need two installed resources, given as

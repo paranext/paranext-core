@@ -22,21 +22,21 @@ function reloadWindow() {
 /**
  * Whether a render failure has reached the renderer root in this window's lifetime.
  *
- * Module scope rather than component state because the reader is `index.tsx`'s teardown, which runs
- * outside React. Never reset: a window whose tree has crashed once is not a window whose web view
- * state can be trusted to be complete, whatever it renders afterwards.
+ * Module scope rather than component state because the reader is the renderer's unload teardown,
+ * which runs outside React. Never reset: a window whose tree has crashed once is not a window whose
+ * web view state can be trusted to be complete, whatever it renders afterwards.
  */
 let rendererHasCrashed = false;
 
 /**
  * Whether this window's React tree has crashed.
  *
- * Read by the `beforeunload` teardown in `index.tsx`, which purges saved web view state for every
- * web view it did not see load. That purge is only correct once every web view HAS loaded, and a
- * tree that crashed partway through restoring tabs never got there - so an unload after a crash
- * would delete the saved state of every tab that had not been restored yet. A crashed window can
- * reach that unload deliberately, through the reload button below, so the teardown has to be told
- * to hold off.
+ * Read by `cleanupWebViewStateOnUnload`, the `beforeunload` teardown, which purges saved web view
+ * state for every web view it did not see load. That purge is only correct once every web view HAS
+ * loaded, and a tree that crashed partway through restoring tabs never got there - so an unload
+ * after a crash would delete the saved state of every tab that had not been restored yet. A crashed
+ * window can reach that unload deliberately, through the reload button below, so the teardown has
+ * to be told to hold off.
  */
 export function hasRendererCrashed(): boolean {
   return rendererHasCrashed;

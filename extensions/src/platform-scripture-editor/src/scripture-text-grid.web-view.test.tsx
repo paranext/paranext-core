@@ -389,6 +389,19 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+describe('content zoom', () => {
+  it('marks nothing around the grid body, so its header and View Options keep their size', async () => {
+    // Each cell of the grid marks its own text with its resource's area. A marker out here would
+    // scale the chrome, and the platform ignores the cells' markers nested inside it.
+    fallbackHookResult = readyResult(twoResourceSources([]), createFakeTextConnectionPdp());
+
+    const { container } = await renderWebView();
+
+    expect(screen.getByTestId('open-chapter-split')).toBeInTheDocument();
+    expect(container.querySelectorAll('[data-platform-content-zoom-root]')).toHaveLength(0);
+  });
+});
+
 describe('View Options disabled reason', () => {
   // Every provider status must produce a sentence. A status that falls through with no message
   // renders the TEXTS header over an empty, greyed-out panel with no explanation —

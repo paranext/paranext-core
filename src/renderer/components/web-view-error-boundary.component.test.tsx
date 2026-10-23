@@ -1,11 +1,16 @@
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { reloadWebView } from '@renderer/services/web-view.service-shard';
+import { WebViewProps } from '@shared/models/web-view.model';
 import { logger } from '@shared/services/logger.service';
 import { ReactNode } from 'react';
+import { createRoot, Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { WebViewErrorBoundary } from './web-view-error-boundary.component';
+import {
+  renderWebViewInErrorBoundary,
+  WebViewErrorBoundary,
+} from './web-view-error-boundary.component';
 
 vi.mock('@shared/services/logger.service', () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
@@ -155,5 +160,75 @@ describe('WebViewErrorBoundary', () => {
 
     expect(screen.getByText('This panel stopped working')).toBeInTheDocument();
     expect(screen.queryByText('An error was thrown.')).not.toBeInTheDocument();
+  });
+});
+
+describe('renderWebViewInErrorBoundary', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  /** Props as the bootstrap builds them: the saved definition plus the bound hooks */
+  function webViewPropsFor(id: string, webViewType: string, title: string): WebViewProps {
+    return {
+      id,
+      webViewType,
+      title,
+      useWebViewState: vi.fn(),
+      useWebViewScrollGroupScrRef: vi.fn(),
+      updateWebViewDefinition: vi.fn(),
+    };
+  }
+
+  it('renders the web view component with the props it was given', () => {
+    function WebView({ title }: WebViewProps) {
+      return <div>{`web view titled ${title}`}</div>;
+    }
+
+    act(() =>
+      renderWebViewInErrorBoundary(root, WebView, webViewPropsFor('id-1', 'testWebView', 'Editor')),
+    );
+
+    expect(screen.getByText('web view titled Editor')).toBeInTheDocument();
+  });
+
+  it('shows the crash view naming that web view instead of blanking the pane when it throws', () => {
+    act(() =>
+      renderWebViewInErrorBoundary(root, Boom, webViewPropsFor('id-1', 'testWebView', 'Editor')),
+    );
+
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.getByText('Localized message for Editor')).toBeInTheDocument();
+    const message = vi.mocked(logger.error).mock.calls[0][0];
+    expect(message).toContain('id-1');
+    expect(message).toContain('testWebView');
+  });
+
+  it('identifies the web view by the definition it renders, not the one it first mounted with', () => {
+    function WebView() {
+      return <div>healthy</div>;
+    }
+    act(() =>
+      renderWebViewInErrorBoundary(root, WebView, webViewPropsFor('id-1', 'firstType', 'First')),
+    );
+
+    // A definition update re-renders the same root
+    act(() =>
+      renderWebViewInErrorBoundary(root, Boom, webViewPropsFor('id-1', 'secondType', 'Second')),
+    );
+
+    expect(screen.getByText('Localized message for Second')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Reload' }));
+    expect(reloadWebView).toHaveBeenCalledWith('secondType', 'id-1');
   });
 });

@@ -58,9 +58,9 @@ import type { MutableRefObject } from 'react';
 // extension activation. See platform-scripture-editor.web-view.utils.ts's header.
 import type { DeltaOp, EditorRef } from '@eten-tech-foundation/platform-editor';
 import type { MarkerMenuItem } from 'platform-bible-react';
+import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 
-// Note: src/main/shutdown-tasks.ts has a copy of this value — keep them in sync.
-export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
+export { SCRIPTURE_EDITOR_WEBVIEW_TYPE };
 
 /**
  * Web view type of the Text Collection panel (the Scripture Text Grid) in Column 3.
