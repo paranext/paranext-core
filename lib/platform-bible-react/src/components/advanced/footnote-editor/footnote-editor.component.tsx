@@ -1589,6 +1589,32 @@ export default function FootnoteEditor({
       };
     }
 
+    // Enter inside the note is the `\fp` footnote-paragraph break only in the editor's marker-edit
+    // engine, which runs only when markers are editable. Here Enter (and Shift+Enter) would be
+    // Lexical's own paragraph split / line break: the split puts the caret in the scaffolding
+    // paragraph after the note, where whatever is typed next is dropped on Save (Save writes only
+    // the note). Until these views support `\fp`, Enter does nothing. Claimed in CAPTURE so
+    // Lexical's root-element listeners never see it; `beforeinput` covers the platforms and input
+    // methods that request the break without a keydown.
+    const isEditorFocusedWithoutMenu = () => {
+      const editorInput = getEditorInput();
+      if (!editorInput || document.activeElement !== editorInput) return false;
+      // The popover's own right-click menu takes Enter to run its highlighted item.
+      return !isEditorContextMenuOpenFor(editorParentRef.current);
+    };
+    const swallowEnter = (event: KeyboardEvent) => {
+      if (event.key !== 'Enter' || isImeCompositionKeyEvent(event)) return;
+      if (!isEditorFocusedWithoutMenu()) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    const swallowParagraphInput = (event: InputEvent) => {
+      if (event.inputType !== 'insertParagraph' && event.inputType !== 'insertLineBreak') return;
+      if (!isEditorFocusedWithoutMenu()) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
     const handleKeyDown = (event: KeyboardEvent) => {
       const editorInput = getEditorInput();
       // Shows the marker menu if it isn't already being shown and if the editor is currently selected
@@ -1607,9 +1633,13 @@ export default function FootnoteEditor({
     };
 
     document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keydown', swallowEnter, { capture: true });
+    document.addEventListener('beforeinput', swallowParagraphInput, { capture: true });
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keydown', swallowEnter, { capture: true });
+      document.removeEventListener('beforeinput', swallowParagraphInput, { capture: true });
     };
   }, [
     showMarkersMenu,
