@@ -2725,14 +2725,14 @@ async function admitContentToDock(operation: string): Promise<void> {
  *
  * Called by `retrieveWebViewContent` — both its tab-restore and extension-reload-re-fetch callers —
  * BEFORE `reloadWebView`, rather than threading a patience flag through
- * `reloadWebView`/`openOrReloadWebView` to wait internally,
- * because `openOrReloadWebView` reads the dock and mints the nonce the web view provider's
- * `getWebView` call relies on — and both are supposed to describe the dock as it is right now, not
- * as it was whenever the provider wait finally settles. Waiting here first keeps the window between
- * that read and the write it leads to at its ordinary short size regardless of how long the
- * provider takes, so a tab that leaves the dock mid-wait is simply gone by the time `reloadWebView`
- * reads it (bailing out before any controller is ever created) instead of leaving one orphaned by a
- * dock-membership check that only ever cleaned up a nonce.
+ * `reloadWebView`/`openOrReloadWebView` to wait internally, because `openOrReloadWebView` reads the
+ * dock and mints the nonce the web view provider's `getWebView` call relies on — and both are
+ * supposed to describe the dock as it is right now, not as it was whenever the provider wait
+ * finally settles. Waiting here first keeps the window between that read and the write it leads to
+ * at its ordinary short size regardless of how long the provider takes, so a tab that leaves the
+ * dock mid-wait is simply gone by the time `reloadWebView` reads it (bailing out before any
+ * controller is ever created) instead of leaving one orphaned by a dock-membership check that only
+ * ever cleaned up a nonce.
  */
 export async function waitForWebViewProviderToRegister(webViewType: string): Promise<void> {
   await webViewProviderService.getWebViewProvider(webViewType, true);

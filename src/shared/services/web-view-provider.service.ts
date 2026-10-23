@@ -184,11 +184,12 @@ const PATIENT_PROVIDER_WAIT_TOTAL_MS = 2 * 60 * 1000;
  * (e.g. a failed network-object snapshot read) propagates immediately, since retrying it won't
  * help.
  *
- * Used only for the tab-restore path (a saved or baked-into-the-default-layout tab materializing):
- * the tab already visually exists, so waiting quietly longer while its provider catches up is
- * exactly right. A fresh `openWebView()` request keeps the single, shorter
- * {@link PROVIDER_WAIT_ARM_MS} wait instead — silently resolving minutes later would be bad UX for
- * an action the user is actively waiting on.
+ * Used by `retrieveWebViewContent`'s callers — a tab-restore request (a saved or
+ * baked-into-the-default-layout tab materializing) and the `platform.onDidReloadExtensions`
+ * re-fetch for every open tab — since in both cases the tab already visually exists, so waiting
+ * quietly longer while its provider catches up is exactly right. A fresh `openWebView()` request
+ * keeps the single, shorter {@link PROVIDER_WAIT_ARM_MS} wait instead — silently resolving minutes
+ * later would be bad UX for an action the user is actively waiting on.
  */
 async function waitForWebViewProviderPatiently(
   webViewProviderObjectId: string,
@@ -225,8 +226,9 @@ async function waitForWebViewProviderPatiently(
  * @param webViewType Type of webview provider to get
  * @param shouldWaitPatiently Whether to keep re-arming the wait, allowing much longer overall for
  *   the provider's extension to finish activating, instead of failing after the default timeout.
- *   Set this only for a tab-restore request; leave it `false` (the default) for a fresh
- *   `openWebView()` request. Defaults to `false`
+ *   Set this for `retrieveWebViewContent`'s callers — a tab-restore request and the
+ *   extension-reload re-fetch; leave it `false` (the default) for a fresh `openWebView()` request.
+ *   Defaults to `false`
  * @returns Web view provider with the given name if one exists, undefined otherwise
  */
 async function getWebViewProvider(
