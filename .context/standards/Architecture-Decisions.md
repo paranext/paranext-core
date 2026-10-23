@@ -10363,6 +10363,48 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   stylesheet, but only the e2e spec checks the cascade against the real editor styles.
 - **Source:** PT-4544 (WI-18), serving TODD-NTH-1.1/1.2 and TODD-NTH-1.3's residual grip.
 
+## adr-wait-for-network-object-rejects-with-platform-error: A bounded network-object wait distinguishes a genuine timeout from any other failure via `PlatformError.code`, not by inspecting the rejection's shape
+
+- **Date:** 2026-10-20
+- **Status:** Accepted
+- **Context:** `waitForWebViewProviderPatiently` (see `adr-web-view-provider-retry-scoped-to-tab-restore`)
+  re-arms a bounded `waitForNetworkObject` wait, up to a total budget, when a webview provider's
+  owning extension may still be activating. Its catch block could not tell a genuine per-arm timeout
+  apart from any other rejection — `waitForNetworkObject` collapsed both a timeout and a failed
+  `getAllNetworkObjectDetails()` snapshot read into one plain rejection reason string, by design
+  (`AsyncVariable` tracks `hasTimedOut` internally, but that flag never survived past
+  `waitForNetworkObject`'s own return). A loop that cannot tell the two apart either retries blindly
+  on any failure — hammering the main process with repeated IPC round trips and delaying a real,
+  non-recoverable error by the full patient budget instead of surfacing it immediately — or cannot
+  retry at all.
+- **Decision:** `waitForNetworkObject` (`network-object-status.service.ts`) now rejects with a
+  `PlatformError` instead of a bare string: `code` is `DEADLINE_EXCEEDED` when `asyncVar.hasTimedOut`,
+  `UNKNOWN` otherwise. This widens `waitForNetworkObject`'s public contract
+  (`NetworkObjectStatusServiceType`), used by multiple call sites (scroll-group
+  service, startup-readiness, etc.), but needs no change to `AsyncVariable` itself: `waitForNetworkObject` already holds the
+  `asyncVar` instance and can read `hasTimedOut` before it returns, so the wrapping happens entirely
+  at this one layer. A caller that needs to distinguish the two reasons checks `isPlatformError(e) && e.code === DEADLINE_EXCEEDED`;
+  any other caller is unaffected, since each either propagates the rejection untouched or formats
+  it through `getErrorMessage`, which already treats a `PlatformError` as a first-class message
+  source.
+- **Alternatives:** **Widen `AsyncVariable`'s rejection type directly** — rejected: `AsyncVariable`
+  is a generic utility with multiple unrelated consumers (not all network-object waits), so changing its
+  shared type would ripple through call sites that have nothing to do with this decision, for no
+  benefit to them. **Inspect the rejection message string** (e.g. match `/^Timeout reached/`) —
+  rejected: it is a string the function itself generates, so any future wording change would
+  silently re-break the distinction, exactly the brittleness `PlatformError.code` exists to avoid.
+  **Leave the retry loop retrying on any rejection** — rejected (the status quo this decision fixes):
+  it hammers the main process with repeated IPC round trips on a fast-failing, non-timeout error, and
+  delays that error from surfacing in ~20s to up to the full patient budget.
+- **Consequences:** `waitForNetworkObject`'s documented contract now promises a `PlatformError`, not
+  a bare string, on rejection — a new caller should rely on that rather than re-deriving a reason
+  string. This establishes the pattern for any future bounded-retry loop in this codebase that needs
+  to distinguish "the operation can still be retried" from "this failure will recur no matter how
+  many times we ask": reject with a `PlatformError` carrying the right `code`, rather than inventing
+  a new out-of-band signal or parsing a message string.
+- **Source:** PT-4734 (PR #2901); architect input mid-review on using `PlatformError`'s `code` field
+  for this.
+
 ## adr-web-view-content-zoom-in-iframe-shortcuts: Content-zoom chords are handled by a platform-injected bootstrap inside each web view
 
 - **Date:** 2026-09-15
@@ -10658,6 +10700,80 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   The mount-time focus in `platform-panel.component.tsx` is unchanged, since a reload does not
   remount the panel.
 - **Source:** PT-4534 (review of #2847), found checking the Checks tab in the running app.
+
+## adr-web-view-provider-retry-scoped-to-tab-restore: A tab-restore request and the extension-reload re-fetch get the webview provider's patient retry; a fresh `openWebView()` keeps the shorter 20s failure
+
+- **Date:** 2026-10-20
+- **Status:** Accepted — the 2-minute budget is a bounded patch, not a full fix; see the deferred
+  alternative at the end of Alternatives.
+- **Context:** `getWebViewProvider` (`web-view-provider.service.ts`) waited a single, fixed 20
+  seconds for a webview provider's network object to register, then gave up permanently. On a cold
+  launch, several bundled extensions can take long enough that any tab whose provider did not
+  complete its registration in time could render as an empty placeholder — unconditionally mounted
+  at layout load on every Simple-mode launch, and so exposed to this race on every cold start.
+  `waitForNetworkObject` already listens for `onDidCreateNetworkObject`; the gap was that
+  `getWebViewProvider`'s single wait never re-armed after giving up. On Windows, it was confirmed
+  empirically that Windows Defender's real-time scan on a cold file read was responsible for the
+  extra delay, during `require()` rather than `activate()`.
+- **Decision:** `retrieveWebViewContent` (`web-view.component.tsx`) calls
+  `waitForWebViewProviderToRegister` (`web-view.service-shard.ts`) BEFORE calling `reloadWebView`.
+  Both of `retrieveWebViewContent`'s callers get this patience — a tab-restore request and the
+  `platform.onDidReloadExtensions` re-fetch for every open tab — since neither is a user action and
+  both can hit the same still-activating-extension race. `waitForWebViewProviderToRegister` re-arms
+  the same 20-second wait up to a 2-minute total budget before propagating the final rejection; once
+  it resolves, `reloadWebView` → `openOrReloadWebView` → `getWebViewProvider` run exactly as they
+  always have, with a single, shorter 20-second wait. Every other caller — a fresh `openWebView()`
+  request, the error boundary's retry, a PAPI-triggered reload — never calls
+  `waitForWebViewProviderToRegister` and so uses the shorter 20-second wait. Whether the
+  extension-reload re-fetch should keep this same scope, or be narrowed to only the tabs whose
+  extension is actually still activating, is a separate, still-open question. As of 2026-10-22, it
+  was confirmed reachable through `paratext-bible-internal-extensions`'
+  `paratext-bible-marketplace` extension's "Manage extensions" menu, which can fire
+  `onDidReloadExtensions` while other tabs are open. PT-4803 (PR #2908) removes that menu item for
+  unrelated product-priority reasons, so this question's near-term urgency is lower, but the
+  underlying race returns whenever the menu does, or sooner if another caller reaches
+  `manageExtensions` first. Tracked by PT-1993, the epic that would bring the menu back — not
+  PT-2274 ("Deploy Marketplace"), whose own subtasks are already closed, which makes it a poor
+  anchor for when this resurfaces despite being the more specific-sounding ticket.
+- **Alternatives:** Re-arm the wait uniformly inside `getWebViewProvider` itself, with no caller-side
+  opt-in — rejected because it would apply the same ~2-minute patience to a fresh, explicit
+  `openWebView()` request too: a Power-mode user choosing "Open X" from a menu would see that request
+  silently resolve minutes later instead of failing within 20 seconds, a regression in its own right,
+  not just a missed improvement. A genuinely missing or mistyped `webViewType` would also take up to
+  2 minutes to surface an error instead of 20 seconds, for every caller.
+
+  Thread a dedicated `shouldWaitPatientlyForProvider` flag through `reloadWebView` →
+  `openOrReloadWebView` → `getWebViewProvider` instead, so the patient wait runs inside that chain
+  rather than ahead of it — the first version of this fix took this approach (reusing the existing
+  `isReloadOfAnOpenWebView` flag for the same purpose was considered and rejected first, since the
+  error boundary's retry and `main/services/web-view.service-router.ts`'s pass-through of arbitrary
+  PAPI-triggered reloads both already set it for an unrelated reason, so reusing it would have
+  wrongly granted extended patience to those call shapes too) — replaced after review reproduced
+  two bugs that trace directly to applying patience AFTER `openOrReloadWebView` had already read
+  the dock and minted a nonce:
+  a tab that left the dock mid-wait left behind a `WebViewController` the extension host had by then
+  registered, which the existing "left the dock" bail-out never disposed (it only ever cleaned up the
+  nonce, the right fix for a provider that was never created, not one that was); and the saved
+  definition `reloadWebView` reads before the wait went stale across the stretched-out window, so a
+  change made to the tab's definition while it waited was silently reverted once the wait resolved
+  and the stale snapshot was finally written into the dock. Both bugs existed in the pre-PT-4734
+  code too, in a 20-second window narrow enough that nobody had hit them; widening that window to up
+  to 2 minutes made them easy to reproduce. Waiting entirely before the dock is ever read removes the
+  precondition for either: by the time `reloadWebView` runs, its own read-then-write sequence is back
+  to its original short size regardless of how long the provider took to register.
+
+  Replace the bounded budget with an open-ended, event-driven recovery instead — subscribe to
+  `onDidCreateNetworkObject` for this provider's id and re-run `retrieveWebViewContent` whenever it
+  fires, dropping the subscription when the tab closes, the way `use-project-picker-data.hook.ts`
+  already heals a late PDP factory — deferred, not rejected. It would close the residual gap the
+  2-minute budget still leaves (a provider that is merely slower than 2 minutes, not broken, still
+  leaves its tab permanently blank), but it removes the flag/budget/loop shape entirely, which is a
+  bigger change than this decision's scope; tracked separately rather than folded in here.
+- **Consequences:** Any future caller that wants this patience must call
+  `waitForWebViewProviderToRegister` itself before its own reload/open — nothing inherits it by
+  default. Revisit the 2-minute budget if cold-start activation times grow enough (more bundled
+  extensions, slower disks) to approach it.
+- **Source:** PT-4734.
 
 ## adr-window-activation-is-declared-not-inferred: Whether a new window activates is declared by its caller; focus state cannot answer it
 

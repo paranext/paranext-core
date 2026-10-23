@@ -2717,6 +2717,28 @@ async function admitContentToDock(operation: string): Promise<void> {
 }
 
 /**
+ * Waits, re-arming up to the full patient budget, for a web view provider whose owning extension
+ * may still be activating — see {@link webViewProviderService.getWebViewProvider}'s
+ * `shouldWaitPatiently` parameter. Resolves once the provider registers (discarding the value —
+ * callers that need the provider itself ask for it again, cheaply, once it is known to exist) or
+ * throws once the budget is spent.
+ *
+ * Called by `retrieveWebViewContent` — both its tab-restore and extension-reload-re-fetch callers —
+ * BEFORE `reloadWebView`, rather than threading a patience flag through
+ * `reloadWebView`/`openOrReloadWebView` to wait internally, because `openOrReloadWebView` reads the
+ * dock and mints the nonce the web view provider's `getWebView` call relies on — and both are
+ * supposed to describe the dock as it is right now, not as it was whenever the provider wait
+ * finally settles. Waiting here first keeps the window between that read and the write it leads to
+ * at its ordinary short size regardless of how long the provider takes, so a tab that leaves the
+ * dock mid-wait is simply gone by the time `reloadWebView` reads it (bailing out before any
+ * controller is ever created) instead of leaving one orphaned by a dock-membership check that only
+ * ever cleaned up a nonce.
+ */
+export async function waitForWebViewProviderToRegister(webViewType: string): Promise<void> {
+  await webViewProviderService.getWebViewProvider(webViewType, true);
+}
+
+/**
  * Creates a new WebView or reloads an existing one based on the saved WebView definition.
  *
  * @param savedWebViewDefinition Saved WebView definition to pass to
@@ -2757,8 +2779,11 @@ export async function openOrReloadWebView(
   // trace once it is over — recorded here, ahead of both, so the recheck further down can tell.
   const layoutLoadGenerationBeforeProvider = layoutLoadGeneration;
 
-  // Get the WebView definition from the webview provider
-  const webViewProvider = await webViewProviderService.getWebViewProvider(webViewType);
+  // Get the WebView definition from the webview provider. A caller who can afford to wait longer
+  // for a still-activating extension (tab restore) does so itself, via
+  // `waitForWebViewProviderToRegister`, before ever reaching here — see that function's doc for why
+  // the wait does not belong on this side of the dock read.
+  const webViewProvider = await webViewProviderService.getWebViewProvider(webViewType, false);
   if (!webViewProvider)
     throw new Error(`getWebView: Cannot find Web View Provider for webview type ${webViewType}`);
 
