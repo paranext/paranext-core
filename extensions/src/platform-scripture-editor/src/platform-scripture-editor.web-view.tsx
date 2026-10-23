@@ -690,7 +690,8 @@ function PlatformScriptureEditor({
    * processing can null the live selection outright; the palette commit paths restore this capture
    * (via {@link restoreSelectionIfLost}) so the apply still lands at the caret the user last saw.
    * Not merged into `currentSelectionRef` above: that ref mirrors every selection-change event
-   * INCLUDING the blur-path nulling this capture must survive.
+   * INCLUDING the blur-path nulling this capture must survive. Cleared when focus leaves while a
+   * paragraph marker is selected, since a marker selection has no caret to capture.
    */
   const lastFocusOutSelectionRef = useRef<SelectionRange | undefined>(undefined);
 
@@ -1832,7 +1833,8 @@ function PlatformScriptureEditor({
   // (where `formatPara` then needs a selection, so the retag would refuse) and a mouse click on a
   // marker palette, which renders outside this document. The single place every palette commit and
   // dismissal goes through, so one rule covers them all — as does every path that hands focus back
-  // to the text (see `returnFocusToScriptureText`). A no-op when the selection is intact.
+  // to the text (see `returnFocusToScriptureText`). A no-op when the selection is intact or a
+  // paragraph marker is selected.
   const restoreEditorSelection = useCallback(() => {
     restoreSelectionIfLost(editorRef.current, lastFocusOutSelectionRef.current);
   }, []);
@@ -2634,18 +2636,10 @@ function PlatformScriptureEditor({
     [webViewId, localizedStrings],
   );
 
-  // Capture the last live selection whenever focus leaves the main editor's input. A palette
-  // mouse click (the overlay lives in the renderer frame, outside this iframe's document) steals
-  // focus BEFORE the commit round-trips, and Lexical's blur-path selection processing can NULL
-  // the editor-state selection — after which focus() no longer restores the caret: with no
-  // selection it falls back to selecting the document END. focusout fires synchronously at the
-  // moment of the steal, ahead of that nulling, so the selection read here is the caret the user
-  // last saw; the palette commit paths restore it (restoreSelectionIfLost) when they find the
-  // live selection gone. Only overwrite when readable: if the selection is already gone at
-  // focusout, the previous capture is the best remaining approximation. Scoped to the main
-  // editor's own input inside editorContainerRef — the footnote popover's editor renders in a
-  // portal outside it and keeps its own capture. Cleared on book/chapter change: the capture is
-  // in content coordinates, so it must never be restored into different chapter content.
+  // Capture the caret whenever focus leaves the main editor's input, for `restoreEditorSelection`
+  // to put back (the hook explains why at focusout, and the selected-marker case). Scoped to the
+  // main editor's own input inside editorContainerRef: the footnote popover's editor renders in a
+  // portal outside it and keeps its own capture.
   useMarkerPaletteFocusOutCapture({
     containerRef: editorContainerRef,
     editorRef,
