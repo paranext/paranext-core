@@ -117,10 +117,11 @@ export class FirstRunPage {
    * write to finish. Selecting the option that is already checked writes nothing.
    *
    * The click timeout covers the step's own async settings read: the options render only once the
-   * internet settings data provider has answered.
+   * internet settings data provider has answered. Clicks the label, as
+   * {@link chooseUnrestrictedInternetAccess} does: it covers the row, radio button included.
    */
   async selectUnrestricted(): Promise<void> {
-    await this.unrestrictedOption.click({ timeout: 60_000 });
+    await this.dialog.locator('label', { hasText: /^Unrestricted$/ }).click({ timeout: 60_000 });
     await expect(this.unrestrictedOption).toBeChecked();
   }
 

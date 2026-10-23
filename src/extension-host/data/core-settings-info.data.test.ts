@@ -231,6 +231,7 @@ describe('settings layout', () => {
       'platform.firstRunComplete',
       'platform.syncOnStartup',
       'platform.internetUseChoiceAsked',
+      'platform.internetUseDisableSomeServicesChosen',
       'platform.requestTimeout',
       'platform.showRegistrationReminderOnStartup',
     ];

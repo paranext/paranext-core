@@ -86,8 +86,7 @@ export type RequestRegistryTokens = {
    *   the resource is not registered with this Registry)
    * - `UNAUTHENTICATED`: the user has no valid registration, or the Registry did not accept it
    * - `FAILED_PRECONDITION`: the user's Internet & connectivity settings block it: "Disable access to
-   *   some Bible translation services" is selected, or "Block internet when in sensitive locations"
-   *   is selected and this computer's location is restricted or could not be determined
+   *   some Bible translation services" or "Block internet when in sensitive locations" is selected
    * - `UNAVAILABLE`: there is no internet connection, reading the registration or the Internet &
    *   connectivity settings failed or took too long, or the Registry could not be reached or did
    *   not return a usable token; retrying later may help

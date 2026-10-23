@@ -653,6 +653,7 @@
   "%settings_platform_interfaceMode_description%": "Controla la complejidad de las funciones mostradas. 'simple' ofrece una experiencia simplificada; 'power' muestra funciones avanzadas.",
   "%settings_platform_interfaceMode_invalidValue%": "Modo de interfaz no válido. Los valores permitidos son 'simple' y 'power'.",
   "%settings_platform_interfaceMode_label%": "Modo de interfaz",
+  "%settings_platform_internetUseDisableSomeServicesChosen_label%": "Se eligió deshabilitar el acceso a algunos servicios de traducción bíblica",
   "%settings_platform_paratextDataLastRegistryDataCachedTimes_label%": "ParatextData Last Registry Data Cached Times (oculto - sin traducir intencionalmente)",
   "%settings_platform_ptxUtilsMementoData_label%": "PtxUtils Memento Data (oculto - sin traducir intencionalmente)",
   "%settings_platform_requestTimeout_description%": "Número de segundos que se permite para que las solicitudes internas se completen. Las solicitudes que tarden más de este tiempo serán abortadas. Establezca en 0 para nunca abortar solicitudes.",

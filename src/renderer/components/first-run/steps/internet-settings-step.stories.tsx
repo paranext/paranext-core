@@ -78,11 +78,21 @@ export const Loading: Story = {
 };
 
 /**
- * Settings loaded with "Disable access…" stored, as on a first startup. No option is selected and
- * Next stays disabled until the user picks one, so a stored value nobody chose is not presented as
- * their choice.
+ * Settings loaded with `Disabled` stored, as on a first startup. In Paratext 9 that value is
+ * "Disable all Internet access", which this app cannot honor yet, so that row shows selected under
+ * the not-supported banner, and Next stays disabled until the user picks an option.
  */
 export const Default: Story = {};
+
+/**
+ * Settings loaded with "Unrestricted" stored. No option is selected and Next stays disabled until
+ * the user picks one, so a stored value nobody chose is not presented as their choice.
+ */
+export const StoredUnrestricted: Story = {
+  beforeEach() {
+    return mockHooks({ value: { ...MOCK_SETTINGS, permittedInternetUse: 'Enabled' } });
+  },
+};
 
 /**
  * The user already chose "Unrestricted" this session and came back to the step: their choice shows

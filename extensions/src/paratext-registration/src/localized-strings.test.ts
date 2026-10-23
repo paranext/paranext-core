@@ -18,17 +18,20 @@ function readLocalizedStringsFile(): LocalizedStringsFile {
 const { localizedStrings, metadata } = readLocalizedStringsFile();
 
 /**
- * The internet-access option descriptions that name sync.
+ * Internet-access strings that replaced an earlier wording.
  *
- * Each key falls back to its superseded Send/Receive predecessor, so a dropped `es` value would
- * silently show the old wording instead of failing anywhere. This test is what notices.
+ * Each key falls back to its superseded predecessor, so a dropped `es` value would silently show
+ * the old wording instead of failing anywhere. This test is what notices.
  */
-const INTERNET_ACCESS_DETAIL_STRING_KEYS = [
+const INTERNET_ACCESS_REWORDED_STRING_KEYS = [
   '%paratextRegistration_description_internetUse_option_Enabled_details_2%',
   '%paratextRegistration_description_internetUse_option_VpnRequired_details_2%',
+  '%paratextRegistration_description_internetUse_option_DisableSomeServices_details%',
+  '%paratextRegistration_internetUse_unsupportedSelection_title_2%',
+  '%paratextRegistration_internetUse_unsupportedSelection_description_2%',
 ];
 
-describe.each(INTERNET_ACCESS_DETAIL_STRING_KEYS)('internet access detail %s', (key) => {
+describe.each(INTERNET_ACCESS_REWORDED_STRING_KEYS)('internet access string %s', (key) => {
   it('has an English string', () => {
     expect(localizedStrings.en[key]).toBeTruthy();
   });

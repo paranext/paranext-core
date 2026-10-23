@@ -1,6 +1,6 @@
 import { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
-import { useData, useLocalizedStrings } from '@papi/frontend/react';
+import { useData, useLocalizedStrings, useSetting } from '@papi/frontend/react';
 import { InternetSettings } from 'paratext-registration';
 import { getErrorMessage, isPlatformError, wait } from 'platform-bible-utils';
 import { useEffect, useRef, useState } from 'react';
@@ -86,6 +86,30 @@ globalThis.webViewComponent = function InternetSettingsComponent({
   // hidden while the first read is loading or errored.
   const [canEditServer, setCanEditServer] = useState(false);
 
+  // Whether a Disabled is the user's choice of "Disable access to some Bible translation services"
+  // rather than "Disable all Internet access" — staged and saved like the settings themselves.
+  const [hasChosenDisableSomeServices, setHasChosenDisableSomeServices] = useWebViewState(
+    'hasChosenDisableSomeServices',
+    false,
+  );
+  const [savedHasChosenDisableSomeServices, setSavedHasChosenDisableSomeServices] = useState<
+    boolean | undefined
+  >();
+  const [savedDisableSomeChoice, , , isLoadingDisableSomeChoice] = useSetting(
+    'platform.internetUseDisableSomeServicesChosen',
+    false,
+  );
+  const hasSyncedDisableSomeChoice = useRef(false);
+  // Synced once, as the settings are below. Unreadable counts as no: Disabled then shows as
+  // "Disable all", which asks the user to choose again rather than assuming the weaker option.
+  useEffect(() => {
+    if (isLoadingDisableSomeChoice || hasSyncedDisableSomeChoice.current) return;
+    hasSyncedDisableSomeChoice.current = true;
+    const hasChosen = savedDisableSomeChoice === true;
+    setHasChosenDisableSomeServices(hasChosen);
+    setSavedHasChosenDisableSomeServices(hasChosen);
+  }, [isLoadingDisableSomeChoice, savedDisableSomeChoice, setHasChosenDisableSomeServices]);
+
   // Once the staged draft + saved baseline have been synced from the first successful read.
   const hasSyncedFetch = useRef(false);
 
@@ -111,6 +135,7 @@ globalThis.webViewComponent = function InternetSettingsComponent({
 
   const isFormDisabled =
     savedInternetSettings === undefined ||
+    savedHasChosenDisableSomeServices === undefined ||
     saveState === SaveState.IsSaving ||
     saveState === SaveState.IsRestarting;
 
@@ -126,9 +151,18 @@ globalThis.webViewComponent = function InternetSettingsComponent({
     setSaveState(SaveState.IsSaving);
     setSaveError('');
     try {
+      // Before the value, so a saved Disabled is never shown as "Disable all" after the user chose
+      // "Disable access…".
+      await papi.settings.set(
+        'platform.internetUseDisableSomeServicesChosen',
+        hasChosenDisableSomeServices,
+      );
       await setData(internetSettings);
       // Update the saved baseline so Reset reflects the just-persisted state.
-      if (isMounted.current) setSavedInternetSettings(internetSettings);
+      if (isMounted.current) {
+        setSavedInternetSettings(internetSettings);
+        setSavedHasChosenDisableSomeServices(hasChosenDisableSomeServices);
+      }
       // Queue restart asynchronously so the UI can update first.
       (async () => {
         try {
@@ -166,6 +200,9 @@ globalThis.webViewComponent = function InternetSettingsComponent({
       saveError={saveError}
       onSaveAndRestart={handleSaveAndRestart}
       canEditServer={canEditServer}
+      hasChosenDisableSomeServices={hasChosenDisableSomeServices}
+      savedHasChosenDisableSomeServices={savedHasChosenDisableSomeServices ?? false}
+      onHasChosenDisableSomeServicesChange={setHasChosenDisableSomeServices}
     />
   );
 };

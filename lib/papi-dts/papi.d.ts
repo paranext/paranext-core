@@ -6602,10 +6602,12 @@ declare module 'papi-shared-types' {
      *
      * Forget first-run progress and restart into the first-run wizard, in Simple mode, as a new
      * user — or a Paratext 9 user launching Platform.Bible for the first time — would see it. Also
-     * clears the orientation tour's completion and whether the user was asked for an internet-use
-     * choice (`platform.internetUseChoiceAsked`), and turns `platform.syncOnStartup` and
-     * `platform.showRegistrationReminderOnStartup` back on. Works in installed builds: press F12
-     * and run `await papi.commands.sendCommand('platform.resetFirstRun')` in the console.
+     * clears the orientation tour's completion, whether the user was asked for an internet-use
+     * choice (`platform.internetUseChoiceAsked`) and whether they chose "Disable access to some
+     * Bible translation services" (`platform.internetUseDisableSomeServicesChosen`), and turns
+     * `platform.syncOnStartup` and `platform.showRegistrationReminderOnStartup` back on. Works in
+     * installed builds: press F12 and run `await
+     * papi.commands.sendCommand('platform.resetFirstRun')` in the console.
      *
      * @param options What to do with the Paratext registration; see {@link ResetFirstRunOptions}
      * @experimental This command is unstable and may change or disappear without notice
@@ -6829,6 +6831,15 @@ declare module 'papi-shared-types' {
      * (default) means the next Power-mode startup checks.
      */
     'platform.internetUseChoiceAsked': boolean;
+    /**
+     * Whether the saved internet use `Disabled` is the user's choice of "Disable access to some
+     * Bible translation services". Hidden; every internet-use choice saved in the first-run wizard
+     * or the Internet & connectivity settings sets it to whether that choice was `Disabled`.
+     * `false` (default) means a saved `Disabled` came from elsewhere — Paratext 9, where it means
+     * "Disable all Internet access", or the startup migration — so it is shown as that option,
+     * which the app does not support yet. Meaningless while the saved value is not `Disabled`.
+     */
+    'platform.internetUseDisableSomeServicesChosen': boolean;
   }
   /**
    * Names for each user setting available on the papi.
@@ -10408,8 +10419,7 @@ declare module 'shared/models/request-registry-tokens-privilege.model' {
      *   the resource is not registered with this Registry)
      * - `UNAUTHENTICATED`: the user has no valid registration, or the Registry did not accept it
      * - `FAILED_PRECONDITION`: the user's Internet & connectivity settings block it: "Disable access to
-     *   some Bible translation services" is selected, or "Block internet when in sensitive locations"
-     *   is selected and this computer's location is restricted or could not be determined
+     *   some Bible translation services" or "Block internet when in sensitive locations" is selected
      * - `UNAVAILABLE`: there is no internet connection, reading the registration or the Internet &
      *   connectivity settings failed or took too long, or the Registry could not be reached or did
      *   not return a usable token; retrying later may help

@@ -119,6 +119,7 @@ async function resetFirstRun(options?: ResetFirstRunOptions): Promise<void> {
   await settingsService.set('platform.syncOnStartup', true);
   await settingsService.set('platform.showRegistrationReminderOnStartup', true);
   await settingsService.set('platform.internetUseChoiceAsked', false);
+  await settingsService.set('platform.internetUseDisableSomeServicesChosen', false);
   // Not switched to Simple mode now: in Power mode that would close every secondary window with a
   // Simple-mode close sync, and the quit would then sync every open editor's project instead of
   // following the Power-mode schedule.
