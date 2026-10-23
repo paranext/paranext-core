@@ -95,6 +95,9 @@ export interface ScheduledCaretRestore {
   cancel: () => void;
 }
 
+/** USFM between two places on either side of a line break and nothing else. */
+const LINE_BREAK_ONLY_REGEX = /^[^\S\n]*\n\s*$/;
+
 /**
  * `location`, with the one alias the location model allows spelled the canonical way: a position at
  * the end of a text that a marker follows is that marker's own location.
@@ -116,10 +119,11 @@ function canonicalLocation(usj: Usj, location: UsjDocumentLocation): UsjDocument
 }
 
 /**
- * Whether two locations in `usj` are the same place: equal once each is spelled canonically, or at
- * the same position in the USFM the document writes. The editor reports a caret held at the end of
- * a text that a marker follows as the text's end, which is the same place as that marker's
- * location.
+ * Whether two locations in `usj` are the same place: equal once each is spelled canonically, or
+ * with nothing but a line break between them in the USFM the document writes. The editor reports a
+ * caret held at the end of a text that a marker follows as the text's end, which is the same place
+ * as that marker's location. And a view that hides markers puts a caret placed at the end of a line
+ * it cannot show a caret on, such as a chapter number's, at the start of the next line instead.
  *
  * @param usj The document both locations address.
  * @param a A location in `usj`.
@@ -143,7 +147,12 @@ export function isSamePlaceInDocument(
       usjReaderWriter.usfmVerseLocationToIndexInUsfm(
         usjReaderWriter.usjDocumentLocationToUsfmVerseRefVerseLocation(location, bookId),
       );
-    return indexOf(a) === indexOf(b);
+    const [indexA, indexB] = [indexOf(a), indexOf(b)];
+    if (indexA === indexB) return true;
+    // Native, as the indexes are: `UsjReaderWriter` counts the USFM in UTF-16 code units.
+    return LINE_BREAK_ONLY_REGEX.test(
+      usjReaderWriter.toUsfm().slice(Math.min(indexA, indexB), Math.max(indexA, indexB)),
+    );
   } catch {
     return false;
   }

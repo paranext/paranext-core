@@ -312,6 +312,48 @@ describe('isSamePlaceInDocument', () => {
     ).toBe(true);
   });
 
+  // A view that hides markers cannot show a caret on a chapter number, so the editor puts one placed
+  // just past it at the start of the next paragraph, and reports it there. Only a line break lies
+  // between the two, so the caret is where it was put; taken as a failed placement, it would be
+  // placed again every 50 ms for the whole retry window, snapping back any caret the user moved.
+  it('is true for the end of a line and the start of the next', () => {
+    expect(
+      isSamePlaceInDocument(
+        usj,
+        { jsonPath: '$.content[1]' },
+        { jsonPath: "$.content[0]['number']", propertyOffset: 1 },
+        'GEN',
+      ),
+    ).toBe(true);
+  });
+
+  it('is false across a marker, even one with nothing but whitespace around it', () => {
+    expect(
+      isSamePlaceInDocument(
+        usj,
+        { jsonPath: '$.content[1].content[0]' },
+        { jsonPath: "$.content[0]['number']", propertyOffset: 1 },
+        'GEN',
+      ),
+    ).toBe(false);
+  });
+
+  it('is false for two places a space apart on one line', () => {
+    const spaced: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para', marker: 'p', content: ['before after'] }],
+    };
+    expect(
+      isSamePlaceInDocument(
+        spaced,
+        { jsonPath: '$.content[0].content[0]', offset: 6 },
+        { jsonPath: '$.content[0].content[0]', offset: 7 },
+        'GEN',
+      ),
+    ).toBe(false);
+  });
+
   it('is false for a different offset in the same property', () => {
     expect(
       isSamePlaceInDocument(

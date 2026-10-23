@@ -323,11 +323,14 @@ describe('prepareUsjForChapterSave', () => {
     };
     const stored = usjOf(chapter('2', { sid: 'GEN 2' }), para('p', 'body'), para('q1', 'poem'));
 
+    // The caret is in the line that moved up into the deleted marker's place, which is not what is
+    // left of the chapter line, so it does not stay there.
     it('to the end of the chapter line when only the marker was deleted', () => {
       const { repairedUsj, caretTarget } = prepareUsjForChapterSave(
         usjOf(para('p', 'body'), para('q1', 'poem')),
         stored,
         2,
+        { start: { jsonPath: '$.content[0].content[0]', offset: 2 } },
       );
       expect(repairedUsj?.content).toEqual([chapter('2'), para('p', 'body'), para('q1', 'poem')]);
       expect(caretTarget).toEqual(RESTORED_CHAPTER_2_NUMBER);
