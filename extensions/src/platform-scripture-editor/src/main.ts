@@ -63,10 +63,10 @@ import {
   showCommentariesTab,
   showTextCollectionTab,
 } from './show-panel.util';
+import { MODEL_TEXT_PANEL_WEBVIEW_TYPE } from './model-text-panel-web-view-type.const';
 
 logger.debug('Scripture Editor is importing!');
 
-const MODEL_TEXT_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.modelText';
 /** Tab title/tooltip for the Text Collection (Scripture Text Grid) tab. */
 
 // #region Editor Selection Tracking

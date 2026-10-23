@@ -59,17 +59,9 @@ import type { MutableRefObject } from 'react';
 import type { DeltaOp, EditorRef } from '@eten-tech-foundation/platform-editor';
 import type { MarkerMenuItem } from 'platform-bible-react';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
+import { SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE } from './scripture-text-grid-web-view-type.const';
 
-export { SCRIPTURE_EDITOR_WEBVIEW_TYPE };
-
-/**
- * Web view type of the Text Collection panel (the Scripture Text Grid) in Column 3.
- *
- * Note: the renderer has copies of this value it cannot import —
- * `src/renderer/components/docking/default-layout-supplement.json` and
- * `platform-dock-layout-positioning.util.ts` — keep them in sync.
- */
-export const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptureTextGrid';
+export { SCRIPTURE_EDITOR_WEBVIEW_TYPE, SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE };
 
 /**
  * Resolves the view type the editor is allowed to show under the current `platform.interfaceMode`.

@@ -15,8 +15,7 @@ import { LexicalReferenceTextManager } from './lexical-reference-text-manager.mo
 import { LexicalReferenceProjectDataProviderEngineFactory } from './lexical-reference-project-data-provider-engine-factory.model';
 import { LEXICAL_REFERENCE_PROJECT_INTERFACES } from './lexical-reference-project-data-provider-engine.model';
 import { DICTIONARY_TITLE_KEY } from './utils/dictionary.utils';
-
-const DICTIONARY_WEB_VIEW_TYPE = 'platformLexicalTools.dictionary';
+import { DICTIONARY_WEB_VIEW_TYPE } from './dictionary-web-view-type.const';
 
 export interface DictionaryWebViewOptions extends OpenWebViewOptions {
   projectId: string | undefined;
