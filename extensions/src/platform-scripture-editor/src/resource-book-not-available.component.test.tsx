@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID,
@@ -21,13 +21,73 @@ describe('ResourceBookNotAvailable', () => {
     expect(screen.getByText(MESSAGE)).toBeInTheDocument();
   });
 
-  it('offers no action, because a resource missing a book has no remedy', () => {
+  it('offers no action unless the caller supplies one', () => {
     render(<ResourceBookNotAvailable message={MESSAGE} />);
 
-    // The sibling `BookNotAvailableView` offers "Manage books" because a PROJECT can gain a book. A
-    // published resource cannot, in either interface mode — so a button here would promise something
-    // impossible.
+    // A published resource cannot gain a book in either interface mode, so only a caller that owns a
+    // remedy (such as picking a different text) may add a button. The Bible texts panel and the main
+    // editor pass none.
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  describe('with an action', () => {
+    const ACTION_LABEL = 'Pick model text…';
+
+    it('shows the action as a button under the message and runs it on click', () => {
+      const onClick = vi.fn();
+      render(
+        <ResourceBookNotAvailable message={MESSAGE} action={{ label: ACTION_LABEL, onClick }} />,
+      );
+
+      expect(screen.getByText(MESSAGE)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: ACTION_LABEL }));
+      expect(onClick).toHaveBeenCalledTimes(1);
+    });
+
+    it('announces only the sentence, not the button', () => {
+      render(
+        <ResourceBookNotAvailable
+          message={MESSAGE}
+          action={{ label: ACTION_LABEL, onClick: vi.fn() }}
+        />,
+      );
+
+      const status = screen.getByRole('status');
+      expect(status).toHaveTextContent(MESSAGE);
+      expect(within(status).queryByRole('button')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: ACTION_LABEL })).toBeInTheDocument();
+    });
+
+    it('keeps the top of the message reachable in a panel too short for it', () => {
+      render(
+        <ResourceBookNotAvailable
+          message={MESSAGE}
+          action={{ label: ACTION_LABEL, onClick: vi.fn() }}
+        />,
+      );
+
+      // Plain `justify-center` pushes the top of a too-tall column above the scroll start, out of
+      // reach; the safe form falls back to top alignment.
+      const wrapper = screen.getByTestId(RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID);
+      expect(wrapper).toHaveClass('tw:justify-center-safe', 'tw:overflow-y-auto');
+      expect(wrapper).not.toHaveClass('tw:justify-center');
+    });
+
+    it('keeps the named, focusable wrapper when an action is shown', () => {
+      vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+
+      render(
+        <ResourceBookNotAvailable
+          message={MESSAGE}
+          action={{ label: ACTION_LABEL, onClick: vi.fn() }}
+        />,
+      );
+
+      const wrapper = screen.getByTestId(RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID);
+      expect(wrapper).toHaveAccessibleName(MESSAGE);
+      expect(wrapper).toHaveFocus();
+      expect(wrapper).toContainElement(screen.getByRole('button', { name: ACTION_LABEL }));
+    });
   });
 
   describe('accessibility', () => {

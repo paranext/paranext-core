@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import * as React from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
@@ -7,7 +7,7 @@ import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { CONTENT_ZOOM_ROOT_ATTRIBUTE } from 'platform-bible-react';
 import { BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS } from 'platform-bible-react/experimental';
 import type { DblResourceData } from 'platform-bible-utils';
-import type { EffectiveResourceReferenceList } from 'platform-scripture';
+import type { EffectiveResourceReferenceList, ResourceReferenceList } from 'platform-scripture';
 import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
 import { MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.const';
 import {
@@ -29,10 +29,16 @@ const setUsjSpy = vi.fn();
 /** Collects the `options` prop passed to each Editorial render. */
 const capturedEditorOptions = vi.fn();
 
+/** Called once per Editorial mount, so a test can tell a hidden editor from a rebuilt one. */
+const editorMountSpy = vi.fn();
+
 vi.mock('@eten-tech-foundation/platform-editor', () => ({
   Editorial: React.forwardRef((props: Record<string, unknown>, ref: React.Ref<unknown>) => {
     capturedEditorOptions(props.options);
     React.useImperativeHandle(ref, () => ({ setUsj: setUsjSpy }));
+    React.useEffect(() => {
+      editorMountSpy();
+    }, []);
     return <div data-testid="editorial" />;
   }),
   // The component reads `getDefaultViewOptions()` at module scope; the mocked component below
@@ -56,6 +62,7 @@ const STRINGS = {
   '%webView_modelTextPanel_selecting%': 'Selecting resource…',
   '%webView_modelTextPanel_noProject%': 'No project.',
   '%webView_modelTextPanel_pickModelText%': 'Pick model text…',
+  '%webView_modelTextPanel_changeText_ariaLabel%': '{textName} – change model text',
   '%webView_modelTextPanel_emptyState_pickText%': 'Pick a text…',
   '%webView_modelTextPanel_unknownResource%': 'The selected model text could not be found.',
   '%webView_modelTextPanel_installFailed%': "The model text couldn't be installed.",
@@ -69,6 +76,8 @@ const STRINGS = {
   '%webView_modelTextPanel_emptyState_baseOrModel_summary%': 'Pick one.',
   '%webView_modelTextPanel_bookNotAvailable%':
     'This book does not exist in this model text. Choose a different model text or go to a book it contains.',
+  '%webView_modelTextPanel_bookNotAvailable_adminChoice%':
+    'This book does not exist in this model text. Go to a book it contains. A project admin can choose a different model text in the team layout.',
   '%webView_platformScriptureEditor_emptyChapter_messageResource%':
     'This chapter is empty in this resource.',
   '%webView_modelTextPanel_catalogUnavailable%': "Couldn't load the list of available resources.",
@@ -144,6 +153,14 @@ function configuredModelText(dblEntryUid: string): EffectiveResourceReferenceLis
   };
 }
 
+/** The user's own choice: the admin has chosen nothing, so every item is user-sourced. */
+function userChosenModelTexts(...dblEntryUids: string[]): EffectiveResourceReferenceList {
+  return {
+    dataVersion: '1.0.0',
+    items: dblEntryUids.map((id) => ({ type: 'dblResource', id, name: id, source: 'user' })),
+  };
+}
+
 /** Wraps a list in the hook's `ready` state — the only state that may carry one. */
 function readyState(list: EffectiveResourceReferenceList): EffectiveResourceReferenceListState {
   return { status: 'ready', list };
@@ -199,6 +216,7 @@ afterEach(() => {
   // Module-scoped, so it outlives `restoreAllMocks` and has to be cleared explicitly.
   setUsjSpy.mockClear();
   capturedEditorOptions.mockClear();
+  editorMountSpy.mockClear();
 });
 
 describe('ModelTextPanel', () => {
@@ -597,7 +615,7 @@ describe('ModelTextPanel', () => {
       throw new Error('Book number 1 not found in project project-web.');
     });
     renderPanel({
-      modelTextsState: readyState(configuredModelText('uid-web')),
+      modelTextsState: readyState(userChosenModelTexts('uid-web')),
       dblResources: [INSTALLED_RESOURCE],
       getResourceChapter,
     });
@@ -622,7 +640,7 @@ describe('ModelTextPanel', () => {
       throw new Error('Project project-web is not available');
     });
     renderPanel({
-      modelTextsState: readyState(configuredModelText('uid-web')),
+      modelTextsState: readyState(userChosenModelTexts('uid-web')),
       dblResources: [INSTALLED_RESOURCE],
       getResourceChapter,
     });
@@ -652,7 +670,7 @@ describe('ModelTextPanel', () => {
       return { usj: SAMPLE_USJ, textDirection: 'ltr' };
     });
     const props = {
-      modelTextsState: readyState(configuredModelText('uid-web')),
+      modelTextsState: readyState(userChosenModelTexts('uid-web')),
       dblResources: [INSTALLED_RESOURCE],
       getResourceChapter,
     };
@@ -714,7 +732,7 @@ describe('ModelTextPanel', () => {
     // the missing-book sentence, which would tell the reader the book is absent when it is present.
     const getResourceChapter = vi.fn(async () => ({ usj: BLANK_USJ, textDirection: 'ltr' }));
     renderPanel({
-      modelTextsState: readyState(configuredModelText('uid-web')),
+      modelTextsState: readyState(userChosenModelTexts('uid-web')),
       dblResources: [INSTALLED_RESOURCE],
       getResourceChapter,
     });
@@ -779,7 +797,7 @@ describe('ModelTextPanel', () => {
       return { usj: BLANK_USJ, textDirection: 'ltr' };
     });
     const props = {
-      modelTextsState: readyState(configuredModelText('uid-web')),
+      modelTextsState: readyState(userChosenModelTexts('uid-web')),
       dblResources: [INSTALLED_RESOURCE],
       getResourceChapter,
     };
@@ -1069,6 +1087,406 @@ describe('ModelTextPanel', () => {
     expect(capturedEditorOptions).toHaveBeenLastCalledWith(
       expect.objectContaining({ copyLimit: 20 }),
     );
+  });
+});
+
+describe('ModelTextPanel changing a model text the user chose', () => {
+  const KJV: DblResourceData = {
+    ...INSTALLED_RESOURCE,
+    dblEntryUid: 'uid-kjv',
+    displayName: 'KJV',
+    fullName: 'King James Version',
+    projectId: 'project-kjv',
+  };
+  const CHANGE_WEB = 'WEB - World English Bible – change model text';
+  const CHANGE_KJV = 'KJV - King James Version – change model text';
+  const USER_MISSING = STRINGS['%webView_modelTextPanel_bookNotAvailable%'];
+  const ADMIN_MISSING = STRINGS['%webView_modelTextPanel_bookNotAvailable_adminChoice%'];
+  /** What the panel receives once the user's pick of KJV is written: KJV first, WEB kept behind. */
+  const AFTER_PICKING_KJV = readyState(userChosenModelTexts('uid-kjv', 'uid-web'));
+
+  const withText = () => vi.fn(async () => ({ usj: SAMPLE_USJ, textDirection: 'ltr' }));
+  /** WEB lacks Genesis; every other text has it. */
+  const webLacksBook = () =>
+    vi.fn(async (projectId: string) => {
+      if (projectId === 'project-web')
+        throw new Error('Book number 1 not found in project project-web.');
+      return { usj: SAMPLE_USJ, textDirection: 'ltr' };
+    });
+
+  /** Props for WEB as the text the user chose, with KJV also installed. */
+  function userChosenWebProps(overrides: Partial<ModelTextPanelProps> = {}) {
+    return makeProps({
+      dblResources: [INSTALLED_RESOURCE, KJV],
+      getResourceChapter: withText(),
+      modelTextsState: readyState(userChosenModelTexts('uid-web')),
+      ...overrides,
+    });
+  }
+
+  function renderUserChosenWeb(overrides: Partial<ModelTextPanelProps> = {}) {
+    const props = userChosenWebProps(overrides);
+    return { props, ...render(<ModelTextPanel {...props} />) };
+  }
+
+  /** A `setUserModelTexts` whose write stays pending until `finish` is called. */
+  function heldWrite() {
+    let resolveWrite: () => void = () => {};
+    const setUserModelTexts = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveWrite = resolve;
+        }),
+    );
+    return { setUserModelTexts, finish: () => act(async () => resolveWrite()) };
+  }
+
+  it('makes the header a button that opens the picker with only the text on screen selected', async () => {
+    const showResourcePicker = vi.fn(async () => undefined);
+    renderUserChosenWeb({
+      modelTextsState: readyState(userChosenModelTexts('uid-web', 'uid-kjv')),
+      showResourcePicker,
+    });
+
+    const header = await screen.findByRole('button', { name: CHANGE_WEB });
+    expect(header).toHaveAttribute('data-testid', 'model-text-header');
+    // The picker is a modal dialog. This also turns off `Button`'s 1px press nudge, which would
+    // shift the whole row out of line with the editor toolbar.
+    expect(header).toHaveAttribute('aria-haspopup', 'dialog');
+    fireEvent.click(header);
+
+    // Not ['uid-web', 'uid-kjv']: the picker can't select an "Already selected" row, so an earlier
+    // pick listed there could never be chosen again.
+    await waitFor(() => expect(showResourcePicker).toHaveBeenCalledWith(['uid-web']));
+  });
+
+  it('writes the newly picked text first in the user list', async () => {
+    const setUserModelTexts = vi.fn<(list: ResourceReferenceList) => Promise<void>>(async () => {});
+    renderUserChosenWeb({
+      showResourcePicker: vi.fn(async () => KJV),
+      getUserModelTexts: async () => ({
+        dataVersion: '1.0.0',
+        items: [{ type: 'dblResource', id: 'uid-web', name: 'WEB' }],
+      }),
+      setUserModelTexts,
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: CHANGE_WEB }));
+
+    await waitFor(() => expect(setUserModelTexts).toHaveBeenCalledTimes(1));
+    expect(setUserModelTexts.mock.calls[0][0].items[0]).toEqual({
+      type: 'dblResource',
+      id: 'uid-kjv',
+      name: 'KJV',
+    });
+  });
+
+  it('keeps the header a plain label when the admin chose the text', async () => {
+    renderUserChosenWeb({ modelTextsState: readyState(configuredModelText('uid-web')) });
+
+    const header = await screen.findByTestId('model-text-header');
+    expect(within(header).getByText('WEB - World English Bible')).toBeInTheDocument();
+    expect(header.tagName).not.toBe('BUTTON');
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('shows the admin choice, with no change button, once the admin chooses a text', async () => {
+    // The admin's choice overrides the user's without deleting it: the user's item stays in the
+    // merged list, after the admin's.
+    const { props, rerender } = renderUserChosenWeb();
+    expect(await screen.findByRole('button', { name: CHANGE_WEB })).toBeInTheDocument();
+
+    rerender(
+      <ModelTextPanel
+        {...props}
+        modelTextsState={readyState({
+          dataVersion: '1.0.0',
+          items: [
+            { type: 'dblResource', id: 'uid-kjv', name: 'KJV', source: 'admin' },
+            { type: 'dblResource', id: 'uid-web', name: 'WEB', source: 'user' },
+          ],
+        })}
+      />,
+    );
+
+    expect(await screen.findByText('KJV - King James Version')).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('keeps the long-name ellipsis structure on the button header', async () => {
+    renderUserChosenWeb();
+
+    const header = await screen.findByRole('button', { name: CHANGE_WEB });
+    expect(header).toHaveClass('tw:min-w-0', 'tw:overflow-hidden');
+    expect(header).not.toHaveClass('tw:truncate');
+    expect(within(header).getByText('WEB - World English Bible')).toHaveClass('tw:truncate');
+  });
+
+  it('draws the header focus ring inside the row', async () => {
+    renderUserChosenWeb();
+
+    // The row spans the panel edge to edge from its top, so a ring drawn outside it is clipped on
+    // three sides and the focused header shows almost no indicator.
+    const header = await screen.findByRole('button', { name: CHANGE_WEB });
+    expect(header).toHaveClass('tw:focus-visible:ring-3', 'tw:focus-visible:ring-inset');
+  });
+
+  it('keeps only the bottom rule of the label row on the button header', async () => {
+    renderUserChosenWeb();
+
+    // `Button` merges its classes, so a later border reset would silently drop the bottom rule, and
+    // its base `tw:border` would draw a box round the row if nothing reset it.
+    const header = await screen.findByRole('button', { name: CHANGE_WEB });
+    expect(header).toHaveClass('tw:border-b', 'tw:border-border', 'tw:h-[42px]');
+    expect(header).not.toHaveClass('tw:border');
+  });
+
+  describe('a pick while a text is on screen', () => {
+    it('keeps the header and the editor while the pick is written', async () => {
+      const write = heldWrite();
+      renderUserChosenWeb({
+        showResourcePicker: vi.fn(async () => KJV),
+        setUserModelTexts: write.setUserModelTexts,
+      });
+      const header = await screen.findByRole('button', { name: CHANGE_WEB });
+      await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
+      header.focus();
+
+      fireEvent.click(header);
+
+      expect(await screen.findByText('Selecting resource…')).toBeInTheDocument();
+      // Only the content area waits: the header the user picked from keeps focus, and the editor is
+      // hidden rather than rebuilt, so it still holds its text if the pick changes nothing.
+      expect(header).toBeInTheDocument();
+      expect(header).toHaveFocus();
+      expect(screen.getByTestId(MODEL_TEXT_EDITOR_CONTAINER_TEST_ID)).toHaveClass('tw:hidden');
+      expect(editorMountSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows the text on screen again when the picked text fails to install', async () => {
+      const uninstalledKjv = { ...KJV, installed: false };
+      // Held, as a real download is, so the "Selecting…" view is on screen before the failure lands.
+      let failInstall: () => void = () => {};
+      const installResource = vi.fn(
+        () =>
+          new Promise<void>((_resolve, reject) => {
+            failInstall = () => reject(new Error('Offline'));
+          }),
+      );
+      renderUserChosenWeb({
+        dblResources: [INSTALLED_RESOURCE, uninstalledKjv],
+        showResourcePicker: vi.fn(async () => uninstalledKjv),
+        installResource,
+      });
+      await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
+
+      fireEvent.click(await screen.findByRole('button', { name: CHANGE_WEB }));
+
+      await waitFor(() => expect(installResource).toHaveBeenCalledWith('uid-kjv'));
+      expect(await screen.findByText('Selecting resource…')).toBeInTheDocument();
+      await act(async () => failInstall());
+      await waitFor(() =>
+        expect(screen.getByTestId(MODEL_TEXT_EDITOR_CONTAINER_TEST_ID)).not.toHaveClass(
+          'tw:hidden',
+        ),
+      );
+      // The same editor, still holding WEB's text: a rebuilt one would be blank, because the editor
+      // is fed only when the text in hand changes.
+      expect(editorMountSpy).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('button', { name: CHANGE_WEB })).toBeInTheDocument();
+    });
+
+    it('waits for the picked text instead of showing the old one again', async () => {
+      vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+      const write = heldWrite();
+      const { props, rerender } = renderUserChosenWeb({
+        getResourceChapter: webLacksBook(),
+        showResourcePicker: vi.fn(async () => KJV),
+        setUserModelTexts: write.setUserModelTexts,
+      });
+      expect(await screen.findByText(USER_MISSING)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Pick model text…' }));
+      expect(await screen.findByText('Selecting resource…')).toBeInTheDocument();
+      // The write can finish before the new list arrives. WEB's message must not come back in
+      // between: it would take focus and be announced again about a text being replaced.
+      await write.finish();
+      expect(screen.getByText('Selecting resource…')).toBeInTheDocument();
+      expect(screen.queryByText(USER_MISSING)).not.toBeInTheDocument();
+
+      rerender(<ModelTextPanel {...props} modelTextsState={AFTER_PICKING_KJV} />);
+
+      expect(await screen.findByRole('button', { name: CHANGE_KJV })).toBeInTheDocument();
+      expect(screen.queryByText('Selecting resource…')).not.toBeInTheDocument();
+    });
+
+    describe('focus after a pick from the missing-book message', () => {
+      /**
+       * Picks KJV from WEB's missing-book message, whose button the "Selecting…" view replaces,
+       * then delivers the new list once the write finishes.
+       */
+      async function pickFromMessage(deliver: (props: ModelTextPanelProps) => React.ReactElement) {
+        const write = heldWrite();
+        const { props, rerender } = renderUserChosenWeb({
+          getResourceChapter: webLacksBook(),
+          showResourcePicker: vi.fn(async () => KJV),
+          setUserModelTexts: write.setUserModelTexts,
+        });
+        const messageButton = await screen.findByRole('button', { name: 'Pick model text…' });
+        messageButton.focus();
+        fireEvent.click(messageButton);
+        expect(await screen.findByText('Selecting resource…')).toBeInTheDocument();
+        expect(document.activeElement).toBe(document.body);
+        await write.finish();
+        rerender(deliver({ ...props, modelTextsState: AFTER_PICKING_KJV }));
+        return { props, rerender };
+      }
+
+      it('puts focus on the header once the picked text is shown', async () => {
+        vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+
+        await pickFromMessage((props) => <ModelTextPanel {...props} />);
+
+        await waitFor(() => expect(screen.getByRole('button', { name: CHANGE_KJV })).toHaveFocus());
+      });
+
+      it('puts focus on the header when it only comes back after the pick', async () => {
+        vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+
+        // Installing a picked text refetches the catalog, and the whole panel waits for it, header
+        // included, until after the pick has finished.
+        const { props, rerender } = await pickFromMessage((pickProps) => (
+          <ModelTextPanel {...pickProps} isCatalogReady={false} />
+        ));
+        expect(screen.queryByTestId('model-text-header')).not.toBeInTheDocument();
+        rerender(<ModelTextPanel {...props} modelTextsState={AFTER_PICKING_KJV} />);
+
+        await waitFor(() => expect(screen.getByRole('button', { name: CHANGE_KJV })).toHaveFocus());
+      });
+
+      it('leaves focus alone when it is outside this document', async () => {
+        // The picker is a dialog outside this iframe; focus that stayed out there is not ours to take.
+        vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+
+        await pickFromMessage((props) => <ModelTextPanel {...props} />);
+
+        expect(await screen.findByRole('button', { name: CHANGE_KJV })).not.toHaveFocus();
+      });
+    });
+  });
+
+  describe('the full-name tooltip on a clipped header', () => {
+    // jsdom ships no ResizeObserver, which the tooltip measures itself with
+    class NoopResizeObserver {
+      private readonly targets = new Set<Element>();
+
+      observe(target: Element) {
+        this.targets.add(target);
+      }
+
+      unobserve(target: Element) {
+        this.targets.delete(target);
+      }
+
+      disconnect() {
+        this.targets.clear();
+      }
+    }
+
+    beforeEach(() => {
+      vi.stubGlobal('ResizeObserver', NoopResizeObserver);
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    /** Makes every element report that its text overflows, so the label counts as clipped. */
+    function clipLabel() {
+      vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(500);
+      vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(100);
+    }
+
+    /** Answers `:focus-visible` as the browser would after a keyboard (true) or pointer move. */
+    function arriveBy(isKeyboard: boolean) {
+      const { matches } = Element.prototype;
+      vi.spyOn(Element.prototype, 'matches').mockImplementation(function matchesFocusVisible(
+        this: Element,
+        selector: string,
+      ) {
+        return selector === ':focus-visible' ? isKeyboard : matches.call(this, selector);
+      });
+    }
+
+    it('shows the full name when the header is reached by keyboard', async () => {
+      clipLabel();
+      arriveBy(true);
+      renderUserChosenWeb();
+
+      act(() => screen.getByRole('button', { name: CHANGE_WEB }).focus());
+
+      expect(await screen.findByRole('tooltip')).toHaveTextContent('WEB - World English Bible');
+    });
+
+    it('does not pop up when focus returns to the header after a pointer pick', async () => {
+      clipLabel();
+      arriveBy(false);
+      renderUserChosenWeb();
+      const header = await screen.findByRole('button', { name: CHANGE_WEB });
+
+      act(() => header.focus());
+
+      expect(header).toHaveFocus();
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    });
+
+    it('closes on Escape', async () => {
+      clipLabel();
+      arriveBy(true);
+      renderUserChosenWeb();
+      act(() => screen.getByRole('button', { name: CHANGE_WEB }).focus());
+      expect(await screen.findByRole('tooltip')).toBeInTheDocument();
+
+      fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+
+      await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+    });
+  });
+
+  describe('when the book is missing', () => {
+    it('offers the picker from the missing-book message when the user chose the text', async () => {
+      const showResourcePicker = vi.fn(async () => undefined);
+      renderUserChosenWeb({ getResourceChapter: webLacksBook(), showResourcePicker });
+
+      expect(await screen.findByText(USER_MISSING)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Pick model text…' }));
+
+      await waitFor(() => expect(showResourcePicker).toHaveBeenCalledWith(['uid-web']));
+    });
+
+    it('opens one picker when the header and then the message button are clicked', async () => {
+      // Never settles, so the first picker is still open when the second click lands.
+      const showResourcePicker = vi.fn(() => new Promise<DblResourceData | undefined>(() => {}));
+      renderUserChosenWeb({ getResourceChapter: webLacksBook(), showResourcePicker });
+      const messageButton = await screen.findByRole('button', { name: 'Pick model text…' });
+
+      fireEvent.click(screen.getByRole('button', { name: CHANGE_WEB }));
+      expect(showResourcePicker).toHaveBeenCalledTimes(1);
+      fireEvent.click(messageButton);
+
+      expect(showResourcePicker).toHaveBeenCalledTimes(1);
+    });
+
+    it('points to the team layout, with no picker, when the admin chose the text', async () => {
+      renderUserChosenWeb({
+        getResourceChapter: webLacksBook(),
+        modelTextsState: readyState(configuredModelText('uid-web')),
+      });
+
+      expect(await screen.findByText(ADMIN_MISSING)).toBeInTheDocument();
+      expect(screen.queryByText(USER_MISSING)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    });
   });
 });
 

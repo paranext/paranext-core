@@ -18,6 +18,9 @@ export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
   '%webView_modelTextPanel_selecting%',
   '%webView_modelTextPanel_noProject%',
   '%webView_modelTextPanel_pickModelText%',
+  // The header's accessible name when the user chose the text themselves and can change it. Starts
+  // with `{textName}`, the visible label, so the spoken name begins with what is on screen.
+  '%webView_modelTextPanel_changeText_ariaLabel%',
   '%webView_modelTextPanel_unknownResource%',
   '%webView_modelTextPanel_installFailed%',
   '%webView_modelTextPanel_installFailedOffline%',
@@ -52,6 +55,9 @@ export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
   '%webView_modelTextPanel_catalogUnavailable%',
   '%webView_modelTextPanel_loading%',
   '%webView_modelTextPanel_bookNotAvailable%',
+  // The missing-book message when the admin chose the text, so the user cannot change it from this
+  // panel: it points to the team layout instead of telling them to choose a different text.
+  '%webView_modelTextPanel_bookNotAvailable_adminChoice%',
   // Shared with the resource text panel's blank-chapter branch. Distinct from the editable
   // `..._emptyChapter_message%`, which sits beside an "Add chapter number" action this read-only
   // panel must not offer.

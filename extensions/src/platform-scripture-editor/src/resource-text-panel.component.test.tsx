@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeAll, describe, it, expect, vi } from 'vitest';
 import * as React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
@@ -15,6 +15,7 @@ import {
   ResourceTextPanel,
   ResourceTextPanelProps,
 } from './resource-text-panel.component';
+import { RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID } from './resource-book-not-available.component';
 
 /**
  * Records every `setUsj` the panel pushes into the editor, across editor instances.
@@ -245,6 +246,14 @@ describe('ResourceTextPanel book not in this resource', () => {
 
     expect(screen.getByText(BIBLE_TEXT_MISSING_BOOK)).toBeInTheDocument();
     expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+  });
+
+  it('offers no button in the message, since the selector above it is the remedy', () => {
+    renderPanel({ usjPossiblyError: missingBookError('MAT') });
+
+    const message = screen.getByTestId(RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID);
+    expect(message).toHaveTextContent(BIBLE_TEXT_MISSING_BOOK);
+    expect(within(message).queryByRole('button')).not.toBeInTheDocument();
   });
 
   it('uses the commentary wording when the panel is showing a commentary', () => {

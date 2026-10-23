@@ -291,6 +291,16 @@ describe.each([...MODEL_TEXT_PANEL_STRING_KEYS])('model text panel label %s', (k
   });
 });
 
+// The header's accessible name is the text's own name plus what the button does, so every locale
+// must keep the slot. Losing it would announce "– change model text" with no hint of which text.
+describe.each(['en', 'es'])('model text header change-text name in %s', (locale) => {
+  it('keeps the {textName} slot', () => {
+    const value = localizedStrings[locale]['%webView_modelTextPanel_changeText_ariaLabel%'];
+    expect(value).toBeTruthy();
+    expect(value).toContain('{textName}');
+  });
+});
+
 // These shipped keys explain the model text alone, a narrower meaning than the empty state's Base
 // and Model explanation, so they keep their values and are retired rather than reworded
 // (Localization-Guide.md, "Existing Strings Are Immutable").
