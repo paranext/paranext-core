@@ -30,6 +30,12 @@ would permanently disable that path with no UI to recover — `startup-tasks.tes
 regression test naming this trap. An interface mode that cannot be read must not become a way past
 the gate: skip the sync, or treat the mode as Simple.
 
+**The switch from Simple to Power is the one exception.** Its sync (`syncOnSwitchToPower` in
+`platform-scripture-editor`) runs in Power mode and skips only on `deferred`, because a user who
+started in Power mode reads `unconfirmed` for the whole session — see
+`adr-switch-to-power-sends-unsent-changes`. So an unreadable first-run flag, which also reads
+`unconfirmed`, does not stop it either; only a rejected consent request does.
+
 ## What is NOT gated
 
 User-initiated syncs — the wizard's own Sync button, the Send/Receive dialog, a toolbar action. The

@@ -51,6 +51,7 @@ import {
   selectProjectIdsForOpenMode,
   startDefaultProjectPicker,
   syncOnProjectSwitch,
+  syncOnSwitchToPower,
   toScriptureEditorInfos,
   updateRelatedChecksSidePanel,
   updateRelatedFindPanel,
@@ -1557,6 +1558,31 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
+  const syncOnSwitchToPowerPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.syncOnSwitchToPower',
+    async (projectId) => {
+      // Not awaited: waiting for the answer and then the sync can outlast the caller's request
+      // timeout. `syncOnSwitchToPower` catches and logs its own failures.
+      syncOnSwitchToPower(papi, projectId);
+    },
+    {
+      method: {
+        'x-experimental': true,
+        summary:
+          'Send/receive the project the Simple-mode Scripture Editor was showing, if it holds local changes to send, after a switch to Power mode',
+        params: [
+          {
+            name: 'projectId',
+            required: true,
+            summary: 'The project the Simple-mode Scripture Editor was showing',
+            schema: { type: 'string' },
+          },
+        ],
+        result: { name: 'return value', schema: { type: 'null' } },
+      },
+    },
+  );
+
   // Await the registration promises at the end so we don't hold everything else up
   const markerNotifier = new MarkersViewNotifier(papi, context.executionToken);
   const markerNotifierUnsubscribers = await markerNotifier.start();
@@ -1607,6 +1633,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     ...markerNotifierUnsubscribers,
     await applySharedLayoutPromise,
     await finalizeProjectSwitchPromise,
+    await syncOnSwitchToPowerPromise,
     sharedLayoutReArmEmitter,
     {
       dispose: async () => {

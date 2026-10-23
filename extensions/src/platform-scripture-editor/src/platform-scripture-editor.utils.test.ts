@@ -31,6 +31,10 @@ import {
   resolveOpenEditorDispatch,
   resolveViewTypeForInterfaceMode,
   syncOnProjectSwitch,
+  syncOnSwitchToPower,
+  UNSENT_CHANGES_SYNC_WAIT_MS,
+  UNSENT_CHANGES_GRACE_MS,
+  waitForUnsentChanges,
   openOrUpdateRelatedPanels,
   updateRelatedFindPanel,
   buildScriptureTextGridWebView,
@@ -3273,6 +3277,442 @@ describe('syncOnProjectSwitch', () => {
 });
 
 // #endregion syncOnProjectSwitch
+
+// #region syncOnSwitchToPower
+
+/** A settled snapshot listing nothing in either direction. */
+const NOTHING_UNSYNCED = { toSend: [], toReceive: [], isRechecking: false };
+
+/**
+ * The papi pieces the switch-to-Power sync touches. The unsynced-changes seed and the consent
+ * request are answered by their own mocks, so `mockSendCommand` records only the Send/Receive call;
+ * `emitUnsyncedChanges` delivers an `onUnsyncedChangesChanged` event to whoever is subscribed.
+ */
+function createSwitchToPowerMockPapi({
+  mode = 'power',
+  consent = 'granted',
+  seed = NOTHING_UNSYNCED,
+}: SyncGateStub & { seed?: unknown } = {}) {
+  const { sendCommand, mockGetSetting, mockWarn, mockInfo, ...gateMocks } = createSyncGateStubs({
+    mode,
+    consent,
+  });
+  const mockGetUnsyncedChanges = vi.fn(async (): Promise<unknown> => seed);
+  const listeners = new Set<(snapshot: unknown) => void>();
+  const mockGetNetworkEvent = vi.fn(() => (listener: (snapshot: unknown) => void) => {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  });
+  const routedSendCommand = async (commandName: string, ...args: unknown[]) =>
+    commandName === 'paratextBibleSendReceive.getUnsyncedChanges'
+      ? mockGetUnsyncedChanges()
+      : sendCommand(commandName, ...args);
+  // Must cast since the mock only includes the papi properties used by syncOnSwitchToPower.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const papi = {
+    commands: { sendCommand: routedSendCommand },
+    network: { getNetworkEvent: mockGetNetworkEvent },
+    logger: { warn: mockWarn, info: mockInfo },
+    settings: { get: mockGetSetting },
+  } as unknown as typeof PapiBackend;
+  return {
+    papi,
+    mockGetSetting,
+    mockWarn,
+    mockInfo,
+    mockGetUnsyncedChanges,
+    mockGetNetworkEvent,
+    emitUnsyncedChanges: (snapshot: unknown) => listeners.forEach((listener) => listener(snapshot)),
+    subscriberCount: () => listeners.size,
+    ...gateMocks,
+  };
+}
+
+/** Lets the helper's seed request settle without moving fake time on. */
+async function flushMicrotasks() {
+  await vi.advanceTimersByTimeAsync(0);
+}
+
+/** Starts a wait and records its answer, so a test can tell a pending wait from a settled one. */
+function startWaiting(papi: typeof PapiBackend, projectId: string) {
+  const wait: { isSettled: boolean; answer?: boolean } = { isSettled: false };
+  (async () => {
+    wait.answer = await waitForUnsentChanges(papi, projectId);
+    wait.isSettled = true;
+  })();
+  return wait;
+}
+
+describe('waitForUnsentChanges', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('answers true at once when the seed already lists the project, whatever its case', async () => {
+    const { papi } = createSwitchToPowerMockPapi({
+      seed: { toSend: ['PROJ-1'], toReceive: [], isRechecking: false },
+    });
+
+    // No time is advanced: a project already listed must not wait out the grace window.
+    await expect(waitForUnsentChanges(papi, 'proj-1')).resolves.toBe(true);
+  });
+
+  it('answers true when the project is listed during the grace window', async () => {
+    const { papi, emitUnsyncedChanges } = createSwitchToPowerMockPapi();
+
+    const answer = waitForUnsentChanges(papi, 'proj-1');
+    await flushMicrotasks();
+    // The edit's save and the backend's debounced check land after the switch began
+    emitUnsyncedChanges({ toSend: ['PROJ-1'], toReceive: [], isRechecking: false });
+
+    await expect(answer).resolves.toBe(true);
+  });
+
+  it('answers false once the grace window passes with the project never listed', async () => {
+    const { papi, emitUnsyncedChanges } = createSwitchToPowerMockPapi();
+    const wait = startWaiting(papi, 'proj-1');
+
+    await flushMicrotasks();
+    // Another project's changes are no reason to sync this one
+    emitUnsyncedChanges({ toSend: ['OTHER'], toReceive: [], isRechecking: false });
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS - 1);
+    expect(wait.isSettled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(wait).toEqual({ isSettled: true, answer: false });
+  });
+
+  it('waits out a running sync before deciding, then answers from what that sync left unsent', async () => {
+    const { papi, emitUnsyncedChanges } = createSwitchToPowerMockPapi({
+      seed: { toSend: [], toReceive: [], isRechecking: true },
+    });
+    const wait = startWaiting(papi, 'proj-1');
+
+    await flushMicrotasks();
+    // A sync can run far longer than the grace window; the answer is not "nothing unsent" yet
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS * 3);
+    expect(wait.isSettled).toBe(false);
+    emitUnsyncedChanges({ toSend: ['PROJ-1'], toReceive: [], isRechecking: false });
+    await flushMicrotasks();
+
+    expect(wait).toEqual({ isSettled: true, answer: true });
+  });
+
+  it('answers false after a running sync sent the project, once the grace window passes', async () => {
+    const { papi, emitUnsyncedChanges } = createSwitchToPowerMockPapi({
+      seed: { toSend: [], toReceive: [], isRechecking: true },
+    });
+    const wait = startWaiting(papi, 'proj-1');
+
+    await flushMicrotasks();
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS * 3);
+    emitUnsyncedChanges(NOTHING_UNSYNCED);
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS);
+
+    expect(wait).toEqual({ isSettled: true, answer: false });
+  });
+
+  it('does not trust a listing taken while a sync is running', async () => {
+    // A running sync parks the backend's checks, so a project it is about to send is still listed
+    const { papi, emitUnsyncedChanges } = createSwitchToPowerMockPapi({
+      seed: { toSend: ['PROJ-1'], toReceive: [], isRechecking: true },
+    });
+    const wait = startWaiting(papi, 'proj-1');
+
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS * 3);
+    expect(wait.isSettled).toBe(false);
+    emitUnsyncedChanges(NOTHING_UNSYNCED);
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS);
+
+    expect(wait).toEqual({ isSettled: true, answer: false });
+  });
+
+  it('restarts the grace window when a sync starts during it', async () => {
+    const { papi, emitUnsyncedChanges } = createSwitchToPowerMockPapi();
+    const wait = startWaiting(papi, 'proj-1');
+    await flushMicrotasks();
+
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS / 2);
+    emitUnsyncedChanges({ toSend: [], toReceive: [], isRechecking: true });
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS);
+
+    expect(wait.isSettled).toBe(false);
+  });
+
+  it('ignores a seed that resolves after a newer event arrived', async () => {
+    const { papi, emitUnsyncedChanges, mockGetUnsyncedChanges } = createSwitchToPowerMockPapi();
+    let resolveSeed: (snapshot: unknown) => void = () => {};
+    mockGetUnsyncedChanges.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSeed = resolve;
+        }),
+    );
+    const wait = startWaiting(papi, 'proj-1');
+    await flushMicrotasks();
+
+    // The event says a sync is running; the older seed must not override it
+    emitUnsyncedChanges({ toSend: [], toReceive: [], isRechecking: true });
+    resolveSeed({ toSend: ['PROJ-1'], toReceive: [], isRechecking: false });
+    await flushMicrotasks();
+
+    expect(wait.isSettled).toBe(false);
+  });
+
+  it('retries a seed of an unexpected shape like a seed that failed', async () => {
+    const { papi, mockGetUnsyncedChanges } = createSwitchToPowerMockPapi();
+    mockGetUnsyncedChanges
+      .mockResolvedValueOnce({ toSend: undefined })
+      .mockResolvedValueOnce({ toSend: ['PROJ-1'], toReceive: [], isRechecking: false });
+
+    const answer = waitForUnsentChanges(papi, 'proj-1');
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS);
+
+    await expect(answer).resolves.toBe(true);
+  });
+
+  it('answers undefined when a running sync never settles', async () => {
+    const { papi, mockWarn } = createSwitchToPowerMockPapi({
+      seed: { toSend: [], toReceive: [], isRechecking: true },
+    });
+    const wait = startWaiting(papi, 'proj-1');
+
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_SYNC_WAIT_MS - 1);
+    expect(wait.isSettled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(wait).toEqual({ isSettled: true, answer: undefined });
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('still running'));
+  });
+
+  it('retries a seed request that rejects, as on a cold start', async () => {
+    const { papi, mockGetUnsyncedChanges } = createSwitchToPowerMockPapi();
+    mockGetUnsyncedChanges
+      .mockRejectedValueOnce(new Error('not registered yet'))
+      .mockResolvedValueOnce({ toSend: ['PROJ-1'], toReceive: [], isRechecking: false });
+
+    const answer = waitForUnsentChanges(papi, 'proj-1');
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS);
+
+    await expect(answer).resolves.toBe(true);
+    expect(mockGetUnsyncedChanges).toHaveBeenCalledTimes(2);
+  });
+
+  it('answers undefined when no snapshot can be read at all', async () => {
+    const { papi, mockGetUnsyncedChanges, mockWarn } = createSwitchToPowerMockPapi();
+    mockGetUnsyncedChanges.mockRejectedValue(new Error('backend down'));
+    const wait = startWaiting(papi, 'proj-1');
+
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS);
+
+    expect(wait).toEqual({ isSettled: true, answer: undefined });
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-1'));
+  });
+
+  it('ignores a snapshot of an unexpected shape', async () => {
+    const { papi, emitUnsyncedChanges } = createSwitchToPowerMockPapi();
+    const wait = startWaiting(papi, 'proj-1');
+
+    await flushMicrotasks();
+    emitUnsyncedChanges({ toSend: 'PROJ-1' });
+    await flushMicrotasks();
+    expect(wait.isSettled).toBe(false);
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS);
+
+    expect(wait).toEqual({ isSettled: true, answer: false });
+  });
+
+  it('unsubscribes once it has answered', async () => {
+    const { papi, subscriberCount } = createSwitchToPowerMockPapi({
+      seed: { toSend: ['PROJ-1'], toReceive: [], isRechecking: false },
+    });
+
+    await waitForUnsentChanges(papi, 'proj-1');
+
+    expect(subscriberCount()).toBe(0);
+  });
+});
+
+describe('syncOnSwitchToPower', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** A seed listing `proj-1` as holding local changes to send. */
+  const PROJ_1_UNSENT = { toSend: ['PROJ-1'], toReceive: [], isRechecking: false };
+
+  it('sends and receives the project when it holds unsent changes, keeping the Power-mode toasts', async () => {
+    const { papi, mockSendCommand } = createSwitchToPowerMockPapi({ seed: PROJ_1_UNSENT });
+
+    await syncOnSwitchToPower(papi, 'proj-1');
+
+    // Exactly one argument: no `suppressNotification`, so the progress and failure toasts show
+    expect(mockSendCommand.mock.calls).toEqual([
+      ['paratextBibleSendReceive.sendReceiveProjects', ['proj-1']],
+    ]);
+  });
+
+  it('starts no sync when the project holds nothing to send', async () => {
+    const { papi, mockSendCommand, mockInfo } = createSwitchToPowerMockPapi();
+
+    const syncing = syncOnSwitchToPower(papi, 'proj-1');
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS);
+    await syncing;
+
+    expect(mockSendCommand).not.toHaveBeenCalled();
+    expect(mockInfo).toHaveBeenCalledWith(expect.stringContaining('proj-1'));
+  });
+
+  it('starts no sync when it cannot tell whether anything is unsent', async () => {
+    const { papi, mockSendCommand, mockGetUnsyncedChanges } = createSwitchToPowerMockPapi();
+    mockGetUnsyncedChanges.mockRejectedValue(new Error('backend down'));
+
+    const syncing = syncOnSwitchToPower(papi, 'proj-1');
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS);
+    await syncing;
+
+    expect(mockSendCommand).not.toHaveBeenCalled();
+  });
+
+  it('syncs nothing when the user chose "Don\'t sync yet" this session', async () => {
+    const { papi, mockSendCommand, mockInfo } = createSwitchToPowerMockPapi({
+      consent: 'deferred',
+      seed: PROJ_1_UNSENT,
+    });
+
+    await syncOnSwitchToPower(papi, 'proj-1');
+
+    expect(mockSendCommand).not.toHaveBeenCalled();
+    expect(mockInfo).toHaveBeenCalledWith(expect.stringContaining('deferred'));
+  });
+
+  it('syncs when first-run consent is unconfirmed, as for a user who started in Power mode', async () => {
+    // Only the Simple-mode wizard records consent, and it never shows on a live switch to Simple,
+    // so a Power-native user who visits Simple reads `unconfirmed` for the whole session.
+    const { papi, mockSendCommand, mockInfo } = createSwitchToPowerMockPapi({
+      consent: 'unconfirmed',
+      seed: PROJ_1_UNSENT,
+    });
+
+    await syncOnSwitchToPower(papi, 'proj-1');
+
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
+      'proj-1',
+    ]);
+    // Every other automatic sync would skip here, so the log has to say why this one ran
+    expect(mockInfo).toHaveBeenCalledWith(expect.stringContaining('does not stop this sync'));
+  });
+
+  it('syncs nothing when the consent check rejects (fails closed)', async () => {
+    const { papi, mockSendCommand, mockWarn } = createSwitchToPowerMockPapi({
+      consent: READ_THROWS,
+      seed: PROJ_1_UNSENT,
+    });
+
+    await syncOnSwitchToPower(papi, 'proj-1');
+
+    expect(mockSendCommand).not.toHaveBeenCalled();
+    expect(mockWarn).toHaveBeenCalledWith(
+      expect.stringContaining('could not check first-run sync consent'),
+    );
+  });
+
+  it('syncs nothing when the user is back in Simple mode by the time it would start', async () => {
+    // The switch back to Simple makes its own sync decision; a second, overlapping sync would be
+    // refused by the backend.
+    const { papi, mockSendCommand } = createSwitchToPowerMockPapi({
+      mode: 'simple',
+      seed: PROJ_1_UNSENT,
+    });
+
+    await syncOnSwitchToPower(papi, 'proj-1');
+
+    expect(mockSendCommand).not.toHaveBeenCalled();
+  });
+
+  it('syncs nothing when the interface mode cannot be read', async () => {
+    const { papi, mockSendCommand } = createSwitchToPowerMockPapi({
+      mode: READ_THROWS,
+      seed: PROJ_1_UNSENT,
+    });
+
+    await syncOnSwitchToPower(papi, 'proj-1');
+
+    expect(mockSendCommand).not.toHaveBeenCalled();
+  });
+
+  it('starts one sync when a second switch arrives while the first is still deciding', async () => {
+    const { papi, mockSendCommand, emitUnsyncedChanges } = createSwitchToPowerMockPapi();
+
+    const first = syncOnSwitchToPower(papi, 'proj-1');
+    await flushMicrotasks();
+    const second = syncOnSwitchToPower(papi, 'PROJ-1');
+    await flushMicrotasks();
+    emitUnsyncedChanges(PROJ_1_UNSENT);
+    await Promise.all([first, second]);
+
+    expect(mockSendCommand.mock.calls).toEqual([
+      ['paratextBibleSendReceive.sendReceiveProjects', ['proj-1']],
+    ]);
+  });
+
+  it('decides afresh for a switch that comes after the first has finished deciding', async () => {
+    const { papi, mockSendCommand } = createSwitchToPowerMockPapi({ seed: PROJ_1_UNSENT });
+
+    await syncOnSwitchToPower(papi, 'proj-1');
+    await syncOnSwitchToPower(papi, 'proj-1');
+
+    expect(mockSendCommand).toHaveBeenCalledTimes(2);
+  });
+
+  it('reads the mode when the sync would start, not when the switch began', async () => {
+    const { papi, mockSendCommand, mockGetSetting, emitUnsyncedChanges } =
+      createSwitchToPowerMockPapi();
+
+    const syncing = syncOnSwitchToPower(papi, 'proj-1');
+    await flushMicrotasks();
+    // The user goes back to Simple while the wait is still open
+    mockGetSetting.mockResolvedValue('simple');
+    emitUnsyncedChanges(PROJ_1_UNSENT);
+    await syncing;
+
+    expect(mockSendCommand).not.toHaveBeenCalled();
+  });
+
+  it('resolves without syncing when the project id is not a string', async () => {
+    // Any PAPI client can send the command, so its argument is not guaranteed to match the type
+    const { papi, mockSendCommand, mockWarn } = createSwitchToPowerMockPapi({
+      seed: PROJ_1_UNSENT,
+    });
+
+    // Must cast to send what a malformed request would carry.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    await expect(syncOnSwitchToPower(papi, 42 as unknown as string)).resolves.toBeUndefined();
+
+    expect(mockSendCommand).not.toHaveBeenCalled();
+    expect(mockWarn).toHaveBeenCalled();
+  });
+
+  it('resolves and warns when the sync fails', async () => {
+    const { papi, mockSendCommand, mockWarn } = createSwitchToPowerMockPapi({
+      seed: PROJ_1_UNSENT,
+    });
+    mockSendCommand.mockRejectedValue(new Error('offline'));
+
+    await expect(syncOnSwitchToPower(papi, 'proj-1')).resolves.toBeUndefined();
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-1'));
+  });
+});
+
+// #endregion syncOnSwitchToPower
 
 // #region finalizeProjectSwitch
 

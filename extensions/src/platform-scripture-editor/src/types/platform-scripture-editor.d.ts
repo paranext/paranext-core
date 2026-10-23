@@ -937,6 +937,18 @@ declare module 'papi-shared-types' {
      */
     'platformScriptureEditor.finalizeProjectSwitch': (projectId: string) => Promise<void>;
     /**
+     * After a switch from Simple to Power mode, send/receives the project if it holds local changes
+     * to send. Resolves as soon as that work has started, not when it ends; the sync reports its
+     * own progress and failures, so this never rejects for them. Syncs nothing if the user chose
+     * "Don't sync yet" this session.
+     *
+     * Intended for Platform.Bible core's Simple -> Power mode switch.
+     *
+     * @param projectId The project the Simple-mode Scripture Editor was showing.
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platformScriptureEditor.syncOnSwitchToPower': (projectId: string) => Promise<void>;
+    /**
      * Opens the model text panel WebView for a translation project
      *
      * @param projectId The project ID of the translation project (not the resource). If not
