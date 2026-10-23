@@ -87,6 +87,15 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
 /**
  * Maps each server environment to its badge label and tooltip localize keys, so the "Internet &
  * connectivity" row can show which server `ParatextData.dll` currently targets.
+ *
+ * In most cases, probably only the Production label need be translated into non-English locales —
+ * it's the only badge most normal users ever see, while the other three target a dev/support
+ * audience who will recognize terse English environment names regardless of interface language;
+ * translating them risks adding confusion rather than clarity. This reasoning might not hold in all
+ * cases (e.g., non-Roman scripts), so they are available for localization as needed. The tooltips
+ * carry the real, localized explanation for anyone (including a non-English-speaking user who ends
+ * up on a non-Production server) who needs to understand what's going on, so all four tooltips
+ * should normally be translated.
  */
 const SERVER_BADGE_KEYS: Record<ServerType, { label: LocalizeKey; tooltip: LocalizeKey }> = {
   Production: {
