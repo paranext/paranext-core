@@ -2758,6 +2758,18 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return true;
     }
 
+    /// <summary>
+    /// Writes <paramref name="data"/> as the USFM of the chapter <paramref name="verseRef"/> names.
+    /// </summary>
+    /// <remarks>
+    /// The chapter markers in <paramref name="data"/> are made to agree with that chapter before
+    /// the write (see <see cref="ChapterMarkerCorrection"/>), so what is stored is not always
+    /// byte-for-byte what was passed in — a wrong number, an extra marker, or a missing one is
+    /// corrected rather than refused. Paratext rejects all three outright, and the rejection leaves
+    /// whatever produced them in place, so every later write of the chapter fails too; correcting
+    /// here is what keeps a single bad marker from stopping the chapter from being written at all.
+    /// A caller that needs the stored form should read it back.
+    /// </remarks>
     public bool SetChapterUsfm(VerseRef verseRef, string data)
     {
         using var _ = EnterSyncWriteScope();
@@ -2769,7 +2781,20 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 WriteScope.EntireProject(scrText),
                 writeLock =>
                 {
-                    scrText.PutText(verseRef.BookNum, verseRef.ChapterNum, false, data, writeLock);
+                    var correctedData = ChapterMarkerCorrection.FixChapterMarkers(
+                        data,
+                        verseRef.ChapterNum,
+                        out var wasCorrected
+                    );
+                    if (wasCorrected)
+                        Console.WriteLine(GetChapterMarkersCorrectedMessage(verseRef));
+                    scrText.PutText(
+                        verseRef.BookNum,
+                        verseRef.ChapterNum,
+                        false,
+                        correctedData,
+                        writeLock
+                    );
                 }
             );
         }
@@ -3104,6 +3129,13 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return SetBookUsfmInScope(verseRef, usfm);
     }
 
+    /// <summary>
+    /// Writes <paramref name="data"/> as the USX of the chapter <paramref name="verseRef"/> names.
+    /// </summary>
+    /// <remarks>
+    /// Corrects the chapter markers before writing, on the same terms as
+    /// <see cref="SetChapterUsfm"/>.
+    /// </remarks>
     public bool SetChapterUsx(VerseRef verseRef, string data)
     {
         using var _ = EnterSyncWriteScope();
@@ -3117,7 +3149,15 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 WriteScope.EntireProject(scrText),
                 writeLock =>
                 {
-                    var usfm = ConvertUsxToUsfm(scrText, verseRef, data);
+                    var convertedUsfm = ConvertUsxToUsfm(scrText, verseRef, data);
+                    // Correct the chapter markers before the comparison below so it sees what would
+                    // actually be written: content that differs from disk only by a bad marker must
+                    // still be written, and content that matches disk once corrected need not be.
+                    var usfm = ChapterMarkerCorrection.FixChapterMarkers(
+                        convertedUsfm,
+                        verseRef.ChapterNum,
+                        out var wasCorrected
+                    );
 
                     // Compare the current USFM to the normalized input USFM to see if anything changed
                     // This may happen if someone makes a whitespace change that gets normalized
@@ -3129,6 +3169,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                         return;
                     }
 
+                    if (wasCorrected)
+                        Console.WriteLine(GetChapterMarkersCorrectedMessage(verseRef));
                     scrText.PutText(verseRef.BookNum, verseRef.ChapterNum, true, usfm, writeLock);
                 }
             );
@@ -3168,6 +3210,16 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     #endregion
 
     #region Private helper methods
+
+    /// <summary>
+    /// What a chapter write logs when its chapter markers had to be corrected to match the chapter
+    /// being written. See <see cref="ChapterMarkerCorrection"/> for why they are corrected rather
+    /// than left for Paratext to reject. Written immediately before the write it describes, so a
+    /// correction that turns out to match what is already stored logs nothing.
+    /// </summary>
+    private static string GetChapterMarkersCorrectedMessage(VerseRef verseRef) =>
+        $"Chapter markers in {verseRef.Book} {verseRef.ChapterNum} did not match the chapter "
+        + "being written; they were corrected before saving.";
 
     private string GetFromScrText(
         VerseRef verseRef,

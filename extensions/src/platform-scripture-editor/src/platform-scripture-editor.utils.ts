@@ -1182,6 +1182,9 @@ export function getParagraphMarkerTitle(
  *   extension-host-reachable module may not import (see the note at the bottom of this file).
  *   Omitting it leaves the retag exposed to the lost-caret failure, so callers that can lose focus
  *   to the menu should always pass it.
+ * @param isChapterLoading Reports whether another chapter is loading, during which the editor still
+ *   shows the chapter being left and an edit would be dropped. A pick does nothing while it returns
+ *   `true`. Omitting it never blocks.
  * @returns List of marker menu items to be used for the paragraph menu
  */
 export function generateParagraphMenuListItems(
@@ -1190,6 +1193,7 @@ export function generateParagraphMenuListItems(
   isStructureProtected: boolean,
   notifyStructureProtected: () => void,
   restoreSelection?: () => void,
+  isChapterLoading?: () => boolean,
 ): MarkerMenuItem[] {
   return selectableParagraphMarkers.map((marker) => {
     // The trailing detail column would otherwise sit empty for exactly the menu this feature is
@@ -1202,6 +1206,7 @@ export function generateParagraphMenuListItems(
       title: getParagraphMarkerTitle(marker, localizedStrings) ?? marker,
       subtitle: descriptionKey ? localizedStrings[descriptionKey] : undefined,
       action: () => {
+        if (isChapterLoading?.()) return;
         // Defense-in-depth: unreachable while the paragraph control is disabled
         // (`disabled={isStructureProtected}` in the web view), so the popover never opens and this
         // action never runs. Kept as a second layer of protection in case that disabled state is
