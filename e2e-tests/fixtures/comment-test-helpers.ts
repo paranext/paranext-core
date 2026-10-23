@@ -68,12 +68,28 @@ const PARATEXT_PROJECTS_ROOT = path.join(
 const PARATEXT_PDPF_METHOD = 'object:platform.Paratext-pdpf.getProjectDataProviderId';
 
 /**
- * Paratext app-data directories are named `Paratext<major><minor>` — `Paratext80` is 8.0,
- * `Paratext94` is 9.4, `Paratext100` is 10.0 — so the suffix read as a number orders the versions
- * (minors are single-digit). Anything below 8.0 stored registration information in a different
- * shape and ParatextData ignores it; see `UpgradeAppDataFiles` in ParatextData's ParatextInfo.
+ * The app's own ParatextData app-data directory. Kept in sync with `APP_DATA_FOLDER_NAME` in
+ * `c-sharp/ParatextUtils/PlatformParatextInfo.cs`.
  */
-const OLDEST_SUPPORTED_PARATEXT_APP_DATA_VERSION = 80;
+const PLATFORM_APP_DATA_FOLDER_NAME = 'Paratext100';
+
+/**
+ * The files the app copies from Paratext 8/9 into its own directory; it copies them only while none
+ * of them is there. Kept in sync with `SEEDED_FILE_NAMES` in
+ * `c-sharp/ParatextUtils/PlatformParatextInfo.cs`.
+ */
+const SEEDED_FILE_NAMES = [
+  'RegistrationInfo.xml',
+  'InternetSettings.xml',
+  'ReleaseStage.txt',
+  'PTXprintPath.txt',
+];
+
+/**
+ * Paratext 8 and 9 app-data directories (`Paratext80`–`Paratext99`), which the app seeds its own
+ * directory from. The two digits are the major and minor version, so they order the versions.
+ */
+const PARATEXT_8_OR_9_APP_DATA_FOLDER = /^Paratext([89]\d)$/;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -105,9 +121,37 @@ function localApplicationDataRoot(): string | undefined {
 }
 
 /**
+ * The registration file the app reads, choosing the way `PlatformParatextInfo` does: the app's own
+ * directory once it holds any of the {@link SEEDED_FILE_NAMES}, otherwise the newest Paratext 8/9
+ * directory with a registration, which the app copies from on its next start.
+ */
+function findCurrentRegistrationFile(root: string): string | undefined {
+  const platformFolder = path.join(root, PLATFORM_APP_DATA_FOLDER_NAME);
+  const platformFolderIsSeeded = SEEDED_FILE_NAMES.some((fileName) =>
+    fs.existsSync(path.join(platformFolder, fileName)),
+  );
+  if (platformFolderIsSeeded) {
+    const registrationFile = path.join(platformFolder, 'RegistrationInfo.xml');
+    return fs.existsSync(registrationFile) ? registrationFile : undefined;
+  }
+
+  const newest = fs
+    .readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => ({
+      name: entry.name,
+      version: Number(PARATEXT_8_OR_9_APP_DATA_FOLDER.exec(entry.name)?.[1]),
+    }))
+    .filter((dir) => !Number.isNaN(dir.version))
+    .filter((dir) => fs.existsSync(path.join(root, dir.name, 'RegistrationInfo.xml')))
+    .sort((a, b) => a.version - b.version)
+    .pop();
+  return newest ? path.join(root, newest.name, 'RegistrationInfo.xml') : undefined;
+}
+
+/**
  * The name ParatextData reports as the current user (`RegistrationInfo.DefaultUser.Name`), read
- * from the machine's registration file: the highest-named `Paratext*` app-data directory holding a
- * `RegistrationInfo.xml`, which is how ParatextData picks one (`ParatextInfo`).
+ * from the registration file the app uses (see {@link findCurrentRegistrationFile}).
  *
  * Read from disk rather than asked of the running app on purpose. A project's
  * `ProjectUserAccess.xml` is loaded when ParatextData first opens the project, during the app's
@@ -120,19 +164,8 @@ export function readCurrentParatextUserName(): string | undefined {
   const root = localApplicationDataRoot();
   if (!root || !fs.existsSync(root)) return undefined;
 
-  const newest = fs
-    .readdirSync(root, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => ({
-      name: entry.name,
-      version: Number(/^Paratext(\d+)$/.exec(entry.name)?.[1]),
-    }))
-    .filter((dir) => dir.version >= OLDEST_SUPPORTED_PARATEXT_APP_DATA_VERSION)
-    .filter((dir) => fs.existsSync(path.join(root, dir.name, 'RegistrationInfo.xml')))
-    .sort((a, b) => a.version - b.version)
-    .pop();
-  if (!newest) return undefined;
-  const registrationFile = path.join(root, newest.name, 'RegistrationInfo.xml');
+  const registrationFile = findCurrentRegistrationFile(root);
+  if (!registrationFile) return undefined;
 
   const name = /<Name>([^<]*)<\/Name>/.exec(fs.readFileSync(registrationFile, 'utf8'))?.[1];
   // Decoded here because the value is scraped straight out of XML and handed to a writer that
@@ -491,8 +524,18 @@ export async function createCommentThreads(
  *    "unknown target tab"; the catch block returns `undefined` and the loop retries immediately on
  *    the next attempt, which succeeds once the race is resolved.
  * 3. Waits for the comment list iframe to appear in the UI before returning.
+ *
+ * A fresh list opens on the current chapter. Pass `options.scopeFilterToSet` to open it on a
+ * different scope (e.g. `'all-books'` when the test needs threads outside the current chapter
+ * listed); the override applies to that open only and is not stored as the user's selection.
  */
-export async function openCommentList(mainPage: Page, project: CommentTestProject): Promise<void> {
+export async function openCommentList(
+  mainPage: Page,
+  project: CommentTestProject,
+  options: {
+    scopeFilterToSet?: 'all-books' | 'current-book' | 'current-chapter' | 'current-verse';
+  } = {},
+): Promise<void> {
   // 1. Wait for the dock layout's initial loadLayout() to complete before opening any new webviews.
   //
   //    Why: `registerDockLayout` (called from the PlatformDockLayout `useEffect`) calls
@@ -584,7 +627,9 @@ export async function openCommentList(mainPage: Page, project: CommentTestProjec
 
     const commentListWebViewId = await sendPapiRequestOnce<string | undefined>(
       'command:legacyCommentManager.openCommentList',
-      [finalEditorWebViewId],
+      options.scopeFilterToSet
+        ? [finalEditorWebViewId, { scopeFilterToSet: options.scopeFilterToSet }]
+        : [finalEditorWebViewId],
       DEFAULT_WEBSOCKET_PORT,
       30_000,
     ).catch((e: unknown) => {

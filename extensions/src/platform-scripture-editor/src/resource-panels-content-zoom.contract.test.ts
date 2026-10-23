@@ -84,9 +84,15 @@ describe('content zoom markers (Text Collection grid)', () => {
       ),
     ).toHaveLength(2);
     // The scroll box's overflow class is chosen per view (the Grid view hands scrolling to its root),
-    // so the inline layout is pinned by the element's other classes.
+    // so the inline layout is pinned by the element's other classes. In both layouts the scroll box
+    // takes `copyAreaRef` (the header layout through `setHeaderContentElement`, which also sets the
+    // caller's `contentRef`), which the right-click Copy reads its selection within, so the resource
+    // name beside it is not copied.
     expect(cell).toMatch(
-      /<div className={`tw:min-w-0 tw:flex-1 \$\{contentOverflowClass\}`} style={contentStyle}> <ContentZoomRoot area={zoomArea}/,
+      /<div ref={copyAreaRef} className={`stg-verse-content tw:min-w-0 tw:flex-1 \$\{contentOverflowClass\}`} style={contentStyle} ?> <ContentZoomRoot area={zoomArea}/,
+    );
+    expect(cell).toMatch(
+      /<div ref={setHeaderContentElement} data-cell-content className={`tw:flex-1 \$\{contentOverflowClass\}`} style={contentStyle}/,
     );
     expect(cell).toContain(
       '<div data-cell-pad className="tw:p-2"> <ContentZoomRoot area={zoomArea}',
@@ -132,12 +138,12 @@ describe('content zoom markers (Bible Texts / Commentaries panel)', () => {
     expect(panel).toMatch(/resourceType === 'ScriptureResource' \? 'bible-texts' : 'commentaries'/);
   });
 
-  it('marks the editor inside its scroll box, keeping the selector and the messages unmarked', () => {
+  it('marks the editor inside its scroll box, keeping the selector, the copyright notice and the messages unmarked', () => {
     expect(panel).toMatch(
       /data-testid={RESOURCE_TEXT_EDITOR_CONTAINER_TEST_ID} ?> <ContentZoomRoot area={contentZoomArea}> <Editorial/,
     );
     expect(panel).toMatch(
-      /<ResourceSelectorDropdown[\s\S]*?\/> <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">{renderContent\(\)}<\/div>/,
+      /<ResourceSelectorDropdown[\s\S]*?\/> {copyrightNotice} <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">{renderContent\(\)}<\/div>/,
     );
   });
 

@@ -47,12 +47,22 @@ export const SHARE_LAYOUT_DIALOG_TYPE = 'platform.shareLayoutDialog';
 
 type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
 
-/** Options to provide when showing the Select Project dialog */
+/**
+ * Options to provide when showing the Select Project dialog. Projects that cannot be opened (see
+ * `ProjectMetadata.unsupportedReason`) are never listed, even when named in `includeProjectIds`.
+ */
 export type SelectProjectDialogOptions = ProjectDialogOptionsBase;
 
-/** Options to provide when showing the Select Multiple Project dialog */
+/**
+ * Options to provide when showing the Select Multiple Project dialog. Projects that cannot be
+ * opened (see `ProjectMetadata.unsupportedReason`) are never listed, even when named in
+ * `includeProjectIds`.
+ */
 export type SelectMultipleProjectsDialogOptions = ProjectDialogOptionsBase & {
-  /** Project IDs that should start selected in the dialog */
+  /**
+   * Project IDs that should start selected in the dialog. The id of a project that cannot be opened
+   * has no row to unselect, so it is returned unchanged on submit.
+   */
   selectedProjectIds?: string[];
 };
 
@@ -99,6 +109,12 @@ export type ResourcePickerDialogOptions = DialogOptions & {
    * one that is already on disk. Defaults to true.
    */
   allowSelectingInstalled?: boolean;
+  /**
+   * When true, texts whose licensing terms prohibit their use as a model or base for a new
+   * translation are shown greyed out, with the reason, and cannot be picked. Set it when picking a
+   * model text, not a reference text. Defaults to false.
+   */
+  disableRestrictedModelTexts?: boolean;
 };
 
 /**

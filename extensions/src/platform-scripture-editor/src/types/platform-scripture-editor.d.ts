@@ -85,6 +85,26 @@ declare module 'platform-scripture-editor' {
   export type AnnotationAction = 'clicked' | TypedMarkRemovalCause;
 
   /**
+   * How `platformScriptureEditor.showResourceInReferencePanel` ended.
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  export type ShowResourceInReferencePanelResult =
+    /** The resource is shown, in the tab with this web view ID */
+    | { status: 'shown'; webViewId: string }
+    /**
+     * The tab could not be shown, or not in time. The user has been told, and the resource should
+     * not be opened some other way.
+     */
+    | { status: 'notShown' }
+    /**
+     * Neither reference tab is open (outside Simple mode's layout), or the resource is of a kind
+     * neither tab lists, which the catalog does not produce today. Open it some other way. With no
+     * project open the resource is still shown in its tab — just not saved to any list.
+     */
+    | { status: 'openElsewhere' };
+
+  /**
    * Handler function for annotation interactions. To handle annotation interactions, register a
    * command with this type and pass the command's name to the editor WebViewController with
    * {@link PlatformScriptureEditorWebViewController.setAnnotation}
@@ -208,14 +228,14 @@ declare module 'platform-scripture-editor' {
    */
   export type ScriptureRange = {
     /**
-     * Starting point where the check result applies in the document
+     * Starting point of the range in the document
      *
      * Note: some forms of this type are deprecated and will be removed eventually; see
      * {@link ScriptureLocation} for details.
      */
     start: UsjChapterLocation | UsfmVerseLocation | ScriptureLocation;
     /**
-     * Ending point where the check result applies in the document
+     * Ending point of the range in the document.
      *
      * Note: some forms of this type are deprecated and will be removed eventually; see
      * {@link ScriptureLocation} for details.
@@ -447,8 +467,8 @@ declare module 'platform-scripture-editor' {
      * If the editor has already reported a selection, resolves immediately with that value (or
      * `undefined` if the editor reported no selection). If the editor has not yet reported any
      * selection at the time of the call, waits up to 10 seconds for the first selection and
-     * **rejects** if none arrives in that window — callers should be prepared to handle a rejected
-     * promise as well as a resolved `undefined`.
+     * resolves with `undefined` if none arrives in that window. Rejects only if the editor's
+     * controller is disposed while waiting.
      *
      * @returns The current selection range, or `undefined` if the editor reported no selection
      */
@@ -709,6 +729,7 @@ declare module 'papi-shared-types' {
     OpenEditorOptions,
     PlatformScriptureEditorWebViewController,
     SelectionChangeEvent,
+    ShowResourceInReferencePanelResult,
   } from 'platform-scripture-editor';
   import type { ResourceType } from 'platform-bible-utils';
   // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
@@ -794,6 +815,11 @@ declare module 'papi-shared-types' {
 
     /**
      * Opens a new read-only editor WebView and returns the WebView id
+     *
+     * In Simple mode this opens in the editor column, replacing the project there. To open a
+     * resource the user asked for in Simple mode, call
+     * `platformScriptureEditor.showResourceInReferencePanel` first, and this only when that answers
+     * `openElsewhere`.
      *
      * @param projectId Optional project ID of the project/resource to open. If a project ID
      *   (editable) is provided, this will properly open the Scripture editor. Prompts the user to
@@ -933,6 +959,27 @@ declare module 'papi-shared-types' {
       resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
       projectId?: string,
     ) => Promise<string | undefined>;
+    /**
+     * Shows a locally-installed resource in the tab for its kind — Commentaries for commentaries,
+     * Bible texts for Bible texts and for resources the catalog does not describe — and brings that
+     * tab to the front. Unless the team's list already has it, the resource is added to the current
+     * user's personal list for the project the tab shows. It is shown but not added when that
+     * cannot be settled safely (the team's list or the resource's catalog entry cannot be read
+     * yet). The team's list is never written.
+     *
+     * Decides within 20 seconds of the request, waiting behind another show included, whether to go
+     * ahead: a show that has not got as far as saving by then is dropped, and the user told. One
+     * that has started saving runs to completion, however long the save and the tab's reload take.
+     *
+     * @param resourceProjectId The local project id of the resource to show
+     * @returns How the show ended. The command itself never rejects: a rejection means it was not
+     *   reached, or PAPI's request timeout (`platform.requestTimeout`) elapsed first — a show that
+     *   has started saving can run past it.
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platformScriptureEditor.showResourceInReferencePanel': (
+      resourceProjectId: string,
+    ) => Promise<ShowResourceInReferencePanelResult>;
     /**
      * Brings the Bible texts tab to the front. If it isn't open, opens it for the editor's project.
      * An open tab is raised, never reloaded, so it keeps its state.

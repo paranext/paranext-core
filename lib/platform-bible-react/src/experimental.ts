@@ -81,11 +81,12 @@ export { Z_INDEX_TOOLTIP } from './components/z-index';
 export { ALL_BOOK_IDS } from './components/shared/book.utils';
 export { readDirection, persistDirection, type Direction } from './utils/dir-helper.util';
 // The standard-view marker-palette machinery: the shared keydown forwarding table, the shared
-// open-session orchestration, and the shared filter/ranking — one API family, kept together.
+// open-session orchestration, the shared editor-side key routing, and the shared filter/ranking —
+// one API family, kept together.
 export {
   clearPaletteSessionIfCurrent,
-  type ForwardedSessionKind,
   getMarkerPaletteClaimedKeys,
+  resolveFilterCharacter,
   handleMarkerPaletteSessionKeyDown,
   type MarkerPaletteKeyEvent,
   type MarkerPaletteKeyOutcome,
@@ -94,15 +95,41 @@ export {
   type MarkerPaletteSessionState,
 } from './components/advanced/marker-palette-keydown.util';
 export {
+  captureEditorContentSnapshot,
+  hasEditorChanged,
+  type EditorContentSnapshot,
+} from './components/advanced/marker-palette-change-guard.util';
+export {
   type MarkerPaletteOpenSession,
   runMarkerPaletteSession,
   type RunMarkerPaletteSessionOptions,
 } from './components/advanced/marker-palette-session.util';
 export {
   filterAndRankPaletteItems,
+  isNoteMarker,
   stripMarkerNestingPrefix,
   type PaletteFilterMode,
 } from './components/advanced/marker-palette-filter.util';
+export {
+  routeMarkerPaletteKey,
+  type RouteMarkerPaletteKeyOptions,
+} from './components/advanced/marker-palette-keys.util';
+export {
+  type FootnoteEditorMarkerPalette,
+  markerMenuItemToPaletteItem,
+} from './components/advanced/footnote-editor/footnote-editor.component';
+export {
+  useMarkerPaletteCompositionClose,
+  type UseMarkerPaletteCompositionCloseOptions,
+} from './components/advanced/use-marker-palette-composition-close.hook';
+export {
+  useMarkerPaletteSessionWriters,
+  type UseMarkerPaletteSessionWritersOptions,
+} from './components/advanced/use-marker-palette-session-writers.hook';
+export {
+  useMarkerPaletteFocusOutCapture,
+  type UseMarkerPaletteFocusOutCaptureOptions,
+} from './components/advanced/use-marker-palette-focus-out-capture.hook';
 export { isEditorContextMenuOpenFor } from './components/advanced/editor-context-menu.util';
 export {
   default as NavigationHistoryButtons,

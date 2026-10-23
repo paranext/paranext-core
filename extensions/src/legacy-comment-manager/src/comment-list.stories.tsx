@@ -10,9 +10,9 @@ import {
   COMMENT_LIST_PANEL_EXTRA_STRING_KEYS,
 } from './comment-list.component';
 import {
+  ALL_BOOKS_SCOPE_FILTER,
   CommentFilters,
   DEFAULT_COMMENT_FILTERS,
-  DEFAULT_SCOPE_FILTER,
   ScopeFilter,
 } from './comment-list-filters.model';
 
@@ -252,7 +252,7 @@ function createDecorator(config: DecoratorConfig) {
       ...DEFAULT_COMMENT_FILTERS,
       ...config.initialFilters,
     });
-    const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(DEFAULT_SCOPE_FILTER);
+    const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(ALL_BOOKS_SCOPE_FILTER);
     const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>(undefined);
     const [threads, setThreads] = useState<LegacyCommentThread[]>(config.threads ?? sampleThreads);
 

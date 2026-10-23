@@ -9,12 +9,12 @@ import {
 
 const localizedStrings = {
   '%paratextRegistration_description_internetUse_option_Enabled_2%': 'Unrestricted',
-  '%paratextRegistration_description_internetUse_option_Enabled_details%':
-    'Allows Paratext to use the internet for all services: Registry, Send/Receive, and resource downloads.',
+  '%paratextRegistration_description_internetUse_option_Enabled_details_2%':
+    'Allows Paratext to use the internet for all services: Registry, sync, and resource downloads.',
   '%paratextRegistration_description_internetUse_option_VpnRequired_2%':
     'Disable access to some Bible translation services',
-  '%paratextRegistration_description_internetUse_option_VpnRequired_details%':
-    'Disables access to Registry, Send/Receive, and the Digital Bible Library within the Paratext app. Other internet features and other applications are not affected.',
+  '%paratextRegistration_description_internetUse_option_VpnRequired_details_2%':
+    'Disables access to Registry, sync, and the Digital Bible Library within the Paratext app. Other internet features and other applications are not affected.',
   '%paratextRegistration_description_internetUse_option_Disabled_2%': 'Disable ALL internet access',
   '%paratextRegistration_description_internetUse_option_Disabled_details%':
     'Blocks all internet access within the Paratext app. Other applications on your computer are not affected.',
@@ -33,13 +33,15 @@ const localizedStrings = {
 };
 
 const ENABLED_DESCRIPTION =
-  localizedStrings['%paratextRegistration_description_internetUse_option_Enabled_details%'];
+  localizedStrings['%paratextRegistration_description_internetUse_option_Enabled_details_2%'];
 
 function Controlled(
-  props: Omit<InternetAccessOptionListProps, 'value' | 'onChange'> & { initialValue: InternetUse },
+  props: Omit<InternetAccessOptionListProps, 'value' | 'onChange'> & {
+    initialValue: InternetUse | undefined;
+  },
 ) {
   const { initialValue, ...rest } = props;
-  const [value, setValue] = useState<InternetUse>(initialValue);
+  const [value, setValue] = useState<InternetUse | undefined>(initialValue);
   return <InternetAccessOptionList {...rest} value={value} onChange={setValue} />;
 }
 
@@ -170,6 +172,15 @@ export const NarrowColumn: Story = {
 /** Option 2 selected — "Disable access to some Bible translation services". */
 export const DisabledAccess: Story = {
   render: (args) => <Controlled {...args} initialValue="VpnRequired" />,
+};
+
+/**
+ * No option selected — how the first-run wizard shows the list until the user picks one, so a
+ * stored value they never chose is not presented as their choice. No banner: nothing unsupported is
+ * selected.
+ */
+export const NothingSelected: Story = {
+  render: (args) => <Controlled {...args} initialValue={undefined} />,
 };
 
 /**

@@ -57,7 +57,8 @@ const EXTENDED_READINESS_POLL_INTERVAL_MS = 2000;
  * into `src/shared` would publish an extension-specific `platformScripture.*` literal into the
  * generated `papi.d.ts` public surface permanently, and the two answer different questions (that
  * one is the picker's display filter; this one is a startup readiness gate). They coincide today;
- * nothing requires them to. If you change one, consider the other.
+ * nothing requires them to. If you change one, consider the other — and the Scripture editor's
+ * `use-project-presence.hook.ts`, which keeps a third copy.
  *
  * The coupling is therefore intentionally left unenforced: no test asserts the two literals are
  * equal, because they are allowed to diverge. The cross-reference comment on each is the whole

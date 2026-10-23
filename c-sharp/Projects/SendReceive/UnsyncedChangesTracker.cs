@@ -3,7 +3,7 @@ using Paratext.Data;
 namespace Paranext.DataProvider.Projects.SendReceive;
 
 /// <summary>
-/// Keeps the set of projects whose local repository holds changes Send/Receive has not sent, and
+/// Keeps the set of projects holding local changes this user's next Send/Receive would send, and
 /// raises <see cref="Changed"/> whenever that set changes.
 /// <para>
 /// A project is (re)checked when a write scope for it closes

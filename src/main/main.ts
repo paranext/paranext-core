@@ -25,6 +25,12 @@ import path from 'path';
 import '@main/global-this.model';
 import '@node/utils/log-archiver.util';
 import { announceAppWindowInput, startAppWindowInputEvent } from '@main/app-window-input.util';
+import {
+  announceAppWillShutDown,
+  announceExtensionHostStopped,
+  startLifecycleEvents,
+} from '@main/lifecycle-events.util';
+import { registerExtensionHostStoppedStateCommand } from '@main/extension-host-stopped-state.command';
 import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util';
 import { getVerseNavigationCommand } from '@main/verse-navigation-shortcuts.util';
 import { getPhysicalHistoryNavigationDirection } from '@main/reference-history-keyboard.util';
@@ -39,6 +45,10 @@ import {
 import { startDialogServiceRouter } from '@main/services/dialog.service-router';
 import { startUsersnapServiceRouter } from '@main/services/usersnap.service-router';
 import { startBookChapterControlServiceRouter } from '@main/services/book-chapter-control.service-router';
+import {
+  applyPendingFirstRunReset,
+  startFirstRunServiceRouter,
+} from '@main/services/first-run.service-router';
 import { startOnboardingTourServiceRouter } from '@main/services/onboarding-tour.service-router';
 import { startScrollGroupNavigationCommands } from '@main/services/scroll-group-navigation.commands';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
@@ -50,6 +60,10 @@ import { extensionHostService } from '@main/services/extension-host.service';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
 import { registerPowerMonitorListeners } from '@main/services/power-monitor-logging.service';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
+import {
+  deferAutomaticSyncForSession,
+  getAutomaticSyncConsent,
+} from '@main/first-run-consent.util';
 import {
   performShutdownTasks,
   performWindowCloseTasks,
@@ -421,6 +435,22 @@ async function main() {
   // the gestures that dismiss transient overlays
   await startAppWindowInputEvent();
 
+  // Register the lifecycle events, then forward the extension host service's unexpected stops to
+  // every window. Subscribed before the extension host is started further down, so the very first
+  // process is covered too.
+  await startLifecycleEvents();
+  extensionHostService.onDidStopUnexpectedly(announceExtensionHostStopped);
+  // Registered this early so a window that connects while main is still starting up can already ask
+  // whether the extension host stopped; a later registration would answer it "no handler". A failure
+  // costs only that catch-up, so it is logged rather than aborting startup.
+  try {
+    await registerExtensionHostStoppedStateCommand();
+  } catch (error) {
+    logger.error(
+      `Failed to register platform.getExtensionHostStoppedState; windows opened after a stop will not show the notice: ${getErrorMessage(error)}`,
+    );
+  }
+
   // Register the focused-window-id event so the `focus`/`blur` handlers wired up per window below
   // can announce every change made through `setFocusedWindowId`/`removeWindow`
   await startFocusedWindowIdEvent();
@@ -452,6 +482,7 @@ async function main() {
       started: startBookChapterControlServiceRouter(),
     },
     { name: 'onboarding tour service router', started: startOnboardingTourServiceRouter() },
+    { name: 'first-run service router', started: startFirstRunServiceRouter() },
     { name: 'scripture navigation commands', started: startScrollGroupNavigationCommands() },
     { name: 'notification service router', started: startNotificationServiceRouter() },
     { name: 'window service router', started: startWindowServiceRouter() },
@@ -642,6 +673,9 @@ async function main() {
   // handler's graceful shutdown has already started.
   app.on('before-quit', () => {
     markQuitRequested();
+    // Before any window is destroyed, so a window can read its own connection dying a moment later
+    // as the quit it is, rather than as a failure. Best effort; see the event's doc.
+    announceAppWillShutDown();
   });
 
   // #region Set up the protocol client to receive navigation to this app's URI scheme
@@ -2398,6 +2432,8 @@ async function main() {
         }
       }
 
+      await applyPendingFirstRunReset();
+
       // Caught here rather than left to reject this chain: `createWindow` refuses outright during a
       // quit and the restore reads from disk, so this can fail — and a rejection would skip the
       // `activate` registration below, which is the only thing that brings windows back on macOS
@@ -2543,7 +2579,11 @@ async function main() {
 
   commandService.registerCommand('platform.restartExtensionHost', restartExtensionHost, {
     method: {
-      summary: 'Restart the extension host which reloads and reinitializes TS/JS extensions',
+      summary:
+        'Restart the extension host which reloads and reinitializes TS/JS extensions. Resolves ' +
+        'once the new process is forked. A call while a restart is already in flight (until the ' +
+        'new extension host announces its start) joins that restart and resolves with it, at ' +
+        'once if the new process is already forked.',
       params: [],
       result: {
         name: 'return value',
@@ -2720,6 +2760,33 @@ async function main() {
     {
       method: {
         summary: 'Get the os platform ("win32", "darwin", "linux")',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand('platform.getAutomaticSyncConsent', getAutomaticSyncConsent, {
+    method: {
+      summary:
+        'Whether the first-run sync consent gate allows an automatic Simple-mode Send/Receive to start now',
+      params: [],
+      result: {
+        name: 'return value',
+        schema: { type: 'string', enum: ['granted', 'unconfirmed', 'deferred'] },
+      },
+    },
+  });
+
+  commandService.registerCommand(
+    'platform.deferAutomaticSyncForSession',
+    async () => deferAutomaticSyncForSession(),
+    {
+      method: {
+        summary: 'Withhold automatic Simple-mode Send/Receive for the rest of this app session',
         params: [],
         result: {
           name: 'return value',

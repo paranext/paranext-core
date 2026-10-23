@@ -12,7 +12,7 @@ import {
   CommentListPanelProps,
   COMMENT_LIST_STICKY_HEADER_ELEMENT_ID,
 } from './comment-list.component';
-import { DEFAULT_COMMENT_FILTERS, DEFAULT_SCOPE_FILTER } from './comment-list-filters.model';
+import { ALL_BOOKS_SCOPE_FILTER, DEFAULT_COMMENT_FILTERS } from './comment-list-filters.model';
 
 // Radix Select scrolls its highlighted item into view on open and checks pointer capture on
 // pointerdown; jsdom implements neither. cmdk uses ResizeObserver, which jsdom also doesn't
@@ -35,7 +35,7 @@ beforeAll(() => {
   };
 });
 
-const SYNC_BLOCKED_NOTICE_KEY = '%webView_legacyCommentManager_syncEditBlocked_notice%';
+const SYNC_BLOCKED_NOTICE_KEY = '%webView_legacyCommentManager_syncEditBlocked_notice_2%';
 const SYNC_BLOCKED_NOTICE_TEXT = 'Editing is paused while this project syncs.';
 
 type LocalizedStringsFile = {
@@ -83,7 +83,7 @@ function renderPanel(overrides: Partial<CommentListPanelProps> = {}) {
       currentUser="Tester"
       filters={DEFAULT_COMMENT_FILTERS}
       onFiltersChange={vi.fn()}
-      scopeFilter={DEFAULT_SCOPE_FILTER}
+      scopeFilter={ALL_BOOKS_SCOPE_FILTER}
       onScopeFilterChange={vi.fn()}
       handleAddCommentToThread={vi.fn()}
       handleUpdateComment={vi.fn()}
@@ -113,7 +113,7 @@ describe('CommentListPanel sync-blocked notice', () => {
 
 describe('CommentListPanel empty state', () => {
   it('shows the generic empty message when no filters are active', () => {
-    renderPanel(); // default filters: preset 'all', scope 'all-books'
+    renderPanel(); // unfiltered: preset 'all', scope 'all-books'
     expect(screen.getByText(EN_STRINGS['%no_comments%'])).toBeInTheDocument();
     expect(screen.queryByText(EN_STRINGS['%no_comments_match_filter%'])).not.toBeInTheDocument();
   });

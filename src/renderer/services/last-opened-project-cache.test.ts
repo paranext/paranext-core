@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { getLastOpenedProject, setLastOpenedProject } from './last-opened-project-cache';
 
-const STORAGE_KEY = 'platform-bible.lastOpenedProject';
+const STORAGE_KEY = 'platform-bible.lastOpenedProject.v2';
+const EARLIER_STORAGE_KEY = 'platform-bible.lastOpenedProject';
 
 describe('last-opened-project-cache', () => {
   beforeEach(() => {
@@ -89,6 +90,34 @@ describe('last-opened-project-cache', () => {
         throw new Error('quota exceeded');
       });
       expect(() => setLastOpenedProject({ id: 'proj-1' })).not.toThrow();
+    });
+  });
+
+  describe('an entry under the earlier key', () => {
+    it('is never read, since it may name a project that is no longer usable', () => {
+      localStorage.setItem(EARLIER_STORAGE_KEY, JSON.stringify({ id: 'proj-old' }));
+      expect(getLastOpenedProject()).toBeUndefined();
+    });
+
+    it('is removed the first time the cache is read', async () => {
+      vi.resetModules();
+      const cache = await import('./last-opened-project-cache');
+      localStorage.setItem(EARLIER_STORAGE_KEY, JSON.stringify({ id: 'proj-old' }));
+
+      cache.getLastOpenedProject();
+
+      expect(localStorage.getItem(EARLIER_STORAGE_KEY)).toBeNull();
+    });
+
+    it('is removed the first time the cache is written', async () => {
+      vi.resetModules();
+      const cache = await import('./last-opened-project-cache');
+      localStorage.setItem(EARLIER_STORAGE_KEY, JSON.stringify({ id: 'proj-old' }));
+
+      cache.setLastOpenedProject({ id: 'proj-1' });
+
+      expect(localStorage.getItem(EARLIER_STORAGE_KEY)).toBeNull();
+      expect(cache.getLastOpenedProject()).toEqual({ id: 'proj-1' });
     });
   });
 

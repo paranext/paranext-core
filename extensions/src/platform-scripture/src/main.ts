@@ -54,6 +54,7 @@ import {
   recentlyOpenedProjectsService,
   RECENTLY_OPENED_PROJECTS_STORAGE_KEY,
 } from './recently-opened-projects.service';
+import { refuseIfProjectUnsupported } from './project-open-blocked.util';
 import { resourceReferenceListValidator } from './resource-reference-list.utils';
 
 const characterInventoryWebViewType = 'platformScripture.characterInventory';
@@ -112,6 +113,19 @@ const sharedLayoutDefaultTabValidator: ProjectSettingValidator<
 
 // #endregion
 
+/**
+ * Whether a tool must not open on `projectId` because the project cannot be opened, telling the
+ * user why when it must not. See {@link refuseIfProjectUnsupported}.
+ */
+function refuseToOpenToolOn(projectId: string): Promise<boolean> {
+  return refuseIfProjectUnsupported(projectId, {
+    getMetadataForProject: (id) => papi.projectLookup.getMetadataForProject(id),
+    getLocalizedStrings: (localizeKeys) => papi.localization.getLocalizedStrings({ localizeKeys }),
+    sendNotification: (notification) => papi.notifications.send(notification),
+    logWarning: (message) => logger.warn(message),
+  });
+}
+
 async function openPlatformCharactersInventory(
   webViewId: string | undefined,
 ): Promise<string | undefined> {
@@ -147,7 +161,7 @@ async function openInventory(
     projectId = webViewDefinition?.projectId;
   }
 
-  if (!projectId) {
+  if (!projectId || (await refuseToOpenToolOn(projectId))) {
     return undefined;
   }
 
@@ -179,6 +193,7 @@ async function openChecksSidePanel(
     logger.debug('No project!');
     return undefined;
   }
+  if (await refuseToOpenToolOn(projectId)) return undefined;
 
   const options: ChecksSidePanelWebViewOptions = {
     projectId,
@@ -200,6 +215,7 @@ async function openMarkersChecklist(webViewId: string | undefined): Promise<stri
     logger.debug('No project!');
     return undefined;
   }
+  if (await refuseToOpenToolOn(projectId)) return undefined;
 
   const options: ChecklistWebViewOptions = { projectId };
   return papi.webViews.openWebView(
@@ -292,6 +308,7 @@ async function openManageBooksUnserialized(
       projectId = webViewIdOrProjectId;
     }
   }
+  if (projectId && (await refuseToOpenToolOn(projectId))) return undefined;
 
   const isCreateMissingBookLaunch = intent === 'createMissingBook' && !!projectId;
 

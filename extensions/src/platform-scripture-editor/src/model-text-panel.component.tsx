@@ -29,12 +29,20 @@ import type {
   ProjectReference,
   ResourceReferenceList,
 } from 'platform-scripture';
-import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ComponentProps,
+  ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { selectTextConnection } from './select-dbl-resource';
 import {
+  getModelResourceProjectId,
   getRefLabel,
   isDblResourceReference,
-  isNonDblResource,
   isProjectReference,
 } from './resource-reference.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
@@ -50,6 +58,7 @@ import { getResourcePanelReadiness } from './resource-panel-readiness.utils';
 import { PanelReadinessView } from './panel-readiness-view.component';
 import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
 import { SCROLL_MAX_WAIT_MS, scrollToVerse } from './editor-dom.util';
+import { blockCopyWhileChapterLoads } from './copy-limit/resolve-copy-limit.util';
 import { ResourceBookNotAvailable } from './resource-book-not-available.component';
 import { ResourceBlankChapter } from './resource-blank-chapter.component';
 import { ResourceTextUnavailable } from './resource-text-unavailable.component';
@@ -153,8 +162,20 @@ export type ModelTextPanelProps = {
     resourceProjectId: string,
     scrRef: SerializedVerseRef,
   ) => Promise<{ usj: Usj | undefined; textDirection: string }>;
+  /**
+   * The copy limit of the chapter `scrRef` points to in the project `getModelResourceProjectId`
+   * resolves, as `useChapterCopyLimit` gives it. Required so a caller states it: `undefined` means
+   * no limit, and `0`, the answer while the limit is unknown, blocks copying. The panel also blocks
+   * copying while the chapter text loads.
+   */
+  resourceCopyLimit: number | undefined;
   /** Logger forwarded to the editor (the webview supplies the PAPI logger; stories may omit it). */
   logger?: ComponentProps<typeof Editorial>['logger'];
+  /**
+   * The model text's copyright notice, shown below the header. The web view supplies it because
+   * reading the notice needs PAPI.
+   */
+  copyrightNotice?: ReactNode;
 };
 
 /**
@@ -178,7 +199,9 @@ export function ModelTextPanel({
   setUserModelTexts,
   showResourcePicker,
   getResourceChapter,
+  resourceCopyLimit,
   logger,
+  copyrightNotice,
 }: ModelTextPanelProps) {
   // --- Resolve the configured model text against the DBL resource list ---
 
@@ -189,14 +212,7 @@ export function ModelTextPanel({
   let dblRef: (EffectiveResourceReference & DblResourceReference) | undefined;
   if (isDblResourceReference(effectiveModelText)) dblRef = effectiveModelText;
   const match = dblRef ? findCachedDblResource(dblRef, dblResources) : undefined;
-  // ProjectReferences are locally-installed non-DBL resources. Only treat the reference as
-  // resolvable if the project is confirmed present in dblResources — an admin-shared reference
-  // pointing at a project the user hasn't installed must fall through to the not-found guard.
-  const localProjectId = isProjectReference(effectiveModelText)
-    ? dblResources.find((r) => isNonDblResource(r) && r.projectId === effectiveModelText.id)
-        ?.projectId
-    : undefined;
-  const resourceProjectId = match?.installed ? match.projectId : localProjectId;
+  const resourceProjectId = getModelResourceProjectId(effectiveModelText, dblResources);
   const modelTextLabel = effectiveModelText
     ? getRefLabel(effectiveModelText, dblResources)
     : undefined;
@@ -360,6 +376,10 @@ export function ModelTextPanel({
   // makes a claim about the model text is gated on this.
   const isAnswerCurrent = loadedRequestKey === requestKey;
 
+  // See `blockCopyWhileChapterLoads` for why the limit is 0 while the chapter text loads. The text
+  // in hand is loading from the render the reference changes, not only once the fetch starts.
+  const copyLimit = blockCopyWhileChapterLoads(resourceCopyLimit, !isAnswerCurrent || isUsjLoading);
+
   // A chapter the resource HAS but with nothing in it. Gated on the answer in hand being for this
   // reference, because `usj` keeps the previous chapter's content until the new fetch lands —
   // deriving this from stale content would paint the message over a chapter that is still arriving,
@@ -419,8 +439,9 @@ export function ModelTextPanel({
       // editor's `auto` is not a mode core passes; anything else falls back to ltr.
       textDirection: textDirection === 'rtl' ? 'rtl' : 'ltr',
       view: VIEW_OPTIONS,
+      copyLimit,
     }),
-    [textDirection, extraValidMarkers],
+    [textDirection, extraValidMarkers, copyLimit],
   );
 
   // Read-only: push incoming USJ directly into the editor whenever it changes. This effect is the
@@ -795,6 +816,9 @@ export function ModelTextPanel({
           </Tooltip>
         </TooltipProvider>
       )}
+      {/* Below the header, so the header keeps the fixed 42px height that lines it up with
+          Column 3's tab bar */}
+      {copyrightNotice}
       {/* The label row stays outside the zoom area (marked inside the editor's scroll box in
           `renderContent`) so its pinned 42 px height — aligned with the editor's toolbar and
           Column 3's tab bar — doesn't scale with the content. */}

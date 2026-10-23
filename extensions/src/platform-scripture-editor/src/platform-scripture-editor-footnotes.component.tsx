@@ -1,4 +1,5 @@
 import {
+  ClipboardEvent,
   FocusEvent,
   PropsWithChildren,
   ReactNode,
@@ -23,7 +24,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { getErrorMessage, getPaneSizeLimits, LanguageStrings } from 'platform-bible-utils';
+import {
+  getErrorMessage,
+  getPaneSizeLimits,
+  LanguageStrings,
+  truncateToCopyLimit,
+} from 'platform-bible-utils';
 import { EditorWebViewMessage } from 'platform-scripture-editor';
 import { UseWebViewStateHook } from '@papi/core';
 import { logger } from '@papi/frontend';
@@ -160,6 +166,12 @@ export type FootnotesLayoutProps = PropsWithChildren<{
    * that panel's scrolling element never being replaced. Defaults to `true`.
    */
   isPaneVisible?: boolean;
+  /**
+   * The most UTF-16 code units a copy from the pane may put on the clipboard; `undefined` is
+   * unlimited. The pane shows the chapter's own text, so pass the editor's `copyLimit`, `0` while
+   * loading included. Required so a caller states it.
+   */
+  copyLimit: number | undefined;
 }>;
 
 /** Panel id of the Scripture text in the layout group. Stable, so its panel never remounts. */
@@ -198,6 +210,7 @@ function FootnotesPane({
   isLoading = false,
   zoomAreaLabel,
   listLayout,
+  copyLimit,
 }: FootnotesPaneProps) {
   const [footnotes, setFootnotes] = useState<MarkerObject[]>([]);
 
@@ -507,6 +520,25 @@ function FootnotesPane({
     onSelectedFootnoteChange?.(selectedFootnote?.index);
   }, [selectedFootnote, onSelectedFootnoteChange]);
 
+  // The pane is outside the editor, whose own copy guard handles only selections that reach into
+  // the editor, so the pane shortens its own copies. A copy within the limit is left to the
+  // browser, with all its usual clipboard formats; only one that needs shortening is written, as
+  // plain text. A copy inside a row editor has already been handled by that editor's own copy
+  // guard, so it is left as the editor wrote it.
+  const handleFootnotesCopy = useCallback(
+    (event: ClipboardEvent<HTMLDivElement>) => {
+      if (copyLimit === undefined || event.defaultPrevented) return;
+      const selectedText = window.getSelection()?.toString() ?? '';
+      const text = truncateToCopyLimit(selectedText, copyLimit);
+      if (text === selectedText) return;
+      event.preventDefault();
+      // React types `clipboardData` as always present, but some copy events carry none; the copy
+      // stays blocked rather than letting the browser copy the whole selection.
+      if (text && event.clipboardData) event.clipboardData.setData('text/plain', text);
+    },
+    [copyLimit],
+  );
+
   return (
     <div
       ref={paneContainerRef}
@@ -553,6 +585,7 @@ function FootnotesPane({
         area="footnotes"
         label={zoomAreaLabel}
         className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0 tw:[&_li]:pe-7"
+        onCopy={handleFootnotesCopy}
       >
         {footnotes.length === 0 && !isLoading && (
           <EmptyState

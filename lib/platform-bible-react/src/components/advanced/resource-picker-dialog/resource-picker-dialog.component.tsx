@@ -5,13 +5,19 @@ import { DialogDescription, DialogHeader, DialogTitle } from '@/components/shadc
 import { Label } from '@/components/shadcn-ui/label';
 import { Table, TableBody, TableCell, TableRow } from '@/components/shadcn-ui/table';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
+import {
   MultiSelectComboBox,
   MultiSelectComboBoxEntry,
 } from '@/components/advanced/multi-select-combo-box.component';
 import { SearchBar } from '@/components/basics/search-bar.component';
 import { DblResourceData, ResourceType, formatReplacementString } from 'platform-bible-utils';
-import { Check, CloudOff, SearchX } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { Check, CloudOff, Lock, SearchX } from 'lucide-react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type RefObject } from 'react';
 import { Spinner } from '@/components/basics/spinner.component';
 import {
   buildLanguageFilterOptions,
@@ -116,6 +122,15 @@ export interface ResourcePickerDialogProps {
    * non-interactive, showing only a checkmark) to preserve existing consumers' behavior.
    */
   allowDeselect?: boolean;
+  /**
+   * Returns why a resource cannot be picked, or `undefined` when it can. Applies to the "Installed"
+   * and "Available to Download" rows only, so a resource that is already selected can still be
+   * deselected.
+   *
+   * A row with a reason is shown dimmed with a lock icon and is not selectable. The reason appears
+   * in a tooltip on hover and keyboard focus, and is the row's description for screen readers.
+   */
+  getDisabledReason?: (resource: DblResourceData) => string | undefined;
   /** Called when the user clicks a resource row to select it */
   onSelect: (resource: DblResourceData) => void;
   /**
@@ -129,6 +144,80 @@ export interface ResourcePickerDialogProps {
   searchInputRef?: RefObject<HTMLInputElement | null>;
 }
 
+/** The display name, full name, and language cells shared by every resource row. */
+function ResourceRowCells({ resource }: { resource: DblResourceData }) {
+  return (
+    <>
+      {/* Every name cell truncates instead of widening the table, and carries its untruncated
+          text as a native hover label so nothing becomes unreadable.
+
+          What allows a cell to be narrower than its content is `table-fixed` plus the
+          `<colgroup>` below — under fixed layout the `<col>` widths are the column widths, and
+          per-cell `max-width` is not consulted at all. `max-w-0` is belt-and-braces for anyone
+          who renders these rows under the default auto layout; removing `table-fixed` or the
+          colgroup is what brings the horizontal scrollbar back. */}
+      {/* `text-start` is the table default, and stated anyway: it is the one invariant of the
+          picker row layout contract that has no class of its own to point at, so a test can
+          only assert its absence otherwise — and "not end-aligned" stays green against a column
+          centred, indented, or realigned some other way. See
+          `.claude/rules/ux/picker-row-layout.md`. */}
+      <TableCell className="tw:max-w-0 tw:truncate tw:border-0 tw:py-1 tw:pe-2 tw:text-start tw:font-normal">
+        <span title={resource.displayName}>{resource.displayName}</span>
+      </TableCell>
+      <TableCell className="tw:max-w-0 tw:truncate tw:border-0 tw:py-1 tw:ps-2">
+        <span title={resource.fullName}>{resource.fullName}</span>
+      </TableCell>
+      {/* `text-end`, not `text-right`: the language sits on the trailing edge of the row, which
+          is the left one in an RTL layout.
+
+          End alignment does not strand the ellipsis. Once the text overflows, the line is
+          wider than the box and `text-align` has nothing left to position, so the ellipsis
+          renders at the inline-end edge either way — measured in Chromium against a
+          `table-fixed` + `colgroup` reproduction, where an end-aligned and a start-aligned
+          `max-width:0` truncating cell render identically. The `title` below is the
+          belt-and-braces half: whatever the ellipsis does, the untruncated language stays
+          reachable on hover. */}
+      <TableCell className="tw:max-w-0 tw:truncate tw:border-0 tw:py-1 tw:ps-4 tw:text-end tw:text-muted-foreground">
+        <span title={resource.bestLanguageName}>{resource.bestLanguageName}</span>
+      </TableCell>
+    </>
+  );
+}
+
+/**
+ * A resource row that cannot be picked. It is reached like any other row — by pointer, or with the
+ * table's arrow-key navigation — so the tooltip explaining why opens on hover and on focus alike.
+ */
+function DisabledResourceRow({ resource, reason }: { resource: DblResourceData; reason: string }) {
+  const reasonId = useId();
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <TableRow
+          role="button"
+          aria-disabled="true"
+          aria-label={resource.displayName}
+          aria-describedby={reasonId}
+          // Swallows activation so Space does not scroll the list, without selecting anything.
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') e.preventDefault();
+          }}
+          className="tw:cursor-not-allowed tw:border-0 tw:opacity-50 tw:hover:bg-transparent"
+        >
+          <TableCell className="tw:border-0 tw:px-1 tw:py-1">
+            <Lock className="tw:h-3.5 tw:w-3.5" aria-hidden />
+            <span id={reasonId} className="tw:sr-only">
+              {reason}
+            </span>
+          </TableCell>
+          <ResourceRowCells resource={resource} />
+        </TableRow>
+      </TooltipTrigger>
+      <TooltipContent className="tw:max-w-xs">{reason}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 /**
  * Component to list filtered resources entries for one of the resource picker sections. Optionally
  * allows clicking and selecting when `onSelect` is not undefined for the cases that the resource
@@ -139,11 +228,13 @@ function ResourceSection({
   resources,
   onSelect,
   showCheckmark,
+  getDisabledReason,
 }: {
   label: string;
   resources: DblResourceData[];
   onSelect?: (resource: DblResourceData) => void;
   showCheckmark?: boolean;
+  getDisabledReason?: (resource: DblResourceData) => string | undefined;
 }) {
   if (resources.length === 0) return undefined;
   return (
@@ -155,71 +246,45 @@ function ResourceSection({
           </Label>
         </TableCell>
       </TableRow>
-      {resources.map((r) => (
-        <TableRow
-          key={r.dblEntryUid}
-          className={
-            onSelect ? 'tw:cursor-pointer tw:border-0' : 'tw:pointer-events-none tw:border-0'
-          }
-          role={onSelect ? 'button' : undefined}
-          aria-label={onSelect ? r.displayName : undefined}
-          onClick={onSelect ? () => onSelect(r) : undefined}
-          onKeyDown={
-            onSelect
-              ? (e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    onSelect(r);
+      {resources.map((r) => {
+        const disabledReason = getDisabledReason?.(r);
+        if (disabledReason)
+          return <DisabledResourceRow key={r.dblEntryUid} resource={r} reason={disabledReason} />;
+        return (
+          <TableRow
+            key={r.dblEntryUid}
+            className={
+              onSelect ? 'tw:cursor-pointer tw:border-0' : 'tw:pointer-events-none tw:border-0'
+            }
+            role={onSelect ? 'button' : undefined}
+            aria-label={onSelect ? r.displayName : undefined}
+            onClick={onSelect ? () => onSelect(r) : undefined}
+            onKeyDown={
+              onSelect
+                ? (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onSelect(r);
+                    }
                   }
-                }
-              : undefined
-          }
-        >
-          {/* `px-1` rather than `TableCell`'s default `p-2`: under `table-fixed` the `<col>` below
-              is a hard width the column cannot grow past, and the base 8px start padding leaves the
-              14px glyph too little room to sit in. The two have to be read together. */}
-          <TableCell className="tw:border-0 tw:px-1 tw:py-1">
-            {showCheckmark && (
-              <>
-                <Check className="tw:h-3.5 tw:w-3.5" aria-hidden />
-                <span className="tw:sr-only">{label}</span>
-              </>
-            )}
-          </TableCell>
-          {/* Every name cell truncates instead of widening the table, and carries its untruncated
-              text as a native hover label so nothing becomes unreadable.
-
-              What allows a cell to be narrower than its content is `table-fixed` plus the
-              `<colgroup>` below — under fixed layout the `<col>` widths are the column widths, and
-              per-cell `max-width` is not consulted at all. `max-w-0` is belt-and-braces for anyone
-              who renders these rows under the default auto layout; removing `table-fixed` or the
-              colgroup is what brings the horizontal scrollbar back. */}
-          {/* `text-start` is the table default, and stated anyway: it is the one invariant of the
-              picker row layout contract that has no class of its own to point at, so a test can
-              only assert its absence otherwise — and "not end-aligned" stays green against a column
-              centred, indented, or realigned some other way. See
-              `.claude/rules/ux/picker-row-layout.md`. */}
-          <TableCell className="tw:max-w-0 tw:truncate tw:border-0 tw:py-1 tw:pe-2 tw:text-start tw:font-normal">
-            <span title={r.displayName}>{r.displayName}</span>
-          </TableCell>
-          <TableCell className="tw:max-w-0 tw:truncate tw:border-0 tw:py-1 tw:ps-2">
-            <span title={r.fullName}>{r.fullName}</span>
-          </TableCell>
-          {/* `text-end`, not `text-right`: the language sits on the trailing edge of the row, which
-              is the left one in an RTL layout.
-
-              End alignment does not strand the ellipsis. Once the text overflows, the line is
-              wider than the box and `text-align` has nothing left to position, so the ellipsis
-              renders at the inline-end edge either way — measured in Chromium against a
-              `table-fixed` + `colgroup` reproduction, where an end-aligned and a start-aligned
-              `max-width:0` truncating cell render identically. The `title` below is the
-              belt-and-braces half: whatever the ellipsis does, the untruncated language stays
-              reachable on hover. */}
-          <TableCell className="tw:max-w-0 tw:truncate tw:border-0 tw:py-1 tw:ps-4 tw:text-end tw:text-muted-foreground">
-            <span title={r.bestLanguageName}>{r.bestLanguageName}</span>
-          </TableCell>
-        </TableRow>
-      ))}
+                : undefined
+            }
+          >
+            {/* `px-1` rather than `TableCell`'s default `p-2`: under `table-fixed` the `<col>` below
+                is a hard width the column cannot grow past, and the base 8px start padding leaves the
+                14px glyph too little room to sit in. The two have to be read together. */}
+            <TableCell className="tw:border-0 tw:px-1 tw:py-1">
+              {showCheckmark && (
+                <>
+                  <Check className="tw:h-3.5 tw:w-3.5" aria-hidden />
+                  <span className="tw:sr-only">{label}</span>
+                </>
+              )}
+            </TableCell>
+            <ResourceRowCells resource={r} />
+          </TableRow>
+        );
+      })}
     </>
   );
 }
@@ -313,6 +378,7 @@ export default function ResourcePickerDialog({
   allowSelectingInstalled = true,
   localizedStrings,
   allowDeselect,
+  getDisabledReason,
   onSelect,
   searchInputRef: externalSearchInputRef,
 }: ResourcePickerDialogProps) {
@@ -630,45 +696,49 @@ export default function ResourcePickerDialog({
             out of the dialog. The proportions come from the colgroup rather than per-cell widths,
             because the section-heading rows span all four columns and so cannot carry them. */}
         {bodyState === 'list' && (
-          <Table className="tw:table-fixed">
-            {/* Proportions, not pixels, so the same table reads correctly in the 640px Share
-                Layout host and at full dialog width. The language column gets a sixth rather than
-                a quarter: it holds one short word, while the full name beside it is the column a
-                user actually reads and is the one that has to truncate last. The checkmark column
-                is a fixed width because its content is one fixed-size glyph — see the padding note
-                on that cell. */}
-            <colgroup>
-              <col className="tw:w-7" />
-              <col className="tw:w-1/4" />
-              <col />
-              <col className="tw:w-1/6" />
-            </colgroup>
-            <TableBody>
-              <ResourceSection
-                label={alreadySelectedLabel}
-                resources={alreadySelected}
-                onSelect={allowDeselect ? onSelect : undefined}
-                showCheckmark
-              />
-              <ResourceSection
-                label={installedLabel}
-                resources={installed}
-                onSelect={allowSelectingInstalled ? onSelect : undefined}
-              />
-              <ResourceSection
-                label={toDownloadLabel}
-                resources={visibleToDownload}
-                onSelect={onSelect}
-              />
-              {hasMore && (
-                <TableRow className="tw:border-0">
-                  <TableCell colSpan={4} className="tw:border-0 tw:p-0">
-                    <div ref={sentinelRef} aria-hidden />
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+          <TooltipProvider>
+            <Table className="tw:table-fixed">
+              {/* Proportions, not pixels, so the same table reads correctly in the 640px Share
+                  Layout host and at full dialog width. The language column gets a sixth rather than
+                  a quarter: it holds one short word, while the full name beside it is the column a
+                  user actually reads and is the one that has to truncate last. The checkmark column
+                  is a fixed width because its content is one fixed-size glyph — see the padding note
+                  on that cell. */}
+              <colgroup>
+                <col className="tw:w-7" />
+                <col className="tw:w-1/4" />
+                <col />
+                <col className="tw:w-1/6" />
+              </colgroup>
+              <TableBody>
+                <ResourceSection
+                  label={alreadySelectedLabel}
+                  resources={alreadySelected}
+                  onSelect={allowDeselect ? onSelect : undefined}
+                  showCheckmark
+                />
+                <ResourceSection
+                  label={installedLabel}
+                  resources={installed}
+                  onSelect={allowSelectingInstalled ? onSelect : undefined}
+                  getDisabledReason={getDisabledReason}
+                />
+                <ResourceSection
+                  label={toDownloadLabel}
+                  resources={visibleToDownload}
+                  onSelect={onSelect}
+                  getDisabledReason={getDisabledReason}
+                />
+                {hasMore && (
+                  <TableRow className="tw:border-0">
+                    <TableCell colSpan={4} className="tw:border-0 tw:p-0">
+                      <div ref={sentinelRef} aria-hidden />
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TooltipProvider>
         )}
       </div>
     </>

@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
  * de-duplicated, sorted ids. A project can appear in both lists.
  */
 export type UnsyncedChangeSets = {
-  /** Projects whose local repository holds changes not yet sent. */
+  /** Projects holding local changes this user's next sync would send. */
   toSend: readonly string[];
   /** Projects for which the server holds changes not yet received. */
   toReceive: readonly string[];
@@ -71,8 +71,8 @@ function isSameSets(a: UnsyncedChangeSets | undefined, b: UnsyncedChangeSets): b
 }
 
 /**
- * The projects out of step with the Send/Receive server — those whose local repository holds
- * changes not yet sent, and those for which the server holds changes not yet received — or
+ * The projects out of step with the Send/Receive server — those holding local changes this user's
+ * next sync would send, and those for which the server holds changes not yet received — or
  * `undefined` while that is not known: before the seed answers, and after the seed's retry window
  * closes with no answer. `undefined` is not "nothing is unsynced": a consumer must not make that
  * claim on the strength of a failed read.

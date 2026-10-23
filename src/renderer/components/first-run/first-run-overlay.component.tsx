@@ -247,6 +247,8 @@ export function FirstRunGate({
               entryStep={status.step}
               stepComponents={stepComponents}
               allowContinueWithoutRegistration={status.allowContinueWithoutRegistration}
+              registrationValidAtStart={status.registrationValidAtStart}
+              registrationPreexisting={status.registrationPreexisting}
             />
           )}
         </TooltipPortalContainerProvider>

@@ -5,9 +5,8 @@ import {
   EditorRef,
   getViewOptions,
 } from '@eten-tech-foundation/platform-editor';
-import { EMPTY_USJ } from '@eten-tech-foundation/scripture-utilities';
 import { logger } from '@papi/frontend';
-import { useLocalizedStrings, useProjectData, useProjectSetting } from '@papi/frontend/react';
+import { useLocalizedStrings, useProjectSetting } from '@papi/frontend/react';
 import { useExtraValidMarkers } from 'platform-bible-react';
 import {
   getErrorMessage,
@@ -17,14 +16,17 @@ import {
   MIN_ZOOM_FACTOR,
 } from 'platform-bible-utils';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { useCallback, useEffect, useMemo, useRef, type KeyboardEvent } from 'react';
-import { deriveCellState, isUsjForChapter } from './resource-cell.utils';
+import { useCallback, useEffect, useMemo, useRef, type DragEvent, type KeyboardEvent } from 'react';
+import { useChapterUsjWithCopyLimit } from '../copy-limit/use-chapter-usj-with-copy-limit.hook';
+import type { GridResource } from './grid-resources.utils';
+import { deriveCellState, isUsjForChapter, type ResourceCellState } from './resource-cell.utils';
 import {
   CHAPTER_EMPTY_KEY,
   EMPTY_KEY,
   NO_VERSES_TO_SHOW_KEY,
   RESOURCE_CELL_STRING_KEYS,
   ResourceCellView,
+  type ResourceCellViewProps,
   type ZoomMenuLabels,
 } from './resource-cell-view.component';
 import type { ResourceZoomController } from './use-resource-content-zoom.hook';
@@ -39,18 +41,12 @@ import { findVerseMarkerForVerse, isMarkerFullyInPortView } from './reference-sc
 import { useReferenceScroll } from './use-reference-scroll.hook';
 import { useCommentaryMarkerStyles } from '../use-commentary-marker-styles.hook';
 import type { ResourceCollectionViewMode } from '../resource-collection-options/resource-collection-options.types';
+import { COPYRIGHT_NOTICE_STRING_KEYS } from '../copyright-notice/copyright-notice.const';
+import { CopyrightNoticeIndicator } from '../copyright-notice/copyright-notice-indicator.component';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
-const STRING_KEYS: LocalizeKey[] = [...RESOURCE_CELL_STRING_KEYS];
+const STRING_KEYS: LocalizeKey[] = [...RESOURCE_CELL_STRING_KEYS, ...COPYRIGHT_NOTICE_STRING_KEYS];
 
-/**
- * A resource to render as a grid cell.
- *
- * `projectId` is `undefined` when the DBL reference could not be resolved to an installed project
- * (e.g., the resource has not been downloaded or is absent from the cached resource list). The cell
- * renders an `'unavailable'` placeholder in that case.
- */
-export type GridResource = { resourceId: string; projectId: string | undefined; label: string };
 type ResourceCellProps = {
   resourceRef: GridResource;
   scrRef: SerializedVerseRef;
@@ -81,7 +77,7 @@ type ResourceCellProps = {
   /** Localized zoom menu copy, passed straight to the view. */
   zoomMenuLabels?: ZoomMenuLabels;
   /**
-   * When true, show a focusable reorder-handle grip in the header (reorder logic lives in the
+   * When true, show a focusable reorder-handle grip before the name (reorder logic lives in the
    * parent).
    */
   showDragHandle?: boolean;
@@ -92,8 +88,14 @@ type ResourceCellProps = {
   /** Keydown handler for the grip; the parent owns the arrow-key reorder logic. */
   onReorderKeyDown?: (event: KeyboardEvent) => void;
   /** Makes the cell's header band the drag source for a reorder; passed straight to the view. */
-  headerDrag?: { onDragStart: () => void; onDragEnd: () => void };
-};
+  headerDrag?: { onDragStart: (event: DragEvent) => void; onDragEnd: () => void };
+} & Pick<
+  ResourceCellViewProps,
+  | 'onDisclosureActivate'
+  | 'disclosureAccessibleName'
+  | 'isDisclosureExpanded'
+  | 'disclosureControlsId'
+>;
 
 /**
  * One resource, the focused chapter or verse. Reuses the resource-text-panel render path: fetch the
@@ -117,6 +119,10 @@ export function ResourceCell({
   reorderHint,
   onReorderKeyDown,
   headerDrag,
+  onDisclosureActivate,
+  disclosureAccessibleName,
+  isDisclosureExpanded,
+  disclosureControlsId,
 }: ResourceCellProps) {
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
 
@@ -126,24 +132,16 @@ export function ResourceCell({
   // the `<style>` element it injects, so cells showing different commentaries do not fight.
   useCommentaryMarkerStyles(resourceRef.projectId);
 
-  // #region Chapter fetch — data method returns [data, setData, isLoading]; isLoading is index 2.
-  // `projectId` may be undefined for unavailable resources; both hooks must still be called
-  // unconditionally (Rules of Hooks). The hooks accept undefined and return loading/empty state.
-  const [usjPossiblyError, , isLoading] = useProjectData(
-    'platformScripture.USJ_Chapter',
-    resourceRef.projectId,
-  ).ChapterUSJ(
-    useMemo(
-      () => ({
-        book: scrRef.book,
-        chapterNum: scrRef.chapterNum,
-        verseNum: 1,
-        versificationStr: scrRef.versificationStr,
-      }),
-      [scrRef.book, scrRef.chapterNum, scrRef.versificationStr],
-    ),
-    EMPTY_USJ,
-  );
+  // #region Chapter fetch and copy limit
+  // `projectId` may be undefined for unavailable resources; the hook must still be called
+  // unconditionally (Rules of Hooks). `isChapterTextLoading` is also set while the fetch still
+  // holds the previous chapter's or resource's text, so `deriveCellState` below reports
+  // `'downloading'` rather than showing that text under this cell's resource.
+  const {
+    usjPossiblyError,
+    isChapterTextLoading: isLoading,
+    copyLimit,
+  } = useChapterUsjWithCopyLimit(resourceRef.projectId, scrRef);
   // #endregion
 
   // #region Text direction (unwrapped)
@@ -163,18 +161,26 @@ export function ResourceCell({
   }, [textDirectionPossiblyError]);
   // #endregion
 
-  const state = useMemo(
-    () =>
-      resourceRef.projectId === undefined
-        ? 'unavailable'
-        : deriveCellState({
-            usjPossiblyError,
-            isLoading,
-            currentBookNum: Canon.bookIdToNumber(scrRef.book),
-            projectId: resourceRef.projectId,
-          }),
-    [resourceRef.projectId, usjPossiblyError, isLoading, scrRef.book],
-  );
+  const state = useMemo((): ResourceCellState => {
+    if (resourceRef.projectId === undefined) {
+      // No cell state of its own: reuse the loading spinner. Nothing is downloading.
+      if (resourceRef.unresolvedReason === 'checking') return 'downloading';
+      if (resourceRef.unresolvedReason === 'unverified') return 'unverified';
+      return 'unavailable';
+    }
+    return deriveCellState({
+      usjPossiblyError,
+      isLoading,
+      currentBookNum: Canon.bookIdToNumber(scrRef.book),
+      projectId: resourceRef.projectId,
+    });
+  }, [
+    resourceRef.projectId,
+    resourceRef.unresolvedReason,
+    usjPossiblyError,
+    isLoading,
+    scrRef.book,
+  ]);
 
   // #region Zoom — the enabled states and actions of this resource's zoom items, for the view's
   // "⋮" dropdown and right-click menu. The level is the platform's; the controller reads it and
@@ -265,10 +271,11 @@ export function ResourceCell({
       isReadonly: true,
       hasSpellCheck: false,
       textDirection,
+      copyLimit,
       ...(viewMode === 'aligned' ? { view: getViewOptions(BLOCK_VERSE_VIEW_MODE) } : {}),
       ...(extraValidMarkers.length > 0 ? { nodes: { extraValidMarkers } } : {}),
     }),
-    [textDirection, viewMode, extraValidMarkers],
+    [textDirection, copyLimit, viewMode, extraValidMarkers],
   );
   // Only the USJ fed to the editor is resolved — `scrRef` passes through untouched. Keying the memo
   // on the resolved verse (not scrRef.verseNum) also keeps 1:0 -> 1:1 from re-feeding identical
@@ -348,6 +355,7 @@ export function ResourceCell({
       zoomArea={zoomArea}
       textDirection={textDirection}
       localizedStrings={localizedStrings}
+      copyLimit={copyLimit}
       emptyMessage={emptyMessage}
       nameDisplay={viewMode === 'verse' ? 'inline' : 'header'}
       // In the aligned grid the single scroll port is the grid root; see `contentOverflow`.
@@ -362,13 +370,25 @@ export function ResourceCell({
       onZoomIn={handleZoomIn}
       onZoomOut={handleZoomOut}
       onResetZoom={handleResetZoom}
-      zoomMenuLabels={zoom && state !== 'unavailable' ? zoomMenuLabels : undefined}
+      zoomMenuLabels={
+        zoom && state !== 'unavailable' && state !== 'unverified' ? zoomMenuLabels : undefined
+      }
       showDragHandle={showDragHandle}
       reorderHandleId={resourceRef.resourceId}
       reorderHandleLabel={reorderHandleLabel}
       reorderHint={reorderHint}
       onReorderKeyDown={onReorderKeyDown}
       headerDrag={headerDrag}
+      copyrightIndicator={
+        <CopyrightNoticeIndicator
+          projectId={resourceRef.projectId}
+          localizedStrings={localizedStrings}
+        />
+      }
+      onDisclosureActivate={onDisclosureActivate}
+      disclosureAccessibleName={disclosureAccessibleName}
+      isDisclosureExpanded={isDisclosureExpanded}
+      disclosureControlsId={disclosureControlsId}
       editor={
         <Editorial
           ref={editorRef}

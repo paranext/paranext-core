@@ -31,9 +31,11 @@ beforeAll(() => {
 
 const mockLocalizedStrings: LanguageStrings = {
   '%paratextRegistration_description_internetUse_option_Enabled_2%': 'Unrestricted',
-  '%paratextRegistration_description_internetUse_option_Enabled_details%': 'Desc Enabled sentinel',
+  '%paratextRegistration_description_internetUse_option_Enabled_details_2%':
+    'Desc Enabled sentinel',
   '%paratextRegistration_description_internetUse_option_VpnRequired_2%': 'Disable access sentinel',
-  '%paratextRegistration_description_internetUse_option_VpnRequired_details%': 'Desc VPN sentinel',
+  '%paratextRegistration_description_internetUse_option_VpnRequired_details_2%':
+    'Desc VPN sentinel',
   '%paratextRegistration_description_internetUse_option_Disabled_2%': 'Disable ALL sentinel',
   '%paratextRegistration_description_internetUse_option_Disabled_details%':
     'Desc Disabled sentinel',
@@ -241,6 +243,26 @@ describe('InternetAccessOptionList', () => {
     test.each(['Enabled', 'VpnRequired'] as const)('%s shows no banner', (value) => {
       renderList({ value });
       expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+  });
+
+  // The first-run wizard passes `undefined` until the user picks an option, so a stored value they
+  // never chose is not presented as their choice.
+  describe('no value', () => {
+    test('selects no option and shows no banner', () => {
+      renderList({ value: undefined });
+      expect(screen.queryByRole('radio', { checked: true })).not.toBeInTheDocument();
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+
+    // The list stays controlled with nothing selected: the click goes to onChange, and the row
+    // only shows as selected once the caller passes that value back.
+    test('clicking an option reports it without selecting it', () => {
+      const onChange = vi.fn();
+      renderList({ value: undefined, onChange });
+      fireEvent.click(screen.getByLabelText('Disable access sentinel'));
+      expect(onChange).toHaveBeenCalledWith('VpnRequired');
+      expect(screen.queryByRole('radio', { checked: true })).not.toBeInTheDocument();
     });
   });
 

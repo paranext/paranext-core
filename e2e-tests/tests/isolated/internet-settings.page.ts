@@ -1,5 +1,47 @@
 import { expect, type FrameLocator, type Locator, type Page } from '@playwright/test';
-import { isPopoverTriggerExpanded, waitForAppReady } from '../../fixtures/helpers';
+import {
+  isPopoverTriggerExpanded,
+  sendPapiRequestOnce,
+  waitForAppReady,
+  waitForPapiMethodRegistered,
+} from '../../fixtures/helpers';
+
+/** JSON-RPC method prefix of the C# `paratextRegistration.internetSettingsDataProvider`. */
+const INTERNET_SETTINGS_PROVIDER_METHOD =
+  'object:paratextRegistration.internetSettingsDataProvider-data';
+
+/**
+ * The saved internet settings, as {@link readSavedInternetSettings} returns them. Opaque to tests:
+ * only {@link restoreSavedInternetSettings} reads it.
+ */
+export type SavedInternetSettings = Record<string, unknown>;
+
+/**
+ * Reads the internet settings ParatextData has saved. They live in ParatextData's own
+ * `InternetSettings.xml`, outside the dev-appdata settings file the fixtures restore, so a test
+ * that saves an internet setting must put this back itself (see
+ * {@link restoreSavedInternetSettings}).
+ */
+export async function readSavedInternetSettings(): Promise<SavedInternetSettings> {
+  await waitForPapiMethodRegistered(`${INTERNET_SETTINGS_PROVIDER_METHOD}.getInternetSettings`);
+  // The leading `undefined` is the data type's selector, which this provider ignores.
+  return sendPapiRequestOnce<SavedInternetSettings>(
+    `${INTERNET_SETTINGS_PROVIDER_METHOD}.getInternetSettings`,
+    [undefined],
+  );
+}
+
+/**
+ * Saves internet settings read by {@link readSavedInternetSettings} back. The proxy and DBL
+ * passwords come back masked, and the provider keeps the stored password for a masked one, so the
+ * round trip does not change them.
+ */
+export async function restoreSavedInternetSettings(settings: SavedInternetSettings): Promise<void> {
+  await sendPapiRequestOnce(`${INTERNET_SETTINGS_PROVIDER_METHOD}.setInternetSettings`, [
+    undefined,
+    settings,
+  ]);
+}
 
 /**
  * Open the user-profile popover and return its "Internet & connectivity" action.

@@ -56,7 +56,7 @@ test.describe('Internet & Connectivity settings', () => {
     // Lowercase "connectivity" — this is %internetSettings_webView_title_2%, and toContainText is
     // case-sensitive for plain strings.
     await expect(frame.locator('h2')).toContainText('Internet & connectivity');
-    await expect(frame.locator('p').first()).toContainText('apply only to Paratext 10 Studio');
+    await expect(frame.locator('p').first()).toContainText('apply only to Paratext 10 —');
   });
 
   // A key the panel asks for but the localization data no longer carries resolves to the bare

@@ -380,6 +380,28 @@ Notes:
 - **Use a packaged build for numbers you intend to compare.** In dev, the .NET provider runs under `dotnet watch`, which inflates the C# portion of the timeline and is not representative.
 - `main.log` accumulates across launches; the tool shows only the latest run and warns when it drops older ones. For a clean capture, delete (or copy aside) the log between runs.
 
+### Resetting the first-run wizard
+
+The first-run (setup) wizard shows in Simple mode on every launch until it is finished. To see it again — in a dev build or an installed one — press **F12** to open DevTools and run this in the Console:
+
+```js
+await papi.commands.sendCommand('platform.resetFirstRun');
+```
+
+The app restarts into the wizard in Simple mode. The reset forgets the wizard's progress and the orientation tour, turns sync on startup and the registration reminder back on, and switches to Simple mode as the app starts again (so in Power mode your other windows are not closed, and the quit syncs on your Power-mode schedule). It keeps your Paratext registration. It also keeps a non-English interface language you chose, but an English choice is treated as unset, so the wizard switches to your operating system's language when that language has a setup translation.
+
+To see exactly what a Paratext 9 user sees, also choose what happens to Platform.Bible's registration:
+
+| Run                                                                                                | You get                                                                                                                                                                  |
+| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `await papi.commands.sendCommand('platform.resetFirstRun')`                                        | The wizard with your current registration                                                                                                                                |
+| `await papi.commands.sendCommand('platform.resetFirstRun', { registration: 'copyFromParatext9' })` | A Paratext 9 user's first launch: the registration and internet settings are copied from Paratext 9 again (if Paratext 9 isn't registered, you get an unregistered user) |
+| `await papi.commands.sendCommand('platform.resetFirstRun', { registration: 'clear' })`             | A Paratext 9 user who never registered                                                                                                                                   |
+
+Platform.Bible keeps its own copy of the registration and internet settings in a `Paratext100` folder inside the OS local application data folder (on Windows `%LOCALAPPDATA%\Paratext100`, on Linux `~/.local/share/Paratext100`). When that folder has neither of those files (nor the two other small files Paratext carries over), Platform.Bible copies them once from the newest Paratext 8 or 9 folder next to it (e.g. `Paratext95`) and records that it did, which is what the wizard's "copied from Paratext 9" banner checks. It never writes to Paratext 9's files, so none of these resets affects Paratext 9. The `copyFromParatext9` reset replaces only those copied files, as the app starts again, so other files in the folder, such as your auto-replace list, are kept. These resets can delete your registration; they are meant for developers and testers, not for extensions to call.
+
+To click through the wizard without changing any settings or your registration at all, use demo mode instead: run `localStorage.setItem('platform-bible.firstRunDemoMode', 'true')` in the Console and reload. Demo mode starts the wizard at the first step on every launch and saves nothing; run `localStorage.removeItem('platform-bible.firstRunDemoMode')` and reload to leave it.
+
 ### Analytics test-environment override
 
 Platform.Bible's analytics abstraction (`src/extension-host/services/analytics.service.ts`) normally decides whether events target the "test" or "production" analytics audience by checking whether the build is packaged and which Send/Receive server it's configured against. Developers and testers who need to force "test" targeting regardless of build/server configuration — so their activity never lands in production analytics — can set the `PT_ANALYTICS_TEST_OVERRIDE=true` environment variable when launching:
