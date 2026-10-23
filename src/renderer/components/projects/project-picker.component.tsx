@@ -36,6 +36,11 @@ export type ProjectItem = {
    * treated as read-only.
    */
   isEditable?: boolean;
+  /**
+   * Localize key explaining why this project cannot be opened; absent when it can. See
+   * `ProjectMetadata.unsupportedReason`.
+   */
+  unsupportedReason?: string;
 };
 
 /** Localization string keys used by {@link ProjectPicker}. */

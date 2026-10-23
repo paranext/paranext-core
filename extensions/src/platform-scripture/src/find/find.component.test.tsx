@@ -671,6 +671,37 @@ const FAKE_RESULT = {
   text: 'God',
 };
 
+describe('Find — search errors', () => {
+  it('shows why a project cannot be searched on its own, without the generic error wording', () => {
+    render(
+      <Find
+        {...buildLifecycleProps({
+          searchStatus: 'errored',
+          openBlockedMessage: "Study Bible Additions projects aren't supported yet.",
+        })}
+      />,
+    );
+
+    expect(
+      screen.getByText("Study Bible Additions projects aren't supported yet."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/An error occurred/)).toBeNull();
+  });
+
+  it('wraps any other error in the generic error wording (positive control)', () => {
+    render(
+      <Find
+        {...buildLifecycleProps({
+          searchStatus: 'errored',
+          searchError: 'Invalid regular expression',
+        })}
+      />,
+    );
+
+    expect(screen.getByText('An error occurred: Invalid regular expression')).toBeInTheDocument();
+  });
+});
+
 describe('Find — permission-blocked Replace', () => {
   function buildReplaceProps(overrides: Partial<FindProps>): FindProps {
     return buildLifecycleProps({

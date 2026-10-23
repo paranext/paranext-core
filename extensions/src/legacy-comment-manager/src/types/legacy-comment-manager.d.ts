@@ -292,6 +292,9 @@ declare module 'legacy-comment-manager' {
        *   value based on the previous three properties.
        * @returns Promise that resolves to the auto-generated comment ID (format:
        *   "threadId/userName/date")
+       * @throws If the project can't be opened in Platform.Bible (see
+       *   `ProjectMetadata.unsupportedReason`). The message ends with the `(PROJECT_OPEN_BLOCKED)`
+       *   sentinel.
        */
       createComment(comment: NewLegacyComment): Promise<string>;
 
@@ -333,6 +336,9 @@ declare module 'legacy-comment-manager' {
        * @throws If the current user is neither a project administrator nor the assigned resolver
        * @throws If resolution is `'reject'` or `'merge'` and the verse text has changed since the
        *   conflict was recorded (stale)
+       * @throws If the project can't be opened in Platform.Bible (see
+       *   `ProjectMetadata.unsupportedReason`). The message ends with the `(PROJECT_OPEN_BLOCKED)`
+       *   sentinel.
        */
       resolveConflict(threadId: string, resolution: 'accept' | 'reject' | 'merge'): Promise<void>;
 
@@ -340,8 +346,9 @@ declare module 'legacy-comment-manager' {
        * The resolution actions the current user may take on the given conflict thread - the
        * capability query for {@link resolveConflict}. Never rejects; failures map to `'none'`.
        *
-       * - `'none'`: not an unresolved `verseText` conflict, or the current user is neither a project
-       *   administrator nor the assigned resolver. UIs should hide the accept/reject controls
+       * - `'none'`: not an unresolved `verseText` conflict, the current user is neither a project
+       *   administrator nor the assigned resolver, or the project can't be opened in Platform.Bible
+       *   (see `ProjectMetadata.unsupportedReason`). UIs should hide the accept/reject controls
        *   entirely.
        * - `'accept'`: the user may resolve, but the verse has been edited since the conflict was
        *   recorded (stale), so only `'accept'` (keep the current text) is available -
@@ -406,10 +413,12 @@ declare module 'legacy-comment-manager' {
       // #region Permission Check Functions
 
       /**
-       * Determines if the current user can create new comment threads in this project
+       * Determines if the current user can create new comment threads in this project. False for a
+       * project Platform.Bible can't open (see `ProjectMetadata.unsupportedReason`), because
+       * `createComment` refuses it.
        *
        * @param allowInSba Allow creating comments in Study Bible Additions projects (default:
-       *   false)
+       *   false). Has no effect while such projects can't be opened.
        * @returns Promise that resolves to true if the user can create comments, false otherwise
        */
       canUserCreateComments(allowInSba?: boolean): Promise<boolean>;
@@ -591,16 +600,17 @@ declare module 'legacy-comment-manager' {
      */
     selectThread(threadId: string): Promise<void>;
     /**
-     * Set the comment-list view deterministically, exactly as a fresh open would. `filters` is
-     * applied on top of the default (all) filters — an unspecified preset resets to 'all', it is
-     * NOT merged with the user's current selection — and an omitted `scopeFilter` resets scope to
-     * 'all-books'. The result is the requested view with nothing carried over from prior state.
+     * Set the comment-list view deterministically, exactly as an `openCommentList` with
+     * `filtersToSet`/`scopeFilterToSet` would. `filters` is applied on top of the default (all)
+     * filters — an unspecified preset resets to 'all', it is NOT merged with the user's current
+     * selection — and an omitted `scopeFilter` resets scope to 'all-books'. The result is the
+     * requested view with nothing carried over from prior state.
      *
      * Also accepts the deprecated {@link LegacyCommentFilters} four-axis shape and the deprecated
      * {@link LegacyScopeFilter} `'unfiltered'` value for backward compatibility; both are mapped
      * onto their current equivalent (see those types' TSDoc for the mapping), and a value this
-     * build doesn't recognize at all resolves to the default rather than reaching the query
-     * unnarrowed.
+     * build doesn't recognize at all resolves to 'all' (preset) or 'all-books' (scope) rather than
+     * reaching the query unnarrowed.
      *
      * @param filters Comment-filter preset to apply; an unspecified preset resets to 'all'.
      * @param scopeFilter Scope to apply; omitting it resets scope to 'all-books'.
@@ -626,8 +636,10 @@ declare module 'legacy-comment-manager' {
      */
     filtersToSet?: Partial<CommentFilters> | LegacyCommentFilters | undefined;
     /**
-     * Scope to pre-apply; an omitted value resets scope to `'all-books'`. Also accepts the
-     * deprecated {@link LegacyScopeFilter} `'unfiltered'` value, which maps onto `'all-books'`.
+     * Scope to pre-apply. An omitted value resets scope to `'all-books'` when `filtersToSet` is
+     * given; an open with neither uses the scope stored for the project, or `'current-chapter'`.
+     * Also accepts the deprecated {@link LegacyScopeFilter} `'unfiltered'` value, which maps onto
+     * `'all-books'`.
      */
     scopeFilterToSet?: ScopeFilter | LegacyScopeFilter | undefined;
   };

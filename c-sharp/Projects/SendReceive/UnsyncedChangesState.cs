@@ -1,12 +1,13 @@
 namespace Paranext.DataProvider.Projects.SendReceive;
 
 /// <summary>
-/// An immutable snapshot of sync direction per project: the projects whose local repository holds
-/// changes not yet sent (<see cref="ToSend"/>) and the projects for which the Send/Receive server
-/// holds changes not yet received here (<see cref="ToReceive"/>). A project may be in both.
+/// An immutable snapshot of sync direction per project: the projects holding local changes this
+/// user's next sync would send (<see cref="ToSend"/>) and the projects for which the Send/Receive
+/// server holds changes not yet received here (<see cref="ToReceive"/>). A project may be in both.
 /// </summary>
-/// <param name="ToSend">The projects with unsent local changes. Normalized (upper-cased) by
-/// whoever publishes it.</param>
+/// <param name="ToSend">The projects with local changes this user's next sync would send; never a
+/// project the user is an Observer on or not a member of. Normalized (upper-cased) by whoever
+/// publishes it.</param>
 /// <param name="ToReceive">The projects with server changes not yet received. Normalized
 /// (upper-cased) by whoever publishes it; always empty where the server cannot be queried. Only a
 /// build that fills <c>ParatextProjectSendReceiveService.GetServerTipIds</c> (Paratext 10 Studio)

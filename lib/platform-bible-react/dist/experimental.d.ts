@@ -120,7 +120,10 @@ export type ProjectSelectorProject = {
 	 * selection but can't toggle it again.
 	 */
 	isDisabled?: boolean;
-	/** Human-readable explanation surfaced in the row tooltip when `isDisabled` is true. */
+	/**
+	 * Human-readable explanation surfaced in the row tooltip, and to screen readers as the row's
+	 * description, when `isDisabled` is true. Rendered verbatim, so pass already-localized text.
+	 */
 	disabledReason?: string;
 	/**
 	 * Consumer-owned extra fields read by `ProjectSelectorGrouping.getGroupKey` implementations. The
@@ -764,6 +767,15 @@ export interface ResourcePickerDialogProps {
 	 * non-interactive, showing only a checkmark) to preserve existing consumers' behavior.
 	 */
 	allowDeselect?: boolean;
+	/**
+	 * Returns why a resource cannot be picked, or `undefined` when it can. Applies to the "Installed"
+	 * and "Available to Download" rows only, so a resource that is already selected can still be
+	 * deselected.
+	 *
+	 * A row with a reason is shown dimmed with a lock icon and is not selectable. The reason appears
+	 * in a tooltip on hover and keyboard focus, and is the row's description for screen readers.
+	 */
+	getDisabledReason?: (resource: DblResourceData) => string | undefined;
 	/** Called when the user clicks a resource row to select it */
 	onSelect: (resource: DblResourceData) => void;
 	/**
@@ -820,7 +832,7 @@ export declare function getResourcePickerBodyState(input: {
  *
  * @param props See {@link ResourcePickerDialogProps}
  */
-export function ResourcePickerDialog({ allResources, isResourcesLoading, hasResourcesError, onRetryResources, areDownloadsUnavailable, resourceType, selectedResourceIds, notice, allowSelectingInstalled, localizedStrings, allowDeselect, onSelect, searchInputRef: externalSearchInputRef, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
+export function ResourcePickerDialog({ allResources, isResourcesLoading, hasResourcesError, onRetryResources, areDownloadsUnavailable, resourceType, selectedResourceIds, notice, allowSelectingInstalled, localizedStrings, allowDeselect, getDisabledReason, onSelect, searchInputRef: externalSearchInputRef, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Whether a resource belongs to the section of the catalogue currently on display. An undefined
  * `resourceType` means "no type filter", so everything matches, as does an empty array — that is
@@ -1368,6 +1380,13 @@ export interface MarkerPaletteOpenSession<TItem extends {
 	/** Identifies this session to async settle-time cleanup, from the consumer's monotonic counter. */
 	token: number;
 	items: readonly TItem[];
+	/**
+	 * An item a typed commit chose but left for the session's close to apply, through the same path
+	 * as a highlighted commit: the caret restored, the editor focused, then the item applied. Set by
+	 * `routeMarkerPaletteKey` for a note marker committed with Space, so the note's editor opens
+	 * after the overlay service has handed focus back to the main editor rather than before it.
+	 */
+	itemToApplyOnClose?: TItem;
 }
 /**
  * The per-consumer half of a marker-palette session — everything the shared spine cannot own
@@ -1853,8 +1872,11 @@ export declare const INTERNET_ACCESS_OPTION_LIST_STRING_KEYS: LocalizeKey[];
 export type InternetAccessOptionListProps = {
 	/** Localized strings; pass strings resolved from `INTERNET_ACCESS_OPTION_LIST_STRING_KEYS`. */
 	localizedStrings: LanguageStrings;
-	/** The currently selected internet use value. */
-	value: InternetUse;
+	/**
+	 * The currently selected internet use value, or `undefined` to select no option — for a caller
+	 * that needs the user to make an explicit choice rather than accept the stored value.
+	 */
+	value: InternetUse | undefined;
 	/** Called when the user selects an active (non-coming-soon) option. */
 	onChange: (value: InternetUse) => void;
 	/** When true, all rows are non-interactive (loading or saving in progress). */
