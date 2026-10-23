@@ -257,8 +257,8 @@ public static class DblResourceWhiteList
         "1FB6AFF33E7B3C31",
         "1FD99B0D5841E19B",
         // HBKESP (1FF24938918BD69E, UBS Translator's Handbook, Spanish) is deliberately absent: its
-        // DBL bundle needs migrating, which Paratext 10 can't do yet, so installing it fails. Add it
-        // back once resources can be migrated (PT-3805).
+        // DBL bundle needs migrating, which Paratext 10 can't do yet, so installing it fails. It
+        // stays out until resources can be migrated (PT-3805).
         "1FF6ADA8C35ABF5A",
         "20314A36CCDE603B",
         "2048238EEE3592F8",
@@ -406,7 +406,7 @@ public static class DblResourceWhiteList
         "3163C7C75A6A2318",
         "317070E47DDF1F4E",
         "31784715C01E694A",
-        "317E03834065A236",
+        "317E03834065A236", // BSB — Berean Standard Bible
         "31A1EF009FDE5625",
         "31C825B218D5AC6B",
         "31CE26B5803B75DD",
@@ -1948,9 +1948,9 @@ public static class DblResourceWhiteList
         "F46643C58154A737",
         "F47E8253B1763E7B",
         "F492A38D0E52DB0F",
-        // This will download and install, but it always says there is an updated version
-        // When you try to update to the newer version, our process just hangs/spins
-        "F4AA566678480C75",
+        // This will download, install and render, but it always says there is an updated version
+        // Updating to the newer version runs for a few seconds, then still offers the update
+        // "F4AA566678480C75",
         "F4BC8C1DB66AE129",
         "F4CC79CD3FEC30F4",
         "F4D5CB18D83CE90C",
