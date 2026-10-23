@@ -360,10 +360,11 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'Reveal the hidden server-selection control when opening Internet & connectivity settings',
     category: 'Developer',
     context: 'User profile popover',
-    // Shift+Space is only reachable from the server badge — it has no native Space-activates-click
-    // behavior (it is a role="button" span, not a real button), so the badge's onKeyDown claims
-    // Space explicitly alongside Enter. The row's own Network settings button has no Space handling
-    // of its own; Shift+Enter works there because its onKeyDown claims Enter specifically.
+    // Both Enter and Space on a focused native <button> trigger a browser-synthesized activation
+    // click that carries Chromium's live modifier state (see the row Button's own comment), so
+    // Shift+Space reaches the unlock there too, with no Space-specific handling of its own. The
+    // badge is a role="button" span, not a real button, so it has no such native activation — its
+    // onKeyDown claims Enter and Space explicitly instead.
     keys: {
       macOS: '⇧⏎ / ⇧␣',
       windows: 'Shift+Enter / Shift+Space',
