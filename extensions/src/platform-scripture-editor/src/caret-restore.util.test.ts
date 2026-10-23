@@ -5,7 +5,7 @@ import {
   CaretRestoreEditor,
   CaretRestoreResult,
   CaretRestoreTimers,
-  isSamePlaceInDocument,
+  isCaretPlacedAt,
   scheduleCaretRestore,
 } from './caret-restore.util';
 
@@ -254,7 +254,7 @@ describe('scheduleCaretRestore', () => {
   });
 });
 
-describe('isSamePlaceInDocument', () => {
+describe('isCaretPlacedAt', () => {
   const usj: Usj = {
     type: 'USJ',
     version: '3.1',
@@ -273,16 +273,16 @@ describe('isSamePlaceInDocument', () => {
     ],
   };
 
-  it('is true for the same location', () => {
+  it('takes a caret at the target', () => {
     const place: UsjDocumentLocation = { jsonPath: "$.content[0]['number']", propertyOffset: 1 };
-    expect(isSamePlaceInDocument(usj, place, { ...place }, 'GEN')).toBe(true);
+    expect(isCaretPlacedAt(usj, place, { ...place }, 'GEN')).toBe(true);
   });
 
   // The location model allows one alias: the end of text that a marker follows is also that
   // marker's own location. The editor reports a caret held at the end of the text that way.
-  it('is true for the end of text and the marker after it', () => {
+  it('takes a caret at the end of the text in front of the target marker', () => {
     expect(
-      isSamePlaceInDocument(
+      isCaretPlacedAt(
         usj,
         { jsonPath: '$.content[1].content[2]' },
         { jsonPath: '$.content[1].content[1]', offset: 3 },
@@ -293,7 +293,7 @@ describe('isSamePlaceInDocument', () => {
 
   // Removing a chapter marker typed between two texts leaves them side by side, which the editor
   // holds as one text.
-  it('is true for the start of a text and the end of the text beside it', () => {
+  it('takes a caret in the text beside the target text, at the same position', () => {
     const sideBySide: Usj = {
       type: 'USJ',
       version: '3.1',
@@ -303,7 +303,7 @@ describe('isSamePlaceInDocument', () => {
       ],
     };
     expect(
-      isSamePlaceInDocument(
+      isCaretPlacedAt(
         sideBySide,
         { jsonPath: '$.content[1].content[1]', offset: 0 },
         { jsonPath: '$.content[1].content[0]', offset: 6 },
@@ -313,12 +313,12 @@ describe('isSamePlaceInDocument', () => {
   });
 
   // A view that hides markers cannot show a caret on a chapter number, so the editor puts one placed
-  // just past it at the start of the next paragraph, and reports it there. Only a line break lies
-  // between the two, so the caret is where it was put; taken as a failed placement, it would be
-  // placed again every 50 ms for the whole retry window, snapping back any caret the user moved.
-  it('is true for the end of a line and the start of the next', () => {
+  // just past it at the start of the next paragraph, and reports it there. Taken as a failed
+  // placement, it would be placed again every 50 ms for the whole retry window, snapping back any
+  // caret the user moved.
+  it('takes a caret at the start of the line after a target at the end of a line', () => {
     expect(
-      isSamePlaceInDocument(
+      isCaretPlacedAt(
         usj,
         { jsonPath: '$.content[1]' },
         { jsonPath: "$.content[0]['number']", propertyOffset: 1 },
@@ -327,9 +327,20 @@ describe('isSamePlaceInDocument', () => {
     ).toBe(true);
   });
 
-  it('is false across a marker, even one with nothing but whitespace around it', () => {
+  it('does not take a caret at the end of the line before a target at the start of a line', () => {
     expect(
-      isSamePlaceInDocument(
+      isCaretPlacedAt(
+        usj,
+        { jsonPath: "$.content[0]['number']", propertyOffset: 1 },
+        { jsonPath: '$.content[1]' },
+        'GEN',
+      ),
+    ).toBe(false);
+  });
+
+  it('does not take a caret past a marker after the line break', () => {
+    expect(
+      isCaretPlacedAt(
         usj,
         { jsonPath: '$.content[1].content[0]' },
         { jsonPath: "$.content[0]['number']", propertyOffset: 1 },
@@ -338,14 +349,14 @@ describe('isSamePlaceInDocument', () => {
     ).toBe(false);
   });
 
-  it('is false for two places a space apart on one line', () => {
+  it('does not take a caret a space past the target on one line', () => {
     const spaced: Usj = {
       type: 'USJ',
       version: '3.1',
       content: [{ type: 'para', marker: 'p', content: ['before after'] }],
     };
     expect(
-      isSamePlaceInDocument(
+      isCaretPlacedAt(
         spaced,
         { jsonPath: '$.content[0].content[0]', offset: 6 },
         { jsonPath: '$.content[0].content[0]', offset: 7 },
@@ -354,9 +365,9 @@ describe('isSamePlaceInDocument', () => {
     ).toBe(false);
   });
 
-  it('is false for a different offset in the same property', () => {
+  it('does not take a caret at a different offset in the target property', () => {
     expect(
-      isSamePlaceInDocument(
+      isCaretPlacedAt(
         usj,
         { jsonPath: "$.content[0]['number']", propertyOffset: 1 },
         { jsonPath: "$.content[0]['number']", propertyOffset: 0 },
@@ -365,9 +376,9 @@ describe('isSamePlaceInDocument', () => {
     ).toBe(false);
   });
 
-  it('is false for a different place', () => {
+  it('does not take a caret somewhere else', () => {
     expect(
-      isSamePlaceInDocument(
+      isCaretPlacedAt(
         usj,
         { jsonPath: '$.content[1].content[1]', offset: 1 },
         { jsonPath: '$.content[1].content[3]', offset: 1 },

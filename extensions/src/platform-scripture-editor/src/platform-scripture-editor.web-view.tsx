@@ -171,7 +171,7 @@ import { createFlushableDebouncer } from './flushable-debouncer.util';
 import { isEditorContentForChapter, performDebouncedPdpSave } from './debounced-pdp-save.util';
 import {
   PLATFORM_CARET_RESTORE_TIMERS,
-  isSamePlaceInDocument,
+  isCaretPlacedAt,
   scheduleCaretRestore,
   ScheduledCaretRestore,
 } from './caret-restore.util';
@@ -3791,12 +3791,7 @@ function PlatformScriptureEditor({
             const selection = editorRef.current?.getSelection();
             return (
               !!selection &&
-              isSamePlaceInDocument(
-                repairedUsj,
-                selection.start,
-                target.start,
-                savedChapterSelector.book,
-              )
+              isCaretPlacedAt(repairedUsj, selection.start, target.start, savedChapterSelector.book)
             );
           },
           focus: () => editorRef.current?.focus(),

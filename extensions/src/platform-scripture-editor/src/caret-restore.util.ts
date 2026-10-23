@@ -56,8 +56,8 @@ export interface CaretRestoreEditor {
   /** Places the caret. Makes no guarantee it took — see {@link CaretRestoreEditor.isCaretAt}. */
   setSelection: (selection: SelectionRange) => void;
   /**
-   * Whether the caret is now at `target`, used to confirm a placement. See
-   * {@link isSamePlaceInDocument} for comparing the locations the editor reports.
+   * Whether a placement at `target` took, read from where the caret now is. See
+   * {@link isCaretPlacedAt} for reading the locations the editor reports.
    */
   isCaretAt: (target: SelectionRange) => boolean;
   /**
@@ -95,7 +95,7 @@ export interface ScheduledCaretRestore {
   cancel: () => void;
 }
 
-/** USFM between two places on either side of a line break and nothing else. */
+/** USFM that is a line break and nothing else. */
 const LINE_BREAK_ONLY_REGEX = /^[^\S\n]*\n\s*$/;
 
 /**
@@ -119,26 +119,27 @@ function canonicalLocation(usj: Usj, location: UsjDocumentLocation): UsjDocument
 }
 
 /**
- * Whether two locations in `usj` are the same place: equal once each is spelled canonically, or
- * with nothing but a line break between them in the USFM the document writes. The editor reports a
- * caret held at the end of a text that a marker follows as the text's end, which is the same place
- * as that marker's location. And a view that hides markers puts a caret placed at the end of a line
- * it cannot show a caret on, such as a chapter number's, at the start of the next line instead.
+ * Whether the editor's caret, read back after placing it at `target`, shows that the placement
+ * took. It took when the caret is at `target`'s own USFM position, however either is spelled: the
+ * editor reports a caret held at the end of a text that a marker follows as the text's end rather
+ * than as that marker's location, and holds two texts side by side as one. It also took when the
+ * caret is at the start of the line after `target`, with nothing but the line break between them: a
+ * view that hides markers cannot show a caret at the end of a line such as a chapter number's, and
+ * puts it there instead. That is a different position, so this is not a location equality.
  *
  * @param usj The document both locations address.
- * @param a A location in `usj`.
- * @param b Another location in `usj`.
+ * @param caret Where the editor reports the caret.
+ * @param target Where the caret was placed.
  * @param bookId The book `usj` is in, for a document with no `\id` of its own.
  */
-export function isSamePlaceInDocument(
+export function isCaretPlacedAt(
   usj: Usj,
-  a: UsjDocumentLocation,
-  b: UsjDocumentLocation,
+  caret: UsjDocumentLocation,
+  target: UsjDocumentLocation,
   bookId: string,
 ): boolean {
-  if (deepEqualAcrossIframes(canonicalLocation(usj, a), canonicalLocation(usj, b))) return true;
-  // Two texts side by side in `usj` are one text in the editor, which then addresses a place in the
-  // second as an offset into the first; both are one position in the USFM the document writes.
+  if (deepEqualAcrossIframes(canonicalLocation(usj, caret), canonicalLocation(usj, target)))
+    return true;
   try {
     const usjReaderWriter = new UsjReaderWriter(correctEditorUsjVersion(usj), {
       markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
@@ -147,11 +148,12 @@ export function isSamePlaceInDocument(
       usjReaderWriter.usfmVerseLocationToIndexInUsfm(
         usjReaderWriter.usjDocumentLocationToUsfmVerseRefVerseLocation(location, bookId),
       );
-    const [indexA, indexB] = [indexOf(a), indexOf(b)];
-    if (indexA === indexB) return true;
+    const [caretIndex, targetIndex] = [indexOf(caret), indexOf(target)];
+    if (caretIndex === targetIndex) return true;
     // Native, as the indexes are: `UsjReaderWriter` counts the USFM in UTF-16 code units.
-    return LINE_BREAK_ONLY_REGEX.test(
-      usjReaderWriter.toUsfm().slice(Math.min(indexA, indexB), Math.max(indexA, indexB)),
+    return (
+      caretIndex > targetIndex &&
+      LINE_BREAK_ONLY_REGEX.test(usjReaderWriter.toUsfm().slice(targetIndex, caretIndex))
     );
   } catch {
     return false;
