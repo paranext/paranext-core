@@ -360,7 +360,15 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'Reveal the hidden server-selection control when opening Internet & connectivity settings',
     category: 'Developer',
     context: 'User profile popover',
-    keys: { macOS: '⇧⏎', windows: 'Shift+Enter', linux: 'Shift+Enter' },
+    // Shift+Space is only reachable from the server badge — it has no native Space-activates-click
+    // behavior (it is a role="button" span, not a real button), so the badge's onKeyDown claims
+    // Space explicitly alongside Enter. The row's own Network settings button has no Space handling
+    // of its own; Shift+Enter works there because its onKeyDown claims Enter specifically.
+    keys: {
+      macOS: '⇧⏎ / ⇧␣',
+      windows: 'Shift+Enter / Shift+Space',
+      linux: 'Shift+Enter / Shift+Space',
+    },
     locations: ['src/renderer/components/user-profile-popover/user-profile-popover.component.tsx'],
   },
   {
