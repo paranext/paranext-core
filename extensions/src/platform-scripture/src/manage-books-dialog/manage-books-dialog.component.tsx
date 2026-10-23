@@ -143,14 +143,12 @@ export type ManageBooksDialogProps = {
   onOpenScriptureReferenceSettings: (projectId: string) => void;
   /**
    * Cross-launch: open project canons for this project. Optional — when omitted the corresponding
-   * View-mode toolbar button renders disabled with a "Not yet available — coming soon" tooltip
-   * (Phase 3 UI Decision 28, 2026-05-04).
+   * View-mode toolbar button renders disabled with a not-yet-available tooltip.
    */
   onOpenProjectCanons?: (projectId: string) => void;
   /**
    * Cross-launch: open registry for this project. Optional — when omitted the corresponding
-   * View-mode toolbar button renders disabled with a "Not yet available — coming soon" tooltip
-   * (Phase 3 UI Decision 28, 2026-05-04).
+   * View-mode toolbar button renders disabled with a not-yet-available tooltip.
    */
   onOpenRegistry?: (projectId: string) => void;
 
@@ -2251,19 +2249,18 @@ export function ManageBooksDialog({
                         )}
                       </Button>
                       {/*
-                    DEF-UI-007 / DEF-UI-008 / DEF-UI-001 stub buttons (Phase 3 UI Decision 13,
-                    2026-05-04): Project canons, Registry, and View differences are not yet
-                    implemented in PT10. We render each as a disabled Button wrapped in a Tooltip
-                    so hover surfaces "Not yet available — coming soon" — the convention used
-                    elsewhere in this dialog (e.g., the apply button when invalid). The handler
-                    props are optional in ManageBooksDialogProps; when an `onOpen*` handler is
-                    eventually supplied, the corresponding button auto-enables and wires the
-                    real cross-launch.
+                    DEF-UI-007 / DEF-UI-008 / DEF-UI-001 stub buttons: Project canons, Registry,
+                    and Compare versions are not yet implemented in PT10. We render each as a
+                    disabled Button wrapped in a Tooltip so hover says it is not yet available —
+                    the convention used elsewhere in this dialog (e.g., the apply button when
+                    invalid). The handler props are optional in
+                    ManageBooksDialogProps; when an `onOpen*` handler is eventually supplied, the
+                    corresponding button auto-enables and wires the real cross-launch.
                   */}
                       {(() => {
                         const stubTooltip = t(
-                          '%manageBooks_view_disabledStub_notYetAvailable%',
-                          'Not yet available — coming soon',
+                          '%manageBooks_view_disabledStub_notYetAvailable_2%',
+                          'Not yet available',
                         );
                         const enableProjectCanons = Boolean(onOpenProjectCanons);
                         const enableRegistry = Boolean(onOpenRegistry);

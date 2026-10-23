@@ -4,8 +4,8 @@
  * Covers:
  *
  * - Opening via profile popover
- * - Radio row visibility (2 active, 3 coming-soon with badges) and descriptions revealed from each
- *   option's info button
+ * - Radio row visibility (2 active, 3 not-yet-available with badges) and descriptions revealed from
+ *   each option's info button
  * - Descriptions staying shut for a programmatic focus, which the panel takes on load
  * - Reset and Save and restart button state (disabled when no changes, enabled after change)
  * - Reset restores original selection (buttons become disabled again)
@@ -67,7 +67,9 @@ test.describe('Internet & Connectivity settings', () => {
     expect(text).toContain('Internet & connectivity');
   });
 
-  test('shows 2 active radio rows and 3 coming-soon rows with badges', async ({ mainPage }) => {
+  test('shows 2 active radio rows and 3 not-yet-available rows with badges', async ({
+    mainPage,
+  }) => {
     const frame = await openInternetSettingsPanel(mainPage);
     await waitForSettingsLoaded(frame);
 
@@ -85,7 +87,7 @@ test.describe('Internet & Connectivity settings', () => {
     await expect(frame.locator('p').filter({ hasText: enabledDescription })).toHaveCount(0);
     await expect(descriptionTooltip(frame)).toHaveCount(0);
 
-    // Coming-soon rows have disabled radio buttons
+    // Not-yet-available rows have disabled radio buttons
     // %paratextRegistration_description_internetUse_option_Disabled_2%
     await expect(internetUseRadio(frame, 'Disable all Internet access')).toBeDisabled();
     await expect(
@@ -93,11 +95,12 @@ test.describe('Internet & Connectivity settings', () => {
     ).toBeDisabled();
     await expect(internetUseRadio(frame, /Configure proxy/)).toBeDisabled();
 
-    // Three "Coming soon" badges appear
-    await expect(frame.getByText('Coming soon')).toHaveCount(3);
+    // Three "Not yet available" badges appear, and nothing promises the options are coming soon
+    await expect(frame.getByText('Not yet available', { exact: true })).toHaveCount(3);
+    await expect(frame.getByText(/coming soon/i)).toHaveCount(0);
 
-    // The per-row "Coming soon" badges above are the only marker of the unavailable options; the
-    // list carries no footer note, which also keeps the first-run wizard's Next button in view.
+    // The per-row "Not yet available" badges above are the only marker of the unavailable options;
+    // the list carries no footer note, which also keeps the first-run wizard's Next button in view.
     await expect(frame.getByText(/Disabled options are planned for future updates/)).toHaveCount(0);
   });
 

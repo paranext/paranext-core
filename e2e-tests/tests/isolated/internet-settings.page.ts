@@ -99,7 +99,7 @@ export function internetSettingsFrame(mainPage: Page): FrameLocator {
   return mainPage.frameLocator('iframe[title*="Internet" i]');
 }
 
-/** The two connectivity options that are actually selectable (the rest are "Coming soon"). */
+/** The two connectivity options that are actually selectable (the rest are "Not yet available"). */
 export function selectableConnectivityOptions(frame: FrameLocator): {
   unrestricted: Locator;
   someServicesDisabled: Locator;

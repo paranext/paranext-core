@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 type LocalizedStringsFile = {
   localizedStrings: Record<string, Record<string, string>>;
+  metadata: Record<string, { fallbackKey?: string; deprecationInfo?: { message: string } }>;
 };
 
 function readLocalizedStringsFile(): LocalizedStringsFile {
@@ -14,7 +15,7 @@ function readLocalizedStringsFile(): LocalizedStringsFile {
   return stringsFile;
 }
 
-const { localizedStrings } = readLocalizedStringsFile();
+const { localizedStrings, metadata } = readLocalizedStringsFile();
 
 /**
  * The internet-access option descriptions that name sync.
@@ -34,5 +35,31 @@ describe.each(INTERNET_ACCESS_DETAIL_STRING_KEYS)('internet access detail %s', (
 
   it('has a Spanish string', () => {
     expect(localizedStrings.es[key]).toBeTruthy();
+  });
+});
+
+/**
+ * The badge on internet-access options that are listed but cannot be chosen yet.
+ *
+ * Its `fallbackKey` points at the superseded "Coming soon" key, so a dropped `es` value would
+ * silently bring back the "coming soon" wording this key exists to replace.
+ */
+describe('not-yet-available badge', () => {
+  const key = '%paratextRegistration_internetUse_notYetAvailable%';
+
+  it.each(['en', 'es'])('has a %s string that does not promise a delivery date', (locale) => {
+    const value = localizedStrings[locale][key];
+    expect(value).toBeTruthy();
+    expect(value).not.toMatch(/coming soon|próximamente|pronto/i);
+  });
+
+  it('Spanish string differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+
+  it('marks the "Coming soon" key it replaces as deprecated', () => {
+    expect(
+      metadata['%paratextRegistration_internetUse_comingSoon%'].deprecationInfo?.message,
+    ).toContain(key);
   });
 });

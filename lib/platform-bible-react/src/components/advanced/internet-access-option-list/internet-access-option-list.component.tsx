@@ -90,9 +90,9 @@ const isInternetUse = (value: string): value is InternetUse =>
  *
  * `InternetSettings.xml` is seeded once from a co-installed Paratext 9 on first launch (the two
  * apps keep separate copies thereafter), so a stored value may name an option this app does not
- * implement yet (the "Coming soon" rows). Such a value is shown selected and called out in a banner
- * rather than silently replaced — callers that gate on a usable selection (the first-run wizard's
- * Next button) should refuse to advance until this returns true.
+ * implement yet (the rows marked not yet available). Such a value is shown selected and called out
+ * in a banner rather than silently replaced — callers that gate on a usable selection (the
+ * first-run wizard's Next button) should refuse to advance until this returns true.
  *
  * @experimental This export is unstable and may change shape or disappear without notice
  */
@@ -104,7 +104,7 @@ export function isSupportedInternetUse(value: InternetUse): boolean {
 // Derived from OPTION_ROWS so adding a new row automatically includes its strings.
 export const INTERNET_ACCESS_OPTION_LIST_STRING_KEYS: LocalizeKey[] = [
   ...OPTION_ROWS.flatMap((row) => [row.labelKey, row.descriptionKey]),
-  '%paratextRegistration_internetUse_comingSoon%',
+  '%paratextRegistration_internetUse_notYetAvailable%',
   '%paratextRegistration_internetUse_unsupportedSelection_title%',
   '%paratextRegistration_internetUse_unsupportedSelection_description%',
 ];
@@ -118,7 +118,7 @@ export type InternetAccessOptionListProps = {
    * that needs the user to make an explicit choice rather than accept the stored value.
    */
   value: InternetUse | undefined;
-  /** Called when the user selects an active (non-coming-soon) option. */
+  /** Called when the user selects an active (available) option. */
   onChange: (value: InternetUse) => void;
   /** When true, all rows are non-interactive (loading or saving in progress). */
   disabled: boolean;
@@ -216,7 +216,7 @@ export function InternetAccessOptionList({
                         actually clickable. The label itself stays inline so that, when a label
                         wraps — as several do in the first-run wizard's narrow column — the info
                         button trails its last word instead of parking at the row's edge against
-                        the "Coming soon" badge.
+                        the not-yet-available badge.
                         A raw <label> rather than the shadcn Label used in DeveloperSection —
                         Label's disabled treatment rides on `tw:peer-disabled:`, a *sibling*
                         combinator, and this label is nested two levels below the RadioGroupItem,
@@ -241,8 +241,8 @@ export function InternetAccessOptionList({
                             the option. Its aria-label carries the whole description, as the info
                             icon button pattern asks. Never disabled — the description explains
                             the option rather than being part of the setting, so it stays
-                            reachable while the list loads or saves, and on the "Coming soon" rows
-                            whose disabled radios never take focus. */}
+                            reachable while the list loads or saves, and on the not-yet-available
+                            rows whose disabled radios never take focus. */}
                         <Button
                           variant="ghost"
                           size="icon"
@@ -257,7 +257,7 @@ export function InternetAccessOptionList({
                   </div>
                   {!row.isEnabled && (
                     <Badge variant="muted">
-                      {localizedStrings['%paratextRegistration_internetUse_comingSoon%']}
+                      {localizedStrings['%paratextRegistration_internetUse_notYetAvailable%']}
                     </Badge>
                   )}
                 </div>

@@ -341,6 +341,7 @@
       "%webView_scriptureTextGrid_viewOptions_adminSharedLock%": "Shared by administrator",
       "%webView_scriptureTextGrid_viewOptions_chapter%": "Chapter",
       "%webView_scriptureTextGrid_viewOptions_chapterComingSoon%": "Chapter view coming soon",
+      "%webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%": "Chapter view is not yet available.",
       "%webView_scriptureTextGrid_viewOptions_comingSoon%": "Coming soon",
       "%webView_scriptureTextGrid_viewOptions_downloadedNoProject%": "Resource downloaded. Select a project to add it to a text collection.",
       "%webView_scriptureTextGrid_viewOptions_emptyState_prompt%": "No texts added yet. Use {getResourcesLabel} to add them.",
@@ -695,6 +696,7 @@
       "%webView_scriptureTextGrid_viewOptions_adminSharedLock%": "Compartido por el administrador",
       "%webView_scriptureTextGrid_viewOptions_chapter%": "Capítulo",
       "%webView_scriptureTextGrid_viewOptions_chapterComingSoon%": "La vista de capítulo estará disponible pronto",
+      "%webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%": "La vista de capítulo aún no está disponible.",
       "%webView_scriptureTextGrid_viewOptions_comingSoon%": "Próximamente",
       "%webView_scriptureTextGrid_viewOptions_downloadedNoProject%": "Recurso descargado. Seleccione un proyecto para agregarlo a una colección de textos.",
       "%webView_scriptureTextGrid_viewOptions_emptyState_prompt%": "Aún no se han añadido textos. Use {getResourcesLabel} para añadirlos.",
@@ -1311,6 +1313,22 @@
     },
     "%webView_platformScriptureEditor_syncEditBlocked_banner_2%": {
       "fallbackKey": "%webView_platformScriptureEditor_syncEditBlocked_banner%"
+    },
+    "%webView_scriptureTextGrid_viewOptions_chapterComingSoon%": {
+      "deprecationInfo": {
+        "date": "2026-10-23",
+        "message": "Said \"coming soon\", which promises a delivery date nobody has set. The new key is %webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%."
+      }
+    },
+    "%webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%": {
+      "fallbackKey": "%webView_scriptureTextGrid_viewOptions_chapterComingSoon%",
+      "notes": "Hint shown under the View Options toggle group when the Chapter view option is shown but does not work yet. The user cannot turn it on. \"Available\" means \"can be used\", not \"in stock\" or \"not busy\"."
+    },
+    "%webView_scriptureTextGrid_viewOptions_comingSoon%": {
+      "deprecationInfo": {
+        "date": "2026-10-23",
+        "message": "Not used. \"Coming soon\" promises a delivery date nobody has set; a disabled feature says it is not yet available instead (see %webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%). No replacement key."
+      }
     }
   }
 }

@@ -45,7 +45,9 @@ const mockLocalizedStrings: LanguageStrings = {
     'Desc Sensitive sentinel',
   '%paratextRegistration_description_internetUse_option_ProxyOnly_2%': 'Configure proxy sentinel',
   '%paratextRegistration_description_internetUse_option_ProxyOnly_details%': 'Desc Proxy sentinel',
+  // Deprecated badge key, so a component that still requests it fails the badge assertions
   '%paratextRegistration_internetUse_comingSoon%': 'Coming soon',
+  '%paratextRegistration_internetUse_notYetAvailable%': 'Not yet available',
   '%paratextRegistration_internetUse_unsupportedSelection_title%': 'Not supported sentinel',
   '%paratextRegistration_internetUse_unsupportedSelection_description%':
     '{selectedOption} is not supported sentinel',
@@ -94,7 +96,7 @@ describe('InternetAccessOptionList', () => {
     expect(paragraphs).toEqual([]);
   });
 
-  test('every row, including the disabled coming-soon ones, describes its radio for screen readers', () => {
+  test('every row, including the disabled not-yet-available ones, describes its radio for screen readers', () => {
     renderList();
     ROWS.forEach(([label, description]) => {
       const radio = screen.getByLabelText(label);
@@ -115,8 +117,8 @@ describe('InternetAccessOptionList', () => {
 
   // Without a visible marker, nothing on a row hints that a description exists. It is a real button
   // rather than a decorative icon so every description is reachable by keyboard — including on the
-  // coming-soon rows, whose disabled radios never take focus.
-  test('every row, including the coming-soon ones, has an info button named by its description', () => {
+  // not-yet-available rows, whose disabled radios never take focus.
+  test('every row, including the not-yet-available ones, has an info button named by its description', () => {
     renderList();
     ROWS.forEach(([, description]) => expect(infoButtonFor(description)).toBeEnabled());
   });
@@ -151,7 +153,7 @@ describe('InternetAccessOptionList', () => {
     await waitFor(() => expect(visibleTooltips()).toHaveLength(0));
   });
 
-  test("tabbing reaches a coming-soon row's info button and reveals its description", async () => {
+  test("tabbing reaches a not-yet-available row's info button and reveals its description", async () => {
     const user = userEvent.setup();
     renderList({ value: 'Enabled' });
     expect(visibleTooltips()).toHaveLength(0);
@@ -162,7 +164,7 @@ describe('InternetAccessOptionList', () => {
     expect(screen.getByLabelText('Unrestricted')).toHaveFocus();
     await user.tab(); // Unrestricted's info button
     await user.tab(); // Disable access's info button
-    await user.tab(); // Disable ALL's info button, on the first coming-soon row
+    await user.tab(); // Disable ALL's info button, on the first not-yet-available row
     expect(infoButtonFor('Desc Disabled sentinel')).toHaveFocus();
 
     await waitFor(() => expect(visibleTooltips()).toHaveLength(1));
@@ -176,7 +178,7 @@ describe('InternetAccessOptionList', () => {
     expect(onChange).toHaveBeenCalledWith('Enabled');
   });
 
-  test('coming-soon radio items are disabled (do not fire onChange)', () => {
+  test('not-yet-available radio items are disabled (do not fire onChange)', () => {
     const onChange = vi.fn();
     renderList({ onChange });
     expect(screen.getByLabelText('Disable ALL sentinel')).toBeDisabled();
@@ -191,15 +193,16 @@ describe('InternetAccessOptionList', () => {
     radios.forEach((r) => expect(r).toBeDisabled());
   });
 
-  test('coming-soon badge appears on exactly 3 rows', () => {
+  test('not-yet-available badge appears on exactly 3 rows', () => {
     renderList();
-    expect(screen.getAllByText('Coming soon')).toHaveLength(3);
+    expect(screen.getAllByText('Not yet available')).toHaveLength(3);
+    expect(screen.queryByText(/coming soon/i)).toBeNull();
   });
 
-  test('coming-soon badge does not appear on active option rows (options 1 and 2)', () => {
+  test('not-yet-available badge does not appear on active option rows (options 1 and 2)', () => {
     renderList({ value: 'Enabled' });
     // Options 1 and 2 are active; only options 3-5 have badges
-    expect(screen.getAllByText('Coming soon')).toHaveLength(3);
+    expect(screen.getAllByText('Not yet available')).toHaveLength(3);
   });
 
   // InternetSettings.xml is seeded once from a co-installed Paratext 9 on first launch, so it can

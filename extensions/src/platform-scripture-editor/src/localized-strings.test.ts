@@ -400,6 +400,42 @@ describe.each([...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS])('View Options label 
   });
 });
 
+// The hint under a disabled Chapter toggle falls back to the "coming soon" key it replaces, so a
+// dropped value would silently bring back a promised delivery date nobody has set.
+describe('View Options chapter hint', () => {
+  const key = '%webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%';
+
+  it.each(['en', 'es'])('has a %s string that does not promise a delivery date', (locale) => {
+    const value = localizedStrings[locale][key];
+    expect(value).toBeTruthy();
+    expect(value).not.toMatch(/coming soon|próximamente|pronto/i);
+  });
+});
+
+describe('retired "coming soon" View Options strings', () => {
+  const retiredKeys = [
+    '%webView_scriptureTextGrid_viewOptions_chapterComingSoon%',
+    '%webView_scriptureTextGrid_viewOptions_comingSoon%',
+  ];
+
+  it.each(retiredKeys)('%s is no longer requested by the panel', (key) => {
+    expect(RESOURCE_COLLECTION_OPTIONS_STRING_KEYS).not.toContain(key);
+  });
+
+  it('marks the chapter hint key as replaced by the not-yet-available hint', () => {
+    expect(
+      metadata?.['%webView_scriptureTextGrid_viewOptions_chapterComingSoon%']?.deprecationInfo
+        ?.message,
+    ).toContain('%webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%');
+  });
+
+  it('marks the unused "coming soon" key as having no replacement', () => {
+    expect(
+      metadata?.['%webView_scriptureTextGrid_viewOptions_comingSoon%']?.deprecationInfo?.message,
+    ).toContain('No replacement key');
+  });
+});
+
 // The View Options notices, which the grid web view shows outside the panel itself — in the
 // resource picker and in a notification — so they are not covered by any panel's key list.
 describe.each([...VIEW_OPTIONS_NOTICE_STRING_KEYS])('view options notice %s', (key) => {

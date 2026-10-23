@@ -49,10 +49,9 @@ export const RESOURCE_COLLECTION_OPTIONS_KEYS = {
   verse: '%webView_scriptureTextGrid_viewOptions_verse%',
   chapter: '%webView_scriptureTextGrid_viewOptions_chapter%',
   grid: '%webView_scriptureTextGrid_viewOptions_grid%',
-  // Specific rather than the general `comingSoon` key beside it (which stays, unmodified, because
-  // shipped strings are immutable): the hint renders after the whole toggle group, with Grid
-  // between it and the disabled Chapter item, so it has to name the mode it describes.
-  chapterComingSoon: '%webView_scriptureTextGrid_viewOptions_chapterComingSoon%',
+  // Names the mode it describes because the hint renders after the whole toggle group, with Grid
+  // between it and the disabled Chapter item.
+  chapterNotYetAvailable: '%webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%',
   textsHeader: '%webView_scriptureTextGrid_viewOptions_textsHeader%',
   emptyTexts: '%webView_scriptureTextGrid_viewOptions_emptyState_prompt%',
   getResources: '%webView_scriptureTextGrid_viewOptions_getResources%',
@@ -67,7 +66,7 @@ export const RESOURCE_COLLECTION_OPTIONS_STRING_KEYS = Object.freeze([
   RESOURCE_COLLECTION_OPTIONS_KEYS.verse,
   RESOURCE_COLLECTION_OPTIONS_KEYS.chapter,
   RESOURCE_COLLECTION_OPTIONS_KEYS.grid,
-  RESOURCE_COLLECTION_OPTIONS_KEYS.chapterComingSoon,
+  RESOURCE_COLLECTION_OPTIONS_KEYS.chapterNotYetAvailable,
   RESOURCE_COLLECTION_OPTIONS_KEYS.textsHeader,
   RESOURCE_COLLECTION_OPTIONS_KEYS.emptyTexts,
   RESOURCE_COLLECTION_OPTIONS_KEYS.getResources,
@@ -96,8 +95,8 @@ export interface ResourceCollectionOptionsProps {
   /** Called when the user picks a different, enabled view mode. */
   onViewModeChange: (mode: ResourceCollectionViewMode) => void;
   /**
-   * When `false` (default) the Chapter toggle is disabled with a "coming soon" hint. It is enabled
-   * once chapter rendering exists.
+   * When `false` (default) the Chapter toggle is disabled with a "not yet available" hint. It is
+   * enabled once chapter rendering exists.
    */
   isChapterEnabled?: boolean;
   /** Admin-shared rows (top section): checkbox reflects the per-user overlay; never removable. */
