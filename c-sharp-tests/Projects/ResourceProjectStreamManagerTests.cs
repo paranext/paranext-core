@@ -157,14 +157,19 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
-        public void GetDataStream_EntryThatCannotBeDecrypted_ThrowsAndLeavesTheArchiveUnlocked()
+        public void GetDataStream_EntryThatCannotBeDecrypted_ThrowsAndLeavesTheArchiveUnlocked(
+            // Real resources hold both deflated and stored entries
+            [Values(CompressionMethod.Deflated, CompressionMethod.Stored)]
+                CompressionMethod compression,
+            // About 1 in 256 entries encrypted with another password pass the header's password
+            // check and fail only once their data is read
+            [Values]
+                bool wrongPasswordPassesHeaderCheck
+        )
         {
-            var streamManager = CreateStreamManager(
-                [
-                    ($"{ExtensionPath}/sealed.json", "sealed", ArchivePassword),
-                    ($"{ExtensionPath}/foreign.json", "foreign", "another password"),
-                ],
-                passwordProtected: true
+            var streamManager = CreateStreamManagerWithForeignEntry(
+                compression,
+                wrongPasswordPassesHeaderCheck
             );
 
             // Read on a thread of its own, as a request would be: a lock the file manager leaked
@@ -347,23 +352,85 @@ namespace TestParanextDataProvider.Projects
             );
         }
 
+        /// <summary>
+        /// A password-protected resource holding sealed.json, encrypted with its password, and
+        /// foreign.json, encrypted with another. Resources use ZipCrypto, which checks a password
+        /// against one byte of a random header, so whether that check accepts the other password
+        /// is chance; the archive is rewritten until it lands on the side asked for.
+        /// </summary>
+        private ResourceProjectStreamManager CreateStreamManagerWithForeignEntry(
+            CompressionMethod compression,
+            bool wrongPasswordPassesHeaderCheck
+        )
+        {
+            (string Name, string Contents, string? Password)[] entries =
+            [
+                ($"{ExtensionPath}/sealed.json", "sealed", ArchivePassword),
+                ($"{ExtensionPath}/foreign.json", "foreign", "another password"),
+            ];
+            for (var attempt = 0; attempt < 10_000; attempt++)
+            {
+                WriteArchive(entries, compression);
+                if (
+                    PassesHeaderPasswordCheck($"{ExtensionPath}/foreign.json")
+                    == wrongPasswordPassesHeaderCheck
+                )
+                    return new ResourceProjectStreamManager(
+                        CreateFileManager(passwordProtected: true),
+                        ArchivePath,
+                        new FixedPasswordProvider()
+                    );
+            }
+            throw new AssertionException(
+                "Could not write an archive with the header check asked for"
+            );
+        }
+
+        /// <summary>
+        /// Whether the archive password gets past the entry's header, the only check ZipCrypto
+        /// makes before the data is read
+        /// </summary>
+        private bool PassesHeaderPasswordCheck(string entryName)
+        {
+            using ZipFile archive = new(ArchivePath) { Password = ArchivePassword };
+            try
+            {
+                using var _ = archive.GetInputStream(archive.GetEntry(entryName));
+                return true;
+            }
+            catch (ZipException)
+            {
+                return false;
+            }
+        }
+
         private ProjectFileManager CreateFileManager(
             IEnumerable<(string Name, string Contents, string? Password)> entries,
             bool passwordProtected
         )
         {
-            using (ZipOutputStream archive = new(File.Create(ArchivePath)))
-            {
-                // Each entry is encrypted with its own password, or not at all when it has none
-                foreach (var (name, contents, password) in entries)
-                {
-                    archive.Password = password;
-                    archive.PutNextEntry(new ZipEntry(name));
-                    var bytes = Encoding.UTF8.GetBytes(contents);
-                    archive.Write(bytes, 0, bytes.Length);
-                }
-            }
+            WriteArchive(entries, CompressionMethod.Deflated);
+            return CreateFileManager(passwordProtected);
+        }
 
+        private void WriteArchive(
+            IEnumerable<(string Name, string Contents, string? Password)> entries,
+            CompressionMethod compression
+        )
+        {
+            using ZipOutputStream archive = new(File.Create(ArchivePath));
+            // Each entry is encrypted with its own password, or not at all when it has none
+            foreach (var (name, contents, password) in entries)
+            {
+                archive.Password = password;
+                archive.PutNextEntry(new ZipEntry(name) { CompressionMethod = compression });
+                var bytes = Encoding.UTF8.GetBytes(contents);
+                archive.Write(bytes, 0, bytes.Length);
+            }
+        }
+
+        private ProjectFileManager CreateFileManager(bool passwordProtected)
+        {
             ResourceProjectFileManager fileManager =
                 new("TST", passwordProtected ? new FixedPasswordProvider() : null, ArchivePath);
             _fileManagers.Add(fileManager);
