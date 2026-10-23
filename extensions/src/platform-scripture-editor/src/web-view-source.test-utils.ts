@@ -1,28 +1,47 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 
 /*
- * Helpers for source-reading contract tests over `platform-scripture-editor.web-view.tsx`. The web
- * view cannot be mounted in jsdom (see `content-zoom-markers.contract.test.ts`), so those tests
- * check its wiring by walking its syntax tree instead.
+ * Helpers for source-reading contract tests over this extension's sources, chiefly
+ * `platform-scripture-editor.web-view.tsx`. The web view cannot be mounted in jsdom (see
+ * `content-zoom-markers.contract.test.ts`), so those tests check its wiring by walking its syntax
+ * tree instead.
  */
 
-const WEB_VIEW_FILE = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  'platform-scripture-editor.web-view.tsx',
-);
+const SRC_DIR = path.dirname(fileURLToPath(import.meta.url));
+
+/** `relativePath` (relative to this extension's `src`), parsed. */
+export function parseSource(relativePath: string): ts.SourceFile {
+  const filePath = path.join(SRC_DIR, relativePath);
+  return ts.createSourceFile(
+    filePath,
+    readFileSync(filePath, 'utf-8'),
+    ts.ScriptTarget.Latest,
+    true,
+    filePath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+}
 
 /** `platform-scripture-editor.web-view.tsx`, parsed. */
 export function parseWebViewSource(): ts.SourceFile {
-  return ts.createSourceFile(
-    WEB_VIEW_FILE,
-    readFileSync(WEB_VIEW_FILE, 'utf-8'),
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
+  return parseSource('platform-scripture-editor.web-view.tsx');
+}
+
+/**
+ * Every `.ts`/`.tsx` file under this extension's `src` that ships (not a test, test helper, or
+ * story), as `/`-separated paths relative to it, so a sweep over the extension also sees a file
+ * added later.
+ */
+export function listSourceFiles(relativeDir = ''): string[] {
+  return readdirSync(path.join(SRC_DIR, relativeDir), { withFileTypes: true }).flatMap((entry) => {
+    const relativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) return listSourceFiles(relativePath);
+    return /\.tsx?$/.test(entry.name) && !/\.(test|test-utils|stories)\.tsx?$/.test(entry.name)
+      ? [relativePath]
+      : [];
+  });
 }
 
 /** Every node in `root`'s subtree, `root` included, in source order. */
