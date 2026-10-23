@@ -5,6 +5,7 @@ import { Plus } from 'lucide-react';
 import { CardTitle, Label } from 'platform-bible-react';
 import { useMemo, useState } from 'react';
 import { Home, HOME_STRING_KEYS } from './home.component';
+import { reportCouldNotOpen } from './open-home-item';
 import { useUnsupportedReasonStrings } from './use-unsupported-reason-strings.hook';
 import { useLocalProjects } from './use-local-projects.hook';
 
@@ -17,17 +18,23 @@ globalThis.webViewComponent = function NewTab({ id: webViewId }: WebViewProps) {
 
   const [projectLoading, setProjectLoading] = useState<boolean>(false);
 
-  const openResource = (projectId: string, isPublished: boolean) => {
+  // Home ignores a failed open beyond letting the item be opened again, so this reports its own —
+  // and leaves the loading screen, which a successful open replaces along with this tab.
+  const openResource = async (projectId: string, isPublished: boolean) => {
     setProjectLoading(true);
-
-    return papi.commands.sendCommand(
-      isPublished
-        ? 'platformScriptureEditor.openResourceViewer'
-        : 'platformScriptureEditor.openScriptureEditor',
-      projectId,
-      undefined,
-      webViewId,
-    );
+    try {
+      await papi.commands.sendCommand(
+        isPublished
+          ? 'platformScriptureEditor.openResourceViewer'
+          : 'platformScriptureEditor.openScriptureEditor',
+        projectId,
+        undefined,
+        webViewId,
+      );
+    } catch (e) {
+      setProjectLoading(false);
+      await reportCouldNotOpen('New Tab', projectId, e);
+    }
   };
 
   const { localProjectsInfo, isLoadingLocalProjects } = useLocalProjects({

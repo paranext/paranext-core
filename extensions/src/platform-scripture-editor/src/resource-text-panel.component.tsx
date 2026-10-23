@@ -84,7 +84,8 @@ type ResourceSelectorDropdownProps = {
   selectedRef: PickerResource | undefined;
   dblResources: DblResourceData[];
   onSelectResource: (id: string) => void;
-  onShowResourcePicker: () => void;
+  /** Undefined hides the option: downloading adds to the project's list, so needs a project */
+  onShowResourcePicker: (() => void) | undefined;
   downloadResourcesLabel: string;
 };
 
@@ -131,10 +132,14 @@ function ResourceSelectorDropdown({
               </DropdownMenuCheckboxItem>
             );
           })}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => onShowResourcePicker()}>
-            {downloadResourcesLabel}
-          </DropdownMenuItem>
+          {onShowResourcePicker && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => onShowResourcePicker()}>
+                {downloadResourcesLabel}
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
@@ -144,7 +149,11 @@ function ResourceSelectorDropdown({
 export type ResourceTextPanelProps = {
   /** Localized strings; import `RESOURCE_PANEL_STRING_KEYS` to resolve them. */
   localizedStrings: ResourcePanelLocalizedStrings;
-  /** Whether the panel has a project context (opened with a project id). */
+  /**
+   * Whether the panel has a project context (opened with a project id). Without one it shows only a
+   * resource it was asked to show, in `selectedRef`, and offers no download, which needs a
+   * project.
+   */
   hasProject: boolean;
   /**
    * Which kind of resource this panel shows. `'ScriptureResource'` is the Bible texts tab; every
@@ -523,7 +532,9 @@ export function ResourceTextPanel({
   // (their container project), so each names its own area to keep its remembered level separate.
   const contentZoomArea = resourceType === 'ScriptureResource' ? 'bible-texts' : 'commentaries';
 
-  if (!hasProject) {
+  // With no project open, a resource the panel was asked to show (one opened from Home) is still
+  // shown; only with nothing to show does it ask for a project.
+  if (!hasProject && !selectedRef) {
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
         <p>{localize(localizedStrings, '%webView_resourcePanel_noProject%')}</p>
@@ -731,7 +742,7 @@ export function ResourceTextPanel({
         selectedRef={selectedRef}
         dblResources={dblResources}
         onSelectResource={onSelectResource}
-        onShowResourcePicker={onShowResourcePicker}
+        onShowResourcePicker={hasProject ? onShowResourcePicker : undefined}
         downloadResourcesLabel={localize(
           localizedStrings,
           '%webView_resourcePanel_downloadResources%',

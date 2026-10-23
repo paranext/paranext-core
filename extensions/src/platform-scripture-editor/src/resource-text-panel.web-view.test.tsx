@@ -228,6 +228,9 @@ import './resource-text-panel.web-view';
 function makeProps(
   overrides: Partial<WebViewProps> = {},
   resourceType: 'ScriptureResource' | 'Commentary' = 'ScriptureResource',
+  /** Web view state the panel reads, by key, and the setter it gets for each */
+  state: Record<string, unknown> = {},
+  setState: (key: string, value: unknown) => void = () => {},
 ): WebViewProps {
   // The object literal only provides the minimum props needed for testing — the double cast
   // avoids satisfying every optional field of WebViewProps in each helper.
@@ -240,6 +243,7 @@ function makeProps(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (key: string, defaultValue: any): [any, (val: any) => void] => {
         if (key === 'resourceType') return [resourceType, vi.fn()];
+        if (key in state) return [state[key], (value: unknown) => setState(key, value)];
         return [defaultValue, vi.fn()];
       },
     ),
@@ -688,6 +692,79 @@ describe('ResourceTextPanel — copy limit', () => {
     expect(capturedResourceTextPanelProps).toHaveBeenLastCalledWith(
       expect.objectContaining({ copyLimit: 12 }),
     );
+  });
+});
+
+/*
+ * Resources never open in Simple mode's middle column, so with no project open the panel shows a
+ * resource it was asked to show (one opened from Home), from the downloaded resources alone. It
+ * never picks one by itself: there is no list of the user's texts to pick from.
+ */
+describe('ResourceTextPanel — no project open', () => {
+  function renderWithoutProject(selectedResourceId: string | undefined) {
+    const setSelectedResourceId = vi.fn();
+    mockUseResourcePickerResources.mockReturnValue([[SELECTED_RESOURCE], false]);
+    // There is no project, so its referenced list never arrives.
+    mockUseEffectiveResourceReferenceList.mockReturnValue({ status: 'loading' });
+    const props = makeProps(
+      { projectId: undefined },
+      'ScriptureResource',
+      { selectedResourceId },
+      (key, value) => {
+        if (key === 'selectedResourceId') setSelectedResourceId(value);
+      },
+    );
+    const ResourceTextPanel = getResourceTextPanel();
+    render(<ResourceTextPanel {...props} />);
+    return { setSelectedResourceId, panelProps: capturedResourceTextPanelProps.mock.lastCall?.[0] };
+  }
+
+  it('shows the resource it was asked to show', () => {
+    const { panelProps } = renderWithoutProject('project:resource-project-id');
+
+    expect(panelProps).toEqual(
+      expect.objectContaining({
+        hasProject: false,
+        readiness: 'configured',
+        selectedRef: SELECTED_RESOURCE,
+      }),
+    );
+  });
+
+  it('picks nothing by itself when it was asked for nothing', () => {
+    const { panelProps, setSelectedResourceId } = renderWithoutProject(undefined);
+
+    expect(panelProps).toEqual(expect.objectContaining({ selectedRef: undefined }));
+    expect(setSelectedResourceId).not.toHaveBeenCalled();
+  });
+
+  describe('while the catalog is down', () => {
+    beforeEach(() => {
+      mockUseDblResourceCatalog.mockReturnValue({
+        dblResources: [],
+        isLoadingResources: false,
+        isCatalogReady: false,
+        hasCatalogError: true,
+        refetchCatalog: vi.fn(),
+      });
+    });
+
+    it('says the catalog is unavailable when the resource it was asked for has no row without it', () => {
+      // A DBL resource is listed only once the catalog resolves it; "open a project" would mislead.
+      const { panelProps } = renderWithoutProject('dbl:uid-not-downloaded');
+
+      expect(panelProps).toEqual(
+        expect.objectContaining({ readiness: 'catalogError', selectedRef: undefined }),
+      );
+    });
+
+    it('still shows a downloaded resource it was asked for', () => {
+      const { panelProps } = renderWithoutProject('project:resource-project-id');
+
+      expect(panelProps).toEqual(
+        expect.objectContaining({ readiness: 'configured', selectedRef: SELECTED_RESOURCE }),
+      );
+    });
   });
 });
 

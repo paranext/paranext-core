@@ -14,8 +14,13 @@ const mocks = vi.hoisted(() => {
   const projectsChangedHandlers = new Set<() => void>();
   return {
     registeredCommands: new Map<string, (...args: unknown[]) => unknown>(),
+    webViewProviders: new Map<string, unknown>(),
+    openWebView: vi.fn<(...args: unknown[]) => Promise<string | undefined>>(async () => 'wv-1'),
+    getOpenWebViewDefinition: vi.fn(async (): Promise<unknown> => undefined),
+    reloadWebView: vi.fn(async (): Promise<string | undefined> => 'wv-1'),
     dataProvidersGet: vi.fn(),
-    getMetadataForAllProjects: vi.fn(),
+    getMetadataForAllProjects: vi.fn(async (): Promise<unknown[]> => []),
+    getSetting: vi.fn(async (): Promise<unknown> => 'power'),
     readUserData: vi.fn(),
     writeUserData: vi.fn(),
     projectsChangedHandlers,
@@ -39,9 +44,21 @@ vi.mock('@papi/backend', () => ({
         return () => mocks.projectsChangedHandlers.delete(handler);
       }),
     },
-    settings: { registerValidator: vi.fn(async () => async () => true) },
-    webViewProviders: { registerWebViewProvider: vi.fn(async () => async () => true) },
-    webViews: { openWebView: vi.fn(async () => 'wv-1') },
+    settings: {
+      registerValidator: vi.fn(async () => async () => true),
+      get: mocks.getSetting,
+    },
+    webViewProviders: {
+      registerWebViewProvider: vi.fn(async (webViewType: string, webViewProvider: unknown) => {
+        mocks.webViewProviders.set(webViewType, webViewProvider);
+        return async () => true;
+      }),
+    },
+    webViews: {
+      openWebView: mocks.openWebView,
+      getOpenWebViewDefinition: mocks.getOpenWebViewDefinition,
+      reloadWebView: mocks.reloadWebView,
+    },
   },
   logger: { debug: vi.fn(), warn: vi.fn(), info: vi.fn(), error: vi.fn() },
 }));
@@ -109,10 +126,13 @@ async function getCachedResources(shouldWaitForModelTextRestrictions?: boolean) 
   return handler(shouldWaitForModelTextRestrictions);
 }
 
-async function getLocalNonDblResources(shouldWaitForModelTextRestrictions?: boolean) {
+async function getLocalNonDblResources(
+  shouldWaitForModelTextRestrictions?: boolean,
+  catalogWaitMs?: number,
+) {
   const handler = mocks.registeredCommands.get('platformGetResources.getLocalNonDblResources');
   if (!handler) throw new Error('getLocalNonDblResources was not registered');
-  return handler(shouldWaitForModelTextRestrictions);
+  return handler(shouldWaitForModelTextRestrictions, catalogWaitMs);
 }
 
 async function refreshResourceFlags(shouldRecomputeUpdateStatus?: boolean) {
@@ -348,5 +368,330 @@ describe('platformGetResources activation', () => {
         projectId: 'local-read-only-proj',
       }),
     ]);
+  });
+});
+
+async function openHome(...args: unknown[]) {
+  const handler = mocks.registeredCommands.get('platformGetResources.openHome');
+  if (!handler) throw new Error('openHome was not registered');
+  return handler(...args);
+}
+
+/** The filter preset the last `openHome` asked the Home web view provider for. */
+function lastRequestedPreset(): unknown {
+  const options = mocks.openWebView.mock.calls.at(-1)?.[2];
+  return options && typeof options === 'object' && 'initialProjectResourceFilter' in options
+    ? options.initialProjectResourceFilter
+    : undefined;
+}
+
+/*
+ * The one place the command's argument becomes a filter preset, and the one caller-facing contract
+ * of the preset: only `true` means "projects only". Everything else — including the menu group key
+ * the macOS native menubar passes as a first argument to every menu command — asks for no preset.
+ */
+describe('platformGetResources.openHome', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    mocks.registeredCommands.clear();
+    mocks.webViewProviders.clear();
+    mocks.readUserData.mockResolvedValue(undefined);
+    mocks.dataProvidersGet.mockResolvedValue(provider);
+    mocks.openWebView.mockResolvedValue('home-1');
+    mocks.getOpenWebViewDefinition.mockResolvedValue(undefined);
+    // Power mode unless a test says otherwise: there, only an opener asks for a preset.
+    mocks.getSetting.mockImplementation(async () => 'power');
+    await activateWithFreshModule();
+  });
+
+  /*
+   * Simple mode does not lock the filter, so Home there always starts on Paratext projects instead,
+   * wherever it was opened from.
+   */
+  it('starts Home on projects in Simple mode, even when asked for nothing in particular', async () => {
+    mocks.getSetting.mockImplementation(async () => 'simple');
+
+    await openHome();
+
+    expect(mocks.openWebView).toHaveBeenCalledTimes(1);
+    expect(lastRequestedPreset()).toBe('paratextProject');
+  });
+
+  it('puts an open Home back on projects in Simple mode when the user had widened it', async () => {
+    mocks.getSetting.mockImplementation(async () => 'simple');
+    mocks.getOpenWebViewDefinition.mockResolvedValue({
+      id: 'home-1',
+      webViewType: 'platformGetResources.home',
+      state: { projectResourceFilter: 'resource' },
+    });
+
+    await openHome('platform.projectResources');
+
+    expect(mocks.reloadWebView).toHaveBeenCalledWith(
+      'platformGetResources.home',
+      'home-1',
+      expect.objectContaining({ initialProjectResourceFilter: 'paratextProject' }),
+    );
+  });
+
+  it('starts Home on projects when the interface mode cannot be read', async () => {
+    mocks.getSetting.mockImplementation(async () => {
+      throw new Error('settings unavailable');
+    });
+
+    await openHome();
+
+    expect(lastRequestedPreset()).toBe('paratextProject');
+  });
+
+  afterEach(async () => {
+    await registrations.runAllUnsubscribers();
+  });
+
+  it('asks for projects only when passed true', async () => {
+    await openHome(true);
+
+    expect(mocks.openWebView).toHaveBeenCalledTimes(1);
+    expect(lastRequestedPreset()).toBe('paratextProject');
+  });
+
+  it('asks for no preset when passed nothing or false', async () => {
+    // Each open is counted first: `lastRequestedPreset` is undefined when nothing opened too.
+    await openHome();
+    expect(mocks.openWebView).toHaveBeenCalledTimes(1);
+    expect(lastRequestedPreset()).toBeUndefined();
+
+    await openHome(false);
+    expect(mocks.openWebView).toHaveBeenCalledTimes(2);
+    expect(lastRequestedPreset()).toBeUndefined();
+  });
+
+  it('asks for no preset when the macOS menubar passes its menu group key', async () => {
+    // Project › Open… in the native menubar reaches this command with the item's group key as its
+    // first argument. A truthiness check would read that string as "projects only".
+    await openHome('platform.projectResources');
+
+    expect(mocks.openWebView).toHaveBeenCalledTimes(1);
+    expect(lastRequestedPreset()).toBeUndefined();
+  });
+
+  it('reloads an open Home showing another filter when asked for projects only', async () => {
+    mocks.getOpenWebViewDefinition.mockResolvedValue({
+      id: 'home-1',
+      webViewType: 'platformGetResources.home',
+      state: { projectResourceFilter: 'all' },
+    });
+
+    await openHome(true);
+
+    // The Home just raised, not the `existingId: '?'` placeholder the open was asked with.
+    expect(mocks.getOpenWebViewDefinition).toHaveBeenCalledWith('home-1');
+    expect(mocks.reloadWebView).toHaveBeenCalledWith(
+      'platformGetResources.home',
+      'home-1',
+      expect.objectContaining({ initialProjectResourceFilter: 'paratextProject' }),
+    );
+  });
+
+  it('leaves an open Home alone when it already shows the asked-for filter', async () => {
+    mocks.getOpenWebViewDefinition.mockResolvedValue({
+      id: 'home-1',
+      webViewType: 'platformGetResources.home',
+      state: { projectResourceFilter: 'paratextProject' },
+    });
+
+    await openHome(true);
+
+    // Positive control: the open Home was looked up, so it had every chance to be reloaded.
+    expect(mocks.getOpenWebViewDefinition).toHaveBeenCalledWith('home-1');
+    expect(mocks.reloadWebView).not.toHaveBeenCalled();
+  });
+
+  it('reports no Home when the reload that would apply the preset finds none', async () => {
+    mocks.getOpenWebViewDefinition.mockResolvedValue({
+      id: 'home-1',
+      webViewType: 'platformGetResources.home',
+      state: { projectResourceFilter: 'all' },
+    });
+    // The tab left this window's dock between the raise and the reload.
+    mocks.reloadWebView.mockResolvedValueOnce(undefined);
+
+    expect(await openHome(true)).toBeUndefined();
+  });
+
+  it('raises an open Home as the user left it when asked for nothing in particular', async () => {
+    mocks.getOpenWebViewDefinition.mockResolvedValue({
+      id: 'home-1',
+      webViewType: 'platformGetResources.home',
+      state: { projectResourceFilter: 'resource' },
+    });
+
+    await openHome();
+
+    // Positive control: the command did open (raise) Home, so it had every chance to reload it.
+    expect(mocks.openWebView).toHaveBeenCalled();
+    expect(mocks.reloadWebView).not.toHaveBeenCalled();
+    // With no preset there is nothing to compare, so the open Home is not even looked up.
+    expect(mocks.getOpenWebViewDefinition).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * The provider runs whenever Home is built — a new Home, a reload, moving Home to a new window, an
+ * extension reload — and only a new Home or a preset reload carries a preset. The user's filter has
+ * to survive the rest, and the key it writes has to be the one the web view reads.
+ */
+describe('Home web view provider', () => {
+  type HomeProvider = {
+    getWebView: (saved: unknown, options: unknown) => Promise<{ state?: Record<string, unknown> }>;
+  };
+
+  async function getHomeProvider(): Promise<HomeProvider> {
+    vi.clearAllMocks();
+    mocks.registeredCommands.clear();
+    mocks.webViewProviders.clear();
+    mocks.readUserData.mockResolvedValue(undefined);
+    mocks.dataProvidersGet.mockResolvedValue(provider);
+    await activateWithFreshModule();
+    const homeProvider = mocks.webViewProviders.get('platformGetResources.home');
+    if (!homeProvider) throw new Error('Home web view provider was not registered');
+    // The mock stores providers untyped; this one is the real `homeWebViewProvider` from main.ts.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    return homeProvider as HomeProvider;
+  }
+
+  afterEach(async () => {
+    await registrations.runAllUnsubscribers();
+  });
+
+  it("keeps the user's filter when rebuilt without a preset", async () => {
+    const homeProvider = await getHomeProvider();
+
+    const webView = await homeProvider.getWebView(
+      {
+        id: 'home-1',
+        webViewType: 'platformGetResources.home',
+        state: { projectResourceFilter: 'resource' },
+      },
+      {},
+    );
+
+    expect(webView.state?.projectResourceFilter).toBe('resource');
+  });
+
+  it("writes an opener's preset to the key the web view reads", async () => {
+    const homeProvider = await getHomeProvider();
+
+    const webView = await homeProvider.getWebView(
+      {
+        id: 'home-1',
+        webViewType: 'platformGetResources.home',
+        state: { projectResourceFilter: 'resource' },
+      },
+      { initialProjectResourceFilter: 'paratextProject' },
+    );
+
+    // `home.web-view.tsx` reads `useWebViewState('projectResourceFilter', …)`.
+    expect(webView.state?.projectResourceFilter).toBe('paratextProject');
+  });
+});
+
+/*
+ * The reference panels and the Simple-mode open tell "could not read the installed resources" apart
+ * from "there are none" by whether this rejects: guessing a commentary to be a Bible text would show
+ * an unrelated text in its place.
+ */
+describe('platformGetResources.getLocalNonDblResources', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.registeredCommands.clear();
+    mocks.projectsChangedHandlers.clear();
+    mocks.readUserData.mockResolvedValue(undefined);
+    mocks.writeUserData.mockResolvedValue(undefined);
+    mocks.dataProvidersGet.mockResolvedValue(provider);
+    provider.recomputeDblResourcesInstallStatus.mockResolvedValue({});
+    mocks.getMetadataForAllProjects.mockResolvedValue([]);
+  });
+
+  afterEach(async () => {
+    await registrations.runAllUnsubscribers();
+    vi.restoreAllMocks();
+  });
+
+  it('lists a side-loaded resource even when the catalog cannot be fetched', async () => {
+    provider.getDblResources.mockRejectedValue(new Error('offline'));
+    mocks.getMetadataForAllProjects.mockResolvedValue([
+      { id: 'VULGP83', name: 'VULGP83', isEditable: false },
+    ]);
+    await activateWithFreshModule();
+    // The failed fetch retries with delays; let them pass rather than wait them out.
+    vi.useFakeTimers();
+    try {
+      const resources = getLocalNonDblResources();
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      await expect(resources).resolves.toEqual([expect.objectContaining({ projectId: 'VULGP83' })]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('waits no longer than asked for a catalog fetch that hangs', async () => {
+    // With no catalog cached yet, the read queues behind the startup fetch; a Simple-mode open of a
+    // side-loaded resource would otherwise wait it all out and run out of time.
+    provider.getDblResources.mockImplementation(() => new Promise(() => {}));
+    mocks.getMetadataForAllProjects.mockResolvedValue([
+      { id: 'VULGP83', name: 'VULGP83', isEditable: false },
+    ]);
+    await activateWithFreshModule();
+    vi.useFakeTimers();
+    try {
+      const resources = getLocalNonDblResources(false, 5000);
+      await vi.advanceTimersByTimeAsync(5000);
+
+      await expect(resources).resolves.toEqual([expect.objectContaining({ projectId: 'VULGP83' })]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('waits for a slow catalog when no limit is given, so an installed DBL resource is not listed', async () => {
+    // The resource picker and panels list this beside the catalog; a list built without the
+    // catalog would put every installed DBL resource in front of them twice.
+    let deliverCatalog: (resources: DblResourceData[]) => void = () => {};
+    provider.getDblResources.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          deliverCatalog = resolve;
+        }),
+    );
+    mocks.getMetadataForAllProjects.mockResolvedValue([
+      { id: 'BYZ1', name: 'BYZ', isEditable: false },
+      { id: 'VULGP83', name: 'VULGP83', isEditable: false },
+    ]);
+    await activateWithFreshModule();
+    vi.useFakeTimers();
+    try {
+      let settled = false;
+      const resources = getLocalNonDblResources().finally(() => {
+        settled = true;
+      });
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(settled).toBe(false);
+
+      deliverCatalog([row('byz', 'BYZ1')]);
+      await vi.advanceTimersByTimeAsync(0);
+
+      await expect(resources).resolves.toEqual([expect.objectContaining({ projectId: 'VULGP83' })]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('rejects when the local projects cannot be read', async () => {
+    mocks.getMetadataForAllProjects.mockRejectedValue(new Error('project lookup failed'));
+    await activateWithFreshModule();
+
+    await expect(getLocalNonDblResources()).rejects.toThrow('project lookup failed');
   });
 });

@@ -16,11 +16,12 @@ import type {
 import type { DblResourceData } from 'platform-bible-utils';
 import { getErrorMessage, isString, Mutex, retryUntil } from 'platform-bible-utils';
 import { resolveDblCatalog, shouldStopBackgroundFetch } from './dbl-catalog.utils';
-import { buildLocalNonDblResources } from './get-local-non-dbl-resources.utils';
+import { buildLocalNonDblResources, waitAtMost } from './get-local-non-dbl-resources.utils';
 import {
   buildHomeWebViewState,
+  getHomeFilterPreset,
   type HomeWebViewOptions,
-  shouldReloadHomeForProjectsOnly,
+  shouldReloadHomeForFilterPreset,
 } from './home-web-view.utils';
 import getResourcesDialogReact from './get-resources.web-view?inline';
 import homeDialogReact from './home.web-view?inline';
@@ -118,7 +119,6 @@ let hasWaitedForLocalResourceProjects = false;
 
 const RESOURCE_PROJECT_WAIT_ATTEMPTS = 5;
 const RESOURCE_PROJECT_WAIT_DELAY_MS = 500;
-
 /**
  * Reads local project metadata, waiting for the C# Paratext PDPF to register its resource projects.
  *
@@ -422,39 +422,63 @@ async function getCachedResources(
  * Convention: each synthetic entry uses `dblEntryUid === projectId` to mark it as non-DBL so that
  * callers (e.g. `selectTextConnection`) can create a `ProjectReference` instead of a
  * `DblResourceReference` when the user selects one.
+ *
+ * Rejects when the local projects could not be read, so a caller can tell that apart from there
+ * being none. The catalog failing does not stop it: the list is then built without it.
+ *
+ * @param shouldWaitForModelTextRestrictions As in {@link getCachedResources}
+ * @param catalogWaitMs The longest to wait for the catalog, in milliseconds, before building the
+ *   list without it. Without one it waits for the catalog however long it takes.
  */
 async function getLocalNonDblResources(
-  shouldWaitForModelTextRestrictions = false,
+  shouldWaitForModelTextRestrictions?: boolean,
+  catalogWaitMs?: number,
 ): Promise<DblResourceData[]> {
   try {
-    // A failed catalog fetch must not cost the local list: for an offline user with no cached
-    // catalog, these rows are the only resources the picker can offer.
-    try {
-      await readCatalog();
-    } catch (e) {
-      logger.debug(`Listing local resources without a DBL catalog: ${getErrorMessage(e)}`);
-    }
     // The exclusion below is only as good as the catalog's `installed`/`projectId` flags, and
     // `readCatalog` returns before its background sync finishes. Wait for that sync and read
     // `cachedResources` afterwards, so a resource already on disk is excluded as a DBL entry rather
-    // than emitted a second time as a synthetic non-DBL one. The sync does not wait for the
-    // model-text restrictions, so the bounded wait below is this read's one wait on them.
-    await ensureInstalledFlagsSynced();
-    // An absent catalog means there is no DBL list in hand: none was ever fetched on this profile,
-    // an emptied persisted one was discarded, or this session's fetch failed. In each case there is
-    // nothing for these projects to duplicate and no reason to withhold them. Suppressing them here
-    // would hide side-loaded resources from exactly the offline users most likely to rely on them.
-    const dblCatalog = cachedResources ?? [];
+    // than emitted a second time as a synthetic non-DBL one. A caller that lists these beside the
+    // catalog must let it wait, or every installed DBL resource is listed twice; one that only
+    // looks a resource up can bound the wait, since the startup fetch and its retries can be long.
+    // The sync does not wait for the model-text restrictions, so the bounded wait below is this
+    // read's one wait on them.
+    const catalogSynced = (async () => {
+      // A failed catalog fetch must not cost the local list: for an offline user with no cached
+      // catalog, these rows are the only resources the picker can offer.
+      try {
+        await readCatalog();
+      } catch (e) {
+        logger.debug(`Listing local resources without a DBL catalog: ${getErrorMessage(e)}`);
+      }
+      await ensureInstalledFlagsSynced();
+    })();
+    // `typeof`, not `!== undefined`: an argument left out may arrive over the network as `null`.
+    if (typeof catalogWaitMs !== 'number') await catalogSynced;
+    else if (!(await waitAtMost(catalogSynced, catalogWaitMs)))
+      logger.warn('Building local non-DBL resources without waiting longer for the catalog');
+  } catch (error: unknown) {
+    logger.warn(
+      `Building local non-DBL resources without syncing the catalog, which failed: ${getErrorMessage(error)}`,
+    );
+  }
+  // An absent catalog means there is no DBL list in hand: none was ever fetched on this profile, an
+  // emptied persisted one was discarded, or this session's fetch failed. In each case there is
+  // nothing for these projects to duplicate and no reason to withhold them. Suppressing them here
+  // would hide side-loaded resources from exactly the offline users most likely to rely on them.
+  const dblCatalog = cachedResources ?? [];
 
+  try {
     const allMetadata = await getLocalProjectMetadata();
     return await applyModelTextRestrictionsWithin(
       buildLocalNonDblResources(allMetadata, dblCatalog),
       modelTextRestrictions,
-      getModelTextRestrictionsWaitMs(shouldWaitForModelTextRestrictions),
+      // `=== true`: a value left out may arrive over the network as `null`.
+      getModelTextRestrictionsWaitMs(shouldWaitForModelTextRestrictions === true),
     );
   } catch (error: unknown) {
     logger.warn(`Error getting local non-DBL resources: ${getErrorMessage(error)}`);
-    return [];
+    throw error;
   }
 }
 
@@ -574,8 +598,18 @@ export async function activate(context: ExecutionActivationContext) {
   const openHomeWebViewCommandPromise = papi.commands.registerCommand(
     'platformGetResources.openHome',
     async (shouldShowProjectsOnly?: boolean) => {
-      const options: HomeWebViewOptions = {
+      let interfaceMode: string | undefined;
+      try {
+        interfaceMode = await papi.settings.get('platform.interfaceMode');
+      } catch (e) {
+        logger.warn(`openHome could not read the interface mode: ${getErrorMessage(e)}`);
+      }
+      const initialProjectResourceFilter = getHomeFilterPreset(
         shouldShowProjectsOnly,
+        interfaceMode,
+      );
+      const options: HomeWebViewOptions = {
+        initialProjectResourceFilter,
         // Focus existing one if one exists
         existingId: '?',
       };
@@ -588,17 +622,20 @@ export async function activate(context: ExecutionActivationContext) {
         },
         options,
       );
-      if (!homeWebViewId) return homeWebViewId;
+      // With no preset there is nothing to compare: Home is raised showing whatever filter it had.
+      if (!homeWebViewId || !initialProjectResourceFilter) return homeWebViewId;
 
-      // Reusing an existing Home raises its tab without consulting the provider, so the scoping
-      // this call asked for never reaches it. Reload only when the two disagree — a rebuilt iframe
-      // is the slowest thing this command can do.
+      // Reusing an existing Home raises its tab without consulting the provider, so the preset
+      // this call asked for never reaches it. Reload only when Home is showing a different filter —
+      // a rebuilt iframe is the slowest thing this command can do.
       const existingWebView = await papi.webViews.getOpenWebViewDefinition(homeWebViewId);
       if (
         existingWebView &&
-        shouldReloadHomeForProjectsOnly(existingWebView, !!shouldShowProjectsOnly)
+        shouldReloadHomeForFilterPreset(existingWebView, initialProjectResourceFilter)
       )
-        await papi.webViews.reloadWebView(HOME_WEB_VIEW_TYPE, homeWebViewId, options);
+        // `undefined` when the tab is gone by the time the reload lands (moved to another window,
+        // or swapped out by an interface-mode change), and then there is no Home to report.
+        return papi.webViews.reloadWebView(HOME_WEB_VIEW_TYPE, homeWebViewId, options);
 
       return homeWebViewId;
     },
@@ -644,6 +681,39 @@ export async function activate(context: ExecutionActivationContext) {
   const getLocalNonDblResourcesCommandPromise = papi.commands.registerCommand(
     'platformGetResources.getLocalNonDblResources',
     getLocalNonDblResources,
+    {
+      method: {
+        // Experimental: the catalogWaitMs parameter's contract is not yet stable.
+        'x-experimental': true,
+        summary:
+          'Lists locally-installed, read-only resources that are not in the DBL catalog, as ' +
+          'synthetic entries whose dblEntryUid is their projectId',
+        params: [
+          {
+            name: 'shouldWaitForModelTextRestrictions',
+            required: false,
+            summary:
+              'Whether to wait, briefly, for the first model-text restrictions fetch so the rows ' +
+              'carry them. Defaults to false',
+            schema: { type: 'boolean' },
+          },
+          {
+            name: 'catalogWaitMs',
+            required: false,
+            summary:
+              'The longest to wait for the DBL catalog, in milliseconds, before building the list ' +
+              'without it, when it can include installed DBL resources too. Left out, it waits for ' +
+              'the catalog; a caller that lists these beside the catalog should leave it out',
+            schema: { type: 'number' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The resources, each as DblResourceData',
+          schema: { type: 'array', items: { type: 'object' } },
+        },
+      },
+    },
   );
 
   const refreshResourceFlagsCommandPromise = papi.commands.registerCommand(

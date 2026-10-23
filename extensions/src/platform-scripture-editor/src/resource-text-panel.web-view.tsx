@@ -39,7 +39,12 @@ import {
   isDblResourceReference,
   isProjectReference,
 } from './resource-reference.utils';
-import { matchesSelectedResourceId, resolveResourceSelection } from './resource-selection.utils';
+import {
+  findSelectedRow,
+  matchesSelectedResourceId,
+  resolveResourceSelection,
+  type ResourceSelectionResolution,
+} from './resource-selection.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { resolveResourcePanelStringKeys } from './resource-panel-strings.utils';
 import { selectTextConnection } from './select-dbl-resource';
@@ -224,11 +229,16 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   const hasRowForSavedSelection =
     selectedResourceId === undefined ||
     filteredResources.some((row) => matchesSelectedResourceId(row, selectedResourceId));
-  // Neither an empty referenced list nor a failed catalog may hide the downloaded extras: they are
-  // read straight off disk, so they can be correct even while the catalog fetch is down. A failed
-  // catalog still shows its error view when the saved selection is not among them, so the panel
-  // never swaps the user's choice for some other downloaded resource without saying so.
-  if (listReadiness === 'empty' || listReadiness === 'catalogError') {
+  if (!projectId) {
+    // No project, so no referenced list to wait for: the rows are the downloaded resources alone.
+    if (arePickerResourcesLoading) readiness = 'loading';
+    else if (hasCatalogError && !hasRowForSavedSelection) readiness = 'catalogError';
+    else readiness = filteredResources.length > 0 ? 'configured' : 'empty';
+  } else if (listReadiness === 'empty' || listReadiness === 'catalogError') {
+    // Neither an empty referenced list nor a failed catalog may hide the downloaded extras: they are
+    // read straight off disk, so they can be correct even while the catalog fetch is down. A failed
+    // catalog still shows its error view when the saved selection is not among them, so the panel
+    // never swaps the user's choice for some other downloaded resource without saying so.
     if (arePickerResourcesLoading) readiness = 'loading';
     else if (hasCatalogError && !hasRowForSavedSelection) readiness = 'catalogError';
     else if (filteredResources.length > 0) readiness = 'configured';
@@ -258,11 +268,17 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   // the `usjPossiblyError` this passes DOWN to the panel, so a callback would close a cycle. That
   // constraint is what fixes the direction of the whole boundary, and it is why there is exactly
   // one answer to "which resource is on screen" rather than two derivations to keep in step.
-  const selection = resolveResourceSelection(
-    filteredResources,
-    selectedResourceId,
-    pendingResourceId,
-  );
+  //
+  // With no project open the panel shows only a resource it was asked for — one opened from Home —
+  // and never picks one by itself: there is no list of the user's texts to pick from, so a fallback
+  // would put an arbitrary download on screen instead of "open a project".
+  const selection: ResourceSelectionResolution = projectId
+    ? resolveResourceSelection(filteredResources, selectedResourceId, pendingResourceId)
+    : {
+        nextSelectedResourceId: undefined,
+        shouldClearPending: false,
+        selectedRow: findSelectedRow(filteredResources, selectedResourceId),
+      };
   // Behind the catalog-error view nothing is on screen, so the first-row fallback must not keep a
   // chapter subscription open or become what Ctrl+F searches.
   const selectedRef = readiness === 'catalogError' ? undefined : selection.selectedRow;

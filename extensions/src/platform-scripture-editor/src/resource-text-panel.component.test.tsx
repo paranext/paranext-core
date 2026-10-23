@@ -510,6 +510,46 @@ describe('ResourceTextPanel install failure', () => {
   });
 });
 
+/*
+ * Resources never open in Simple mode's middle column, so with no project open a resource opened
+ * from Home still shows here. With no project there is no list to download into.
+ */
+describe('ResourceTextPanel with no project open', () => {
+  it('shows a resource it was asked to show', () => {
+    renderPanel({ hasProject: false });
+
+    expectEditorShowing();
+    expect(screen.queryByText('No project.')).toBeNull();
+  });
+
+  it('asks for a project when it has nothing to show', () => {
+    renderPanel({ hasProject: false, selectedRef: undefined });
+
+    expect(screen.queryByText('No project.')).not.toBeNull();
+  });
+
+  it('offers no download, which needs a project to add to', async () => {
+    renderPanel({ hasProject: false });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /WEB/ }));
+    await screen.findByRole('menuitemcheckbox', { name: /WEB/ });
+
+    expect(screen.queryByRole('menuitem', { name: 'Download resources…' })).toBeNull();
+  });
+
+  it('offers the download with a project open', async () => {
+    renderPanel();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /WEB/ }));
+
+    expect(
+      await screen.findByRole('menuitem', { name: 'Download resources…' }),
+    ).toBeInTheDocument();
+  });
+});
+
 /** Whether `later` comes after `earlier` in document order */
 function comesAfter(earlier: Node, later: Node) {
   // compareDocumentPosition reports its answer as bit flags

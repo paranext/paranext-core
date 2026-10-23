@@ -332,6 +332,35 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `SelectContent` that only mounted alongside items — so a user with no local project metadata can
   reach Home through it after all. The controlled-`open` state that closed the dropdown by hand is
   gone with it: `ProjectSelector` closes its own popover when the footer row is activated.
+- **Amended 2026-09-30 (PT-3182, Home type filter; supersedes the scoping mechanics of the
+  2026-09-18 amendment):** projects-only is no longer a fixed scope but the starting value of a
+  type filter (All / Paratext Projects / Resources) the user can change in Home. The
+  `platformGetResources.openHome(shouldShowProjectsOnly)` signature is unchanged; only `true` sets
+  the preset, because the macOS native menubar passes each menu item's group key as the command's
+  first argument. The filter lives in the web view's `state` as `projectResourceFilter`, and Home
+  writes the user's changes back to it. It is no longer "a property of the launch, not of the tab":
+  `buildHomeWebViewState` replaces it only when an opener passes a preset and otherwise keeps it,
+  because the provider also runs for window moves, extension reloads and layout restores, and a
+  visible, one-click filter is not the trap the invisible scope was. The reload rule is one-way
+  (`shouldReloadHomeForFilterPreset`, replacing `shouldReloadHomeForProjectsOnly`): the command
+  reloads an open Home only when it asks for a specific filter Home is not showing, and an open
+  with no preset raises Home showing whatever filter it last had — including a preset, which
+  therefore persists until the user changes it. The accepted cost is that "More projects…" on a
+  Home the user has widened still rebuilds the iframe, dropping its search and any in-progress
+  send/receive UI state: a Get or Sync started from it loses its progress indicator, and its
+  "Sync failed" alert and internet-block notice are never shown (they were to be sent from the
+  replaced iframe), while Get and Sync are enabled again although the sync is still running. Pushing the preset into the open Home instead
+  (`papi.webViewProviders.postMessageToWebView`) would avoid that, but Home reads its starting
+  filter once, so it would need a message handler of its own; not worth it for that case. Note
+  that the reload applies the preset only because every provider run gives the iframe a new
+  `srcNonce`, which remounts it: if web views ever keep their nonce across reloads, Home would keep
+  showing its old filter while its `state` says otherwise, and this has to be revisited.
+- **Amended 2026-10-21 (PT-3182, Simple mode):** in Simple mode `openHome` always asks for the
+  Paratext projects preset, whatever its argument (`getHomeFilterPreset`), so Home there starts on
+  projects on every open and an open Home the user had widened is reloaded back onto them; an
+  unreadable interface mode counts as Simple. The filter is not locked in Simple mode: Ian accepted
+  that on this condition, since resources a user chooses to see open in their reference tab
+  (`adr-simple-mode-resource-opens-to-reference-tab`). Power mode is unchanged.
 
 ## adr-analytics-in-extension-host: Analytics abstraction layer hosted in extension-host; environment resolved once and fail-safe toward test
 
@@ -8330,6 +8359,46 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   as a local literal — and is now bound to a shared constant; see
   `adr-window-min-width-shared-constant`.
 - **Source:** PT-4344; Jolie Rabideau measured the shipped floor in the running app on macOS during review of PR #2701, 2026-08-24.
+
+## adr-simple-mode-resource-opens-to-reference-tab: In Simple mode a resource opened from Home goes to its reference tab and the user's own list
+
+- **Date:** 2026-10-19
+- **Status:** Accepted
+- **Context:** Simple mode's middle column only ever shows the project (Ian, PT-3182, 2026-10-12),
+  but Home and Get Resources opened a resource with `platformScriptureEditor.openResourceViewer`,
+  which in Simple mode replaces that project. The Bible texts and Commentaries tabs list the texts
+  of the project they show — the team's list (a project setting, synced by Send/Receive) merged
+  with each user's personal list — plus every downloaded resource.
+- **Decision:** A new command, `platformScriptureEditor.showResourceInReferencePanel` (experimental),
+  owned by the editor extension that owns those tabs, and called by `platform-get-resources` for
+  Home's and Get Resources' Open in Simple mode. It picks the tab by the resource's kind (Commentaries
+  for commentaries, Bible texts otherwise), adds the resource to the user's *personal* list for the
+  project that tab shows — never to the team's list, and not when the team's list already has it,
+  the tab is showing a resource rather than a project, or the reference's kind can't be confirmed —
+  and selects it by reloading the tab with the row id in the reload options, which `reloadWebView`
+  forwards to the provider (`ResourceTextPanelOptions`). Shows run one at a time, and each has 20 s
+  from the request to reach the point of saving: past that it is dropped and the user warned, so the
+  caller hears how it ended before PAPI's request timeout. It answers with a status: `shown`,
+  `notShown` (the user has been told; open nothing else), or `openElsewhere` (no reference tab open,
+  or a kind neither tab lists), on which the caller opens the viewer. Resources never open in
+  Simple mode's middle column (Sebastian, PT-3182, 2026-10-21): with no project open the tab still
+  shows the resource, from the downloaded ones, and nothing is saved. The catalog types every
+  resource as a Bible text or a commentary — source-language texts included — so every resource has
+  a tab.
+- **Alternatives:** **Add it to the project's (team) list** — rejected: every teammate would see
+  one user's pick. **Show it without saving** — rejected by Ian: an opened text should stay
+  available to that user. **Lock Simple-mode Home to projects only** — the fallback Sebastian
+  defined in case this didn't land; not added. Ian accepted that on PT-3182 (2026-10-21) on one
+  condition, which `openHome` keeps: in Simple mode Home always starts on Paratext projects, so a
+  user sees resources only by choosing them, and they then open in their tab. **A pending-selection slot in module
+  state**, as `currentResourceTextPanelProjectIds` is — rejected: reload options carry the value to
+  the one build it was asked for.
+- **Consequences:** The personal list is per project (`UserSettings-{user}.xml`); "available in any
+  project" comes from the tabs listing every downloaded resource. A show reloads the tab unless it
+  already shows the resource, which discards anything in progress in it (PT-4510). An open early in
+  a launch can wait on the catalog's installed-flag sync and be dropped at the deadline. With no
+  project open, a reference tab lists the downloaded resources but shows only one it was asked to
+  show, and offers no download, since there is no project's list to add to.
 
 ## adr-simple-mode-tab-menu-offers-zoom-only: Simple mode's tab menu is the platform's own contributed menu, narrowed to the content-zoom group
 

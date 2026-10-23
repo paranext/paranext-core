@@ -5,6 +5,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi, beforeAll, afterAll } from 'vitest';
 import type { DblResourceData } from 'platform-bible-utils';
 import { FAILED_PRECONDITION, isPlatformError } from 'platform-bible-utils';
+import localizedStringsContribution from '../contributions/localizedStrings.json';
 import {
   GetResources,
   newResourceActionDidNotTakeEffectError,
@@ -473,6 +474,22 @@ function openLanguageFilter() {
   fireEvent.click(triggers[1]);
   return screen.queryAllByRole('option').map((option) => option.textContent ?? '');
 }
+
+describe('GetResources search box', () => {
+  it("is described by what it matches, which isn't type", () => {
+    renderGetResources();
+
+    // The search matches name and language only; the type filter is the control for type.
+    expect(screen.getByRole('textbox')).toHaveAttribute(
+      'placeholder',
+      '%resources_filterInput_searchPlaceholder%',
+    );
+    // The wording itself, not just the key: it must not promise a search by type.
+    expect(
+      localizedStringsContribution.localizedStrings.en['%resources_filterInput_searchPlaceholder%'],
+    ).not.toMatch(/type/i);
+  });
+});
 
 describe('GetResources language filter', () => {
   it('offers only languages that have a resource of a selected type', () => {

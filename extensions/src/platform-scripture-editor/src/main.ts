@@ -64,6 +64,11 @@ import {
   showCommentariesTab,
   showTextCollectionTab,
 } from './show-panel.util';
+import {
+  buildResourceTextPanelState,
+  showResourceInReferencePanel,
+  type ResourceTextPanelOptions,
+} from './show-resource-in-panel.util';
 
 logger.debug('Scripture Editor is importing!');
 
@@ -958,7 +963,8 @@ const modelTextPanelWebViewProvider: IWebViewProvider = {
  * type. A Map entry present (even with value `undefined`) means a reload is in progress and the
  * pending value should be used. Absence means no pending value.
  *
- * Used to pass a new projectId through reloadWebView, which has no options for extra data.
+ * Used to pass a new projectId through reloadWebView. For new data, prefer the reload options
+ * (`ResourceTextPanelOptions`), which `reloadWebView` forwards to the provider.
  */
 const currentResourceTextPanelProjectIds = new Map<string, string | undefined>();
 
@@ -976,9 +982,9 @@ const scriptureTextGridWebViewProvider: IWebViewProvider = {
 
 /**
  * Creates a resource panel web view provider that injects the given resourceType into web view
- * state so the shared component can filter resources appropriately.
+ * state so the shared component can filter resources appropriately. Exported for its tests.
  */
-function createResourceTextPanelProvider(
+export function createResourceTextPanelProvider(
   webViewType: string,
   title: string,
   resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
@@ -987,7 +993,7 @@ function createResourceTextPanelProvider(
   return {
     async getWebView(
       savedWebView: SavedWebViewDefinition,
-      openWebViewOptions: ResourceViewerOptions,
+      openWebViewOptions: ResourceTextPanelOptions,
     ): Promise<WebViewDefinition | undefined> {
       if (savedWebView.webViewType !== webViewType)
         throw new Error(
@@ -1018,10 +1024,8 @@ function createResourceTextPanelProvider(
         // exactly as today, since it is text-labeled there (see resource-text-panel.web-view.tsx
         // for the live theme/selection-adaptive swap, which is likewise gated on Power mode).
         iconUrl: interfaceMode === 'simple' ? defaultIconUrl : savedWebView.iconUrl,
-        state: {
-          ...savedWebView.state,
-          resourceType,
-        },
+        // Also selects a resource opened elsewhere — from Home in Simple mode — when one is passed.
+        state: buildResourceTextPanelState(savedWebView.state, resourceType, openWebViewOptions),
         // This webview only ever appears in the fixed 3-column simple-mode layout (Column 3) and
         // must always remain open there, so it's non-closable in simple mode.
         isClosable: interfaceMode === 'power',
@@ -1348,6 +1352,39 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
+  const showResourceInReferencePanelPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.showResourceInReferencePanel',
+    showResourceInReferencePanel,
+    {
+      method: {
+        'x-experimental': true,
+        summary:
+          "Show a resource in the Bible texts or Commentaries tab, adding it to the user's personal list unless the team's list has it",
+        params: [
+          {
+            name: 'resourceProjectId',
+            required: true,
+            summary: 'The local project id of the resource to show',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary:
+            "How the show ended: 'shown' (with the tab's webViewId), 'notShown' (the user has been told; open nothing else) or 'openElsewhere' (no reference tab is open, or neither tab lists its kind). Never rejects",
+          schema: {
+            type: 'object',
+            properties: {
+              status: { type: 'string', enum: ['shown', 'notShown', 'openElsewhere'] },
+              webViewId: { type: 'string' },
+            },
+            required: ['status'],
+          },
+        },
+      },
+    },
+  );
+
   const showBibleTextsPanelPromise = papi.commands.registerCommand(
     'platformScriptureEditor.showBibleTextsPanel',
     showBibleTextsTab,
@@ -1552,6 +1589,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await commentariesPanelWebViewProviderPromise,
     ...(scriptureTextGridRegistration ? [scriptureTextGridRegistration] : []),
     await openResourceTextPromise,
+    await showResourceInReferencePanelPromise,
     await showBibleTextsPanelPromise,
     await showCommentariesPanelPromise,
     await showTextCollectionPanelPromise,
