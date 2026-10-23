@@ -758,7 +758,9 @@ export function PlatformBibleToolbar() {
   );
 
   // The union of both sections. The hook returns them disjoint (`allProjects` already excludes
-  // recents), so concatenating cannot duplicate a project.
+  // recents), so concatenating cannot duplicate a project. Both sections also exclude published
+  // resources (`isPickableProject` in `use-project-picker-data.hook.ts`), so this titlebar
+  // switcher never offers one to switch to — same exclusion as the "More projects…" dialog.
   const pickerProjects = useMemo(
     () => [...recentProjects, ...allProjects],
     [recentProjects, allProjects],
