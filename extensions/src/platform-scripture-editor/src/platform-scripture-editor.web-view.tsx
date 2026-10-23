@@ -210,6 +210,7 @@ import {
   hasPendingCommentTextChanged,
   shouldEndPaneNoteEditOnRowSelect,
   shouldPublishPaneDocument,
+  showCommentThreadForInterfaceMode,
   UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY,
 } from './platform-scripture-editor.utils';
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
@@ -3237,15 +3238,22 @@ function PlatformScriptureEditor({
   }, [isBlankChapter, scrRef]);
 
   /**
-   * Creates a click handler for a comment annotation that opens the comment list and scrolls to the
-   * specified thread.
+   * Creates a click handler for a comment annotation that shows the specified thread: in Power
+   * mode, the comment list opened on it; in Simple mode, the Column 3 Comments tab brought to the
+   * front with it selected. The mode is read through `isPowerModeRef` when the annotation is
+   * clicked, the same way the save path reads it, rather than captured from the render that created
+   * the handler.
    *
    * @param threadId The ID of the thread to scroll to when the annotation is clicked
    * @returns A click handler function that can be passed to setAnnotation
    */
   const createCommentAnnotationClickHandler = useCallback(
     (threadId: string) => async () => {
-      await openCommentListAndSelectThreadSafe(papi, webViewId, threadId);
+      await showCommentThreadForInterfaceMode(papi, {
+        isPowerMode: isPowerModeRef.current,
+        editorWebViewId: webViewId,
+        threadId,
+      });
     },
     [webViewId],
   );
@@ -4459,13 +4467,19 @@ function PlatformScriptureEditor({
           // Simple-mode users get the same "yes, that worked" confirmation Power-mode users
           // already get. bringToFront is deliberately false here: forcing the Comments tab to the
           // front on every insert would interrupt a user who is actively working in a different
-          // Column 3 tab (UX feedback on PT-4204) — the selection still applies silently and is
-          // visible whenever the user next switches to the Comments tab themselves.
-          if (isPowerMode) {
+          // Column 3 tab (UX feedback on PT-4204).
+          //
+          // The Simple-mode select is not awaited, since the comment is already saved and the
+          // select can take seconds: a Comments tab that has not been shown this session is not
+          // mounted yet (rc-dock renders a tab only once it is first shown), so the message is
+          // retried for several seconds and applies only if the user opens the tab in that time.
+          // The helper logs and swallows its own failures. Passing this editor's id points the tab
+          // at the editor's project first if it shows another one, as a highlight click does.
+          // Power mode awaits its list, so the list takes focus while the popover is up rather than
+          // after the user is typing again.
+          if (isPowerModeRef.current)
             await openCommentListAndSelectThreadSafe(papi, webViewId, newThreadId);
-          } else {
-            await selectCommentThreadInPanelSafe(papi, newThreadId, false);
-          }
+          else selectCommentThreadInPanelSafe(papi, newThreadId, false, webViewId);
         }
 
         pendingCommentAnnotationRange.current = undefined;
@@ -4491,7 +4505,6 @@ function PlatformScriptureEditor({
       scrRef,
       createCommentAnnotationClickHandler,
       webViewId,
-      isPowerMode,
       isSyncBlocked,
       notifySyncEditBlocked,
       onCommentEditorCancel,

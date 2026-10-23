@@ -64,6 +64,7 @@ import {
   withDocumentEndOnText,
   selectableParagraphMarkers,
   PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
+  showCommentThreadForInterfaceMode,
 } from './platform-scripture-editor.utils';
 
 /** Build a mock editor ref exposing spies for the methods the generators call. */
@@ -5670,6 +5671,81 @@ describe('hasPendingCommentTextChanged', () => {
     expect(hasPendingCommentTextChanged(pending, docWith(text))).toBe(expected);
   });
 });
+
+// #region showCommentThreadForInterfaceMode
+
+describe('showCommentThreadForInterfaceMode', () => {
+  function makeMockPapi() {
+    const sendCommand = vi.fn().mockResolvedValue('web-view-id');
+    const warn = vi.fn();
+    // Mock literal cannot satisfy the full PAPI interface — cast for test isolation.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const papi = { commands: { sendCommand }, logger: { warn } } as unknown as typeof PapiBackend;
+    return { papi, sendCommand, warn };
+  }
+
+  const options = { editorWebViewId: 'editor-1', threadId: 'thread-1' };
+
+  it("raises the Column 3 Comments tab on the thread in Simple mode, for the editor's project, and opens nothing else", async () => {
+    const { papi, sendCommand } = makeMockPapi();
+
+    await showCommentThreadForInterfaceMode(papi, { ...options, isPowerMode: false });
+
+    expect(sendCommand).toHaveBeenCalledTimes(1);
+    expect(sendCommand).toHaveBeenCalledWith(
+      'legacyCommentManager.selectCommentThreadInPanel',
+      'thread-1',
+      true,
+      'editor-1',
+    );
+  });
+
+  it("opens the editor's comment list on the thread in Power mode, and opens nothing else", async () => {
+    const { papi, sendCommand } = makeMockPapi();
+
+    await showCommentThreadForInterfaceMode(papi, { ...options, isPowerMode: true });
+
+    expect(sendCommand).toHaveBeenCalledTimes(1);
+    expect(sendCommand).toHaveBeenCalledWith('legacyCommentManager.openCommentList', 'editor-1', {
+      threadIdToSelect: 'thread-1',
+    });
+  });
+
+  it.each([
+    ['Simple', false],
+    ['Power', true],
+  ])(
+    'warns instead of throwing when the %s-mode navigation rejects',
+    async (_mode, isPowerMode) => {
+      const { papi, sendCommand, warn } = makeMockPapi();
+      sendCommand.mockRejectedValue(new Error('navigation failed'));
+
+      await expect(
+        showCommentThreadForInterfaceMode(papi, { ...options, isPowerMode }),
+      ).resolves.toBeUndefined();
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('navigation failed'));
+    },
+  );
+
+  it.each([
+    ['Simple', false],
+    ['Power', true],
+  ])(
+    'warns instead of throwing when the %s-mode navigation finds no web view',
+    async (_mode, isPowerMode) => {
+      const { papi, sendCommand, warn } = makeMockPapi();
+      sendCommand.mockResolvedValue(undefined);
+
+      await expect(
+        showCommentThreadForInterfaceMode(papi, { ...options, isPowerMode }),
+      ).resolves.toBeUndefined();
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('thread-1'));
+    },
+  );
+});
+
+// #endregion showCommentThreadForInterfaceMode
 
 // #region unsupported projects
 
