@@ -44,6 +44,7 @@ import {
   getModelResourceProjectId,
   getRefLabel,
   getResourceReferenceBareId,
+  getResourceReferenceRowId,
   isDblResourceReference,
 } from './resource-reference.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
@@ -472,16 +473,26 @@ export function ModelTextPanel({
   // The list on screen when a pick was written. Until a newer list arrives, the panel would show the
   // text being replaced again, so the pick still counts as in progress. It waits for a newer list
   // rather than for the picked id, because an admin item listed first would keep that id off screen.
+  // "Newer" is by identity: every update from `useEffectiveResourceReferenceList` is a new object.
   const [listBeforeWrittenPick, setListBeforeWrittenPick] = useState<
     EffectiveResourceReferenceList | undefined
   >(undefined);
   const isPickInProgress =
     isSelecting ||
     (listBeforeWrittenPick !== undefined && listBeforeWrittenPick === effectiveModelTexts);
+  useEffect(() => {
+    if (listBeforeWrittenPick !== undefined && listBeforeWrittenPick !== effectiveModelTexts)
+      setListBeforeWrittenPick(undefined);
+  }, [listBeforeWrittenPick, effectiveModelTexts]);
+
+  // Read when a pick lands rather than when the picker opened, since the list can change while the
+  // user is choosing.
+  const effectiveModelTextsRef = useRef(effectiveModelTexts);
+  effectiveModelTextsRef.current = effectiveModelTexts;
 
   const handleResourceSelect = useCallback(
     async (resource: DblResourceData) => {
-      const listBeforePick = effectiveModelTexts;
+      const listBeforePick = effectiveModelTextsRef.current;
       setIsSelecting(true);
       // A user-initiated pick is a fresh attempt: clear any prior auto-install failure so the
       // install-failed state doesn't stick.
@@ -505,20 +516,22 @@ export function ModelTextPanel({
               throw e;
             }
           },
-          () => setListBeforeWrittenPick(listBeforePick),
+          (writtenReference) => {
+            // Re-picking the user's first text writes an identical list, which sends no update, so
+            // there would be no newer list to wait for.
+            const firstUserText = listBeforePick?.items.find((item) => item.source === 'user');
+            const isListUnchanged =
+              firstUserText !== undefined &&
+              getResourceReferenceRowId(firstUserText) ===
+                getResourceReferenceRowId(writtenReference);
+            if (!isListUnchanged) setListBeforeWrittenPick(listBeforePick);
+          },
         );
       } finally {
         setIsSelecting(false);
       }
     },
-    [
-      effectiveModelTexts,
-      getUserModelTexts,
-      setUserModelTexts,
-      installResource,
-      clearInstallFailure,
-      markInstallFailed,
-    ],
+    [getUserModelTexts, setUserModelTexts, installResource, clearInstallFailure, markInstallFailed],
   );
 
   // One pick at a time. The Pick button stays enabled while the picker is open and while a picked
@@ -586,16 +599,23 @@ export function ModelTextPanel({
   // --- Render the resolved state ---
 
   // Not-found: a configured model text can't be resolved to a displayable resource (not in the DBL
-  // catalog, a non-DBL reference, or an entry missing its id). Offer the picker so the user can
-  // recover rather than being stranded.
+  // catalog, a non-DBL reference, or an entry missing its id). For the user's own text, offer the
+  // picker so they are not stranded. A pick could never replace the admin's text, so that case says
+  // where it can be changed instead.
   const notFoundState = (
     <div
       className={`tw:flex tw:flex-col tw:items-center tw:gap-4 tw:p-8 tw:text-center ${PANEL_FILL_CLASSES}`}
     >
-      <p>{localize(localizedStrings, '%webView_modelTextPanel_unknownResource%')}</p>
-      <Button onClick={() => handlePickModelText()}>
-        {localize(localizedStrings, '%webView_modelTextPanel_pickModelText%')}
-      </Button>
+      {isUserChosenModelText ? (
+        <>
+          <p>{localize(localizedStrings, '%webView_modelTextPanel_unknownResource%')}</p>
+          <Button onClick={() => handlePickModelText()}>
+            {localize(localizedStrings, '%webView_modelTextPanel_pickModelText%')}
+          </Button>
+        </>
+      ) : (
+        <p>{localize(localizedStrings, '%webView_modelTextPanel_unknownResource_adminChoice%')}</p>
+      )}
     </div>
   );
 
@@ -912,7 +932,8 @@ export function ModelTextPanel({
                   className={`tw:border-0 ${modelTextHeaderClassName} tw:w-full tw:justify-start tw:rounded-none tw:focus-visible:ring-inset`}
                 >
                   {modelTextHeaderLabel}
-                  <ChevronDown />
+                  {/* At the end edge, so it stays put whatever the name's length */}
+                  <ChevronDown className="tw:ms-auto" />
                 </Button>
               ) : (
                 // Keyboard and screen-reader users can't hover, so this otherwise non-interactive

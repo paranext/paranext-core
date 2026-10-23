@@ -373,7 +373,7 @@ for `Empty` over extending `EmptyState`: `adr-empty-is-zero-state-primitive` in
 
 One exception: a sentence that most callers show alone but some show with a button keeps
 `EmptyState`, with the `Button` beside it rather than inside it, so the sentence looks the same
-either way. `ResourceMessageView`'s optional `action` is the one case
+either way. `ResourceMessageView`'s optional `action` is the reference case
 (`adr-resource-missing-book-message`).
 
 ## Empty State Handling (form fields)

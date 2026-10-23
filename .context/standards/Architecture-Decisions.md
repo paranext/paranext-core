@@ -2762,7 +2762,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
 - **Formerly:** ADR-0016
 - **Date:** 2026-08-18
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-10-23 — records one exception, `ResourceMessageView`'s optional
+  action button
 - **Context:** PT-4111 needed a zero-state carrying a title, a description, and an optional action
   button (the scripture editor's "this book is not in this project" state, whose Power-mode variant
   offers a Manage Books button). Three candidate shapes already existed and nothing said which to
@@ -2810,6 +2811,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4111 design + implementation. (The original design note lives under gitignored
   `docs/superpowers/specs/`, so it is not a citable reference — the reasoning is reproduced here
   precisely because that path is not readable from the repo.)
+- **Amended 2026-10-23 (PT-4780):** one recorded exception. `ResourceMessageView`'s optional action
+  button sits beside `EmptyState` rather than inside `Empty`, because most of its callers show the
+  sentence alone and it must look the same either way. The reasoning is in the 2026-10-22 amendment
+  to `adr-resource-missing-book-message`.
 
 ## adr-extension-host-exits-on-lost-connection: The extension host exits when its connection to main dies; main relays the stop to every window, and the user restarts it
 

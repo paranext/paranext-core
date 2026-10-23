@@ -22,6 +22,9 @@ export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
   // with `{textName}`, the visible label, so the spoken name begins with what is on screen.
   '%webView_modelTextPanel_changeText_ariaLabel%',
   '%webView_modelTextPanel_unknownResource%',
+  // The not-found message when the admin chose the text: a pick could never replace it, so this
+  // points to the team layout instead of offering the picker.
+  '%webView_modelTextPanel_unknownResource_adminChoice%',
   '%webView_modelTextPanel_installFailed%',
   '%webView_modelTextPanel_installFailedOffline%',
   '%webView_modelTextPanel_installedButUnavailable%',

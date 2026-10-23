@@ -341,11 +341,26 @@ export const InstalledButUnavailable: Story = {
   ],
 };
 
-/** The configured model text id isn't present in the DBL list. */
+/**
+ * The admin's model text id isn't present in the DBL list. A pick could never replace the admin's
+ * text, so the message points to the team layout and offers no button.
+ */
 export const UnknownResource: Story = {
   decorators: [
     createDecorator({
       initialAdmin: [{ type: 'dblResource', id: 'uid-missing', name: 'Missing' }],
+    }),
+  ],
+};
+
+/**
+ * The model text the user picked isn't present in the DBL list. It is theirs to change, so the
+ * message offers "Pick model text…".
+ */
+export const UserChosenUnknownResource: Story = {
+  decorators: [
+    createDecorator({
+      initialUser: [{ type: 'dblResource', id: 'uid-missing', name: 'Missing' }],
     }),
   ],
 };
