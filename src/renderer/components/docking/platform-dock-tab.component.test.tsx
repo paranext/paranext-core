@@ -15,10 +15,20 @@ vi.mock('@renderer/services/theme.service', () => ({
 
 // Stub child components that are heavy or pull in unrelated deps. Surfaces `webViewType` as a data
 // attribute so a test can see which name (if any) reached the child, without rendering the real
-// tab title and everything it pulls in.
+// tab title and everything it pulls in. `isIconMonochrome` is surfaced the same way.
 vi.mock('./platform-tab-title.component', () => ({
-  PlatformTabTitle: ({ webViewType }: { webViewType?: string }) => (
-    <span data-testid="mock-tab-title" data-web-view-type={webViewType} />
+  PlatformTabTitle: ({
+    webViewType,
+    isIconMonochrome,
+  }: {
+    webViewType?: string;
+    isIconMonochrome?: boolean;
+  }) => (
+    <span
+      data-testid="mock-tab-title"
+      data-web-view-type={webViewType}
+      data-is-icon-monochrome={isIconMonochrome}
+    />
   ),
 }));
 vi.mock('./platform-panel.component', () => ({
@@ -113,5 +123,22 @@ describe('createRCDockTabFromTabInfo webViewType wiring', () => {
     render(<div>{createRCDockTabFromTabInfo(tabInfo).title}</div>);
 
     expect(screen.getByTestId('mock-tab-title')).not.toHaveAttribute('data-web-view-type');
+  });
+});
+
+describe('createRCDockTabFromTabInfo icon wiring', () => {
+  it('passes isTabIconMonochrome to the title as isIconMonochrome', () => {
+    const tabInfo: TabInfo = {
+      id: 'test-id',
+      tabType: TAB_TYPE_WEBVIEW,
+      tabTitle: 'Test',
+      content: <div>content</div>,
+      tabIconUrl: 'a.svg',
+      isTabIconMonochrome: true,
+    };
+
+    render(<div>{createRCDockTabFromTabInfo(tabInfo).title}</div>);
+
+    expect(screen.getByTestId('mock-tab-title')).toHaveAttribute('data-is-icon-monochrome', 'true');
   });
 });

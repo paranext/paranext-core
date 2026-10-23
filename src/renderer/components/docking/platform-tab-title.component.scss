@@ -63,6 +63,24 @@
   vertical-align: middle;
 }
 
+// A single-colour icon is drawn as its shape filled with the tab's text colour, so it follows the
+// theme and selection state. `--tab-icon-mask` is set inline by `PlatformTabTitle`.
+.tab-menu-icon-monochrome {
+  background-color: currentColor;
+  mask-image: var(--tab-icon-mask);
+  mask-size: 100%;
+  mask-repeat: no-repeat;
+}
+
+// Forced colours repaint `background-color` to the system background, which would make a
+// mask-filled icon invisible
+@media (forced-colors: active) {
+  .tab-menu-icon-monochrome {
+    forced-color-adjust: none;
+    background-color: CanvasText;
+  }
+}
+
 .platform-tab-tooltip {
   white-space: pre-wrap;
   z-index: vars.$z-index--above-dock;

@@ -648,3 +648,47 @@ describe('PlatformTabTitle header id attribute', () => {
     expect(header).not.toHaveAttribute('data-tab-id');
   });
 });
+
+describe('PlatformTabTitle icon rendering', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  /** The visible icon; the second `.tab-menu-icon` is the hidden measurement clone's copy. */
+  function renderIcon(iconUrl?: string, isIconMonochrome?: boolean): HTMLElement {
+    const { container } = render(
+      <PlatformTabTitle
+        id="icon-tab"
+        text="Tab title"
+        iconUrl={iconUrl}
+        isIconMonochrome={isIconMonochrome}
+      />,
+    );
+    const icon = container.querySelector<HTMLElement>('.tab-menu-icon');
+    if (!icon) throw new Error('No tab icon rendered');
+    return icon;
+  }
+
+  it('masks a monochrome icon so it takes the tab text colour', () => {
+    const icon = renderIcon('a.svg', true);
+
+    expect(icon).toHaveClass('tab-menu-icon-monochrome');
+    expect(icon.style.getPropertyValue('--tab-icon-mask')).toBe('url(a.svg)');
+    expect(icon.style.backgroundImage).toBe('none');
+  });
+
+  it('paints a non-monochrome icon as a background image', () => {
+    const icon = renderIcon('a.png');
+
+    expect(icon).not.toHaveClass('tab-menu-icon-monochrome');
+    expect(icon.style.backgroundImage).toBe('url(a.png)');
+    expect(icon.style.getPropertyValue('--tab-icon-mask')).toBe('');
+  });
+
+  it('does not mask the default logo when there is no icon url', () => {
+    const icon = renderIcon(undefined, true);
+
+    expect(icon).not.toHaveClass('tab-menu-icon-monochrome');
+    expect(icon.getAttribute('style')).toBeNull();
+  });
+});

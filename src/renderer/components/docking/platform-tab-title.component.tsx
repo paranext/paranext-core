@@ -61,7 +61,7 @@ import {
   type Localized,
   type SingleColumnMenu,
 } from 'platform-bible-utils';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import './platform-tab-title.component.scss';
 
@@ -81,6 +81,11 @@ const TAB_BAR_CHROME_OVERHEAD_PX = 40;
 type PlatformTabTitleProps = {
   /** Url to image to show on the tab. Defaults to the software's standard logo. */
   iconUrl?: string;
+  /**
+   * Whether `iconUrl` is a single-colour shape to draw in the tab's text colour, so it follows the
+   * theme. Ignored when there is no `iconUrl`.
+   */
+  isIconMonochrome?: boolean;
   /** Text to show on the tab */
   text: string | LocalizeKey;
   /** Text to show when hovering over the tab. Defaults to empty string */
@@ -377,6 +382,8 @@ const handleMoveTabToNewWindow = async (webViewIdToMove: WebViewId) => {
  * Custom tab title for all tabs in Platform
  *
  * @param iconUrl Url to image to show on the tab. Defaults to the software's standard logo.
+ * @param isIconMonochrome Whether `iconUrl` is a single-colour shape to draw in the tab's text
+ *   colour
  * @param text The text to show on the tab title
  * @param tooltip Text to show when hovering over the tab. Defaults to empty string
  * @param flashTriggerTime Trigger to make the tab flash. Each time this value changes to a truthy
@@ -386,6 +393,7 @@ const handleMoveTabToNewWindow = async (webViewIdToMove: WebViewId) => {
  */
 export function PlatformTabTitle({
   iconUrl,
+  isIconMonochrome,
   text,
   tooltip,
   flashTriggerTime,
@@ -932,17 +940,23 @@ export function PlatformTabTitle({
 
   const iconOnlyClass = isIconOnly ? ' icon-only' : '';
 
+  // A monochrome icon is drawn as a mask filled with the text colour (see
+  // `.tab-menu-icon-monochrome`), so it follows the theme and selection state. The url goes through
+  // a custom property so the stylesheet owns every other mask property.
+  const isIconMasked = !!iconUrl && !!isIconMonochrome;
+  // CSS custom properties (--*) are not in CSSProperties, so the masked style needs an assertion
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const maskedIconStyle = {
+    backgroundImage: 'none',
+    '--tab-icon-mask': `url(${iconUrl})`,
+  } as CSSProperties;
+  let iconStyle: CSSProperties | undefined;
+  if (isIconMasked) iconStyle = maskedIconStyle;
+  else if (iconUrl) iconStyle = { backgroundImage: `url(${iconUrl})` };
+  const monochromeIconClass = isIconMasked ? ' tab-menu-icon-monochrome' : '';
+
   const icon = (
-    <div
-      className={`tab-menu-icon${dragIgnoreClass}`}
-      style={
-        iconUrl
-          ? {
-              backgroundImage: `url(${iconUrl})`,
-            }
-          : undefined
-      }
-    />
+    <div className={`tab-menu-icon${monochromeIconClass}${dragIgnoreClass}`} style={iconStyle} />
   );
 
   const titleWithTooltip = (
