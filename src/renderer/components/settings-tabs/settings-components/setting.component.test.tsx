@@ -17,6 +17,7 @@ type UiLanguageSelectorStubProps = {
   knownUiLanguages: LanguagesStub;
   primaryLanguage: string;
   onLanguagesChange?: (newUiLanguages: string[]) => void;
+  disabled?: boolean;
 };
 
 // Lets a test stand in for the loaded offered languages; unset means "still loading", which hands
@@ -189,6 +190,94 @@ describe('Setting disabled forwarding', () => {
       />,
     );
     expect(screen.getByRole('textbox')).not.toBeDisabled();
+  });
+});
+
+describe('Setting read-only', () => {
+  // A read-only text field stays enabled so its whole value can still be focused, selected and
+  // scrolled; only controls with no read-only state are disabled.
+  it('makes a string setting read-only without disabling it', () => {
+    render(
+      <Setting
+        {...baseProps}
+        settingKey="platformScripture.validCharacters"
+        setting="a b c"
+        label="Valid characters"
+        readOnly
+      />,
+    );
+    const field = screen.getByRole('textbox');
+    expect(field).toHaveAttribute('readonly');
+    expect(field).not.toBeDisabled();
+    // The muted fill is the only visual cue that the field cannot be edited.
+    expect(field).toHaveClass('tw:bg-muted');
+  });
+
+  it('leaves a string setting editable when readOnly is not passed', () => {
+    render(
+      <Setting
+        {...baseProps}
+        settingKey="platformScripture.validCharacters"
+        setting="a b c"
+        label="Valid characters"
+      />,
+    );
+    const field = screen.getByRole('textbox');
+    expect(field).not.toHaveAttribute('readonly');
+    expect(field).not.toHaveClass('tw:bg-muted');
+  });
+
+  it('makes an object setting read-only without disabling it', () => {
+    render(
+      <Setting
+        {...baseProps}
+        settingKey="platformScripture.modelTexts"
+        setting={{ dataVersion: '1.1.0', items: [] }}
+        label="Model texts"
+        readOnly
+      />,
+    );
+    const field = screen.getByRole('textbox');
+    expect(field).toHaveAttribute('readonly');
+    expect(field).not.toBeDisabled();
+  });
+
+  it('disables a boolean setting, since a switch has no read-only state', () => {
+    render(
+      <Setting {...baseProps} settingKey="platform.isEditable" setting label="Editable" readOnly />,
+    );
+    expect(screen.getByRole('switch')).toBeDisabled();
+  });
+
+  it('disables the zoom stepper buttons', () => {
+    render(
+      <Setting
+        {...userSettingProps}
+        validateOtherSetting={vi.fn()}
+        settingKey="platform.webViewContentZoom"
+        setting={1}
+        label="Tab content default zoom"
+        readOnly
+      />,
+    );
+    // The stepper marks its buttons `aria-disabled` so they stay focusable.
+    expect(
+      screen.getByRole('button', { name: '%settings_platform_webViewContentZoom_increase%' }),
+    ).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('disables the interface language selector', () => {
+    render(
+      <Setting
+        {...userSettingProps}
+        validateOtherSetting={vi.fn()}
+        settingKey="platform.interfaceLanguage"
+        setting={['en']}
+        label="Interface language"
+        readOnly
+      />,
+    );
+    expect(lastSelectorProps()?.disabled).toBe(true);
   });
 });
 

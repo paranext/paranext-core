@@ -1,8 +1,8 @@
 /**
  * E2E for the Settings page layout and its zoom steppers, driven through the rendered controls.
  *
- * - Every settings card fits its pane — General, an extension's group, and a project's settings — at
- *   the default width and after narrowing the pane, so no setting row is cut off on the right.
+ * - Every settings card fits its pane — General and a project's settings — at the default width and
+ *   after narrowing the pane, so no setting row is cut off on the right.
  * - The zoom stepper wraps into two rows (− and + over the percentage and reset) with nothing cut
  *   off; a typed percentage commits as a factor; Escape abandons an edit; Interface scaling is
  *   shown as a percentage and its + writes the next step.
@@ -244,28 +244,18 @@ test.describe('Settings layout and zoom steppers', () => {
       timeout: 30_000,
     });
 
-    await test.step('General and an extension group fit at the default width', async () => {
+    // With DEV_NOISY off, no bundled extension shows a settings group, so General is the only
+    // sidebar entry; extension groups render through the same card component.
+    await test.step('General fits at the default width', async () => {
       await expectEveryCardInsidePanel(general, 'General, default width');
       await testInfo.attach('general-default.png', {
         body: await general.screenshot(),
         contentType: 'image/png',
       });
-      await general.getByRole('button', { name: 'Scripture Editor', exact: true }).click();
-      await expectEveryCardInsidePanel(general, 'Scripture Editor, default width');
-      await testInfo.attach('extension-default.png', {
-        body: await general.screenshot(),
-        contentType: 'image/png',
-      });
     });
 
-    await test.step('General and an extension group fit after narrowing the pane', async () => {
+    await test.step('General fits after narrowing the pane', async () => {
       await narrowPanelTo(mainPage, general, NARROW_PANEL_PX);
-      await expectEveryCardInsidePanel(general, 'Scripture Editor, narrow');
-      await testInfo.attach('extension-narrow.png', {
-        body: await general.screenshot(),
-        contentType: 'image/png',
-      });
-      await general.getByRole('button', { name: 'General', exact: true }).click();
       await expectEveryCardInsidePanel(general, 'General, narrow');
       await testInfo.attach('general-narrow.png', {
         body: await general.screenshot(),
