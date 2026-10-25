@@ -53,6 +53,7 @@ import { startOnboardingTourServiceRouter } from '@main/services/onboarding-tour
 import { startScrollGroupNavigationCommands } from '@main/services/scroll-group-navigation.commands';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
 import { registerDisplayMediaRequestHandler } from '@main/services/display-media-request.util';
+import { registerLeakedCertificateCheck } from '@main/services/leaked-certificate-check.util';
 import { dotnetDataProvider } from '@main/services/dotnet-data-provider.service';
 import { enhancedResourceProtocolService } from '@main/services/enhanced-resource-protocol.service';
 import { extensionAssetProtocolService } from '@main/services/extension-asset-protocol.service';
@@ -220,6 +221,7 @@ import {
   getCommandLineArgument,
   getCommandLineSwitch,
 } from '@node/utils/command-line.util';
+import { distrustLeakedCertificateRootsInNode } from '@node/utils/leaked-certificates.util';
 import { resolveHtmlPath } from '@node/utils/util';
 import {
   DEFAULT_ZOOM_FACTOR,
@@ -261,6 +263,11 @@ import {
   wait,
   waitForDuration,
 } from 'platform-bible-utils';
+
+// Before this process opens any TLS connection. The modules imported above open none when they
+// load.
+// TODO(PT-3111): Remove once Electron blocks the leaked eMudhra certificates itself
+distrustLeakedCertificateRootsInNode();
 
 // #region Helper functions
 
@@ -2414,6 +2421,9 @@ async function main() {
       // web views with `allowSameOrigin: false` and any other iframe are denied (see
       // `selectDisplayMediaSource`).
       registerDisplayMediaRequestHandler(session.defaultSession, USERSNAP_SPACE_API_KEY);
+
+      // TODO(PT-3111): Remove once Electron blocks the leaked eMudhra certificates itself
+      registerLeakedCertificateCheck(session.defaultSession);
 
       // Install Chromium devtools extensions once (not per-window)
       if (isDebug) {
