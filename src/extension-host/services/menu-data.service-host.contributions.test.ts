@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { USERSNAP_SPACE_API_KEY } from '@shared/data/platform.data';
 import { JsonDocumentLike } from 'platform-bible-utils';
 import { describe, expect, test } from 'vitest';
+import { LUCIDE_ICON_NAMES } from '../../../lib/platform-bible-react/src/components/basics/lucide-icons.util';
 import {
   EXTENSIONS_DIR,
   getMenuContributingExtensions,
@@ -401,5 +402,27 @@ describe("The Scripture editor's hamburger offers zoom in both Power and Simple 
     expect(zoomCommandsIn(await getEditorTopMenuInMode('simple')).sort()).toEqual(
       [...ZOOM_COMMANDS].sort(),
     );
+  });
+});
+
+describe('Shipped menu icons name icons the menus can draw', () => {
+  /** Every string value of an `iconNameBefore` / `iconNameAfter` key, at any depth of `value`. */
+  function collectIconNames(value: unknown): string[] {
+    if (Array.isArray(value)) return value.flatMap(collectIconNames);
+    if (!value || typeof value !== 'object') return [];
+    return Object.entries(value).flatMap(([key, child]) =>
+      (key === 'iconNameBefore' || key === 'iconNameAfter') && typeof child === 'string'
+        ? [child]
+        : collectIconNames(child),
+    );
+  }
+
+  // Covers only the menus shipped in this repo; menus contributed from other repos are not checked.
+  test('every iconNameBefore and iconNameAfter is a known icon name', () => {
+    const iconNames = collectIconNames(getRealCombinedMenus({ excludeDevOnly: true }));
+    // Positive control: the walk found icons to check.
+    expect(iconNames.length).toBeGreaterThan(0);
+    const knownIconNames = new Set(LUCIDE_ICON_NAMES);
+    expect([...new Set(iconNames)].filter((name) => !knownIconNames.has(name))).toEqual([]);
   });
 });
