@@ -1848,7 +1848,7 @@ export declare function BaseOrModelTextExplanation({ localizedStrings, className
  * SYNC WARNING: Keep this alias identical to `InternetUse` in
  * extensions/src/paratext-registration/src/types/paratext-registration.d.ts and the matching C#
  * enum. Structural typing makes them mutually assignable today, but divergence (e.g. C# adding a
- * new value) will silently break the wizard step's prop wiring. Update this alias whenever the
+ * new value) will silently break the settings panel's prop wiring. Update this alias whenever the
  * authoritative type changes.
  *
  * @experimental This export is unstable and may change shape or disappear without notice
@@ -1860,8 +1860,8 @@ export type InternetUse = "Enabled" | "VpnRequired" | "Disabled" | "ProxyOnly";
  * `InternetSettings.xml` is seeded once from a co-installed Paratext 9 on first launch (the two
  * apps keep separate copies thereafter), so a stored value may name an option this app does not
  * implement yet (the rows marked not yet available). Such a value is shown selected and called out
- * in a banner rather than silently replaced — callers that gate on a usable selection (the
- * first-run wizard's Next button) should refuse to advance until this returns true.
+ * in a banner rather than swapped for another row. (The data provider replaces a stored
+ * `VpnRequired` with `Disabled` at startup, so in practice this is `ProxyOnly`.)
  *
  * @experimental This export is unstable and may change shape or disappear without notice
  */
@@ -1883,7 +1883,7 @@ export type InternetAccessOptionListProps = {
 	disabled: boolean;
 };
 /**
- * The five internet-access options as radio rows. Each row's description sits behind an info icon
+ * The internet-access options as radio rows. Each row's description sits behind an info icon
  * button, revealed as a tooltip on hover or keyboard focus.
  *
  * The descriptions run to two sentences — longer than `Guidelines/Tooltips` allows a tooltip on a
