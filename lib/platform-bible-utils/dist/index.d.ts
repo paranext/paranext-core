@@ -2439,8 +2439,15 @@ export declare function normalizeScriptureSpaces(str: string): string;
  * Note that this will not work properly if there ever exist any properties of USJ document or USJ
  * markers other than `content` that are complex objects like arrays or objects as the properties
  * are shallow equaled.
+ *
+ * @param options `ignoreDirectionMarks`: also treat text that differs only by left-to-right
+ *   (U+200E) or right-to-left (U+200F) marks as equal, as Paratext 9 does when deciding whether a
+ *   save changed anything. Off by default because a sync that adopts incoming text must still see
+ *   an added direction mark.
  */
-export declare function areUsjContentsEqualExceptWhitespace(a: Usj | undefined, b: Usj | undefined): boolean;
+export declare function areUsjContentsEqualExceptWhitespace(a: Usj | undefined, b: Usj | undefined, options?: {
+	ignoreDirectionMarks?: boolean;
+}): boolean;
 /**
  * Collects the distinct markers actually present in a USJ document.
  *

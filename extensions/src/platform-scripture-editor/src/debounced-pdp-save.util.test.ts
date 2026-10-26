@@ -181,6 +181,11 @@ describe('performDebouncedPdpSave — settled-snapshot replay (no re-derivation 
 });
 
 describe('resolveUsjToSaveToPdp', () => {
+  it('skips a save that only adds direction marks, but saves a real change', () => {
+    expect(resolveUsjToSaveToPdp(usjWith('tell\u200E them'), usjWith('tell them'))).toBeUndefined();
+    expect(resolveUsjToSaveToPdp(usjWith('tell\u200F thEm'), usjWith('tell them'))).toBeDefined();
+  });
+
   it('returns undefined when the editor content matches the PDP except for whitespace', () => {
     expect(resolveUsjToSaveToPdp(usjWith('tell them'), usjWith('tell  them'))).toBeUndefined();
   });

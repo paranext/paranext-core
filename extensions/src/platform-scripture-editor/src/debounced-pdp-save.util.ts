@@ -78,7 +78,11 @@ export function resolveUsjToSaveToPdp(
   usjFromEditor: Usj,
   usjFromPdp: Usj | undefined,
 ): Usj | undefined {
-  return areUsjContentsEqualExceptWhitespace(usjFromPdp, usjFromEditor) ? undefined : usjFromEditor;
+  return areUsjContentsEqualExceptWhitespace(usjFromPdp, usjFromEditor, {
+    ignoreDirectionMarks: true,
+  })
+    ? undefined
+    : usjFromEditor;
 }
 
 /**
