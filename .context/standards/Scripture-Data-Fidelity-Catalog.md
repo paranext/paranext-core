@@ -38,7 +38,7 @@ observation under T-4. Parked: O-6 / C-6. Filed:
 CB-3 (= EV-1) as PT-4921.
 
 Also decided or found 2026-10-26: the T-4 observation matches Paratext 9 for default projects (a
-literally typed U+00A0 saves as a space; `~` is the authored no-break space — pinned). AI-1 is being fixed and PJ-1 is out of scope (TJ, 2026-10-26).
+literally typed U+00A0 saves as a space; `~` is the authored no-break space — pinned). AI-1 is fixed and PJ-1 is out of scope (TJ, 2026-10-26).
 
 ## The pipeline
 
@@ -170,7 +170,7 @@ behavior; it is not a ruling by TJ.
 | T-14 | load | testUSFM-1SA-1 is authored `version: "3.0"` and the editor wrote its own version | superseded by F-5 (the version is now preserved) |
 | T-15 | formatted, paragraph-structure | Enter at a paragraph's start moves its content to a paragraph without the original's attributes (`vid=""` stays on the now-empty first paragraph; `ParaNode.insertNewAfter` copies the marker only) | **accept** (TJ, 2026-10-26): same in all three views; Paratext 9 does the same, and `vid` never reaches the file |
 | T-16 | formatted | Backspace at an element caret after a span at a paragraph's end is ignored (no content changed) | **PINNED** Tracked as **PT-4924**. |
-| AI-1 | Standard | Projects with `AllowInvisibleChars` on: the editor never learns the setting, so Standard view still applies its `~` rules — a literal tilde in the text (`a~b`) is saved as U+00A0 once the chapter is saved from Standard view (an unasked change to the text), and a literally typed NBSP saves as a space where Paratext 9 keeps it. Formatted and Simple are fine. | **fix in progress** (TJ, 2026-10-26: fix in this work item, TDD, thread the setting through every editor host and `UsjReaderWriter` site) |
+| AI-1 | Standard | Projects with `AllowInvisibleChars` on: the editor never learns the setting, so Standard view still applies its `~` rules — a literal tilde in the text (`a~b`) is saved as U+00A0 once the chapter is saved from Standard view (an unasked change to the text), and a literally typed NBSP saves as a space where Paratext 9 keeps it. Formatted and Simple are fine. | **FIXED** (TJ, 2026-10-26) — the editor option `ViewOptions.allowInvisibleCharacters` (scripture-editors `9b807a2a`, `81a4769a`) keeps `~` and U+00A0 verbatim when the project stores invisible characters literally; paranext-core reads `platformScripture.allowInvisibleCharacters` and passes it to every editing host, and Find & Replace and the legacy comment manager now honor it too (Replace used to rewrite every NBSP in the book as `~`). Measured ground truth: with the setting on, ParatextData keeps `~` and U+00A0 distinct and verbatim on load and save. Known cost: Standard view shows a stored U+00A0 as `⍽` (U+237D), so a literal U+237D in such a project saves as U+00A0 (documented). The design is ADR `adr-editor-nbsp-spelling-follows-project-setting` (Proposed). |
 | PJ-1 | formatted, paragraph-structure | Joining two paragraphs with Backspace/Delete keeps the FIRST paragraph's marker (`\p a` + `\q1 b` → `\p ab`); Paratext 9 keeps the SECOND (`\q1 ab`), because its editor engine (Gecko) keeps the second block on every join. | **out of scope** (TJ, 2026-10-26): an editor usability question with no clear guidance yet, not a data issue; the `\b` case that mattered is fixed (T-2 follow-up) |
 
 Not fixed in the typing pass (fix budget): T-6, T-7, T-10, T-15 (rulings), T-11, T-12, T-16
