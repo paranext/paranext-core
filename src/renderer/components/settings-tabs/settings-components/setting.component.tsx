@@ -17,6 +17,7 @@ import {
   SettingTypes,
 } from 'papi-shared-types';
 import {
+  Button,
   ERROR_POPOVER_STRING_KEYS,
   ErrorPopover,
   Input,
@@ -32,6 +33,7 @@ import { Info } from 'lucide-react';
 import {
   debounce,
   DebouncedFunction,
+  formatReplacementString,
   getErrorMessage,
   isPlatformError,
   LocalizeKey,
@@ -69,11 +71,11 @@ type BaseSettingProps<TSettingKey, TSettingValue> = {
    * When true, the user can read but not change the setting: text stays focusable, selectable and
    * scrollable, and controls with no read-only state (switches, steppers, selects) are disabled.
    * Used for settings contributed with `isReadOnly` and for project settings the project's locks
-   * forbid changing (see `getSettingReadOnlyReasonKey`). Defaults to `false`.
+   * forbid changing (see `getSettingLock`). Defaults to `false`.
    */
   readOnly?: boolean;
-  /** Localized explanation shown in a tooltip over the control while `readOnly` is true */
-  readOnlyReason?: string;
+  /** Localized line shown under the control, saying why it is locked, while `readOnly` is true */
+  lockReason?: string;
 };
 
 /**
@@ -213,6 +215,7 @@ class SettingWriterUnavailableError extends Error {}
 const SYNC_EDIT_BLOCKED_REGEX = /\(SR_EDIT_BLOCKED\)/;
 
 const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
+  '%settings_infoButton_ariaLabel%',
   '%settings_defaultMessage_loadingOneSetting%',
   '%settings_defaultMessage_noSettingComponent%',
   '%settings_platform_webViewContentZoom_atDefault%',
@@ -255,7 +258,7 @@ export function Setting({
   description,
   disabled = false,
   readOnly = false,
-  readOnlyReason,
+  lockReason,
 }: CombinedSettingProps) {
   const validateSetting = validateOtherSetting || validateProjectSetting;
 
@@ -283,7 +286,7 @@ export function Setting({
   const controlId = useId();
   const labelId = useId();
   const descriptionId = useId();
-  const readOnlyReasonId = useId();
+  const lockReasonId = useId();
   const isUiLanguageSelector =
     Array.isArray(setting) && settingKey === 'platform.interfaceLanguage';
 
@@ -427,11 +430,10 @@ export function Setting({
   const debouncedHandleChange = debouncedHandleChangeRef.current;
   const debouncedHandleStepperChange = debouncedHandleStepperChangeRef.current;
 
-  const shownReadOnlyReason = readOnly ? readOnlyReason : undefined;
+  const shownLockReason = readOnly ? lockReason : undefined;
   const ariaDescribedBy =
-    [description && descriptionId, shownReadOnlyReason && readOnlyReasonId]
-      .filter(Boolean)
-      .join(' ') || undefined;
+    [description && descriptionId, shownLockReason && lockReasonId].filter(Boolean).join(' ') ||
+    undefined;
   const ariaInvalid = errorMessage ? true : undefined;
 
   // The control and the id the label points at are derived together so `htmlFor` cannot drift from
@@ -580,50 +582,42 @@ export function Setting({
       ) : (
         <div className="setting-label-container">
           <div className="setting-label-wrapper">
-            {description ? (
+            <Label id={labelId} htmlFor={labelFor} className="setting-label">
+              {label}
+            </Label>
+            {description && (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Label id={labelId} htmlFor={labelFor} className="setting-label">
-                      <span>{label}</span>
-                      <Info className="setting-label-info-icon" aria-hidden="true" />
-                    </Label>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label={formatReplacementString(
+                        localizedStrings['%settings_infoButton_ariaLabel%'],
+                        { settingLabel: label },
+                      )}
+                    >
+                      <Info />
+                    </Button>
                   </TooltipTrigger>
                   <TooltipContent align="start">{description}</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-            ) : (
-              <Label id={labelId} htmlFor={labelFor} className="setting-label">
-                {label}
-              </Label>
             )}
           </div>
-          {/* The tooltips are hover-only; these copies are what the control's `aria-describedby`
-              reads. */}
+          {/* The tooltip opens only from the info button; this copy is what the control's
+              `aria-describedby` reads. */}
           {description && (
             <span id={descriptionId} className="tw:sr-only">
               {description}
             </span>
           )}
-          {shownReadOnlyReason && (
-            <span id={readOnlyReasonId} className="tw:sr-only">
-              {shownReadOnlyReason}
-            </span>
-          )}
           <div className="setting-container">
-            {shownReadOnlyReason ? (
-              <TooltipProvider>
-                <Tooltip>
-                  {/* A disabled control receives no pointer events, so the tooltip hangs on a
-                      wrapper around it. */}
-                  <TooltipTrigger asChild>
-                    <span className="setting-control-tooltip-trigger">{control}</span>
-                  </TooltipTrigger>
-                  <TooltipContent align="start">{shownReadOnlyReason}</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            ) : (
-              control
+            {control}
+            {shownLockReason && (
+              <p id={lockReasonId} className="tw:text-xs tw:text-muted-foreground">
+                {shownLockReason}
+              </p>
             )}
             {errorMessage && (
               // Mounted only while there is an error, so the alert announces when one appears. The

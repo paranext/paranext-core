@@ -16,7 +16,7 @@ export function ProjectSetting({
   className,
   disabled,
   readOnly,
-  readOnlyReason,
+  lockReason,
 }: ProjectSettingProps) {
   const [setting, setSetting, , isLoading] = useProjectSetting<keyof ProjectSettingTypes>(
     projectId,
@@ -44,7 +44,7 @@ export function ProjectSetting({
       className={className}
       disabled={disabled}
       readOnly={readOnly}
-      readOnlyReason={readOnlyReason}
+      lockReason={lockReason}
     />
   );
 }

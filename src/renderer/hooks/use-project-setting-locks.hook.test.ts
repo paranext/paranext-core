@@ -30,7 +30,7 @@ describe('useProjectSettingLocks', () => {
   it("reports the project's locks once all three settings have loaded", () => {
     mockSettings({
       'platform.isPublished': { value: false },
-      'platform.isShared': { value: true },
+      'platform.isRegistered': { value: true },
       'platform.isCurrentUserAdministrator': { value: false },
     });
 
@@ -38,7 +38,7 @@ describe('useProjectSettingLocks', () => {
 
     expect(result.current).toEqual({
       isPublished: false,
-      isShared: true,
+      isRegistered: true,
       isCurrentUserAdministrator: false,
     });
   });
@@ -46,7 +46,7 @@ describe('useProjectSettingLocks', () => {
   it('reports nothing while any of the settings is still loading', () => {
     mockSettings({
       'platform.isPublished': { value: false },
-      'platform.isShared': { value: false, isLoading: true },
+      'platform.isRegistered': { value: false, isLoading: true },
       'platform.isCurrentUserAdministrator': { value: true },
     });
 
@@ -58,7 +58,7 @@ describe('useProjectSettingLocks', () => {
   it('reports nothing without a project', () => {
     mockSettings({
       'platform.isPublished': { value: false },
-      'platform.isShared': { value: false },
+      'platform.isRegistered': { value: false },
       'platform.isCurrentUserAdministrator': { value: true },
     });
 
@@ -70,7 +70,7 @@ describe('useProjectSettingLocks', () => {
   it('locks the names and the language when their settings cannot be read, but not the whole project', () => {
     mockSettings({
       'platform.isPublished': { value: READ_ERROR },
-      'platform.isShared': { value: READ_ERROR },
+      'platform.isRegistered': { value: READ_ERROR },
       'platform.isCurrentUserAdministrator': { value: READ_ERROR },
     });
 
@@ -78,7 +78,7 @@ describe('useProjectSettingLocks', () => {
 
     expect(result.current).toEqual({
       isPublished: false,
-      isShared: true,
+      isRegistered: true,
       isCurrentUserAdministrator: false,
     });
   });

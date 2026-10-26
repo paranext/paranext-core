@@ -41,11 +41,10 @@ public sealed class ProjectSettingsNames
     public const string PB_IS_PUBLISHED = "platform.isPublished";
 
     /// <summary>
-    /// Whether the project is shared with a team through Send/Receive
-    /// (<c>ScrText.IsProjectShared</c>). A computed, read-only setting with no Paratext setting
-    /// name, like <see cref="PB_IS_PUBLISHED"/>.
+    /// Whether the project is registered with the Paratext Registry. A computed, read-only setting
+    /// with no Paratext setting name, like <see cref="PB_IS_PUBLISHED"/>.
     /// </summary>
-    public const string PB_IS_SHARED = "platform.isShared";
+    public const string PB_IS_REGISTERED = "platform.isRegistered";
 
     /// <summary>
     /// Whether the current user has the administrator role on the project. A computed, read-only

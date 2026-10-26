@@ -133,6 +133,12 @@ beforeAll(() => {
 beforeEach(() => {
   vi.clearAllMocks();
   availableLanguages.loaded = undefined;
+  // Several describes below pin the strings to a fixed map and leave it in place afterwards; start
+  // each test from the real hook's shape instead, where every key resolves to at least itself.
+  vi.mocked(useLocalizedStrings).mockImplementation((keys) => [
+    Object.fromEntries(keys.map((key) => [key, key])),
+    false,
+  ]);
 });
 
 describe('Setting disabled forwarding', () => {
@@ -962,9 +968,18 @@ describe('Setting description', () => {
   });
 });
 
-describe('Setting label info icon', () => {
-  it('marks a label that has a description to show', () => {
-    const { container } = render(
+describe('Setting info button', () => {
+  afterEach(() => {
+    vi.mocked(useLocalizedStrings).mockReturnValue([{}, false]);
+  });
+
+  it('offers a keyboard-reachable info button, named for its setting, when there is a description', async () => {
+    vi.mocked(useLocalizedStrings).mockReturnValue([
+      { '%settings_infoButton_ariaLabel%': 'About {settingLabel}' },
+      false,
+    ]);
+    const user = userEvent.setup();
+    render(
       <Setting
         {...baseProps}
         settingKey="platform.language"
@@ -973,21 +988,25 @@ describe('Setting label info icon', () => {
         description="The language of the project"
       />,
     );
-    expect(container.querySelector('.setting-label-info-icon')).toBeInTheDocument();
-    // The icon is decoration, so it stays out of the control's name.
+
+    // The info button sits beside the label, ahead of the control, so it is the first tab stop.
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'About Language' })).toHaveFocus();
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('The language of the project');
+    // The button sits beside the label, not inside it, so the control's name stays the label.
     expect(screen.getByRole('textbox')).toHaveAccessibleName('Language');
   });
 
-  it('leaves a label with no description unmarked', () => {
-    const { container } = render(
+  it('offers no info button when there is no description', () => {
+    render(
       <Setting {...baseProps} settingKey="platform.language" setting="English" label="Language" />,
     );
-    expect(container.querySelector('.setting-label-info-icon')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 });
 
-describe('Setting read-only reason', () => {
-  it('describes a read-only control with its reason as well as its description', () => {
+describe('Setting lock reason', () => {
+  it('shows the reason under a locked control and describes the control with it', () => {
     render(
       <Setting
         {...baseProps}
@@ -996,49 +1015,29 @@ describe('Setting read-only reason', () => {
         label="Editable"
         description="Whether the project can be edited"
         readOnly
-        readOnlyReason="The project is published"
+        lockReason="Only a project administrator can change this."
       />,
     );
+    expect(screen.getByText('Only a project administrator can change this.')).toBeVisible();
     expect(screen.getByRole('switch')).toHaveAccessibleDescription(
-      'Whether the project can be edited The project is published',
+      'Whether the project can be edited Only a project administrator can change this.',
     );
   });
 
-  it('shows the reason when the pointer is over the disabled control', async () => {
-    const user = userEvent.setup();
-    render(
-      <Setting
-        {...baseProps}
-        settingKey="platform.isEditable"
-        setting={false}
-        label="Editable"
-        readOnly
-        readOnlyReason="The project is published"
-      />,
-    );
-
-    // A disabled switch takes no pointer events, so the pointer lands on the wrapper around it.
-    const tooltipTrigger = screen.getByRole('switch').parentElement;
-    if (!tooltipTrigger) throw new Error('The switch has no wrapper to hover');
-    await user.hover(tooltipTrigger);
-
-    expect(await screen.findByRole('tooltip')).toHaveTextContent('The project is published');
-  });
-
-  it('gives an editable control no reason, even when one is passed', () => {
+  it('shows no reason under an editable control, even when one is passed', () => {
     render(
       <Setting
         {...baseProps}
         settingKey="platform.language"
         setting="English"
         label="Language"
-        readOnlyReason="Only an administrator can change this"
+        lockReason="Only a project administrator can change this."
       />,
     );
-    expect(screen.getByRole('textbox')).not.toHaveAccessibleDescription(
-      'Only an administrator can change this',
-    );
-    expect(screen.queryByText('Only an administrator can change this')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Only a project administrator can change this.'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox')).not.toHaveAccessibleDescription();
   });
 });
 

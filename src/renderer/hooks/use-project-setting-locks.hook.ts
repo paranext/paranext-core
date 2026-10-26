@@ -5,8 +5,8 @@ import { useMemo } from 'react';
 export type ProjectSettingLocks = {
   /** `platform.isPublished`: a published project is read-only throughout */
   isPublished: boolean;
-  /** `platform.isShared`: a shared project's names change only through the registry */
-  isShared: boolean;
+  /** `platform.isRegistered`: a registered project's names change only through the registry */
+  isRegistered: boolean;
   /** `platform.isCurrentUserAdministrator`: only an administrator may change the language */
   isCurrentUserAdministrator: boolean;
 };
@@ -29,23 +29,27 @@ export function useProjectSettingLocks(
     'platform.isPublished',
     false,
   );
-  const [isShared, , , isSharedLoading] = useProjectSetting(projectId, 'platform.isShared', true);
+  const [isRegistered, , , isRegisteredLoading] = useProjectSetting(
+    projectId,
+    'platform.isRegistered',
+    true,
+  );
   const [isCurrentUserAdministrator, , , isCurrentUserAdministratorLoading] = useProjectSetting(
     projectId,
     'platform.isCurrentUserAdministrator',
     false,
   );
 
-  const isLoading = isPublishedLoading || isSharedLoading || isCurrentUserAdministratorLoading;
+  const isLoading = isPublishedLoading || isRegisteredLoading || isCurrentUserAdministratorLoading;
 
   return useMemo(() => {
     if (!projectId || isLoading) return undefined;
     return {
       isPublished: isPublished === true,
-      isShared: isShared !== false,
+      isRegistered: isRegistered !== false,
       isCurrentUserAdministrator: isCurrentUserAdministrator === true,
     };
-  }, [projectId, isLoading, isPublished, isShared, isCurrentUserAdministrator]);
+  }, [projectId, isLoading, isPublished, isRegistered, isCurrentUserAdministrator]);
 }
 
 export default useProjectSettingLocks;

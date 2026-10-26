@@ -12,13 +12,10 @@ import { useMemo } from 'react';
 import { OtherSetting } from './other-setting.component';
 import './project-or-other-settings-list.component.scss';
 import { ProjectSetting } from './project-setting.component';
-import {
-  getSettingReadOnlyReasonKey,
-  READ_ONLY_REASON_KEYS,
-} from './setting-read-only-reason.util';
+import { getSettingLock, SETTING_LOCK_REASON_KEYS } from './setting-lock.util';
 import { OtherSettingValues, ProjectSettingValues } from './setting.component';
 
-const LOCALIZE_READ_ONLY_REASON_KEYS: LocalizeKey[] = Object.values(READ_ONLY_REASON_KEYS);
+const LOCALIZE_LOCK_REASON_KEYS: LocalizeKey[] = Object.values(SETTING_LOCK_REASON_KEYS);
 
 /** Properties for a settings list component that displays either project or user settings */
 type ProjectOrOtherSettingsListProps = {
@@ -68,7 +65,7 @@ export function ProjectOrOtherSettingsList({
   // groups) and passed down, so a project's several setting groups don't each subscribe to the
   // auto-sync-blocking store. This component just forwards it to each project setting.
 
-  const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZE_READ_ONLY_REASON_KEYS, []));
+  const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZE_LOCK_REASON_KEYS, []));
 
   if (Object.entries(settingProperties).length === 0) return undefined;
 
@@ -82,13 +79,13 @@ export function ProjectOrOtherSettingsList({
       </CardHeader>
       <CardContent>
         {Object.entries(settingProperties).map(([key, property]) => {
-          const readOnlyReasonKey = getSettingReadOnlyReasonKey(
+          const { isLocked, reasonKey } = getSettingLock(
             key,
             property.isReadOnly,
             projectId ? projectSettingLocks : undefined,
           );
-          const readOnly = areProjectLocksLoading || !!readOnlyReasonKey;
-          const readOnlyReason = readOnlyReasonKey && localizedStrings[readOnlyReasonKey];
+          const readOnly = areProjectLocksLoading || isLocked;
+          const lockReason = reasonKey && localizedStrings[reasonKey];
 
           return projectId ? (
             <ProjectSetting
@@ -105,7 +102,7 @@ export function ProjectOrOtherSettingsList({
               className="card-content"
               disabled={disabled}
               readOnly={readOnly}
-              readOnlyReason={readOnlyReason}
+              lockReason={lockReason}
             />
           ) : (
             <OtherSetting
@@ -120,7 +117,7 @@ export function ProjectOrOtherSettingsList({
               defaultSetting={property.default as OtherSettingValues}
               className="card-content"
               readOnly={readOnly}
-              readOnlyReason={readOnlyReason}
+              lockReason={lockReason}
             />
           );
         })}

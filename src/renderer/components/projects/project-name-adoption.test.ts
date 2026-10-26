@@ -215,7 +215,7 @@ const EXEMPT: { file: string; contains: string; reason: string }[] = [
     reason: 'compares a prop value whose name happens to end in `FullName`',
   },
   {
-    file: 'src/renderer/components/settings-tabs/settings-components/setting-read-only-reason.util.ts',
+    file: 'src/renderer/components/settings-tabs/settings-components/setting-lock.util.ts',
     contains: "settingKey === 'platform.fullName'",
     reason: 'compares a setting key to decide whether it is locked; reads no name',
   },

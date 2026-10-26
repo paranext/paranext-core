@@ -20,6 +20,7 @@ const PICKER_SEARCH_PLACEHOLDER = 'Buscar proyectos y recursos';
 const PICKER_NO_RESULTS = 'No se encontraron proyectos';
 const PROJECT_NAME = 'World English Bible';
 const NO_SETTINGS_FOUND = 'No settings found';
+const PUBLISHED_NOTICE_TEXT = 'This project is published';
 
 // The hook under wiring test — controlled per test to simulate a blocked / unblocked project.
 vi.mock('@renderer/hooks/use-is-project-auto-sync-blocked.hook', () => ({
@@ -29,7 +30,7 @@ vi.mock('@renderer/hooks/use-is-project-auto-sync-blocked.hook', () => ({
 // A published project, so a group that received the tab's locks is recognisable in the DOM.
 const PROJECT_SETTING_LOCKS = vi.hoisted(() => ({
   isPublished: true,
-  isShared: false,
+  isRegistered: false,
   isCurrentUserAdministrator: true,
 }));
 vi.mock('@renderer/hooks/use-project-setting-locks.hook', () => ({
@@ -47,6 +48,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       [PROJECT_SELECTOR_NO_RESULTS_KEY]: PICKER_NO_RESULTS,
       '%settings_defaultMessage_noSettingsFound%': NO_SETTINGS_FOUND,
       '%settings_defaultMessage_noSettingsFoundDetails%': 'Nothing matches {query}',
+      '%settings_lockReason_projectPublished%': PUBLISHED_NOTICE_TEXT,
     },
   ]),
 }));
@@ -239,6 +241,12 @@ describe('SettingsTab project setting locks', () => {
     vi.mocked(useIsProjectAutoSyncBlocked).mockReturnValue(false);
   });
 
+  afterEach(() => {
+    vi.mocked(useProjectSettingLocks).mockImplementation((projectId) =>
+      projectId ? PROJECT_SETTING_LOCKS : undefined,
+    );
+  });
+
   it("reads the project's locks once for the tab and hands them to every group", async () => {
     render(<SettingsTab projectIdToLimitSettings="projA" />);
 
@@ -248,6 +256,24 @@ describe('SettingsTab project setting locks', () => {
     screen
       .getAllByTestId('settings-group')
       .forEach((group) => expect(group).toHaveAttribute('data-published', 'true'));
+  });
+
+  it("says once, above all of a published project's groups, why none of its settings can change", async () => {
+    render(<SettingsTab projectIdToLimitSettings="projA" />);
+
+    await waitFor(() => expect(screen.getAllByTestId('settings-group')).toHaveLength(3));
+    expect(screen.getAllByText(PUBLISHED_NOTICE_TEXT)).toHaveLength(1);
+  });
+
+  it('shows no published notice for a project that is not published', async () => {
+    vi.mocked(useProjectSettingLocks).mockReturnValue({
+      ...PROJECT_SETTING_LOCKS,
+      isPublished: false,
+    });
+    render(<SettingsTab projectIdToLimitSettings="projA" />);
+
+    await waitFor(() => expect(screen.getAllByTestId('settings-group')).toHaveLength(3));
+    expect(screen.queryByText(PUBLISHED_NOTICE_TEXT)).not.toBeInTheDocument();
   });
 });
 

@@ -12,6 +12,7 @@ using Paranext.DataProvider.Services;
 using Paratext.Data;
 using Paratext.Data.ProjectComments;
 using Paratext.Data.ProjectSettingsAccess;
+using Paratext.Data.Users;
 using PtxUtils;
 using SIL.Scripture;
 
@@ -1884,8 +1885,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (settingName == ProjectSettingsNames.PB_IS_PUBLISHED)
             return scrText.IsResourceProject;
 
-        if (settingName == ProjectSettingsNames.PB_IS_SHARED)
-            return scrText.IsProjectShared;
+        if (settingName == ProjectSettingsNames.PB_IS_REGISTERED)
+            return IsRegistered(scrText);
 
         if (settingName == ProjectSettingsNames.PB_IS_CURRENT_USER_ADMINISTRATOR)
             return IsUserProjectAdministrator();
@@ -2010,15 +2011,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (scrText.IsResourceProject)
             throw new Exception("Cannot change settings on resources");
 
-        // platform.isPublished is read-only — it reflects ScrText.IsResourceProject and is not
-        // backed by any writable Paratext setting.
-        if (settingName == ProjectSettingsNames.PB_IS_PUBLISHED)
-            throw new InvalidOperationException(
-                $"{ProjectSettingsNames.PB_IS_PUBLISHED} is a read-only computed setting."
-            );
+        // Computed settings reflect the project or the user and are not backed by any writable
+        // Paratext setting.
         if (
-            settingName == ProjectSettingsNames.PB_COPYRIGHT_NOTICE
-            || settingName == ProjectSettingsNames.PB_IS_SHARED
+            settingName == ProjectSettingsNames.PB_IS_PUBLISHED
+            || settingName == ProjectSettingsNames.PB_COPYRIGHT_NOTICE
+            || settingName == ProjectSettingsNames.PB_IS_REGISTERED
             || settingName == ProjectSettingsNames.PB_IS_CURRENT_USER_ADMINISTRATOR
         )
             throw new InvalidOperationException($"{settingName} is a read-only computed setting.");
@@ -2029,38 +2027,31 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(settingName)
             ?? settingName;
 
-        // The referenced-projects-and-resources list carries the admin-only isInTextCollection
-        // flag (the shared text-collection default for the Scripture Text Grid), so its writes are
-        // gated to project administrators server-side (the UI-facing query is
-        // canUserWriteProjectTextConnectionSettings()). Model texts do NOT participate in
+        // Only project administrators may change the project's language, or the
+        // referenced-projects-and-resources list: it carries the admin-only isInTextCollection
+        // flag (the shared text-collection default for the Scripture Text Grid; the UI-facing query
+        // is canUserWriteProjectTextConnectionSettings()). Model texts do NOT participate in
         // text-collection and keep their pre-existing ungated behavior. USER-scope writes (user
         // lists, overlay, init) are intentionally UNGATED.
         if (
-            paratextSettingName == ProjectSettingsNames.PT_REFERENCED_PROJECTS_AND_RESOURCES
-            && !IsUserProjectAdministrator()
+            (
+                paratextSettingName == ProjectSettingsNames.PT_REFERENCED_PROJECTS_AND_RESOURCES
+                || paratextSettingName == ProjectSettingsNames.PT_LANGUAGE
+            ) && !IsUserProjectAdministrator()
         )
             throw new UnauthorizedAccessException(
                 $"Only project administrators may write '{settingName}'."
             );
 
-        // A shared project is registered, and Paratext changes a registered project's names only
-        // through the registry, never locally.
+        // Paratext changes a registered project's names only through the registry, never locally.
         if (
             (
                 paratextSettingName == ProjectSettingsNames.PT_NAME
                 || paratextSettingName == ProjectSettingsNames.PT_FULL_NAME
-            ) && scrText.IsProjectShared
+            ) && IsRegistered(scrText)
         )
             throw new InvalidOperationException(
-                $"'{settingName}' of a shared project can only be changed through the registry."
-            );
-
-        if (
-            paratextSettingName == ProjectSettingsNames.PT_LANGUAGE
-            && !IsUserProjectAdministrator()
-        )
-            throw new UnauthorizedAccessException(
-                $"Only project administrators may write '{settingName}'."
+                $"'{settingName}' of a registered project can only be changed through the registry."
             );
 
         // If there is no Paratext setting for the name given, we'll create one lower down
@@ -2268,6 +2259,14 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <remarks>At this time, the only check for this is whether the user is an administrator on
     /// the project.</remarks>
     public bool CanUserWriteProjectTextConnectionSettings() => IsUserProjectAdministrator();
+
+    /// <summary>
+    /// Whether the project is registered with the Paratext Registry, by the same test as
+    /// ParatextData's <c>ProjectWrapper.IsRegistered</c>: a registered project has a Normal or
+    /// Publishable license. An unregistered project's license is Limited, even when it is shared.
+    /// </summary>
+    private static bool IsRegistered(ScrText scrText) =>
+        scrText.Permissions.LicenseType.IsValidRegisteredProject();
 
     /// <summary>
     /// Determines if the current user is a project administrator

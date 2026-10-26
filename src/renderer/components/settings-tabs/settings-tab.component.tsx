@@ -29,6 +29,7 @@ import {
   PROJECT_SELECTOR_SEARCH_PLACEHOLDER_KEY,
 } from './settings-tab.localization';
 import { ProjectOrOtherSettingsList } from './settings-components/project-or-other-settings-list.component';
+import { SETTING_LOCK_REASON_KEYS } from './settings-components/setting-lock.util';
 
 export const TAB_TYPE_SETTINGS_TAB = 'settings-tab';
 
@@ -39,6 +40,9 @@ export const TAB_TYPE_SETTINGS_TAB = 'settings-tab';
  * per-list would show one identical banner per group.
  */
 const SYNC_BLOCKED_NOTICE_KEY: LocalizeKey = '%settings_projectSyncBlocked_notice%';
+
+/** Notice shown once above a published project's settings groups, for the same reason. */
+const PUBLISHED_NOTICE_KEY: LocalizeKey = SETTING_LOCK_REASON_KEYS.projectPublished;
 
 type SettingsTabProps = {
   /** Optional project Id, when passed in, will only show settings for that project */
@@ -80,6 +84,7 @@ const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
   '%settings_defaultMessage_noSettingsFound%',
   '%settings_defaultMessage_noSettingsFoundDetails%',
   SYNC_BLOCKED_NOTICE_KEY,
+  PUBLISHED_NOTICE_KEY,
   // The sidebar's project picker is a ProjectSelector. Its trigger label comes from the tab's own
   // `%settings_sidebar_projectsComboBoxPlaceholder%`; these are the only two picker strings this
   // flat, tab-less list can render, so resolve them here rather than the picker's whole key block.
@@ -283,9 +288,15 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
   // two copies can't drift. Falsy (renders nothing) when the project isn't blocked or for
   // general/user settings.
   const syncBlockedNotice = isProjectSyncBlocked && (
-    <div role="status" className="sync-blocked-notice">
+    <div role="status" className="project-settings-notice">
       {localizedStrings[SYNC_BLOCKED_NOTICE_KEY]}
     </div>
+  );
+
+  // Says once, above all of a published project's groups, why none of its settings can be changed,
+  // rather than repeating the reason under every setting.
+  const publishedNotice = projectSettingLocks?.isPublished && (
+    <div className="project-settings-notice">{localizedStrings[PUBLISHED_NOTICE_KEY]}</div>
   );
 
   if (projectIdToLimitSettings) {
@@ -294,6 +305,7 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
         {filteredProjectSettingsContributions ? (
           <>
             {syncBlockedNotice}
+            {publishedNotice}
             {renderProjectSettingsList(projectIdToLimitSettings)}
           </>
         ) : (
@@ -347,6 +359,7 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
             {selectedSidebarItem.projectId ? (
               <>
                 {syncBlockedNotice}
+                {publishedNotice}
                 {renderProjectSettingsList(selectedSidebarItem.projectId)}
               </>
             ) : (

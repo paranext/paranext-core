@@ -732,17 +732,16 @@ declare module 'papi-shared-types' {
      */
     'platform.isPublished': boolean;
     /**
-     * Whether this project is shared with a team through Send/Receive, as opposed to existing only
-     * on this computer. A shared project is registered, so its
+     * Whether this project is registered with the Paratext Registry. A registered project's
      * {@link ProjectSettingTypes['platform.name'] | `platform.name`} and
      * {@link ProjectSettingTypes['platform.fullName'] | `platform.fullName`} can be changed only
-     * through the registry.
+     * through the registry. A project can be shared through Send/Receive without being registered.
      *
      * Computed by the project data provider; it cannot be set.
      *
      * Defaults to `false`.
      */
-    'platform.isShared': boolean;
+    'platform.isRegistered': boolean;
     /**
      * Whether the current user has the administrator role on this project. Unlike most project
      * settings, the answer depends on who is asking. A project with no notion of roles counts its

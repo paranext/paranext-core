@@ -7,8 +7,8 @@ using Paratext.Data.Users;
 namespace TestParanextDataProvider.Projects;
 
 /// <summary>
-/// Covers the computed <c>platform.isShared</c> and <c>platform.isCurrentUserAdministrator</c>
-/// settings, and the writes they lock: a shared project's short and full names change only
+/// Covers the computed <c>platform.isRegistered</c> and <c>platform.isCurrentUserAdministrator</c>
+/// settings, and the writes they lock: a registered project's short and full names change only
 /// through the registry, and only a project administrator can change the project's language.
 /// </summary>
 [ExcludeFromCodeCoverage]
@@ -54,13 +54,16 @@ internal class ParatextProjectDataProviderSettingLocksTests : PapiTestBase
     }
 
     [Test]
-    public void GetProjectSetting_UnsharedProject_IsNotSharedAndUserIsAdministrator()
+    public void GetProjectSetting_LocalProject_IsNotRegisteredAndUserIsAdministrator()
     {
         UseProject(CreateDummyProject());
 
         Assert.Multiple(() =>
         {
-            Assert.That(_provider.GetProjectSetting(ProjectSettingsNames.PB_IS_SHARED), Is.False);
+            Assert.That(
+                _provider.GetProjectSetting(ProjectSettingsNames.PB_IS_REGISTERED),
+                Is.False
+            );
             Assert.That(
                 _provider.GetProjectSetting(ProjectSettingsNames.PB_IS_CURRENT_USER_ADMINISTRATOR),
                 Is.True
@@ -69,13 +72,16 @@ internal class ParatextProjectDataProviderSettingLocksTests : PapiTestBase
     }
 
     [Test]
-    public void GetProjectSetting_SharedProjectWithoutAdminRole_IsSharedAndUserIsNotAdministrator()
+    public void GetProjectSetting_RegisteredProjectWithoutAdminRole_IsRegisteredAndUserIsNotAdministrator()
     {
-        UseProject(new SharedScrText(isAdministrator: false));
+        UseProject(new PermissionsScrText(isRegistered: true, isAdministrator: false));
 
         Assert.Multiple(() =>
         {
-            Assert.That(_provider.GetProjectSetting(ProjectSettingsNames.PB_IS_SHARED), Is.True);
+            Assert.That(
+                _provider.GetProjectSetting(ProjectSettingsNames.PB_IS_REGISTERED),
+                Is.True
+            );
             Assert.That(
                 _provider.GetProjectSetting(ProjectSettingsNames.PB_IS_CURRENT_USER_ADMINISTRATOR),
                 Is.False
@@ -83,7 +89,24 @@ internal class ParatextProjectDataProviderSettingLocksTests : PapiTestBase
         });
     }
 
-    [TestCase(ProjectSettingsNames.PB_IS_SHARED)]
+    [Test]
+    public void GetProjectSetting_SharedButUnregisteredProject_IsNotRegistered()
+    {
+        var scrText = new PermissionsScrText(isRegistered: false, isAdministrator: true);
+        UseProject(scrText);
+
+        Assert.Multiple(() =>
+        {
+            // Shared (it has a permissions file) is not the same as registered.
+            Assert.That(scrText.IsProjectShared, Is.True);
+            Assert.That(
+                _provider.GetProjectSetting(ProjectSettingsNames.PB_IS_REGISTERED),
+                Is.False
+            );
+        });
+    }
+
+    [TestCase(ProjectSettingsNames.PB_IS_REGISTERED)]
     [TestCase(ProjectSettingsNames.PB_IS_CURRENT_USER_ADMINISTRATOR)]
     public void SetProjectSetting_ComputedSetting_ThrowsInvalidOperationException(
         string settingName
@@ -100,12 +123,12 @@ internal class ParatextProjectDataProviderSettingLocksTests : PapiTestBase
 
     [TestCase(ProjectSettingsNames.PB_NAME, "NEWNAME")]
     [TestCase(ProjectSettingsNames.PB_FULL_NAME, "New full name")]
-    public void SetProjectSetting_NameOfSharedProject_ThrowsAndLeavesNameUnchanged(
+    public void SetProjectSetting_NameOfRegisteredProject_ThrowsAndLeavesNameUnchanged(
         string settingName,
         string newValue
     )
     {
-        UseProject(new SharedScrText(isAdministrator: true));
+        UseProject(new PermissionsScrText(isRegistered: true, isAdministrator: true));
         object? before = _provider.GetProjectSetting(settingName);
 
         Assert.Throws<InvalidOperationException>(
@@ -116,9 +139,9 @@ internal class ParatextProjectDataProviderSettingLocksTests : PapiTestBase
     }
 
     [Test]
-    public void SetProjectSetting_FullNameOfUnsharedProject_IsWritten()
+    public void SetProjectSetting_FullNameOfSharedButUnregisteredProject_IsWritten()
     {
-        UseProject(CreateDummyProject());
+        UseProject(new PermissionsScrText(isRegistered: false, isAdministrator: true));
 
         _provider.SetProjectSetting(ProjectSettingsNames.PB_FULL_NAME, "New full name");
 
@@ -131,7 +154,7 @@ internal class ParatextProjectDataProviderSettingLocksTests : PapiTestBase
     [Test]
     public void SetProjectSetting_LanguageWithoutAdminRole_ThrowsAndLeavesLanguageUnchanged()
     {
-        UseProject(new SharedScrText(isAdministrator: false));
+        UseProject(new PermissionsScrText(isRegistered: true, isAdministrator: false));
         _scrText.Settings.ParametersDictionary[ProjectSettingsNames.PT_LANGUAGE] = "English";
 
         Assert.Throws<UnauthorizedAccessException>(
@@ -145,9 +168,9 @@ internal class ParatextProjectDataProviderSettingLocksTests : PapiTestBase
     }
 
     [Test]
-    public void SetProjectSetting_LanguageAsAdministratorOfSharedProject_IsWritten()
+    public void SetProjectSetting_LanguageAsAdministratorOfRegisteredProject_IsWritten()
     {
-        UseProject(new SharedScrText(isAdministrator: true));
+        UseProject(new PermissionsScrText(isRegistered: true, isAdministrator: true));
 
         _provider.SetProjectSetting(ProjectSettingsNames.PB_LANGUAGE, "French");
 
@@ -158,21 +181,27 @@ internal class ParatextProjectDataProviderSettingLocksTests : PapiTestBase
     }
 
     /// <summary>
-    /// A shared project (one that takes part in Send/Receive) whose current user has or lacks the
-    /// administrator role.
+    /// A shared project (one with a permissions file) that is or is not registered, and whose
+    /// current user has or lacks the administrator role.
     /// </summary>
-    private sealed class SharedScrText(bool isAdministrator) : DummyScrText
+    private sealed class PermissionsScrText(bool isRegistered, bool isAdministrator) : DummyScrText
     {
-        private readonly SharedPermissionManager _permissions = new(isAdministrator);
+        private readonly FakePermissionManager _permissions = new(isRegistered, isAdministrator);
 
         public override PermissionManager Permissions => _permissions;
 
-        private sealed class SharedPermissionManager(bool isAdministrator) : PermissionManager
+        private sealed class FakePermissionManager(bool isRegistered, bool isAdministrator)
+            : PermissionManager
         {
             // Non-null Data makes HasPermissionsDefined true, which makes ScrText.IsProjectShared
             // true.
             protected override InternalProjectUserAccessData Data { get; set; } =
                 new InternalProjectUserAccessData();
+
+            // An unregistered project's license is Limited; a registered one's is Normal or
+            // Publishable.
+            public override ProjectLicenseType LicenseType =>
+                isRegistered ? ProjectLicenseType.Normal : ProjectLicenseType.Limited;
 
             public override bool AmAdministrator => isAdministrator;
         }

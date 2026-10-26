@@ -41,15 +41,17 @@ export const platformProjectSettings: ProjectSettingsContribution = {
       default: false,
       isReadOnly: true,
     },
-    'platform.isShared': {
-      label: '%project_settings_platform_isShared_label%',
+    'platform.isRegistered': {
+      label: '%project_settings_platform_isRegistered_label%',
       default: false,
       isHidden: true,
+      isReadOnly: true,
     },
     'platform.isCurrentUserAdministrator': {
       label: '%project_settings_platform_isCurrentUserAdministrator_label%',
       default: true,
       isHidden: true,
+      isReadOnly: true,
     },
     'platform.textDirection': {
       label: '%project_settings_platform_textDirection_label%',
@@ -88,8 +90,9 @@ const isPublishedValidator: ProjectSettingValidator<'platform.isPublished'> = as
   newValue: boolean,
 ) => typeof newValue === 'boolean';
 
-const isSharedValidator: ProjectSettingValidator<'platform.isShared'> = async (newValue: boolean) =>
-  typeof newValue === 'boolean';
+const isRegisteredValidator: ProjectSettingValidator<'platform.isRegistered'> = async (
+  newValue: boolean,
+) => typeof newValue === 'boolean';
 
 const isCurrentUserAdministratorValidator: ProjectSettingValidator<
   'platform.isCurrentUserAdministrator'
@@ -109,7 +112,7 @@ export const coreProjectSettingsValidators: Partial<AllProjectSettingsValidators
   'platform.languageTag': languageTagValidator,
   'platform.isEditable': isEditableValidator,
   'platform.isPublished': isPublishedValidator,
-  'platform.isShared': isSharedValidator,
+  'platform.isRegistered': isRegisteredValidator,
   'platform.isCurrentUserAdministrator': isCurrentUserAdministratorValidator,
   'platform.textDirection': textDirectionValidator,
 };
