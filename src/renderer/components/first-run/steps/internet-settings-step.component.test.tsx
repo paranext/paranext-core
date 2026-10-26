@@ -96,16 +96,10 @@ vi.mock('platform-bible-react/experimental', () => ({
       option list
     </button>
   ),
-  DeveloperSection: ({ onServerChange }: { onServerChange: (server: string) => void }) => (
-    <button data-testid="dev-section" type="button" onClick={() => onServerChange('Development')}>
-      dev section
-    </button>
-  ),
   // Stands in for the real helper, whose own list of implemented options is covered by
   // InternetAccessOptionList's tests. This step only cares that it gates Next.
   isSupportedInternetUse: (value: string) => value === 'Enabled' || value === 'VpnRequired',
   INTERNET_ACCESS_OPTION_LIST_STRING_KEYS: [],
-  DEVELOPER_SECTION_STRING_KEYS: [],
 }));
 
 const MOCK_SETTINGS = {
@@ -262,18 +256,6 @@ describe('InternetSettingsStep', () => {
       );
     });
 
-    it('does not record that the user was asked when only the server changes', async () => {
-      const { setData } = configureHooks({ value: MOCK_SETTINGS, isLoading: false });
-      renderStep();
-
-      await userEvent.click(screen.getByTestId('dev-section'));
-
-      await waitFor(() => expect(setData).toHaveBeenCalled());
-      // The list is disabled while the save runs, so enabled again means the save has finished.
-      await waitFor(() => expect(screen.getByTestId('option-list')).not.toBeDisabled());
-      expect(settingsService.set).not.toHaveBeenCalled();
-    });
-
     it('keeps showing the choice while the provider still reports the value from before the save', async () => {
       const { deliverSavedValue } = configureHooks({
         value: MOCK_SETTINGS,
@@ -312,18 +294,6 @@ describe('InternetSettingsStep', () => {
         expect.objectContaining({ permittedInternetUse: 'Enabled' }),
       );
       await waitFor(() => expect(setCanProceed.mock.calls.at(-1)?.[0]).toBe(true));
-    });
-
-    it('does not let a server change alone unlock Next', async () => {
-      const { setData } = configureHooks({ value: MOCK_SETTINGS, isLoading: false });
-      const { setCanProceed } = renderStep();
-
-      await userEvent.click(screen.getByTestId('dev-section'));
-
-      await waitFor(() => expect(setData).toHaveBeenCalled());
-      await waitFor(() => expect(setCanProceed.mock.calls.at(-1)?.[0]).toBe(false));
-      expect(setCanProceed).not.toHaveBeenCalledWith(true);
-      expect(screen.getByTestId('option-list')).not.toHaveAttribute('data-value');
     });
 
     // The shell remounts the step when the user goes on to the next step and comes back.
@@ -507,25 +477,6 @@ describe('InternetSettingsStep', () => {
     expect(screen.getByTestId('option-list')).not.toHaveAttribute('data-value');
   });
 
-  it('reverts to the last saved choice when a later save fails', async () => {
-    const setData = vi
-      .fn()
-      .mockResolvedValueOnce(undefined)
-      .mockRejectedValueOnce(new Error('save failed'));
-    configureHooks({ value: MOCK_SETTINGS, setData });
-    renderStep();
-
-    // First click saves Enabled; a server change that then fails reverts to that saved choice.
-    await userEvent.click(screen.getByTestId('option-list'));
-    await waitFor(() =>
-      expect(screen.getByTestId('option-list')).toHaveAttribute('data-value', 'Enabled'),
-    );
-    await userEvent.click(screen.getByTestId('dev-section'));
-
-    await waitFor(() => expect(screen.getByText(/save failed/i)).toBeInTheDocument());
-    expect(screen.getByTestId('option-list')).toHaveAttribute('data-value', 'Enabled');
-  });
-
   it('bails without persisting or reporting success when setData is unavailable', async () => {
     // A defined provider whose useData has not yet produced a setter (setData === undefined).
     configureHooks({ value: MOCK_SETTINGS, setData: undefined });
@@ -574,19 +525,6 @@ describe('InternetSettingsStep', () => {
       await userEvent.click(screen.getByTestId('option-list'));
 
       await waitFor(() => expect(setCanProceed).toHaveBeenCalledWith(true));
-    });
-
-    it('does not let a server change alone unlock Next', async () => {
-      const { setData } = configureHooks({ value: UNSUPPORTED_SETTINGS, isLoading: false });
-      const { setCanProceed } = renderStep();
-
-      await userEvent.click(screen.getByTestId('dev-section'));
-
-      // The save succeeds, so the step re-derives whether it can proceed — from the value it just
-      // persisted, which still names the option the app cannot honor.
-      await waitFor(() => expect(setData).toHaveBeenCalled());
-      await waitFor(() => expect(setCanProceed.mock.calls.at(-1)?.[0]).toBe(false));
-      expect(setCanProceed).not.toHaveBeenCalledWith(true);
     });
   });
 

@@ -454,7 +454,7 @@ const resource = (
 const RESOURCES: DblResourceData[] = [
   resource({ bestLanguageName: 'Amharic', type: 'ScriptureResource' }),
   resource({ bestLanguageName: 'Nepali', type: 'ScriptureResource' }),
-  resource({ bestLanguageName: 'Coptic', type: 'XmlResource' }),
+  resource({ bestLanguageName: 'Coptic', type: 'CommentaryResource' }),
 ];
 
 function renderGetResources(overrides: Partial<Parameters<typeof GetResources>[0]> = {}) {
@@ -468,10 +468,10 @@ function renderGetResources(overrides: Partial<Parameters<typeof GetResources>[0
   );
 }
 
-/** The language filter is the second combo box; the first is the type filter. */
-function openLanguageFilter() {
+/** Opens the filter at `index` among the combo boxes and returns the text of each option. */
+function openFilter(index: number) {
   const triggers = screen.getAllByRole('combobox').filter((el) => el.tagName === 'BUTTON');
-  fireEvent.click(triggers[1]);
+  fireEvent.click(triggers[index]);
   return screen.queryAllByRole('option').map((option) => option.textContent ?? '');
 }
 
@@ -488,6 +488,52 @@ describe('GetResources search box', () => {
     expect(
       localizedStringsContribution.localizedStrings.en['%resources_filterInput_searchPlaceholder%'],
     ).not.toMatch(/type/i);
+  });
+});
+
+/** The type filter is the first combo box. */
+function openTypeFilter() {
+  return openFilter(0);
+}
+
+/** The language filter is the second combo box. */
+function openLanguageFilter() {
+  return openFilter(1);
+}
+
+describe('GetResources type filter', () => {
+  it('offers Scripture, commentary and source language types, but not Enhanced or XML', () => {
+    renderGetResources();
+
+    // No localized strings are served, so each option renders its label key.
+    const offered = openTypeFilter();
+
+    expect(offered.some((label) => label.includes('%resources_type_Scripture%'))).toBe(true);
+    expect(offered.some((label) => label.includes('%resources_type_Commentary%'))).toBe(true);
+    expect(offered.some((label) => label.includes('%resources_type_SLR%'))).toBe(true);
+    expect(offered.some((label) => label.includes('%resources_type_ER%'))).toBe(false);
+    expect(offered.some((label) => label.includes('%resources_type_XR%'))).toBe(false);
+  });
+
+  it('lists no Enhanced or XML resource, or a language only they have, when no type is selected', () => {
+    renderGetResources({
+      selectedTypes: [],
+      resources: [
+        ...RESOURCES,
+        resource({ bestLanguageName: 'Hebrew', type: 'EnhancedResource' }),
+        resource({ bestLanguageName: 'Syriac', type: 'XmlResource' }),
+      ],
+    });
+
+    // Positive control: "Any type" does widen past Scripture.
+    expect(screen.getByText('Resource Coptic CommentaryResource')).toBeInTheDocument();
+    expect(screen.queryByText('Resource Hebrew EnhancedResource')).not.toBeInTheDocument();
+    expect(screen.queryByText('Resource Syriac XmlResource')).not.toBeInTheDocument();
+
+    const offered = openLanguageFilter();
+    expect(offered.some((label) => label.includes('Coptic'))).toBe(true);
+    expect(offered.some((label) => label.includes('Hebrew'))).toBe(false);
+    expect(offered.some((label) => label.includes('Syriac'))).toBe(false);
   });
 });
 
@@ -532,11 +578,11 @@ describe('GetResources language filter', () => {
     // The badges placeholder stands where the badges would be, so nothing is selected.
     expect(screen.getByText('%resources_any_type%')).toBeInTheDocument();
     // And with no type in play the grid shows the whole catalogue rather than nothing.
-    expect(screen.getByText('Resource Coptic XmlResource')).toBeInTheDocument();
+    expect(screen.getByText('Resource Coptic CommentaryResource')).toBeInTheDocument();
   });
 
   it('ignores a selected language the type filter no longer offers, rather than emptying the grid', () => {
-    // Coptic is persisted from a session where XML resources were shown. Filtering rows on it now
+    // Coptic is persisted from a session where commentaries were shown. Filtering rows on it now
     // would hide every Scripture row and leave no way to un-pick it.
     renderGetResources({ selectedLanguages: ['Coptic'] });
 

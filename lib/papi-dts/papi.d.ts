@@ -5704,9 +5704,10 @@ declare module 'shared/models/network-object-status.service-model' {
      * @param timeoutInMS Max duration to wait for the network object. If not provided, it will wait
      *   indefinitely
      * @returns Promise that either resolves to the {@link NetworkObjectDetails} for a network object
-     *   once the network object is registered, or rejects if a timeout is provided and the timeout is
-     *   reached before the network object is registered, or if the current set of network objects
-     *   could not be read. Rejections carry a reason string, not an `Error`
+     *   once the network object is registered, or rejects with a {@link PlatformError} (not an
+     *   `Error`) if a timeout is provided and the timeout is reached before the network object is
+     *   registered (`code` is {@link DEADLINE_EXCEEDED}), or if the current set of network objects
+     *   could not be read (`code` is {@link UNKNOWN})
      */
     waitForNetworkObject: (
       objectDetailsToMatch: Partial<NetworkObjectDetails>,
@@ -6044,9 +6045,17 @@ declare module 'shared/services/web-view-provider.service' {
    * Get a web view provider that has previously been set up
    *
    * @param webViewType Type of webview provider to get
+   * @param shouldWaitPatiently Whether to keep re-arming the wait, allowing much longer overall for
+   *   the provider's extension to finish activating, instead of failing after the default timeout.
+   *   Set this for `retrieveWebViewContent`'s callers — a tab-restore request and the
+   *   extension-reload re-fetch; leave it `false` (the default) for a fresh `openWebView()` request.
+   *   Defaults to `false`
    * @returns Web view provider with the given name if one exists, undefined otherwise
    */
-  function getWebViewProvider(webViewType: string): Promise<IRegisteredWebViewProvider | undefined>;
+  function getWebViewProvider(
+    webViewType: string,
+    shouldWaitPatiently?: boolean,
+  ): Promise<IRegisteredWebViewProvider | undefined>;
   /**
    * Register a web view controller to represent a web view. It is expected that a web view provider
    * calls this to register a web view controller for a web view that is being created. If a web view
@@ -9619,7 +9628,8 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
    */
   export const RESOURCE_PICKER_DIALOG_TYPE = 'platform.resourcePicker';
   /**
-   * The tabType for the project picker dialog in `project-picker.dialog.tsx`
+   * The tabType for the project picker dialog in `project-picker.dialog.tsx`. Lists the user's
+   * projects only — editable and read-only — never published resources.
    *
    * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
    *   It is not yet a stable contract.
@@ -9700,7 +9710,8 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
     disableRestrictedModelTexts?: boolean;
   };
   /**
-   * Options to provide when showing the Project Picker dialog (no extra options needed)
+   * Options to provide when showing the Project Picker dialog (no extra options needed). The dialog
+   * lists the user's projects only — editable and read-only — never published resources.
    *
    * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
    *   It is not yet a stable contract.

@@ -21,11 +21,19 @@ export const PANEL_FILL_CLASSES = 'tw:h-screen tw:justify-center-safe tw:overflo
  *
  * @param label Already-localized status text shown next to the spinner (e.g. "Installing
  *   resource…"). Doubles as the state's accessible name.
+ * @param heightClassName How tall the view is. Defaults to the whole panel; pass `tw:h-full` to
+ *   wait inside a content area that keeps a header above it.
  */
-export function LoadingView({ label }: { label: ReactNode }) {
+export function LoadingView({
+  label,
+  heightClassName = 'tw:h-screen',
+}: {
+  label: ReactNode;
+  heightClassName?: string;
+}) {
   return (
     <div
-      className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:gap-2 tw:p-8 tw:text-center"
+      className={`tw:flex ${heightClassName} tw:items-center tw:justify-center tw:gap-2 tw:p-8 tw:text-center`}
       role="status"
     >
       <Spinner aria-hidden />

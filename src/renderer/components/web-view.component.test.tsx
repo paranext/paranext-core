@@ -9,6 +9,7 @@ import { registerWebViewRoot } from '@renderer/services/web-view-root.registry';
 const mocks = vi.hoisted(() => ({
   reloadWebView:
     vi.fn<(webViewType: string, id: string, options?: unknown) => Promise<string | undefined>>(),
+  waitForWebViewProviderToRegister: vi.fn<(webViewType: string) => Promise<void>>(),
   getSavedWebViewDefinitionSync: vi.fn<(id: string) => unknown>(),
   loggerDebug: vi.fn(),
   loggerWarn: vi.fn(),
@@ -20,6 +21,7 @@ const mocks = vi.hoisted(() => ({
 // answers, and the real module pulls the entire web view service in behind it.
 vi.mock('@renderer/services/web-view.service-shard', () => ({
   reloadWebView: mocks.reloadWebView,
+  waitForWebViewProviderToRegister: mocks.waitForWebViewProviderToRegister,
   getSavedWebViewDefinitionSync: mocks.getSavedWebViewDefinitionSync,
   convertWebViewDefinitionToSaved: vi.fn((webViewDefinition: unknown) => webViewDefinition),
   saveTabInfoBase: vi.fn((tabInfo: unknown) => tabInfo),
@@ -109,6 +111,9 @@ async function flushTimerTurn() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Default to an immediate, successful wait so tests that don't care about it don't need their own
+  // mock setup; the tests below that do care override this per case.
+  mocks.waitForWebViewProviderToRegister.mockResolvedValue(undefined);
   // The curried useData return type is a deeply-generic object; its shape is tested in the
   // papi-hooks tests. Replicating it here would create brittle coupling.
   // eslint-disable-next-line no-type-assertion/no-type-assertion -- necessary for mock helper flexibility
@@ -118,6 +123,47 @@ beforeEach(() => {
 });
 
 describe('a restored tab fetching the content it was saved without', () => {
+  test('waits patiently for the provider to register before reloading', async () => {
+    // A tab-restore's provider may belong to an extension that has not finished activating yet.
+    // Skipping this wait, or calling reloadWebView first, would silently reintroduce the failure
+    // that leaves an extension's tab stuck blank if it fails to activate within the normal 20s
+    // window — see `waitForWebViewProviderToRegister`'s own doc for why the wait has to happen
+    // before reloadWebView rather than inside it.
+    const { loadWebViewTab } = await import('./web-view.component');
+    mocks.reloadWebView.mockResolvedValue(SAVED_WEB_VIEW_ID);
+
+    loadWebViewTab(RESTORED_TAB);
+
+    await vi.waitFor(() =>
+      expect(mocks.reloadWebView).toHaveBeenCalledWith(SAVED_WEB_VIEW_TYPE, SAVED_WEB_VIEW_ID, {
+        bringToFront: false,
+      }),
+    );
+    expect(mocks.waitForWebViewProviderToRegister).toHaveBeenCalledWith(SAVED_WEB_VIEW_TYPE);
+    // Not just that both were called, but in this order — the whole point of moving the wait out
+    // of reloadWebView is that it happens BEFORE the dock is ever read.
+    expect(mocks.waitForWebViewProviderToRegister.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.reloadWebView.mock.invocationCallOrder[0],
+    );
+  });
+
+  test('never reloads when the provider fails to register in time', async () => {
+    // If the wait itself fails, reloadWebView must not run at all — there is nothing to reload a
+    // dock entry into, and calling it anyway would mint a nonce/controller for a provider we just
+    // gave up waiting on.
+    const { loadWebViewTab } = await import('./web-view.component');
+    mocks.waitForWebViewProviderToRegister.mockRejectedValue(
+      new Error('Timeout reached when waiting for wait-for-net-obj to settle'),
+    );
+
+    loadWebViewTab(RESTORED_TAB);
+
+    await vi.waitFor(() =>
+      expect(mocks.loggerError).toHaveBeenCalledWith(expect.stringContaining(SAVED_WEB_VIEW_ID)),
+    );
+    expect(mocks.reloadWebView).not.toHaveBeenCalled();
+  });
+
   test('says nothing louder than debug when the web view left the dock while it fetched', async () => {
     // The reload answers `undefined` for a web view that is no longer in this window's dock — a
     // layout load that took the dock wholesale while the tab was still fetching, or the tab being

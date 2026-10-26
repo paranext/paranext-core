@@ -30,7 +30,8 @@ export const CONFIRM_DIALOG_TYPE = 'platform.confirm';
  */
 export const RESOURCE_PICKER_DIALOG_TYPE = 'platform.resourcePicker';
 /**
- * The tabType for the project picker dialog in `project-picker.dialog.tsx`
+ * The tabType for the project picker dialog in `project-picker.dialog.tsx`. Lists the user's
+ * projects only — editable and read-only — never published resources.
  *
  * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
  *   It is not yet a stable contract.
@@ -118,7 +119,8 @@ export type ResourcePickerDialogOptions = DialogOptions & {
 };
 
 /**
- * Options to provide when showing the Project Picker dialog (no extra options needed)
+ * Options to provide when showing the Project Picker dialog (no extra options needed). The dialog
+ * lists the user's projects only — editable and read-only — never published resources.
  *
  * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
  *   It is not yet a stable contract.

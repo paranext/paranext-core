@@ -231,6 +231,37 @@ describe('content arriving through a door that names no caller', () => {
   });
 });
 
+describe('waitForWebViewProviderToRegister', () => {
+  test('asks the provider lookup to wait patiently, not the shorter one-shot wait', async () => {
+    // This is what retrieveWebViewContent calls BEFORE reloadWebView for a tab restore — reloadWebView
+    // itself always takes the shorter, one-shot path; using a longer wait time to get the provider
+    // is exclusive to `waitForWebViewProviderToRegister`.
+    const { waitForWebViewProviderToRegister } = await import(
+      '@renderer/services/web-view.service-shard'
+    );
+    await primeProvider();
+    const { webViewProviderService } = await import('@shared/services/web-view-provider.service');
+
+    await waitForWebViewProviderToRegister('test.type');
+
+    expect(webViewProviderService.getWebViewProvider).toHaveBeenCalledWith('test.type', true);
+  });
+});
+
+describe('reloadWebView always uses the shorter, one-shot provider wait', () => {
+  test('never asks the provider lookup to wait patiently, even for a plain reload', async () => {
+    // Only `waitForWebViewProviderToRegister` should call `getWebViewProvider` with a request for
+    // a more patient wait.
+    const { shard } = await shardOverDockRecordingAdds();
+    await primeProvider();
+    const { webViewProviderService } = await import('@shared/services/web-view-provider.service');
+
+    await shard.reloadWebView('test.type', 'open-view');
+
+    expect(webViewProviderService.getWebViewProvider).toHaveBeenCalledWith('test.type', false);
+  });
+});
+
 describe('a failed reload of an open web view', () => {
   test('leaves the live view alone: no close event, state kept, error logged', async () => {
     const { shard } = await shardOverDockHoldingLiveView();

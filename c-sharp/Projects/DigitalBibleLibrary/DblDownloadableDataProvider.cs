@@ -18,11 +18,12 @@ internal class DblResourcesDataProvider(
     Func<List<InstallableResource>>? fetchCatalog = null
 ) : NetworkObjects.DataProvider("platformGetResources.dblResourcesProvider", papiClient)
 {
-    // These UIDs determine which DBL catalog entries are classified as CommentaryResource.
-    // The TypeScript `useCommentaryMarkerStyles` hook (extensions/src/platform-scripture-editor/src/
-    // use-commentary-marker-styles.hook.ts) keeps a parallel map and may include additional legacy
-    // UIDs for locally-installed resources predating a DBL UID reassignment — those extra entries
-    // are intentionally absent here since we no longer serve those UIDs from the catalog.
+    // These UIDs determine which DBL catalog entries are classified as CommentaryResource. The
+    // TypeScript `useCommentaryMarkerStyles` hook (extensions/src/platform-scripture-editor/src/
+    // use-commentary-marker-styles.hook.ts) and `LOCAL_COMMENTARY_UIDS`
+    // (extensions/src/platform-get-resources/src/get-local-non-dbl-resources.utils.ts) keep
+    // matching lists; change all three together. TNN and North Tanna (`tnn`, 72dd0b9b0f2b4024, a
+    // Scripture text) have short names that differ only in case; don't mistake one for the other.
     private static readonly HashSet<string> CommentariesWhiteList =
     [
         // UBS Translator's Handbook
@@ -31,13 +32,13 @@ internal class DblResourcesDataProvider(
         "77dc05b26ce399dd", // HBKCT — Chinese (Traditional)
         "815f988992157b10", // HBKFRA — French
         "24daa5f24f0020b3", // HBKPT — Portuguese
-        "1ff24938918bd69e", // HBKESP — Spanish
-        // UBS Translator's Notes
-        "72dd0b9b0f2b4024", // TNN — English (UID reassigned in DBL; old UID 090f7cbf7924b245 now belongs to a different resource)
+        "1ff24938918bd69e", // HBKESP — Spanish (filtered out by DblResourceWhiteList until PT-3805; kept to match the TypeScript lists)
+        // SIL Translator's Notes
+        "090f7cbf7924b245", // TNN — English
         "0617c397f003127c", // TNNESP — Spanish
         "233345361843ce8b", // TNNPTG — Portuguese
         "d95fde28b4346e61", // TNNFR — French
-        // UBS Translator's Notes (Deuterocanon)
+        // SIL Translator's Notes (Deuterocanon)
         "b58b80b798e22be6", // TND — English
         "943164c222f75687", // TNDESP — Spanish
         "e0b3f20ff8677585", // TNDPTG — Portuguese

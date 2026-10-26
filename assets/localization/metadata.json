@@ -140,6 +140,15 @@
       "message": "The tour's left-column stop now names both Base and Model texts rather than the model text alone. The new key is %onboardingTour_step_baseOrModelText_title%."
     }
   },
+  "%onboardingTour_step_profile_description%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "The tour's profile stop now also names the Simple / Power switch in the User menu. The new key is %onboardingTour_step_profile_description_2%."
+    }
+  },
+  "%onboardingTour_step_profile_description_2%": {
+    "fallbackKey": "%onboardingTour_step_profile_description%"
+  },
   "%onboardingTour_step_sendReceive_description%": {
     "deprecationInfo": {
       "date": "2026-10-13",
@@ -375,11 +384,38 @@
     "notes": "The tooltip text for the undo button in the common undo/redo control used in various editors.",
     "fallbackKey": "%Paratext.Base.ProjectComments.CommentEditorForm.uiUndo.ToolTipText%"
   },
+  "%userProfile_interfaceMode_power_description%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Power mode is now described as a configurable interface to use alongside Paratext 9 rather than the full Paratext interface. The new key is %userProfile_interfaceMode_power_description_2%."
+    }
+  },
+  "%userProfile_interfaceMode_power_description_2%": {
+    "fallbackKey": "%userProfile_interfaceMode_power_description%"
+  },
+  "%userProfile_interfaceMode_simple_description%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Simple mode is now described by what it supports (basic exegesis, drafting and AI checks) rather than as focused translation work. The new key is %userProfile_interfaceMode_simple_description_2%."
+    }
+  },
+  "%userProfile_interfaceMode_simple_description_2%": {
+    "fallbackKey": "%userProfile_interfaceMode_simple_description%"
+  },
   "%userProfile_networkSettings%": {
     "deprecationInfo": {
       "date": "2026-07-26",
       "message": "Renamed to \"Internet & connectivity\" to match the internet settings panel. The new key is %userProfile_networkSettings_2%."
     }
+  },
+  "%userProfile_server_badge_development%": {
+    "notes": "Usually left untranslated (falling back to the English \"Development\") since this badge targets a dev/support audience who will likely recognize the terse English environment name regardless of interface language. Translate it if that reasoning doesn't hold in your language or script — it is not required to match the English string. The tooltip, %userProfile_server_tooltip_development%, should still be translated: it carries the full explanation for anyone who ends up on this server."
+  },
+  "%userProfile_server_badge_qualityAssurance%": {
+    "notes": "Usually left untranslated (falling back to the English \"QA\") since this badge targets a dev/support audience who will likely recognize the terse English environment abbreviation regardless of interface language. Translate it if that reasoning doesn't hold in your language or script — it is not required to match the English string. The tooltip, %userProfile_server_tooltip_qualityAssurance%, should still be translated: it carries the full explanation for anyone who ends up on this server."
+  },
+  "%userProfile_server_badge_test%": {
+    "notes": "Usually left untranslated (falling back to the English \"Test\") since this badge targets a dev/support audience who will likely recognize the terse English environment name regardless of interface language. Translate it if that reasoning doesn't hold in your language or script — it is not required to match the English string. The tooltip, %userProfile_server_tooltip_test%, should still be translated: it carries the full explanation for anyone who ends up on this server."
   },
   "%yes%": {
     "notes": "A confirmation word used in many places. For example, this may be used as the label on a button on a dialog.",

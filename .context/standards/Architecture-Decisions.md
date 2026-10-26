@@ -866,6 +866,211 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   **Revisit** as its own change, with `paratext-10-studio` in scope.
 - **Source:** the multi-agent review of #2654, finding 25.
 
+## adr-chapter-marker-repair-at-the-save-boundary: A chapter's `\c` marker is repaired on the way out, in both write layers
+
+- **Date:** 2026-09-14
+- **Status:** Accepted
+- **Context:** `ScrText.ValidateChapterNumber` (in PT9 `ParatextData/ScrText.cs:1050`) refuses a
+  chapter write whose `\c` marker disagrees with the chapter being written — a wrong number, a
+  second marker typed mid-chapter, a deleted marker, or (for any chapter after the first) any
+  content at all ahead of the marker. The refusal does not touch the editor, so the offending
+  document stays on screen and every LATER save of that chapter is refused too: editing a chapter
+  marker silently stopped the chapter saving, with nothing on screen to say so (PT-4608). Paratext 9
+  does not prevent the edit. Its editor repairs the USFM inside its own save path —
+  `UsfmEditorTextLoader.FixChapterNumbers`, in PT9
+  `ParatextBase/ScriptureEditor/UsfmEditorTextLoader.cs:355` — and reloads the editor onto the
+  repaired text with `Revert()` (same file, `:277-278`), so the typing is allowed and the document
+  is made writable on its way out. PT9 tells the user only in the mid-chapter-marker case, the one
+  shape for which `FixChapterNumbers` sets an error message (`:409`, surfaced at `:318-319`);
+  notifying on every repair is our own choice, recorded in the Decision below.
+- **Decision:** Repair at the save boundary, and do it in **both** write layers rather than picking
+  one.
+  - The renderer repairs the USJ before the PDP write
+    (`extensions/src/platform-scripture-editor/src/chapter-marker-repair.util.ts`), pushes the
+    repaired document back into the editor, and notifies the user — the push-back is what stops the
+    loop, since a bad marker left on screen is repaired and reported again on every subsequent save.
+  - C# repairs the USFM inside `SetChapterUsx`/`SetChapterUsfm`
+    (`c-sharp/Projects/ChapterMarkerCorrection.cs`) as a backstop for writers that do not correct
+    their own content, silently apart from a log line.
+  - **Book-level writes are never touched.** A book legitimately carries one `\c` per chapter, so
+    only a write aimed at a single chapter knows which marker is the right one. The mechanism is
+    the call graph, not a flag: `SetBookUsfm` and `SetBookUsx` never call the corrector at all — the
+    two chapter setters are its only call sites. Both ports separately return their input untouched
+    for a non-chapter number (the opening guard of `FixChapterMarkers` in
+    `c-sharp/Projects/ChapterMarkerCorrection.cs`, and of `repairChapterMarkers` in
+    `extensions/src/platform-scripture-editor/src/chapter-marker-repair.util.ts`), but that is a
+    defensive guard inside the algorithm rather than what keeps book writes safe.
+  - **Placement rule:** a restored marker for a chapter after the first goes at index 0
+    *unconditionally*. Nothing may precede it — not even an `\id` book node typed into the chapter —
+    because `verseRef.ChapterNum != 1 && parts[0] != ""` is "Text present before chapter marker."
+    (in PT9 `ParatextData/ScrText.cs:1067`), so a marker placed behind such a node yields another
+    document the writer refuses. Chapter 1 is the sole exception: its marker stays where the author
+    has it, behind the introduction, and may legitimately be absent altogether (Jude). This is the
+    one point at which the two ports can plausibly drift, and Paratext 9's table does not pin it (no
+    row puts text ahead of a later chapter's marker), so it is recorded here rather than left to be
+    re-derived.
+- **Alternatives:**
+  - **Block the edit in the editor** (refuse the keystroke, or revert the marker in place) —
+    rejected. Paratext 9 deliberately allows the typing and fixes it on save, and the editor's
+    chapter transform is written for that parity; policing marker edits in the editor would be a
+    behaviour change to the typing surface in order to work around a writer constraint.
+  - **C# only** — rejected. `useEditorPdpSync`
+    (`extensions/src/platform-scripture-editor/src/use-editor-pdp-sync.hook.ts`) defers an incoming
+    PDP update for up to `EDITOR_OWNERSHIP_WINDOW_MS` (15 s) while the editor is focused and
+    recently edited, so a backend-only correction would not reach the editor; the still-poisoned
+    editor document would simply be written over it on the next save. A correction the editor never
+    sees also cannot be explained to the user.
+  - **Renderer only** — rejected. It would leave every non-editor writer of a chapter (imports,
+    commands, future extensions) able to poison a chapter exactly as before.
+- **Consequences:** two ports of one algorithm now exist, over two different representations (USJ
+  nodes and USFM text), and they must not drift. Both are pinned to Paratext 9's own 16-row
+  `[TestCase]` table (in PT9 `ParatextBase.Tests/ScriptureEditor/UsfmEditorTextLoaderTests.cs:573`):
+  the C# port keeps all 16 rows, the USJ port keeps the 10 distinct behaviours (the other 6 rows
+  differ only in LF-vs-CRLF line endings, which USJ does not represent). Anything that changes one
+  port must change the other or explain why not. The C# port writes exactly what Paratext 9 writes,
+  including its layout of a correctly numbered marker whose line carries more than the marker:
+  `\c 2 \ca 3\ca*` is written as `\c 2` with ` \ca 3\ca*` on the next line, so a file keeps the
+  shape Paratext 9 gives it and does not flip between the two in its revision history. It differs
+  only in what it reports (decided in the PT-4608 review): Paratext 9 counts that layout as a fix and
+  reloads its editor, but `ValidateChapterNumber` reads the number only up to the first non-word
+  character, so the marker was never wrong and the C# port does not report it as a correction. The
+  USJ port has no such case to match: there `\ca` is the chapter's `altnumber` attribute, not text on
+  its line. For editor traffic the C# half is expected to find
+  nothing to correct, so a log line from it is a signal that the renderer repair has a gap.
+  The repair also removes a protection the refusal used to provide by accident: a save carrying one
+  chapter's content into another chapter was refused as a wrong chapter number, and once the marker
+  is renumbered to match, Paratext accepts it. The editor makes that save after navigation, because
+  it goes on holding (and letting the user type into) the chapter it is leaving until the new one
+  arrives, while its saves are already bound to the new chapter. So the web view drops any save
+  whose content is not from the chapter being written (`isEditorContentForChapter` in
+  `extensions/src/platform-scripture-editor/src/debounced-pdp-save.util.ts`, fed the editor's
+  document by `useEditorPdpSync`). The C# backstop has no such view of where its content came from,
+  and does not need one for editor traffic, which is guarded before it leaves the renderer.
+  The repair can only act on what the editor saves, so the editor saves a chapter line's bytes as
+  what they are once they stop being a chapter marker (`\ 2` after the `c` is deleted, another
+  marker typed over the `\c`, text typed ahead of it): its chapter settle replaces the chapter with
+  what those bytes tokenize to (scripture-editors `$rebuildChapter` and `chapterFragmentContent`).
+  The repair then puts the marker back above them, as Paratext 9 saves the bytes it holds and
+  restores the marker at the top of a later chapter; chapter 1 is left without one, as Paratext 9
+  leaves it. Text typed ahead of a later chapter's marker is the placement rule's case above,
+  reachable by typing, and `chapter-line-left-as-text.spec.ts` pins it end to end. Text typed
+  ahead of a marker with a paragraph before it joins the end of that paragraph instead
+  (`\mt1 Ruth X`), because USFM reads text behind a line break with no marker of its own as part of
+  the paragraph before it, which is where the save and the reload put it. The caret the user had in
+  such a line stays at the same character of it, in a marker typed over the `\c` as in its text
+  (`caretInMovedText` in `chapter-marker-repair.util.ts`).
+  **Revisit** if the editor ever gains a way to reject a marker edit at the source, or if Paratext
+  relaxes the "text before chapter marker" rule.
+- **Source:** PT-4608; Paratext 9 `UsfmEditorTextLoader.FixChapterNumbers` and its test table.
+
+## adr-chapter-marker-repair-replaces-the-document: The repair's push-back replaces the whole document and re-places the caret; keeping the undo stack is deferred to the editor
+
+- **Date:** 2026-09-16
+- **Status:** Accepted
+- **Context:** The renderer half of
+  [adr-chapter-marker-repair-at-the-save-boundary](#adr-chapter-marker-repair-at-the-save-boundary)
+  pushes the repaired document back with `EditorRef.setUsj`. The editor loads external content
+  through `LoadStatePlugin`
+  (`scripture-editors` `libs/shared-react/src/plugins/usj/LoadStatePlugin.tsx`): it parses a fresh
+  editor state, calls `editor.setEditorState`, and dispatches `CLEAR_HISTORY_COMMAND`
+  **unconditionally**. So every Lexical node key regenerates, the parsed state carries no selection,
+  and the caret the correction was made under disappears while the undo/redo stack is emptied. Hand
+  QA reported the vanished caret: the correction lands mid-typing, and the user is left with no
+  insertion point.
+- **Decision:** Keep the whole-document push-back, place a caret afresh at the correction, and
+  accept the emptied undo stack for now.
+  - The repair reports where the caret belongs in the coordinates of the document it produced
+    (`ChapterMarkerRepairResult.caretTarget`). The save path applies it once the editor has loaded
+    that document, and only when the editor held DOM focus at push-back time — an unfocused editor
+    has no claim on the shared document selection, and the editor itself skips selection
+    reconciliation when it loads content unfocused.
+  - A caret in a line the repair only moved stays at the same place in that line (see "what is
+    left of the chapter line" below). Otherwise the target is just past the corrected chapter
+    number; failing that, the boundary a removed marker occupied; failing that, the surviving
+    marker. A RESTORED marker (the document had none) is the exception: its caret goes to the end
+    of the document's text (`CARET_AT_DOCUMENT_END`), applied by focusing the editor with no
+    selection, which Lexical resolves to the root's end. A restore is reached by typing into a
+    chapter with no marker at all — in Power mode, a chapter the book has not reached yet — so the
+    user was typing at the end, and keys typed into the new marker would become part of the chapter
+    number for the next repair to correct away. It is also reached by deleting the marker of a
+    chapter with text (backspacing the chapter line away); when that deletion is the ONLY
+    difference from the stored chapter, the user was working on the chapter line, so the caret goes
+    back to just past the restored number instead (`prepareUsjForChapterSave`).
+  - **The push-back has to load, and the caret is placed whatever selection the load leaves.** A
+    marker edit reaches the editor's node state only when it settles, so correcting one still in
+    progress — a number just backspaced out of the glyph — hands the editor a document equal to its
+    node state. `EditorRef.setUsj` once measured against node state and skipped that load: the
+    numberless glyph stayed, the caret target past the number had nothing to resolve against, and
+    the caret stayed where `focus()` put it — the end of the chapter, where the next keys deleted
+    text. `setUsj` skips a document equal to either the settled document or node state, so that a
+    host re-sending the text as it was does not throw away an edit in progress; the editor cannot
+    tell that re-send from this correction, so the push-back forces the load
+    (`setUsj(usj, { force: true })`, `scripture-editors` `packages/platform/src/editor/Editor.tsx`).
+    A load can leave a stray browser selection where the replaced text was, so an existing selection
+    is not taken to be the user's caret.
+  - **The target is computed from the repair, except inside a line the repair only moved.** The
+    correction the user is standing in front of is where the caret belongs, and only the repair
+    knows where that ended up. Every target is a USJ location in the repaired document, which is
+    the document the editor is about to load: just past a corrected number is the end of the
+    chapter's `number` value (`{ jsonPath: "$.content[0]['number']", propertyOffset: 1 }`).
+  - **The exception: what is left of the chapter line keeps the user's caret**
+    (`caretInMovedText` in `chapter-marker-repair.util.ts`, ranked ahead of every target above).
+    When the chapter line's bytes stop being a chapter marker (`\ 2` once the `c` is deleted, `\sc 2`
+    once an `s` is typed into it), text is typed ahead of the marker, or the chapter line merges into
+    the paragraph below it (a selection from the chapter line into that paragraph, typed over), the
+    repair restores the marker above that line and moves the line down whole, and the user is still
+    typing in it — a computed target cannot know where. `EditorRef.getSelection()` reports the
+    caret in the document `getUsj()` returns, even while the line's edit is still pending on
+    screen, and that is the document the repair works on, so the caret keeps its exact place and
+    only the line's index changes. It is read only on the top-level line where the stored marker
+    stood; a caret anywhere else is never carried across.
+- **Alternatives:**
+  - **Apply the repair as OT delta ops (`EditorRef.applyUpdate`) instead of `setUsj`** — rejected
+    for now, though it would keep the history (no load, so no `CLEAR_HISTORY_COMMAND`). A chapter is
+    an opaque embed in `$applyUpdate`'s `"apply"` coordinates — every element embed is one unit and
+    its children are never descended into — so no op can edit a character out of a chapter's glyph
+    text. The wrong-number case, which is the common one, could then only be expressed as
+    replace-the-whole-embed, which regenerates the node key and loses the caret anyway. The editor
+    also records the editable-chapter coordinate divergence as accepted and unfinished ("no live flow
+    currently routes ops across an editable chapter into `$applyUpdate`", in `scripture-editors`
+    `libs/shared-react/src/plugins/usj/collab/delta-common.utils.ts`), and it exports no USJ→OT
+    position helper, so the host would compute retains itself — where a miscomputed retain splices
+    content silently rather than failing.
+  - **Repair inside the editor as node surgery, behind a new `EditorRef` method** — deferred, and
+    it would put a Paratext rule into the editor. One `editor.update()` that rewrites the marker's glyph (the glyph is the source
+    of truth: `$chapterNodeTransform` re-derives the number from it, so `ChapterNode.setNumber`
+    alone is overwritten) or removes the offending node would keep the caret through Lexical's own
+    reconciliation and push exactly one undo entry — the shape every other structural mutation on
+    `EditorRef` already has (`removeCharacterMarker`, `insertMarker`, `splitParagraphWithMarker`).
+    Deferred because it is a `scripture-editors` change, so it carries its own PR, committed-dist
+    rebuild and `platform-yalc` move; and because it has to handle the pending, unsettled literal
+    case inside the marker-edit tiers, which is the genuinely hard part. Which way to keep the undo
+    history — this, OT ops, or a generic history-preserving load in the editor — is open in PT-4818.
+- **Consequences:** after a correction the caret sits in the marker glyph, where typed characters
+  are marker bytes that the next repair corrects away again — the same fight any autocorrect has.
+  **None of this is announced.** The notice says only that the marker did not match the chapter and
+  was corrected; it does not say where the caret was put, that undo history is gone, or that
+  annotations were cleared. That is deliberate — one sentence a reader can take in beats a warning
+  nobody finishes — but it means the losses below are unmitigated, not merely explained. Undo and
+  redo history is emptied by every repair, so a user cannot undo back past a correction; that is a
+  known limitation tracked in PT-4818 rather than a property anyone should rely on.
+  **Every annotation is cleared too** — a load replaces the node
+  map, and the `TypedMarkNode`s that carry annotations live only in that tree, never in USJ. That is
+  not new to the repair (it is true of every `setEditorUsj` call, including the ordinary PDP echo)
+  and the local bookkeeping already follows it: `setEditorUsj` runs `clearAnnotationInfo`. What is
+  NOT announced outward is the clearing itself: a per-annotation removal normally sends the
+  annotation's `interactionCommand` with a `TypedMarkRemovalCause`, but a wholesale clear fires no
+  `onRemove` at all, so nothing is sent, and the editor exposes no event for it either. This is
+  pre-existing and accepted, not something the repair introduced. Anyone revisiting it should know
+  that `destroyed` is the wrong value to reuse: the published contract defines it as "when the text
+  the annotation was on is completely deleted", so a consumer acting on it could discard data whose
+  text is intact. No annotation set in this repo carries an `interactionCommand` today. Where the
+  editor puts a caret target on screen is pinned end to end
+  (`e2e-tests/tests/isolated/scripture-editor/chapter-marker-repair.spec.ts`,
+  `chapter-marker-deleted.spec.ts` and `chapter-line-left-as-text.spec.ts` read the web view's own
+  DOM selection). **Revisit** with PT-4818.
+- **Source:** PT-4608 hand QA.
+
 ## adr-character-marker-removal-peels-one-layer: Character-marker removal peels one nesting layer per activation; the row is labelled to match rather than looping
 
 - **Formerly:** ADR-0011
@@ -2865,7 +3070,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
 - **Formerly:** ADR-0016
 - **Date:** 2026-08-18
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-10-23 — records one exception, `ResourceMessageView`'s optional
+  action button
 - **Context:** PT-4111 needed a zero-state carrying a title, a description, and an optional action
   button (the scripture editor's "this book is not in this project" state, whose Power-mode variant
   offers a Manage Books button). Three candidate shapes already existed and nothing said which to
@@ -2913,6 +3119,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4111 design + implementation. (The original design note lives under gitignored
   `docs/superpowers/specs/`, so it is not a citable reference — the reasoning is reproduced here
   precisely because that path is not readable from the repo.)
+- **Amended 2026-10-23 (PT-4780):** one recorded exception. `ResourceMessageView`'s optional action
+  button sits beside `EmptyState` rather than inside `Empty`, because most of its callers show the
+  sentence alone and it must look the same either way. The reasoning is in the 2026-10-22 amendment
+  to `adr-resource-missing-book-message`.
 
 ## adr-extension-host-exits-on-lost-connection: The extension host exits when its connection to main dies; main relays the stop to every window, and the user restarts it
 
@@ -3530,6 +3740,59 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   title header was removed by team decision, and PT9's own pane likewise closes via a corner button
   rather than a toggle in a title bar.
 - **Source:** PT-4189, PT-4478.
+- **Amended 2026-10-22 (PT-4846):** Partly superseded by `adr-footnote-pane-editing-in-simple-mode`.
+  Simple mode's Formatted view is now in scope for the pane: it resolves to `'pane'`, not
+  `'popover'`, and a caller click reveals a hidden pane there too, not only in Power mode. The
+  surface helper's input is a `usesPaneModel` flag (from `usesPaneNoteModel`) rather than the view
+  type, and `resolveCallerHighlight` takes the same flag. Everything else above stands.
+
+## adr-footnote-pane-editing-in-simple-mode: Simple mode edits footnotes in the footnotes pane, like Standard view
+
+- **Date:** 2026-10-22
+- **Status:** Accepted
+- **Context:** Simple mode edited footnotes in a popover while Power's Standard view edits them in
+  place in the footnotes pane (`adr-footnote-editing-surface-per-view`). A UX review found the
+  popover fighting the main editor in Simple: the character-style control acting on the main text
+  while it was open (PT-4836), applying the keyword marker adding a paragraph (PT-4834), Escape not
+  closing it (PT-4096), and the popover drifting off-screen when zooming. UX decided Simple should
+  edit footnotes as Power does, showing markers in the pane and editing there.
+- **Decision:** One pure predicate, `usesPaneNoteModel({ viewType, isPowerMode,
+  isInterfaceModeLoading })` in `platform-scripture-editor.utils.ts`, decides whether a view uses
+  the pane note model: Standard view, and Simple's Formatted view. Power's Formatted and Markers
+  views and Simple's Markers view (read-only, notes expanded) keep their note-editing behavior;
+  while `platform.interfaceMode` is still loading only Standard counts, so a Power user never
+  briefly gets Simple's answer. Every note check that was Standard-only in the scripture editor web
+  view goes through it — the editing surface, the caller-click decision, navigation to a picked
+  note, the caller highlight, and the pane taking focus in a read-only text — and
+  `note-pane-model-wiring.contract.test.ts` fails on any new check of the view against
+  `'standard'` anywhere in the extension's non-test sources (`===`, `!==`, either operand order, or
+  a `case`). In Simple, the pane and its row editor get Standard view's view options
+  (`resolveFootnotesPaneViewOptions`) in both of Simple's views, so the pane shows markers in
+  Markers view too, while the main text keeps Simple's. Four things stay Standard-only on purpose: Standard's own view options, the Ctrl+T /
+  Ctrl+Shift+T insert shortcuts (insertion, not editing), the project stylesheet mode, and the
+  main text's `\` marker-menu trigger (which Standard view does not use). An open popover is not
+  closed when switching from Power to Simple: its text applies only on Save, so closing it would
+  discard what was typed. That one session ends through its own Save or X. Until it does, caller
+  clicks are ignored, as a second caller click already is in Power's Formatted view, and a pane-row
+  click or Enter only moves the text to its note, as Space on the row does.
+- **Alternatives:**
+  - **Keep the popover in Simple and fix its bugs one by one.** Rejected by UX: two editing models
+    for one product, and the popover's problems come from being a second editor floating over the
+    first.
+  - **Put Simple in Standard view.** Rejected: Simple pairs with structure protection and its main
+    text must keep hiding markers (`resolveViewTypeForInterfaceMode`).
+  - **Put Simple's Markers view on the pane model too.** Rejected: Power's Markers view is not on
+    it, and the view is read-only with its notes already expanded in the text.
+- **Consequences:** The footnotes pane now opens in Simple on a caller click, and stays open until
+  the user closes it, as in Power. Simple's character-marker bar is wired to the main editor, so it
+  still acts on the main text while a pane row editor has focus; Power has nothing equivalent to
+  copy, and PT-4836 tracks it. The row editor in Simple runs Standard's editable marker mode, so the
+  `\` marker palette and Enter-for-`\fp` work there as in Standard view. For the latter it runs with
+  structure protection `'off'`, as Power's does, whatever the project's lock state: a note has no
+  verse or paragraph structure of its own to protect, its edits only ever replace the note, and
+  `'protected'` claims Enter as a paragraph insert before the note's `\fp` handling can run. The main
+  text keeps the project's protection mode.
+- **Source:** PT-4846.
 
 ## adr-footnote-unclosed-note-edited-in-place: In Standard view an unclosed note is edited in place in the text, and in the footnotes pane too
 
@@ -4553,7 +4816,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   four Inventories, Markers Checklist, or Open Checks. That follows the v0 Simple design, which has
   no quality tools in the Project menu; UX has not yet confirmed it. Auto-show footnote pane
   (`platformScriptureEditor.toggleFootnotesAutoShow`) is Power-only too, because Simple keeps PT9's
-  manual footnotes pane: Show footnotes opens it and it stays open. The Edit flyout's ids are not
+  manual footnotes pane: Show footnotes opens it and it stays open. *(Amended 2026-10-22: a caller
+  click now also opens Simple's pane — see `adr-footnote-pane-editing-in-simple-mode`; only the
+  auto-show toggle stays Power-only.)* The Edit flyout's ids are not
   registered commands, and `KeyboardShortcutEntry.command` is typed to registered commands, so
   those items cannot show a shortcut hint even though Ctrl+Z, Ctrl+Y and the clipboard chords work
   in the editor.
@@ -5296,6 +5561,51 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   is the static-asset half of the same shape and does not cover it.
 - **Source:** the `paratext-10-studio` notices design of 2026-09-04.
 
+## adr-offered-interface-languages-allowlist: The interface languages offered to users are an explicit allowlist, not a coverage rule
+
+- **Date:** 2026-09-25
+- **Status:** Accepted
+- **Context:** Locale files ship for languages at very different stages. As of 2026-09-24, `es`
+  covered ~97% of the core strings (~75% app-wide, counting bundled extensions), `fr`/`zh-*` ~6%,
+  and `km` 0%. The first-run setup-dialog threshold (`setup-dialog-languages.util.ts`
+  `computeSetupDialogLanguages`) only measures the `%firstRun_` namespace, so a French or Chinese
+  OS was auto-switched into a mostly-English UI. Product decided to offer only English and Spanish
+  for the Nov 2026 release (PT-4751).
+- **Decision:** `OFFERED_INTERFACE_LANGUAGES` (`src/shared/data/interface-languages.data.ts`)
+  filters `getAvailableInterfaceLanguages` and `getSetupDialogLanguages`, so every picker and the
+  OS-locale default see only offered languages. Locale files, string resolution and the
+  setup-dialog threshold are unchanged. The `platform.interfaceLanguage` validator accepts any
+  loaded locale (`getAllLoadedInterfaceLanguages`), so a hidden language that is already set is
+  honored, never reset:
+  - Each picker keeps the current language listed (`includeCurrentLanguages`): Settings lists every
+    stored tag, since it shows the fallbacks too; the popover and the first-run step list only the
+    primary.
+  - Picking a language writes one value in all three pickers (`switchInterfaceLanguage`): the
+    chosen language first, then the other current languages that are offered. A hidden language is
+    dropped when the user switches away from it, since no picker can remove a fallback.
+  - The first-run OS-locale default writes only while the setting is still unset, empty or `['en']`.
+  - Some UI keeps the old language until restart (the main menu bar, PT-4503; the Settings labels),
+    so Settings and the popover offer a restart after a change of primary language, and withdraw
+    the offer when the user switches back to the language the window started with. The first-run
+    step does not offer one.
+- **Alternatives:** Filtering in each renderer surface (several places to keep in sync; PAPI
+  consumers would still see hidden languages). Excluding hidden locale files from the build (removes
+  the only way to test those translations; re-enabling means restoring assets). A coverage threshold
+  (the only existing one measures the setup dialog, which is what caused the bad auto-pick).
+  Resetting a hidden language to English on startup (overrides deliberate testers and translators
+  every launch). Keeping hidden languages as fallbacks after a switch (they could not be removed
+  again in any picker). Keeping `getAvailableInterfaceLanguages` unchanged and adding a separate
+  offered-languages data type or an `isOffered` flag (additive for extensions, but every core picker
+  would move to the new type, and nothing outside core was found using the getter).
+- **Consequences:** Offering a language is a one-line code change (plus the tests that pin the
+  list); `src/node/data/offered-interface-languages.test.ts` fails if an offered tag has no locale
+  file or misses the setup-dialog threshold. A value stored before this change keeps its
+  not-offered fallbacks until the user next picks a different language (e.g. `["es","fr"]` still
+  falls back to French). The public `getAvailableInterfaceLanguages` now means "offered", not "every
+  locale file"; PAPI has no way to list hidden languages. PT-4457 (offer languages by translation
+  coverage) is expected to supersede the list; its rule must measure app-wide coverage, not only
+  `%firstRun_`. Revisit when French is ready.
+
 ## adr-one-reference-scroll-hook-parameterized-by-verse-anchor: The Text Collection has one reference-scroll controller, parameterized by how a verse is found
 
 - **Date:** 2026-09-16
@@ -5349,51 +5659,6 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   widening this change into a file #2781 does not touch. Revisit if a layout ever needs a genuinely
   different scroll *policy* rather than a different anchor or visibility test.
 - **Source:** PT-4543.
-
-## adr-offered-interface-languages-allowlist: The interface languages offered to users are an explicit allowlist, not a coverage rule
-
-- **Date:** 2026-09-25
-- **Status:** Accepted
-- **Context:** Locale files ship for languages at very different stages. As of 2026-09-24, `es`
-  covered ~97% of the core strings (~75% app-wide, counting bundled extensions), `fr`/`zh-*` ~6%,
-  and `km` 0%. The first-run setup-dialog threshold (`setup-dialog-languages.util.ts`
-  `computeSetupDialogLanguages`) only measures the `%firstRun_` namespace, so a French or Chinese
-  OS was auto-switched into a mostly-English UI. Product decided to offer only English and Spanish
-  for the Nov 2026 release (PT-4751).
-- **Decision:** `OFFERED_INTERFACE_LANGUAGES` (`src/shared/data/interface-languages.data.ts`)
-  filters `getAvailableInterfaceLanguages` and `getSetupDialogLanguages`, so every picker and the
-  OS-locale default see only offered languages. Locale files, string resolution and the
-  setup-dialog threshold are unchanged. The `platform.interfaceLanguage` validator accepts any
-  loaded locale (`getAllLoadedInterfaceLanguages`), so a hidden language that is already set is
-  honored, never reset:
-  - Each picker keeps the current language listed (`includeCurrentLanguages`): Settings lists every
-    stored tag, since it shows the fallbacks too; the popover and the first-run step list only the
-    primary.
-  - Picking a language writes one value in all three pickers (`switchInterfaceLanguage`): the
-    chosen language first, then the other current languages that are offered. A hidden language is
-    dropped when the user switches away from it, since no picker can remove a fallback.
-  - The first-run OS-locale default writes only while the setting is still unset, empty or `['en']`.
-  - Some UI keeps the old language until restart (the main menu bar, PT-4503; the Settings labels),
-    so Settings and the popover offer a restart after a change of primary language, and withdraw
-    the offer when the user switches back to the language the window started with. The first-run
-    step does not offer one.
-- **Alternatives:** Filtering in each renderer surface (several places to keep in sync; PAPI
-  consumers would still see hidden languages). Excluding hidden locale files from the build (removes
-  the only way to test those translations; re-enabling means restoring assets). A coverage threshold
-  (the only existing one measures the setup dialog, which is what caused the bad auto-pick).
-  Resetting a hidden language to English on startup (overrides deliberate testers and translators
-  every launch). Keeping hidden languages as fallbacks after a switch (they could not be removed
-  again in any picker). Keeping `getAvailableInterfaceLanguages` unchanged and adding a separate
-  offered-languages data type or an `isOffered` flag (additive for extensions, but every core picker
-  would move to the new type, and nothing outside core was found using the getter).
-- **Consequences:** Offering a language is a one-line code change (plus the tests that pin the
-  list); `src/node/data/offered-interface-languages.test.ts` fails if an offered tag has no locale
-  file or misses the setup-dialog threshold. A value stored before this change keeps its
-  not-offered fallbacks until the user next picks a different language (e.g. `["es","fr"]` still
-  falls back to French). The public `getAvailableInterfaceLanguages` now means "offered", not "every
-  locale file"; PAPI has no way to list hidden languages. PT-4457 (offer languages by translation
-  coverage) is expected to supersede the list; its rule must measure app-wide coverage, not only
-  `%firstRun_`. Revisit when French is ready.
 
 ## adr-one-shot-launch-parameters: One-shot launch parameters on `open*` commands: optional scalar, options field, scrubbed on rebuild
 
@@ -7568,19 +7833,22 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 ## adr-resource-missing-book-message: A missing book in a *published resource* is mode-agnostic and action-free; a *project* splits Simple/Power
 
 - **Date:** 2026-08-20
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-10-22 — the Model text panel's message offers a pick button when
+  the user chose the text themselves
 - **Context:** PT-4132 needed the "book not in this text" state for the Model text and Bible
   texts/Commentaries panels, and the ticket asked to "compare expected behavior for PT-4111", which
   had just built `BookNotAvailableView` with a deliberate Simple/Power split. The obvious reading was
   to reuse that view, or to mirror its shape with a second interface-mode branch.
 - **Decision:** Resource panels get ONE message for both interface modes, with no action button, via
-  a separate `ResourceBookNotAvailable` component. The Simple/Power split in `BookNotAvailableView`
+  a separate `ResourceBookNotAvailable` component. *(Amended 2026-10-22: the Model text panel adds a
+  pick button when the user chose the text; see the amendment below.)* The Simple/Power split in `BookNotAvailableView`
   exists solely because a *project* missing a book is **actionable** in Power (Manage Books can
   create it). A published resource cannot gain a book in either mode, so both arms would say the same
   thing. PT-4111's own `isResource` branch already ignores interface mode for exactly this reason.
   The panels swap only their content area, leaving the header mounted — the resource panel's selector
   is the user's real remedy (switch to a text that has the book), and the model panel's label at
-  least attributes the message to a named text.
+  least attributes the message to a named text. *(Amended 2026-10-22: that label is now a button
+  when the user chose the text.)*
 
   **Scope limit, known and deliberate.** "Published resource" is not the whole of what these panels
   display. The Bible texts tab also lists real Paratext projects (`isProjectReference` in
@@ -7613,7 +7881,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   target, and does not repeat the `role="status"` that `EmptyState` already sets. Every surface that
   shows this sentence renders it through that one component — the two resource panels and the main
   editor's `isResource` branch — so the wording, styling, live-region announcement, and focus repair
-  cannot drift apart between them.
+  cannot drift apart between them. *(Amended 2026-10-22: an optional action button may now sit beside
+  the `EmptyState`, outside its live region — a recorded exception to that ADR's "an action means
+  `Empty`", explained in the amendment below.)*
 
   The message is shown only when the failure names BOTH the book and the project the view is
   displaying right now, compared in the RENDER BODY rather than latched when the failure arrived.
@@ -7693,6 +7963,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4132 (Empty state needs to be improved for the Model and Bible texts). Premise
   scope, the shared-decision correction, and the `isLoading` mechanism correction from PR #2704
   review.
+- **Amended 2026-10-22 (PT-4780):** when the admin has chosen no model text, the text on screen is
+  the user's own (`source: 'user'`), and the user CAN remedy a missing book by picking another. There
+  the Model text panel's message offers "Pick model text…" through `ResourceBookNotAvailable`'s
+  optional `action`, and its header is a button that opens the same picker. When the admin chose the
+  text, the message names the team layout instead and has no action. The Bible texts/Commentaries
+  panel and the main editor are unchanged. The button sits beside `EmptyState`, not inside `Empty`:
+  `EmptyDescription` would style the sentence differently whenever a button follows it, and the
+  action-free callers would then render the same sentence a second way. Rejected: a header button
+  alone, which left the message's own advice unfollowable from the message.
 
 ## adr-resource-panes-name-their-zoom-areas: The Text Collection grid and the Bible Texts / Commentaries / Model Text panels each name their own zoom area, because they share one project identity; Enhanced Resources retires its private zoom
 
@@ -8230,7 +8509,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Alternatives:** Leave each surface to scope its own list — rejected: that is the bug, and the
   two definitions drifted apart within one component. Reset the language selection when the type
   filter changes — rejected: in Get Resources that selection is persisted web view state seeded from
-  installed resources, so a reset destroys a user's choice on a transient type change. Drop a
+  installed resources, so a reset destroys a user's choice on a transient type change. *(Amended
+  2026-10-22: PT-4700 removed the seeding, so the selection starts empty. The rejection still holds,
+  because a reset would still destroy a language the user picked.)* Drop a
   hidden value the next time the selection changes — rejected: it is the same loss by a different
   route, and it makes the result depend on the path the user took: widening the type filter first
   brings the language back, while toggling any other language first loses it. Pass the raw
@@ -10139,6 +10420,48 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   stylesheet, but only the e2e spec checks the cascade against the real editor styles.
 - **Source:** PT-4544 (WI-18), serving TODD-NTH-1.1/1.2 and TODD-NTH-1.3's residual grip.
 
+## adr-wait-for-network-object-rejects-with-platform-error: A bounded network-object wait distinguishes a genuine timeout from any other failure via `PlatformError.code`, not by inspecting the rejection's shape
+
+- **Date:** 2026-10-20
+- **Status:** Accepted
+- **Context:** `waitForWebViewProviderPatiently` (see `adr-web-view-provider-retry-scoped-to-tab-restore`)
+  re-arms a bounded `waitForNetworkObject` wait, up to a total budget, when a webview provider's
+  owning extension may still be activating. Its catch block could not tell a genuine per-arm timeout
+  apart from any other rejection — `waitForNetworkObject` collapsed both a timeout and a failed
+  `getAllNetworkObjectDetails()` snapshot read into one plain rejection reason string, by design
+  (`AsyncVariable` tracks `hasTimedOut` internally, but that flag never survived past
+  `waitForNetworkObject`'s own return). A loop that cannot tell the two apart either retries blindly
+  on any failure — hammering the main process with repeated IPC round trips and delaying a real,
+  non-recoverable error by the full patient budget instead of surfacing it immediately — or cannot
+  retry at all.
+- **Decision:** `waitForNetworkObject` (`network-object-status.service.ts`) now rejects with a
+  `PlatformError` instead of a bare string: `code` is `DEADLINE_EXCEEDED` when `asyncVar.hasTimedOut`,
+  `UNKNOWN` otherwise. This widens `waitForNetworkObject`'s public contract
+  (`NetworkObjectStatusServiceType`), used by multiple call sites (scroll-group
+  service, startup-readiness, etc.), but needs no change to `AsyncVariable` itself: `waitForNetworkObject` already holds the
+  `asyncVar` instance and can read `hasTimedOut` before it returns, so the wrapping happens entirely
+  at this one layer. A caller that needs to distinguish the two reasons checks `isPlatformError(e) && e.code === DEADLINE_EXCEEDED`;
+  any other caller is unaffected, since each either propagates the rejection untouched or formats
+  it through `getErrorMessage`, which already treats a `PlatformError` as a first-class message
+  source.
+- **Alternatives:** **Widen `AsyncVariable`'s rejection type directly** — rejected: `AsyncVariable`
+  is a generic utility with multiple unrelated consumers (not all network-object waits), so changing its
+  shared type would ripple through call sites that have nothing to do with this decision, for no
+  benefit to them. **Inspect the rejection message string** (e.g. match `/^Timeout reached/`) —
+  rejected: it is a string the function itself generates, so any future wording change would
+  silently re-break the distinction, exactly the brittleness `PlatformError.code` exists to avoid.
+  **Leave the retry loop retrying on any rejection** — rejected (the status quo this decision fixes):
+  it hammers the main process with repeated IPC round trips on a fast-failing, non-timeout error, and
+  delays that error from surfacing in ~20s to up to the full patient budget.
+- **Consequences:** `waitForNetworkObject`'s documented contract now promises a `PlatformError`, not
+  a bare string, on rejection — a new caller should rely on that rather than re-deriving a reason
+  string. This establishes the pattern for any future bounded-retry loop in this codebase that needs
+  to distinguish "the operation can still be retried" from "this failure will recur no matter how
+  many times we ask": reject with a `PlatformError` carrying the right `code`, rather than inventing
+  a new out-of-band signal or parsing a message string.
+- **Source:** PT-4734 (PR #2901); architect input mid-review on using `PlatformError`'s `code` field
+  for this.
+
 ## adr-web-view-content-zoom-in-iframe-shortcuts: Content-zoom chords are handled by a platform-injected bootstrap inside each web view
 
 - **Date:** 2026-09-15
@@ -10434,6 +10757,80 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   The mount-time focus in `platform-panel.component.tsx` is unchanged, since a reload does not
   remount the panel.
 - **Source:** PT-4534 (review of #2847), found checking the Checks tab in the running app.
+
+## adr-web-view-provider-retry-scoped-to-tab-restore: A tab-restore request and the extension-reload re-fetch get the webview provider's patient retry; a fresh `openWebView()` keeps the shorter 20s failure
+
+- **Date:** 2026-10-20
+- **Status:** Accepted — the 2-minute budget is a bounded patch, not a full fix; see the deferred
+  alternative at the end of Alternatives.
+- **Context:** `getWebViewProvider` (`web-view-provider.service.ts`) waited a single, fixed 20
+  seconds for a webview provider's network object to register, then gave up permanently. On a cold
+  launch, several bundled extensions can take long enough that any tab whose provider did not
+  complete its registration in time could render as an empty placeholder — unconditionally mounted
+  at layout load on every Simple-mode launch, and so exposed to this race on every cold start.
+  `waitForNetworkObject` already listens for `onDidCreateNetworkObject`; the gap was that
+  `getWebViewProvider`'s single wait never re-armed after giving up. On Windows, it was confirmed
+  empirically that Windows Defender's real-time scan on a cold file read was responsible for the
+  extra delay, during `require()` rather than `activate()`.
+- **Decision:** `retrieveWebViewContent` (`web-view.component.tsx`) calls
+  `waitForWebViewProviderToRegister` (`web-view.service-shard.ts`) BEFORE calling `reloadWebView`.
+  Both of `retrieveWebViewContent`'s callers get this patience — a tab-restore request and the
+  `platform.onDidReloadExtensions` re-fetch for every open tab — since neither is a user action and
+  both can hit the same still-activating-extension race. `waitForWebViewProviderToRegister` re-arms
+  the same 20-second wait up to a 2-minute total budget before propagating the final rejection; once
+  it resolves, `reloadWebView` → `openOrReloadWebView` → `getWebViewProvider` run exactly as they
+  always have, with a single, shorter 20-second wait. Every other caller — a fresh `openWebView()`
+  request, the error boundary's retry, a PAPI-triggered reload — never calls
+  `waitForWebViewProviderToRegister` and so uses the shorter 20-second wait. Whether the
+  extension-reload re-fetch should keep this same scope, or be narrowed to only the tabs whose
+  extension is actually still activating, is a separate, still-open question. As of 2026-10-22, it
+  was confirmed reachable through `paratext-bible-internal-extensions`'
+  `paratext-bible-marketplace` extension's "Manage extensions" menu, which can fire
+  `onDidReloadExtensions` while other tabs are open. PT-4803 (PR #2908) removes that menu item for
+  unrelated product-priority reasons, so this question's near-term urgency is lower, but the
+  underlying race returns whenever the menu does, or sooner if another caller reaches
+  `manageExtensions` first. Tracked by PT-1993, the epic that would bring the menu back — not
+  PT-2274 ("Deploy Marketplace"), whose own subtasks are already closed, which makes it a poor
+  anchor for when this resurfaces despite being the more specific-sounding ticket.
+- **Alternatives:** Re-arm the wait uniformly inside `getWebViewProvider` itself, with no caller-side
+  opt-in — rejected because it would apply the same ~2-minute patience to a fresh, explicit
+  `openWebView()` request too: a Power-mode user choosing "Open X" from a menu would see that request
+  silently resolve minutes later instead of failing within 20 seconds, a regression in its own right,
+  not just a missed improvement. A genuinely missing or mistyped `webViewType` would also take up to
+  2 minutes to surface an error instead of 20 seconds, for every caller.
+
+  Thread a dedicated `shouldWaitPatientlyForProvider` flag through `reloadWebView` →
+  `openOrReloadWebView` → `getWebViewProvider` instead, so the patient wait runs inside that chain
+  rather than ahead of it — the first version of this fix took this approach (reusing the existing
+  `isReloadOfAnOpenWebView` flag for the same purpose was considered and rejected first, since the
+  error boundary's retry and `main/services/web-view.service-router.ts`'s pass-through of arbitrary
+  PAPI-triggered reloads both already set it for an unrelated reason, so reusing it would have
+  wrongly granted extended patience to those call shapes too) — replaced after review reproduced
+  two bugs that trace directly to applying patience AFTER `openOrReloadWebView` had already read
+  the dock and minted a nonce:
+  a tab that left the dock mid-wait left behind a `WebViewController` the extension host had by then
+  registered, which the existing "left the dock" bail-out never disposed (it only ever cleaned up the
+  nonce, the right fix for a provider that was never created, not one that was); and the saved
+  definition `reloadWebView` reads before the wait went stale across the stretched-out window, so a
+  change made to the tab's definition while it waited was silently reverted once the wait resolved
+  and the stale snapshot was finally written into the dock. Both bugs existed in the pre-PT-4734
+  code too, in a 20-second window narrow enough that nobody had hit them; widening that window to up
+  to 2 minutes made them easy to reproduce. Waiting entirely before the dock is ever read removes the
+  precondition for either: by the time `reloadWebView` runs, its own read-then-write sequence is back
+  to its original short size regardless of how long the provider took to register.
+
+  Replace the bounded budget with an open-ended, event-driven recovery instead — subscribe to
+  `onDidCreateNetworkObject` for this provider's id and re-run `retrieveWebViewContent` whenever it
+  fires, dropping the subscription when the tab closes, the way `use-project-picker-data.hook.ts`
+  already heals a late PDP factory — deferred, not rejected. It would close the residual gap the
+  2-minute budget still leaves (a provider that is merely slower than 2 minutes, not broken, still
+  leaves its tab permanently blank), but it removes the flag/budget/loop shape entirely, which is a
+  bigger change than this decision's scope; tracked separately rather than folded in here.
+- **Consequences:** Any future caller that wants this patience must call
+  `waitForWebViewProviderToRegister` itself before its own reload/open — nothing inherits it by
+  default. Revisit the 2-minute budget if cold-start activation times grow enough (more bundled
+  extensions, slower disks) to approach it.
+- **Source:** PT-4734.
 
 ## adr-window-activation-is-declared-not-inferred: Whether a new window activates is declared by its caller; focus state cannot answer it
 
