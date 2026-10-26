@@ -945,7 +945,8 @@ export function PlatformTabTitle({
   // the default logo, since `LucideIcon` renders nothing for a name it does not know
   const icon =
     iconName && LUCIDE_ICON_NAMES.includes(iconName) ? (
-      // The wrapper keeps the 16px icon box of `.tab-menu-icon` without its default-logo background.
+      // The wrapper keeps the icon box that `.tab-menu-icon` gets from
+      // `platform-tab-title.component.scss`, without its default-logo background.
       // The svg ignores the pointer so the wrapper, which carries the drag-ignore marker, is the
       // element under the pointer.
       <span className={`tab-lucide-icon${dragIgnoreClass}`}>
