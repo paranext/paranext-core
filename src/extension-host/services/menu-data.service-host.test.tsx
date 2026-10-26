@@ -499,7 +499,15 @@ describe('Platform menu document interface-mode gating', () => {
    * absent in Simple proves the gate takes effect, and present in Power proves the item was gated
    * rather than deleted — which is what catches a flag broad enough to hide it in every mode.
    */
-  const POWER_ONLY_COMMANDS = ['platform.createWindow', 'platform.visitGettingStartedPage'];
+  const POWER_ONLY_COMMANDS = ['platform.createWindow'];
+
+  /** Offered in every mode: Help is how a Simple-mode translator reaches the help articles. */
+  const BOTH_MODES_COMMANDS = ['platform.visitGettingStartedPage'];
+
+  test.each(BOTH_MODES_COMMANDS)('getMainMenu offers %s in both modes', async (command) => {
+    expect(await isCommandInMainMenu('simple', command)).toBe(true);
+    expect(await isCommandInMainMenu('power', command)).toBe(true);
+  });
 
   /** Gated out of both modes: Power's main menu leaves these to other surfaces. */
   const HIDDEN_IN_BOTH_MODES = ['platform.openDeveloperDocumentationUrl'];
