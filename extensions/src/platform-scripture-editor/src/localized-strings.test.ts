@@ -17,6 +17,7 @@ import { VIEW_OPTIONS_NOTICE_STRING_KEYS } from './scripture-text-grid/view-opti
 import { TEAM_LAYOUT_BUTTON_STRING_KEYS } from './team-layout-button.component';
 import { STRUCTURE_PROTECTION_BUTTON_STRING_KEYS } from './structure-protection-button.component';
 import { HIDDEN_CONTENT_DELETE_STRING_KEYS } from './hidden-content-delete-confirm.utils';
+import { TWO_STEP_DELETE_MESSAGE_STRING_KEYS } from './two-step-delete-tooltip/two-step-delete-tooltip.utils';
 import {
   paragraphMarkerNameKey,
   PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
@@ -568,6 +569,28 @@ describe.each([...HIDDEN_CONTENT_DELETE_STRING_KEYS])('hidden content delete lab
 
   it('Spanish label differs from English', () => {
     expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+// The guarded two-press delete's "press again" hint: one message per armed kind (verse, chapter,
+// selection).
+describe.each([...TWO_STEP_DELETE_MESSAGE_STRING_KEYS])('two-step delete hint %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+
+  // The confirming key's name is substituted into `{key}`; a translation that drops it would not
+  // say which key to press.
+  it.each(['en', 'es'] as const)('keeps {key} in %s', (locale) => {
+    expect(localizedStrings[locale][key]).toContain('{key}');
   });
 });
 

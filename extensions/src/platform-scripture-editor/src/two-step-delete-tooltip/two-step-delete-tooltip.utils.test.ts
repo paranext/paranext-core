@@ -4,6 +4,7 @@ import {
   confirmingKey,
   getConfirmingKeyDisplayLabel,
   readArmedHint,
+  twoStepDeleteMessageKey,
 } from './two-step-delete-tooltip.utils';
 
 // Mock element factory — avoids a jsdom dependency for pure-function tests. Only the two members
@@ -53,6 +54,14 @@ describe('readArmedHint', () => {
     expect(readArmedHint(el)).toEqual({ intent: 'deleteForward', kind: 'selection' });
   });
 
+  it('reads a backward chapter arm', () => {
+    const el = makeAttrEl({
+      'data-verse-delete-intent': 'deleteBackward',
+      'data-verse-delete-kind': 'chapter',
+    });
+    expect(readArmedHint(el)).toEqual({ intent: 'deleteBackward', kind: 'chapter' });
+  });
+
   it('returns undefined when attributes are missing', () => {
     expect(readArmedHint(makeAttrEl({}))).toBeUndefined();
   });
@@ -75,6 +84,26 @@ describe('readArmedHint', () => {
       'data-verse-delete-kind': 'verse',
     });
     expect(readArmedHint(el)).toBeUndefined();
+  });
+});
+
+describe('twoStepDeleteMessageKey', () => {
+  it('names the verse marker for an armed verse', () => {
+    expect(twoStepDeleteMessageKey('verse')).toBe(
+      '%webView_platformScriptureEditor_twoStepDelete_removeVerseNumber%',
+    );
+  });
+
+  it('names the chapter marker for an armed chapter', () => {
+    expect(twoStepDeleteMessageKey('chapter')).toBe(
+      '%webView_platformScriptureEditor_twoStepDelete_removeChapterNumber%',
+    );
+  });
+
+  it('names the selection for an armed selection', () => {
+    expect(twoStepDeleteMessageKey('selection')).toBe(
+      '%webView_platformScriptureEditor_twoStepDelete_deleteSelection%',
+    );
   });
 });
 
