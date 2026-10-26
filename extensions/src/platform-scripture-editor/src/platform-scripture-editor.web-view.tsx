@@ -918,6 +918,21 @@ function PlatformScriptureEditor({
     return textDirectionPossiblyError || defaultTextDirection;
   }, [textDirectionPossiblyError]);
 
+  // Whether the project keeps `~` (a literal tilde) and a no-break space distinct. Off, its USFM
+  // spells a no-break space `~`; on, both are written as themselves. Anything here that turns this
+  // project's USJ into USFM has to spell it the project's way.
+  const [allowInvisibleCharactersPossiblyError] = useProjectSetting(
+    projectId,
+    'platformScripture.allowInvisibleCharacters',
+    false,
+  );
+  const allowInvisibleCharacters: boolean = isPlatformError(allowInvisibleCharactersPossiblyError)
+    ? false
+    : allowInvisibleCharactersPossiblyError;
+  // For callbacks that run after the render that created them, such as the caret restore's retries
+  const allowInvisibleCharactersRef = useRef(allowInvisibleCharacters);
+  allowInvisibleCharactersRef.current = allowInvisibleCharacters;
+
   // The next two reactive signals gate whether the Scripture Editor is writable: whether the
   // project itself is editable (`platform.isEditable`) and whether the current user has a
   // non-Observer Scripture-edit role. Both fail OPEN below (return `true`, i.e. don't block
@@ -3823,7 +3838,13 @@ function PlatformScriptureEditor({
             const selection = editorRef.current?.getSelection();
             return (
               !!selection &&
-              isCaretPlacedAt(repairedUsj, selection.start, target.start, savedChapterSelector.book)
+              isCaretPlacedAt(
+                repairedUsj,
+                selection.start,
+                target.start,
+                savedChapterSelector.book,
+                allowInvisibleCharactersRef.current,
+              )
             );
           },
           focus: () => editorRef.current?.focus(),
