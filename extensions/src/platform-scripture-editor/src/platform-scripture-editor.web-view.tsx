@@ -2184,7 +2184,9 @@ function PlatformScriptureEditor({
         command,
         editorRef.current ?? undefined,
         {
-          isReadOnly: isReadOnlyEffective || isUsjFromPdpLoading,
+          // A chapter still loading blocks edits the same way read-only does; read through the ref
+          // because the loading flag is declared further down the component.
+          isReadOnly: isReadOnlyEffective || isChapterLoadingRef.current,
           isDurablyReadOnly,
           isSyncBlocked,
         },
@@ -2201,7 +2203,6 @@ function PlatformScriptureEditor({
       isDurablyReadOnly,
       isReadOnlyEffective,
       isSyncBlocked,
-      isUsjFromPdpLoading,
       localizedStrings,
       notifySyncEditBlocked,
     ],
