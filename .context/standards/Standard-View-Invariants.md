@@ -259,6 +259,18 @@ Lexical's blur processing can NULL the editor-state selection; `focus()` then fa
 selecting the document END. So dismissals restore the caret from the focus-out capture exactly as
 commits do, before focusing. It is a no-op when the selection survived.
 
+A selected paragraph marker counts as a surviving selection. It has no text range, so
+`getSelection()` reports nothing, but the capture is a caret the user has since left: restoring it
+would send a paragraph retag (or any other apply) to whichever paragraph that caret was in. So:
+
+- `useMarkerPaletteFocusOutCapture` (`lib/platform-bible-react`) clears the capture when focus
+  leaves while a marker is selected, instead of keeping the older caret;
+- every restore — `restoreSelectionIfLost` in the editor web view's utils, and the footnote
+  editor's own copy — returns early when `getSelectedParaMarker()` reports a marker.
+
+The editor's `getSelectedParaMarker()` reports nothing while the editor is read-only, so neither
+check sees a marker selected then.
+
 ## 4. The footnote editor
 
 `lib/platform-bible-react/src/components/advanced/footnote-editor/`.

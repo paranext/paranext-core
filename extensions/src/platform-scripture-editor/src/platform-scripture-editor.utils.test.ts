@@ -3633,7 +3633,7 @@ describe('generateParagraphMenuListItems', () => {
     );
   });
 
-  it('retags a selected paragraph marker in place rather than restoring an older caret first', () => {
+  it('does not restore an older caret, and still calls formatPara, while a paragraph marker is selected', () => {
     // Wired as the web view wires it: the real restore, over an editor whose gutter marker is
     // selected. A selected marker has no text range, and the caret captured before it was selected
     // is in another paragraph — restoring it would make `formatPara` retag that paragraph instead.
