@@ -176,14 +176,7 @@ export async function sendPapiCommandWhenRegistered(
  * developer's real project root too.
  */
 export async function makeSampleProjectEditable(): Promise<void> {
-  requireIsolatedProjectRoot();
-  const pdpId = await getSampleProjectDataProviderId();
-  await sendPapiRequestOnce<boolean>(
-    `object:${pdpId}.setSetting`,
-    ['platform.isEditable', true],
-    WEBSOCKET_PORT,
-    COMMAND_TIMEOUT_MS,
-  );
+  await sendSampleProjectPdpRequest('setSetting', ['platform.isEditable', true]);
 }
 
 /**
@@ -196,11 +189,20 @@ export async function makeSampleProjectEditable(): Promise<void> {
  * true`, for the reason {@link makeSampleProjectEditable} gives.
  */
 export async function unlockSampleProjectStructure(): Promise<void> {
+  await sendSampleProjectPdpRequest('setUserStructureProtected', [false]);
+}
+
+/**
+ * Calls a write method on the installed sample WEB project's data provider. Refuses to run unless
+ * the app was launched with `isolatedProjectRoot: true`, for the reason
+ * {@link makeSampleProjectEditable} gives.
+ */
+async function sendSampleProjectPdpRequest(method: string, args: unknown[]): Promise<void> {
   requireIsolatedProjectRoot();
   const pdpId = await getSampleProjectDataProviderId();
   await sendPapiRequestOnce<boolean>(
-    `object:${pdpId}.setUserStructureProtected`,
-    [false],
+    `object:${pdpId}.${method}`,
+    args,
     WEBSOCKET_PORT,
     COMMAND_TIMEOUT_MS,
   );

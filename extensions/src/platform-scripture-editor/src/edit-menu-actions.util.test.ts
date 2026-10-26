@@ -75,7 +75,7 @@ describe('handleEditMenuCommand', () => {
     expect(effects.notifySyncEditBlocked).not.toHaveBeenCalled();
   });
 
-  it('pastes into a selected paragraph marker rather than restoring an older caret first', () => {
+  it('does not restore an older caret while a paragraph marker is selected', () => {
     // Wired as the web view wires it: the real restore, over an editor whose gutter marker is
     // selected. A selected marker has no text range, and the caret captured before it was selected
     // is in another paragraph — restoring it would paste the text there instead.
