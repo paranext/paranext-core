@@ -6,7 +6,7 @@
       {
         "label": "%platformLexicalTools_mainMenu_openDictionary_sdbhSdbg_2%",
         "hiddenInterfaceModes": ["simple"],
-        "localizeNotes": "Application main menu > Project > Dictionary: SDBH/SDBG. Hidden in Simple mode: Simple has a pinned, non-closable Dictionary tab in Column 3 instead, so this Power-only command to open it as an ordinary tab is unneeded there",
+        "localizeNotes": "Application main menu > Project > Dictionary: SDBH/SDBG (opens the Hebrew and Greek dictionary as a tab)",
         "iconNameBefore": "book-a",
         "group": "platform.projectResources",
         "order": 100,
