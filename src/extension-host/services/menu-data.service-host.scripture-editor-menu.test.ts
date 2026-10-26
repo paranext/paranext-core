@@ -140,7 +140,6 @@ const HIDDEN_IN_SIMPLE = [
   'platformScripture.openChecksSidePanel',
   'platformScripture.openManageBooks',
   'legacyCommentManager.openCommentList',
-  'platformLexicalTools.openDictionary',
   'platformScripture.openCharactersInventory',
   'platformScripture.openMarkersChecklist',
 ];
@@ -240,6 +239,7 @@ describe("The scripture editor's Project menu, per mode", () => {
         [
           'platformScriptureEditor.showBibleTextsPanel',
           'platformScriptureEditor.showCommentariesPanel',
+          'platformLexicalTools.openDictionary',
           'platformScriptureEditor.showTextCollectionPanel',
           'platformScripture.openFind',
           'legacyCommentManager.showCommentListPanel',
@@ -311,6 +311,7 @@ describe("The scripture editor's Project menu, per mode", () => {
   const ICONS_SIMPLE_ONLY: [string, string][] = [
     ['platformScriptureEditor.showBibleTextsPanel', 'book'],
     ['platformScriptureEditor.showCommentariesPanel', 'book-marked'],
+    ['platformLexicalTools.openDictionary', 'book-a'],
     ['platformScriptureEditor.showTextCollectionPanel', 'library'],
     ['platformScripture.openFind', 'search'],
     ['legacyCommentManager.showCommentListPanel', 'message-square'],

@@ -339,12 +339,21 @@
             "command": "platformScriptureEditor.showCommentariesPanel"
           },
           {
+            "label": "%webView_platformScriptureEditor_showDictionaryPanel%",
+            "hiddenInterfaceModes": ["power"],
+            "localizeNotes": "Scripture editor top menu (Simple) > Tools and resources > Dictionary — brings the Dictionary tab in the third column to the front",
+            "iconNameBefore": "book-a",
+            "group": "platformScriptureEditor.simpleToolsPanels",
+            "order": 3,
+            "command": "platformLexicalTools.openDictionary"
+          },
+          {
             "label": "%webView_platformScriptureEditor_showTextCollectionPanel%",
             "hiddenInterfaceModes": ["power"],
             "localizeNotes": "Scripture editor top menu (Simple) > Tools and resources > Text collection — brings the Text collection tab in the third column to the front",
             "iconNameBefore": "library",
             "group": "platformScriptureEditor.simpleToolsPanels",
-            "order": 3,
+            "order": 4,
             "command": "platformScriptureEditor.showTextCollectionPanel"
           },
           {
@@ -353,7 +362,7 @@
             "localizeNotes": "Scripture editor top menu (Simple) > Tools and resources > Find — brings the Find tab in the third column to the front. Power offers Find under Edit instead",
             "iconNameBefore": "search",
             "group": "platformScriptureEditor.simpleToolsPanels",
-            "order": 4,
+            "order": 5,
             "command": "platformScripture.openFind"
           },
           {
@@ -362,7 +371,7 @@
             "localizeNotes": "Scripture editor top menu (Simple) > Tools and resources > Comments — brings the project's Comments tab in the third column to the front. Orders after 5 stay free for items other extensions add below the built-in tools",
             "iconNameBefore": "message-square",
             "group": "platformScriptureEditor.simpleToolsPanels",
-            "order": 5,
+            "order": 6,
             "command": "legacyCommentManager.showCommentListPanel"
           }
         ]
