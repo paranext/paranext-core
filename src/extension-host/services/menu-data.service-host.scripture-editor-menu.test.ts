@@ -389,7 +389,7 @@ describe("The scripture editor's Project menu, per mode", () => {
     const isViewSubmenu = (item: Item) =>
       'id' in item && item.id === 'platformScriptureEditor.viewSubmenu';
     const root = (await getEditorTopMenuInMode('power')).items.find(isViewSubmenu);
-    expect(root && labelText(root.label)).toBe('Switch scripture view');
+    expect(root && labelText(root.label)).toBe('Switch Scripture view');
     expect((await getEditorTopMenuInMode('simple')).items.some(isViewSubmenu)).toBe(false);
   });
 
