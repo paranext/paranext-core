@@ -1020,10 +1020,11 @@ export function createResourceTextPanelProvider(
         projectId,
         content: resourceTextPanelWebView,
         styles: resourceTextPanelWebViewStyles,
-        // Icon-only tab in Simple mode only — Power mode keeps showing this tab with no icon,
-        // exactly as today, since it is text-labeled there (see resource-text-panel.web-view.tsx
-        // for the live theme/selection-adaptive swap, which is likewise gated on Power mode).
-        iconUrl: interfaceMode === 'simple' ? defaultIconUrl : savedWebView.iconUrl,
+        // Icon-only tab in Simple mode, drawn in the tab's text colour so it follows the theme.
+        // Power mode labels this tab with text and shows the default logo; a saved icon is dropped
+        // since it may name an asset that no longer exists.
+        iconUrl: interfaceMode === 'simple' ? defaultIconUrl : undefined,
+        isIconMonochrome: interfaceMode === 'simple' ? true : undefined,
         // Also selects a resource opened elsewhere — from Home in Simple mode — when one is passed.
         state: buildResourceTextPanelState(savedWebView.state, resourceType, openWebViewOptions),
         // This webview only ever appears in the fixed 3-column simple-mode layout (Column 3) and
