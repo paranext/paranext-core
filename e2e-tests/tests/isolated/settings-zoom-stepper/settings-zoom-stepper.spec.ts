@@ -1,8 +1,8 @@
 /**
  * E2E for the Settings page layout and its zoom steppers, driven through the rendered controls.
  *
- * - Every settings card fits its pane — General and a project's settings — at the default width and
- *   after narrowing the pane, so no setting row is cut off on the right.
+ * - Every settings card fits its pane at the default width and after narrowing the pane, so no
+ *   setting row is cut off on the right.
  * - The zoom stepper wraps into two rows (− and + over the percentage and reset) with nothing cut
  *   off; a typed percentage commits as a factor; Escape abandons an edit; Interface scaling is
  *   shown as a percentage and its + writes the next step.
@@ -244,8 +244,9 @@ test.describe('Settings layout and zoom steppers', () => {
       timeout: 30_000,
     });
 
-    // With DEV_NOISY off, no bundled extension shows a settings group, so General is the only
-    // sidebar entry; extension groups render through the same card component.
+    // No shipping extension has a visible (non-hidden) setting, and the test extensions that do
+    // load only with DEV_NOISY on, so General is the only sidebar entry; extension groups render
+    // through the same card component as General's.
     await test.step('General fits at the default width', async () => {
       await expectEveryCardInsidePanel(general, 'General, default width');
       await testInfo.attach('general-default.png', {

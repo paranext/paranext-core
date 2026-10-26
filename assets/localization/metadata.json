@@ -228,7 +228,7 @@
   "%settings_platform_showRegistrationReminderOnStartup_label%": {
     "deprecationInfo": {
       "date": "2026-10-23",
-      "message": "UX renamed this setting to say what it reminds you about. The new key is %settings_platform_showRegistrationReminderOnStartup_label_2%."
+      "message": "UX renamed this setting to say what it reminds the user about. The new key is %settings_platform_showRegistrationReminderOnStartup_label_2%."
     }
   },
   "%settings_platform_showRegistrationReminderOnStartup_label_2%": {
