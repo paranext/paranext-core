@@ -38,6 +38,20 @@ editor behaviors exist only to satisfy these, so changing one changes the editor
 
 4. **End of file always gets a newline**, likely replacing a space.
 
+5. **A no-break space is spelled the way the project stores it.** The project setting
+   `platformScripture.allowInvisibleCharacters` (Paratext's `AllowInvisibleChars`) decides: off
+   (the default), the USFM spells U+00A0 as `~` and the project cannot hold a literal tilde; on, the
+   USFM holds U+00A0 itself and `~` is an ordinary character. Every `UsjReaderWriter` that writes a
+   project's USFM gets the setting as `shouldAllowInvisibleCharacters`, and every editor host puts
+   it in the editor's `ViewOptions.allowInvisibleCharacters` (`getEditorViewOptions` in the
+   scripture editor web view), so Standard view keeps `~` and U+00A0 apart (it shows a stored U+00A0
+   as `⍽` with the setting on). Text a host reads from the editor's display (a DOM selection, an
+   element's `textContent`) goes through the editor's `toUsfmNbspSpelling` before it is copied or
+   searched for.
+
+   _Consequence:_ a writer or editor that does not get the setting rewrites every no-break space or
+   every tilde of such a project the next time it saves.
+
 ---
 
 ## 2. The markers map is the declared-property source
