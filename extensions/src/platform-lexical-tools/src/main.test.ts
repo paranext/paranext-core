@@ -230,6 +230,23 @@ describe('platform lexical tools main.ts activation', () => {
       return provider?.getWebView(savedWebView, getWebViewOptions);
     }
 
+    it.each(['simple', 'power'])(
+      'opts its icon in to theme colouring in %s mode',
+      async (interfaceMode) => {
+        vi.mocked(papi.settings.get).mockResolvedValueOnce(interfaceMode);
+
+        // getWebView's real return type is a large union; narrowing to the fields this test checks.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const webView = (await getCapturedWebView()) as {
+          iconUrl?: string;
+          isIconMonochrome?: boolean;
+        };
+
+        expect(webView.iconUrl).toBe('papi-extension://platformLexicalTools/assets/book-a.svg');
+        expect(webView.isIconMonochrome).toBe(true);
+      },
+    );
+
     it('falls back to Simple mode when reading the interface mode setting rejects', async () => {
       vi.mocked(papi.settings.get).mockRejectedValueOnce(new Error('settings service unavailable'));
       vi.mocked(papi.localization.getLocalizedString).mockResolvedValueOnce(

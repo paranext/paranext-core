@@ -148,9 +148,10 @@ const dictionaryWebViewProvider: IWebViewProvider = {
       // In Simple mode this is the pinned Column 3 tab, forced onto scroll group 0 to stay
       // verse-synced with the Scripture editor.
       scrollGroupScrRef: interfaceMode === 'simple' ? 0 : getWebViewOptions.editorScrollGroupId,
-      // Shown in both Power and Simple mode (product decision) — see dictionary.web-view.tsx for
-      // the live theme/selection-adaptive swap, likewise unconditional.
+      // Shown in both Power and Simple mode (product decision), drawn in the tab's text colour so
+      // it follows the theme
       iconUrl: 'papi-extension://platformLexicalTools/assets/book-a.svg',
+      isIconMonochrome: true,
       // TODO(PT-4405) move this per-mode computation into the renderer.
       isClosable: interfaceMode === 'power',
     };
