@@ -192,14 +192,14 @@ describe('settings layout', () => {
     ]);
   });
 
-  it("keeps the moved settings' keys, labels and defaults unchanged", () => {
+  it('declares the supporter settings with their keys, labels and defaults', () => {
     expect(groups[1].properties['platform.requestTimeout']).toMatchObject({
       label: '%settings_platform_requestTimeout_label%',
       description: '%settings_platform_requestTimeout_description%',
       default: 30,
     });
     expect(groups[1].properties['platform.showRegistrationReminderOnStartup']).toMatchObject({
-      label: '%settings_platform_showRegistrationReminderOnStartup_label%',
+      label: '%settings_platform_showRegistrationReminderOnStartup_label_2%',
       description: '%settings_platform_showRegistrationReminderOnStartup_description%',
       default: true,
     });

@@ -3,7 +3,8 @@ import { defineConfig } from '@playwright/test';
 /**
  * Playwright configuration for paranext-core E2E tests.
  *
- * - `smoke` (default): tests share a single Electron instance per worker — fast, for CI.
+ * - `smoke` (default): tests share a single Electron instance per worker — fast, for CI. The
+ *   bare-Electron checks there launch their own (see `tests/smoke/README.md`).
  * - `isolated`: each suite gets its own Electron, but how varies by fixture —
  *   `fixtures/isolated.fixture.ts` launches one per test, `comment.fixture`/`find.fixture` one per
  *   worker. Every spec in this project launches its own app; specs that attach to one you started

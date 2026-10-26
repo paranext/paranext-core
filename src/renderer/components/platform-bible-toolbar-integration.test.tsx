@@ -5,6 +5,7 @@ import { vi } from 'vitest';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { sendCommand } from '@shared/services/command.service';
 import { PROJECT_SELECTOR_DEFAULT_STRINGS } from 'platform-bible-react/experimental';
+import type { WindowControlsOverlayInsets } from '@renderer/hooks/use-window-controls-overlay.hook';
 import { PlatformBibleToolbar } from './platform-bible-toolbar';
 import type { ProjectItem } from './projects/project-picker.component';
 
@@ -93,7 +94,7 @@ vi.mock('@renderer/hooks/use-open-project-book-ids.hook', () => ({
 }));
 
 vi.mock('@renderer/hooks/use-window-controls-overlay.hook', () => ({
-  useWindowControlsOverlay: vi.fn((): DOMRect | undefined => undefined),
+  useWindowControlsOverlay: vi.fn((): WindowControlsOverlayInsets | undefined => undefined),
 }));
 
 vi.mock('@renderer/services/web-view.service-shard', () => ({

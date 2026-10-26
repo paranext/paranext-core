@@ -19,6 +19,7 @@ import {
   Localized,
   LocalizeKey,
   normalizeFullName,
+  SettingBase,
 } from 'platform-bible-utils';
 import { SettingsContributionInfo } from '@shared/utils/settings-document-combiner-base';
 import { ProjectSettingsContributionInfo } from '@shared/utils/project-settings-document-combiner';
@@ -85,6 +86,31 @@ const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
   PROJECT_SELECTOR_NO_RESULTS_KEY,
 ];
 
+/**
+ * Removes every `isHidden` setting, then the groups left empty, then the contributors left with no
+ * groups. Done once at load so the sidebar, the search results and the cards all see the same
+ * settings, and a fully hidden group leaves neither an empty card nor an empty sidebar entry.
+ */
+function removeHiddenSettings<
+  TGroup extends { properties: Record<string, Pick<SettingBase, 'isHidden'>> },
+>(contributions: Record<string, TGroup[] | undefined>): Record<string, TGroup[]> {
+  return Object.fromEntries(
+    Object.entries(contributions)
+      .map(([key, groups]): [string, TGroup[]] => [
+        key,
+        (groups ?? [])
+          .map((group) => ({
+            ...group,
+            properties: Object.fromEntries(
+              Object.entries(group.properties).filter(([, property]) => !property.isHidden),
+            ),
+          }))
+          .filter((group) => Object.keys(group.properties).length > 0),
+      ])
+      .filter(([, groups]) => groups.length > 0),
+  );
+}
+
 const filterSettingsContributions = (
   contributions:
     | Localized<SettingsContributionInfo['contributions']>
@@ -138,12 +164,7 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
         ?.contributions;
       if (!contributions) return undefined;
 
-      // Filter out the extensions that do not have setting groups
-      const filteredContributions = Object.fromEntries(
-        Object.entries(contributions).filter(
-          ([, settingsGroups]) => Array.isArray(settingsGroups) && settingsGroups.length > 0,
-        ),
-      );
+      const filteredContributions = removeHiddenSettings(contributions);
 
       // Default selected item to the first settings tab
       setSelectedSidebarItem({ label: Object.keys(filteredContributions)[0] });
@@ -164,13 +185,7 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
         ?.contributions;
       if (!contributions) return undefined;
 
-      // Filter out the projects that do not have setting groups
-      return Object.fromEntries(
-        Object.entries(contributions).filter(
-          ([, projectSettingsGroups]) =>
-            Array.isArray(projectSettingsGroups) && projectSettingsGroups.length > 0,
-        ),
-      );
+      return removeHiddenSettings(contributions);
     }, []),
     useMemo(() => undefined, []),
   );
