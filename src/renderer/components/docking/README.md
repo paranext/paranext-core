@@ -88,7 +88,7 @@ in "rc-dock internals we depend on".
 
 The patch edits only rc-dock's `es/` build (the one webpack bundles). Vitest loads `lib/`, so unit
 tests don't see the patch unless they import `rc-dock/es/...` directly
-(`rc-dock-tab-cache-patch.test.ts` does).
+(`rc-dock-tab-cache-patch.test.ts` and `rc-dock-dock-move-patch.test.tsx` do).
 
 - `DockLayout.dockMove`: looks the source and target up by id in the current layout before moving,
   and treats a drop onto itself, or a whole tab group dropped next to one of its own tabs, as a

@@ -178,10 +178,19 @@ describe('rc-dock patch: DockLayout.dockMove acts on the current layout, not the
     expect(describeTabGroups(dock)).toEqual({ left: ['T', 'U'], top: ['V'], bottom: ['W', 'X'] });
   });
 
+  it('leaves a tab group replaced during the drag in place when it is dropped on itself', () => {
+    const dock = renderDock();
+    const dragged = startGroupDrag(dock, 'left');
+    replaceTab(dock, 'T');
+
+    drop(dock, dragged, findPanel(dock, 'left'), 'middle');
+
+    expect(describeTabGroups(dock)).toEqual({ left: ['T', 'U'], top: ['V'], bottom: ['W', 'X'] });
+  });
+
   it('leaves a tab in place when it is dropped on its own header given by id', () => {
     const dock = renderDock();
     const dragged = startDrag(dock, 'T');
-    replaceTab(dock, 'T');
 
     drop(dock, dragged, 'T', 'after-tab');
 
@@ -191,11 +200,19 @@ describe('rc-dock patch: DockLayout.dockMove acts on the current layout, not the
   it('leaves a tab group in place when it is dropped next to one of its own tabs given by id', () => {
     const dock = renderDock();
     const dragged = startGroupDrag(dock, 'left');
-    replaceTab(dock, 'T');
 
     drop(dock, dragged, 'U', 'after-tab');
 
     expect(describeTabGroups(dock)).toEqual({ left: ['T', 'U'], top: ['V'], bottom: ['W', 'X'] });
+  });
+
+  it('moves a tab to the end of its own group given by id', () => {
+    const dock = renderDock();
+    const dragged = startDrag(dock, 'T');
+
+    drop(dock, dragged, 'left', 'middle');
+
+    expect(describeTabGroups(dock)).toEqual({ left: ['U', 'T'], top: ['V'], bottom: ['W', 'X'] });
   });
 
   it('floats a tab group dropped on its own float drop target', () => {
@@ -272,7 +289,7 @@ describe('rc-dock patch: DockLayout.dockMove acts on the current layout, not the
     expect(describeTabGroups(dock)).toEqual({ left: ['T', 'U'], top: ['V'], bottom: ['W', 'X'] });
   });
 
-  it('closes a tab through an object replaced since it was found, keeping its neighbours current', () => {
+  it('closes a tab through an object replaced since it was found, keeping its neighbors current', () => {
     const dock = renderDock();
     const found = findTab(dock, 'T');
     replaceTab(dock, 'T');
@@ -330,5 +347,16 @@ describe('rc-dock patch: DockLayout.dockMove acts on the current layout, not the
     drop(dock, dragged, findPanel(dock, 'bottom'), 'middle');
 
     expect(describeTabGroups(dock)).toEqual({ left: ['U'], top: ['V'], bottom: ['W', 'X', 'T'] });
+  });
+
+  it('still reorders a tab replaced during the drag within its own group', () => {
+    const dock = renderDock();
+    const dragged = startDrag(dock, 'T');
+    replaceTab(dock, 'T');
+
+    drop(dock, dragged, findTab(dock, 'U'), 'after-tab');
+
+    expect(describeTabGroups(dock)).toEqual({ left: ['U', 'T'], top: ['V'], bottom: ['W', 'X'] });
+    expect(findTab(dock, 'T').title).toBe('T (updated)');
   });
 });
