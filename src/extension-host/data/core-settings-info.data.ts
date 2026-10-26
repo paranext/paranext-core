@@ -79,7 +79,7 @@ export const platformSettings: SettingsContribution = [
         default: 30,
       },
       'platform.showRegistrationReminderOnStartup': {
-        label: '%settings_platform_showRegistrationReminderOnStartup_label%',
+        label: '%settings_platform_showRegistrationReminderOnStartup_label_2%',
         description: '%settings_platform_showRegistrationReminderOnStartup_description%',
         default: true,
       },

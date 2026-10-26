@@ -9,17 +9,28 @@ import { ProjectOrOtherSettingsList } from './project-or-other-settings-list.com
 // renders the single sync-blocked NOTICE above all of a project's groups (see
 // settings-tab.component.test.tsx). A project can have several of these lists (one per settings
 // group), so a per-list store subscription would stack listeners and duplicate the banner.
-// This unit just forwards `disabled` to each project setting; the leaf forwarding into
-// platform-bible-react's Input/Switch is covered in setting.component.test.tsx.
+// This unit forwards `disabled` to each project setting and each setting's `isReadOnly` as
+// `readOnly`; the leaf forwarding into platform-bible-react's Input/Switch is covered in
+// setting.component.test.tsx.
+type OtherSettingStubProps = { label: string; readOnly?: boolean };
+type ProjectSettingStubProps = OtherSettingStubProps & { disabled?: boolean };
 vi.mock('./project-setting.component', () => ({
-  ProjectSetting: ({ label, disabled }: { label: string; disabled?: boolean }) => (
-    <div data-testid="project-setting" data-disabled={String(Boolean(disabled))}>
+  ProjectSetting: ({ label, disabled, readOnly }: ProjectSettingStubProps) => (
+    <div
+      data-testid="project-setting"
+      data-disabled={String(Boolean(disabled))}
+      data-read-only={String(Boolean(readOnly))}
+    >
       {label}
     </div>
   ),
 }));
 vi.mock('./other-setting.component', () => ({
-  OtherSetting: ({ label }: { label: string }) => <div data-testid="other-setting">{label}</div>,
+  OtherSetting: ({ label, readOnly }: OtherSettingStubProps) => (
+    <div data-testid="other-setting" data-read-only={String(Boolean(readOnly))}>
+      {label}
+    </div>
+  ),
 }));
 
 // Minimal Localized<ProjectSettingProperties>: one setting entry with a label the stub renders.
@@ -84,5 +95,39 @@ describe('ProjectOrOtherSettingsList sync-block disabled wiring', () => {
     );
 
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+});
+
+describe('ProjectOrOtherSettingsList isReadOnly', () => {
+  const PROPERTIES_WITH_READ_ONLY = {
+    'testExtension.readOnlySetting': { label: 'Read-only', default: '', isReadOnly: true },
+    'testExtension.editableSetting': { label: 'Editable', default: '' },
+  };
+
+  it('makes only the project settings contributed with isReadOnly read-only', () => {
+    render(
+      <ProjectOrOtherSettingsList
+        settingProperties={PROPERTIES_WITH_READ_ONLY}
+        projectId="projA"
+        groupLabel="Group"
+      />,
+    );
+
+    expect(screen.getByText('Read-only')).toHaveAttribute('data-read-only', 'true');
+    expect(screen.getByText('Editable')).toHaveAttribute('data-read-only', 'false');
+    // Read-only is separate from the sync block, which still disables nothing here.
+    expect(screen.getByText('Read-only')).toHaveAttribute('data-disabled', 'false');
+  });
+
+  it('makes only the user settings contributed with isReadOnly read-only', () => {
+    render(
+      <ProjectOrOtherSettingsList
+        settingProperties={PROPERTIES_WITH_READ_ONLY}
+        groupLabel="Group"
+      />,
+    );
+
+    expect(screen.getByText('Read-only')).toHaveAttribute('data-read-only', 'true');
+    expect(screen.getByText('Editable')).toHaveAttribute('data-read-only', 'false');
   });
 });

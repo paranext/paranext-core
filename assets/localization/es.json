@@ -653,6 +653,7 @@
   "%settings_platform_requestTimeout_label%": "Tiempo de espera de la solicitud",
   "%settings_platform_showRegistrationReminderOnStartup_description%": "Cuando su registro de Paratext ya no sea válido, mostrar el paso de registro al iniciar para que pueda volver a registrarse.",
   "%settings_platform_showRegistrationReminderOnStartup_label%": "Mostrar el recordatorio de registro al iniciar",
+  "%settings_platform_showRegistrationReminderOnStartup_label_2%": "Recordarme al iniciar la aplicación si mi registro no es válido",
   "%settings_platform_supporter_group_description%": "Configuraciones que una persona de soporte puede pedirle ajustar al ayudarle",
   "%settings_platform_supporter_group_label%": "Configuración de soporte",
   "%settings_platform_syncOnStartup_label%": "Sincronizar automáticamente al iniciar",
