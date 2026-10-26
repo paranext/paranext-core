@@ -192,10 +192,10 @@ describe("The scripture editor's Project menu, per mode", () => {
         [
           'platformScriptureEditor.showBibleTextsPanel',
           'platformScriptureEditor.showCommentariesPanel',
-          'platformLexicalTools.openDictionary',
-          'legacyCommentManager.showCommentListPanel',
           'platformScriptureEditor.showTextCollectionPanel',
+          'platformLexicalTools.openDictionary',
           'platformScripture.openFind',
+          'legacyCommentManager.showCommentListPanel',
         ],
       ],
       ['platformScriptureEditor.simpleQualityChecks', ['platformScripture.openChecksSidePanel']],
