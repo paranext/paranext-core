@@ -69,7 +69,7 @@ const ROWS: [label: string, description: string][] = [
   ['Configure proxy sentinel', 'Desc Proxy sentinel'],
 ];
 
-const COMING_SOON_LABELS = ['Block sensitive sentinel', 'Configure proxy sentinel'];
+const UNAVAILABLE_LABELS = ['Block sensitive sentinel', 'Configure proxy sentinel'];
 
 /** A row's info button, found by the description it carries as its accessible name. */
 function infoButtonFor(description: string) {
@@ -183,7 +183,7 @@ describe('InternetAccessOptionList', () => {
   test('not-yet-available radio items are disabled (do not fire onChange)', () => {
     const onChange = vi.fn();
     renderList({ value: 'Enabled', onChange });
-    COMING_SOON_LABELS.forEach((label) => {
+    UNAVAILABLE_LABELS.forEach((label) => {
       expect(screen.getByLabelText(label)).toBeDisabled();
       fireEvent.click(screen.getByText(label));
     });
@@ -199,7 +199,7 @@ describe('InternetAccessOptionList', () => {
   // The radio sits directly in its row, beside the label and badge.
   const rowOf = (label: string) => screen.getByLabelText(label).parentElement;
 
-  test.each(COMING_SOON_LABELS)('"%s" row has a not-yet-available badge', (label) => {
+  test.each(UNAVAILABLE_LABELS)('"%s" row has a not-yet-available badge', (label) => {
     renderList();
     expect(rowOf(label)).toHaveTextContent('Not yet available');
   });

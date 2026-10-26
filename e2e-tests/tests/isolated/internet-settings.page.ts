@@ -134,8 +134,8 @@ export function selectableConnectivityOptions(frame: FrameLocator): {
  *
  * Which one that is depends on the machine: these settings live in ParatextData's own storage,
  * which is seeded once from a co-installed Paratext 9, so a developer box can legitimately start on
- * either — or on a "Coming soon" option, such as a proxy carried over from Paratext 9. Clicking a
- * fixed option would be a no-op wherever that option was already selected. Nothing here is
+ * either — or on a not-yet-available option, such as a proxy carried over from Paratext 9. Clicking
+ * a fixed option would be a no-op wherever that option was already selected. Nothing here is
  * persisted — only "Save and restart" writes.
  *
  * @returns The radio that was selected before the click, whichever row it is on, so a test can

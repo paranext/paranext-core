@@ -85,7 +85,7 @@ describe('InternetSettingsForm', () => {
   // source.
   test('marks each option that cannot be chosen yet as not yet available', () => {
     renderForm();
-    expect(screen.getAllByText('Not yet available')).toHaveLength(3);
+    expect(screen.getAllByText('Not yet available')).toHaveLength(2);
   });
 
   test('Reset and Save buttons are disabled when savedInternetSettings is undefined', () => {

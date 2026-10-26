@@ -4319,8 +4319,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   ParatextData saves `VpnRequired` when nothing is stored, and a re-seed from Paratext 9 can bring
   it back. `InternetServicesGate` still blocks `VpnRequired`, and `RegistryAccessTokenService`
   refuses tokens for it in every location without looking the location up, so Send/Receive, the
-  DBL and extensions' Registry tokens fail closed if the migration fails. `ProxyOnly`, the other Coming soon value, is neither migrated
-  nor gated: ParatextData honors the proxy carried over from Paratext 9.
+  DBL and extensions' Registry tokens fail closed if the migration fails. `ProxyOnly`, the other
+  not-yet-available value, is neither migrated nor gated: ParatextData honors the proxy carried over
+  from Paratext 9.
 - **Alternatives:** **Keep `VpnRequired` behind "Disable access…"** (the PT-4590 mapping) —
   rejected: it gives a Paratext 9 value a meaning only Platform.Bible uses, and leaves the
   sensitive-locations option nothing to save. **Migrate only the users who chose "Disable
@@ -4335,8 +4336,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   project but the bundled sample, and the sensitive-locations and proxy options do not work yet.
   **Give "Disable access…" a value of its own, so `Disabled` can mean "Disable all"** — rejected:
   `InternetUse` is ParatextData's enum, so the new value would have to be stored outside it and
-  translated back to `Disabled` for ParatextData. **Keep a Coming soon "Disable all Internet
-  access" row for a saved `Disabled`, and record in a hidden setting when the user chose "Disable
+  translated back to `Disabled` for ParatextData. **Keep a not-yet-available "Disable all
+  Internet access" row for a saved `Disabled`, and record in a hidden setting when the user chose "Disable
   access…" instead** — rejected: every writer of the value would have to keep that second record in
   step, and onboarding no longer offers "Disable access…". **Name the Paratext 9 setting from
   Platform.Bible's copy** — rejected: startup has already changed a carried-over `VpnRequired` to
