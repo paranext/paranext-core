@@ -99,7 +99,6 @@ const STRINGS: Record<string, string> = {
   '%webView_scriptureTextGrid_viewOptions_viewHeader%': 'View',
   '%webView_scriptureTextGrid_viewOptions_verse%': 'Verse',
   '%webView_scriptureTextGrid_viewOptions_chapter%': 'Chapter',
-  '%webView_scriptureTextGrid_viewOptions_comingSoon%': 'Coming soon',
   '%webView_scriptureTextGrid_viewOptions_textsHeader%': 'Texts',
   '%webView_scriptureTextGrid_viewOptions_emptyState_prompt%':
     'No texts added yet. Use {getResourcesLabel} to add them.',
