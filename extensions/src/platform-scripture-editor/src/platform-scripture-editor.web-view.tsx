@@ -5437,7 +5437,11 @@ function PlatformScriptureEditor({
     <div
       className={[
         'tw:flex tw:flex-col tw:h-screen',
-        ...getSimpleModeRootClassNames({ isPowerMode, isInterfaceModeLoading, isDurablyReadOnly }),
+        ...getSimpleModeRootClassNames({
+          isPowerMode,
+          isInterfaceModeLoading,
+          isDurablyReadOnly: isReadOnlyForTitle,
+        }),
       ].join(' ')}
     >
       <TabToolbar

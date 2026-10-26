@@ -122,10 +122,12 @@
 // Character markers with no visible style. Simple styles character markers only through the static
 // `_usj-nodes.scss`, where these set nothing but `font-size: 100%`, so their text looks like plain
 // text and users type inside them unawares. `simple-mode.scss.test.ts` keeps both lists in step
-// with `_usj-nodes.scss`.
+// with `_usj-nodes.scss`. The list is written out twice, not shared through a Sass variable or a
+// nested `&:hover`, because that test reads this file as flat CSS.
 //
-// The tint is solid `--muted`, so nested markers are no darker. Find, comments and the selection
-// paint above it, and an expanded footnote's own tint wins (one class more specific).
+// The tint is solid `--muted`, so nested markers are no darker. It keeps the text's own color on
+// purpose: `--muted-foreground` would dim Scripture. Find, comments and the selection paint above
+// it, and an expanded footnote's own tint wins (one class more specific).
 //
 // The hover line is always drawn but transparent; only the hover rule carries the delay, so the
 // line appears late and fades out at once. Chromium also paints it in the selection's text color

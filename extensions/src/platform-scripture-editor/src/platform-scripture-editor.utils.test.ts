@@ -6210,6 +6210,18 @@ describe('getSimpleModeRootClassNames', () => {
     ).toEqual(['editor-container-simple']);
   });
 
+  it('leaves the indicator off until edit permissions are known', () => {
+    // The permission reads default to "editable" while they load, so a read-only project would
+    // otherwise be tinted until they resolve.
+    expect(
+      getSimpleModeRootClassNames({
+        isPowerMode: false,
+        isInterfaceModeLoading: false,
+        isDurablyReadOnly: undefined,
+      }),
+    ).toEqual(['editor-container-simple']);
+  });
+
   it('adds no Simple-mode classes in Power mode', () => {
     expect(
       getSimpleModeRootClassNames({

@@ -3,6 +3,10 @@ import { join } from 'path';
 import { describe, expect, it } from 'vitest';
 
 const EDITOR_OVERRIDES_SCSS_PATH = join(__dirname, '_editor-overrides.scss');
+const DEMO_EDITOR_OVERRIDES_CSS_PATH = join(
+  __dirname,
+  '../../../../lib/platform-bible-react/src/components/demo/scripture-editor/editor-overrides.css',
+);
 
 /**
  * Pins the right-click context menu's viewport-capped, visibly-scrollable list — see the comment
@@ -32,17 +36,22 @@ describe('_editor-overrides.scss', () => {
     expect(scss).toContain('overscroll-behavior: contain;');
   });
 
-  it('shows an unfocused selection in primary at 30%, not the --secondary that matches the marker tint', () => {
-    // In every built-in theme `--secondary` equals or nearly equals `--muted`, the Simple tint on
-    // character markers with no visible style, so a selection there would vanish into it.
-    const unfocusedSelection =
-      /(?:^|\n)::selection \{([^}]*)\}/.exec(
-        readFileSync(EDITOR_OVERRIDES_SCSS_PATH, 'utf8'),
-      )?.[1] ?? '';
+  // In every built-in theme `--secondary` equals or nearly equals `--muted`, the Simple tint on
+  // character markers with no visible style, so a selection there would vanish into it. The
+  // Storybook demo's copy is checked too, so the demo editor cannot drift from the app.
+  it.each([
+    ['_editor-overrides.scss', EDITOR_OVERRIDES_SCSS_PATH],
+    ['the Storybook demo editor-overrides.css', DEMO_EDITOR_OVERRIDES_CSS_PATH],
+  ])(
+    'shows an unfocused selection in primary at 30%, not --secondary, in %s',
+    (_name, stylesheetPath) => {
+      const unfocusedSelection =
+        /(?:^|\n)::selection \{([^}]*)\}/.exec(readFileSync(stylesheetPath, 'utf8'))?.[1] ?? '';
 
-    expect(unfocusedSelection).toContain(
-      'background-color: color-mix(in oklab, var(--primary) 30%, transparent);',
-    );
-    expect(unfocusedSelection).toContain('color: var(--foreground);');
-  });
+      expect(unfocusedSelection).toContain(
+        'background-color: color-mix(in oklab, var(--primary) 30%, transparent);',
+      );
+      expect(unfocusedSelection).toContain('color: var(--foreground);');
+    },
+  );
 });

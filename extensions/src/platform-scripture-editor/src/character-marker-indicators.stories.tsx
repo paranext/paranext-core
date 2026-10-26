@@ -8,9 +8,12 @@ import type { Meta, StoryObj } from '@storybook/react-webpack5';
    model-text-panel.stories.tsx does. */
 import '../../../../lib/platform-bible-react/src/components/demo/scripture-editor/scripture-editor.stories.css';
 /* eslint-enable import/no-relative-packages */
-// The real rules under review, rather than a copy.
+// The production Simple-mode rules, not a copy.
 import './_simple-mode.scss';
-import { CHARACTER_MARKER_INDICATORS_CLASS } from './platform-scripture-editor.utils';
+import {
+  CHARACTER_MARKER_INDICATORS_CLASS,
+  getSimpleModeRootClassNames,
+} from './platform-scripture-editor.utils';
 
 /**
  * Genesis 11:26–29 with `\w` (no visible style) beside `\nd` (underlined) and `\bd` (bold), so the
@@ -59,9 +62,9 @@ const EDITOR_OPTIONS = { isReadonly: true, hasExternalUI: true, view: getDefault
 type LineStyle = 'underline' | 'underline overline';
 
 type CharacterMarkerIndicatorsProps = {
-  /** Whether the editor root carries the class that turns the indicator on. */
-  isOn: boolean;
-  /** The hover line. `_simple-mode.scss` ships `underline`; UX is choosing between the two. */
+  /** Whether the text can be typed into; the indicator is on only when it can. */
+  isTextEditable: boolean;
+  /** The hover line: `underline` ships, and `underline overline` is the alternative. */
   lineStyle: LineStyle;
 };
 
@@ -69,15 +72,19 @@ type CharacterMarkerIndicatorsProps = {
  * The real Scripture editor with the Simple-mode rules from `_simple-mode.scss`. Hover a tinted
  * word: the line appears after half a second.
  */
-function CharacterMarkerIndicators({ isOn, lineStyle }: CharacterMarkerIndicatorsProps) {
+function CharacterMarkerIndicators({ isTextEditable, lineStyle }: CharacterMarkerIndicatorsProps) {
   return (
     <div
-      className={`editor-container-simple${isOn ? ` ${CHARACTER_MARKER_INDICATORS_CLASS}` : ''}`}
+      className={getSimpleModeRootClassNames({
+        isPowerMode: false,
+        isInterfaceModeLoading: false,
+        isDurablyReadOnly: !isTextEditable,
+      }).join(' ')}
     >
       {lineStyle === 'underline overline' && (
-        // Previews the one-word change in `_simple-mode.scss`. Keyed on `\w`, the only marker
-        // with no visible style in this text.
-        <style>{`.${CHARACTER_MARKER_INDICATORS_CLASS} [data-marker='w'] { text-decoration-line: underline overline !important; }`}</style>
+        // Previews the one-word change in `_simple-mode.scss`. Same selector weight as the real
+        // rule, so it wins by coming later. `\w` is the only invisible marker in this text.
+        <style>{`.editor-container-simple.${CHARACTER_MARKER_INDICATORS_CLASS} .usfm_w { text-decoration-line: underline overline; }`}</style>
       )}
       <Editorial defaultUsj={GENESIS_11_USJ} scrRef={SCR_REF} options={EDITOR_OPTIONS} />
     </div>
@@ -88,7 +95,7 @@ const meta: Meta<typeof CharacterMarkerIndicators> = {
   title: 'Bundled Extensions/platform-scripture-editor/CharacterMarkerIndicators',
   component: CharacterMarkerIndicators,
   tags: ['autodocs'],
-  args: { isOn: true, lineStyle: 'underline' },
+  args: { isTextEditable: true, lineStyle: 'underline' },
   argTypes: {
     lineStyle: { control: 'inline-radio', options: ['underline', 'underline overline'] },
   },
@@ -102,8 +109,8 @@ type Story = StoryObj<typeof CharacterMarkerIndicators>;
 /** What Simple shows on text the user can type into: `\w` is tinted, `\nd` and `\bd` are not. */
 export const Default: Story = {};
 
-/** The alternative hover line UX is choosing between. */
+/** The alternative hover line: underline plus overline. */
 export const UnderlinePlusOverline: Story = { args: { lineStyle: 'underline overline' } };
 
-/** Read-only text and Power mode: no tint and no hover line. */
-export const Off: Story = { args: { isOn: false } };
+/** Text that cannot be typed into: no tint and no hover line. Power mode looks the same. */
+export const ReadOnly: Story = { args: { isTextEditable: false } };

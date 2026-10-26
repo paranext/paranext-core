@@ -109,8 +109,13 @@ export const CHARACTER_MARKER_INDICATORS_CLASS = 'character-marker-indicators';
  * The Simple-mode marker classes for the Scripture editor's root element (see `_simple-mode.scss`).
  *
  * The character-marker indicator warns against typing inside a marker, so it is on only where the
- * text can be typed into. It also waits for the interface mode, because `isPowerMode` reads `false`
- * while that setting loads and would otherwise tint a Power session for a frame.
+ * text can be typed into, and stays off until that is known: `isPowerMode` reads `false` while the
+ * interface mode loads, and the edit-permission reads default to editable while they load.
+ *
+ * Pass the durable read-only state, not `isReadOnlyEffective`: that also covers the brief freeze
+ * during an automatic Send/Receive, and would flicker the tint on every scheduled sync.
+ *
+ * @param options.isDurablyReadOnly `undefined` while edit permissions are still resolving
  */
 export function getSimpleModeRootClassNames({
   isPowerMode,
@@ -119,10 +124,10 @@ export function getSimpleModeRootClassNames({
 }: {
   isPowerMode: boolean;
   isInterfaceModeLoading: boolean;
-  isDurablyReadOnly: boolean;
+  isDurablyReadOnly: boolean | undefined;
 }): string[] {
   if (isPowerMode) return [];
-  if (isInterfaceModeLoading || isDurablyReadOnly) return ['editor-container-simple'];
+  if (isInterfaceModeLoading || isDurablyReadOnly !== false) return ['editor-container-simple'];
   return ['editor-container-simple', CHARACTER_MARKER_INDICATORS_CLASS];
 }
 
