@@ -85,14 +85,12 @@ const PDP_FACTORY_OBJECT_TYPE = 'pdpFactory';
  * Resolves the view type the editor is allowed to show under the current `platform.interfaceMode`.
  * Standard and markers views are power-mode-only surfaces.
  *
- * Standard view's PT9-parity editing affordances (the `\`/Enter marker palettes, paragraph-marker
- * editing) assume paragraph markers can be edited, but simple mode pairs with structure protection,
- * which intentionally blocks paragraph-marker edits. Markers view is read-only, and simple mode
- * offers no menu or shortcut back out of it. So a simple-mode user must never land in either (e.g.
- * via a `viewType` persisted during a power-mode session). Coerces 'standard' and 'markers' to
- * 'formatted' (the simple-mode view) when not in power mode; every other combination passes through
- * unchanged. The result is for display only: callers must not write it back to the persisted view
- * type, so returning to power mode restores the user's choice.
+ * Simple mode's editor offers one view, the Formatted "Preview" (PT-4849), and has no menu or
+ * shortcut to leave another view. So a view type persisted during a power-mode session must not be
+ * shown in simple mode. Coerces 'standard' and 'markers' to 'formatted' (the simple-mode view) when
+ * not in power mode; every other combination passes through unchanged. The result is for display
+ * only: callers must not write it back to the persisted view type, so returning to power mode
+ * restores the user's choice.
  *
  * @param viewType The current (requested or persisted) view type
  * @param isPowerMode Whether `platform.interfaceMode` is 'power'
