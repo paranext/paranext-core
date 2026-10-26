@@ -277,7 +277,6 @@
       "%webView_platformScriptureEditor_structureProtection_unlockStructure%": "Unlock structure",
       "%webView_platformScriptureEditor_structureProtection_unlockStructureForProject%": "Unlock structure for project",
       "%webView_platformScriptureEditor_switchScriptureView%": "Switch Scripture view",
-      "%webView_platformScriptureEditor_switchScriptureView_2%": "Switch scripture view",
       "%webView_platformScriptureEditor_syncEditBlocked_banner%": "Editing paused — Send/Receive in progress",
       "%webView_platformScriptureEditor_syncEditBlocked_banner_2%": "Editing paused — sync in progress",
       "%webView_platformScriptureEditor_tabCouldNotOpen%": "That tab couldn't be opened. Please try again.",
@@ -643,7 +642,6 @@
       "%webView_platformScriptureEditor_structureProtection_unlockStructure%": "Desbloquear estructura",
       "%webView_platformScriptureEditor_structureProtection_unlockStructureForProject%": "Desbloquear estructura para el proyecto",
       "%webView_platformScriptureEditor_switchScriptureView%": "Cambiar vista de escrituras",
-      "%webView_platformScriptureEditor_switchScriptureView_2%": "Cambiar vista de las Escrituras",
       "%webView_platformScriptureEditor_syncEditBlocked_banner%": "Edición pausada — Enviar/Recibir en curso",
       "%webView_platformScriptureEditor_syncEditBlocked_banner_2%": "Edición pausada — sincronización en curso",
       "%webView_platformScriptureEditor_tabCouldNotOpen%": "No se pudo abrir esa pestaña. Inténtelo de nuevo.",
@@ -1292,7 +1290,7 @@
       }
     },
     "%webView_platformScriptureEditor_insertEndnoteAtSelection_2%": {
-      "fallbackKey": "%webView_platformScriptureEditor_insertEndnoteAtSelection%"
+      "fallbackKey": "%ScriptureEditorControl_21%"
     },
     "%webView_platformScriptureEditor_openChecks%": {
       "fallbackKey": "%webView_platformScriptureEditor_openChecksSidePanel%",
@@ -1302,13 +1300,16 @@
       }
     },
     "%webView_platformScriptureEditor_openChecks_2%": {
-      "fallbackKey": "%webView_platformScriptureEditor_openChecks%"
+      "fallbackKey": "%Paratext.ProjectProgress.ProgressPlanEditorForm.grpBasicChecks.Text%"
     },
     "%webView_platformScriptureEditor_options%": {
       "deprecationInfo": {
         "date": "2026-10-20",
         "message": "The editor menu column is now called \"View\". The new key is %webView_platformScriptureEditor_view%."
       }
+    },
+    "%webView_platformScriptureEditor_preview%": {
+      "fallbackKey": "%ScriptureView.Preview%"
     },
     "%webView_platformScriptureEditor_resetZoomToDefault%": {
       "deprecationInfo": {
@@ -1368,14 +1369,7 @@
       }
     },
     "%webView_platformScriptureEditor_switchScriptureView%": {
-      "fallbackKey": "%Paratext.TextForm.nextViewToolStripMenuItem.Text%",
-      "deprecationInfo": {
-        "date": "2026-10-20",
-        "message": "Sentence case: \"Switch scripture view\". The new key is %webView_platformScriptureEditor_switchScriptureView_2%."
-      }
-    },
-    "%webView_platformScriptureEditor_switchScriptureView_2%": {
-      "fallbackKey": "%webView_platformScriptureEditor_switchScriptureView%"
+      "fallbackKey": "%Paratext.TextForm.nextViewToolStripMenuItem.Text%"
     },
     "%webView_platformScriptureEditor_syncEditBlocked_banner%": {
       "deprecationInfo": {
