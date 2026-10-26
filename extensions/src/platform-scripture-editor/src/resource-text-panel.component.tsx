@@ -3,6 +3,7 @@ import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
   Button,
+  ContentZoomRoot,
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
@@ -21,7 +22,7 @@ import {
   ResourceType,
 } from 'platform-bible-utils';
 import { ChevronDown } from 'lucide-react';
-import { ComponentProps, useCallback, useEffect, useMemo, useRef } from 'react';
+import { ComponentProps, ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   hasNewScrollTarget,
   isEchoOfPublishedScrRef,
@@ -51,6 +52,9 @@ import type {
   ResourcePanelLocalizedStringKey,
   ResourcePanelLocalizedStrings,
 } from './resource-text-panel.const';
+import type { DblResourceInstallFailureReason } from './use-dbl-resource-auto-install.hook';
+import { RESOURCE_PANEL_INSTALL_FAILURE_KEYS } from './resource-text-panel.const';
+import { getInstallFailureMessageKey } from './install-failure-message.utils';
 
 /**
  * Falls back to the key itself, matching the idiom in `model-text-panel.component.tsx`. Falling
@@ -80,7 +84,8 @@ type ResourceSelectorDropdownProps = {
   selectedRef: PickerResource | undefined;
   dblResources: DblResourceData[];
   onSelectResource: (id: string) => void;
-  onShowResourcePicker: () => void;
+  /** Undefined hides the option: downloading adds to the project's list, so needs a project */
+  onShowResourcePicker: (() => void) | undefined;
   downloadResourcesLabel: string;
 };
 
@@ -100,7 +105,9 @@ function ResourceSelectorDropdown({
             variant="outline"
             className="tw:h-8 tw:w-full tw:justify-between tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap"
           >
-            <span className="tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
+            {/* `dir="auto"`: `getRefLabel` returns the joined short/full name as one text node, so
+                the label needs the name's own direction rather than the panel's. */}
+            <span className="tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap" dir="auto">
               {selectedRef ? getRefLabel(selectedRef.reference, dblResources) : ''}
             </span>
             <ChevronDown className="tw:ml-1 tw:h-4 tw:w-4 tw:shrink-0" />
@@ -119,15 +126,20 @@ function ResourceSelectorDropdown({
                 onCheckedChange={() => {
                   onSelectResource(refId);
                 }}
+                dir="auto"
               >
                 {getRefLabel(ref.reference, dblResources)}
               </DropdownMenuCheckboxItem>
             );
           })}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => onShowResourcePicker()}>
-            {downloadResourcesLabel}
-          </DropdownMenuItem>
+          {onShowResourcePicker && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => onShowResourcePicker()}>
+                {downloadResourcesLabel}
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
@@ -137,7 +149,11 @@ function ResourceSelectorDropdown({
 export type ResourceTextPanelProps = {
   /** Localized strings; import `RESOURCE_PANEL_STRING_KEYS` to resolve them. */
   localizedStrings: ResourcePanelLocalizedStrings;
-  /** Whether the panel has a project context (opened with a project id). */
+  /**
+   * Whether the panel has a project context (opened with a project id). Without one it shows only a
+   * resource it was asked to show, in `selectedRef`, and offers no download, which needs a
+   * project.
+   */
   hasProject: boolean;
   /**
    * Which kind of resource this panel shows. `'ScriptureResource'` is the Bible texts tab; every
@@ -188,6 +204,8 @@ export type ResourceTextPanelProps = {
   isUsjLoading: boolean;
   /** The displayed resource's text direction. Applied to the editor only, never to the messages. */
   textDirection: EditorOptions['textDirection'];
+  /** The editor's copy limit for the chapter on screen. See `EditorOptions.copyLimit`. */
+  copyLimit: EditorOptions['copyLimit'];
   /**
    * Whether a user-initiated pick is in flight, which this panel renders as "Selecting…". Distinct
    * from `isInstalling`, where the user picked nothing and a configured resource is just
@@ -198,7 +216,9 @@ export type ResourceTextPanelProps = {
   isInstalling: boolean;
   /** Whether the last install attempt for the selected resource failed. */
   installFailed: boolean;
-  /** Clears the failed-install state and re-attempts the same resource. */
+  /** Why the install failed, when it did. Decides whether the connection hint applies. */
+  installFailureReason: DblResourceInstallFailureReason | undefined;
+  /** Re-reads the catalog and re-attempts the same resource. */
   retryInstall: () => void;
   /** Whether the machine is online. Only adds a "check your connection" hint to install failures. */
   isOnline: boolean;
@@ -211,6 +231,12 @@ export type ResourceTextPanelProps = {
   onShowResourcePicker: () => void;
   /** Logger forwarded to the editor (the web view supplies the PAPI logger; tests may omit it). */
   logger?: ComponentProps<typeof Editorial>['logger'];
+  /**
+   * The selected resource's copyright notice, shown under the selector whatever the content state
+   * (loading, missing book, error or text). The web view supplies it because reading the notice
+   * needs PAPI.
+   */
+  copyrightNotice?: ReactNode;
 };
 
 /**
@@ -248,13 +274,16 @@ export function ResourceTextPanel({
   usjPossiblyError,
   isUsjLoading,
   textDirection,
+  copyLimit,
   isSelecting,
   isInstalling,
   installFailed,
+  installFailureReason,
   retryInstall,
   isOnline,
   onShowResourcePicker,
   logger,
+  copyrightNotice,
 }: ResourceTextPanelProps) {
   // #region Content state
 
@@ -339,9 +368,10 @@ export function ResourceTextPanel({
       isReadonly: true,
       hasSpellCheck: false,
       textDirection,
+      copyLimit,
       ...(extraValidMarkers.length > 0 ? { nodes: { extraValidMarkers } } : {}),
     }),
-    [textDirection, extraValidMarkers],
+    [textDirection, copyLimit, extraValidMarkers],
   );
 
   // `contentState` and `isBlankChapter` are deps because the content-area branches below UNMOUNT
@@ -484,7 +514,7 @@ export function ResourceTextPanel({
       highlightedVerseElement?.classList.remove('highlighted');
     };
     // The rule wants `scrRef` itself, but this effect is keyed on the three fields that decide where
-    // to scroll. `useWebViewScrollGroupScrRef` hands back a fresh object whenever the scroll group
+    // to scroll. `useScrollGroupScrRef` hands back a fresh object whenever the scroll group
     // publishes, including for a reference that did not change, so depending on the object would
     // restart the settle loop on updates that cannot move the target.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -498,7 +528,13 @@ export function ResourceTextPanel({
   const { emptyStatePromptKey, bookNotAvailableKey, pickButtonKey } =
     resolveResourcePanelStringKeys(resourceType);
 
-  if (!hasProject) {
+  // Both web-view types share this component and resolve to the same content-zoom memory identity
+  // (their container project), so each names its own area to keep its remembered level separate.
+  const contentZoomArea = resourceType === 'ScriptureResource' ? 'bible-texts' : 'commentaries';
+
+  // With no project open, a resource the panel was asked to show (one opened from Home) is still
+  // shown; only with nothing to show does it ask for a project.
+  if (!hasProject && !selectedRef) {
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
         <p>{localize(localizedStrings, '%webView_resourcePanel_noProject%')}</p>
@@ -583,9 +619,11 @@ export function ResourceTextPanel({
       <PanelRetryableErrorView
         message={localize(
           localizedStrings,
-          isOnline
-            ? '%webView_resourcePanel_installFailed%'
-            : '%webView_resourcePanel_installFailedOffline%',
+          getInstallFailureMessageKey(
+            installFailureReason,
+            isOnline,
+            RESOURCE_PANEL_INSTALL_FAILURE_KEYS,
+          ),
         )}
         retryLabel={localize(localizedStrings, '%webView_resourcePanel_retry%')}
         onRetry={retryInstall}
@@ -669,19 +707,26 @@ export function ResourceTextPanel({
         </div>
       );
 
+    // The zoom marker sits INSIDE the scroll box, never on it or above it: `scrollToVerse` adds a
+    // `getBoundingClientRect()` distance (zoomed pixels) to the box's `scrollTop` (unzoomed pixels),
+    // which agree only while the box itself is unscaled. The messages and the spinner above are app
+    // chrome and stay unmarked; while one of them shows, the pane reports no area and its declared
+    // default area stands in.
     return (
       <div
         className="tw:flex-1 tw:overflow-auto"
         dir={options.textDirection}
         data-testid={RESOURCE_TEXT_EDITOR_CONTAINER_TEST_ID}
       >
-        <Editorial
-          ref={editorRef}
-          scrRef={scrRef}
-          onScrRefChange={handleScrRefChange}
-          options={options}
-          logger={logger}
-        />
+        <ContentZoomRoot area={contentZoomArea}>
+          <Editorial
+            ref={editorRef}
+            scrRef={scrRef}
+            onScrRefChange={handleScrRefChange}
+            options={options}
+            logger={logger}
+          />
+        </ContentZoomRoot>
       </div>
     );
   };
@@ -697,14 +742,16 @@ export function ResourceTextPanel({
         selectedRef={selectedRef}
         dblResources={dblResources}
         onSelectResource={onSelectResource}
-        onShowResourcePicker={onShowResourcePicker}
+        onShowResourcePicker={hasProject ? onShowResourcePicker : undefined}
         downloadResourcesLabel={localize(
           localizedStrings,
           '%webView_resourcePanel_downloadResources%',
         )}
       />
 
-      {renderContent()}
+      {copyrightNotice}
+
+      <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">{renderContent()}</div>
     </div>
   );
 

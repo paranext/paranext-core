@@ -1,4 +1,4 @@
-import { type Frame, type Page } from '@playwright/test';
+import { type Frame, type Locator, type Page } from '@playwright/test';
 import {
   LAUNCH_PHASE_TIMEOUT_MS,
   requireIsolatedProjectRoot,
@@ -6,6 +6,7 @@ import {
   sendPapiRequestOnce,
   waitForPapiMethodRegistered,
 } from './helpers';
+import { suppressOnboardingTour } from './onboarding-tour.page';
 
 // Re-exported so the specs that reach for it through this module keep working: it is defined in
 // helpers.ts, which is the lower-level module and the single home for it.
@@ -25,6 +26,91 @@ export interface OpenScriptureEditorOptions {
 }
 const WEBSOCKET_PORT = 8876;
 const COMMAND_TIMEOUT_MS = 30_000;
+
+/**
+ * Names of the three content-zoom commands (registered in
+ * `src/main/services/web-view.service-router.ts`). Restated here rather than imported from
+ * `@shared/models/content-zoom.model`'s `CONTENT_ZOOM_COMMANDS`: `e2e-tests/tsconfig.json` carries
+ * no path aliases, so e2e specs cannot reach core source and this is the one place the literal is
+ * kept.
+ */
+export const CONTENT_ZOOM_COMMANDS = {
+  in: 'platform.webViewContentZoomIn',
+  out: 'platform.webViewContentZoomOut',
+  reset: 'platform.webViewContentZoomReset',
+} as const;
+
+/**
+ * The `<iframe data-web-view-id>` element's content frame — a real `Frame`, not a `FrameLocator`,
+ * so `evaluate` can read the CSS custom properties the platform writes onto the pane's own
+ * `documentElement`.
+ */
+export async function getEditorFrame(page: Page, webViewId: string): Promise<Frame> {
+  const handle = await page.locator(`iframe[data-web-view-id="${webViewId}"]`).elementHandle();
+  const frame = await handle?.contentFrame();
+  if (!frame) throw new Error(`Editor iframe ${webViewId} has no content frame`);
+  return frame;
+}
+
+/**
+ * Reads one zoom area's effective factor straight off the CSS custom property the platform writes
+ * as an inline style on the pane's `documentElement` (`pushContentZoom`'s
+ * `root.style.setProperty`), so it is readable from inside the frame without going through any DOM
+ * measurement. `areaId` is `''` for the `main` area.
+ */
+export async function readFactor(frame: Frame, areaId: string): Promise<number> {
+  const value = await frame.evaluate(
+    (variableName) =>
+      getComputedStyle(document.documentElement).getPropertyValue(variableName).trim(),
+    `--platform-content-zoom-${areaId || 'main'}`,
+  );
+  return Number(value);
+}
+
+/**
+ * Sends a PAPI command from the renderer, exactly as a menu entry would (`window.papi` is exposed
+ * on `globalThis` but not typed there). Used both for the three content-zoom commands (with an area
+ * id) and for `platformScriptureEditor.toggleFootnotes` (without one).
+ */
+export async function sendCommandWithId(
+  page: Page,
+  commandName: string,
+  webViewId: string,
+  areaId?: string,
+): Promise<void> {
+  await page.evaluate(
+    ([cmd, id, area]) => {
+      // The renderer exposes `papi` on `globalThis`, untyped here (same pattern as
+      // scripture-text-grid-zoom.spec.ts's afterEach cleanup).
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const win = window as unknown as {
+        papi: { commands: { sendCommand: (c: string, ...a: unknown[]) => Promise<unknown> } };
+      };
+      return area === undefined
+        ? win.papi.commands.sendCommand(cmd, id)
+        : win.papi.commands.sendCommand(cmd, id, area);
+    },
+    [commandName, webViewId, areaId] as const,
+  );
+}
+
+/**
+ * Shows the footnotes pane, tolerating that it may already be visible: Power mode's footnotes
+ * auto-show/hide (`resolveFootnotesPaneAutoVisibility`) shows the pane by itself for any chapter
+ * that has notes — so sending `toggleFootnotes` unconditionally would just as often HIDE an
+ * already-auto-shown pane.
+ */
+export async function ensureFootnotesVisible(
+  page: Page,
+  frame: Frame,
+  webViewId: string,
+): Promise<void> {
+  const footnotesRoot = frame.locator('[data-platform-content-zoom-root="footnotes"]');
+  if ((await footnotesRoot.count()) === 0) {
+    await sendCommandWithId(page, 'platformScriptureEditor.toggleFootnotes', webViewId);
+  }
+  await footnotesRoot.waitFor({ state: 'attached', timeout: 20_000 });
+}
 /**
  * Poll until the ProjectLookupService advertises the bundled sample WEB project. The generic
  * `waitForAtLeastOneProjectMetadata` is NOT sufficient here: other PDP factories (e.g. the lexical
@@ -284,6 +370,9 @@ function escapeForRegExp(value: string): string {
  * book name localized, and the app under test runs in English, so a book CODE never matches.
  */
 export async function navigateToolbarBcv(mainPage: Page, reference: string): Promise<void> {
+  // Simple-mode specs never reach `waitForHomeTab` (that layout has no Home tab), so this is the
+  // one place every caller passes through before the tour could block the click below.
+  await suppressOnboardingTour(mainPage);
   await mainPage.locator('button[aria-label="book-chapter-trigger"]').first().click();
   const input = mainPage.locator('[data-radix-popper-content-wrapper] input');
   await input.fill(reference);
@@ -440,4 +529,18 @@ export async function findScriptureEditorFrame(page: Page, timeout = 30_000): Pr
     await page.waitForTimeout(500);
   }
   throw new Error(`Scripture editor not found: no Project button visible after ${timeout}ms`);
+}
+
+/**
+ * Click the very start of `glyph`'s rendered text (the boundary immediately BEFORE it) — the
+ * insertion point a user would click to type new content right before a marker glyph, or to reach
+ * the end of the text a closing glyph follows. A plain `.click()` lands mid-glyph at an
+ * unpredictable offset; clicking just inside the left edge (x: 1) is the reliable way to place the
+ * caret at a specific structural boundary in a contentEditable without counting characters (glyph
+ * text length varies with `+`-nesting).
+ */
+export async function clickBeforeGlyph(glyph: Locator): Promise<void> {
+  const box = await glyph.boundingBox();
+  if (!box) throw new Error('Glyph has no bounding box (not visible/attached)');
+  await glyph.click({ position: { x: 1, y: box.height / 2 } });
 }

@@ -25,9 +25,16 @@ import path from 'path';
 import '@main/global-this.model';
 import '@node/utils/log-archiver.util';
 import { announceAppWindowInput, startAppWindowInputEvent } from '@main/app-window-input.util';
+import {
+  announceAppWillShutDown,
+  announceExtensionHostStopped,
+  startLifecycleEvents,
+} from '@main/lifecycle-events.util';
+import { registerExtensionHostStoppedStateCommand } from '@main/extension-host-stopped-state.command';
 import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util';
 import { getVerseNavigationCommand } from '@main/verse-navigation-shortcuts.util';
 import { getPhysicalHistoryNavigationDirection } from '@main/reference-history-keyboard.util';
+import { createInterfaceScaling } from '@main/interface-scaling.util';
 import { openTermsOfServiceWindow } from '@main/terms-of-service-window';
 import chroma from 'chroma-js';
 import {
@@ -39,9 +46,14 @@ import {
 import { startDialogServiceRouter } from '@main/services/dialog.service-router';
 import { startUsersnapServiceRouter } from '@main/services/usersnap.service-router';
 import { startBookChapterControlServiceRouter } from '@main/services/book-chapter-control.service-router';
+import {
+  applyPendingFirstRunReset,
+  startFirstRunServiceRouter,
+} from '@main/services/first-run.service-router';
 import { startOnboardingTourServiceRouter } from '@main/services/onboarding-tour.service-router';
 import { startScrollGroupNavigationCommands } from '@main/services/scroll-group-navigation.commands';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
+import { registerDisplayMediaRequestHandler } from '@main/services/display-media-request.util';
 import { dotnetDataProvider } from '@main/services/dotnet-data-provider.service';
 import { enhancedResourceProtocolService } from '@main/services/enhanced-resource-protocol.service';
 import { extensionAssetProtocolService } from '@main/services/extension-asset-protocol.service';
@@ -49,6 +61,10 @@ import { extensionHostService } from '@main/services/extension-host.service';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
 import { registerPowerMonitorListeners } from '@main/services/power-monitor-logging.service';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
+import {
+  deferAutomaticSyncForSession,
+  getAutomaticSyncConsent,
+} from '@main/first-run-consent.util';
 import {
   performShutdownTasks,
   performWindowCloseTasks,
@@ -95,7 +111,6 @@ import {
   addWindow,
   announceRoutingTargetChange,
   countWindowsThatCouldBeTheLastOne,
-  doesNavigationReplaceRendererRegistrations,
   focusWindow,
   getFocusedWindowId,
   getTargetWindowId,
@@ -120,6 +135,11 @@ import {
   setWindowPendingContentPredicate,
   startFocusedWindowIdEvent,
 } from '@main/services/window-state.service';
+import {
+  closeAllPorts as closeAllPapiPorts,
+  closeWindowPort as closePapiPortForWindow,
+  registerWindow as registerWindowWithPapiPortBroker,
+} from '@main/services/papi-port-broker.service';
 import { confirmCloseAllWindows } from '@main/services/close-all-prompt.service';
 import { decideWindowClose } from '@main/services/window-close-decision.service';
 import {
@@ -203,35 +223,38 @@ import {
 } from '@node/utils/command-line.util';
 import { resolveHtmlPath } from '@node/utils/util';
 import {
-  DEFAULT_ZOOM_FACTOR,
   DEV_MODE_QUERY_PARAMETER,
   IS_MAIN_WINDOW_QUERY_PARAMETER,
   LOG_LEVEL_QUERY_PARAMETER,
-  MAX_ZOOM_FACTOR,
-  MIN_ZOOM_FACTOR,
   SCROLL_GROUP_STATE_QUERY_PARAMETER,
   STARTUP_MARK_PROCESS_START,
   STARTUP_MARKS_QUERY_PARAMETER,
   THEME_STATE_QUERY_PARAMETER,
+  USERSNAP_SPACE_API_KEY,
   WINDOW_AWAITING_FIRST_ACTIVATION_QUERY_PARAMETER,
   WINDOW_ID,
 } from '@shared/data/platform.data';
-import { GET_METHODS } from '@shared/data/rpc.model';
+import { GET_METHODS, INTENTIONAL_CLOSE_CODE } from '@shared/data/rpc.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import { WINDOW_MIN_WIDTH_PX } from '@shared/models/window-constraints.model';
 import * as commandService from '@shared/services/command.service';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
 import { readFile } from 'fs/promises';
-import { networkObjectService } from '@shared/services/network-object.service';
+import {
+  networkObjectService,
+  onDidCreateNetworkObject,
+} from '@shared/services/network-object.service';
 import * as networkService from '@shared/services/network.service';
 import { get } from '@shared/services/project-data-provider.service';
 import { settingsService } from '@shared/services/settings.service';
+import { settingsServiceDataProviderName } from '@shared/services/settings.service-model';
 import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
 import { markStartup, markStartupOnce } from '@shared/utils/startup-timing.util';
 import { SerializedRequestType } from '@shared/utils/util';
 import { CommandNames, SettingTypes } from 'papi-shared-types';
 import {
+  adjustZoomFactor,
   getErrorMessage,
   isPlatformError,
   LocalizeKey,
@@ -245,19 +268,14 @@ import {
 
 // #region Helper functions
 
-/**
- * Get the zoom factor from settings or return the default value
- *
- * @returns The stored zoom factor or the default value
- */
-const getZoomFactor = async (): Promise<number> => {
-  try {
-    return await settingsService.get('platform.zoomFactor');
-  } catch (e) {
-    logger.warn(`Failed to get zoom factor from settings: ${getErrorMessage(e)}`);
-    return DEFAULT_ZOOM_FACTOR;
-  }
-};
+/** Keeps every window at the zoom factor setting (interface scaling) */
+const interfaceScaling = createInterfaceScaling({
+  get: () => settingsService.get('platform.zoomFactor'),
+  subscribe: (callback) =>
+    settingsService.subscribe('platform.zoomFactor', callback, { retrieveDataImmediately: false }),
+  onDidCreateNetworkObject,
+  settingsProviderName: settingsServiceDataProviderName,
+});
 
 /**
  * Save the zoom factor to settings
@@ -272,32 +290,18 @@ const setZoomFactor = async (factor: number): Promise<void> => {
   }
 };
 
-/** Reset the zoom factor of the app to 1.0 (100%) */
-const resetZoomFactor = async () => {
-  try {
-    return await settingsService.reset('platform.zoomFactor');
-  } catch (e) {
-    logger.warn(`Failed to reset zoom factor from settings: ${getErrorMessage(e)}`);
-    return DEFAULT_ZOOM_FACTOR;
-  }
-};
-
-/** Increase the zoom factor of all application windows by 0.1, up to a maximum of 3.0 */
+/** Increase the zoom factor of all application windows by one step (0.1), up to 3.0 */
 const zoomIn = async () => {
-  const currentZoom = await getZoomFactor();
-  if (currentZoom < MAX_ZOOM_FACTOR) {
-    const newZoom = currentZoom + 0.1;
-    await setZoomFactor(newZoom);
-  }
+  const currentZoom = await interfaceScaling.read();
+  const newZoom = adjustZoomFactor(currentZoom, 1);
+  if (newZoom !== currentZoom) await setZoomFactor(newZoom);
 };
 
-/** Decrease the zoom factor of all application windows by 0.1, down to a minimum of 0.5 */
+/** Decrease the zoom factor of all application windows by one step (0.1), down to 0.5 */
 const zoomOut = async () => {
-  const currentZoom = await getZoomFactor();
-  if (currentZoom > MIN_ZOOM_FACTOR) {
-    const newZoom = currentZoom - 0.1;
-    await setZoomFactor(newZoom);
-  }
+  const currentZoom = await interfaceScaling.read();
+  const newZoom = adjustZoomFactor(currentZoom, -1);
+  if (newZoom !== currentZoom) await setZoomFactor(newZoom);
 };
 
 // #endregion
@@ -430,6 +434,22 @@ async function main() {
   // the gestures that dismiss transient overlays
   await startAppWindowInputEvent();
 
+  // Register the lifecycle events, then forward the extension host service's unexpected stops to
+  // every window. Subscribed before the extension host is started further down, so the very first
+  // process is covered too.
+  await startLifecycleEvents();
+  extensionHostService.onDidStopUnexpectedly(announceExtensionHostStopped);
+  // Registered this early so a window that connects while main is still starting up can already ask
+  // whether the extension host stopped; a later registration would answer it "no handler". A failure
+  // costs only that catch-up, so it is logged rather than aborting startup.
+  try {
+    await registerExtensionHostStoppedStateCommand();
+  } catch (error) {
+    logger.error(
+      `Failed to register platform.getExtensionHostStoppedState; windows opened after a stop will not show the notice: ${getErrorMessage(error)}`,
+    );
+  }
+
   // Register the focused-window-id event so the `focus`/`blur` handlers wired up per window below
   // can announce every change made through `setFocusedWindowId`/`removeWindow`
   await startFocusedWindowIdEvent();
@@ -461,6 +481,7 @@ async function main() {
       started: startBookChapterControlServiceRouter(),
     },
     { name: 'onboarding tour service router', started: startOnboardingTourServiceRouter() },
+    { name: 'first-run service router', started: startFirstRunServiceRouter() },
     { name: 'scripture navigation commands', started: startScrollGroupNavigationCommands() },
     { name: 'notification service router', started: startNotificationServiceRouter() },
     { name: 'window service router', started: startWindowServiceRouter() },
@@ -482,6 +503,13 @@ async function main() {
     throw new Error(
       `Could not start the app-global services in main: ${failedGlobalServiceNames.join(', ')}. Each failure is logged above.`,
     );
+
+  // Follow the zoom factor setting. Not awaited, as in the theme service host: resolving a provider
+  // that is not registered yet spends the whole RPC retry budget, and the extension host that
+  // registers this one is only spawned below.
+  // TODO(PT-4807): after an extension-host restart the settings service still holds the old
+  // provider, so re-subscribing fails and zoom changes stop until the app restarts.
+  interfaceScaling.startFollowingSetting();
 
   // Window layout persistence must register its request handlers before any window exists so a
   // renderer's layout load can never race the registration
@@ -651,6 +679,9 @@ async function main() {
   // handler's graceful shutdown has already started.
   app.on('before-quit', () => {
     markQuitRequested();
+    // Before any window is destroyed, so a window can read its own connection dying a moment later
+    // as the quit it is, rather than as a failure. Best effort; see the event's doc.
+    announceAppWillShutDown();
   });
 
   // #region Set up the protocol client to receive navigation to this app's URI scheme
@@ -885,6 +916,8 @@ async function main() {
     // against the renderer's own naming. Until the renderer's first title arrives, Electron answers
     // `getTitle()` with its own default, which is why `summarizeWindows` reads a window's readiness
     // rather than trusting its title.
+    // interface-scaling.spec.ts's `appWindowOptions` mirrors `show`, the title bar options and
+    // `webPreferences` here, so keep the two in step
     const newWindow = new BrowserWindow({
       show: activation.showOnCreate,
       ...(boundsState?.bounds ? { x: boundsState.bounds.x, y: boundsState.bounds.y } : {}),
@@ -926,6 +959,22 @@ async function main() {
         ? restoreInfo.entry.windowId
         : undefined,
     );
+    // Before `loadURL` below: the page asks for its PAPI port as soon as its preload runs, so the
+    // handler has to exist first. Registered on the WebContents, so it survives reloads.
+    //
+    // A window is routable only while it has a live PAPI channel and its window service shard has
+    // registered over it, so the ready mark follows the channel: it is cleared whenever the window's
+    // port closes, and the shard registering over the next port sets it again. A navigation that
+    // starts and is abandoned leaves the channel, and the mark, alone; one that completes, or a
+    // crash, closes the channel and clears the mark; and a reload that ends on an error page still
+    // clears it, because the old page's port has closed.
+    registerWindowWithPapiPortBroker(newWindow.webContents, windowId, {
+      onPortClosed: () => markWindowNotReady(windowId),
+    });
+    // A preload error otherwise shows only in that window's DevTools console
+    newWindow.webContents.on('preload-error', (_event, preloadPath, error) => {
+      logger.error(`Window ${windowId} preload ${preloadPath} failed: ${getErrorMessage(error)}`);
+    });
 
     // Tie the window to its persisted identity so layout persistence can serve and save it. If the
     // entry has gone (the user closed it while this window was starting), `assignEntryToWindow`
@@ -1223,16 +1272,6 @@ async function main() {
       );
       newWindow.webContents.reload();
     });
-    // A reload replaces the page and everything it registered, the same as a crash does. This also
-    // fires for the very first load, before the window was ever ready, which changes nothing.
-    //
-    // Deliberately NOT `did-start-loading`: that is a whole-tab signal with no frame information,
-    // and every web view in the app is an in-page iframe in this page, so it fires again every time
-    // the user opens a tab — which would strip a fully working window of its readiness with nothing
-    // to restore it. See `doesNavigationReplaceRendererRegistrations` for which navigations count.
-    newWindow.webContents.on('did-start-navigation', (details) => {
-      if (doesNavigationReplaceRendererRegistrations(details)) markWindowNotReady(windowId);
-    });
     newWindow.webContents.on(
       // @ts-expect-error - TS seems confused, as this matches the d.ts file and the docs
       'did-fail-load',
@@ -1449,6 +1488,15 @@ async function main() {
      * would no longer give the same answer.
      */
     let isAppGoingDown = false;
+    /**
+     * Destroy the window, closing its PAPI port first: `destroy()` skips the page's unload and so
+     * the page's own clean close, and a port left to die with the page reads as an unclean 1006 on
+     * main.
+     */
+    const closePapiPortAndDestroy = () => {
+      closePapiPortForWindow(windowId, 1001, 'window closing');
+      newWindow.destroy();
+    };
     newWindow.on('close', async (event) => {
       // A second close click while the first close is still working falls through to Electron's
       // default close on purpose: with the sync's request timeout disabled by the extension, the
@@ -1640,6 +1688,9 @@ async function main() {
         // the tracked list, and until that fires a fan-out would still ask a window that cannot
         // answer — and report the coverage of whatever it was doing as incomplete because of it.
         markWindowNotReady(windowId);
+        // The PAPI port is closed from here only on the paths that destroy the window, because
+        // `destroy()` skips the page's unload and so its `pagehide` close. On the `close()` path
+        // the page closes its own port with 1001 after its `beforeunload` teardown has used it.
         // The escape hatch above takes the window down on a second close click, which can happen
         // any time during the wait this handler just came out of
         if (newWindow.isDestroyed()) {
@@ -1649,7 +1700,7 @@ async function main() {
         } else if (isAppGoingDown) {
           // `event.preventDefault()` above suppresses Electron's default close; destroy() here
           // triggers the 'closed' event and allows the app to quit.
-          newWindow.destroy();
+          closePapiPortAndDestroy();
         } else {
           // Closed rather than destroyed, because the app is staying up and the page still has
           // teardown of its own to run — `destroy()` skips `beforeunload`, which is what prunes
@@ -1666,7 +1717,7 @@ async function main() {
             logger.warn(
               `Window ${windowId} did not finish closing within ${WINDOW_CLOSE_TIME_OUT_MS} ms; destroying it`,
             );
-            newWindow.destroy();
+            closePapiPortAndDestroy();
           }, WINDOW_CLOSE_TIME_OUT_MS);
           newWindow.once('closed', () => clearTimeout(forceCloseTimeout));
         }
@@ -1788,7 +1839,10 @@ async function main() {
       logger.error(`Window ${windowId} could not load URL "${urlToLoad}". ${getErrorMessage(e)}`);
     });
 
-    // Register zoom keyboard shortcuts. MacOS already supports this natively
+    // Window-chrome keyboard shortcuts: dev tools (F12), tab and tab-group navigation, and PT9-style
+    // verse/reference-history navigation. Content zoom is not among them — the window-chrome zoom
+    // chords live in `web-view-content-zoom.chrome-keys.ts`, and the in-view case in the bootstrap
+    // script it injects.
     newWindow.webContents.on('before-input-event', (event, input) => {
       // Just act on keyDown and ignore keyUp. Could cause trouble if we need to preventDefault on keyUp
       if (input.type === 'keyUp') return;
@@ -1876,26 +1930,6 @@ async function main() {
       if (process.platform !== 'darwin') {
         // Non-Mac shortcuts
 
-        // Zoom shortcuts - Mac's zoom shortcuts already work because of the menu items
-        // Zoom in: Ctrl++ or Ctrl+=
-        if (input.control && (input.key === '=' || input.key === '+')) {
-          event.preventDefault();
-          zoomIn();
-          return;
-        }
-        // Zoom out: Ctrl+-
-        if (input.control && input.key === '-') {
-          event.preventDefault();
-          zoomOut();
-          return;
-        }
-        // Reset zoom: Ctrl+0
-        if (input.control && input.key === '0') {
-          event.preventDefault();
-          resetZoomFactor();
-          return;
-        }
-
         // keyboard tab group navigation - Ctrl+PgUp and Ctrl+PgDown
         if (input.control && (input.key === 'PageUp' || input.key === 'PageDown')) {
           event.preventDefault();
@@ -1925,36 +1959,12 @@ async function main() {
       }
     });
 
-    // Set initial zoom factor from settings
-    newWindow.webContents.on('did-finish-load', async () => {
-      try {
-        const zoom = await getZoomFactor();
-        newWindow.webContents.setZoomFactor(zoom);
-      } catch (e) {
-        logger.error(`Failed to set initial zoom factor: ${getErrorMessage(e)}`);
-      }
+    // Keep this window at the zoom factor setting through every document it loads and every change
+    const stopInterfaceScaling = interfaceScaling.addWindow(newWindow);
+    windowCloseUnsubscribers.add(async () => {
+      stopInterfaceScaling();
+      return true;
     });
-
-    // Update zoom factor when the setting changes (per-window subscription with cleanup)
-    try {
-      windowCloseUnsubscribers.add(
-        await settingsService.subscribe('platform.zoomFactor', async (newZoomFactor) => {
-          const zoomFactor = isPlatformError(newZoomFactor)
-            ? (() => {
-                logger.error(`Error getting new zoom factor: ${getErrorMessage(newZoomFactor)}`);
-                return DEFAULT_ZOOM_FACTOR;
-              })()
-            : newZoomFactor;
-          try {
-            newWindow.webContents.setZoomFactor(zoomFactor);
-          } catch (e) {
-            logger.error(`Failed to update zoom factor: ${getErrorMessage(e)}`);
-          }
-        }),
-      );
-    } catch (e) {
-      logger.warn(`Failed to subscribe to zoom factor changes: ${getErrorMessage(e)}`);
-    }
 
     // Remove this if your app does not use auto updates
     // eslint-disable-next-line
@@ -2342,6 +2352,9 @@ async function main() {
         dotnetDataProvider.waitForClose(PROCESS_CLOSE_TIME_OUT_MS),
         extensionHostService.waitForClose(PROCESS_CLOSE_TIME_OUT_MS),
       ]);
+      // Windows are normally destroyed by now, so this closes nothing; it is the backstop for a
+      // port still open when the network goes down, so it reads as an intentional close.
+      closeAllPapiPorts(INTENTIONAL_CLOSE_CODE, 'app shutdown');
       await networkService.shutdown();
 
       // In development, the dotnet watcher was killed so we have to wait here.
@@ -2383,6 +2396,13 @@ async function main() {
         },
       );
 
+      // Usersnap's native screenshot asks for a display-media stream. When Usersnap is configured,
+      // serve the window's top frame without showing an OS screen picker. Code in the top frame's
+      // origin, including web views created with the default `allowSameOrigin`, shares that grant;
+      // web views with `allowSameOrigin: false` and any other iframe are denied (see
+      // `selectDisplayMediaSource`).
+      registerDisplayMediaRequestHandler(session.defaultSession, USERSNAP_SPACE_API_KEY);
+
       // Install Chromium devtools extensions once (not per-window)
       if (isDebug) {
         await installExtensions();
@@ -2399,6 +2419,8 @@ async function main() {
           logger.info(`Failed to build the macOS menubar ${error}`);
         }
       }
+
+      await applyPendingFirstRunReset();
 
       // Caught here rather than left to reject this chain: `createWindow` refuses outright during a
       // quit and the restore reads from disk, so this can fail — and a rejection would skip the
@@ -2545,7 +2567,11 @@ async function main() {
 
   commandService.registerCommand('platform.restartExtensionHost', restartExtensionHost, {
     method: {
-      summary: 'Restart the extension host which reloads and reinitializes TS/JS extensions',
+      summary:
+        'Restart the extension host which reloads and reinitializes TS/JS extensions. Resolves ' +
+        'once the new process is forked. A call while a restart is already in flight (until the ' +
+        'new extension host announces its start) joins that restart and resolves with it, at ' +
+        'once if the new process is already forked.',
       params: [],
       result: {
         name: 'return value',
@@ -2731,6 +2757,33 @@ async function main() {
     },
   );
 
+  commandService.registerCommand('platform.getAutomaticSyncConsent', getAutomaticSyncConsent, {
+    method: {
+      summary:
+        'Whether the first-run sync consent gate allows an automatic Simple-mode Send/Receive to start now',
+      params: [],
+      result: {
+        name: 'return value',
+        schema: { type: 'string', enum: ['granted', 'unconfirmed', 'deferred'] },
+      },
+    },
+  });
+
+  commandService.registerCommand(
+    'platform.deferAutomaticSyncForSession',
+    async () => deferAutomaticSyncForSession(),
+    {
+      method: {
+        summary: 'Withhold automatic Simple-mode Send/Receive for the rest of this app session',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
   commandService.registerCommand(
     'platform.isFullScreen',
     async () => {
@@ -2823,9 +2876,9 @@ async function main() {
     {
       method: {
         summary:
-          'Increase the zoom level of the entire UI, including menus and toolbars, by 10 %. ' +
-          'On Windows and Linux, Ctrl+= / Ctrl++ invoke this until PT-4577 hands those chords ' +
-          'to per-pane content zoom (platform.webViewContentZoomIn).',
+          'Increase the app-wide interface scaling — menus, toolbars and content — to the next ' +
+          '10 % mark in that direction. Has no default keyboard shortcut; per-pane content zoom ' +
+          'uses platform.webViewContentZoomIn.',
         params: [],
         result: {
           name: 'return value',
@@ -2843,9 +2896,9 @@ async function main() {
     {
       method: {
         summary:
-          'Decrease the zoom level of the entire UI, including menus and toolbars, by 10 %. ' +
-          'On Windows and Linux, Ctrl+- invokes this until PT-4577 hands that chord to per-pane ' +
-          'content zoom (platform.webViewContentZoomOut).',
+          'Decrease the app-wide interface scaling — menus, toolbars and content — to the next ' +
+          '10 % mark in that direction. Has no default keyboard shortcut; per-pane content zoom ' +
+          'uses platform.webViewContentZoomOut.',
         params: [],
         result: {
           name: 'return value',

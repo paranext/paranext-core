@@ -7,7 +7,7 @@ import {
   getExtensionContributedKeys,
   getFallbackRedirectedKeys,
   readShippedLocale,
-} from '@node/utils/locale-assets.test-helper';
+} from '@node/utils/locale-assets.test-utils';
 
 // Guards the shipped localization sources against a key that a component asks for but no shipping
 // source defines. This file has no paired module by design: its subject is the locale assets

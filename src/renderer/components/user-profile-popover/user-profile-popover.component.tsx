@@ -1,4 +1,5 @@
 import {
+  Badge,
   Button,
   cn,
   Popover,
@@ -16,6 +17,7 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  useEvent,
   type LanguageInfo,
 } from 'platform-bible-react';
 import { CircleUserRound, Languages, Monitor, Moon, Sun, User, Wifi } from 'lucide-react';
@@ -27,18 +29,33 @@ import {
 } from '@renderer/hooks/papi-hooks';
 import { useInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
 import { useRegistrationValidity } from '@renderer/hooks/use-registration-validity.hook';
+import { includeCurrentLanguages } from '@renderer/services/include-current-languages';
+import { offerRestartAfterInterfaceLanguageChange } from '@renderer/services/interface-language-restart-prompt';
+import {
+  DEFAULT_INTERNET_SETTINGS,
+  INTERNET_SETTINGS_DATA_PROVIDER,
+} from '@renderer/components/internet-settings.constants';
+import {
+  getOfferedLanguageDefaults,
+  switchInterfaceLanguage,
+} from '@shared/data/interface-languages.data';
 import { sendCommand } from '@shared/services/command.service';
+import { getDataProviderObjectId } from '@shared/services/data-provider.service';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
+import type { NetworkObjectDetails } from '@shared/models/network-object.model';
+import { onDidCreateNetworkObject } from '@shared/services/network-object.service';
 import { themeServiceDataProviderName } from '@shared/services/theme.service-model';
 import {
+  formatReplacementString,
   getErrorMessage,
   isPlatformError,
   LocalizeKey,
+  type LanguageStrings,
   type ThemeDefinitionExpanded,
 } from 'platform-bible-utils';
-import type { RegistrationData } from 'paratext-registration';
-import { useEffect, useState } from 'react';
+import type { RegistrationData, ServerType } from 'paratext-registration';
+import { useCallback, useEffect, useState } from 'react';
 import './user-profile-popover.component.css';
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
@@ -47,12 +64,21 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%userProfile_header_defaultName%',
   '%userProfile_header_notRegistered%',
   '%userProfile_interfaceMode_simple_label%',
-  '%userProfile_interfaceMode_simple_description%',
+  '%userProfile_interfaceMode_simple_description_2%',
   '%userProfile_interfaceMode_power_label%',
-  '%userProfile_interfaceMode_power_description%',
+  '%userProfile_interfaceMode_power_labelWithPreview%',
+  '%userProfile_interfaceMode_power_description_2%',
   '%userProfile_profileAndRegistration%',
   '%userProfile_registrationNeeded%',
   '%userProfile_networkSettings_2%',
+  '%userProfile_server_badge_development%',
+  '%userProfile_server_badge_production%',
+  '%userProfile_server_badge_qualityAssurance%',
+  '%userProfile_server_badge_test%',
+  '%userProfile_server_tooltip_development%',
+  '%userProfile_server_tooltip_production%',
+  '%userProfile_server_tooltip_qualityAssurance%',
+  '%userProfile_server_tooltip_test%',
   '%userProfile_language%',
   '%userProfile_appearance%',
   '%userProfile_appearance_light%',
@@ -60,9 +86,49 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%userProfile_appearance_system%',
 ];
 
-const DEFAULT_AVAILABLE_LANGUAGES: Record<string, LanguageInfo> = {
-  en: { autonym: 'English' },
+/**
+ * Maps each server environment to its badge label and tooltip localize keys, so the "Internet &
+ * connectivity" row can show which server `ParatextData.dll` currently targets.
+ *
+ * In most cases, probably only the Production label need be translated into non-English locales —
+ * it's the only badge most normal users ever see, while the other three target a dev/support
+ * audience who will recognize terse English environment names regardless of interface language;
+ * translating them risks adding confusion rather than clarity. This reasoning might not hold in all
+ * cases (e.g., non-Roman scripts), so they are available for localization as needed. The tooltips
+ * carry the real, localized explanation for anyone (including a non-English-speaking user who ends
+ * up on a non-Production server) who needs to understand what's going on, so all four tooltips
+ * should normally be translated.
+ */
+const SERVER_BADGE_KEYS: Record<ServerType, { label: LocalizeKey; tooltip: LocalizeKey }> = {
+  Production: {
+    label: '%userProfile_server_badge_production%',
+    tooltip: '%userProfile_server_tooltip_production%',
+  },
+  QualityAssurance: {
+    label: '%userProfile_server_badge_qualityAssurance%',
+    tooltip: '%userProfile_server_tooltip_qualityAssurance%',
+  },
+  Development: {
+    label: '%userProfile_server_badge_development%',
+    tooltip: '%userProfile_server_tooltip_development%',
+  },
+  Test: {
+    label: '%userProfile_server_badge_test%',
+    tooltip: '%userProfile_server_tooltip_test%',
+  },
 };
+
+/**
+ * The network object id `paratextRegistration.internetSettingsDataProvider` registers under.
+ * Compared against `onDidCreateNetworkObject` events to catch the moment it first registers — see
+ * `NetworkSettingsRow`.
+ */
+const INTERNET_SETTINGS_DATA_PROVIDER_OBJECT_ID = getDataProviderObjectId(
+  INTERNET_SETTINGS_DATA_PROVIDER,
+);
+
+/** Shown while the offered languages load, or if they cannot be read: exactly the offered languages. */
+const OFFERED_LANGUAGE_DEFAULTS = getOfferedLanguageDefaults();
 
 /**
  * Placeholder passed as the default value for the `CurrentTheme` data hook so it has something
@@ -123,10 +189,110 @@ function ReminderDot({ testId, className }: { testId: string; className?: string
 }
 
 /**
+ * The "Internet & connectivity" row, including its server badge.
+ *
+ * Isolated into its own component so the parent can force a fresh mount (via the `key` it supplies)
+ * once `paratextRegistration.internetSettingsDataProvider` registers, if that happens after this
+ * row's first mount. `useDataProvider`/`useData` only re-attempt a lookup that is later disposed
+ * after having been held (see `createUseNetworkObjectHook`); a lookup that comes back empty on its
+ * very first attempt — the data provider has not registered yet — has nothing to dispose, so it is
+ * never retried on its own and the badge would otherwise stay hidden for the rest of the session.
+ * Remounting runs that first lookup again from scratch. Tracked generically at PT-4417; this is a
+ * local workaround for this one consumer, not a fix to the shared hook.
+ */
+function NetworkSettingsRow({
+  localizedStrings,
+  onNetworkSettingsClick,
+}: {
+  localizedStrings: LanguageStrings;
+  onNetworkSettingsClick: (requestDeveloperSettings: boolean) => void;
+}) {
+  const internetSettingsProvider = useDataProvider(INTERNET_SETTINGS_DATA_PROVIDER);
+  const [internetSettings, , isLoadingInternetSettings] = useData(
+    internetSettingsProvider,
+  ).InternetSettings(undefined, DEFAULT_INTERNET_SETTINGS);
+  const selectedServer: ServerType | undefined =
+    isLoadingInternetSettings || isPlatformError(internetSettings)
+      ? undefined
+      : internetSettings.selectedServer;
+
+  return (
+    <div className="tw:relative tw:flex tw:w-full tw:items-center">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="tw:w-full tw:justify-start tw:gap-2 tw:px-2 tw:font-normal"
+        onClick={(e) => onNetworkSettingsClick(e.shiftKey)}
+        // A keyboard-activated click on a focused button carries the live modifier state in
+        // Chromium, so this duplicates that path defensively rather than depending on it:
+        // `preventDefault` stops the native click the Enter keypress would otherwise also
+        // trigger, so Shift+Enter calls the handler exactly once.
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && e.shiftKey) {
+            e.preventDefault();
+            onNetworkSettingsClick(true);
+          }
+        }}
+        data-testid="user-profile-action-network"
+      >
+        <Wifi className="tw:size-3.5" />
+        {localizedStrings['%userProfile_networkSettings_2%']}
+      </Button>
+      {selectedServer !== undefined && (
+        // A sibling of the Button, not a child: a focusable element nested inside another
+        // interactive element fails the axe `nested-interactive` rule and folds the badge
+        // text into the button's accessible name. Absolutely positioned over the row's right
+        // edge to keep the original layout. Narrowly scoped TooltipProvider — the file's other
+        // one only wraps the toolbar-trigger tooltip, not PopoverContent.
+        <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {/* Independently clickable and keyboard-activatable, mirroring the row Button's
+                  plain-click and Shift-click behavior exactly: the badge is a second,
+                  equivalent way to reach the same two outcomes, not a new one. `role="button"`
+                  plus its own key handling make that contract explicit now that it is no
+                  longer a plain nested span inside the Button. `tabIndex` also makes it a
+                  separate focus stop (Tab reaches the row, a second Tab reaches the badge) so
+                  a keyboard or screen-reader user can still reach the tooltip — the one case
+                  that matters is a non-English speaker on a non-Production server, where the
+                  badge alone isn't enough context but the (localized) tooltip is. */}
+              <Badge
+                variant="muted"
+                data-testid="user-profile-server-badge"
+                className="tw:absolute tw:end-2 tw:top-1/2 tw:-translate-y-1/2 tw:cursor-pointer"
+                role="button"
+                tabIndex={0}
+                onClick={(e) => onNetworkSettingsClick(e.shiftKey)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onNetworkSettingsClick(e.shiftKey);
+                  }
+                }}
+              >
+                {localizedStrings[SERVER_BADGE_KEYS[selectedServer].label]}
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p className="tw:font-light">
+                {localizedStrings[SERVER_BADGE_KEYS[selectedServer].tooltip]}
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+    </div>
+  );
+}
+
+/**
  * Popover triggered from the top-right of the toolbar that surfaces the user's profile (name,
  * email), interface mode, registration / network settings shortcuts, language, and appearance
  * (theme) controls. Replaces the previous standalone theme-toggle, internet-settings, and
  * Paratext-registration buttons in the toolbar.
+ *
+ * The Power option's label is marked as a preview: Power mode ships with features still missing, so
+ * users should read the gaps as "not built yet" rather than as bugs.
  *
  * When the user's Paratext registration is missing or invalid, an unobtrusive reminder dot appears
  * on the toolbar trigger and on the "Profile & registration" row. The dot is never the only signal:
@@ -175,14 +341,36 @@ export function UserProfilePopover() {
     }
   };
 
-  const handleNetworkSettings = async () => {
+  // The popover does not need to know the current server to decide whether the dialog should allow
+  // changing it — that is computed live, inside the dialog, from the server the data provider
+  // reports when it opens. This only forwards whether Shift was held, choosing between the two
+  // commands: one that unlocks the (otherwise hidden) server-selection control for this open, and
+  // the plain one that doesn't.
+  const handleNetworkSettings = async (requestDeveloperSettings: boolean) => {
     setIsOpen(false);
     try {
-      await sendCommand('paratextRegistration.showInternetSettings');
+      await sendCommand(
+        requestDeveloperSettings
+          ? 'paratextRegistration.showInternetSettingsWithServerSelection'
+          : 'paratextRegistration.showInternetSettings',
+      );
     } catch (e: unknown) {
       logger.warn(`UserProfilePopover: failed to open internet settings: ${getErrorMessage(e)}`);
     }
   };
+
+  // Bumped to force a fresh mount of NetworkSettingsRow — see its doc comment for why that is the
+  // recovery path when the internet settings data provider registers after this popover's first
+  // render of that row.
+  const [internetSettingsRetryKey, setInternetSettingsRetryKey] = useState(0);
+  useEvent(
+    onDidCreateNetworkObject,
+    useCallback((networkObjectDetails: NetworkObjectDetails) => {
+      if (networkObjectDetails.id === INTERNET_SETTINGS_DATA_PROVIDER_OBJECT_ID) {
+        setInternetSettingsRetryKey((previous) => previous + 1);
+      }
+    }, []),
+  );
 
   const [interfaceLanguage, setInterfaceLanguage] = useSetting('platform.interfaceLanguage', [
     'en',
@@ -195,18 +383,21 @@ export function UserProfilePopover() {
 
   const [availableLanguagesPossiblyError] = useData(
     localizationService.dataProviderName,
-  ).AvailableInterfaceLanguages(undefined, DEFAULT_AVAILABLE_LANGUAGES);
+  ).AvailableInterfaceLanguages(undefined, OFFERED_LANGUAGE_DEFAULTS);
   const availableLanguages: Record<string, LanguageInfo> = isPlatformError(
     availableLanguagesPossiblyError,
   )
-    ? DEFAULT_AVAILABLE_LANGUAGES
+    ? OFFERED_LANGUAGE_DEFAULTS
     : availableLanguagesPossiblyError;
-  const sortedLanguageEntries = sortLanguageEntries(Object.entries(availableLanguages));
+  // Show the current primary language even when not offered, so it appears pressed.
+  const sortedLanguageEntries = sortLanguageEntries(
+    Object.entries(includeCurrentLanguages(availableLanguages, [primaryLanguage])),
+  );
 
   const handleLanguageChange = (value: string) => {
     if (value === '') return;
     if (value === primaryLanguage) return;
-    const next = [value, ...safeInterfaceLanguage.filter((l) => l !== value)];
+    const next = switchInterfaceLanguage(safeInterfaceLanguage, value);
     // Setting writes are asynchronous, so the failure arrives as a rejection: a synchronous
     // try/catch around this call cannot see it. A missing setter is a real runtime state, not a
     // type formality — `useSetting` has no setter while the subscription is throttled — so say so
@@ -215,9 +406,11 @@ export function UserProfilePopover() {
       logger.warn('UserProfilePopover: cannot set interface language; the setting is unavailable');
       return;
     }
-    setInterfaceLanguage(next).catch((e: unknown) => {
-      logger.warn(`UserProfilePopover: failed to set interface language: ${getErrorMessage(e)}`);
-    });
+    setInterfaceLanguage(next)
+      .then(() => offerRestartAfterInterfaceLanguageChange(safeInterfaceLanguage, next))
+      .catch((e: unknown) => {
+        logger.warn(`UserProfilePopover: failed to set interface language: ${getErrorMessage(e)}`);
+      });
   };
 
   const themeDataProvider = useDataProvider(themeServiceDataProviderName);
@@ -415,7 +608,7 @@ export function UserProfilePopover() {
               {localizedStrings['%userProfile_interfaceMode_simple_label%']}
             </span>
             <span className="user-profile-popover-text-3xs tw:leading-tight tw:text-muted-foreground">
-              {localizedStrings['%userProfile_interfaceMode_simple_description%']}
+              {localizedStrings['%userProfile_interfaceMode_simple_description_2%']}
             </span>
           </ToggleGroupItem>
           <ToggleGroupItem
@@ -434,10 +627,13 @@ export function UserProfilePopover() {
                 safeInterfaceMode === 'power' && 'tw:text-accent-foreground',
               )}
             >
-              {localizedStrings['%userProfile_interfaceMode_power_label%']}
+              {formatReplacementString(
+                localizedStrings['%userProfile_interfaceMode_power_labelWithPreview%'],
+                { label: localizedStrings['%userProfile_interfaceMode_power_label%'] },
+              )}
             </span>
             <span className="user-profile-popover-text-3xs tw:leading-tight tw:text-muted-foreground">
-              {localizedStrings['%userProfile_interfaceMode_power_description%']}
+              {localizedStrings['%userProfile_interfaceMode_power_description_2%']}
             </span>
           </ToggleGroupItem>
         </ToggleGroup>
@@ -462,16 +658,11 @@ export function UserProfilePopover() {
               </>
             )}
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="tw:w-full tw:justify-start tw:gap-2 tw:px-2 tw:font-normal"
-            onClick={handleNetworkSettings}
-            data-testid="user-profile-action-network"
-          >
-            <Wifi className="tw:size-3.5" />
-            {localizedStrings['%userProfile_networkSettings_2%']}
-          </Button>
+          <NetworkSettingsRow
+            key={internetSettingsRetryKey}
+            localizedStrings={localizedStrings}
+            onNetworkSettingsClick={handleNetworkSettings}
+          />
         </div>
         <div className="tw:flex tw:items-start tw:justify-between tw:gap-2 tw:px-2">
           <span className="tw:flex tw:shrink-0 tw:items-center tw:gap-1.5 tw:pt-1 tw:text-xs tw:text-muted-foreground">

@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import {
   Inventory,
+  InventoryLocalizedStrings,
   InventorySummaryItem,
 } from '@/components/advanced/inventory/inventory.component';
 import {
@@ -16,7 +17,9 @@ import { Scope } from '@/components/utils/scripture.util';
 import { escapeStringRegexp } from 'platform-bible-utils';
 import { useState } from 'react';
 
-const localizedStrings = {
+// Typed `Required<InventoryLocalizedStrings>` so the compiler flags a dropped key: Inventory
+// resolves `strings[key] ?? key`, so a missing key would render the raw `%…%` token in the UI.
+const localizedStrings: Required<InventoryLocalizedStrings> = {
   '%webView_inventory_all%': 'All items',
   '%webView_inventory_approved%': 'Approved items',
   '%webView_inventory_unapproved%': 'Unapproved items',
@@ -28,6 +31,9 @@ const localizedStrings = {
   '%webView_inventory_scope_currentBook%': 'Current book',
   '%webView_inventory_scope_chapter%': 'Current chapter',
   '%webView_inventory_scope_verse%': 'Current verse',
+  // Shown by the results table when a filter matches nothing. Missing here previously, so the raw
+  // key `%webView_inventory_no_results%` leaked into the UI once a filter emptied the list.
+  '%webView_inventory_no_results%': 'No results.',
 };
 
 const sampleInventoryItems: InventorySummaryItem[] = [

@@ -244,6 +244,7 @@ describe('metadataToLocalProjectInfo', () => {
           fullName: 'Full Name',
           language: 'en',
           isPublished: true,
+          isEditable: false,
         }),
       ),
     ).toEqual({
@@ -252,23 +253,35 @@ describe('metadataToLocalProjectInfo', () => {
       fullName: 'Full Name',
       language: 'en',
       isPublished: true,
+      isEditable: false,
     });
   });
 
-  it('falls back to the id for name and fullName when both are absent', () => {
+  it('falls back the name to the id, and leaves fullName and isEditable absent, when unset', () => {
     expect(metadataToLocalProjectInfo(makeMetadata({ id: 'proj-id-only' }))).toEqual({
       projectId: 'proj-id-only',
       name: 'proj-id-only',
-      fullName: 'proj-id-only',
+      fullName: undefined,
       language: '',
       isPublished: false,
+      // Passed through as absent: "absent means editable" is decided once, where Home reads it.
+      isEditable: undefined,
     });
   });
 
-  it('falls back fullName to name when fullName is absent but name is present', () => {
+  it('leaves fullName absent rather than mirroring the short name into it', () => {
+    // Home renders Full Name in its own column beside Name, so a mirror would print the same text
+    // twice across two columns.
     const result = metadataToLocalProjectInfo(makeMetadata({ id: 'p1', name: 'ShortOnly' }));
     expect(result.name).toBe('ShortOnly');
-    expect(result.fullName).toBe('ShortOnly');
+    expect(result.fullName).toBeUndefined();
+  });
+
+  it('treats a whitespace-only full name as absent', () => {
+    const result = metadataToLocalProjectInfo(
+      makeMetadata({ id: 'p1', name: 'S', fullName: '  ' }),
+    );
+    expect(result.fullName).toBeUndefined();
   });
 
   it('defaults isPublished to false and language to the empty string when absent', () => {
@@ -283,5 +296,21 @@ describe('metadataToLocalProjectInfo', () => {
     );
     expect(result.isPublished).toBe(false);
     expect(result.language).toBe('de');
+  });
+
+  it('copies unsupportedReason through when the metadata carries one', () => {
+    const result = metadataToLocalProjectInfo(
+      makeMetadata({
+        id: 'p1',
+        name: 'Short',
+        unsupportedReason: '%project_unsupported_studyBibleAdditions%',
+      }),
+    );
+    expect(result.unsupportedReason).toBe('%project_unsupported_studyBibleAdditions%');
+  });
+
+  it('leaves unsupportedReason absent when the metadata has none', () => {
+    const result = metadataToLocalProjectInfo(makeMetadata({ id: 'p1', name: 'Short' }));
+    expect(result.unsupportedReason).toBeUndefined();
   });
 });

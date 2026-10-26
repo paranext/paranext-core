@@ -502,7 +502,6 @@ describe('Platform menu document interface-mode gating', () => {
   const POWER_ONLY_COMMANDS = [
     'platform.createWindow',
     'platform.visitGettingStartedPage',
-    'platform.visitFeatureRoadmapPage',
     'platform.openDeveloperDocumentationUrl',
   ];
 
@@ -548,6 +547,9 @@ describe('Tab menu', () => {
     const result = await engine.getWebViewMenu('nothing.recognized');
 
     expect(commandsIn(result.tabMenu)).toEqual([
+      'platform.webViewContentZoomIn',
+      'platform.webViewContentZoomOut',
+      'platform.webViewContentZoomReset',
       'platform.floatTab',
       'platform.moveWebViewToNewWindow',
       'platform.moveTabToWindow',

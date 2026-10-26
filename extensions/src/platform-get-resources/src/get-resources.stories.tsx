@@ -8,6 +8,7 @@ import {
   GetResourcesProps,
   GET_RESOURCES_STRING_KEYS,
   ResourceAction,
+  RESOURCE_TYPES,
 } from './get-resources.component';
 
 // Get all localized strings needed by the GetResources component
@@ -60,14 +61,14 @@ const staticResources: DblResourceData[] = [
   },
   {
     dblEntryUid: 'uid-5',
-    displayName: 'SDBG',
-    fullName: 'Semantic Dictionary of Biblical Greek',
+    displayName: 'SBLGNT',
+    fullName: 'SBL Greek New Testament',
     bestLanguageName: 'Greek',
-    type: 'EnhancedResource',
+    type: 'SourceLanguageResource',
     size: 800,
     installed: false,
     updateAvailable: false,
-    projectId: 'project-sdbg',
+    projectId: 'project-sblgnt',
   },
 ];
 
@@ -220,7 +221,7 @@ function createDecorator(config: DecoratorConfig) {
   return function GetResourcesDecorator(
     Story: (update?: { args: GetResourcesProps }) => ReactElement,
   ) {
-    const [selectedTypes, setSelectedTypes] = useState<string[]>(['ScriptureResource']);
+    const [selectedTypes, setSelectedTypes] = useState<string[]>(RESOURCE_TYPES);
     const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
     const [resources, setResources] = useState<DblResourceData[]>(
       config.resources ?? staticResources,
@@ -327,6 +328,22 @@ export const RemoveError: Story = {
     createDecorator({
       onInstallOrRemoveResource: rejectingMock(
         'Cannot remove resource: it is currently open in another window',
+      ),
+    }),
+  ],
+};
+
+/**
+ * An install refused by the "Disable access to some Bible translation services" setting. The
+ * component shows the message that points at the setting instead of the raw error. (In the app, the
+ * web view also raises a notification that opens the setting; this story renders only the
+ * component, so no notification appears.)
+ */
+export const BlockedByInternetSettings: Story = {
+  decorators: [
+    createDecorator({
+      onInstallOrRemoveResource: rejectingMock(
+        'Internet access is disabled in “Internet & connectivity”. Please enable it and try again. (INTERNET_SERVICES_BLOCKED)',
       ),
     }),
   ],

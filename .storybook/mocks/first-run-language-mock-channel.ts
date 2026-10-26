@@ -19,8 +19,6 @@ export type FirstRunLanguageMock = {
   interfaceLanguage: string[];
   /** Languages returned by the `SetupDialogLanguages` data type (the qualifying picker options). */
   setupLanguages: Record<string, LanguageInfo>;
-  /** Languages returned by the `AvailableInterfaceLanguages` data type (autonym source). */
-  availableLanguages: Record<string, LanguageInfo>;
   /** Loading flag for the `SetupDialogLanguages` data (gates the wizard's Next button). */
   isLoading: boolean;
 };
@@ -46,7 +44,6 @@ export function setFirstRunLanguageMock(mock: Partial<FirstRunLanguageMock> = {}
   activeMock = {
     interfaceLanguage: ['en'],
     setupLanguages: { en: { autonym: 'English' } },
-    availableLanguages: { en: { autonym: 'English' } },
     isLoading: false,
     ...mock,
   };

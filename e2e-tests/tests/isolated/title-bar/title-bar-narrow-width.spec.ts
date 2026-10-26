@@ -76,7 +76,9 @@ async function expectControlWithinRow(
   selector: string,
 ): Promise<void> {
   const control = mainPage.locator(selector);
-  await expect(control, `${name} disappeared at the minimum window width`).toBeVisible();
+  await expect(control, `${name} disappeared at the minimum window width`).toBeVisible({
+    timeout: 1_000,
+  });
 
   const box = await control.boundingBox();
   expect(box, `${name} has no layout box`).not.toBeNull();
@@ -153,23 +155,29 @@ test.describe('Title bar at narrow window widths', () => {
     const contentRow = mainPage.locator('[data-testid="toolbar-content-row"]');
     await expect(contentRow).toBeVisible();
 
-    const rowBox = await contentRow.boundingBox();
-    expect(rowBox).not.toBeNull();
-    if (!rowBox) return;
+    // The title bar's flex re-layout can still land a frame or two after `setWindowWidth` resolves
+    // (that wait only confirms `window.innerWidth`, not that the row has finished reflowing), so a
+    // measurement taken immediately can catch a control mid-shift. Retry the whole
+    // measure-and-assert pass, re-reading the boxes fresh each time, until layout has settled.
+    await expect(async () => {
+      const rowBox = await contentRow.boundingBox();
+      expect(rowBox).not.toBeNull();
+      if (!rowBox) return;
 
-    // Guards against "fixing" the overflow by hiding the controls the ticket is about. Both are
-    // named in the report as things the user could no longer reach.
-    await expectControlWithinRow(
-      mainPage,
-      rowBox,
-      'BCV control',
-      '[aria-label="book-chapter-trigger"]',
-    );
-    await expectControlWithinRow(
-      mainPage,
-      rowBox,
-      'profile button',
-      '[data-testid="user-profile-popover-trigger"]',
-    );
+      // Guards against "fixing" the overflow by hiding the controls the ticket is about. Both are
+      // named in the report as things the user could no longer reach.
+      await expectControlWithinRow(
+        mainPage,
+        rowBox,
+        'BCV control',
+        '[aria-label="book-chapter-trigger"]',
+      );
+      await expectControlWithinRow(
+        mainPage,
+        rowBox,
+        'profile button',
+        '[data-testid="user-profile-popover-trigger"]',
+      );
+    }).toPass({ timeout: 10_000 });
   });
 });

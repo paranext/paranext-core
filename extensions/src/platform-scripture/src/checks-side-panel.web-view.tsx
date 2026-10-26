@@ -23,11 +23,17 @@ import {
   CheckJobScope,
   CheckJobStatusReport,
   CheckResultsInvalidated,
-  CheckRunnerCheckDetails,
   CheckRunResult,
 } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CheckInfo, CheckScopes, ProjectOption } from './checks-side-panel.utils';
+import { projectNamesFromMetadata } from './project-names.util';
+import {
+  CheckScopes,
+  defaultCheckRunnerCheckDetails,
+  ProjectOption,
+  shouldRefreshChecksInfo,
+} from './checks-side-panel.utils';
+import { callControllerSafely } from './find/find.utils';
 import { CHECK_RESULTS_INVALIDATED_EVENT } from './checks/check.model';
 import {
   ChecksSidePanel,
@@ -36,29 +42,11 @@ import {
 } from './checks/checks-side-panel/checks-side-panel.component';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import { useProjectRecencyMap } from './hooks/use-project-recency-map';
+import { getProjectOpenBlockedReasonKeyFromResult } from './project-open-blocked.util';
 import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
+import { useProjectOpenBlockedMessage } from './hooks/use-project-open-blocked-message';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
-
-/**
- * Gets the short and full names of a project from its ID. Kept in the webview (not the shared,
- * `@papi`-free utils) so the utils stay importable by the presentational component and its story.
- */
-async function getProjectNames(projectId: string): Promise<ProjectOption> {
-  const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-  // Fetched together so adding language costs no extra serial round trip per project.
-  // `platform.language` is optional: a project that does not define it degrades to an unknown
-  // language bucket rather than failing the whole lookup.
-  const [projectShortName, projectFullName, projectLanguage] = await Promise.all([
-    pdp.getSetting('platform.name'),
-    pdp.getSetting('platform.fullName'),
-    pdp.getSetting('platform.language').catch(() => undefined),
-  ]);
-  return {
-    shortName: projectShortName,
-    fullName: projectFullName,
-    language: typeof projectLanguage === 'string' ? projectLanguage : undefined,
-  };
-}
+import { useChecksInfo } from './use-checks-info.hook';
 
 /**
  * Web-view types that should count as "open" project tabs for the picker's "Open Tabs" grouping.
@@ -67,12 +55,6 @@ async function getProjectNames(projectId: string): Promise<ProjectOption> {
  * side panel itself) would falsely mark a project as open.
  */
 const SCRIPTURE_EDITOR_WEB_VIEW_TYPES = new Set<string>([SCRIPTURE_EDITOR_WEBVIEW_TYPE]);
-
-const defaultCheckRunnerCheckDetails: CheckRunnerCheckDetails = {
-  checkDescription: '',
-  checkId: '',
-  checkName: '',
-};
 
 const defaultJobStatusReport: CheckJobStatusReport = {
   jobId: '',
@@ -108,8 +90,11 @@ global.webViewComponent = function ChecksSidePanelWebView({
     useState<CheckJobStatusReport>(defaultJobStatusReport);
   const activeJobIdRef = useRef<string | undefined>(undefined);
   const [forceNewCheckRun, setForceNewCheckRun] = useState(1);
+  const [checksInfoRefreshKey, setChecksInfoRefreshKey] = useState(0);
   const [checkResults, setCheckResults] = useState<CheckRunResult[]>(() => defaultCheckResults);
   const checkResultsRef = useRef<CheckRunResult[]>(checkResults);
+  /** The result id the editor was last asked to select, so a late failure knows if it is stale. */
+  const lastSelectRequestIdRef = useRef<string | undefined>(undefined);
   const [isResultLoadingCancelled, setIsResultLoadingCancelled] = useState(false);
   const [localizedStrings] = useLocalizedStrings(
     useMemo(() => [...CHECKS_SIDE_PANEL_STRING_KEYS], []),
@@ -134,14 +119,12 @@ global.webViewComponent = function ChecksSidePanelWebView({
         includeProjectInterfaces: ['Scripture', 'Paratext'],
       });
 
-      // Map through all metadata to get ids and names
-      await Promise.all(
-        allMetadata.map(async (metadata) => {
-          const names = await getProjectNames(metadata.id);
-          if (!names) return;
-          projectDict[metadata.id] = names;
-        }),
-      );
+      // Every name this panel shows comes off the metadata already fetched above, so there is no
+      // per-project read left to await.
+      allMetadata.forEach((metadata) => {
+        if (metadata.unsupportedReason) return;
+        projectDict[metadata.id] = projectNamesFromMetadata(metadata);
+      });
 
       return projectDict;
     }, []),
@@ -455,6 +438,10 @@ global.webViewComponent = function ChecksSidePanelWebView({
     (details: CheckResultsInvalidated) => {
       if (!checkAggregator || !isMountedRef.current) return;
 
+      // This is not debounced or filtered by the selected checks: a later event would cancel the
+      // debounce, and an unselected check's label must refresh too.
+      if (shouldRefreshChecksInfo(details, projectId)) setChecksInfoRefreshKey((key) => key + 1);
+
       // Clear any existing timeout
       if (invalidateTimeoutRef.current) {
         clearTimeout(invalidateTimeoutRef.current);
@@ -483,7 +470,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
         if (applies) setForceNewCheckRun((x) => x + 1);
       }, 1000); // Debounce for 1 second
     },
-    [activeRanges, checkAggregator, selectedCheckTypeIds],
+    [activeRanges, checkAggregator, projectId, selectedCheckTypeIds],
   );
 
   useEvent(network.getNetworkEvent(CHECK_RESULTS_INVALIDATED_EVENT), invalidateResultsIfNecessary);
@@ -534,36 +521,13 @@ global.webViewComponent = function ChecksSidePanelWebView({
     [availableChecks],
   );
 
-  const [checksInfo, setChecksInfo] = useState<CheckInfo[]>([]);
-
-  useEffect(() => {
-    if (
-      !checkAggregator ||
-      !projectId ||
-      isPlatformError(availableChecks) ||
-      availableChecks.length === 0 ||
-      availableChecks[0] === defaultCheckRunnerCheckDetails
-    ) {
-      setChecksInfo([]);
-      return;
-    }
-
-    const fetchChecksInfo = async () => {
-      const promises = availableChecks.map(async (check) => {
-        const isSetup = await checkAggregator.isCheckSetupForProject(check.checkId, projectId);
-        return {
-          checkId: check.checkId,
-          checkName: getLocalizedCheckDescription(check.checkId),
-          isSetup,
-          setUpLink: undefined, // TODO: Add setUpLink when available from backend
-        };
-      });
-      const results = await Promise.all(promises);
-      setChecksInfo(results);
-    };
-
-    fetchChecksInfo();
-  }, [checkAggregator, projectId, availableChecks, getLocalizedCheckDescription]);
+  const checksInfo = useChecksInfo(
+    checkAggregator,
+    projectId,
+    availableChecks,
+    getLocalizedCheckDescription,
+    checksInfoRefreshKey,
+  );
 
   /**
    * Selects the check result in the editor and focuses the editor.
@@ -591,14 +555,38 @@ global.webViewComponent = function ChecksSidePanelWebView({
                 },
               }
             : location;
-        editorWebViewController.selectRange({
-          // Transform deprecated check result locations to the new format. The old check result
-          // types don't have book/chapter info in the location, so we need to add them.
-          start: normalizeLocation(selectedResult.start),
-          end: normalizeLocation(selectedResult.end),
-        });
+        // Records which result the editor was last asked for, so a failure that arrives late can
+        // tell whether the user has since moved on.
+        lastSelectRequestIdRef.current = id;
+        // `callControllerSafely`, not a bare `.catch`: the tab can close between this callback
+        // being handed to the result list and the user activating it, leaving a revoked proxy
+        // whose property read throws SYNCHRONOUSLY, before there is a promise to catch on.
+        callControllerSafely(
+          () =>
+            editorWebViewController.selectRange({
+              // Transform deprecated check result locations to the new format. The old check result
+              // types don't have book/chapter info in the location, so we need to add them.
+              start: normalizeLocation(selectedResult.start),
+              end: normalizeLocation(selectedResult.end),
+            }),
+          (e) => {
+            logger.warn(`Checks: failed to select result in editor: ${getErrorMessage(e)}`);
+            // Only fall back for the result still selected. A slow failure for a result the user
+            // has since replaced with another selection would otherwise jump the scroll group
+            // back to it, away from the one they are now reading.
+            if (lastSelectRequestIdRef.current !== id) return;
+            // The fallback covers a conversion failure in `convertScriptureRangeToEditorRange` or
+            // a delivery failure (`selectRange` resolves once the message is posted to the editor,
+            // and a closed tab leaves a revoked proxy). It moves this panel's own scroll group,
+            // which was copied once when the panel opened. If the editor cannot place the exact
+            // range, it still moves to the range's verse itself, so nothing more is needed here.
+            setScrRef(selectedResult.verseRef);
+          },
+        );
       } else {
-        // Could not get controller to set specific range, so at least set the verse ref
+        // Could not get controller to set specific range, so at least set the verse ref. A late
+        // failure for an earlier request must not move back from it.
+        lastSelectRequestIdRef.current = undefined;
         setScrRef(selectedResult.verseRef);
       }
     },
@@ -739,6 +727,18 @@ global.webViewComponent = function ChecksSidePanelWebView({
     [checkResults],
   );
 
+  const openBlockedReasonKey = getProjectOpenBlockedReasonKeyFromResult(
+    activeJobStatusReport.error,
+  );
+  const openBlockedMessage = useProjectOpenBlockedMessage(openBlockedReasonKey);
+  const displayedJobStatusReport = useMemo(
+    () =>
+      openBlockedReasonKey
+        ? { ...activeJobStatusReport, error: openBlockedMessage }
+        : activeJobStatusReport,
+    [activeJobStatusReport, openBlockedReasonKey, openBlockedMessage],
+  );
+
   // Shape the loaded project metadata into the list the panel renders in the project filter.
   const projects = useMemo<ChecksSidePanelProject[]>(() => {
     return Object.entries(projectIdsAndNames).map(([id, project]) => ({
@@ -762,7 +762,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
       selectedCheckTypeIds={selectedCheckTypeIds}
       checksInfo={checksInfo}
       checkResults={safeCheckResults}
-      jobStatusReport={activeJobStatusReport}
+      jobStatusReport={displayedJobStatusReport}
       hasActiveJob={activeJobStatusReport !== defaultJobStatusReport}
       isResultLoadingCancelled={isResultLoadingCancelled}
       getLocalizedCheckDescription={getLocalizedCheckDescription}

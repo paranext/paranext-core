@@ -18,20 +18,29 @@ import {
   clampToScrollRange,
   clampTopToVisibleArea,
   computeRangeScrollTop,
+  createNoteAnchorSource,
+  createPendingCommentAnchorSource,
+  createPendingCommentCenterAnchorSource,
   findScrollContainer,
+  getEditorScrollTop,
   getEditorSelectionRange,
   getVerseElement,
   hasNewScrollTarget,
   isEchoOfPublishedScrRef,
   isSameScrollGeometry,
   isSameVerseRef,
+  keepScrollPositionAcross,
+  measureAnnotation,
   measureBaselineOffset,
+  focusPaneSelectedRow,
+  FOOTNOTES_PANE_ATTRIBUTE,
   measureRangeScrollGeometry,
   paraAtPoint,
   RANGE_SCROLL_TOP_OFFSET,
   resolveScrollBehavior,
   SCROLL_MAX_WAIT_MS,
   scrollToAnnotation,
+  scrollToNoteCaller,
   scrollToRange,
   scrollToVerse,
   waitForLayoutToSettle,
@@ -41,18 +50,7 @@ vi.mock('@papi/frontend', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-// jsdom doesn't provide CSS.escape; polyfill for tests (same approach as
-// src/renderer/services/overlays/overlay-coordinates.test.ts). scrollToAnnotation escapes the
-// annotation class token before querySelector, so the tests need CSS.escape to exist.
-// eslint-disable-next-line no-type-assertion/no-type-assertion
-const cssPolyfill = {
-  escape: (value: string) => value.replace(/[!"#$%&'()*+,./:;<=>?@[\\\]^`{|}~]/g, '\\$&'),
-} as typeof CSS;
-
 beforeAll(() => {
-  if (typeof CSS === 'undefined' || !CSS.escape) {
-    globalThis.CSS = cssPolyfill;
-  }
   // jsdom has no layout engine and doesn't implement elementFromPoint at all; stub it so paraAtPoint
   // tests below have a real function to vi.spyOn (spyOn requires the property to already exist).
   if (!document.elementFromPoint) {
@@ -167,20 +165,130 @@ function buildEditorDom({
   return { wrapper, editorContainer, wrapperScrollTo, editorContainerScrollTo };
 }
 
+/**
+ * The editor DOM with one annotation in it: a `<mark>` the editor reports one range over, laid out
+ * at `top`/`height` until a test calls `moveAnnotation`.
+ */
 function buildAnnotationDom(options: EditorDomOptions = {}): EditorDom & {
   annotation: HTMLElement;
+  getRanges: () => Range[];
+  moveAnnotation: (top: number, height: number) => void;
 } {
   const dom = buildEditorDom({ ...options, verseNumbers: [] });
-  const annotation = document.createElement('span');
-  annotation.className = 'annotationId-thread1';
-  stubRect(annotation, 1500, 20);
+  const annotation = document.createElement('mark');
+  annotation.textContent = 'annotated';
   dom.editorContainer.append(annotation);
-  return { ...dom, annotation };
+  const range = document.createRange();
+  range.selectNodeContents(annotation);
+  const moveAnnotation = (top: number, height: number) =>
+    stubClientRects(range, [new DOMRect(0, top, 100, height)]);
+  moveAnnotation(1500, 20);
+  return { ...dom, annotation, getRanges: () => [range], moveAnnotation };
+}
+
+function buildNotesDom(options: EditorDomOptions = {}): EditorDom & { notes: HTMLElement[] } {
+  const dom = buildEditorDom({ ...options, verseNumbers: [] });
+  const notes = [1500, 1800].map((top) => {
+    const note = document.createElement('span');
+    note.className = 'note collapsed usfm_f';
+    stubRect(note, top, 20);
+    dom.editorContainer.append(note);
+    return note;
+  });
+  return { ...dom, notes };
 }
 
 afterEach(() => {
   document.body.innerHTML = '';
   vi.clearAllMocks();
+});
+
+describe('keepScrollPositionAcross', () => {
+  /** Runs the frame callbacks `requestAnimationFrame` was handed, in order. */
+  function captureAnimationFrames() {
+    const frames: FrameRequestCallback[] = [];
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    return () => frames.splice(0).forEach((callback) => callback(0));
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    document.body.replaceChildren();
+  });
+
+  it('puts the text back where it was after the action scrolls it, on the next frame', () => {
+    const { wrapper, editorContainer } = buildEditorDom();
+    wrapper.scrollTop = 800;
+    const runFrames = captureAnimationFrames();
+
+    keepScrollPositionAcross(editorContainer, () => {
+      // What focusing the text does when its caret is elsewhere: scrolls the caret into view.
+      wrapper.scrollTop = 0;
+    });
+    expect(wrapper.scrollTop).toBe(0);
+
+    runFrames();
+    expect(wrapper.scrollTop).toBe(800);
+  });
+
+  it('just runs the action when the text has no scroll container', () => {
+    const { editorContainer } = buildEditorDom({ wrapperScrolls: false });
+    const action = vi.fn();
+    const requestFrame = vi.spyOn(window, 'requestAnimationFrame');
+
+    keepScrollPositionAcross(editorContainer, action);
+
+    expect(action).toHaveBeenCalledOnce();
+    expect(requestFrame).not.toHaveBeenCalled();
+  });
+
+  it('shifts scrollTop to keep the anchor paragraph at the same screen offset when the action re-wraps the text', () => {
+    const { wrapper, editorContainer } = buildEditorDom({ verseNumbers: [] });
+    const paragraph = editorContainer.querySelector('p');
+    if (!paragraph) throw new Error('test setup failed: no paragraph');
+    // The paragraph sits 40px below the scroll container's top edge before the action runs.
+    stubRect(paragraph, 40, 20);
+    wrapper.scrollTop = 500;
+    const runFrames = captureAnimationFrames();
+
+    keepScrollPositionAcross(editorContainer, () => {
+      // Simulates a width change (the footnotes pane opening or closing beside the text instead
+      // of below it) re-wrapping the text: the same paragraph now renders 15px lower.
+      stubRect(paragraph, 55, 20);
+    });
+
+    runFrames();
+
+    // A pixel-only restore would land back at 500, showing a different passage now that the text
+    // re-wrapped; the extra 15px keeps the paragraph at the same screen offset it had before the
+    // toggle.
+    expect(wrapper.scrollTop).toBe(515);
+  });
+
+  it('keeps the first verse whose top is in view in place, even inside a paragraph that starts above the view', () => {
+    const { wrapper, editorContainer } = buildEditorDom({
+      verseNumbers: [14, 15],
+      verseTops: { 14: -100, 15: 300 },
+    });
+    const paragraph = editorContainer.querySelector('p');
+    const verse15 = editorContainer.querySelector<HTMLElement>('[data-number="15"]');
+    if (!paragraph || !verse15) throw new Error('test setup failed');
+    // One long paragraph, starting above the view, holds both verses.
+    stubRect(paragraph, -200, 2000);
+    wrapper.scrollTop = 500;
+    const runFrames = captureAnimationFrames();
+
+    keepScrollPositionAcross(editorContainer, () => {
+      // The re-wrap moves verse 15 down within its paragraph; the paragraph's own top stays put.
+      stubRect(verse15, 340, 20);
+    });
+    runFrames();
+
+    expect(wrapper.scrollTop).toBe(540);
+  });
 });
 
 describe('findScrollContainer', () => {
@@ -421,10 +529,9 @@ describe('resolveScrollBehavior', () => {
     });
 
     it('scrollToAnnotation', () => {
-      const { annotation, wrapperScrollTo } = buildAnnotationDom();
-      stubRect(annotation, 1500, 20);
+      const { getRanges, wrapperScrollTo } = buildAnnotationDom();
 
-      scrollToAnnotation('thread1');
+      scrollToAnnotation(getRanges);
 
       // Bottom-aligned: annotationBottom (1520) - clientHeight (900) + offset (80). An annotation
       // below the viewport is closer to the bottom edge, so it travels the shorter distance.
@@ -478,19 +585,19 @@ describe('clampToScrollRange', () => {
 
 describe('scrollToAnnotation', () => {
   it('does not scroll when the annotation is already fully visible', () => {
-    const { annotation, wrapperScrollTo } = buildAnnotationDom();
-    stubRect(annotation, 400, 20); // within [0, 900) viewport band, scrollTop 0
+    const { annotation, getRanges, moveAnnotation, wrapperScrollTo } = buildAnnotationDom();
+    moveAnnotation(400, 20); // within [0, 900) viewport band, scrollTop 0
 
-    const annotationElement = scrollToAnnotation('thread1');
+    const annotationElement = scrollToAnnotation(getRanges);
 
     expect(annotationElement).toBe(annotation);
     expect(wrapperScrollTo).not.toHaveBeenCalled();
   });
 
   it('aligns to the bottom edge when the annotation is below the viewport (closer edge)', () => {
-    const { wrapperScrollTo } = buildAnnotationDom(); // annotation rect top 1500, height 20
+    const { getRanges, wrapperScrollTo } = buildAnnotationDom(); // range rect top 1500, height 20
 
-    scrollToAnnotation('thread1');
+    scrollToAnnotation(getRanges);
 
     // annotationTop = 0 + 1500 - 0 = 1500; bottom = 1520
     // distanceToTop = 1500, distanceToBottom = |0 + 900 - 1520| = 620 -> bottom edge
@@ -499,11 +606,11 @@ describe('scrollToAnnotation', () => {
   });
 
   it('aligns to the top edge when the annotation is above the viewport (closer edge)', () => {
-    const { wrapper, annotation, wrapperScrollTo } = buildAnnotationDom();
+    const { wrapper, getRanges, moveAnnotation, wrapperScrollTo } = buildAnnotationDom();
     wrapper.scrollTop = 2000;
-    stubRect(annotation, -1500, 20);
+    moveAnnotation(-1500, 20);
 
-    scrollToAnnotation('thread1');
+    scrollToAnnotation(getRanges);
 
     // annotationTop = 2000 + (-1500) - 0 = 500 -> above viewport [2000, 2900)
     // distanceToTop = 1500, distanceToBottom = 2380 -> top edge; targetTop = 500 - 80 = 420
@@ -511,49 +618,144 @@ describe('scrollToAnnotation', () => {
   });
 
   it('clamps the target to the valid scroll range', () => {
-    const { annotation, wrapperScrollTo } = buildAnnotationDom();
-    stubRect(annotation, 2990, 20); // annotationTop 2990, bottom 3010 (content is 3000 tall)
+    const { getRanges, moveAnnotation, wrapperScrollTo } = buildAnnotationDom();
+    moveAnnotation(2990, 20); // annotationTop 2990, bottom 3010 (content is 3000 tall)
 
-    scrollToAnnotation('thread1');
+    scrollToAnnotation(getRanges);
 
     // bottom-edge target = 3010 - 900 + 80 = 2190 > maxScrollTop (3000 - 900 = 2100) -> clamp
     expect(wrapperScrollTo).toHaveBeenCalledWith({ behavior: 'smooth', top: 2100 });
   });
 
   it('clamps a negative top-aligned target up to 0', () => {
-    const { wrapper, annotation, wrapperScrollTo } = buildAnnotationDom();
+    const { wrapper, getRanges, moveAnnotation, wrapperScrollTo } = buildAnnotationDom();
     wrapper.scrollTop = 100;
-    stubRect(annotation, -70, 20);
+    moveAnnotation(-70, 20);
 
-    scrollToAnnotation('thread1');
+    scrollToAnnotation(getRanges);
 
     // annotationTop = 100 + (-70) - 0 = 30, above viewport [100, 1000) -> top edge
     // top-aligned target = 30 - 80 = -50 -> clamped up to 0
     expect(wrapperScrollTo).toHaveBeenCalledWith({ behavior: 'smooth', top: 0 });
   });
 
-  it('escapes CSS-special characters in the annotation id (a raw id would throw a SyntaxError)', () => {
-    const dom = buildEditorDom({ verseNumbers: [] });
-    const annotation = document.createElement('span');
-    // Real annotation/comment ids can contain ':'; the applied class is `annotationId-<id>`.
-    annotation.className = 'annotationId-thread:1';
-    stubRect(annotation, 400, 20); // fully visible -> resolves the element, no scroll
-    dom.editorContainer.append(annotation);
+  it('brings every fragment of a split annotation into view, not just the first', () => {
+    // An annotation split across a page's worth of text: its first fragment is already in view,
+    // but its last one ends below the viewport.
+    const { editorContainer, getRanges, wrapperScrollTo } = buildAnnotationDom();
+    const [first] = getRanges();
+    stubClientRects(first, [new DOMRect(0, 800, 100, 20)]);
+    const tail = document.createElement('mark');
+    tail.textContent = 'tail';
+    editorContainer.append(tail);
+    const tailRange = document.createRange();
+    tailRange.selectNodeContents(tail);
+    stubClientRects(tailRange, [new DOMRect(0, 1000, 100, 20)]);
 
-    // Without CSS.escape, `.annotationId-thread:1` is an invalid selector and querySelector throws.
-    const annotationElement = scrollToAnnotation('thread:1');
+    scrollToAnnotation(() => [first, tailRange]);
 
-    expect(annotationElement).toBe(annotation);
-    expect(dom.wrapperScrollTo).not.toHaveBeenCalled();
+    // Union top 800, bottom 1020; distanceToTop = 800, distanceToBottom = |900 - 1020| = 120 ->
+    // bottom edge; targetTop = 1020 - 900 + 80 = 200.
+    expect(wrapperScrollTo).toHaveBeenCalledWith({ behavior: 'smooth', top: 200 });
   });
 
-  it('returns undefined and does not scroll when the annotation does not exist', () => {
+  it('scrolls to the part of a verse number the annotation holds, and answers its element', () => {
+    // The editor paints part of a display byte with a highlight, so no element carries the
+    // annotation; only its range says where it is.
+    const { editorContainer, wrapperScrollTo } = buildEditorDom({ verseNumbers: [] });
+    const verse = document.createElement('span');
+    verse.setAttribute('data-marker', 'v');
+    verse.textContent = '12';
+    editorContainer.append(verse);
+    const verseText = verse.firstChild;
+    if (!(verseText instanceof Text)) throw new Error('test setup failed: no verse text');
+    const heldPart = document.createRange();
+    heldPart.setStart(verseText, 1);
+    heldPart.setEnd(verseText, 2);
+    stubClientRects(heldPart, [new DOMRect(10, 1500, 8, 20)]);
+
+    const annotationElement = scrollToAnnotation(() => [heldPart]);
+
+    expect(annotationElement).toBe(verse);
+    expect(wrapperScrollTo).toHaveBeenCalledWith({ behavior: 'smooth', top: 700 });
+  });
+
+  it('answers the element but does not scroll when the annotation paints nothing', () => {
+    // Inside a `display: none` pane every range has no client rects; there is nothing to measure.
+    const { annotation, getRanges, wrapperScrollTo } = buildAnnotationDom();
+    stubClientRects(getRanges()[0], []);
+
+    expect(scrollToAnnotation(getRanges)).toBe(annotation);
+    expect(wrapperScrollTo).not.toHaveBeenCalled();
+  });
+
+  it('returns undefined and does not scroll when the editor reports no ranges', () => {
     const { wrapperScrollTo } = buildAnnotationDom();
 
-    const annotationElement = scrollToAnnotation('no-such-thread');
+    const annotationElement = scrollToAnnotation(() => []);
 
     expect(annotationElement).toBeUndefined();
     expect(wrapperScrollTo).not.toHaveBeenCalled();
+  });
+});
+
+describe('scrollToNoteCaller', () => {
+  it('does not scroll when the caller is already fully visible', () => {
+    const { notes, wrapperScrollTo } = buildNotesDom();
+    stubRect(notes[0], 400, 20); // within [0, 900), scrollTop 0
+    scrollToNoteCaller(notes[0]);
+    expect(wrapperScrollTo).not.toHaveBeenCalled();
+  });
+
+  it('aligns the caller to the closer edge when it is out of view', () => {
+    const { notes, wrapperScrollTo } = buildNotesDom(); // note 1 rect top 1800, height 20
+    scrollToNoteCaller(notes[1]);
+    // noteTop = 1800, bottom = 1820; distanceToTop = 1800, distanceToBottom = |900 - 1820| = 920
+    // -> bottom edge; targetTop = 1820 - 900 + 80 = 1000
+    expect(wrapperScrollTo).toHaveBeenCalledWith({ behavior: 'smooth', top: 1000 });
+  });
+});
+
+describe('focusPaneSelectedRow', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    // `focus()` leaves a collapsed Selection on the focused element in jsdom, and `addRange` is a
+    // no-op while the document already holds a range — so a test later in this file that builds
+    // its own selection would silently get none.
+    document.getSelection()?.removeAllRanges();
+  });
+
+  /**
+   * The pane's list, preceded by another list whose highlighted option is also `aria-selected` - a
+   * portalled menu, say, which the helper must not reach.
+   */
+  function buildRows() {
+    document.body.innerHTML = `
+      <ul role="listbox">
+        <li role="option" aria-selected="true" id="menu-item" tabindex="0">menu item</li>
+      </ul>
+      <div ${FOOTNOTES_PANE_ATTRIBUTE}>
+        <ul role="listbox">
+          <li role="option" aria-selected="false" id="first" tabindex="0">first</li>
+          <li role="option" aria-selected="true" id="selected" tabindex="0">selected</li>
+        </ul>
+      </div>`;
+  }
+
+  it("focuses the pane's selected row", () => {
+    buildRows();
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    expect(focusPaneSelectedRow()?.id).toBe('selected');
+    expect(document.activeElement?.id).toBe('selected');
+  });
+
+  // A chapter change driven from the toolbar or another view also ends a row session; focusing a
+  // row then would take focus away from where the user is working.
+  it('leaves focus alone while the document does not hold it', () => {
+    buildRows();
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    expect(focusPaneSelectedRow()).toBeUndefined();
+    expect(document.activeElement).toBe(document.body);
   });
 });
 
@@ -788,6 +990,17 @@ describe('computeRangeScrollTop', () => {
     ).toBeUndefined();
   });
 
+  it('lands a range already in view at its offset when told not to stay put', () => {
+    expect(
+      computeRangeScrollTop({
+        ...viewport,
+        rangeTop: 1000,
+        rangeBottom: 1020,
+        stayPutWhenInView: false,
+      }),
+    ).toBe(920);
+  });
+
   it('counts a range a sub-pixel outside the viewport as in view', () => {
     // A fractional devicePixelRatio puts fractions on every one of these numbers, and scrolling by
     // a fraction of a pixel for a range already flush against an edge is a move for nothing.
@@ -976,6 +1189,19 @@ describe('measureRangeScrollGeometry', () => {
   });
 });
 
+describe('getEditorScrollTop', () => {
+  it('reads the scroll position of the container that actually scrolls the editor content', () => {
+    const { wrapper } = buildEditorDom({ verseNumbers: [] });
+    wrapper.scrollTop = 569;
+
+    expect(getEditorScrollTop()).toBe(569);
+  });
+
+  it('is undefined when no editor content is mounted', () => {
+    expect(getEditorScrollTop()).toBeUndefined();
+  });
+});
+
 describe('scrollToRange', () => {
   it('scrolls the element that actually scrolls so the range lands just under the top', () => {
     const { editorContainer, wrapperScrollTo, editorContainerScrollTo } = buildEditorDom({
@@ -1003,6 +1229,18 @@ describe('scrollToRange', () => {
 
     expect(scrollToRange(rangeInEditor(editorContainer, 400, 20), 'smooth')).toBe(true);
     expect(wrapperScrollTo).not.toHaveBeenCalled();
+  });
+
+  it('scrolls a range already in view to its offset when told not to stay put', () => {
+    const { editorContainer, wrapperScrollTo } = buildEditorDom({ verseNumbers: [] });
+
+    expect(
+      scrollToRange(rangeInEditor(editorContainer, 400, 20), 'smooth', {
+        stayPutWhenInView: false,
+      }),
+    ).toBe(true);
+    // scrollTop 0 + rect top 400 - container top 0 - offset 80 = 320
+    expect(wrapperScrollTo).toHaveBeenCalledWith({ behavior: 'smooth', top: 320 });
   });
 
   it('reports a measurement but does not scroll when the content does not overflow', () => {
@@ -1159,5 +1397,613 @@ describe('waitForLayoutToSettle', () => {
     expect(onSettled).toHaveBeenCalledWith(9, true);
     // Settling — even this late — still resolves through onSettled, never onTimedOut.
     expect(onTimedOut).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Gives `target` the client rects jsdom cannot lay out. The measurement helpers read
+ * `getClientRects()` (and, for a range, `getBoundingClientRect()`), so a test supplies them per
+ * element or range.
+ */
+function stubClientRects(target: Element | Range, rects: DOMRect[]) {
+  Object.defineProperty(target, 'getClientRects', { value: () => rects, configurable: true });
+  Object.defineProperty(target, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => {
+      const left = Math.min(...rects.map((rect) => rect.left));
+      const top = Math.min(...rects.map((rect) => rect.top));
+      const right = Math.max(...rects.map((rect) => rect.right));
+      const bottom = Math.max(...rects.map((rect) => rect.bottom));
+      return new DOMRect(left, top, right - left, bottom - top);
+    },
+  });
+}
+
+/**
+ * A rect's numbers, for comparison. `DOMRect` keeps its values on the prototype, so `toEqual` on
+ * two rects compares nothing and passes for any pair.
+ */
+function rectNumbers(rect: DOMRect | undefined) {
+  if (!rect) return undefined;
+  return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+}
+
+/**
+ * A stand-in for the editor's report of where an annotation paints: `getRanges` answers the ranges
+ * added so far, in the order they were added, the way `EditorRef.getAnnotationRanges` answers them
+ * in document order.
+ */
+function createAnnotationRanges() {
+  const ranges: Range[] = [];
+  const rangeByMark = new Map<Element, Range>();
+  return {
+    getRanges: () => [...ranges],
+    /** The range over `mark`'s contents, if one was added. */
+    rangeOver: (mark: Element) => rangeByMark.get(mark),
+    /** Adds a `<mark>` fragment of the annotation to `container`, painting `rects`. */
+    addFragment(container: Element, rects: DOMRect[], text = '') {
+      const mark = document.createElement('mark');
+      mark.textContent = text;
+      container.appendChild(mark);
+      const range = document.createRange();
+      range.selectNodeContents(mark);
+      stubClientRects(range, rects);
+      ranges.push(range);
+      rangeByMark.set(mark, range);
+      return mark;
+    },
+    /** Reports `range` as one of the annotation's fragments. */
+    addRange(range: Range) {
+      ranges.push(range);
+    },
+  };
+}
+
+/** An editor container for the annotation fragments to render in. */
+function addEditorContainer() {
+  const container = document.createElement('div');
+  container.className = 'editor-container';
+  document.body.appendChild(container);
+  return container;
+}
+
+describe('measureAnnotation', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('has no rect when the editor reports no ranges', () => {
+    expect(measureAnnotation(() => [])).toBeUndefined();
+  });
+
+  it('has no rect when the annotation renders no line box', () => {
+    // An annotation in a collapsed or unrendered subtree has ranges but paints nothing; anchoring
+    // a pop-up on a zero rect would put it in the frame's corner.
+    const annotation = createAnnotationRanges();
+    annotation.addFragment(addEditorContainer(), []);
+    expect(measureAnnotation(annotation.getRanges)).toBeUndefined();
+  });
+
+  it('spans every line box of a wrapped annotation', () => {
+    // A selection that wraps renders as several line boxes; the anchor must cover all of them
+    // rather than its first line.
+    const annotation = createAnnotationRanges();
+    annotation.addFragment(addEditorContainer(), [
+      new DOMRect(200, 100, 100, 20),
+      new DOMRect(40, 120, 260, 20),
+    ]);
+
+    expect(rectNumbers(measureAnnotation(annotation.getRanges))).toEqual({
+      x: 40,
+      y: 100,
+      width: 260,
+      height: 40,
+    });
+  });
+
+  it('spans every fragment when formatting splits the annotation', () => {
+    // Partly formatted text renders one annotation as several fragments.
+    const container = addEditorContainer();
+    const annotation = createAnnotationRanges();
+    annotation.addFragment(container, [new DOMRect(50, 100, 60, 20)]);
+    annotation.addFragment(container, [new DOMRect(110, 100, 90, 20)]);
+
+    expect(rectNumbers(measureAnnotation(annotation.getRanges))).toEqual({
+      x: 50,
+      y: 100,
+      width: 150,
+      height: 20,
+    });
+  });
+
+  it('measures only the part of a verse number the annotation holds', () => {
+    // The editor paints part of a display byte with a highlight, so no element carries the
+    // annotation and the verse number's own box is wider than what is held.
+    const verse = document.createElement('span');
+    verse.setAttribute('data-marker', 'v');
+    verse.textContent = '12';
+    addEditorContainer().appendChild(verse);
+    stubClientRects(verse, [new DOMRect(0, 100, 18, 20)]);
+    const verseText = verse.firstChild;
+    if (!(verseText instanceof Text)) throw new Error('test setup failed: no verse text');
+    const heldPart = document.createRange();
+    heldPart.setStart(verseText, 1);
+    heldPart.setEnd(verseText, 2);
+    stubClientRects(heldPart, [new DOMRect(10, 100, 8, 20)]);
+
+    expect(rectNumbers(measureAnnotation(() => [heldPart]))).toEqual({
+      x: 10,
+      y: 100,
+      width: 8,
+      height: 20,
+    });
+  });
+});
+
+describe('createPendingCommentAnchorSource', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  function addParagraph(text: string) {
+    const container = addEditorContainer();
+    const paragraph = document.createElement('p');
+    paragraph.textContent = text;
+    container.appendChild(paragraph);
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    return { container, paragraph, range };
+  }
+
+  it('mark absent and the range still intact: follows the range', () => {
+    const { container, range } = addParagraph('In the beginning');
+    stubClientRects(range, [new DOMRect(30, 60, 120, 18)]);
+
+    const source = createPendingCommentAnchorSource(range, () => [], container);
+
+    expect(rectNumbers(source.measure())).toEqual({ x: 30, y: 60, width: 0, height: 18 });
+    expect(source.contextElement).toBe(container);
+  });
+
+  it('mark absent and the range moved: measure reports no rect', () => {
+    const { container, paragraph, range } = addParagraph('In the beginning');
+    const movedTo = document.createElement('p');
+    movedTo.textContent = 'elsewhere';
+    container.appendChild(movedTo);
+    // A stale stub: still returns this rect after the move below, so the test only passes because
+    // isRangeIntact() is checked BEFORE this stub is ever consulted — not because the stub happens
+    // to reflect the move.
+    stubClientRects(range, [new DOMRect(30, 60, 120, 18)]);
+
+    const source = createPendingCommentAnchorSource(range, () => [], container);
+
+    // The editor re-rendered and moved the range to a different node before the mark appeared.
+    range.selectNodeContents(movedTo);
+    expect(range.startContainer).not.toBe(paragraph);
+
+    expect(source.measure()).toBeUndefined();
+  });
+
+  /**
+   * Where a collapsed range's caret paints, per text node, in the fake layout below. jsdom has no
+   * layout and no `Range.getClientRects` at all, so the tests install one on `Range.prototype` that
+   * reads this map; a range with its own instance stub (via `stubClientRects`) ignores it.
+   */
+  const caretLayouts = new Map<Node, (offset: number) => DOMRect>();
+
+  beforeEach(() => {
+    const caretRects = (range: Range) => {
+      const layout = range.collapsed ? caretLayouts.get(range.startContainer) : undefined;
+      return layout ? [layout(range.startOffset)] : [];
+    };
+    Object.defineProperty(Range.prototype, 'getClientRects', {
+      configurable: true,
+      value(this: Range) {
+        return caretRects(this);
+      },
+    });
+    Object.defineProperty(Range.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      value(this: Range) {
+        return caretRects(this)[0] ?? new DOMRect();
+      },
+    });
+  });
+
+  afterEach(() => {
+    caretLayouts.clear();
+    // jsdom's Range has neither method, so removing the stubs restores it exactly.
+    Reflect.deleteProperty(Range.prototype, 'getClientRects');
+    Reflect.deleteProperty(Range.prototype, 'getBoundingClientRect');
+  });
+
+  /**
+   * A fixed-width-character layout of a text node that starts at `left` on a line at `top` and
+   * wraps after `firstLineChars` characters to `nextLineLeft` on the next line.
+   */
+  type TextLayout = {
+    left: number;
+    top: number;
+    charWidth: number;
+    lineHeight: number;
+    firstLineChars: number;
+    nextLineLeft: number;
+  };
+
+  /** The pending comment's annotation, as the editor reports it to the source under test. */
+  let annotation = createAnnotationRanges();
+
+  beforeEach(() => {
+    annotation = createAnnotationRanges();
+  });
+
+  /**
+   * Lays out `textNode` as `layout` says: its caret positions for collapsed ranges, and — when it
+   * sits in an annotation fragment — the fragment's line boxes.
+   */
+  function layOut(textNode: Text, layout: TextLayout) {
+    const { left, top, charWidth, lineHeight, firstLineChars, nextLineLeft } = layout;
+    const onFirstLine = Math.min(textNode.length, firstLineChars);
+    caretLayouts.set(textNode, (offset) =>
+      offset <= onFirstLine
+        ? new DOMRect(left + offset * charWidth, top, 0, lineHeight)
+        : new DOMRect(
+            nextLineLeft + (offset - onFirstLine) * charWidth,
+            top + lineHeight,
+            0,
+            lineHeight,
+          ),
+    );
+    const lineBoxes = [new DOMRect(left, top, onFirstLine * charWidth, lineHeight)];
+    if (textNode.length > onFirstLine)
+      lineBoxes.push(
+        new DOMRect(
+          nextLineLeft,
+          top + lineHeight,
+          (textNode.length - onFirstLine) * charWidth,
+          lineHeight,
+        ),
+      );
+    const fragmentRange = textNode.parentElement && annotation.rangeOver(textNode.parentElement);
+    if (fragmentRange) stubClientRects(fragmentRange, lineBoxes);
+  }
+
+  /**
+   * A paragraph of text with a collapsed caret `caretOffset` characters in, and the popover source
+   * built for it — the state when the user asks to add a comment at a caret.
+   */
+  function openAtCaret(text: string, caretOffset: number, layout: TextLayout) {
+    const { container, paragraph } = addParagraph(text);
+    const textNode = paragraph.firstChild;
+    if (!(textNode instanceof Text)) throw new Error('The paragraph should hold one text node');
+    layOut(textNode, layout);
+    const range = document.createRange();
+    range.setStart(textNode, caretOffset);
+    range.collapse(true);
+    const source = createPendingCommentAnchorSource(range, annotation.getRanges, container);
+    return { paragraph, source };
+  }
+
+  /**
+   * The editor's re-render marking the pending comment: the paragraph's text is replaced by the
+   * text before the mark, the mark over `[markStart, markEnd)`, and the text after it. The original
+   * text node is detached, so a range in it collapses to the paragraph.
+   */
+  function renderMark(paragraph: HTMLElement, markStart: number, markEnd: number) {
+    const text = paragraph.textContent ?? '';
+    paragraph.replaceChildren();
+    paragraph.append(text.slice(0, markStart));
+    const mark = annotation.addFragment(paragraph, [], text.slice(markStart, markEnd));
+    paragraph.append(text.slice(markEnd));
+    const markText = mark.firstChild;
+    if (!(markText instanceof Text)) throw new Error('The mark should hold one text node');
+    return markText;
+  }
+
+  // "In the beginning" is a spaced line; the long unspaced run the caret sits in below stands for
+  // Thai or Chinese text, where the editor marks the whole run between spaces around the caret.
+  const RUN_TEXT = 'xx abcdefghij yy';
+  const RUN_START = 3;
+  const RUN_END = 13;
+
+  it('a selection: anchors on the left edge of the union of the mark fragments', () => {
+    const { container, range } = addParagraph('In the beginning');
+    stubClientRects(range, [new DOMRect(40, 100, 200, 40)]);
+
+    const source = createPendingCommentAnchorSource(range, annotation.getRanges, container);
+
+    // The editor re-rendered the selection into the pending-comment mark, split over two lines
+    // whose union is left=40, top=100, width=200, height=40.
+    annotation.addFragment(container, [new DOMRect(120, 100, 120, 20)]);
+    annotation.addFragment(container, [new DOMRect(40, 120, 80, 20)]);
+
+    expect(rectNumbers(source.measure())).toEqual({ x: 40, y: 100, width: 0, height: 40 });
+  });
+
+  it('a caret: anchors at the caret inside the mark once the mark renders', () => {
+    // Caret 6 characters into the run "abcdefghij" (between "f" and "g").
+    const { paragraph, source } = openAtCaret(RUN_TEXT, RUN_START + 6, {
+      left: 0,
+      top: 100,
+      charWidth: 10,
+      lineHeight: 20,
+      firstLineChars: 100,
+      nextLineLeft: 0,
+    });
+
+    const mark = renderMark(paragraph, RUN_START, RUN_END);
+    layOut(mark, {
+      left: 30,
+      top: 100,
+      charWidth: 10,
+      lineHeight: 20,
+      firstLineChars: 100,
+      nextLineLeft: 0,
+    });
+
+    // x = 30 + 6 * 10.
+    expect(rectNumbers(source.measure())).toEqual({ x: 90, y: 100, width: 0, height: 20 });
+  });
+
+  it('a caret in a mark that reflows onto one line (a pane widened): stays at the caret', () => {
+    // A narrow pane wraps the run: "abcde" ends line 1 and "fghij" starts line 2, so the caret
+    // 6 characters in sits on line 2.
+    const narrow = { top: 100, charWidth: 10, lineHeight: 20, firstLineChars: 5, nextLineLeft: 0 };
+    const { paragraph, source } = openAtCaret(RUN_TEXT, RUN_START + 6, {
+      ...narrow,
+      left: 0,
+      firstLineChars: 8,
+    });
+    const mark = renderMark(paragraph, RUN_START, RUN_END);
+    layOut(mark, { ...narrow, left: 30 });
+    // Line 2: x = 0 + (6 - 5) * 10; the union spans both lines.
+    expect(rectNumbers(source.measure())).toEqual({ x: 10, y: 100, width: 0, height: 40 });
+
+    // The pane widens and the whole run fits on line 1.
+    layOut(mark, { ...narrow, left: 30, firstLineChars: 100 });
+
+    // x = 30 + 6 * 10, where the caret now paints.
+    expect(rectNumbers(source.measure())).toEqual({ x: 90, y: 100, width: 0, height: 20 });
+  });
+
+  it('a caret in a mark that reflows across two lines (zoomed in): stays at the caret', () => {
+    // Caret 8 characters into the run (between "h" and "i").
+    const { paragraph, source } = openAtCaret(RUN_TEXT, RUN_START + 8, {
+      left: 0,
+      top: 100,
+      charWidth: 10,
+      lineHeight: 20,
+      firstLineChars: 100,
+      nextLineLeft: 0,
+    });
+    const mark = renderMark(paragraph, RUN_START, RUN_END);
+    layOut(mark, {
+      left: 30,
+      top: 100,
+      charWidth: 10,
+      lineHeight: 20,
+      firstLineChars: 100,
+      nextLineLeft: 0,
+    });
+    // x = 30 + 8 * 10.
+    expect(rectNumbers(source.measure())).toEqual({ x: 110, y: 100, width: 0, height: 20 });
+
+    // Zoom 200 %: every length doubles and the run no longer fits on its line — "abcdefg" stays on
+    // line 1, "hij" wraps to line 2, taking the caret with it.
+    layOut(mark, {
+      left: 60,
+      top: 200,
+      charWidth: 20,
+      lineHeight: 40,
+      firstLineChars: 7,
+      nextLineLeft: 0,
+    });
+
+    // Line 2: x = 0 + (8 - 7) * 20; the union spans both lines, top=200, height=80.
+    expect(rectNumbers(source.measure())).toEqual({ x: 20, y: 200, width: 0, height: 80 });
+  });
+
+  it('a caret measured twice in one frame still follows a later reflow', () => {
+    // The popover's positioning can read the anchor twice in one frame, so two identical readings
+    // in a row are no sign the layout has settled for good.
+    const { paragraph, source } = openAtCaret(RUN_TEXT, RUN_START + 8, {
+      left: 0,
+      top: 100,
+      charWidth: 10,
+      lineHeight: 20,
+      firstLineChars: 100,
+      nextLineLeft: 0,
+    });
+    const mark = renderMark(paragraph, RUN_START, RUN_END);
+    layOut(mark, {
+      left: 30,
+      top: 100,
+      charWidth: 10,
+      lineHeight: 20,
+      firstLineChars: 100,
+      nextLineLeft: 0,
+    });
+    expect(rectNumbers(source.measure())).toEqual({ x: 110, y: 100, width: 0, height: 20 });
+    expect(rectNumbers(source.measure())).toEqual({ x: 110, y: 100, width: 0, height: 20 });
+
+    // The next frame: the pane narrows and the run wraps after "abcde", taking the caret to line 2.
+    layOut(mark, {
+      left: 30,
+      top: 100,
+      charWidth: 10,
+      lineHeight: 20,
+      firstLineChars: 5,
+      nextLineLeft: 0,
+    });
+
+    // Line 2: x = 0 + (8 - 5) * 10; the union spans both lines.
+    expect(rectNumbers(source.measure())).toEqual({ x: 30, y: 100, width: 0, height: 40 });
+  });
+
+  it('a caret in an annotation held on part of a text node: places the caret in the held part', () => {
+    // The editor paints a part of a display byte with a highlight instead of splitting it into a
+    // mark, so the annotation's range covers only the middle of a text node; the caret is found in
+    // that part's text, not in the whole node's. The caret opened in a node holding the run alone.
+    const { paragraph, source } = openAtCaret(RUN_TEXT.slice(RUN_START, RUN_END), 6, {
+      left: 0,
+      top: 100,
+      charWidth: 10,
+      lineHeight: 20,
+      firstLineChars: 100,
+      nextLineLeft: 0,
+    });
+    // The re-render replaces the text node the caret sat in with one that also holds the text
+    // around the run.
+    const rerendered = document.createTextNode(RUN_TEXT);
+    paragraph.replaceChildren(rerendered);
+    layOut(rerendered, {
+      left: 200,
+      top: 300,
+      charWidth: 10,
+      lineHeight: 20,
+      firstLineChars: 100,
+      nextLineLeft: 0,
+    });
+    const heldPart = document.createRange();
+    heldPart.setStart(rerendered, RUN_START);
+    heldPart.setEnd(rerendered, RUN_END);
+    stubClientRects(heldPart, [new DOMRect(230, 300, 100, 20)]);
+    annotation.addRange(heldPart);
+
+    // x = 200 + (3 + 6) * 10: 6 characters into the held part, which starts 3 into the node.
+    expect(rectNumbers(source.measure())).toEqual({ x: 290, y: 300, width: 0, height: 20 });
+  });
+
+  it('a caret the rendered mark does not contain: anchors on the left edge of the mark', () => {
+    // The mark has painted only its first part so far, which ends before the caret.
+    const { paragraph, source } = openAtCaret(RUN_TEXT, RUN_START + 8, {
+      left: 0,
+      top: 100,
+      charWidth: 10,
+      lineHeight: 20,
+      firstLineChars: 100,
+      nextLineLeft: 0,
+    });
+    const mark = renderMark(paragraph, RUN_START, RUN_START + 4);
+    layOut(mark, {
+      left: 30,
+      top: 100,
+      charWidth: 10,
+      lineHeight: 20,
+      firstLineChars: 100,
+      nextLineLeft: 0,
+    });
+
+    expect(rectNumbers(source.measure())).toEqual({ x: 30, y: 100, width: 0, height: 20 });
+  });
+});
+
+describe('createNoteAnchorSource', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('measures the passed-in element directly when it is still connected', () => {
+    const container = addEditorContainer();
+    const caller = document.createElement('span');
+    container.append(caller);
+    stubClientRects(caller, [new DOMRect(30, 60, 12, 18)]);
+    const getElementByKey = vi.fn();
+
+    const source = createNoteAnchorSource(caller, 'note-1', getElementByKey);
+
+    // leftEdgeRect: zero-width, full-height, pinned to the left edge.
+    expect(rectNumbers(source.measure())).toEqual({ x: 30, y: 60, width: 0, height: 18 });
+    expect(getElementByKey).not.toHaveBeenCalled();
+  });
+
+  it('returns undefined when the connected element has no layout', () => {
+    const container = addEditorContainer();
+    const caller = document.createElement('span');
+    container.append(caller);
+    stubClientRects(caller, []);
+
+    const source = createNoteAnchorSource(caller, 'note-1', vi.fn());
+
+    expect(source.measure()).toBeUndefined();
+  });
+
+  it('falls back to the key lookup once the passed-in element is detached', () => {
+    const caller = document.createElement('span'); // never appended -> not connected
+    const replacement = document.createElement('span');
+    document.body.append(replacement);
+    stubClientRects(replacement, [new DOMRect(15, 45, 10, 20)]);
+    const getElementByKey = vi.fn().mockReturnValue(replacement);
+
+    const source = createNoteAnchorSource(caller, 'note-1', getElementByKey);
+
+    expect(rectNumbers(source.measure())).toEqual({ x: 15, y: 45, width: 0, height: 20 });
+    expect(getElementByKey).toHaveBeenCalledWith('note-1');
+  });
+
+  it('returns undefined when detached and the key lookup finds nothing', () => {
+    const caller = document.createElement('span'); // never appended -> not connected
+
+    const source = createNoteAnchorSource(caller, 'note-1', vi.fn().mockReturnValue(undefined));
+
+    expect(source.measure()).toBeUndefined();
+  });
+
+  it('returns undefined when detached and the looked-up element has no layout', () => {
+    const caller = document.createElement('span'); // never appended -> not connected
+    const replacement = document.createElement('span');
+    document.body.append(replacement);
+    stubClientRects(replacement, []);
+
+    const source = createNoteAnchorSource(caller, 'note-1', vi.fn().mockReturnValue(replacement));
+
+    expect(source.measure()).toBeUndefined();
+  });
+
+  it("reports the nearest '.editor-input' ancestor as the context element", () => {
+    const editorInput = document.createElement('div');
+    editorInput.className = 'editor-input';
+    document.body.append(editorInput);
+    const caller = document.createElement('span');
+    editorInput.append(caller);
+
+    const source = createNoteAnchorSource(caller, 'note-1', vi.fn());
+
+    expect(source.contextElement).toBe(editorInput);
+  });
+
+  it('reports the element itself as the context element when no editor-input ancestor exists', () => {
+    const caller = document.createElement('span');
+    document.body.append(caller);
+
+    const source = createNoteAnchorSource(caller, 'note-1', vi.fn());
+
+    expect(source.contextElement).toBe(caller);
+  });
+});
+
+describe('createPendingCommentCenterAnchorSource', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('returns undefined when the editor container has no layout', () => {
+    const container = addEditorContainer();
+    stubClientRects(container, []);
+
+    const source = createPendingCommentCenterAnchorSource(container);
+
+    expect(source.measure()).toBeUndefined();
+  });
+
+  it("returns a zero-size rect at the container's center when it has layout", () => {
+    const container = addEditorContainer();
+    stubClientRects(container, [new DOMRect(100, 200, 300, 400)]);
+
+    const source = createPendingCommentCenterAnchorSource(container);
+
+    // center x = 100 + 300/2 = 250; center y = 200 + 400/2 = 400; zero size.
+    expect(rectNumbers(source.measure())).toEqual({ x: 250, y: 400, width: 0, height: 0 });
+    expect(source.contextElement).toBe(container);
   });
 });

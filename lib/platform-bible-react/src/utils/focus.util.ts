@@ -65,3 +65,118 @@ export const LIST_ITEM_KEYBOARD_FOCUS_RING =
   'tw:forced-colors:data-selected:outline-2 ' +
   'tw:forced-colors:data-selected:outline-[color:Highlight] ' +
   'tw:forced-colors:data-selected:-outline-offset-2';
+
+/**
+ * Which input device the user most recently used, tracked document-wide.
+ *
+ * Radix hands focus back to a trigger when the menu or popover it opened closes (`onCloseAutoFocus`
+ * / `onUnmountAutoFocus`). That fires a real `focus` event with the pointer nowhere near the
+ * control, so a focus listener alone cannot tell "the user tabbed here" from "a menu just closed".
+ * The distinction is the input device, not the element, so it is tracked once for the document
+ * rather than per component: a listener on any one element misses the keys and clicks that land
+ * elsewhere, including the Escape that Radix consumes from its own document listener.
+ *
+ * Starts as keyboard so a control focused before any input at all is still treated as a keyboard
+ * arrival.
+ */
+let lastInteractionModality: 'keyboard' | 'pointer' = 'keyboard';
+let isModalityTrackerRegistered = false;
+
+/**
+ * Starts tracking {@link getLastInteractionModality}. Registers one pair of document listeners the
+ * first time and does nothing afterwards, so any number of consumers may call it.
+ *
+ * React components should call `useInteractionModality` rather than this directly, which keeps the
+ * registration out of render.
+ */
+export function trackInteractionModality() {
+  if (isModalityTrackerRegistered || typeof document === 'undefined') return;
+  isModalityTrackerRegistered = true;
+  // Capture phase, so the modality is already correct by the time any focus handler runs.
+  document.addEventListener(
+    'pointerdown',
+    () => {
+      lastInteractionModality = 'pointer';
+    },
+    true,
+  );
+  document.addEventListener(
+    'keydown',
+    () => {
+      lastInteractionModality = 'keyboard';
+    },
+    true,
+  );
+}
+
+/** Reads the device behind the user's most recent interaction. See {@link trackInteractionModality}. */
+export function getLastInteractionModality() {
+  return lastInteractionModality;
+}
+
+/**
+ * Marks a trigger whose focus was restored by a pointer close, so its focus ring stays hidden.
+ *
+ * The name is spelled out a second time inside {@link QUIET_FOCUS_RING_SUPPRESSION}'s
+ * `tw:data-quiet-focus:*` variants, because Tailwind scans class strings statically and cannot read
+ * one from a constant. Change one and you must change the other;
+ * `tab-dropdown-menu-focus.stories.tsx` is what catches it if you don't.
+ */
+export const QUIET_FOCUS_ATTRIBUTE = 'data-quiet-focus';
+
+/**
+ * Hides the focus indicator on a trigger that a pointer-driven close just refocused. Undo with
+ * {@link showFocusRing}.
+ *
+ * Sets {@link QUIET_FOCUS_ATTRIBUTE}, which {@link QUIET_FOCUS_RING_SUPPRESSION} keys off for the
+ * ring and the border, and additionally clears `outline` inline. The inline part is not belt and
+ * braces: Tailwind emits its utilities inside `@layer utilities`, and an **unlayered** rule in the
+ * host document beats every layered rule whatever its specificity. A web view that styles
+ * `:focus-visible` itself — the scripture editor does — would therefore win against any class we
+ * could add, so the outline has to be overridden where nothing but `!important` can reach it.
+ *
+ * Does nothing under `forced-colors: active` (Windows High Contrast). CSS Color Adjust forces
+ * `box-shadow: none` there, which removes the ring, so the outline is the only focus indicator left
+ * — and clearing it would leave focus on the trigger with nothing on screen saying so. The same
+ * reasoning is behind the forced-colors outline in {@link LIST_ITEM_KEYBOARD_FOCUS_RING}.
+ */
+export function hideFocusRing(element: HTMLElement | undefined) {
+  if (!element) return;
+  if (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(forced-colors: active)').matches
+  )
+    return;
+  element.setAttribute(QUIET_FOCUS_ATTRIBUTE, '');
+  element.style.outline = 'none';
+}
+
+/** Restores the focus indicator hidden by {@link hideFocusRing}, giving the ring back. */
+export function showFocusRing(element: HTMLElement | undefined) {
+  if (!element) return;
+  element.removeAttribute(QUIET_FOCUS_ATTRIBUTE);
+  element.style.removeProperty('outline');
+}
+
+/**
+ * Tailwind classes that hide a trigger's focus ring while it carries {@link QUIET_FOCUS_ATTRIBUTE}.
+ *
+ * A menu closed with the pointer still hands focus back to its trigger, because the tab order
+ * depends on it — but the ring would then sit on a control the pointer is nowhere near. Browsers
+ * offer no way to ask for "focus without the indicator" that the app's own Chromium understands
+ * (`FocusOptions.focusVisible` only lands in Chromium 145; Electron 39 bundles 142), so the ring is
+ * suppressed in CSS instead. Consumers clear the attribute on the next keydown, which is what
+ * brings the ring back for keyboard users.
+ *
+ * Focus is drawn through three separate channels, and all three have to go. The ring and the border
+ * are the obvious two. The third is `outline`: a host document may set one on `:focus-visible` —
+ * the scripture editor's web view does — and because `Button` carries `tw:transition-all`, the
+ * outline animates rather than switching, so even a rule whose final state is `transparent` paints
+ * a visible line on its way there. `outline-none` removes the style, so nothing paints at any point
+ * in that animation.
+ */
+export const QUIET_FOCUS_RING_SUPPRESSION =
+  'tw:data-quiet-focus:focus-visible:border-transparent ' +
+  'tw:data-quiet-focus:focus-visible:ring-0 ' +
+  'tw:data-quiet-focus:focus-visible:outline-none';

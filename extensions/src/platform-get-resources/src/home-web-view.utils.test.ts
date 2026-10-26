@@ -1,0 +1,107 @@
+import { describe, expect, it } from 'vitest';
+import type { SavedWebViewDefinition } from '@papi/core';
+import {
+  buildHomeWebViewState,
+  getHomeFilterPreset,
+  shouldReloadHomeForFilterPreset,
+} from './home-web-view.utils';
+
+const savedHome = (state?: Record<string, unknown>): SavedWebViewDefinition => ({
+  id: 'home1',
+  webViewType: 'platformGetResources.home',
+  ...(state ? { state } : {}),
+});
+
+/*
+ * The provider runs whenever Home is built, and most of those builds — moving Home to a new window,
+ * an extension reload, a layout restore — pass no preset. So only an opener's preset may change the
+ * filter; without one, the filter Home last had stays.
+ */
+describe('buildHomeWebViewState', () => {
+  it('presets the filter the caller asks for', () => {
+    expect(
+      buildHomeWebViewState(savedHome(), { initialProjectResourceFilter: 'paratextProject' }),
+    ).toEqual({ projectResourceFilter: 'paratextProject' });
+  });
+
+  it("keeps the user's filter when rebuilt without a preset", () => {
+    expect(buildHomeWebViewState(savedHome({ projectResourceFilter: 'resource' }), {})).toEqual({
+      projectResourceFilter: 'resource',
+    });
+  });
+
+  it("replaces the user's filter with an opener's preset", () => {
+    expect(
+      buildHomeWebViewState(savedHome({ projectResourceFilter: 'resource' }), {
+        initialProjectResourceFilter: 'paratextProject',
+      }),
+    ).toEqual({ projectResourceFilter: 'paratextProject' });
+  });
+
+  it('keeps every other key the saved state carries', () => {
+    expect(
+      buildHomeWebViewState(savedHome({ somethingElse: 'keep me' }), {
+        initialProjectResourceFilter: 'resource',
+      }),
+    ).toEqual({ somethingElse: 'keep me', projectResourceFilter: 'resource' });
+  });
+
+  it('drops the projects-only flag that older saved layouts carry', () => {
+    expect(buildHomeWebViewState(savedHome({ shouldShowProjectsOnly: true }), {})).toEqual({});
+  });
+});
+
+/*
+ * Reusing an already-open Home brings its tab to the front without calling the provider, so fresh
+ * options never reach it — a reload is the only way in. It is also the expensive way in, and drops
+ * the user's search, so it is limited to an opener asking for a specific filter Home is not showing.
+ */
+describe('shouldReloadHomeForFilterPreset', () => {
+  it('reloads an unfiltered Home that is being asked for projects only', () => {
+    expect(shouldReloadHomeForFilterPreset(savedHome(), 'paratextProject')).toBe(true);
+  });
+
+  it('reloads a Home the user changed when "More projects…" asks for projects again', () => {
+    // Launched on projects, then switched to everything by the user. The launch preset alone would
+    // say nothing changed, and "More projects…" would raise a list full of resources.
+    expect(
+      shouldReloadHomeForFilterPreset(
+        savedHome({ projectResourceFilter: 'all' }),
+        'paratextProject',
+      ),
+    ).toBe(true);
+  });
+
+  it('leaves a Home already showing the asked-for filter alone', () => {
+    expect(
+      shouldReloadHomeForFilterPreset(
+        savedHome({ projectResourceFilter: 'paratextProject' }),
+        'paratextProject',
+      ),
+    ).toBe(false);
+  });
+});
+
+/*
+ * Simple mode doesn't lock the filter, but Home there always starts on Paratext projects. Power
+ * mode starts where the user left it unless an opener asks.
+ */
+describe('getHomeFilterPreset', () => {
+  it('starts on projects in Simple mode, whatever the opener asked for', () => {
+    expect(getHomeFilterPreset(undefined, 'simple')).toBe('paratextProject');
+    expect(getHomeFilterPreset(false, 'simple')).toBe('paratextProject');
+  });
+
+  it('starts on projects when the interface mode cannot be read', () => {
+    expect(getHomeFilterPreset(undefined, undefined)).toBe('paratextProject');
+  });
+
+  it('starts on projects in Power mode only when the opener asks for them', () => {
+    expect(getHomeFilterPreset(true, 'power')).toBe('paratextProject');
+    expect(getHomeFilterPreset(undefined, 'power')).toBeUndefined();
+  });
+
+  it("doesn't read the macOS menubar's group key as asking for projects", () => {
+    expect(getHomeFilterPreset('platform.projectResources', 'power')).toBeUndefined();
+  });
+});

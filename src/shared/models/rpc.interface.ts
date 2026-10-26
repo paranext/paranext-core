@@ -3,6 +3,7 @@ import {
   EventHandler,
   InternalRequestHandler,
   RequestParams,
+  ServerSocketLike,
 } from '@shared/data/rpc.model';
 import {
   SingleMethodDocumentation,
@@ -190,4 +191,24 @@ export interface IRpcEventRegistry {
   tryUnregister(handler: unknown, eventName: string): boolean;
   /** Remove all event registrations for the given handler (e.g. when a websocket closes) */
   unregisterAll(handler: unknown): void;
+}
+
+/**
+ * An RPC handler that can serve a client whose socket was created by the caller rather than
+ * accepted from the websocket server. Only the process that owns the server (main) implements this;
+ * it is how a renderer's MessagePort-backed connection joins the same registry as the websocket
+ * clients.
+ *
+ * @experimental
+ */
+export interface IRpcLocalClientAcceptor {
+  /**
+   * Start serving `socket` as a client of this process's RPC server.
+   *
+   * @param socket The server end of the client's connection
+   * @param name Label for this client in log lines, in place of the incrementing websocket number
+   * @throws If this handler is not currently accepting clients
+   * @experimental
+   */
+  acceptLocalClient(socket: ServerSocketLike, name: string): void;
 }

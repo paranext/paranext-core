@@ -36,7 +36,10 @@ import {
   formatReplacementString,
   getErrorMessage,
   makeProjectSelectorCustomData,
+  normalizeFullName,
   normalizeProjectId,
+  notifyProjectOpenBlocked,
+  NotifyProjectOpenBlockedDependencies,
 } from 'platform-bible-utils';
 import { getBookIdsFromBooksPresent } from 'platform-bible-utils/experimental';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
@@ -61,11 +64,18 @@ import {
   GreekEstherTemplatePicker,
   GreekEstherTemplatePickerLocalizedStrings,
 } from './greek-esther-template-picker.component';
+import { getProjectOpenBlockedReasonKeyFromResult } from './project-open-blocked.util';
 import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 
 const NETWORK_OBJECT_ID = 'platformScripture.manageBooks';
 const BOOKS_PRESENT_DEFAULT = '0'.repeat(123);
+
+const PROJECT_OPEN_BLOCKED_NOTIFY_DEPENDENCIES: NotifyProjectOpenBlockedDependencies = {
+  getLocalizedStrings: (localizeKeys) => papi.localization.getLocalizedStrings({ localizeKeys }),
+  sendNotification: (notification) => papi.notifications.send(notification),
+  logWarning: (message) => logger.warn(message),
+};
 
 // Only Scripture Editor tabs should mark a project as "open" in the ProjectSelector.
 // Other project-bound tabs (Manage Books itself, Checks side panel, etc.) carry a `projectId`
@@ -108,8 +118,11 @@ type ProjectListResult = {
     isResource: boolean;
     /**
      * Long human-readable name (e.g. "English Standard Version 2016"). Returned on the list so the
-     * frontend does not have to fetch `platform.fullName` per project. Empty when unset — fall back
-     * to the short `name`.
+     * frontend does not have to fetch `platform.fullName` per project.
+     *
+     * Empty when unset. Readers narrow it with `normalizeFullName` and leave the full name absent
+     * rather than falling back to the short `name` — mirroring claims a full name the project does
+     * not have.
      */
     fullName: string;
     /**
@@ -117,6 +130,11 @@ type ProjectListResult = {
      * list so the frontend does not have to fetch `platformScripture.versification` per project.
      */
     versification: string;
+    /**
+     * Whether licensing terms prohibit using the project as the base of new text. Mirrors the C#
+     * `ProjectSummary.IsRestrictedAsBase` wire field.
+     */
+    isRestrictedAsBase: boolean;
   }[];
 };
 
@@ -372,9 +390,11 @@ export function toManageBooksSelectorRows(
 ): SidebarProject[] {
   return projects.map((p) => ({
     id: p.projectId,
-    // `fullName` arrives on the wire row, so no per-project `getSetting` is needed here.
+    // `fullName` arrives on the wire row, so no per-project `getSetting` is needed here. It is
+    // left absent rather than mirrored from the short name when unset — the selector renders one
+    // line for a project with no distinct full name, and a mirror would claim it has one.
     shortName: p.name,
-    fullName: p.fullName.length > 0 ? p.fullName : p.name,
+    fullName: normalizeFullName(p.fullName),
     isEditable: p.isEditable,
     customData: makeProjectSelectorCustomData({
       type: p.projectType,
@@ -848,8 +868,9 @@ global.webViewComponent = function ManageBooksWebView({
         id: p.projectId,
         shortName: p.name,
         name: p.name,
-        // fullName is empty when unset server-side; fall back to the short name.
-        fullName: p.fullName.length > 0 ? p.fullName : p.name,
+        // Empty when unset server-side, and left absent rather than mirrored from the short name:
+        // the pickers render one line for a project with no distinct full name.
+        fullName: normalizeFullName(p.fullName),
         isEditable: p.isEditable,
         // Forward the isResource flag so the dialog can filter resources out of the Copy "From"
         // picker (licensing). The Create "Based on" picker includes resources (structure-only
@@ -859,6 +880,8 @@ global.webViewComponent = function ManageBooksWebView({
         // versification grouping. The localized name is resolved on the dialog side (it owns the
         // localizedStrings → versificationLabelKey map); here we forward the raw id.
         versificationId: p.versification,
+        // Licensing-restricted texts stay listed in the Create "Based on" picker but cannot be chosen
+        isRestrictedAsBase: p.isRestrictedAsBase,
         // Project type for the Copy "From" picker's type grouping. Already on this same wire
         // response, so it adds no round-trip. There is no localized display name on the wire, so
         // the raw key doubles as the section heading.
@@ -974,6 +997,11 @@ global.webViewComponent = function ManageBooksWebView({
       // of leaking the raw technical message at error severity.
       if (isSyncEditBlockedError(entry.text)) {
         notifySyncEditBlocked();
+        return;
+      }
+      const openBlockedReasonKey = getProjectOpenBlockedReasonKeyFromResult(entry.text);
+      if (openBlockedReasonKey) {
+        notifyProjectOpenBlocked(openBlockedReasonKey, PROJECT_OPEN_BLOCKED_NOTIFY_DEPENDENCIES);
         return;
       }
       // notificationService is exposed on @papi/frontend; per ui-spec-manage-books.md:118 toasts

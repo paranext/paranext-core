@@ -1,5 +1,3 @@
-import papi, { logger } from '@papi/frontend';
-import { getErrorMessage } from 'platform-bible-utils';
 import { useCallback } from 'react';
 import { installDblResource, type DblResourceInstaller } from './install-dbl-resource.util';
 
@@ -32,20 +30,10 @@ export function useInstallDblResource(
     async (dblEntryUid: string) => {
       if (!(await installDblResource(provider, dblEntryUid, logLabel))) return;
 
-      // Bring the catalog's installed flags up to date before the panel re-resolves. That
-      // re-resolve reads a cache the extension host corrects in the background, so without this it
-      // answers from before this install and the panel reports the resource it just installed as
-      // missing.
-      try {
-        await papi.commands.sendCommand('platformGetResources.refreshResourceFlags');
-      } catch (error) {
-        // The install succeeded, so this is not a failure to report: the flags catch up on a later
-        // read instead of this one.
-        logger.debug(
-          `Could not refresh installed flags for the ${logLabel}: ${getErrorMessage(error)}`,
-        );
-      }
-
+      // No flag refresh here: every caller re-resolves its catalog through a read that refreshes
+      // the flags first, so refreshing again would run a second full sync back to back — one the
+      // user waits through, since a refresh deliberately starts after any sync already running
+      // rather than joining it.
       onInstalled();
     },
     [provider, logLabel, onInstalled],

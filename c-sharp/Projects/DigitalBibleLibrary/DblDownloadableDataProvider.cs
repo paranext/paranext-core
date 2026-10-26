@@ -1,7 +1,8 @@
-using System.Diagnostics;
 using System.Text.Json;
+using Paranext.DataProvider.NetworkObjects.Documentation;
 using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Services;
+using Paranext.DataProvider.Users;
 using Paratext.Data;
 using Paratext.Data.Archiving;
 using Paratext.Data.Users;
@@ -13,14 +14,16 @@ namespace Paranext.DataProvider.Projects.DigitalBibleLibrary;
 /// </summary>
 internal class DblResourcesDataProvider(
     PapiClient papiClient,
-    LocalParatextProjects paratextProjects
+    LocalParatextProjects paratextProjects,
+    Func<List<InstallableResource>>? fetchCatalog = null
 ) : NetworkObjects.DataProvider("platformGetResources.dblResourcesProvider", papiClient)
 {
-    // These UIDs determine which DBL catalog entries are classified as CommentaryResource.
-    // The TypeScript `useCommentaryMarkerStyles` hook (extensions/src/platform-scripture-editor/src/
-    // use-commentary-marker-styles.hook.ts) keeps a parallel map and may include additional legacy
-    // UIDs for locally-installed resources predating a DBL UID reassignment — those extra entries
-    // are intentionally absent here since we no longer serve those UIDs from the catalog.
+    // These UIDs determine which DBL catalog entries are classified as CommentaryResource. The
+    // TypeScript `useCommentaryMarkerStyles` hook (extensions/src/platform-scripture-editor/src/
+    // use-commentary-marker-styles.hook.ts) and `LOCAL_COMMENTARY_UIDS`
+    // (extensions/src/platform-get-resources/src/get-local-non-dbl-resources.utils.ts) keep
+    // matching lists; change all three together. TNN and North Tanna (`tnn`, 72dd0b9b0f2b4024, a
+    // Scripture text) have short names that differ only in case; don't mistake one for the other.
     private static readonly HashSet<string> CommentariesWhiteList =
     [
         // UBS Translator's Handbook
@@ -29,13 +32,13 @@ internal class DblResourcesDataProvider(
         "77dc05b26ce399dd", // HBKCT — Chinese (Traditional)
         "815f988992157b10", // HBKFRA — French
         "24daa5f24f0020b3", // HBKPT — Portuguese
-        "1ff24938918bd69e", // HBKESP — Spanish
-        // UBS Translator's Notes
-        "72dd0b9b0f2b4024", // TNN — English (UID reassigned in DBL; old UID 090f7cbf7924b245 now belongs to a different resource)
+        "1ff24938918bd69e", // HBKESP — Spanish (filtered out by DblResourceWhiteList until PT-3805; kept to match the TypeScript lists)
+        // SIL Translator's Notes
+        "090f7cbf7924b245", // TNN — English
         "0617c397f003127c", // TNNESP — Spanish
         "233345361843ce8b", // TNNPTG — Portuguese
         "d95fde28b4346e61", // TNNFR — French
-        // UBS Translator's Notes (Deuterocanon)
+        // SIL Translator's Notes (Deuterocanon)
         "b58b80b798e22be6", // TND — English
         "943164c222f75687", // TNDESP — Spanish
         "e0b3f20ff8677585", // TNDPTG — Portuguese
@@ -43,7 +46,8 @@ internal class DblResourcesDataProvider(
 
     #region Internal classes
 
-    private class DblResourceData(
+    // Internal (not private) so tests can inspect what GetDblResources returns.
+    internal class DblResourceData(
         string DblEntryUid,
         string DisplayName,
         string FullName,
@@ -91,6 +95,25 @@ internal class DblResourcesDataProvider(
     private const string INVALID_USER_REGISTRATION_MESSAGE =
         "User registration is not valid. Cannot retrieve resources from DBL.";
 
+    private const string DBL_UNREACHABLE_MESSAGE =
+        "Could not retrieve the resource list from the DBL.";
+
+    private const string NO_COMPATIBLE_RESOURCES_MESSAGE =
+        "The resource list from the DBL contained no compatible resources.";
+
+    // Replaceable so tests can drive the provider's fetch-failure handling without a live DBL. The
+    // internet gate belongs to the real fetch: it reads the machine's saved internet setting, which
+    // a test must neither depend on nor change.
+    private readonly Func<List<InstallableResource>> _fetchCatalog =
+        fetchCatalog
+        ?? (
+            () =>
+            {
+                InternetServicesGate.ThrowIfBlocked(papiClient);
+                return FetchAvailableDBLResources();
+            }
+        );
+
     private List<InstallableResource> _resources = [];
 
     // Set once the catalog has loaded at least once so a mutation (install/uninstall) that races the
@@ -104,7 +127,6 @@ internal class DblResourcesDataProvider(
     //   • _resources — reassigned by FetchResourcesCore, read by FindResource and by
     //     RecomputeDblResourcesUpdateStatus
     //   • the Paratext ScrTextCollection — mutated by install/uninstall, read by the fetch's projection
-    //   • the process-global Trace.Listeners 401-detection bracket in FetchResourcesCore
     // GetDblResources/InstallDblResource/UninstallDblResource/RecomputeDblResourcesUpdateStatus do
     // their blocking work inside Task.Run and take this lock there — never on the JSON-RPC reading
     // thread — so the reading loop stays responsive while an operation runs. See PT-4222.
@@ -124,6 +146,7 @@ internal class DblResourcesDataProvider(
             ("installDblResource", InstallDblResource),
             ("uninstallDblResource", UninstallDblResource),
             ("isGetDblResourcesAvailable", IsGetDblResourcesAvailable),
+            ("listModelTextRestrictions", ListModelTextRestrictions),
         ];
     }
 
@@ -132,9 +155,72 @@ internal class DblResourcesDataProvider(
         return Task.CompletedTask;
     }
 
+    // Only these two recompute functions are marked: their contract is untested beyond the one
+    // caller that awaits them (see refreshResourceFlags's own experimental marker in
+    // platform-get-resources). GetDblResources, InstallDblResource, UninstallDblResource and
+    // IsGetDblResourcesAvailable are unaffected and stay undocumented, so `Experimental` is left
+    // unset rather than fanning out to the whole object.
+    protected override NetworkObjectDocumentation GetNetworkObjectDocumentation() =>
+        new()
+        {
+            Methods = new Dictionary<string, OpenRpcSingleMethodDocumentation>
+            {
+                ["recomputeDblResourcesUpdateStatus"] = ExperimentalMethodDocumentation.Create(
+                    "Recompute, for each resource in the already-loaded catalog, whether the DBL has a newer version than the copy installed locally.",
+                    result: ExperimentalMethodDocumentation.ResultOf(
+                        "object",
+                        "Whether an update is available, keyed by DBL entry uid."
+                    )
+                ),
+                ["recomputeDblResourcesInstallStatus"] = ExperimentalMethodDocumentation.Create(
+                    "Recompute which resources in the already-loaded catalog are installed locally, and under which project id.",
+                    result: ExperimentalMethodDocumentation.ResultOf(
+                        "object",
+                        "The local project id of each catalogued resource, keyed by DBL entry uid; empty string for one that is not installed."
+                    )
+                ),
+            },
+        };
+
     #endregion
 
     #region Private properties and methods
+
+    /// <summary>
+    /// Which texts pickers must not offer as a model or base text. Answers from Biblica's list and
+    /// the installed projects alone, so it works offline and before the DBL catalog has loaded.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately does not take <see cref="_providerGate"/>. It only reads ScrTextCollection,
+    /// whose ScrTexts() copies the collection under ParatextData's own lock, so an install or
+    /// uninstall running alongside cannot fault the scan; it can only answer from just before or
+    /// just after it. Waiting on the gate would stall pickers behind an unbounded catalog download,
+    /// and giving up on a contended gate would have to answer "nothing is restricted".
+    /// </remarks>
+    internal Task<ModelTextRestrictions> ListModelTextRestrictions() =>
+        // Reading every installed project's settings can take a while; keep it off the JSON-RPC
+        // reading thread
+        Task.Run(() =>
+        {
+            List<string> projectIds = [];
+            foreach (var scrText in ScrTextCollection.ScrTexts(IncludeProjects.AllAccessible))
+            {
+                try
+                {
+                    if (BiblicaLicensing.IsRestricted(scrText))
+                        projectIds.Add(scrText.Guid.ToString().ToUpperInvariant());
+                }
+                catch (Exception e)
+                {
+                    // One unreadable project must not cost every picker its restrictions. It is
+                    // not named here because reading it is what just failed.
+                    Console.Error.WriteLine(
+                        $"Could not check a project's license for model text restrictions: {e}"
+                    );
+                }
+            }
+            return new ModelTextRestrictions([.. BiblicaLicensing.RestrictedTextIds], projectIds);
+        });
 
     /// <summary>
     /// Detect if DBL credentials have been configured. Does not check these credentials for
@@ -149,54 +235,103 @@ internal class DblResourcesDataProvider(
     }
 
     /// <summary>
-    /// Fetch list DBL resources
+    /// Fetch the full DBL catalog, before the compatibility whitelist is applied. Throws when the
+    /// registered user's credentials are invalid.
     /// </summary>
-    /// <returns>
-    /// A list of all available resources on the DBL, along with information about their
-    /// installation status on the local machine
-    /// </returns>
-    private void FetchAvailableDBLResources()
-    {
-        var allResources = InstallableDBLResource.GetInstallableDBLResources(
-            RegistrationInfo.DefaultUser,
-            new DBLRESTClientFactory(),
-            new DblProjectDeleter(),
-            new DblMigrationOperations(),
-            new DblResourcePasswordProvider()
-        );
-        _resources = allResources.Where(r => DblResourceWhiteList.IsValidResource(r)).ToList();
-        var excludedResources = allResources.Except(_resources).Select(r => r.Name).ToList();
-        excludedResources.Sort();
-        Console.WriteLine(
-            $"Excluded resources (not confirmed to be compatible): {string.Join(", ", excludedResources)}\n"
-        );
-    }
-
-    /// <summary>
-    /// Loads the DBL catalog into <see cref="_resources"/>, surfacing Paratext's trace-only 401 as
-    /// <see cref="INVALID_USER_REGISTRATION_MESSAGE"/>. Call only while holding
-    /// <see cref="_providerGate"/> (it touches the global Trace.Listeners bracket) and from a
-    /// background thread (the network call blocks and has no timeout).
-    /// </summary>
-    private void FetchResourcesCore()
+    private static List<InstallableResource> FetchAvailableDBLResources()
     {
         if (!RegistrationInfo.DefaultUser.IsValid)
             throw new Exception(INVALID_USER_REGISTRATION_MESSAGE);
 
-        TextSearchingTraceListener traceListener = new("REST ProtocolError = 401");
-        Trace.Listeners.Add(traceListener);
+        return InstallableDBLResource.GetInstallableDBLResources(
+            RegistrationInfo.DefaultUser,
+            new DBLRESTClientFactory(),
+            new DblProjectDeleter(),
+            new DblMigrationOperations(),
+            new DblResourcePasswordProvider(),
+            runWithProgress: false
+        );
+    }
+
+    /// <summary>
+    /// Decides whether a catalog fetch produced a catalog, and throws when it did not.
+    /// </summary>
+    /// <remarks>
+    /// ParatextData reports every failure to reach the DBL — offline, server error, bad
+    /// registration — by raising an alert and returning an empty list, never by throwing. The DBL
+    /// always lists resources for a registered user, so an empty list is a failure. Accepting it
+    /// would replace the catalog already loaded with nothing, and mark the catalog as fetched,
+    /// which stops install status from answering from disk.
+    /// </remarks>
+    /// <param name="fetched">What ParatextData returned, before the whitelist is applied.</param>
+    /// <param name="wasUnauthorized">Whether the fetch logged a 401.</param>
+    /// <param name="alerts">Alerts ParatextData raised during the fetch, for the error text.</param>
+    /// <returns><paramref name="fetched"/>, when it is a catalog.</returns>
+    internal static List<InstallableResource> RequireFetchedCatalog(
+        List<InstallableResource> fetched,
+        bool wasUnauthorized,
+        IReadOnlyList<AlertEntry> alerts
+    )
+    {
+        if (wasUnauthorized)
+            throw new Exception(INVALID_USER_REGISTRATION_MESSAGE);
+        if (fetched.Count > 0)
+            return fetched;
+
+        var detail = string.Join(" ", alerts.Select(alert => alert.Text));
+        throw new Exception(
+            detail.Length == 0
+                ? DBL_UNREACHABLE_MESSAGE
+                : $"{DBL_UNREACHABLE_MESSAGE} {AlertCapture.RedactPathsForLog(detail)}"
+        );
+    }
+
+    /// <summary>
+    /// Loads the DBL catalog into <see cref="_resources"/>, surfacing Paratext's trace-only 401, an
+    /// unreachable DBL and a catalog with no whitelisted resource as an exception, and leaving
+    /// <see cref="_resources"/> and <see cref="_hasFetchedResources"/> untouched when it does.
+    /// Call only while holding <see cref="_providerGate"/> and from a background thread (the
+    /// network call blocks and has no timeout).
+    /// </summary>
+    private void FetchResourcesCore()
+    {
+        // Captured rather than logged so the reason the DBL could not be reached travels with the
+        // exception to the front end's log. Capturing suppresses AlertCapture's own console
+        // fallback, so the `finally` below logs every captured alert itself, on every exit path.
+        using var alertScope = AlertCapture.StartCapture();
         try
         {
-            FetchAvailableDBLResources();
+            List<InstallableResource> allResources = [];
+            // Watches this thread only, so a 401 traced by an unrelated REST call on another thread
+            // is not mistaken for this user's invalid registration. Assumes ParatextData traces the
+            // 401 on the thread that made the request, which this call runs on directly.
+            bool wasUnauthorized = TextSearchingTraceListener.WasTracedDuring(
+                "REST ProtocolError = 401",
+                () => allResources = _fetchCatalog(),
+                currentThreadOnly: true
+            );
+
+            // Throws before any state below is written.
+            var fetched = RequireFetchedCatalog(allResources, wasUnauthorized, alertScope.Entries);
+            var compatible = fetched.Where(r => DblResourceWhiteList.IsValidResource(r)).ToList();
+            var excludedResources = fetched.Except(compatible).Select(r => r.Name).ToList();
+            excludedResources.Sort();
+            Console.WriteLine(
+                $"Excluded resources (not confirmed to be compatible): {string.Join(", ", excludedResources)}\n"
+            );
+            // A catalog the whitelist emptied is no catalog either. Accepting it would mark the
+            // catalog fetched, which stops install status answering from disk while the empty
+            // catalog reports nothing installed.
+            if (compatible.Count == 0)
+                throw new Exception(NO_COMPATIBLE_RESOURCES_MESSAGE);
+
+            _resources = compatible;
+            _hasFetchedResources = true;
         }
         finally
         {
-            Trace.Listeners.Remove(traceListener);
+            AlertCapture.WriteCapturedToConsole(alertScope.Entries);
         }
-        if (traceListener.FoundText)
-            throw new Exception(INVALID_USER_REGISTRATION_MESSAGE);
-
-        _hasFetchedResources = true;
     }
 
     /// <summary>
@@ -218,8 +353,9 @@ internal class DblResourcesDataProvider(
     /// A list with some information about all available resources on the DBL, for the purpose of
     /// presenting the resources and their installation status on the front-end
     /// </returns>
+    /// <remarks>Internal (not private) so tests can call it.</remarks>
     [NetworkTimeout(DBL_NETWORK_TIMEOUT)]
-    private Task<List<DblResourceData>> GetDblResources(JsonElement _ignore) =>
+    internal Task<List<DblResourceData>> GetDblResources(JsonElement _ignore) =>
         // Offload the DBL catalog fetch to a background thread. This is a blocking, unbounded
         // (NetworkTimeout = 0) network call, and on a cold cache (first run) it downloads the
         // full catalog, which can take a long time. StreamJsonRpc invokes synchronous handlers
@@ -594,6 +730,22 @@ internal class DblResourcesDataProvider(
             }
         });
 
+    /// <summary>
+    /// Whether an install request is already satisfied, so installing again would do nothing.
+    /// </summary>
+    /// <remarks>
+    /// <c>Installed</c> is not a flag captured when the catalog was fetched: it resolves
+    /// <c>ExistingScrText</c> (or <c>ExistingDictionary</c>) against the live
+    /// <c>ScrTextCollection</c> on every read. So this answers for the collection as it stands, and
+    /// <c>RefreshScrTexts()</c> before the call is what makes that the disk as it is now rather
+    /// than as the collection last saw it — which is how a resource removed outside this process
+    /// stops counting as installed.
+    /// </remarks>
+    /// <param name="resource">The catalog entry the caller asked to install.</param>
+    /// <returns>True when the resource is installed and up to date.</returns>
+    internal static bool IsInstallAlreadySatisfied(InstallableResource resource) =>
+        resource.Installed && !resource.IsNewerThanCurrentlyInstalled();
+
     private void InstallDblResourceCore(string DBLEntryUid)
     {
         FindResource(
@@ -606,14 +758,33 @@ internal class DblResourcesDataProvider(
             out var installableResource
         );
 
-        if (installableResource.Installed && !installableResource.IsNewerThanCurrentlyInstalled())
-            throw new Exception(
-                LocalizationService.GetLocalizedString(
-                    PapiClient,
-                    "%getResources_errorInstallResource_resourceAlreadyInstalled%",
-                    $"Resource is already installed and up to date. Installation skipped."
-                )
-            );
+        // Already installed and up to date is what the caller asked for, so succeed without doing
+        // anything. Throwing strands a caller whose catalog says the resource is missing: every
+        // retry it offers gets the same error, however many times the user asks.
+        //
+        // Asked twice, either side of a refresh. `Installed` reads the project collection live, so
+        // the first answer describes the collection as it stands — possibly from before another
+        // process removed the project — and only the second describes the disk now. Refreshing
+        // unconditionally would put a full collection rescan in front of every ordinary install, so
+        // the cheap answer gates the expensive one.
+        if (IsInstallAlreadySatisfied(installableResource))
+        {
+            ScrTextCollection.RefreshScrTexts();
+            if (IsInstallAlreadySatisfied(installableResource))
+            {
+                Console.WriteLine(
+                    $"DBL resource {DBLEntryUid} is already installed and up to date. Installation skipped."
+                );
+                // Nothing changed on disk, but the caller's view of it disagrees; the notifications
+                // the install path sends are what let that view catch up.
+                SendDataUpdateEvent(DBL_RESOURCES, "DBL resources data updated");
+                paratextProjects.NotifyProjectsChanged();
+                return;
+            }
+        }
+
+        // The catalog may have loaded before the internet setting changed, so check again here
+        InternetServicesGate.ThrowIfBlocked(PapiClient);
 
         // Install()'s bool is not a verdict on the install. Its only `true` assignment is inside
         // InternalInstall's loop over the bundle's `*.font` entries, so a bundle carrying no font

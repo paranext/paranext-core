@@ -82,6 +82,35 @@ export function clearInheritedPidFile(pidFile: string): void {
   if (fs.existsSync(pidFile)) fs.unlinkSync(pidFile);
 }
 
+/**
+ * The dev-server child process's platform-dependent spawn options.
+ *
+ * POSIX: `detached: true` creates a new process group so global-teardown can kill the entire tree
+ * via `process.kill(-pid)` — without it, the shell child inherits the parent's PGID and
+ * `process.kill(-pid)` throws ESRCH. Windows has no addressable process group for `detached` to
+ * create, so global-teardown reaches the tree there via `taskkill /t` instead (see
+ * `killProcessTree` in `fixtures/helpers.ts`), and `detached` is left off there: combined with
+ * `windowsHide`, Node would otherwise request DETACHED_PROCESS on Windows, and Windows silently
+ * ignores CREATE_NO_WINDOW whenever DETACHED_PROCESS is also set — the two flags would lose to each
+ * other, reopening the visible console window `windowsHide` exists to suppress. Splitting them by
+ * platform keeps both properties: a killable tree on POSIX, no console window on Windows.
+ *
+ * `windowsHide` is set on every platform regardless: a detached (and/or shell-wrapped) child gets
+ * its own console window on Windows unless told otherwise — Node's own doc for `detached`: "On
+ * Windows, ... the child process will have its own console window". Without it, every
+ * isolated-suite run opens a visible cmd window nobody asked for, on top of the app windows under
+ * test.
+ */
+export function devServerSpawnFlags(platform: NodeJS.Platform): {
+  detached: boolean;
+  windowsHide: boolean;
+} {
+  return {
+    detached: platform !== 'win32',
+    windowsHide: true,
+  };
+}
+
 /** Last few lines of a file, for putting a process's own words into the error that reports it. */
 function tailFile(filePath: string, lines = 20): string {
   try {
@@ -262,11 +291,7 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
       cwd: rootDir,
       stdio: ['ignore', devServerLog, devServerLog],
       shell: true,
-      // Create a new process group so global-teardown can kill the entire tree: on POSIX via
-      // process.kill(-pid) (without this, the shell child inherits the parent's PGID and
-      // process.kill(-pid) throws ESRCH), on Windows via `taskkill /t` instead, since `detached`
-      // does not create an addressable process group there.
-      detached: true,
+      ...devServerSpawnFlags(process.platform),
       // Must clear ELECTRON_RUN_AS_NODE for the env to be clean.
       // SKIP_START_MAIN tells the webpack dev server's setupMiddlewares to skip
       // spawning start:main — Playwright launches Electron directly via electron.launch().

@@ -11,6 +11,7 @@
 import { InitialConfigType, LexicalComposer } from '@lexical/react/LexicalComposer';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { EditorState, SerializedEditorState } from 'lexical';
+import { ReactNode, useCallback, useState } from 'react';
 
 import { editorTheme } from '@/components/advanced/editor/themes/editor-theme';
 import { TooltipProvider } from '@/components/shadcn-ui/tooltip';
@@ -42,6 +43,7 @@ export function Editor({
   autoFocus = false,
   onClear,
   className,
+  actions,
 }: {
   editorState?: EditorState;
   editorSerializedState?: SerializedEditorState;
@@ -51,7 +53,32 @@ export function Editor({
   autoFocus?: boolean;
   onClear?: (clearFn: () => void) => void;
   className?: string;
+  /**
+   * Optional controls rendered inside the editor's bordered box, below the content area — e.g. a
+   * comment's assign and submit buttons. Placed after the content in DOM order so tab order runs
+   * from the text to the actions.
+   */
+  actions?: ReactNode;
 }) {
+  // `LexicalComposer` reads `initialConfig` only once, at mount (it is genuinely an "initial"
+  // config, not a controlled prop) — so building it fresh on every render, `JSON.stringify` of
+  // `editorSerializedState` included, redoes work whose result is thrown away on every render but
+  // the first. `useState`'s lazy initializer runs exactly once (unlike `useMemo`, which React does
+  // not guarantee to cache permanently), matching how the value is actually consumed.
+  const [initialConfig] = useState<InitialConfigType>(() => ({
+    ...editorConfig,
+    ...(editorState ? { editorState } : {}),
+    ...(editorSerializedState ? { editorState: JSON.stringify(editorSerializedState) } : {}),
+  }));
+
+  const handleChange = useCallback(
+    (latestEditorState: EditorState) => {
+      onChange?.(latestEditorState);
+      onSerializedChange?.(latestEditorState.toJSON());
+    },
+    [onChange, onSerializedChange],
+  );
+
   return (
     // CUSTOM: Added `className` prop
     <div
@@ -60,23 +87,16 @@ export function Editor({
         className,
       )}
     >
-      <LexicalComposer
-        initialConfig={{
-          ...editorConfig,
-          ...(editorState ? { editorState } : {}),
-          ...(editorSerializedState ? { editorState: JSON.stringify(editorSerializedState) } : {}),
-        }}
-      >
+      <LexicalComposer initialConfig={initialConfig}>
         <TooltipProvider>
-          <Plugins placeholder={placeholder} autoFocus={autoFocus} onClear={onClear} />
-
-          <OnChangePlugin
-            ignoreSelectionChange
-            onChange={(latestEditorState) => {
-              onChange?.(latestEditorState);
-              onSerializedChange?.(latestEditorState.toJSON());
-            }}
+          <Plugins
+            placeholder={placeholder}
+            autoFocus={autoFocus}
+            onClear={onClear}
+            actions={actions}
           />
+
+          <OnChangePlugin ignoreSelectionChange onChange={handleChange} />
         </TooltipProvider>
       </LexicalComposer>
     </div>

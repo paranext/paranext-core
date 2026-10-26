@@ -26,9 +26,17 @@ import {
   MenuItemContainingSubmenu,
   MultiColumnMenu,
 } from 'platform-bible-utils';
-import { Fragment, ReactNode, useId } from 'react';
+import { Fragment, ReactNode, useId, useRef } from 'react';
 import { Button } from '@/components/shadcn-ui/button';
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
+import {
+  getLastInteractionModality,
+  hideFocusRing,
+  QUIET_FOCUS_RING_SUPPRESSION,
+  showFocusRing,
+} from '@/utils/focus.util';
+import { useInteractionModality } from '@/hooks/use-interaction-modality.hook';
+import { ShortcutKeys } from '@/components/basics/shortcut-keys.component';
 import {
   getMenuSectionsWithItems,
   getSubMenuGroupKeyForMenuItemId,
@@ -54,10 +62,15 @@ const getGroupContent = (
       .filter((item) => item.group === groupKey)
       .sort((a, b) => a.order - b.order)
       .map((item: Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>) => {
-        return (
-          <Tooltip key={`tooltip-${item.label}-${'command' in item ? item.command : item.id}`}>
-            <TooltipTrigger asChild>
-              {'command' in item ? (
+        // `DropdownMenuSub` is a Radix context provider that renders no DOM node of its own, so a
+        // `TooltipTrigger asChild` wrapped around it drops every cloned prop (including
+        // `aria-describedby`) instead of reaching the trigger that actually renders. The submenu
+        // branch attaches the tooltip to `DropdownMenuSubTrigger` itself instead, which is the
+        // element the tooltip needs to describe anyway.
+        if ('command' in item) {
+          return (
+            <Tooltip key={`tooltip-${item.label}-${item.command}`}>
+              <TooltipTrigger asChild>
                 <DropdownMenuItem
                   key={`dropdown-menu-item-${item.label}-${item.command}`}
                   onClick={() => {
@@ -73,27 +86,44 @@ const getGroupContent = (
                   {item.iconPathAfter && (
                     <MenuItemIcon icon={item.iconPathAfter} menuLabel={item.label} />
                   )}
-                  {item.shortcut && <DropdownMenuShortcut>{item.shortcut}</DropdownMenuShortcut>}
+                  {item.shortcut && (
+                    <DropdownMenuShortcut>
+                      <ShortcutKeys hint={item.shortcut} />
+                    </DropdownMenuShortcut>
+                  )}
                 </DropdownMenuItem>
-              ) : (
-                <DropdownMenuSub key={`dropdown-menu-sub-${item.label}-${item.id}`}>
-                  <DropdownMenuSubTrigger>{item.label}</DropdownMenuSubTrigger>
+              </TooltipTrigger>
+              {item.tooltip && <TooltipContent>{item.tooltip}</TooltipContent>}
+            </Tooltip>
+          );
+        }
 
-                  <DropdownMenuPortal>
-                    <DropdownMenuSubContent>
-                      {getGroupContent(
-                        groups,
-                        items,
-                        getSubMenuGroupKeyForMenuItemId(groups, item.id),
-                        onSelectMenuItem,
-                      )}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuPortal>
-                </DropdownMenuSub>
-              )}
-            </TooltipTrigger>
-            {item.tooltip && <TooltipContent>{item.tooltip}</TooltipContent>}
-          </Tooltip>
+        // Only wrap the trigger when there is a tooltip: `TooltipTrigger asChild` clones its own
+        // `data-state` and `data-slot` onto the trigger, hiding the submenu's open state from
+        // `data-open:` styles
+        const subTrigger = <DropdownMenuSubTrigger>{item.label}</DropdownMenuSubTrigger>;
+        return (
+          <DropdownMenuSub key={`dropdown-menu-sub-${item.label}-${item.id}`}>
+            {item.tooltip ? (
+              <Tooltip>
+                <TooltipTrigger asChild>{subTrigger}</TooltipTrigger>
+                <TooltipContent>{item.tooltip}</TooltipContent>
+              </Tooltip>
+            ) : (
+              subTrigger
+            )}
+
+            <DropdownMenuPortal>
+              <DropdownMenuSubContent>
+                {getGroupContent(
+                  groups,
+                  items,
+                  getSubMenuGroupKeyForMenuItemId(groups, item.id),
+                  onSelectMenuItem,
+                )}
+              </DropdownMenuSubContent>
+            </DropdownMenuPortal>
+          </DropdownMenuSub>
         );
       });
 
@@ -140,7 +170,8 @@ export type TabDropdownMenuProps = {
  * Dropdown menu for Platform.Bible menu data. Each column that has items is a section, divided from
  * the next by a line; columns without items are left out. Groups within a column are not
  * distinguished. Items show their tooltip on hover and their `shortcut`, if any, at the end of the
- * row. With `showSectionHeadings`, each section is headed by its column label.
+ * row. With `showSectionHeadings`, each section is headed by its column label, except a column that
+ * sets `isHeaderHidden`, whose label names the section for screen readers only.
  *
  * A child component can be passed in to show as an icon on the menu trigger button.
  */
@@ -159,20 +190,58 @@ export default function TabDropdownMenu({
   const sections = getMenuSectionsWithItems(menuData);
   const showHeadings = showSectionHeadings && sections.length > 1;
 
+  // Radix restores focus to the trigger on every close, and the tab order depends on that. The focus
+  // ring does not belong there after a pointer close, though — it would sit on a button the pointer
+  // has long left. Mark the trigger so CSS hides the ring, and clear the mark on the next keydown so
+  // keyboard users get it back.
+  // Only the tab menus behave this way; every other menu keeps Radix's default.
+  // TODO(PT-4727): Lift this into DropdownMenuContent so all menus close alike, and drop it here.
+  useInteractionModality();
+  // `null` is React's canonical "not yet attached" ref value; there's no undefined equivalent in the
+  // DOM/ref API (same pattern as navigation-history-buttons' button refs)
+  // eslint-disable-next-line no-null/no-null
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const restoreFocusRing = () => showFocusRing(triggerRef.current ?? undefined);
+
   return (
     <DropdownMenu variant={variant}>
       <DropdownMenuTrigger aria-label={tabLabel} className={className} asChild id={id}>
-        <Button variant={buttonVariant} size="icon">
+        <Button
+          ref={triggerRef}
+          variant={buttonVariant}
+          size="icon"
+          className={QUIET_FOCUS_RING_SUPPRESSION}
+          onKeyDown={restoreFocusRing}
+          onBlur={restoreFocusRing}
+        >
           {icon ?? <MenuIcon />}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" style={{ zIndex: Z_INDEX_ABOVE_DOCK }}>
-        {sections.map(({ columnKey, label }, index) => {
+      <DropdownMenuContent
+        align="start"
+        style={{ zIndex: Z_INDEX_ABOVE_DOCK }}
+        onCloseAutoFocus={() => {
+          // Radix composes this ahead of its own restore, so the mark is in place before it
+          // focuses. Deliberately does not preventDefault: Radix's handler also resets the
+          // bookkeeping that decides when the trigger must not be refocused at all.
+          if (getLastInteractionModality() === 'pointer')
+            hideFocusRing(triggerRef.current ?? undefined);
+        }}
+      >
+        {sections.map(({ columnKey, label, isHeaderHidden }, index) => {
           const headingId = `${headingIdPrefix}-${columnKey}`;
           return (
             <Fragment key={columnKey}>
               <DropdownMenuGroup aria-labelledby={showHeadings ? headingId : undefined}>
-                {showHeadings && <DropdownMenuLabel id={headingId}>{label}</DropdownMenuLabel>}
+                {showHeadings && (
+                  // A section shown without its heading keeps it for assistive technology only
+                  <DropdownMenuLabel
+                    id={headingId}
+                    className={isHeaderHidden ? 'tw:sr-only' : undefined}
+                  >
+                    {label}
+                  </DropdownMenuLabel>
+                )}
                 <TooltipProvider>
                   {getGroupContent(menuData.groups, menuData.items, columnKey, onSelectMenuItem)}
                 </TooltipProvider>

@@ -377,13 +377,31 @@ describe('fetchDownloadedResources', () => {
     expect(papi.projectDataProviders.get).not.toHaveBeenCalled();
   });
 
+  it('excludes a read-only project that cannot be opened', async () => {
+    vi.mocked(papi.projectLookup.getMetadataForAllProjects).mockResolvedValue([
+      { id: 'proj-kjn', projectInterfaces: [], pdpFactoryInfo: {}, isEditable: false, name: 'KJN' },
+      {
+        id: 'proj-sba',
+        projectInterfaces: [],
+        pdpFactoryInfo: {},
+        isEditable: false,
+        name: 'SBA',
+        unsupportedReason: '%project_unsupported_studyBibleAdditions%',
+      },
+    ]);
+
+    const result = await fetchDownloadedResources();
+
+    expect(result.map((r) => r.projectId)).toEqual(['proj-kjn']);
+  });
+
   it('returns [] and warns when enumeration throws', async () => {
     vi.mocked(papi.projectLookup.getMetadataForAllProjects).mockRejectedValue(new Error('boom'));
     await expect(fetchDownloadedResources()).resolves.toEqual([]);
     expect(vi.mocked(logger.warn)).toHaveBeenCalled();
   });
 
-  it('falls back to project id when name and fullName are absent from metadata', async () => {
+  it('falls back the short name to the project id, and leaves the full name absent', async () => {
     vi.mocked(papi.projectLookup.getMetadataForAllProjects).mockResolvedValue([
       // `as never` is required: mockResolvedValue expects the full ProjectMetadata shape but a
       // minimal stub suffices for this test.
@@ -392,8 +410,10 @@ describe('fetchDownloadedResources', () => {
     ]);
 
     const result = await fetchDownloadedResources();
+    // `fullName` is absent rather than mirrored from the id: claiming a full name the resource does
+    // not have makes every consumer downstream un-claim it.
     expect(result).toEqual([
-      { projectId: 'proj-unnamed', name: 'proj-unnamed', fullName: 'proj-unnamed', language: '' },
+      { projectId: 'proj-unnamed', name: 'proj-unnamed', fullName: undefined, language: '' },
     ]);
   });
 });

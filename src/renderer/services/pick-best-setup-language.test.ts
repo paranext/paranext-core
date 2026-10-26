@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import { pickBestSetupLanguage } from './pick-best-setup-language';
 
-// Raw locale-file tags, as returned by getSetupDialogLanguages().
+// Raw locale-file tags of the kind getSetupDialogLanguages() returns. More than the offered
+// languages, so the matching itself is tested whatever the offered list is.
 const QUALIFYING = ['en', 'es', 'fr', 'km', 'zh-hans', 'zh-hant'];
 
 describe('pickBestSetupLanguage', () => {
@@ -43,5 +44,10 @@ describe('pickBestSetupLanguage', () => {
   test('returns undefined for an empty or invalid locale without throwing', () => {
     expect(pickBestSetupLanguage('', QUALIFYING)).toBeUndefined();
     expect(pickBestSetupLanguage('not a locale', QUALIFYING)).toBeUndefined();
+  });
+  test('matches the Latin-American Spanish region code to Spanish', () => {
+    // Electron reports `es-419` for `--lang=es-MX` and `LANG=es_MX.UTF-8`, so Latin-American
+    // Spanish users reach this with it.
+    expect(pickBestSetupLanguage('es-419', ['en', 'es'])).toBe('es');
   });
 });

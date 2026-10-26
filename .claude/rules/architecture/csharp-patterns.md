@@ -14,7 +14,7 @@ Design decisions for the C# data-provider backend (not enforceable by linting). 
 - `Get*` / `Set*` are implemented in **C#**; `subscribe*` is **auto-generated** TS-side from the events `Set*` emits (declare it in the `.d.ts`, never write a body).
 - Every `Set*` MUST call `SendDataUpdateEvent(...)` for each affected data type — that is how subscribers get notified.
 - Each data type needs its own paired `Get*` / `Set*` / `subscribe*`; they cannot be shared across methods.
-- A provider helper that is **not** part of the contract MUST NOT start with `get`/`set`/`subscribe` — use another verb (`lookup*`, `compute*`, `list*`).
+- A provider helper that is **not** part of the contract MUST NOT start with `get`/`set`/`subscribe` — use another verb (`lookUp*`, `compute*`, `list*`).
 - When a **NetworkObject** (not the DataProvider itself) mutates project data that DataProvider subscribers observe, it must fire `GetExistingProjectDataProvider(projectId)?.SendFullProjectUpdateEvent()` for the changed project — see the mutation-notify pattern in [Paranext-Core-Patterns.md](../../../.context/standards/Paranext-Core-Patterns.md).
 
 ## Logic Placement: C# Process Is Reserved for ParatextData

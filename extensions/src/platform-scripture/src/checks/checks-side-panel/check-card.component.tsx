@@ -1,6 +1,7 @@
 import {
   Badge,
   cn,
+  ContentZoomRoot,
   DropdownMenuItem,
   ResultsCard,
   Tooltip,
@@ -188,7 +189,10 @@ export function CheckCard({
       <div className="tw:flex tw:items-center tw:gap-2 tw:overflow-hidden">
         <span className="tw:shrink-0 tw:text-nowrap tw:text-xs tw:font-medium">
           {formatScrRef(checkResult.verseRef)}{' '}
-          <span className="scripture-font">{checkResult.itemText}</span>
+          {/* Only the checked project text zooms; the reference beside it keeps interface size. */}
+          <ContentZoomRoot as="span" className="scripture-font">
+            {checkResult.itemText}
+          </ContentZoomRoot>
         </span>
         {showBadge &&
           (checkState === CheckStates.Fixed ||

@@ -46,6 +46,7 @@ import {
   ScopeWithRange,
   buildBuiltInGroupingStrings,
   buildProjectSelectorLocalizedStrings,
+  resolveLocalizedString,
   makeBuiltInGroupings,
   summarizeSelectedBooks,
 } from 'platform-bible-react/experimental';
@@ -210,8 +211,11 @@ export type FindProject = {
   id: string;
   /** Short display name (e.g. an abbreviation). */
   shortName: string;
-  /** Full display name. */
-  fullName: string;
+  /**
+   * Full display name. Optional: a project with no distinct full name omits it rather than
+   * mirroring the short name in, so the picker renders a single line for it.
+   */
+  fullName?: string;
   /** Language name, used by the picker's Language grouping. Omitted when unknown. */
   language?: string;
   /**
@@ -382,6 +386,11 @@ export type FindProps = {
   searchStatus: FindJobStatus | undefined;
   /** The find-job error message, if the status is `errored`. */
   searchError: string | undefined;
+  /**
+   * Why the project cannot be searched, already localized. Shown on its own, in place of
+   * {@link searchError}, when the status is `errored`.
+   */
+  openBlockedMessage?: string;
   /** Percent complete of the running search (0-100). */
   searchProgress: number;
   /** Total number of results the job reports (may exceed loaded results). */
@@ -506,17 +515,18 @@ export const FIND_SIMPLE_PROJECT_SELECTOR_GROUPING_IDS: readonly string[] = ['la
  * projects beyond the open ones would want it without a second round of plumbing.
  */
 export function toFindSelectorRows(projects: readonly FindProject[]): ProjectSelectorProject[] {
-  return [...projects]
-    .sort((a, b) => a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }))
-    .map((project) => ({
-      id: project.id,
-      shortName: project.shortName,
-      fullName: project.fullName,
-      customData: makeProjectSelectorCustomData({
-        language: project.language,
-        lastUsedAt: project.lastUsedAt,
-      }),
-    }));
+  // Deliberately unsorted. `ProjectSelector` sorts every section it renders itself — every
+  // partition path in `project-selector.rows.ts` runs `compareRows`, which leads with
+  // `compareProjectsByName` — so a sort here would order rows nothing ever reads in that order.
+  return projects.map((project) => ({
+    id: project.id,
+    shortName: project.shortName,
+    fullName: project.fullName,
+    customData: makeProjectSelectorCustomData({
+      language: project.language,
+      lastUsedAt: project.lastUsedAt,
+    }),
+  }));
 }
 
 /**
@@ -595,6 +605,7 @@ export function Find({
   focusedResultIndex,
   searchStatus,
   searchError,
+  openBlockedMessage,
   searchProgress,
   totalNumberOfResults,
   numberOfHiddenResults,
@@ -988,9 +999,21 @@ export function Find({
   const projectSelectorLocalizedStrings = useMemo<ProjectSelectorLocalizedStrings>(
     () => ({
       ...buildProjectSelectorLocalizedStrings(localizedStrings),
-      buttonPlaceholder: localizedStrings['%webView_find_projectFilter_noOpenProjectsOrResources%'],
-      commandEmptyMessage: localizedStrings['%webView_find_projectFilter_noProjectsFound%'],
-      ariaLabel: localizedStrings['%webView_find_projectSelector_label%'],
+      // Each override falls back to Find's own English, not the picker's. The picker's generic
+      // "Select a project" would be actively wrong here: this placeholder reports that there is
+      // nothing to pick, so instructing the user to pick something contradicts it.
+      buttonPlaceholder: resolveLocalizedString(
+        localizedStrings['%webView_find_projectFilter_noOpenProjectsOrResources%'],
+        'No open projects or resources',
+      ),
+      commandEmptyMessage: resolveLocalizedString(
+        localizedStrings['%webView_find_projectFilter_noProjectsFound%'],
+        'No projects found',
+      ),
+      ariaLabel: resolveLocalizedString(
+        localizedStrings['%webView_find_projectSelector_label%'],
+        'Project',
+      ),
     }),
     [localizedStrings],
   );
@@ -1588,7 +1611,10 @@ export function Find({
             searchStatus === 'exceeded') && (
             <p className="tw:font-light tw:text-center">{resultsMessage}</p>
           )}
-          {searchStatus === 'errored' && searchError && (
+          {searchStatus === 'errored' && openBlockedMessage && (
+            <p className="tw:font-light tw:text-center">{openBlockedMessage}</p>
+          )}
+          {searchStatus === 'errored' && !openBlockedMessage && searchError && (
             <p className="tw:font-light tw:text-center">
               {formatReplacementString(localizedStrings['%webView_find_errorOccurred%'], {
                 error: searchError,

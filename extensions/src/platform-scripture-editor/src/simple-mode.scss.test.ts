@@ -77,4 +77,23 @@ describe('_simple-mode.scss', () => {
     // React side: the bar slot is empty unless the same two conditions hold.
     expect(webView).toContain('isPowerMode || !viewOptions.hasGutterParaMarkers ? undefined');
   });
+
+  it('reserves the gutter in unzoomed pixels, in both directions, so the fixed-size bar never overlaps zoomed text', () => {
+    // The reservation is padding on `.usfm`, inside the editor's content-zoom area; the bar sits
+    // outside that area at its own fixed 64px. Divided by the area's factor, the padding renders at
+    // exactly the bar's width at every zoom level, instead of shrinking under it below 100 %.
+    // Whitespace-insensitive, so the formatter's line breaks inside `calc(` cannot fail it.
+    const scss = readFileSync(SIMPLE_MODE_SCSS_PATH, 'utf8')
+      .replace(/\s+/g, ' ')
+      .replace(/\( /g, '(')
+      .replace(/ \)/g, ')');
+    const reservation =
+      'calc(var(--psc-character-marker-bar-width) / var(--platform-content-zoom-main, var(--platform-content-zoom-default, 1)))';
+
+    expect(scss).toContain(`padding-inline-end: ${reservation};`);
+    expect(scss).toContain(`padding-left: ${reservation};`);
+    expect(scss).not.toMatch(
+      /padding-(inline-end|left):\s*var\(--psc-character-marker-bar-width\);/,
+    );
+  });
 });

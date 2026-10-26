@@ -12,6 +12,7 @@ import {
 } from 'platform-bible-react/experimental';
 import type {
   CommandPaletteItem,
+  CommandPaletteRequest,
   PaletteSearchField,
 } from '@renderer/services/overlays/overlay.service-model';
 
@@ -26,6 +27,30 @@ export const DEFAULT_PALETTE_SEARCH_FIELDS: readonly PaletteSearchField[] = [
   'description',
   'badge',
 ];
+
+/**
+ * Whether the REQUESTER resolves this palette's filtered list rather than the palette resolving it
+ * itself — true for a passive palette and for one that focuses its list.
+ *
+ * Both render a read-only search box over a host-supplied filter and answer commits from the
+ * requester's own list, so both must match HOST-SIDE rather than through cmdk: reimplementing
+ * cmdk's fuzzy scorer is the only way the two lists could otherwise agree, and a disagreement
+ * commits an item the user cannot see. That host-side rule is {@link PaletteFilterMode} `'passive'`
+ * — a label PREFIX match, mirroring PT9's marker dropdown. Derived in one place so the palette's
+ * display and the host's commit resolution can never drift apart.
+ */
+export function isHostDrivenPalette(
+  request: Pick<CommandPaletteRequest, 'passive' | 'focusTarget'>,
+): boolean {
+  return !!request.passive || request.focusTarget === 'list';
+}
+
+/** The {@link PaletteFilterMode} a request's palette filters by. */
+export function getPaletteFilterMode(
+  request: Pick<CommandPaletteRequest, 'passive' | 'focusTarget'>,
+): PaletteFilterMode {
+  return isHostDrivenPalette(request) ? 'passive' : 'active';
+}
 
 /**
  * Filters command palette items by matching `filterText` against each item's text, with

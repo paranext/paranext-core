@@ -30,7 +30,6 @@ function withFirstRunMock(mock: Partial<FirstRunLanguageMock>) {
   const resolvedMock: FirstRunLanguageMock = {
     interfaceLanguage: ['en'],
     setupLanguages: { en: { autonym: 'English' } },
-    availableLanguages: { en: { autonym: 'English' } },
     isLoading: false,
     ...mock,
   };
@@ -70,7 +69,6 @@ export const MultipleLanguages: Story = {
     withFirstRunMock({
       interfaceLanguage: ['en'],
       setupLanguages: MULTIPLE_LANGUAGES,
-      availableLanguages: MULTIPLE_LANGUAGES,
     }),
   ],
 };
@@ -81,7 +79,6 @@ export const EnglishOnly: Story = {
     withFirstRunMock({
       interfaceLanguage: ['en'],
       setupLanguages: ENGLISH_ONLY,
-      availableLanguages: ENGLISH_ONLY,
     }),
   ],
 };

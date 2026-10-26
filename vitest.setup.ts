@@ -168,6 +168,26 @@ if (typeof window !== 'undefined') {
   });
 }
 
+// ─── Radix layout-measurement shims ──────────────────────────────────────────
+//
+// Radix primitives (dropdown menu, context menu, menubar, select, popover) measure their content on
+// mount. jsdom ships neither these Element methods nor (see the note below) a ResizeObserver, so any
+// test that opens one of these overlays throws or hangs waiting on layout it can never produce.
+// Guarded on `Element` itself, not just its members: this file is shared by the repo's
+// node-environment test projects, where `Element` does not exist at all and `typeof
+// Element.prototype.x` would throw before the `typeof` could help.
+if (typeof Element !== 'undefined') {
+  if (typeof Element.prototype.hasPointerCapture !== 'function') {
+    Element.prototype.hasPointerCapture = () => false;
+  }
+  if (typeof Element.prototype.scrollIntoView !== 'function') {
+    Element.prototype.scrollIntoView = () => {};
+  }
+}
+
+// `ResizeObserver` is deliberately NOT shimmed here — tests opt in with `installNoopResizeObserver()`.
+// Why: lib/platform-bible-react/src/test-utils/resize-observer.util.ts.
+
 // ─── NOTICES_POLICY_OVERLAY ──────────────────────────────────────────────────
 //
 // `loadPolicy` defaults its overlay from this variable at call time, so several notices suites that

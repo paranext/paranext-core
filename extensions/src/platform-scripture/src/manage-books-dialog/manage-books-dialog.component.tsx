@@ -51,8 +51,13 @@ import {
   ProjectSelectorGrouping,
   ProjectSelectorLocalizedStrings,
   ProjectSelectorProject,
+  resolveLocalizedString,
 } from 'platform-bible-react/experimental';
-import { makeProjectSelectorCustomData } from 'platform-bible-utils';
+import {
+  formatProjectName,
+  isolateBidi,
+  makeProjectSelectorCustomData,
+} from 'platform-bible-utils';
 import { ManageBooksSidebar } from './manage-books-sidebar.component';
 import {
   BookGridGroupBy,
@@ -218,8 +223,8 @@ export type ManageBooksDialogProps = {
   /**
    * (A2) Whether the project is shared with other users (PT9: `ScrText.IsProjectShared` with more
    * than one registered user). When true, the delete-confirm prompt warns that the books will be
-   * deleted for all users when they next Send/Receive — in both the partial and the all-books
-   * variants. Defaults to false.
+   * deleted for all users when they next sync — in both the partial and the all-books variants.
+   * Defaults to false.
    */
   isSharedProject?: boolean;
 
@@ -528,7 +533,7 @@ export function toCopyFromSelectorRows(
     .map((project) => ({
       id: project.id,
       shortName: project.shortName,
-      fullName: project.fullName ?? project.shortName,
+      fullName: project.fullName,
       customData: makeProjectSelectorCustomData({
         type: project.type,
         typeName: project.typeName,
@@ -614,9 +619,12 @@ export function ManageBooksDialog({
   const filterBarRef = useRef<HTMLDivElement | null>(null);
   const filterBarIsNarrow = useIsNarrow(filterBarRef, open);
 
+  // `?? fallback` would never fire here: `useLocalizedStrings` seeds its map with `{ [key]: key }`
+  // and keeps that seed until strings load — permanently if localization errors — so an unresolved
+  // lookup arrives as the defined string `%manageBooks_…%`, not as nullish.
   const t = useCallback(
     (key: keyof ManageBooksDialogLocalizedStrings, fallback: string) =>
-      localizedStrings[key] ?? fallback,
+      resolveLocalizedString(localizedStrings[key], fallback),
     [localizedStrings],
   );
 
@@ -821,8 +829,11 @@ export function ManageBooksDialog({
   // The Copy "From" and Create "Based on" pickers are <ProjectSelector mode="project">, which
   // takes a `ProjectSelectorProject` shape (`{ id, shortName, fullName }`). Map the dialog's
   // `ManageBooksDialogProject` to that shape — `p.fullName` (sourced from `platform.fullName`
-  // upstream) becomes the secondary label, falling back to `shortName` when no fullName is
-  // configured. The target project itself is filtered out (already done in `otherProjects`).
+  // upstream) becomes the secondary label, and is passed through as-is. Do not mirror the short
+  // name into it when it is absent: `hasDistinctFullName` would collapse the row either way, but a
+  // mirrored value claims a full name the project does not have, and every consumer downstream
+  // then has to un-claim it. The target project itself is filtered out (already done in
+  // `otherProjects`).
   // Commentaries should be excluded from both the Copy "From" and Create "Based on" pickers.
   // DEFERRED — there is no reliable commentary signal in
   // the current data model: DBL classifies resources only by medium (text/audio/print), ParatextData
@@ -843,7 +854,16 @@ export function ManageBooksDialog({
       otherProjects.map((p) => ({
         id: p.id,
         shortName: p.shortName,
-        fullName: p.fullName ?? p.shortName,
+        fullName: p.fullName,
+        // Creating from a template copies only its structure (markers, chapters and verses), but
+        // the license forbids even that use as a base.
+        isDisabled: p.isRestrictedAsBase,
+        disabledReason: p.isRestrictedAsBase
+          ? t(
+              '%restrictedModelOrBaseText_disabledReason%',
+              'This text is disabled from being selected because of licensing terms which prohibit its use as a model or base for a new translation.',
+            )
+          : undefined,
         customData: {
           versificationId: p.versificationId,
           // Group header reads "{name} versification" (lowercase), localized via a template so
@@ -1619,14 +1639,18 @@ export function ManageBooksDialog({
   const totalPresent = current.present.size;
 
   // The subtitle reads
-  // "{count} books in {full project name} ⋅ {versification name} Versification". The
+  // "{count} books in {project label} ⋅ {versification name} Versification". The
   // versification name is resolved from the numeric `ScrVersType` enum (which `loadVersification`
   // returns as a string) via `versificationLabelKey` + `t()`. The trailing literal " Versification"
   // is part of the template, not the localized name (the names are bare — "English", "Vulgate",
   // …). Falls back to the no-versification template when the versification setting is absent.
-  // Project label prefers `fullName` (the project's `platform.fullName` setting) and falls back to
-  // `shortName` so the subtitle reads naturally for both fully-configured and bare-bones projects.
-  const projectDisplayName = project.fullName ?? project.shortName;
+  // Project label leads with the short name — the field that identifies a project to a Paratext
+  // user — and appends the full name only when it carries information the short name does not.
+  // Isolated because it is interpolated into a sentence: a right-to-left name dropped bare into a
+  // left-to-right template pulls the surrounding punctuation into its own directional run. An
+  // element attribute cannot fix this — `dir="auto"` on the sentence reads the SENTENCE's first
+  // strong character — so the isolate has to travel in the string itself.
+  const projectDisplayName = isolateBidi(formatProjectName(project));
   const subtitleTemplate = versification
     ? t('%manageBooks_header_subtitle%', '{0} books in {1} ⋅ {2} Versification')
     : t('%manageBooks_header_subtitleNoVersification%', '{0} books in {1}');
@@ -2052,7 +2076,7 @@ export function ManageBooksDialog({
   // the standard confirm with the shared-users warning (DeleteBooksForm.cs),
   // and the previous PT10 branch order dropped it exactly in the
   // highest-impact case (deleting every book of a shared project). The
-  // wording is S/R-accurate: deletion is local until other users Send/Receive
+  // wording is S/R-accurate: deletion is local until other users sync
   // — the old copy falsely claimed "they will
   // see this change immediately" (old key redirected via metadata
   // fallbackKey).
@@ -2067,8 +2091,8 @@ export function ManageBooksDialog({
       case 'allShared':
         return fmtTemplate(
           t(
-            '%manageBooks_delete_confirmBodyAllShared%',
-            'All books will be deleted from {0}, which is shared with other users. The books will be deleted for all users when they next Send/Receive. The project itself will not be deleted. This cannot be undone.',
+            '%manageBooks_delete_confirmBodyAllShared_2%',
+            'All books will be deleted from {0}, which is shared with other users. The books will be deleted for all users when they next sync. The project itself will not be deleted. This cannot be undone.',
           ),
           dest,
         );
@@ -2083,8 +2107,8 @@ export function ManageBooksDialog({
       case 'partialShared':
         return fmtTemplate(
           t(
-            '%manageBooks_delete_confirmBodySharedSendReceive%',
-            '{0} book(s) will be deleted from {1}, which is shared with other users. The books will be deleted for all users when they next Send/Receive. This cannot be undone.',
+            '%manageBooks_delete_confirmBodySharedSendReceive_2%',
+            '{0} book(s) will be deleted from {1}, which is shared with other users. The books will be deleted for all users when they next sync. This cannot be undone.',
           ),
           n,
           dest,

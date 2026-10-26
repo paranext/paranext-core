@@ -5,6 +5,7 @@ import { InternetSettings } from 'paratext-registration';
 import { getErrorMessage, isPlatformError, wait } from 'platform-bible-utils';
 import { useEffect, useRef, useState } from 'react';
 import { INTERNET_SETTINGS_STRING_KEYS, InternetSettingsForm } from './internet-settings.component';
+import { computeCanEditServer } from './internet-settings-web-view-state.utils';
 import { SaveState } from './utils';
 
 /** Time in milliseconds to wait before restarting the application after changing internet settings. */
@@ -12,9 +13,11 @@ const INTERNET_SETTINGS_RESTART_DELAY_MS = 5 * 1000;
 
 const INTERNET_SETTINGS_DATA_PROVIDER = 'paratextRegistration.internetSettingsDataProvider';
 
-// Intentionally duplicated in the first-run wizard (internet-settings-step.component.tsx): the two
-// consumers sit on opposite sides of the core/extension boundary and `paratext-registration` is a
-// types-only module, so there is no shared runtime module to hoist this into.
+// Intentionally duplicated from the core-side copy (src/renderer/components/
+// internet-settings.constants.ts, shared by the user-profile popover and the first-run wizard step):
+// this consumer sits on the extension side of the core/extension boundary and `paratext-registration`
+// is a types-only module, so there is no shared runtime module across that boundary to hoist this
+// into.
 const DEFAULT_INTERNET_SETTINGS: InternetSettings = {
   permittedInternetUse: 'VpnRequired',
   selectedServer: 'Production',
@@ -71,6 +74,18 @@ globalThis.webViewComponent = function InternetSettingsComponent({
     INTERNET_SETTINGS_DATA_PROVIDER,
   ).InternetSettings(undefined, DEFAULT_INTERNET_SETTINGS);
 
+  // One-shot: whether the dialog was opened via `showInternetSettingsWithServerSelection`. See
+  // `computeCanEditServer`.
+  const [requestDeveloperSettings] = useWebViewState<boolean>('requestDeveloperSettings', false);
+
+  // Whether the server-selection control should render, captured once from the first successful
+  // read (below) rather than recomputed from the live `dpValue` on every render: this is a
+  // stage-then-commit dialog, so a value this session already decided to show must not flip to
+  // hidden the instant the user's own save lands (or vanish for good if the queued restart then
+  // fails) just because the live value moved to Production. Starts `false` so the control stays
+  // hidden while the first read is loading or errored.
+  const [canEditServer, setCanEditServer] = useState(false);
+
   // Once the staged draft + saved baseline have been synced from the first successful read.
   const hasSyncedFetch = useRef(false);
 
@@ -90,8 +105,9 @@ globalThis.webViewComponent = function InternetSettingsComponent({
       hasSyncedFetch.current = true;
       setInternetSettings(dpValue);
       setSavedInternetSettings(dpValue);
+      setCanEditServer(computeCanEditServer(requestDeveloperSettings, dpValue));
     }
-  }, [setData, isLoadingSettings, dpValue, setInternetSettings]);
+  }, [setData, isLoadingSettings, dpValue, setInternetSettings, requestDeveloperSettings]);
 
   const isFormDisabled =
     savedInternetSettings === undefined ||
@@ -149,6 +165,7 @@ globalThis.webViewComponent = function InternetSettingsComponent({
       saveState={saveState}
       saveError={saveError}
       onSaveAndRestart={handleSaveAndRestart}
+      canEditServer={canEditServer}
     />
   );
 };

@@ -1,11 +1,14 @@
 import {
   CONTENT_ZOOM_AREA_ID_PATTERN,
   CONTENT_ZOOM_AREA_ID_PLACEHOLDER,
+  CONTENT_ZOOM_CHORDS,
   CONTENT_ZOOM_COMMANDS,
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
+  CONTENT_ZOOM_LABEL_ATTRIBUTE,
   CONTENT_ZOOM_MAIN_AREA_ATTRIBUTE_VALUES,
   CONTENT_ZOOM_NAMED_AREA_RULE_TEMPLATE,
   CONTENT_ZOOM_ROOT_ATTRIBUTE,
+  CONTENT_ZOOM_SCOPE_ATTRIBUTE,
   CONTENT_ZOOM_STYLE_ELEMENT_ID,
   CONTENT_ZOOM_UNNESTED_CLAUSE,
   DEFAULT_ZOOM_FACTOR,
@@ -16,6 +19,7 @@ import {
   ZOOM_STEP,
 } from '@shared/models/content-zoom.model';
 import { MAIN_CONTENT_ZOOM_AREA } from '@shared/models/web-view.model';
+import { MODIFIER_KEYS } from 'platform-bible-utils';
 import { isValidContentZoomAreaId, isValidZoomFactor } from '@shared/utils/content-zoom.util';
 
 const INDICATOR_ID = 'platform-content-zoom-indicator';
@@ -27,6 +31,12 @@ const INDICATOR_VISIBLE_MS = 1100;
  * wheel gesture announces once, short enough to land well inside {@link INDICATOR_VISIBLE_MS}.
  */
 const INDICATOR_ANNOUNCE_QUIET_MS = 500;
+/**
+ * How long a focus change may still count as the one a click itself caused (the view putting the
+ * caret somewhere else in response to the click) rather than an unrelated focus move. See the
+ * pointerdown/focusin listeners below for the gesture this bounds.
+ */
+const GESTURE_FOCUS_MS = 200;
 
 /**
  * The rule that scales one zoom area: its own variable, else the default. The `main` area's rule
@@ -98,17 +108,43 @@ function escapeClosingTags(jsSourceLiteral: string): string {
  * JavaScript run inside every non-URL web view (appended to the platform's import script). It
  * discovers the view's zoom areas, tracks the active one, turns Ctrl/⌘+`+`/`-`/`0` and Ctrl/⌘+wheel
  * into content-zoom actions for THIS web view and one of its areas, and provides the on-area
- * indicator. Bubble phase on purpose: a view that owns Ctrl+wheel for a sub-region (the Text
- * Collection grid's per-resource zoom) stops propagation in capture phase and this listener never
- * sees the event. A view without areas ignores the input.
+ * indicator. Bubble phase on purpose: a view that owns Ctrl+wheel for a sub-region stops
+ * propagation in capture phase and this listener never sees the event. A view that is not zoomable
+ * (it reports no area, and the shard passes no declared area) ignores the input.
+ *
+ * @param webViewId The web view this script runs in
+ * @param declaredArea The default area core declares for the view's web view type
+ *   (`getContentZoomDeclaration(...).defaultArea`), or `undefined` both for an undeclared type and
+ *   for a type declared with no default area (e.g. the Text Collection grid). While the view
+ *   reports no area, the chords and the wheel act on this area. A malformed id is ignored.
  */
-export function getContentZoomBootstrapScript(webViewId: string): string {
+export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: string): string {
   const id = escapeClosingTags(JSON.stringify(webViewId));
+  // A validated area id is lower-case letters, digits and hyphens only, so its JSON literal needs
+  // no escaping inside the script tag.
+  const declared =
+    declaredArea !== undefined && isValidContentZoomAreaId(declaredArea)
+      ? JSON.stringify(declaredArea)
+      : 'undefined';
   const attr = CONTENT_ZOOM_ROOT_ATTRIBUTE;
+  const chords = JSON.stringify(
+    CONTENT_ZOOM_CHORDS.map(({ action, command, keys, codes }) => ({
+      action,
+      command,
+      keys,
+      codes,
+    })),
+  );
+  const modifierKeys = JSON.stringify([...MODIFIER_KEYS]);
   return `
   (() => {
     const webViewId = ${id};
+    // The area core declares for this view's type: the chords and the wheel act on it while the view
+    // renders no marker (before a search, while loading), so a declared view stays zoomable.
+    const DECLARED_AREA = ${declared};
     const ATTR = '${attr}';
+    const SCOPE_ATTR = '${CONTENT_ZOOM_SCOPE_ATTRIBUTE}';
+    const LABEL_ATTR = '${CONTENT_ZOOM_LABEL_ATTRIBUTE}';
     const MAIN = '${MAIN_CONTENT_ZOOM_AREA}';
     const AREA_ID = new RegExp(${JSON.stringify(CONTENT_ZOOM_AREA_ID_PATTERN.source)});
     const RESERVED_ID = ${JSON.stringify(RESERVED_CONTENT_ZOOM_AREA_ID)};
@@ -145,15 +181,24 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     // that way rather than with an empty value; the same list builds the main area's CSS rule, so
     // the report and the stylesheet always agree. An area genuinely called "true" is not available.
     const MAIN_AREA_VALUES = ${JSON.stringify(CONTENT_ZOOM_MAIN_AREA_ATTRIBUTE_VALUES)};
-    const idOf = (element) => {
-      const value = element.getAttribute(ATTR);
-      return value === null || MAIN_AREA_VALUES.indexOf(value) !== -1 ? MAIN : value;
-    };
-    // The area an element belongs to: its closest marked ancestor (itself included).
+    const spelledAreaId = (value) =>
+      value === null || MAIN_AREA_VALUES.indexOf(value) !== -1 ? MAIN : value;
+    const idOf = (element) => spelledAreaId(element.getAttribute(ATTR));
+    // The area an element belongs to: its closest marked ancestor (itself included). Where no marker
+    // encloses it, the closest zoom scope decides instead - an unscaled row, column or card a view
+    // ties to one area, so a click, a focus, a chord or the wheel anywhere in it means that area. A
+    // scope is spelled like a marker, and one whose value is not a well-formed id resolves to
+    // nothing. A marker always wins, so a scope inside a marker never counts.
     const areaOf = (node) => {
       const element = node && node.nodeType === 1 ? node : node && node.parentElement;
-      const marked = element && element.closest ? element.closest('[' + ATTR + ']') : undefined;
-      return marked ? idOf(marked) : undefined;
+      if (!element || !element.closest) return undefined;
+      const marked = element.closest('[' + ATTR + ']');
+      if (marked) return idOf(marked);
+      const scope = element.closest('[' + SCOPE_ATTR + ']');
+      if (!scope) return undefined;
+      const areaId = spelledAreaId(scope.getAttribute(SCOPE_ATTR));
+      if (!isAreaId(areaId)) { warnOnce('ignoring zoom scope with invalid id "' + areaId + '"'); return undefined; }
+      return areaId;
     };
 
     let areas = [];
@@ -188,14 +233,27 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       sheet.insertRule(NAMED_AREA_RULE_TEMPLATE.split(AREA_ID_PLACEHOLDER).join(areaId), sheet.cssRules.length);
       ruled.add(areaId);
     };
+    // Per area, its first accepted marker (which decides its text direction) and its first
+    // non-empty label, in document order. Rebuilt by every scan, so the badge reads them on each
+    // zoom step without a scan of its own: a label change is an attribute the observer watches, and
+    // a marker added or removed is a mutation it already rescans for.
+    let firstMarkerByArea = new Map();
+    let labelByArea = new Map();
     const collectAreas = () => {
       const found = [];
+      const firstMarkers = new Map();
+      const labels = new Map();
       document.querySelectorAll('[' + ATTR + ']').forEach((element) => {
         const areaId = idOf(element);
         if (!isAreaId(areaId)) { warnOnce('ignoring zoom area with invalid id "' + areaId + '"'); return; }
         if (element.parentElement && element.parentElement.closest('[' + ATTR + ']')) { warnOnce('ignoring nested zoom area "' + areaId + '"'); return; }
         if (found.indexOf(areaId) === -1) found.push(areaId);
+        if (!firstMarkers.has(areaId)) firstMarkers.set(areaId, element);
+        const label = element.getAttribute(LABEL_ATTR);
+        if (label && !labels.has(areaId)) labels.set(areaId, label);
       });
+      firstMarkerByArea = firstMarkers;
+      labelByArea = labels;
       return found;
     };
     const setActive = (areaId) => {
@@ -207,8 +265,9 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       activeArea = areaId;
     };
     // A MutationObserver callback already runs as a microtask after its batch of synchronous DOM
-    // changes, well before the next paint - refreshing straight from it (no rAF hop) is what lets the
-    // parent clear a hidden whole-iframe fallback zoom before the view is ever shown at the wrong scale.
+    // changes, well before the next paint - refreshing straight from it (no rAF hop) re-reports the
+    // area list before the view is ever painted, so the parent's view of the pane's areas is current
+    // from the first frame.
     let reported = false;
     const refresh = () => {
       const next = collectAreas();
@@ -224,7 +283,10 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
           syncWheelListener();
         }
       }
-      if (!activeArea || areas.indexOf(activeArea) === -1) setActive(areas[0]);
+      if (!activeArea || areas.indexOf(activeArea) === -1) {
+        const focused = areaOf(document.activeElement);
+        setActive(focused !== undefined && areas.indexOf(focused) !== -1 ? focused : areas[0]);
+      }
     };
     // The badge and live region live in this document, so writing their text is itself a
     // childList mutation; a zoom step would otherwise pay for a second full-document scan.
@@ -233,14 +295,15 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     const carriesMarker = (node) =>
       node.nodeType === 1 && (node.matches('[' + ATTR + ']') || !!node.querySelector('[' + ATTR + ']'));
     const someCarriesMarker = (nodes) => Array.prototype.some.call(nodes, carriesMarker);
-    // Only a record that carries a marker can change the area list: an added or removed node that is
-    // one or contains one, or a change to the marker attribute itself, which is the only attribute
-    // this observer is given. Typing in a view moves text nodes and unmarked elements, so without
-    // this the editor would pay for a whole-document scan per keystroke. A removed node's subtree is
-    // intact and queryable while the record holds it, so a marker removed inside a larger subtree is
-    // seen too; nesting needs no case of its own, because any change to a marker's marked ancestry
-    // is itself the addition, removal or retitling of a marker. A marker inside a shadow root is
-    // still invisible here, as it was before, since the observer does not traverse shadow trees.
+    // Only a record that carries a marker can change the area list or the labels recorded with it:
+    // an added or removed node that is one or contains one, or a change to the marker or label
+    // attribute, the only two attributes this observer is given. Typing in a view moves text nodes
+    // and unmarked elements, so without this the editor would pay for a whole-document scan per
+    // keystroke. A removed node's subtree is intact and queryable while the record holds it, so a
+    // marker removed inside a larger subtree is seen too; nesting needs no case of its own, because
+    // any change to a marker's marked ancestry is itself the addition, removal or retitling of a
+    // marker. A marker inside a shadow root is invisible here, since the observer does not traverse
+    // shadow trees.
     const isAreaRecord = (record) => {
       if (isIndicatorRecord(record)) return false;
       // Until the parent has taken a report, every mutation is worth another try: that retry is the
@@ -260,20 +323,96 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       observer = new MutationObserver((records) => {
         if (records.some(isAreaRecord)) refresh();
       });
-      observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: [ATTR] });
+      observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: [ATTR, LABEL_ATTR] });
       refresh();
     };
 
     // Capture phase: the active area must update even when a descendant stops propagation before
     // the bubble phase (the same rule the wheel listener below is deliberately the exception to).
     // Every listener here is a named function so destroy() can take it off again.
-    const onPointerDown = (e) => setActive(areaOf(e.target));
-    const onFocusIn = (e) => setActive(areaOf(e.target));
+    // A click and the focus change it causes are one gesture, and the pointer is what says which
+    // area the user means: clicking a row in the Scripture editor's footnotes list makes the view
+    // put the caret back in the editor text, so focus lands in another area milliseconds after the
+    // pointer went down in this one. A focus change with no pointer gesture behind it - the caret
+    // reaching a footnote by keyboard, or a view focusing a pane by itself - still names the active
+    // area, which is why the gesture's reach is bounded rather than the focus listener simply
+    // deferring to the pointer one. One click may suppress at most one focus change into a
+    // DIFFERENT area: the recorded area is cleared only when such a change is actually suppressed,
+    // so a later, unrelated focus move within the same window is never mistaken for the click's
+    // own. A focus change that settles inside the clicked area itself (the footnote row taking
+    // focus a few milliseconds after the pointer went down on its caller, before the view moves
+    // focus again) is neither suppressed nor spends the gesture - it is not the click's own move
+    // into another area, and the click's protection stays live for the one that follows. A focus
+    // change that lands outside every area works the same way: there is no area to protect, so it
+    // is not suppressed, but nothing was spent either, and the gesture still protects the next
+    // change into a different area. A Tab ends the gesture outright: the focus move that follows it
+    // is one the user asked for, not the view's answer to the click, and a user who clicks a
+    // footnote row and immediately Tabs toward the text means the text. Any other key ends it too
+    // (typing, a shortcut such as Ctrl+C, an arrow key), since a user using the keyboard where the
+    // view put the caret is working there. A zoom chord does not end it -
+    // a chord pressed inside the window is exactly what the protection is for - and neither does a
+    // modifier pressed on its own, which is how a keyboard sends the first half of every chord.
+    let pointerArea;
+    let pointerTime = 0;
+    // Whether the element holding focus is one the VIEW focused rather than one the user chose.
+    // Set when a pointer gesture's answering focus change is suppressed below - the view moving the
+    // caret out of the area the user just clicked, which is what selecting a footnote row does.
+    // Cleared by a focus change the platform accepts, by Tab, or by any other key that is not a lone
+    // modifier or a zoom chord - never by a pointer
+    // down: a click is not itself a focus move, and a click that moves no caret (a non-focusable
+    // element) must leave the caret exactly where the view put it rather than hand the chords back
+    // to it. The chords consult this flag; the wheel does not, since it reads the pointer and never
+    // the caret.
+    let viewMovedFocus = false;
+    const onPointerDown = (e) => {
+      const areaId = areaOf(e.target);
+      // Recorded only when the id is one setActive would actually accept, and only for the primary
+      // button - a click the pane never reported an area for (nested, ill-formed, or outside every
+      // marker), and a right- or middle-click, which opens a menu and moves no caret, have no focus
+      // change of their own to protect, so they must not arm a suppression window either. Both
+      // still say which area the user is pointing at, so both still set it active.
+      const arms = e.button === 0 && areaId !== undefined && areas.indexOf(areaId) !== -1;
+      pointerArea = arms ? areaId : undefined;
+      // The monotonic clock, so a backward system-clock step cannot make a gesture look fresh
+      // forever.
+      pointerTime = performance.now();
+      setActive(areaId);
+    };
+    const onFocusIn = (e) => {
+      const areaId = areaOf(e.target);
+      const suppress =
+        pointerArea !== undefined &&
+        areaId !== undefined &&
+        areaId !== pointerArea &&
+        performance.now() - pointerTime < ${GESTURE_FOCUS_MS};
+      if (suppress) {
+        pointerArea = undefined;
+        viewMovedFocus = true;
+        return;
+      }
+      viewMovedFocus = false;
+      setActive(areaId);
+    };
+    // The platform's MODIFIER_KEYS, baked in as the chords are below: every key that is not typed
+    // input on its own, lock keys and AltGraph included, so no half-pressed chord ends the gesture.
+    const MODIFIER_KEYS = ${modifierKeys};
+    const onGestureKeyDown = (e) => {
+      if (e.key === 'Tab') { pointerArea = undefined; viewMovedFocus = false; return; }
+      // hasModifier and chordFor are the chord listener's own tests, declared with it below.
+      if (MODIFIER_KEYS.indexOf(e.key) !== -1 || (hasModifier(e) && chordFor(e))) return;
+      pointerArea = undefined;
+      if (!viewMovedFocus) return;
+      // The focus change the click suppressed takes effect now: the caret the user is working at
+      // names the active area, the way an accepted focus change would have.
+      viewMovedFocus = false;
+      setActive(areaOf(document.activeElement));
+    };
     window.addEventListener('pointerdown', onPointerDown, true);
     window.addEventListener('focusin', onFocusIn, true);
+    window.addEventListener('keydown', onGestureKeyDown, true);
 
     const targetFor = (node) => {
-      if (areas.length === 0) return undefined;
+      if (areas.length === 0) return DECLARED_AREA;
       const hit = areaOf(node);
       return hit && areas.indexOf(hit) !== -1 ? hit : (activeArea || areas[0]);
     };
@@ -290,41 +429,69 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
         return false;
       }
     };
-    const act = (command, areaId) => {
+    // The steps argument is how many steps of this command to take; only the coalesced wheel burst
+    // below passes it, and every other caller means one. The bound helper takes a step count, so a
+    // burst is one call; the commands take none, so that path repeats the command per step rather
+    // than dropping the notches it cannot express. A count is always at least one - an action worth
+    // sending is worth a step - so a zero can never reach the parent as a no-op adjustment or make
+    // the command loop below send nothing at all.
+    const act = (command, areaId, steps) => {
+      const count = steps === undefined ? 1 : Math.max(1, steps);
       try {
         if (command === '${CONTENT_ZOOM_COMMANDS.reset}' && boundReset) { boundReset(webViewId, areaId); return; }
-        if (command === '${CONTENT_ZOOM_COMMANDS.in}' && boundAdjust) { boundAdjust(webViewId, 1, areaId); return; }
-        if (command === '${CONTENT_ZOOM_COMMANDS.out}' && boundAdjust) { boundAdjust(webViewId, -1, areaId); return; }
+        if (command === '${CONTENT_ZOOM_COMMANDS.in}' && boundAdjust) { boundAdjust(webViewId, count, areaId); return; }
+        if (command === '${CONTENT_ZOOM_COMMANDS.out}' && boundAdjust) { boundAdjust(webViewId, -count, areaId); return; }
         const papi = getPapi();
         if (!papi || !papi.commands || typeof papi.commands.sendCommand !== 'function') {
           warnPapi('Content zoom command ' + command + ' could not run: papi is unavailable');
           return;
         }
-        papi.commands.sendCommand(command, webViewId, areaId).catch((e) => {
-          warnPapi('Content zoom command ' + command + ' failed: ' + (e && e.message ? e.message : e));
-        });
+        for (let i = 0; i < count; i += 1) {
+          papi.commands.sendCommand(command, webViewId, areaId).catch((e) => {
+            warnPapi('Content zoom command ' + command + ' failed: ' + (e && e.message ? e.message : e));
+          });
+        }
       } catch (e) {
         warnPapi('Content zoom command ' + command + ' threw: ' + (e && e.message ? e.message : e));
       }
     };
+    // The zoom chords, baked in from CONTENT_ZOOM_CHORDS in content-zoom.model.ts. This script runs
+    // as injected text inside the web view, so it cannot import that module - it gets the table
+    // serialized into the script text as the script is generated, the same way the injected
+    // stylesheet's rule template travels here. The macOS menu half is dropped: a web view has no
+    // menu. The modifier rule is the one chord rule stated in both places, because it is two
+    // booleans; Shift is accepted for every action, since on AZERTY and Czech layouts the top-row 0
+    // and - are shifted keys.
+    const CHORDS = ${chords};
     const hasModifier = (e) => (e.ctrlKey || e.metaKey) && !e.altKey;
+    const chordFor = (e) => {
+      for (let i = 0; i < CHORDS.length; i += 1) {
+        const chord = CHORDS[i];
+        if (chord.keys.indexOf(e.key) !== -1) return chord;
+        for (let j = 0; j < chord.codes.length; j += 1) {
+          const entry = chord.codes[j];
+          if (entry.code === e.code && (!entry.requiredKey || entry.requiredKey === e.key)) return chord;
+        }
+      }
+      return undefined;
+    };
 
     const onKeyDown = (e) => {
       if (!hasModifier(e)) return;
-      const zoomIn = e.key === '=' || e.key === '+' || e.code === 'NumpadAdd';
-      // On US and UK layouts the published + is Shift+=, and Chromium's own zoom in accepts
-      // Ctrl+Shift+= for the same reason, so the zoom-in chord takes Shift. Zoom out and reset
-      // reject it, leaving Ctrl+Shift+- and Ctrl+Shift+0 to whoever else wants them.
-      if (e.shiftKey && !zoomIn) return;
-      const areaId = targetFor(document.activeElement);
+      const chord = chordFor(e);
+      if (!chord) return;
+      const areaId =
+        viewMovedFocus && activeArea && areas.indexOf(activeArea) !== -1
+          ? activeArea
+          : targetFor(document.activeElement);
       if (!areaId) return;
-      let command;
-      if (zoomIn) command = '${CONTENT_ZOOM_COMMANDS.in}';
-      else if (e.key === '-' || e.code === 'NumpadSubtract') command = '${CONTENT_ZOOM_COMMANDS.out}';
-      else if (e.key === '0' || e.code === 'Numpad0') command = '${CONTENT_ZOOM_COMMANDS.reset}';
-      if (!command) return;
       e.preventDefault();
-      act(command, areaId);
+      // Whatever the tick path has pending goes over first, so the parent is asked to step in the
+      // order the events arrived: its clamp is not commutative, and a reset writes the default
+      // outright, so at either end of the range - and for every reset - the order IS the level the
+      // pane is left at.
+      applyZoomSteps();
+      act(chord.command, areaId);
     };
     window.addEventListener('keydown', onKeyDown);
 
@@ -336,15 +503,19 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     // of three lines, 33 with that setting at one line, 120 on Linux, and as few as 4 on macOS - so
     // a pixel threshold zooms at a different speed on each of them and stops responding altogether
     // on the smallest. \`wheelDeltaY\` is Chromium's own and absent elsewhere; there the pixel delta
-    // stands in at the 100 px per tick that \`deltaMode\` 0 is defined around.
+    // stands in at the 100 px per tick that \`deltaMode\` 0 is defined around. It stands in too when
+    // \`wheelDeltaY\` is 0: that property is an integer rounded from the pixel delta, so a slow
+    // two-finger scroll's sub-pixel frames all report 0 while their travel is real, and reading
+    // them as 0 ticks would leave the gesture inert however long it runs.
     const WHEEL_TICK_DELTA = 120;
     const WHEEL_FALLBACK_TICK_PIXELS = 100;
-    // The zoom range measured in steps: however large one delta is, a single event can never ask
-    // for more steps than would take an area from one end of its range to the other.
+    // The zoom range measured in steps: however large one delta is, and however many notches one
+    // frame of a burst carries, an area can never be asked for more steps than would take it from
+    // one end of its range to the other.
     const WHEEL_MAX_STEPS = ${Math.ceil((MAX_ZOOM_FACTOR - MIN_ZOOM_FACTOR) / ZOOM_STEP)};
     const ticksOf = (e) => {
       const wheelDelta = e.wheelDeltaY;
-      return typeof wheelDelta === 'number' && Number.isFinite(wheelDelta)
+      return typeof wheelDelta === 'number' && Number.isFinite(wheelDelta) && wheelDelta !== 0
         ? -wheelDelta / WHEEL_TICK_DELTA
         : e.deltaY / WHEEL_FALLBACK_TICK_PIXELS;
     };
@@ -386,7 +557,7 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     const PINCH_SCALE_PIXELS = 100;
     // How far \`exp(-deltaY / 100)\` may sit from 1 and still OPEN a pinch rather than be a wheel
     // notch. A notch clears it on every platform but macOS, where the physical-modifier test is
-    // what tells the two apart.
+    // what tells the two apart (see IS_MAC below).
     const PINCH_MAX_SCALE_DEVIATION = 0.05;
     // How long a pinch's classification survives its last frame. A pinch is a stream at the
     // display's refresh rate, so anything arriving within this window is the same gesture; a
@@ -408,8 +579,22 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     // first frame of a pane's life is judged on its size alone.
     let pinchLatchTime = -Infinity;
 
+    // Whether a physically held modifier key is evidence that a ctrl+wheel is a mouse notch. It is
+    // only on macOS, whose mouse notch can be as small as a pinch frame (≈4 px), so there the size
+    // test cannot tell the two apart and the held key is what does. On Windows and Linux a detented
+    // wheel's notch is 100 px at the system default, 33 px at the smallest common one-line setting -
+    // both far outside the window that OPENS a pinch, which only the frame that starts a gesture has
+    // to clear (a running gesture's later frames ride the latch above, whatever their size). A smooth
+    // or free-spin wheel can emit frames small enough for the latch to read as a pinch; that is
+    // acceptable, since pinching while Ctrl is held is an ordinary way to pinch there, and reading
+    // the held key as a notch would send every frame of it down the tick path at a whole step each.
+    // So everywhere but macOS the size test decides alone. Read once: the platform cannot change
+    // under a running pane.
+    const IS_MAC = /^Mac/.test(navigator.platform || '');
+
     // Which modifier keys are PHYSICALLY down - the thing a synthesized pinch's \`ctrlKey\` is not.
-    // Two sources feed it, because neither sees the whole picture on its own:
+    // Consulted on macOS only (see IS_MAC). Two sources feed it, because neither sees the whole
+    // picture on its own:
     //
     // - Key events, in capture phase so a view that stops them from propagating cannot strand a
     //   flag. This bootstrap runs inside the web view's iframe, so these only arrive while that
@@ -426,7 +611,8 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     // moving again, and then nothing can correct it - so a pointer reading is trusted for a bounded
     // time and the pane falls back to what the key events know. A modifier held while the window
     // loses focus or visibility has its keyup delivered to somebody else, so both are cleared there
-    // too. Every flag left standing sends later pinches down the notch path at a step a frame.
+    // too. On macOS, every flag left standing sends later pinches down the notch path at a step a
+    // frame.
     const PHYSICAL_MODIFIER_KEYS = ['Control', 'Meta'];
     // Long enough for the gesture a pointer reading was taken for - a user who moves the mouse with
     // Ctrl held is about to turn the wheel - and short next to the life of a pane.
@@ -475,7 +661,7 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       // Chromium's synthesized pinch is ctrl+wheel on every platform, never meta+wheel, so ⌘+wheel
       // on a Mac is a mouse gesture however small its delta - the same test pdf.js makes.
       e.ctrlKey &&
-      !anyPhysicalModifier(now) &&
+      !(IS_MAC && anyPhysicalModifier(now)) &&
       e.deltaMode === 0 &&
       e.deltaX === 0 &&
       (Math.abs(Math.exp(-e.deltaY / PINCH_SCALE_PIXELS) - 1) < PINCH_MAX_SCALE_DEVIATION ||
@@ -502,6 +688,59 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       stepArea(steps, areaId);
     };
 
+    // A wheel gesture delivers 50-120 notches a second, and applying one is not cheap: the parent
+    // restyles the whole pane and persists the new level, and only the level the gesture has
+    // reached by the end of a frame is ever painted. So a notch adds its steps to a pending total
+    // instead of applying them, and one adjustment per frame carries that total. What accumulates
+    // is one area's travel in one direction, and a notch that leaves either behind flushes what is
+    // pending first (see requestZoomSteps), so a burst lands exactly where the same notches applied
+    // one at a time would and no notch is lost. Only the tick path coalesces: a chord is one
+    // keystroke and one step, and a pinch already arrives once per frame, so both apply straight
+    // away - handing over whatever is pending first, so arrival order is preserved.
+    //
+    // Hidden pane: an inactive rc-dock tab's iframe is display:none, where no animation frame runs,
+    // so a total left pending when the tab is hidden waits there rather than being applied or
+    // dropped. Deliberate: it is at most the notches of the frame the tab was hidden in, it lands
+    // whole the moment the tab is shown again, and a timer instead would write a level to a pane
+    // nobody is looking at.
+    let zoomFrame;
+    let zoomArea;
+    // Signed the way a tick count is, so the pending total reads like the ticks that fed it:
+    // negative zooms in, positive zooms out.
+    let zoomSteps = 0;
+    const applyZoomSteps = () => {
+      const areaId = zoomArea;
+      const steps = zoomSteps;
+      zoomArea = undefined;
+      zoomSteps = 0;
+      // Nothing has landed since the last flush, so there is no travel to carry.
+      if (areaId === undefined || steps === 0) return;
+      const command = steps < 0 ? '${CONTENT_ZOOM_COMMANDS.in}' : '${CONTENT_ZOOM_COMMANDS.out}';
+      // The bound helper takes a step count, so the whole frame travels as one call; the commands
+      // take none, so that path repeats the command per step rather than dropping notches.
+      act(command, areaId, Math.min(Math.abs(steps), WHEEL_MAX_STEPS));
+    };
+    const onZoomFrame = () => {
+      zoomFrame = undefined;
+      applyZoomSteps();
+    };
+    const requestZoomSteps = (areaId, steps) => {
+      // Steps pending for another area belong to that area, and steps pending in the other
+      // direction belong to the travel that asked for them: either way they are applied before this
+      // notch joins a total rather than netted against it. Netting across a reversal is exact only
+      // in the middle of the range - at either end the parent's clamp ABSORBS the travel an area
+      // cannot take, so notches back the other way start from the bound, while a net would hand the
+      // reversal the absorbed travel back.
+      const reverses = zoomSteps !== 0 && (steps < 0) !== (zoomSteps < 0);
+      if (zoomArea !== undefined && (zoomArea !== areaId || reverses)) applyZoomSteps();
+      zoomArea = areaId;
+      zoomSteps += steps;
+      // A realm without rAF (an unusual host, or a document that never animates) still zooms; it
+      // just pays for it in the handler, as it did before.
+      if (typeof window.requestAnimationFrame !== 'function') { applyZoomSteps(); return; }
+      if (zoomFrame === undefined) zoomFrame = window.requestAnimationFrame(onZoomFrame);
+    };
+
     // Ctrl or the meta key, and neither Shift nor Alt: a shifted wheel is horizontal scroll on many
     // platforms, and Chromium and the OS give Ctrl+Alt+wheel its own meaning, so both pass through.
     const onWheel = (e) => {
@@ -516,13 +755,17 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       if (e.deltaY === 0) return;
       // Line and page delta modes carry small counts of lines or pages, which neither a tick count
       // nor a scale describes; such an event is one step in its direction and leaves the
-      // accumulator alone.
+      // accumulator alone. Both immediate paths hand over whatever the tick path has pending before
+      // they act, so the parent is always asked to step in the order the events arrived: its clamp
+      // is not commutative, so at either end of the range the order IS the level they land on.
       if (e.deltaMode !== 0) {
+        applyZoomSteps();
         act(e.deltaY < 0 ? '${CONTENT_ZOOM_COMMANDS.in}' : '${CONTENT_ZOOM_COMMANDS.out}', areaId);
         return;
       }
       const now = performance.now();
       if (isPinchWheel(e, areaId, now)) {
+        applyZoomSteps();
         stepPinch(e, areaId, now);
         return;
       }
@@ -542,51 +785,44 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       // Only the whole ticks are consumed; carrying the fraction is what lets a wheel whose notch
       // reports less than a full tick, or an engine that reports none, still step steadily.
       wheelRemainder -= steps;
-      stepArea(steps, areaId);
+      requestZoomSteps(areaId, steps);
     };
     // A non-passive listener is what lets this cancel the gesture, but it also means the compositor
-    // consults the main thread for the first event of every scrolling sequence - a cost a pane with
-    // no zoom area can never repay, since every gesture there ends in targetFor returning undefined.
-    // So it is registered and removed on the 0 <-> n transition of the area list. It stays on the
-    // window rather than moving to the marked roots, so a gesture outside every area still reaches
-    // the fallback in targetFor.
+    // consults the main thread for the first event of every scrolling sequence - a cost a pane that
+    // is not zoomable can never repay, since every gesture there ends in targetFor returning
+    // undefined. So the listener is registered only while the pane reports an area or has a
+    // declared one. It stays on the window rather than moving to the marked roots, so a gesture
+    // outside every area still reaches the fallback in targetFor.
     const WHEEL_OPTIONS = { passive: false };
     let wheelListening = false;
     const syncWheelListener = () => {
-      const wanted = areas.length > 0;
+      const wanted = areas.length > 0 || DECLARED_AREA !== undefined;
       if (wanted === wheelListening) return;
       wheelListening = wanted;
       if (wanted) window.addEventListener('wheel', onWheel, WHEEL_OPTIONS);
       else window.removeEventListener('wheel', onWheel, WHEEL_OPTIONS);
     };
 
-    // An area's own text direction, read off one of its marked elements (falling back to the
-    // document's when the area currently has no elements) so a marker inside an otherwise-LTR
-    // document (or vice versa) still anchors on its own inline-end, not the document's.
-    const directionOf = (element) => {
-      const style = window.getComputedStyle ? window.getComputedStyle(element) : undefined;
-      return style && style.direction === 'rtl' ? 'rtl' : 'ltr';
-    };
-    // Top inline-end corner of the union of one area's elements, in viewport pixels: top-right for
-    // an LTR area, top-left for an RTL one.
-    const cornerOf = (areaId) => {
-      let top = Infinity; let left = Infinity; let right = -Infinity; let anchor;
-      document.querySelectorAll('[' + ATTR + ']').forEach((element) => {
-        if (idOf(element) !== areaId) return;
-        if (!anchor) anchor = element;
-        const rect = element.getBoundingClientRect();
-        if (rect.width === 0 && rect.height === 0) return;
-        top = Math.min(top, rect.top); left = Math.min(left, rect.left); right = Math.max(right, rect.right);
-      });
-      const rtl = directionOf(anchor || document.documentElement) === 'rtl';
-      if (top === Infinity) return rtl ? { top: 12, left: 16, rtl } : { top: 12, right: 16, rtl };
-      const topOffset = Math.max(0, top) + 12;
-      return rtl
-        ? { top: topOffset, left: Math.max(0, left) + 16, rtl }
-        : { top: topOffset, right: Math.max(0, window.innerWidth - right) + 16, rtl };
+    // The badge sits at a fixed inset from the web view's own viewport corner, never next to the
+    // zoomed text: text moves on every zoom step and can lie partly or wholly outside the visible
+    // pane, and a badge that followed it would jump with each step or land out of sight. It is on
+    // the inline-end side of the zoomed area's text direction - top-right for an LTR area, top-left
+    // for an RTL one - read off the area's first marked element (the document's own direction when
+    // the area has none rendered), so a marker inside an otherwise-LTR document (or vice versa)
+    // still gets its own inline-end.
+    const INDICATOR_INSET_TOP = 12;
+    const INDICATOR_INSET_INLINE = 16;
+    const isRtlArea = (areaId) => {
+      const anchor = firstMarkerByArea.get(areaId);
+      const style = window.getComputedStyle
+        ? window.getComputedStyle(anchor || document.documentElement)
+        : undefined;
+      return !!style && style.direction === 'rtl';
     };
     let hideTimer;
     let announceTimer;
+    let placementFrame;
+    let placementArea;
     let badge;
     let liveRegion;
     // Both nodes exist, and the live region is empty, from the moment the view's DOM is ready: a
@@ -600,8 +836,8 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
         badge = document.createElement('div');
         badge.id = '${INDICATOR_ID}';
         // The visible badge is not the live region: its text is rewritten on every wheel notch.
-        // It starts transparent at the fallback corner, so the first show places it rather than it
-        // appearing at the flow position.
+        // It starts transparent at its corner, so it never appears at the flow position. It is a
+        // direct child of the body rather than of any view element, so no area's zoom scales it.
         badge.setAttribute('aria-hidden', 'true');
         badge.style.cssText = 'position:fixed;top:12px;right:16px;z-index:2147483647;pointer-events:none;' +
           'padding:4px 10px;border-radius:6px;font:600 13px/1.4 system-ui,sans-serif;' +
@@ -627,20 +863,62 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
         document.body.appendChild(liveRegion);
       }
     };
+    // Placing the badge is the only part of a show that reads style: isRtlArea's computed style,
+    // which forces a style recalculation on the spot because the zoom write that preceded it has
+    // just invalidated it. A wheel gesture delivers 50-120 notches a second and only the last one in
+    // a frame is ever painted, so a notch asks for a placement instead of performing one: the
+    // requests collapse into a single callback, running once before the frame is painted with
+    // whichever area the burst settled on.
+    const placeBadge = () => {
+      placementFrame = undefined;
+      const areaId = placementArea;
+      placementArea = undefined;
+      if (!badge || areaId === undefined) return;
+      badge.style.top = INDICATOR_INSET_TOP + 'px';
+      if (isRtlArea(areaId)) {
+        badge.style.left = INDICATOR_INSET_INLINE + 'px';
+        badge.style.right = '';
+      } else {
+        badge.style.right = INDICATOR_INSET_INLINE + 'px';
+        badge.style.left = '';
+      }
+    };
+    const requestPlacement = (areaId) => {
+      placementArea = areaId;
+      // A realm without rAF (an unusual host, or a document that never animates) still gets a
+      // placed badge; it just pays for it in the handler, as it did before.
+      if (typeof window.requestAnimationFrame !== 'function') { placeBadge(); return; }
+      if (placementFrame !== undefined) return;
+      placementFrame = window.requestAnimationFrame(placeBadge);
+    };
+    // A view names an area for the user by putting a label on one of its markers; the first
+    // non-empty label among the area's marked elements, in document order, is the name. Read from
+    // the last scan's record rather than the document: a zoom gesture calls this 50-120 times a
+    // second, and a book-length view carries thousands of markers.
+    const labelOf = (areaId) => labelByArea.get(areaId);
+    const LABEL_SEPARATOR = ' · ';
+    // The name's own box: a <bdi>, so a right-to-left name cannot reorder the level beside it, and
+    // capped, so a long name is cut with an ellipsis while the level text after it is never cut.
+    const LABEL_STYLE = 'unicode-bidi:isolate;display:inline-block;max-width:16em;overflow:hidden;' +
+      'text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom';
     const showIndicator = (areaId, text) => {
       ensureIndicatorElements();
       if (!badge) return;
-      const corner = cornerOf(areaId);
-      badge.style.top = corner.top + 'px';
-      if (corner.rtl) {
-        badge.style.left = corner.left + 'px';
-        badge.style.right = '';
-      } else {
-        badge.style.right = corner.right + 'px';
-        badge.style.left = '';
-      }
+      requestPlacement(areaId);
       badge.dataset.area = areaId;
-      badge.textContent = text;
+      const label = labelOf(areaId);
+      // The label is written as text, never as markup, and the live region hears it uncut.
+      const spoken = label ? label + LABEL_SEPARATOR + text : text;
+      if (label) {
+        const name = document.createElement('bdi');
+        name.style.cssText = LABEL_STYLE;
+        name.textContent = label;
+        badge.textContent = '';
+        badge.appendChild(name);
+        badge.appendChild(document.createTextNode(LABEL_SEPARATOR + text));
+      } else {
+        badge.textContent = text;
+      }
       // Reduced motion still hides the badge on schedule, as a hard cut instead of a fade (an
       // opacity-0 pointer-events:none box left in place would otherwise sit at the corner forever).
       // Computed fresh on every call so a badge element reused across shows picks up a live
@@ -653,7 +931,7 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       if (announceTimer) clearTimeout(announceTimer);
       announceTimer = setTimeout(() => {
         announceTimer = undefined;
-        if (liveRegion) liveRegion.textContent = text;
+        if (liveRegion) liveRegion.textContent = spoken;
       }, ${INDICATOR_ANNOUNCE_QUIET_MS});
       if (hideTimer) clearTimeout(hideTimer);
       hideTimer = setTimeout(() => {
@@ -671,6 +949,7 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       document.removeEventListener('DOMContentLoaded', start);
       window.removeEventListener('pointerdown', onPointerDown, true);
       window.removeEventListener('focusin', onFocusIn, true);
+      window.removeEventListener('keydown', onGestureKeyDown, true);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keydown', onModifierKeyDown, true);
       window.removeEventListener('keyup', onModifierKeyUp, true);
@@ -679,9 +958,22 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       window.removeEventListener('blur', onModifierLost);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       if (wheelListening) { window.removeEventListener('wheel', onWheel, WHEEL_OPTIONS); wheelListening = false; }
+      // Steps a burst left pending go with the pane they were meant for, rather than reaching a
+      // parent that has already let this view go.
+      if (zoomFrame !== undefined) {
+        if (typeof window.cancelAnimationFrame === 'function') window.cancelAnimationFrame(zoomFrame);
+        zoomFrame = undefined;
+      }
+      zoomArea = undefined;
+      zoomSteps = 0;
       if (observer) { observer.disconnect(); observer = undefined; }
       if (hideTimer) { clearTimeout(hideTimer); hideTimer = undefined; }
       if (announceTimer) { clearTimeout(announceTimer); announceTimer = undefined; }
+      if (placementFrame !== undefined) {
+        if (typeof window.cancelAnimationFrame === 'function') window.cancelAnimationFrame(placementFrame);
+        placementFrame = undefined;
+      }
+      placementArea = undefined;
       if (badge && badge.parentNode) badge.parentNode.removeChild(badge);
       if (liveRegion && liveRegion.parentNode) liveRegion.parentNode.removeChild(liveRegion);
       badge = undefined;

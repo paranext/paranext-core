@@ -3,7 +3,11 @@
   gap: calc(var(--spacing) * 2); // tw:gap-2
   display: flex;
   flex-direction: column;
-  width: 50%;
+  // Shares the row with `.setting-label` at the same basis, and drops below it once the row cannot
+  // hold both. `min-width: 0` lets it shrink below its content's natural width instead of pushing
+  // the row wider than its card.
+  flex: 1 1 12rem;
+  min-width: 0;
 }
 
 .language-selector {
@@ -22,13 +26,17 @@
 
 .setting-label-container {
   display: flex;
+  // The label sits above its control once the card is too narrow for both side by side.
+  flex-wrap: wrap;
+  row-gap: calc(var(--spacing) * 2); // tw:gap-y-2, so a wrapped label does not touch its control
   justify-content: flex-start;
   align-items: center;
 }
 
 .setting-label {
-  padding-right: 1rem;
-  width: 50%;
+  padding-inline-end: 1rem;
+  flex: 1 1 12rem;
+  min-width: 0;
 }
 
 .error-view-link {

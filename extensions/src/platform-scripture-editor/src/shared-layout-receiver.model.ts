@@ -12,15 +12,23 @@ const COMMENTS_PANEL_WEBVIEW_TYPE = 'legacyCommentManager.commentListPanel';
 // `%webView_scriptureTextGrid_title_multiple%` = "Text Collection").
 const TEXT_COLLECTION_PANEL_WEBVIEW_TYPE = SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE;
 
-/** Reads the three admin layout settings for a project and serializes them into a signature. */
+/**
+ * Reads the four admin layout settings for a project and serializes them into a signature.
+ *
+ * Every setting the Team layout dialog saves must be fingerprinted here, or an admin who changes
+ * only that setting produces a byte-identical signature and the team is never told. The team
+ * structure lock is the case that makes this load-bearing rather than tidy: it is the one change in
+ * that dialog that REMOVES a capability from the team, so a silent apply is the worst outcome.
+ */
 async function readLayoutSignature(papi: typeof PapiBackend, projectId: string): Promise<string> {
   const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-  const [modelTexts, resources, tab] = await Promise.all([
+  const [modelTexts, resources, tab, structureProtected] = await Promise.all([
     pdp.getSetting('platformScripture.modelTexts'),
     pdp.getSetting('platformScripture.referencedProjectsAndResources'),
     pdp.getSetting('platformScripture.sharedLayoutDefaultTab'),
+    pdp.getSetting('platformScripture.structureProtected'),
   ]);
-  return serialize({ modelTexts, resources, tab });
+  return serialize({ modelTexts, resources, tab, structureProtected });
 }
 
 /** Maps a `sharedLayoutDefaultTab` value to the col-3 panel web view type, or `undefined`. */

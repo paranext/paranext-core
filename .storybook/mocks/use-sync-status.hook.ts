@@ -8,11 +8,14 @@
  * The real hook derives its status from two Send/Receive commands and two network events. Storybook
  * has no PAPI backend, so every read fails: the hook reports `idle` and then `unknown` a minute
  * later, and no other state is reachable at all. Replacing the hook — rather than the services
- * under it — is what lets a story ask for any one of the five statuses directly, including
+ * under it — is what lets a story ask for any one of the six statuses directly, including
  * `unknown`, without the sync button growing props it does not need in the app.
  *
  * With no story opted in, this returns the inert `idle` state the real hook shows in Storybook
  * anyway, so stories that merely contain a toolbar are unaffected.
+ *
+ * A story asking for `unsynced` names its projects with a `direction` each (`send`, `receive` or
+ * `both`) and sets the matching `unsyncedDirection`, as the real hook reports them together.
  */
 import { useContext } from 'react';
 // Type-only, so nothing of the real hook is pulled into the bundle. Deep relative (not
@@ -21,16 +24,19 @@ import type {
   SyncStatus,
   SyncingProject,
   SyncStatusInfo,
+  UnsyncedDirection,
+  UnsyncedProject,
 } from '../../src/renderer/hooks/use-sync-status.hook';
 import { SyncStatusMockContext } from './sync-status-mock-channel';
 
 // Re-exported so the mock presents the same surface as the module it replaces.
-export type { SyncStatus, SyncingProject, SyncStatusInfo };
+export type { SyncStatus, SyncingProject, SyncStatusInfo, UnsyncedDirection, UnsyncedProject };
 
 /** Frozen so a consumer cannot mutate the shared default. Stable identity across renders. */
 const IDLE: SyncStatusInfo = Object.freeze({
   status: 'idle',
   syncingProjects: Object.freeze([]),
+  unsyncedProjects: Object.freeze([]),
 });
 
 export function useSyncStatus(): SyncStatusInfo {

@@ -72,9 +72,12 @@ export type ManageBooksDialogProject = {
    */
   name: string;
   /**
-   * Long human-readable name (typically the project's `platform.fullName` setting), e.g. "English
-   * Standard Version 2016". Falls back to `shortName` when no fullName is configured. Used as the
-   * secondary label in the `<ProjectSelector>` dialog pickers (Copy "From", Create "Based on").
+   * Long human-readable name, e.g. "English Standard Version 2016". Used as the secondary label in
+   * the `<ProjectSelector>` dialog pickers (Copy "From", Create "Based on").
+   *
+   * Optional, and absent when the project has no distinct full name — deliberately NOT mirrored
+   * from the short name, which would claim a full name the project does not have and leave every
+   * consumer downstream to un-claim it.
    */
   fullName?: string;
   /**
@@ -103,6 +106,12 @@ export type ManageBooksDialogProject = {
    * surfaced as the section header in versification-grouping mode.
    */
   versificationName?: string;
+  /**
+   * Whether licensing terms prohibit using the project as the base of new text: a traditionally
+   * licensed Biblica text. Sourced from the C# `ProjectSummary.IsRestrictedAsBase` field. The
+   * Create "Based on" picker lists such a project but does not let it be chosen.
+   */
+  isRestrictedAsBase?: boolean;
   /**
    * Locale-stable project-type key (the PT9 `ProjectType` enum value, e.g. "Standard"). Forwarded
    * to the Copy "From" `<ProjectSelector>` so it can group projects by type. Arrives on the same
@@ -247,6 +256,9 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_genericError%',
   '%manageBooks_projectSelector_versificationSectionHeading%',
   '%manageBooks_projectSelector_versificationUnknownSectionHeading%',
+  // Create "Based on" disabled-row tooltip. A core resource picker string shared with the model
+  // text pickers, so it lives in core's localization files rather than this extension's.
+  '%restrictedModelOrBaseText_disabledReason%',
   // Section headings for the built-in `type` grouping in the manage-books project pickers. The
   // wire carries the raw PT9 `ProjectType` enum value with no display name, so the web view maps
   // each value onto one of these keys consumer-side.
@@ -328,8 +340,8 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_delete_confirmTitle%',
   '%manageBooks_delete_confirmBodyPartial%',
   '%manageBooks_delete_confirmBodyAll%',
-  '%manageBooks_delete_confirmBodySharedSendReceive%',
-  '%manageBooks_delete_confirmBodyAllShared%',
+  '%manageBooks_delete_confirmBodySharedSendReceive_2%',
+  '%manageBooks_delete_confirmBodyAllShared_2%',
   '%manageBooks_delete_confirmCancel%',
   '%manageBooks_delete_confirmAccept%',
   // runDelete refreshes the destination book set before issuing the delete; if the user's

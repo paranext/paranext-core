@@ -1,8 +1,8 @@
 import type React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
-import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
 import { ScriptureTextGrid } from './scripture-text-grid.component';
+import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
 import {
   RESET_ZOOM_KEY,
   RESOURCE_CELL_STRING_KEYS,
@@ -10,7 +10,12 @@ import {
   ZOOM_OPTIONS_KEY,
   ZOOM_OUT_KEY,
 } from './resource-cell-view.component';
-import type { ResourceZoomController } from './use-resource-zoom.hook';
+import type { ResourceZoomController } from './use-resource-content-zoom.hook';
+import type { GridResource } from './grid-resources.utils';
+// The verse rows' grip and name positioning. The real app loads it through
+// `scripture-text-grid.web-view.scss`; Storybook loads story files lazily, so these stories import it
+// themselves rather than relying on another story file having been opened first.
+import '../_scripture-text-grid-verse.scss';
 
 /**
  * The Scripture Text Grid row: one cell per shown resource, all synced to the active scrRef, laid
@@ -41,6 +46,13 @@ const resources = [
   { resourceId: 'heb', projectId: 'heb', label: 'עברית' },
 ];
 
+const resourcesWithUnresolvedCells: GridResource[] = [
+  { resourceId: 'web', projectId: 'web', label: 'WEB' },
+  { resourceId: 'niv', projectId: undefined, label: 'NIV', unresolvedReason: 'unverified' },
+  { resourceId: 'esv', projectId: undefined, label: 'ESV', unresolvedReason: 'checking' },
+  { resourceId: 'nlt', projectId: undefined, label: 'NLT', unresolvedReason: 'notInstalled' },
+];
+
 /** Bounds the grid so its `h-full` layout behaves like a real web-view pane. */
 const GRID_BOX_STYLE: React.CSSProperties = {
   height: '360px',
@@ -61,11 +73,33 @@ export const Row: Story = {
   render: () => (
     <GridBox>
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={noop}
         ariaLabel="Text Collection"
         onChapterContextChange={noop}
+      />
+    </GridBox>
+  ),
+};
+
+/**
+ * A row mixing a resolved cell with the three unresolved placeholder states — `unverified`,
+ * `checking`, and `notInstalled` — so reviewers can confirm they are distinguishable side by side.
+ * These are decided before any PAPI data arrives, so they render even against Storybook's inert
+ * stubs.
+ */
+export const RowWithUnresolvedCells: Story = {
+  render: () => (
+    <GridBox>
+      <ScriptureTextGrid
+        resources={resourcesWithUnresolvedCells}
+        scrRef={scrRef}
+        setScrRef={noop}
+        ariaLabel="Text Collection"
+        onChapterContextChange={noop}
+        isViewVisible
       />
     </GridBox>
   ),
@@ -80,6 +114,7 @@ export const RowDraggable: Story = {
   render: () => (
     <GridBox>
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={noop}
@@ -99,6 +134,7 @@ export const ChapterContextOpen: Story = {
   render: () => (
     <GridBox>
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={noop}
@@ -118,44 +154,62 @@ export const ChapterContextOpen: Story = {
 
 const localizedStrings = getLocalizedStrings([...RESOURCE_CELL_STRING_KEYS]);
 const zoomMenuLabels = {
-  zoomIn: localizedStrings[ZOOM_IN_KEY] ?? 'Zoom In',
-  zoomOut: localizedStrings[ZOOM_OUT_KEY] ?? 'Zoom Out',
-  reset: localizedStrings[RESET_ZOOM_KEY] ?? 'Reset Zoom',
+  zoomIn: localizedStrings[ZOOM_IN_KEY] ?? 'Zoom in',
+  zoomOut: localizedStrings[ZOOM_OUT_KEY] ?? 'Zoom out',
+  reset: localizedStrings[RESET_ZOOM_KEY] ?? 'Zoom reset',
   options: localizedStrings[ZOOM_OPTIONS_KEY] ?? 'Zoom options for {resourceName}',
 };
 
 /**
- * A no-op stub `ResourceZoomController` that returns the default factor (1) for every resource.
- * Passed to `ScriptureTextGrid` so each `ResourceCell` renders with zoom wiring active and the
- * kebab button visible — without needing a real `useWebViewState` persistence layer. Because the
- * connected `ResourceCell` renders "Downloading…" in Storybook (PAPI stubs never resolve), the
- * focus here is the kebab affordance and the `data-resource-id` attribute wiring, not the text.
+ * A stub `ResourceZoomController`: every resource follows a 100 % default with no level of its own.
+ * Storybook runs no content zoom, so this story documents the menus' presence and the zoom scope on
+ * each column (`data-platform-content-zoom-scope`), not zoomed text.
  */
 const stubZoomController: ResourceZoomController = {
   getZoom: () => 1,
-  setZoomForResource: noop,
+  hasOwnLevel: () => false,
   adjustZoom: noop,
   resetZoom: noop,
-  pruneToResourceIds: noop,
 };
 
 /**
- * Grid with zoom wiring active: each cell receives a stub zoom controller that returns the default
- * factor (1), so the kebab button is rendered and the `data-resource-id` attribute is visible on
- * each column wrapper. In Storybook the cells remain in their "Downloading…" state (PAPI stubs);
- * this story documents the grid-level zoom plumbing rather than zoomed text content.
+ * Chapter view with zoom wiring active: each column's header carries the "⋮" button (revealed on
+ * hover), and each column's right-click menu carries the zoom items. In Storybook the cells remain
+ * in their "Downloading…" state (PAPI stubs).
  */
 export const RowWithZoomEnabled: Story = {
   render: () => (
     <GridBox>
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={noop}
         ariaLabel="Text Collection"
-        onChapterContextChange={noop}
+        viewMode="chapter"
         zoom={stubZoomController}
         zoomMenuLabels={zoomMenuLabels}
+      />
+    </GridBox>
+  ),
+};
+
+/**
+ * The verse-aligned Grid view. Storybook's cells run against inert PAPI stubs, so they render their
+ * "Downloading…" state rather than scripture — what this documents is the grid chrome: one column
+ * per resource, a sticky resource-name header on each, and no interior grid lines. `AlignedGrid`'s
+ * own stories show the row alignment with stand-in verse blocks.
+ */
+export const AlignedGridView: Story = {
+  render: () => (
+    <GridBox>
+      <ScriptureTextGrid
+        isViewVisible
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={noop}
+        viewMode="aligned"
+        ariaLabel="Text Collection"
       />
     </GridBox>
   ),

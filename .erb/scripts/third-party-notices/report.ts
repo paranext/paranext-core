@@ -157,10 +157,33 @@ function exceptionRemedy(
       // somebody read the license file, which is a thing only they know.
       date: '<YYYY-MM-DD you read this package\u2019s license file>',
       textSha256: v.textSha256,
+      // `applyException` requires credits on every conjunction, so an entry offered without them
+      // would be refused for a field it never mentioned. One placeholder per operand, which the gate
+      // refuses by name until the reader replaces it.
+      ...(declared.ok && declared.hasConjunction
+        ? {
+            copyrightByOperand: Object.fromEntries(
+              declared.ids.map((id) => [
+                id,
+                '<the notice(s) this operand is granted under, copied whole lines from this file>',
+              ]),
+            ),
+          }
+        : {}),
     }),
     '',
     '  Every identifier in "spdx" has to be on the policy\'s "allowed" list and absent from its',
     '  "copyleft" list; a conjunction is checked one operand at a time.',
+    // Unconditional, because the case it covers is one the template cannot see coming: a file
+    // stacking several grants is typically declared as ONE of them and identified as nothing, and
+    // the reader writes the conjunction into "spdx" by hand.
+    '  If "spdx" is a conjunction, also record "copyrightByOperand", mapping each operand to the',
+    '  notices it is granted under, copied from this file whole lines at a time and never across a',
+    '  blank line (separate several with "; "). Credit every notice the file states, even one for',
+    '  code the package does not ship today. An operand you leave out is printed as having no',
+    '  notice; record an empty object if none has one. A notice stated only in another file of the',
+    '  package can be copied from it once its path is listed in "creditFiles". Leave both fields',
+    '  out for a single identifier: they would never be printed.',
     '  The exception is pinned to this exact license TEXT. If the package changes it, the block',
     '  returns and the exception must be reviewed again. "version" records what you read, so a',
     '  later reader can check the determination against the same thing; it does not pin anything.',

@@ -22,7 +22,35 @@ export type SelectedSettingsSidebarItem = {
   projectId?: string;
 };
 
-export type ProjectInfo = { projectId: string; projectName: string };
+/**
+ * A project as this sidebar's consumer supplies it.
+ *
+ * `projectName`/`projectFullName` are the same pair `platform-bible-utils` calls
+ * `ProjectNames.shortName`/`fullName`; the names differ because this type predates that helper and
+ * is exported from the stable barrel, where renaming a field is a breaking change. The two shapes
+ * meet in exactly one adapter — the `projectSelectorProjects` memo below — so the helper's rules
+ * still apply to every project this component renders.
+ */
+export type ProjectInfo = {
+  projectId: string;
+  /**
+   * Short project name — the trigger label for the `<ProjectSelector>` and the primary line of each
+   * popover row. Sourced from the `platform.name` project setting.
+   */
+  projectName: string;
+  /**
+   * Optional full project name — rendered as the muted secondary line beneath `projectName` in the
+   * popover rows. Omit it for a project that has no distinct full name; when it is absent, blank or
+   * equal to `projectName`, the row falls back to a single-line layout (the `hasDistinctFullName`
+   * rule the `ProjectSelector` applies).
+   *
+   * Source it from project metadata (`getMetadataForAllProjects`), NOT from a
+   * `getSetting('platform.fullName')` read: that setting cannot express "no full name" — it
+   * defaults to a localized `%project_full_name_missing%` placeholder, which would render here as a
+   * second name the project does not have.
+   */
+  projectFullName?: string;
+};
 
 export type SettingsSidebarProps = {
   /** Optional id for testing */
@@ -101,15 +129,16 @@ export function SettingsSidebar({
   );
 
   // Adapt the public `ProjectInfo[]` shape to `ProjectSelectorProject[]` for the canonical
-  // <ProjectSelector> trigger. We only have a single name string in the public API, so reuse it
-  // as both `shortName` (the trigger label) and `fullName` (the popover row's secondary line).
-  // The public prop shape is intentionally preserved so downstream consumers don't need to change.
+  // <ProjectSelector>. `projectFullName` is passed through as-is rather than falling back to the
+  // short name: the selector suppresses a full name that is absent or equal to the short name, and
+  // mirroring one into the other would make every project look like it has a full name and defeat
+  // searching on it.
   const projectSelectorProjects = useMemo<ProjectSelectorProject[]>(
     () =>
       projectInfo.map((info) => ({
         id: info.projectId,
         shortName: info.projectName,
-        fullName: info.projectName,
+        fullName: info.projectFullName,
       })),
     [projectInfo],
   );
@@ -202,6 +231,7 @@ export function SettingsSidebar({
                 buttonVariant="ghost"
                 buttonClassName="tw:h-8 tw:w-full tw:flex-1 tw:justify-start tw:font-normal"
                 localizedStrings={projectSelectorStrings}
+                triggerLabelFormat="shortNameAndFullName"
               />
             </div>
           </SidebarGroupContent>

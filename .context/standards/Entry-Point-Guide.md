@@ -105,7 +105,15 @@ For each entry point, add to `extensions/src/{ext}/contributions/menus.json`:
 **Notes:**
 - Use `localizeNotes` to document the menu path for translators
 - Order numbers determine sort order within the group
-- Commands must match exactly what's registered in main.ts
+- Commands must match exactly what's registered in main.ts — with one exception: a web view's
+  top-menu item can name a command id that its own `SelectMenuItemHandler` handles before any PAPI
+  call, never registered in `main.ts`. The scripture editor's Edit flyout
+  (Undo/Redo/Cut/Copy/Paste) works this way, because the clipboard needs the click's user
+  activation, which a PAPI round trip loses. `EDIT_MENU_COMMANDS` in
+  `extensions/src/platform-scripture-editor/src/edit-menu-actions.util.ts` is the list the handler
+  intercepts, and a test keeps it matched to the menu. See
+  `adr-menu-per-mode-layout-via-mode-gated-columns` in
+  [Architecture-Decisions.md](Architecture-Decisions.md).
 
 ### Menu Availability: Menus Stay Always-Available
 
@@ -128,12 +136,20 @@ visibility/enable rules inline in the command/backend so the rationale isn't los
 See `adr-menus-always-available-gate-at-submission` in `Architecture-Decisions.md` for the
 rationale and history.
 
+When a mode needs a different *section* structure, not just fewer items, give that mode its own
+columns and gate items into them — see `adr-menu-per-mode-layout-via-mode-gated-columns`.
+
 ### Section Headings and Shortcut Hints
 
 - **Headings come from columns.** In a tab's top menu each column is a section. When two or more
   columns have items, each is headed by its `label`; a column with no items (including one whose
   items are all hidden in the current interface mode) is not shown at all. So label columns as
   section titles, and hide a section by hiding its items. See `adr-menu-section-headings-from-column-labels`.
+- **A section with no heading** sets `"isHeaderHidden": true` on its column. It is still divided
+  from its neighbors, and while two or more sections are shown its `label` still names it for
+  screen readers. A section left on its own — including one left alone by interface-mode
+  filtering — gets neither a heading nor a name. Give it a real label regardless. The application
+  menubar ignores the flag. See `adr-menu-per-mode-layout-via-mode-gated-columns`.
 - **Do not add `shortcut` to `menus.json`** — the schema rejects it and the whole file fails to
   load. Hints come from the keyboard shortcuts catalog's `command` join; see
   `.claude/rules/keyboard-shortcuts-catalog.md` and `adr-menu-shortcut-hints-joined-from-catalog`.

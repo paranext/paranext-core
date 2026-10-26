@@ -292,6 +292,9 @@ declare module 'legacy-comment-manager' {
        *   value based on the previous three properties.
        * @returns Promise that resolves to the auto-generated comment ID (format:
        *   "threadId/userName/date")
+       * @throws If the project can't be opened in Platform.Bible (see
+       *   `ProjectMetadata.unsupportedReason`). The message ends with the `(PROJECT_OPEN_BLOCKED)`
+       *   sentinel.
        */
       createComment(comment: NewLegacyComment): Promise<string>;
 
@@ -333,6 +336,9 @@ declare module 'legacy-comment-manager' {
        * @throws If the current user is neither a project administrator nor the assigned resolver
        * @throws If resolution is `'reject'` or `'merge'` and the verse text has changed since the
        *   conflict was recorded (stale)
+       * @throws If the project can't be opened in Platform.Bible (see
+       *   `ProjectMetadata.unsupportedReason`). The message ends with the `(PROJECT_OPEN_BLOCKED)`
+       *   sentinel.
        */
       resolveConflict(threadId: string, resolution: 'accept' | 'reject' | 'merge'): Promise<void>;
 
@@ -340,8 +346,9 @@ declare module 'legacy-comment-manager' {
        * The resolution actions the current user may take on the given conflict thread - the
        * capability query for {@link resolveConflict}. Never rejects; failures map to `'none'`.
        *
-       * - `'none'`: not an unresolved `verseText` conflict, or the current user is neither a project
-       *   administrator nor the assigned resolver. UIs should hide the accept/reject controls
+       * - `'none'`: not an unresolved `verseText` conflict, the current user is neither a project
+       *   administrator nor the assigned resolver, or the project can't be opened in Platform.Bible
+       *   (see `ProjectMetadata.unsupportedReason`). UIs should hide the accept/reject controls
        *   entirely.
        * - `'accept'`: the user may resolve, but the verse has been edited since the conflict was
        *   recorded (stale), so only `'accept'` (keep the current text) is available -
@@ -406,10 +413,12 @@ declare module 'legacy-comment-manager' {
       // #region Permission Check Functions
 
       /**
-       * Determines if the current user can create new comment threads in this project
+       * Determines if the current user can create new comment threads in this project. False for a
+       * project Platform.Bible can't open (see `ProjectMetadata.unsupportedReason`), because
+       * `createComment` refuses it.
        *
        * @param allowInSba Allow creating comments in Study Bible Additions projects (default:
-       *   false)
+       *   false). Has no effect while such projects can't be opened.
        * @returns Promise that resolves to true if the user can create comments, false otherwise
        */
       canUserCreateComments(allowInSba?: boolean): Promise<boolean>;
@@ -483,27 +492,100 @@ declare module 'legacy-comment-manager' {
 
   // #endregion
 
-  // #region Comment filter axis types (shared with comment-list-filters.model.ts)
+  // #region Comment filter types (shared with comment-list-filters.model.ts)
 
-  /** Resolved-status filter axis: all threads, only unresolved, or only resolved. */
-  export type ResolvedFilter = 'all' | 'unresolved' | 'resolved';
-  /** Read-status filter axis: all threads, only unread, or only read (for the current user). */
-  export type ReadFilter = 'all' | 'unread' | 'read';
-  /** Note-type filter axis: all notes, only conflict notes, or only regular comments. */
-  export type TypeFilter = 'all' | 'conflicts' | 'comments';
-  /** Assignment filter axis: all threads, assigned to me, assigned to the team, or unassigned. */
-  export type AssignmentFilter = 'all' | 'assigned-to-me' | 'team' | 'unassigned';
+  /**
+   * The named filter presets the comment toolbar offers. A single closed set rather than orthogonal
+   * axes: these are the combinations users actually work in, and the axes are not offered
+   * separately, so composing them would be unreachable flexibility.
+   *
+   * `unsaved` is the one preset with no selector clause — a draft is client-side state the data
+   * provider has never heard of, so it is applied after the query rather than within it.
+   */
+  export type CommentPreset =
+    | 'all'
+    | 'unresolved-assigned-to-me'
+    | 'unresolved'
+    | 'unread-assigned-to-me'
+    | 'unread'
+    | 'unread-and-unresolved'
+    | 'resolved'
+    | 'unsaved'
+    | 'conflict';
 
-  /** The four orthogonal comment-filter axis selections. Each defaults to `'all'` (no filtering). */
+  /** The comment-filter selection. */
   export type CommentFilters = {
-    resolved: ResolvedFilter;
-    read: ReadFilter;
-    type: TypeFilter;
-    assignment: AssignmentFilter;
+    preset: CommentPreset;
   };
 
-  /** Scope axis: current chapter vs all books. */
-  export type ScopeFilter = 'unfiltered' | 'current-chapter';
+  /**
+   * Scripture scope. The three `current-*` values follow the window's scroll-group reference live,
+   * and resolve against it whether or not this list follows an editor.
+   */
+  export type ScopeFilter = 'all-books' | 'current-book' | 'current-chapter' | 'current-verse';
+
+  // #endregion
+
+  // #region Legacy comment filter types (deprecated, mapped onto the current model)
+
+  /**
+   * @deprecated 2026-09-18. One axis of the legacy four-axis filter model, replaced by
+   *   {@link CommentPreset} via `CommentFilters.preset`. Still accepted at the filter boundaries
+   *   only for backward compatibility — see {@link LegacyCommentFilters} for how a legacy
+   *   combination maps onto a preset.
+   */
+  export type ResolvedFilter = 'all' | 'unresolved' | 'resolved';
+
+  /** @deprecated 2026-09-18. See {@link ResolvedFilter}. */
+  export type ReadFilter = 'all' | 'unread' | 'read';
+
+  /** @deprecated 2026-09-18. See {@link ResolvedFilter}. */
+  export type TypeFilter = 'all' | 'conflicts' | 'comments';
+
+  /**
+   * @deprecated 2026-09-18. See {@link ResolvedFilter}. `'team'` and `'unassigned'` have no
+   *   counterpart in the current preset set — a legacy combination naming either always maps to
+   *   `'all'`.
+   */
+  export type AssignmentFilter = 'all' | 'assigned-to-me' | 'team' | 'unassigned';
+
+  /**
+   * @deprecated 2026-09-18. The legacy four-orthogonal-axis filter shape, replaced by
+   *   {@link CommentFilters}' single `preset`. Still accepted at
+   *   {@link OpenCommentListWebViewOptions.filtersToSet}, the `setFilters` web view message, and
+   *   {@link CommentListWebViewController.setFilters} for backward compatibility, and mapped onto
+   *   the preset whose meaning matches:
+   *
+   *   - Every axis `'all'` (or the shape omitted entirely) → `'all'`
+   *   - `type: 'conflicts'` → `'conflict'`
+   *   - `resolved: 'unresolved'` → `'unresolved'`
+   *   - `read: 'unread'` → `'unread'`
+   *   - `resolved: 'unresolved'` + `read: 'unread'` → `'unread-and-unresolved'`
+   *   - `resolved: 'resolved'` → `'resolved'`
+   *   - `resolved: 'unresolved'` + `assignment: 'assigned-to-me'` → `'unresolved-assigned-to-me'`
+   *   - `read: 'unread'` + `assignment: 'assigned-to-me'` → `'unread-assigned-to-me'`
+   *   - `type: 'conflicts'` combined with any OTHER active axis (e.g. `resolved: 'unresolved'` + `type:
+   *       'conflicts'`, the Send/Receive "unresolved conflicts" view) → `'conflict'`, dropping only
+   *       the other axis rather than the conflict constraint too
+   *   - Any other combination — including `type: 'comments'`, `assignment: 'team'` or `'unassigned'`,
+   *       `read: 'read'`, or a mix of active axes that matches none of the rows above and doesn't
+   *       name `type: 'conflicts'` — → `'all'`, since the current preset set has nothing narrower
+   *       to offer it and dropping one of the requested axes to force a fit would silently show a
+   *       different query than what was asked for
+   */
+  export type LegacyCommentFilters = {
+    resolved?: ResolvedFilter;
+    read?: ReadFilter;
+    type?: TypeFilter;
+    assignment?: AssignmentFilter;
+  };
+
+  /**
+   * @deprecated 2026-09-18. Replaced by `'all-books'` on {@link ScopeFilter}, which `'unfiltered'`
+   *   maps onto exactly (both mean "no Scripture-range restriction"). Still accepted at the same
+   *   boundaries as {@link LegacyCommentFilters}.
+   */
+  export type LegacyScopeFilter = 'unfiltered';
 
   // #endregion
 
@@ -518,16 +600,25 @@ declare module 'legacy-comment-manager' {
      */
     selectThread(threadId: string): Promise<void>;
     /**
-     * Set the comment-list view deterministically, exactly as a fresh open would. `filters` is
-     * applied on top of the default (all) filters — unspecified axes reset to 'all', they are NOT
-     * merged with the user's current selection — and an omitted `scopeFilter` resets scope to
-     * 'unfiltered' (all books). The result is the requested view with nothing carried over from
-     * prior state.
+     * Set the comment-list view deterministically, exactly as an `openCommentList` with
+     * `filtersToSet`/`scopeFilterToSet` would. `filters` is applied on top of the default (all)
+     * filters — an unspecified preset resets to 'all', it is NOT merged with the user's current
+     * selection — and an omitted `scopeFilter` resets scope to 'all-books'. The result is the
+     * requested view with nothing carried over from prior state.
      *
-     * @param filters Comment-filter axes to apply; unspecified axes reset to 'all'.
-     * @param scopeFilter Scope to apply; omitting it resets scope to 'unfiltered' (all books).
+     * Also accepts the deprecated {@link LegacyCommentFilters} four-axis shape and the deprecated
+     * {@link LegacyScopeFilter} `'unfiltered'` value for backward compatibility; both are mapped
+     * onto their current equivalent (see those types' TSDoc for the mapping), and a value this
+     * build doesn't recognize at all resolves to 'all' (preset) or 'all-books' (scope) rather than
+     * reaching the query unnarrowed.
+     *
+     * @param filters Comment-filter preset to apply; an unspecified preset resets to 'all'.
+     * @param scopeFilter Scope to apply; omitting it resets scope to 'all-books'.
      */
-    setFilters(filters?: Partial<CommentFilters>, scopeFilter?: ScopeFilter): Promise<void>;
+    setFilters(
+      filters?: Partial<CommentFilters> | LegacyCommentFilters,
+      scopeFilter?: ScopeFilter | LegacyScopeFilter,
+    ): Promise<void>;
   }>;
 
   export type OpenCommentListWebViewOptions = {
@@ -538,10 +629,19 @@ declare module 'legacy-comment-manager' {
      * the S/R results dialog). Takes precedence over the project derived from `webViewId`.
      */
     projectId?: string | undefined;
-    /** Comment-filter axes to pre-apply (unspecified axes reset to 'all'). */
-    filtersToSet?: Partial<CommentFilters> | undefined;
-    /** Scope to pre-apply; an omitted value resets scope to `'unfiltered'` (all books). */
-    scopeFilterToSet?: ScopeFilter | undefined;
+    /**
+     * Comment-filter preset to pre-apply (an unspecified preset resets to 'all'). Also accepts the
+     * deprecated {@link LegacyCommentFilters} four-axis shape for backward compatibility, which is
+     * mapped onto the closest matching preset — see {@link LegacyCommentFilters} for the mapping.
+     */
+    filtersToSet?: Partial<CommentFilters> | LegacyCommentFilters | undefined;
+    /**
+     * Scope to pre-apply. An omitted value resets scope to `'all-books'` when `filtersToSet` is
+     * given; an open with neither uses the scope stored for the project, or `'current-chapter'`.
+     * Also accepts the deprecated {@link LegacyScopeFilter} `'unfiltered'` value, which maps onto
+     * `'all-books'`.
+     */
+    scopeFilterToSet?: ScopeFilter | LegacyScopeFilter | undefined;
   };
 
   // #endregion Comment list WebView types
@@ -569,7 +669,7 @@ declare module 'papi-shared-types' {
      * @param options Additional options for opening the comment list WebView. `options.projectId`
      *   targets a project directly, taking precedence over the project derived from `webViewId`
      *   (e.g. for callers that are not that project's own web view). `options.filtersToSet` and
-     *   `options.scopeFilterToSet` pre-apply comment-filter axes/scope on open or focus.
+     *   `options.scopeFilterToSet` pre-apply a comment-filter preset/scope on open or focus.
      * @returns The ID of the comment list WebView that was opened or focused, or `undefined` if no
      *   project ID could be determined
      * @throws If the comment list WebView controller cannot be obtained to apply the requested
@@ -592,19 +692,38 @@ declare module 'papi-shared-types' {
     ) => Promise<string | undefined>;
 
     /**
-     * Selects/scrolls to a specific thread in the fixed Column 3 Comment List panel, without
-     * reloading it. Optionally also brings the panel's tab to the front.
+     * Selects/scrolls to a specific thread in the fixed Column 3 Comment List panel. Optionally
+     * also brings the panel's tab to the front. The panel is reloaded only when `editorWebViewId`
+     * is given and the panel shows a different project, which discards any in-progress inline edit
+     * in it.
      *
      * @param threadId The ID of the thread to select and scroll to in the panel
      * @param bringToFront Whether to also bring the panel's tab to the front. Pass `false` for
      *   background confirmation (e.g. after inserting a comment, so the user's current Column 3 tab
      *   isn't interrupted) or `true` for an explicit "show me this comment" navigation.
+     * @param editorWebViewId The scripture editor the thread belongs to. If given, the panel is
+     *   first pointed at that editor's project when it shows another one. If omitted, the panel is
+     *   assumed to show the right project already.
      * @returns The webView ID of the panel, or `undefined` if it isn't open in the current layout
-     * @throws If the panel's WebView Controller cannot be obtained to apply the selection
+     * @throws If the panel's WebView Controller cannot be obtained to apply the selection, or if
+     *   the panel shows another project and can't be pointed at the editor's project
      */
     'legacyCommentManager.selectCommentThreadInPanel': (
       threadId: string,
       bringToFront: boolean,
+      editorWebViewId?: string,
+    ) => Promise<string | undefined>;
+
+    /**
+     * Brings the Comments tab to the front, the way clicking it would. An open tab is raised, never
+     * reloaded, so an in-progress comment edit survives. If no tab is open, opens one for the
+     * editor's project.
+     *
+     * @param editorWebViewId The scripture editor the request came from
+     * @returns The Comments web view's ID, or `undefined` if it couldn't be shown
+     */
+    'legacyCommentManager.showCommentListPanel': (
+      editorWebViewId?: string,
     ) => Promise<string | undefined>;
   }
 

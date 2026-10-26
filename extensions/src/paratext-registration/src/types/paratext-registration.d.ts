@@ -86,6 +86,7 @@ declare module 'papi-shared-types' {
     InternetSettings,
     IInternetSettingsDataProvider,
   } from 'paratext-registration';
+  import type { ResetFirstRunRegistration } from 'papi-shared-types';
 
   export interface CommandHandlers {
     /**
@@ -99,9 +100,28 @@ declare module 'papi-shared-types' {
      * Show the Paratext Registration Internet Settings window with which the user defines internet
      * settings for connecting to the Paratext Registration
      *
+     * Always opens with the (otherwise hidden) server-selection control locked — the dialog may
+     * still show it live if the persisted server is already something other than Production. This
+     * is also the `clickCommand` target of two notifications, which invoke it with the
+     * notification's own id as an argument; taking no parameters means that argument can never be
+     * mistaken for a request to unlock the control. See `showInternetSettingsWithServerSelection`
+     * for the one-shot unlock.
+     *
      * @returns Id of the internet settings web view
      */
     'paratextRegistration.showInternetSettings': () => Promise<string | undefined>;
+    /**
+     * Show the Paratext Registration Internet Settings window with the (otherwise hidden)
+     * server-selection control unlocked for this one open — the counterpart to
+     * `showInternetSettings` for the deliberate Shift-click/Shift-Entered "Internet & connectivity"
+     * gesture. The other input to the dialog's decision about whether to show the control — whether
+     * the server is already something other than Production — is read live by the dialog itself.
+     *
+     * @returns Id of the internet settings web view
+     */
+    'paratextRegistration.showInternetSettingsWithServerSelection': () => Promise<
+      string | undefined
+    >;
     /**
      * Gets information about user's current Paratext Registry user information in
      * `ParatextData.dll`
@@ -136,6 +156,24 @@ declare module 'papi-shared-types' {
     'paratextRegistration.validateParatextRegistrationData': (
       registrationData: RegistrationData,
     ) => Promise<boolean>;
+    /**
+     * Whether the current registration is the one Platform.Bible copied from Paratext 9 when it
+     * first set up its own ParatextData folder (false if it was entered in Platform.Bible).
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextRegistration.isRegistrationCopiedFromParatext9': () => Promise<boolean>;
+    /**
+     * Registration half of `platform.resetFirstRun`, which is the command to call: it also resets
+     * first-run progress and restarts the app, which this needs afterwards. Developer and tester
+     * tool, not for extensions to call: it can delete the user's registration. Only ever touches
+     * Platform.Bible's own ParatextData folder; Paratext 9's registration is never changed.
+     *
+     * @param mode See {@link ResetFirstRunRegistration}
+     * @throws If ParatextData is not using Platform.Bible's own folder
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextRegistration.resetForFirstRun': (mode: ResetFirstRunRegistration) => Promise<void>;
     /**
      * @deprecated Use the `paratextRegistration.internetSettingsDataProvider` data provider's
      *   `getInternetSettings` instead. Retained as a thin wrapper for backward compatibility and

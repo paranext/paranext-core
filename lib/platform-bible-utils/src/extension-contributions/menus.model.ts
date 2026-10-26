@@ -55,6 +55,15 @@ export type MenuGroupDetailsInSubMenu = OrderedExtensibleContainer & {
 export type MenuColumnWithHeader = OrderedExtensibleContainer & {
   /** Key that represents the text of the header text of the column */
   label: LocalizeKey;
+  /**
+   * Set to `true` to show this column's items without its header text in the menu that opens when
+   * you click on the top left corner of a tab (`topMenu`), which heads each section with its
+   * column's header. While that menu shows two or more sections, the label still names this section
+   * for assistive technology; a section left on its own, including one left alone by interface-mode
+   * filtering, gets neither a heading nor a name. Give it a real label regardless. The application
+   * menubar ignores this, because there the header is what opens the column.
+   */
+  isHeaderHidden?: boolean;
 };
 
 export type MenuItemBase = OrderedItem & {
@@ -97,8 +106,8 @@ export type MenuItemContainingCommand = MenuItemBase & {
   iconPathBefore?: string;
   /**
    * Display text for the keyboard shortcut that runs this item's command (e.g. `⌃F` on macOS,
-   * `Ctrl+F` on Windows and Linux), shown at the end of the row. It is display-only: do not parse
-   * it as a key binding.
+   * `Ctrl+F` on Windows and Linux), shown at the end of the row. It is display-only: renderers
+   * split it into one keycap per key, but never treat it as a key binding.
    *
    * The platform fills it in from its keyboard shortcuts catalog in the localized menus it serves;
    * the unlocalized main menu never has it. Key names are not localized, and only the first
@@ -189,7 +198,7 @@ export type WebViewMenu = {
    * panel within its own window, which never leaves the renderer. Treat a `command` here as the
    * name of the action, not as something to invoke through the command service.
    *
-   * The platform's own group here sits at order 100, so choose another order for yours. A
+   * The platform's own groups here sit at orders 50 and 100, so choose another order for yours. A
    * single-column menu buckets every group together for the duplicate-order check, so a second
    * group at 100 throws — and because a failed contribution is rolled back whole, that would cost
    * this extension its entire `menus.json`, not just its tab items.
@@ -321,6 +330,11 @@ export const menuDocumentSchema = {
             isExperimental: {
               description:
                 'Set to `true` to mark this extension point as experimental. Experimental menu content may change or be removed without notice.',
+              type: 'boolean',
+            },
+            isHeaderHidden: {
+              description:
+                "Set to `true` to show this column's items without its header text in the menu that opens when you click on the top left corner of a tab (`topMenu`), which heads each section with its column's header. While that menu shows two or more sections, the label still names this section for assistive technology; a section left on its own, including one left alone by interface-mode filtering, gets neither a heading nor a name. Give it a real label regardless. The application menubar ignores this, because there the header is what opens the column.",
               type: 'boolean',
             },
           },
