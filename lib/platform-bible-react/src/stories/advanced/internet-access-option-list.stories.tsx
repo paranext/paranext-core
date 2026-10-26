@@ -25,7 +25,7 @@ const localizedStrings = {
   '%paratextRegistration_description_internetUse_option_ProxyOnly_2%': 'Configure proxy',
   '%paratextRegistration_description_internetUse_option_ProxyOnly_details%':
     'Routes Paratext internet traffic through a configured proxy server.',
-  '%paratextRegistration_internetUse_comingSoon%': 'Coming soon',
+  '%paratextRegistration_internetUse_notYetAvailable%': 'Not yet available',
   '%paratextRegistration_internetUse_unsupportedSelection_title%':
     'This internet setting is not supported yet',
   '%paratextRegistration_internetUse_unsupportedSelection_description%':
@@ -50,9 +50,9 @@ function Controlled(
  * on hover or keyboard focus, rather than under the label as body copy — which kept the list from
  * becoming five stacked paragraphs of small grey text. The button carries the description as its
  * accessible name and is its own tab stop, so the description is reachable on every row, including
- * the "Coming soon" rows whose radios are disabled. A visually-hidden copy of the same description
- * is also wired to each radio via `aria-describedby`, so a screen reader moving through the radios
- * hears it too.
+ * the "Not yet available" rows whose radios are disabled. A visually-hidden copy of the same
+ * description is also wired to each radio via `aria-describedby`, so a screen reader moving through
+ * the radios hears it too.
  */
 const meta: Meta<typeof InternetAccessOptionList> = {
   title: 'Advanced/InternetAccessOptionList',
@@ -99,8 +99,8 @@ export const DescriptionTooltipOnHover: Story = {
 
 /**
  * The same descriptions are reachable without a mouse, on every row. Tabbing into the group lands
- * on the checked radio, and each info button after it is a tab stop of its own — so a "Coming soon"
- * row's description opens even though its disabled radio never takes focus.
+ * on the checked radio, and each info button after it is a tab stop of its own — so a "Not yet
+ * available" row's description opens even though its disabled radio never takes focus.
  *
  * The mirror image — the panel's programmatic focus on the checked radio revealing nothing — is
  * asserted in a real browser by the `internet-settings` Playwright spec.
@@ -108,16 +108,16 @@ export const DescriptionTooltipOnHover: Story = {
 export const DescriptionTooltipOnKeyboardFocus: Story = {
   render: (args) => <Controlled {...args} initialValue="Enabled" />,
   play: async ({ canvasElement, userEvent }) => {
-    const comingSoonDescription =
+    const unavailableOptionDescription =
       localizedStrings['%paratextRegistration_description_internetUse_option_Disabled_details%'];
     await userEvent.tab(); // the checked radio
     await userEvent.tab(); // Unrestricted's info button
     await userEvent.tab(); // "Disable access to some Bible translation services" info button
-    await userEvent.tab(); // "Disable ALL internet access" info button, on a "Coming soon" row
+    await userEvent.tab(); // "Disable ALL internet access" info button, on an unavailable row
     await expect(
-      within(canvasElement).getByRole('button', { name: comingSoonDescription }),
+      within(canvasElement).getByRole('button', { name: unavailableOptionDescription }),
     ).toHaveFocus();
-    await expectVisibleTooltip(comingSoonDescription);
+    await expectVisibleTooltip(unavailableOptionDescription);
   },
 };
 
@@ -159,7 +159,7 @@ export const RowClickTargets: Story = {
 /**
  * Roughly the width the first-run wizard gives this list, where the longer labels wrap onto a
  * second line. The info button stays with its label's last word instead of drifting out to the
- * row's edge next to the "Coming soon" badge, which reads as if it belonged to the badge.
+ * row's edge next to the "Not yet available" badge, which reads as if it belonged to the badge.
  */
 export const NarrowColumn: Story = {
   render: (args) => (
@@ -184,17 +184,17 @@ export const NothingSelected: Story = {
 };
 
 /**
- * A coming-soon value is the current setting — `InternetSettings.xml` is seeded once from a
+ * A not-yet-available value is the current setting — `InternetSettings.xml` is seeded once from a
  * co-installed Paratext 9 on first launch, so it can name an option this app does not implement
  * yet. The row renders selected-but-disabled so the carried-over setting is visible rather than
  * silently swapped, and a banner says why nothing acts on it.
  */
-export const ComingSoonSelected: Story = {
+export const UnavailableOptionSelected: Story = {
   render: (args) => <Controlled {...args} initialValue="Disabled" />,
 };
 
 /** The other unsupported value a settings file can carry: "Configure proxy". */
-export const ComingSoonProxySelected: Story = {
+export const UnavailableProxySelected: Story = {
   render: (args) => <Controlled {...args} initialValue="ProxyOnly" />,
 };
 

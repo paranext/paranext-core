@@ -39,7 +39,8 @@ STRINGS['%webView_scriptureTextGrid_viewOptions_viewHeader%'] = 'View';
 STRINGS['%webView_scriptureTextGrid_viewOptions_verse%'] = 'Verse';
 STRINGS['%webView_scriptureTextGrid_viewOptions_chapter%'] = 'Chapter';
 STRINGS['%webView_scriptureTextGrid_viewOptions_grid%'] = 'Grid';
-STRINGS['%webView_scriptureTextGrid_viewOptions_chapterComingSoon%'] = 'Chapter view coming soon';
+STRINGS['%webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%'] =
+  'Chapter view is not yet available.';
 STRINGS['%webView_scriptureTextGrid_viewOptions_textsHeader%'] = 'Texts';
 STRINGS['%webView_scriptureTextGrid_viewOptions_getResources%'] = 'Get resources…';
 STRINGS['%webView_scriptureTextGrid_viewOptions_adminSharedLock%'] = 'Shared by administrator';
@@ -87,7 +88,7 @@ function renderComponent(overrides?: Partial<ResourceCollectionOptionsProps>) {
 afterEach(() => vi.clearAllMocks());
 
 describe('ResourceCollectionOptions — VIEW toggle', () => {
-  it('renders Verse selected and Chapter disabled with a "coming soon" hint by default', () => {
+  it('renders Verse selected and Chapter disabled with a "not yet available" hint by default', () => {
     renderComponent({ viewMode: 'verse', isChapterEnabled: false });
     const verse = screen.getByRole('radio', { name: 'Verse' });
     const chapter = screen.getByRole('radio', { name: /Chapter/ });
@@ -95,13 +96,13 @@ describe('ResourceCollectionOptions — VIEW toggle', () => {
     expect(chapter).toBeDisabled();
     // The hint renders after the whole toggle group rather than beside the item it describes, so
     // it has to name the mode itself — Grid sits between it and the disabled Chapter item.
-    expect(screen.getByText('Chapter view coming soon')).toBeInTheDocument();
+    expect(screen.getByText('Chapter view is not yet available.')).toBeInTheDocument();
   });
 
-  it('enables Chapter and hides the "coming soon" hint when isChapterEnabled is true', () => {
+  it('enables Chapter and hides the "not yet available" hint when isChapterEnabled is true', () => {
     renderComponent({ isChapterEnabled: true });
     expect(screen.getByRole('radio', { name: /Chapter/ })).toBeEnabled();
-    expect(screen.queryByText('Chapter view coming soon')).not.toBeInTheDocument();
+    expect(screen.queryByText('Chapter view is not yet available.')).not.toBeInTheDocument();
   });
 
   it('fires onViewModeChange when a different mode is picked', () => {

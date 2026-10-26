@@ -52,7 +52,7 @@ const mockLocalizedStrings: LanguageStrings = {
   '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%': '',
   '%paratextRegistration_description_internetUse_option_ProxyOnly%': 'Proxy sentinel',
   '%paratextRegistration_description_internetUse_option_ProxyOnly_details%': '',
-  '%paratextRegistration_internetUse_comingSoon%': 'Coming soon',
+  '%paratextRegistration_internetUse_notYetAvailable%': 'Not yet available',
   '%paratextRegistration_developer_section_label%': 'Developer only',
   '%paratextRegistration_label_serverType_option_Production_2%': 'Production server',
   '%paratextRegistration_label_serverType_option_QualityAssurance_2%': 'Quality assurance server',
@@ -82,6 +82,14 @@ function renderForm(overrides: Partial<InternetSettingsFormProps> = {}) {
 }
 
 describe('InternetSettingsForm', () => {
+  // The form imports `platform-bible-react/experimental`, which that package's exports map resolves
+  // to its committed `dist` build, so this also fails when that build is out of date with the
+  // source.
+  test('marks each option that cannot be chosen yet as not yet available', () => {
+    renderForm();
+    expect(screen.getAllByText('Not yet available')).toHaveLength(3);
+  });
+
   test('Reset and Save buttons are disabled when savedInternetSettings is undefined', () => {
     renderForm({ savedInternetSettings: undefined });
     expect(screen.getByRole('button', { name: 'Discard changes sentinel' })).toBeDisabled();

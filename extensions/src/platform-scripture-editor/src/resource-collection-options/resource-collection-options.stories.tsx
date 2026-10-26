@@ -18,7 +18,7 @@ import type {
  *
  * **Try it**: toggle the checkboxes, hover a user row to reveal the remove (✕) button, hover an
  * admin-shared (top-section) row to reveal its "shared by administrator" lock, and click Get
- * Resources. Chapter is disabled with a "coming soon" hint until its renderer ships.
+ * Resources. Chapter is disabled with a "not yet available" hint until its renderer ships.
  */
 const meta: Meta<typeof ResourceCollectionOptions> = {
   title: 'Bundled Extensions/platform-scripture-editor/ResourceCollectionOptions',
