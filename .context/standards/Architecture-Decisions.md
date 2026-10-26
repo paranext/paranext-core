@@ -4879,9 +4879,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Consequences:** A few items are declared twice (once per mode), so a command change must touch
   both copies; `menu-data.service-host.scripture-editor-menu.test.ts` pins both modes by command id
   and order, and checks that a command served in both modes carries the same label in each, so a
-  missed, reordered or relabelled copy fails there. Simple's Tools order is pinned to the
-  third-column tab order (`shipped-simple-layout-order.test.ts`), so adding a third-column tab (e.g.
-  Dictionary) fails that test until a Tools item exists. Hiding a Power-only item without re-adding
+  missed, reordered or relabelled copy fails there. Every third-column tab must have a Simple Tools
+  item (`shipped-simple-layout-order.test.ts`; the menu's own order is the design's, not the
+  column's), so adding a third-column tab fails that test until a Tools item exists. Hiding a
+  Power-only item without re-adding
   it to a Simple column removes its only entry point: Simple now has no menu route at all to the
   four Inventories, Markers Checklist, or Open Checks. That follows the v0 Simple design, which has
   no quality tools in the Project menu; UX has not yet confirmed it. Auto-show footnote pane
