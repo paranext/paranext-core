@@ -4602,7 +4602,13 @@ export declare function measureBox(target: Range | Element): DOMRect | undefined
  * @experimental This export is unstable and may change shape or disappear without notice
  */
 export declare function leftEdgeRect(rect: DOMRect): DOMRect;
-/** The four tab-icon variants, as static asset URLs (e.g. `papi-extension://` URLs). */
+/**
+ * The four tab-icon variants, as static asset URLs (e.g. `papi-extension://` URLs).
+ *
+ * @deprecated Point `iconUrl` at one single-colour icon and set `isIconMonochrome: true` on the web
+ *   view definition instead. The platform then draws the icon in the tab's text colour, so it
+ *   follows the theme and selection state, including on tabs that have never been opened.
+ */
 export type TabIconUrls = {
 	/** Dark theme (any selection). */
 	dark: string;
@@ -4625,6 +4631,10 @@ export type TabIconUrls = {
  * `dock-layout-wrapper.simple-mode.scss`'s "SIMPLE-MODE TAB SELECTION LOOK" region), so a selected
  * tab needs the same contrast as an unselected one — a mid-slate fallback is used when the selected
  * state is unknown (`undefined`).
+ *
+ * @deprecated Point `iconUrl` at one single-colour icon and set `isIconMonochrome: true` on the web
+ *   view definition instead. The platform then draws the icon in the tab's text colour, so it
+ *   follows the theme and selection state, including on tabs that have never been opened.
  */
 export declare function pickTabIconUrl(isDarkTheme: boolean, isTabSelected: boolean | undefined, urls: TabIconUrls): string;
 /**
@@ -4645,6 +4655,9 @@ export declare function pickTabIconUrl(isDarkTheme: boolean, isTabSelected: bool
  * Callers own the theme subscription themselves (e.g. `papi.themes.subscribeCurrentTheme`) and pass
  * the resulting `isDarkTheme` in — this hook has no PAPI dependency.
  *
+ * @deprecated Point `iconUrl` at one single-colour icon and set `isIconMonochrome: true` on the web
+ *   view definition instead. The platform then draws the icon in the tab's text colour, so it
+ *   follows the theme and selection state, including on tabs that have never been opened.
  * @param isDarkTheme Whether the current theme is dark.
  * @param tabIconUrls The four icon variant URLs for this tab.
  * @returns The icon URL to pass to `updateWebViewDefinition({ iconUrl })`.

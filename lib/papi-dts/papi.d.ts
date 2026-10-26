@@ -4809,8 +4809,8 @@ declare module 'shared/models/docking-framework.model' {
      */
     tabIconUrl?: string;
     /**
-     * Whether the image at {@link TabInfo.tabIconUrl} is a single-colour shape that should be drawn
-     * in the tab's current text colour. Ignored when there is no `tabIconUrl`.
+     * Whether the image at {@link TabInfo.tabIconUrl} is a single-colour shape that should be drawn in
+     * the tab's current text colour. Ignored when there is no `tabIconUrl`.
      */
     isTabIconMonochrome?: boolean;
     /**
