@@ -337,7 +337,7 @@ describe("The scripture editor's Project menu, per mode", () => {
   test.each([
     ['power', 'platform.openProjectSettingsForWebView', 'Project settings'],
     ['power', 'platformScriptureEditor.toggleFootnotes', 'Show footnotes'],
-    ['power', 'platformScriptureEditor.insertEndnoteAtSelection', 'Insert end note'],
+    ['power', 'platformScriptureEditor.insertEndnoteAtSelection', 'Insert endnote'],
     ['power', 'legacyCommentManager.openCommentList', 'Comments'],
     ['power', 'platformScripture.openManageBooks', 'Manage books'],
     ['power', 'platformScriptureEditor.setViewStandard', 'Standard view'],
@@ -346,7 +346,7 @@ describe("The scripture editor's Project menu, per mode", () => {
     ['power', 'platform.webViewContentZoomReset', 'Zoom 100%'],
     ['simple', 'platform.webViewContentZoomReset', 'Zoom 100%'],
     ['simple', 'legacyCommentManager.showCommentListPanel', 'Comments'],
-    ['simple', 'platformScriptureEditor.insertEndnoteAtSelection', 'Insert end note'],
+    ['simple', 'platformScriptureEditor.insertEndnoteAtSelection', 'Insert endnote'],
   ] as const)('%s labels %s "%s"', async (mode, command, expected) => {
     const menu = await getEditorTopMenuInMode(mode);
     const item = menu.items.find(

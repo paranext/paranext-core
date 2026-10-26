@@ -238,7 +238,6 @@
       "%webView_platformScriptureEditor_insertCommentAtSelection%": "Insert comment",
       "%webView_platformScriptureEditor_insertCrossReferenceAtSelection%": "Insert cross-reference",
       "%webView_platformScriptureEditor_insertEndnoteAtSelection%": "Insert endnote",
-      "%webView_platformScriptureEditor_insertEndnoteAtSelection_2%": "Insert end note",
       "%webView_platformScriptureEditor_insertFootnoteAtSelection%": "Insert footnote",
       "%webView_platformScriptureEditor_markersInventory%": "Inventory: Markers...",
       "%webView_platformScriptureEditor_openChecks%": "Open Checks...",
@@ -603,7 +602,6 @@
       "%webView_platformScriptureEditor_insertCommentAtSelection%": "Insertar comentario",
       "%webView_platformScriptureEditor_insertCrossReferenceAtSelection%": "Insertar referencia cruzada",
       "%webView_platformScriptureEditor_insertEndnoteAtSelection%": "Insertar nota al final",
-      "%webView_platformScriptureEditor_insertEndnoteAtSelection_2%": "Insertar nota final",
       "%webView_platformScriptureEditor_insertFootnoteAtSelection%": "Insertar nota al pie",
       "%webView_platformScriptureEditor_markersInventory%": "Inventario: Marcadores...",
       "%webView_platformScriptureEditor_openChecks%": "Abrir verificaciones...",
@@ -1284,12 +1282,6 @@
       "fallbackKey": "%Paratext.EditMenu.ListForm.insertToolStripMenuItem.Text%"
     },
     "%webView_platformScriptureEditor_insertEndnoteAtSelection%": {
-      "deprecationInfo": {
-        "date": "2026-10-20",
-        "message": "Relabeled to \"Insert end note\". The new key is %webView_platformScriptureEditor_insertEndnoteAtSelection_2%."
-      }
-    },
-    "%webView_platformScriptureEditor_insertEndnoteAtSelection_2%": {
       "fallbackKey": "%ScriptureEditorControl_21%"
     },
     "%webView_platformScriptureEditor_openChecks%": {
