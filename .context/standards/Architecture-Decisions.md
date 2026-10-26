@@ -9356,6 +9356,46 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4275 epic (multi-window architecture plan §6, theme half; §9.2 for the staleness it
   closes).
 
+## adr-theme-tinted-tab-icons: A single-colour tab icon opts in and the platform draws it in the tab's text colour
+
+- **Date:** 2026-10-26
+- **Status:** Accepted
+- **Context:** `PlatformTabTitle` paints a tab icon as a static CSS `background-image`, so an SVG
+  can't follow the theme through `currentColor`. To work around that, each Simple-mode Column 3
+  tab shipped four SVG variants and its web view subscribed to the theme and swapped `iconUrl`
+  (`useTabIconSelection` / `pickTabIconUrl` in `platform-bible-react`). A web view's code only runs
+  once its tab has been activated, so never-opened tabs showed the provider's static mid-slate
+  default, which read as blue in dark mode, and Find and Checking Assistant, which had one
+  `currentColor` SVG, rendered black on dark. Which tabs looked wrong depended on what the user had
+  opened that session.
+- **Decision:** A web view definition can set `isIconMonochrome: true` beside its `iconUrl`. It
+  reaches `TabInfo.isTabIconMonochrome`, and `PlatformTabTitle` then draws the icon as a CSS mask
+  (`.tab-menu-icon-monochrome`) filled with `currentColor`: the icon is always its own tab's text
+  colour, with no icon-specific colour anywhere. That makes icons correct before a tab is opened and
+  through theme switches, with no per-tab code. Providers set the opt-in, so it is present from the
+  first render. Opt-in rules: the mask applies only when both `iconUrl` and the flag are set (no
+  icon still means the default logo, unmasked), and an `updateWebViewDefinition` that sets `iconUrl`
+  without restating the flag clears it (`mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent`),
+  so a later full-colour icon is never drawn as a silhouette. Under forced colours the mask is
+  filled with `CanvasText`, since forced colours would otherwise repaint it invisible.
+- **Alternatives:**
+  - Per-tab fix: keep the variant swapping and have each provider also pick the right variant at
+    `getWebView` time from the current theme. Rejected: it fixes startup but not a mid-session theme
+    switch on never-opened tabs, since no supported API lets an extension update another tab's icon
+    and `papi.webViews.reloadWebView` would also reload opened tabs and lose their state. It also
+    keeps every tab shipping four icon files and its own theme subscription.
+  - A dedicated icon colour matching the old dark variant (`#cbd5e1`). Rejected: no theme variable
+    has that value, and the rest of the app (component library tabs, buttons, menus) lets icons
+    inherit text colour. Dark-mode icons are therefore the near-white `--foreground`, slightly
+    brighter than the old variant.
+  - Opt-in-free recolouring of every tab icon. Rejected: it would turn full-colour and raster icons
+    (the app logo, third-party extension PNGs) into silhouettes.
+- **Consequences:** A single-colour tab icon needs one file and one flag. The variant helpers are
+  deprecated, not deleted, because extensions in other repos may use them. A mask whose URL fails to
+  load paints nothing, rather than falling back to the logo. Possible follow-up: dim unselected tab
+  text and icons the way the component library's tabs do.
+- **Source:** PT-4864.
+
 ## adr-toolbar-shrink-measurement: Responsive toolbars measure their own width in JS, not with CSS container queries
 
 - **Date:** 2026-08-19

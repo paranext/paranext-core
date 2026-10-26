@@ -401,6 +401,17 @@ view, so it refuses to guess instead: an open that would create fails, while a p
 - Use semantic color variables (e.g., `tw:bg-card`) instead of hardcoded colors
 - Support RTL/LTR layouts using logical properties (`start`/`end` instead of `left`/`right`)
 
+### Tab Icons
+
+A tab icon is painted as a static image, so an SVG's `currentColor` can't follow the theme. For a
+single-colour icon, set `isIconMonochrome: true` beside `iconUrl` in the provider's `getWebView`:
+the platform then draws the icon's shape in the tab's text colour, so it follows the theme and the
+selection state, including on tabs that have never been opened. Don't ship light/dark variants or
+swap `iconUrl` from the web view (`useTabIconSelection` and `pickTabIconUrl` are deprecated). Leave
+the flag unset for a full-colour icon. Updating `iconUrl` through `updateWebViewDefinition` without
+restating the flag clears it. See `adr-theme-tinted-tab-icons` in
+[Architecture-Decisions.md](Architecture-Decisions.md).
+
 ### Content Zoom (experimental)
 
 A WebView opts into per-pane **content zoom** by marking the elements that render **project text** — scripture, note bodies, result snippets, resource text in its own font — and not the region around them. Buttons, inputs, filters, headers, badges and card frames stay outside every marked element, so they keep interface scale while the text grows:
@@ -610,3 +621,4 @@ For details, see [Merging Template Changes wiki](https://github.com/paranext/par
 | 1.1.6   | 2026-09-24 | "Content Zoom": the area `label` and the zoom scope attribute (both experimental), pointing to Component-Builder-Patterns; the Text Collection grid is the reference, with one `resource-<id>` area per resource. |
 | 1.1.7   | 2026-10-02 | Add "Saving on Teardown" under WebViews: flush in a `pagehide` listener and in the unmount cleanup; a reload unmounts the root on `unload`, after the web view's own `pagehide` listeners; a panel close or tab move runs `pagehide` too, but the root can unmount after the iframe is gone, so `pagehide` is the flush point. |
 | 1.1.8   | 2026-10-16 | "Elevated privileges": the privilege table and the `requestRegistryTokens` privilege for Paratext Registry access tokens. |
+| 1.1.9   | 2026-10-26 | Add "Tab Icons" under WebViews: single-colour tab icons set `isIconMonochrome` instead of shipping theme variants. |
