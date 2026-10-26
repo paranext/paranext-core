@@ -8489,6 +8489,45 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   cannot express it.
 - **Source:** PT-4646.
 
+## adr-settings-locks-from-computed-project-settings: The Settings tab locks a project's settings from computed, hidden project settings
+
+- **Date:** 2026-10-26
+- **Status:** Accepted
+- **Context:** Some project settings may be changed only in some projects or by some users: none of
+  a published project's, not a registered project's short or full name (Paratext changes those only
+  through the registry), and not the primary language unless the user administers the project. The
+  Settings tab lives in core and reaches a project only through `platform.base`, whose only
+  project-specific reads are settings, so it could not tell whether a project was registered or
+  whether the user administered it. The static `isReadOnly` flag
+  (`adr-settings-contribution-read-only-flag`) cannot express a lock that depends on the project or
+  the user.
+- **Decision:** The Paratext project data provider computes two hidden, read-only project settings,
+  `platform.isRegistered` and `platform.isCurrentUserAdministrator` (`Permissions.AmAdministrator`),
+  alongside the existing computed `platform.isPublished`. "Registered" uses ParatextData's own test,
+  the one behind `ProjectWrapper.IsRegistered`: the project's license is Normal or Publishable.
+  `ScrText.IsProjectShared` is not used, because a project can have a permissions file without
+  being registered. `SetProjectSetting` rejects the writes those facts lock, so no caller can bypass
+  the tab. The Settings tab reads the three once per project (`useProjectSettingLocks`), and a pure
+  function (`getSettingLock`) decides from them, plus `isReadOnly`, whether each setting is locked
+  and what to say. A published project gets one notice above all its settings; a registered
+  project's names and a non-administrator's language get a visible line under the control, which
+  is also its `aria-describedby`. While the facts load, every project setting is read-only; an
+  unreadable fact locks the names or the language, but not the whole project.
+- **Alternatives:** A new `platform.base` method listing the settings the user may not change was
+  more general, but would widen an interface every project data provider shares. A
+  `canUser*()` method like `canUserEditScripture` would have to live on a Paratext-specific
+  interface the core Settings tab does not use. Rejecting the writes in C# alone was smallest, but
+  left editable fields that fail only after the user types. Explaining a lock in a tooltip over the
+  control was dropped: a disabled control cannot be hovered or focused, so keyboard and touch users
+  never saw why.
+- **Consequences:** A per-user fact is now exposed as a project setting, so
+  `platform.isCurrentUserAdministrator` answers differently for different users of one project.
+  Project data providers that implement neither setting get the declared defaults (not registered,
+  administered by the current user), which leaves their settings unlocked as before. A new
+  conditional lock adds a case to `getSettingLock` and, if it needs a fact the tab cannot read yet,
+  another computed setting.
+- **Source:** PT-4646.
+
 ## adr-shard-discovery-by-type: Service routers discover shards by network-object type, not by rebuilding the scoped name
 
 - **Date:** 2026-08-06

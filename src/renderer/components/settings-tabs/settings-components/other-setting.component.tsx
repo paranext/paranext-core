@@ -11,6 +11,7 @@ export function OtherSetting({
   defaultSetting,
   className,
   readOnly,
+  lockReason,
 }: OtherSettingProps) {
   const [setting, setSetting, , isLoading] = useSetting<keyof SettingTypes>(
     settingKey,
@@ -36,6 +37,7 @@ export function OtherSetting({
       description={description}
       className={className}
       readOnly={readOnly}
+      lockReason={lockReason}
     />
   );
 }
