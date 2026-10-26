@@ -150,7 +150,7 @@ export function InternetAccessOptionList({
   // at all — which selects nothing and would otherwise leave nothing on screen explaining why — is
   // announced too. Such a value can only be named by its raw form.
   const selectedRow = OPTION_ROWS.find((row) => row.value === value);
-  const isUnsupported = value !== undefined && !selectedRow?.isEnabled;
+  const isUnsupported = value !== undefined && !isSupportedInternetUse(value);
   const unsupportedOptionName = selectedRow
     ? (localizedStrings[selectedRow.labelKey] ?? selectedRow.value)
     : value;

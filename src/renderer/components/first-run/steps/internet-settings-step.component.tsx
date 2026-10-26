@@ -205,6 +205,9 @@ function InternetSettingsLoaded({ provider, localizedStrings, onNext, onRetry }:
       await setData(next);
       noteInternetSettingsSaved(next);
       markInternetUseChoiceSaved();
+      // The shell's Back stays available during the save. If the user left, this `onNext` would
+      // move the wizard on from a step they are no longer on.
+      if (!isMounted.current) return;
       onNext();
     } catch (err: unknown) {
       if (!isMounted.current) return;
