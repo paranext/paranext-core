@@ -4156,6 +4156,78 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   (`2026-09-02-pt-4286-mode-switch-spec.md`); amends nothing in
   `adr-primary-window-owns-app-lifetime`, which it depends on for the primary role.
 
+## adr-interface-scaling-is-per-window-zoom: Interface scaling is set by each window's page once the window has painted or is shown, on Chromium's temporary zoom, not per-host zoom
+
+- **Date:** 2026-09-25
+- **Status:** Accepted
+- **Context:** `platform.zoomFactor` used to be applied with `webContents.setZoomFactor`, which
+  Chromium stores per host. A page with no host, like the packaged app's `file://` page, is stored
+  under its full URL, query included. Since `adr-scroll-group-hosted-in-main` and
+  `adr-theme-hosted-in-main` the renderer rewrites that query whenever its scroll group or theme
+  changes, so the stored zoom stops matching the page. The next time the browser re-sends the page's
+  display settings — a resize (maximize, restore, a drag), docking DevTools, a display or DPI
+  change — the window repaints at 100 % while the setting still says otherwise. Dev mode loads
+  from `http://localhost:1212`, whose host never changes, so it never shows the problem. Electron
+  also persists per-host zoom in the profile's `Preferences` file.
+- **Decision:** Main sends the setting to each window's page over `INTERFACE_SCALING_CHANNEL`
+  (`src/shared/data/interface-scaling.model.ts`), and the preload sets it with
+  `webFrame.setZoomFactor`. A zoom set from the page is Chromium's temporary zoom: keyed by the
+  page's frame host rather than its URL, and never persisted. A plain reload keeps the frame host
+  and its zoom; a crash reload replaces it. Nothing sets any zoom on a hidden window before it has
+  painted: its first document gets the setting at `ready-to-show`. A shown window does not wait
+  for that: it takes the setting at every `did-finish-load`, and so does a hidden one once it has
+  painted or been shown. A change reaches the windows that have painted or are shown
+  (`createInterfaceScaling` in `src/main/interface-scaling.util.ts`). One subscription to the
+  setting, taken again whenever the settings provider is announced, feeds every window. It does not
+  deliver the current value first, since each window reads the setting when a document loads.
+  - **Why a shown window does not wait:** `ready-to-show` is the page's first visually non-empty
+    layout (`OnFirstNonEmptyLayout` in Electron's `electron_api_web_contents.cc`), and a window
+    covered by other windows is occluded, so its page is hidden and does not lay out. Every window
+    someone asks for is created shown (`planWindowActivation`), and one that opens behind another
+    app's window has no `ready-to-show` until it is uncovered. Measured on Electron 39.8.8 on
+    Windows: a covered shown window had none for as long as it stayed covered, and with occlusion
+    tracking off it had one every time. Waiting for it showed the first frame at 100 % at the moment
+    the window was uncovered, while a shown window that took the setting at load while still covered
+    showed the setting once uncovered, in bare Electron (under CPU load too) and the packaged app.
+- **Alternatives:** (a) Reapply the zoom on every main-frame `did-navigate-in-page`: rejected,
+  because it was measured to persist one `Preferences` entry per distinct URL, and each URL carries
+  serialized scroll-group and theme state, so a zoomed user would grow the profile with every verse
+  move. (b) Move the reload seed from the URL to `sessionStorage`: rejected as a second seed source,
+  which `adr-theme-hosted-in-main` and `Paranext-Core-Patterns.md` rule out, and zoom would stay
+  URL-keyed. (c) Serve the packaged renderer from a custom protocol with a host: rejected, because
+  the CSP, asset-path and web-view origin changes are far out of proportion. (d)
+  `webPreferences.zoomFactor`: measured not to survive the rewrite. (e) Set any zoom on a hidden
+  window before its first frame: rejected, because every variant measured can stop that frame, so
+  `ready-to-show` never fires and main never reveals a window nobody asked for. The page setting its
+  zoom while the preload runs did so in every bare-Electron run. The page setting it at
+  `DOMContentLoaded` did so in the smoke suite with another app window open, and together with a
+  main-side apply at `dom-ready` it did so in the real app (isolated
+  `web-view-move-between-windows.spec.ts` failed every run). Main's own `setZoomFactor` at
+  `did-finish-load`, which the app long used, did so intermittently under load. (f) Seed the zoom
+  on the window's URL, like the theme and scroll group, so the first frame is at the setting:
+  deferred as the bigger change, and it would still have to wait for the first frame.
+- **Consequences:** Zoom no longer depends on the URL, so the URL-seed design stays free to rewrite
+  the query, and main writes no per-URL zoom to the profile. Electron's own docs describe zoom as
+  same-origin and suggest distinct URLs for per-window zoom, which is exactly what breaks here; the
+  temporary-zoom behavior was measured on Electron 39.8.8 and is not documented.
+  `e2e-tests/tests/smoke/interface-scaling.spec.ts` reproduces the failure with a control window, for
+  windows both shown and hidden at creation, and requires `ready-to-show` of the hidden ones.
+  - **First frame:** a window's first document renders at its starting zoom until it takes the
+    setting: a hidden window's at `ready-to-show`, a shown window's at `did-finish-load`, which can
+    come after its first frames, and a crash-reloaded one's at `did-finish-load`. The starting zoom
+    is 100 % in the packaged app; in dev mode it is the zoom Chromium stored for `localhost`, which
+    main no longer updates. For a hidden window this is a change: main reveals it at its own
+    `ready-to-show`, before the setting reaches the page, so its first visible frame is at the
+    starting zoom, where it used to take the setting at `did-finish-load`, before being shown.
+    Follow-up: PT-4889, which weighs (f) against showing the window only after it takes the zoom.
+  - **Stale entries:** existing profiles keep whatever per-URL entries they had, and nothing
+    overwrites them any more. A packaged window whose launch URL happens to match one starts at that
+    zoom until it takes the setting.
+  - **Known gap:** main's settings service keeps its first provider, so after an extension-host
+    restart the re-taken subscription fails and zoom changes stop reaching open windows until the
+    app restarts. That predates this decision and belongs to the settings service (PT-4807).
+- **Source:** PT-4798.
+
 ## adr-internet-services-gate: Platform.Bible gates Send/Receive and DBL access on the saved internet setting
 
 - **Date:** 2026-09-24
@@ -8312,6 +8384,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   back on the reference it opened on — which for a restored Scripture editor is the extra chapter
   load the seed exists to avoid. The theme service is hosted the same way in `adr-theme-hosted-in-main`.
 - **Source:** PT-4275 epic (multi-window architecture plan §6).
+- **Amended 2026-09-25 (`adr-interface-scaling-is-per-window-zoom`):** because this rewrites the
+  window's URL for as long as it is open, nothing may be keyed by that URL. Chromium keys a
+  `file://` page's zoom by it, so interface scaling uses a zoom that is not keyed by URL.
 
 ## adr-shard-discovery-by-type: Service routers discover shards by network-object type, not by rebuilding the scoped name
 
@@ -9636,6 +9711,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   awaited — awaiting it put ten seconds in front of both process spawns.
 - **Source:** PT-4275 epic (multi-window architecture plan §6, theme half; §9.2 for the staleness it
   closes).
+- **Amended 2026-09-25 (`adr-interface-scaling-is-per-window-zoom`):** the same constraint as in
+  `adr-scroll-group-hosted-in-main`: the rewritten URL may not be a key, which is why interface
+  scaling uses a zoom that is not keyed by URL.
 
 ## adr-toolbar-shrink-measurement: Responsive toolbars measure their own width in JS, not with CSS container queries
 

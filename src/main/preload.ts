@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webFrame } from 'electron';
 import {
   PAPI_PORT_CHANNEL,
   PAPI_PORT_ERROR_CHANNEL,
@@ -6,6 +6,7 @@ import {
   PapiPortMainWorldMessage,
 } from '@shared/data/papi-port.model';
 import type { PapiPortBridge } from '@shared/data/papi-port.model';
+import { INTERFACE_SCALING_CHANNEL } from '@shared/data/interface-scaling.model';
 
 const electronAPIHandler = {
   env: {
@@ -34,6 +35,15 @@ ipcRenderer.on(PAPI_PORT_CHANNEL, (event, grant: { windowId: string }) => {
 ipcRenderer.on(PAPI_PORT_ERROR_CHANNEL, (_event, error: { reason: string }) => {
   const message: PapiPortMainWorldMessage = { type: PAPI_PORT_ERROR_CHANNEL, reason: error.reason };
   window.postMessage(message, '*');
+});
+
+// Interface scaling, set from the page so this document is on Chromium's temporary zoom, keyed by
+// frame rather than by the URL the renderer keeps rewriting; otherwise the packaged `file://` window
+// drops to 100 % on its next resize. Main sends it to a hidden window only once it has painted: set
+// earlier, it can stop the window from ever showing. See `adr-interface-scaling-is-per-window-zoom`.
+ipcRenderer.on(INTERFACE_SCALING_CHANNEL, (_event, zoomFactor: unknown) => {
+  if (typeof zoomFactor === 'number' && Number.isFinite(zoomFactor) && zoomFactor > 0)
+    webFrame.setZoomFactor(zoomFactor);
 });
 
 export type ElectronAPIHandler = typeof electronAPIHandler;

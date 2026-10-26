@@ -34,6 +34,7 @@ import { registerExtensionHostStoppedStateCommand } from '@main/extension-host-s
 import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util';
 import { getVerseNavigationCommand } from '@main/verse-navigation-shortcuts.util';
 import { getPhysicalHistoryNavigationDirection } from '@main/reference-history-keyboard.util';
+import { createInterfaceScaling } from '@main/interface-scaling.util';
 import { openTermsOfServiceWindow } from '@main/terms-of-service-window';
 import chroma from 'chroma-js';
 import {
@@ -222,7 +223,6 @@ import {
 } from '@node/utils/command-line.util';
 import { resolveHtmlPath } from '@node/utils/util';
 import {
-  DEFAULT_ZOOM_FACTOR,
   DEV_MODE_QUERY_PARAMETER,
   IS_MAIN_WINDOW_QUERY_PARAMETER,
   LOG_LEVEL_QUERY_PARAMETER,
@@ -241,10 +241,14 @@ import * as commandService from '@shared/services/command.service';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
 import { readFile } from 'fs/promises';
-import { networkObjectService } from '@shared/services/network-object.service';
+import {
+  networkObjectService,
+  onDidCreateNetworkObject,
+} from '@shared/services/network-object.service';
 import * as networkService from '@shared/services/network.service';
 import { get } from '@shared/services/project-data-provider.service';
 import { settingsService } from '@shared/services/settings.service';
+import { settingsServiceDataProviderName } from '@shared/services/settings.service-model';
 import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
 import { markStartup, markStartupOnce } from '@shared/utils/startup-timing.util';
 import { SerializedRequestType } from '@shared/utils/util';
@@ -264,19 +268,14 @@ import {
 
 // #region Helper functions
 
-/**
- * Get the zoom factor from settings or return the default value
- *
- * @returns The stored zoom factor or the default value
- */
-const getZoomFactor = async (): Promise<number> => {
-  try {
-    return await settingsService.get('platform.zoomFactor');
-  } catch (e) {
-    logger.warn(`Failed to get zoom factor from settings: ${getErrorMessage(e)}`);
-    return DEFAULT_ZOOM_FACTOR;
-  }
-};
+/** Keeps every window at the zoom factor setting (interface scaling) */
+const interfaceScaling = createInterfaceScaling({
+  get: () => settingsService.get('platform.zoomFactor'),
+  subscribe: (callback) =>
+    settingsService.subscribe('platform.zoomFactor', callback, { retrieveDataImmediately: false }),
+  onDidCreateNetworkObject,
+  settingsProviderName: settingsServiceDataProviderName,
+});
 
 /**
  * Save the zoom factor to settings
@@ -293,14 +292,14 @@ const setZoomFactor = async (factor: number): Promise<void> => {
 
 /** Increase the zoom factor of all application windows by one step (0.1), up to 3.0 */
 const zoomIn = async () => {
-  const currentZoom = await getZoomFactor();
+  const currentZoom = await interfaceScaling.read();
   const newZoom = adjustZoomFactor(currentZoom, 1);
   if (newZoom !== currentZoom) await setZoomFactor(newZoom);
 };
 
 /** Decrease the zoom factor of all application windows by one step (0.1), down to 0.5 */
 const zoomOut = async () => {
-  const currentZoom = await getZoomFactor();
+  const currentZoom = await interfaceScaling.read();
   const newZoom = adjustZoomFactor(currentZoom, -1);
   if (newZoom !== currentZoom) await setZoomFactor(newZoom);
 };
@@ -504,6 +503,13 @@ async function main() {
     throw new Error(
       `Could not start the app-global services in main: ${failedGlobalServiceNames.join(', ')}. Each failure is logged above.`,
     );
+
+  // Follow the zoom factor setting. Not awaited, as in the theme service host: resolving a provider
+  // that is not registered yet spends the whole RPC retry budget, and the extension host that
+  // registers this one is only spawned below.
+  // TODO(PT-4807): after an extension-host restart the settings service still holds the old
+  // provider, so re-subscribing fails and zoom changes stop until the app restarts.
+  interfaceScaling.startFollowingSetting();
 
   // Window layout persistence must register its request handlers before any window exists so a
   // renderer's layout load can never race the registration
@@ -910,6 +916,8 @@ async function main() {
     // against the renderer's own naming. Until the renderer's first title arrives, Electron answers
     // `getTitle()` with its own default, which is why `summarizeWindows` reads a window's readiness
     // rather than trusting its title.
+    // interface-scaling.spec.ts's `appWindowOptions` mirrors `show`, the title bar options and
+    // `webPreferences` here, so keep the two in step
     const newWindow = new BrowserWindow({
       show: activation.showOnCreate,
       ...(boundsState?.bounds ? { x: boundsState.bounds.x, y: boundsState.bounds.y } : {}),
@@ -962,6 +970,10 @@ async function main() {
     // clears it, because the old page's port has closed.
     registerWindowWithPapiPortBroker(newWindow.webContents, windowId, {
       onPortClosed: () => markWindowNotReady(windowId),
+    });
+    // A preload error otherwise shows only in that window's DevTools console
+    newWindow.webContents.on('preload-error', (_event, preloadPath, error) => {
+      logger.error(`Window ${windowId} preload ${preloadPath} failed: ${getErrorMessage(error)}`);
     });
 
     // Tie the window to its persisted identity so layout persistence can serve and save it. If the
@@ -1947,36 +1959,12 @@ async function main() {
       }
     });
 
-    // Set initial zoom factor from settings
-    newWindow.webContents.on('did-finish-load', async () => {
-      try {
-        const zoom = await getZoomFactor();
-        newWindow.webContents.setZoomFactor(zoom);
-      } catch (e) {
-        logger.error(`Failed to set initial zoom factor: ${getErrorMessage(e)}`);
-      }
+    // Keep this window at the zoom factor setting through every document it loads and every change
+    const stopInterfaceScaling = interfaceScaling.addWindow(newWindow);
+    windowCloseUnsubscribers.add(async () => {
+      stopInterfaceScaling();
+      return true;
     });
-
-    // Update zoom factor when the setting changes (per-window subscription with cleanup)
-    try {
-      windowCloseUnsubscribers.add(
-        await settingsService.subscribe('platform.zoomFactor', async (newZoomFactor) => {
-          const zoomFactor = isPlatformError(newZoomFactor)
-            ? (() => {
-                logger.error(`Error getting new zoom factor: ${getErrorMessage(newZoomFactor)}`);
-                return DEFAULT_ZOOM_FACTOR;
-              })()
-            : newZoomFactor;
-          try {
-            newWindow.webContents.setZoomFactor(zoomFactor);
-          } catch (e) {
-            logger.error(`Failed to update zoom factor: ${getErrorMessage(e)}`);
-          }
-        }),
-      );
-    } catch (e) {
-      logger.warn(`Failed to subscribe to zoom factor changes: ${getErrorMessage(e)}`);
-    }
 
     // Remove this if your app does not use auto updates
     // eslint-disable-next-line
