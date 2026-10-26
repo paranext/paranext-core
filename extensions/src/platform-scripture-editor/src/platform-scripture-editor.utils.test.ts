@@ -33,6 +33,8 @@ import {
   openDefaultActiveProjectIfApplicable,
   resolveOpenEditorDispatch,
   resolveViewTypeForInterfaceMode,
+  getDisplayedViewType,
+  VIEW_TYPE_UNSET,
   VIEW_TYPE_FOR_SET_VIEW_COMMAND,
   syncOnProjectSwitch,
   syncOnSwitchToPower,
@@ -5186,6 +5188,78 @@ describe('getSimpleModeRootClassNames', () => {
         isDurablyReadOnly: false,
       }),
     ).toEqual([]);
+  });
+});
+
+describe('getDisplayedViewType', () => {
+  it('shows formatted while the mode loads and nothing is saved', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: VIEW_TYPE_UNSET,
+        isPowerMode: false,
+        isInterfaceModeLoading: true,
+      }),
+    ).toBe('formatted');
+  });
+
+  it('shows the persisted value as is while the mode loads', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: 'standard',
+        isPowerMode: false,
+        isInterfaceModeLoading: true,
+      }),
+    ).toBe('standard');
+  });
+
+  it('shows Standard view for a never-saved Power tab', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: VIEW_TYPE_UNSET,
+        isPowerMode: true,
+        isInterfaceModeLoading: false,
+      }),
+    ).toBe('standard');
+  });
+
+  it('shows a saved markers view as Standard view in Power', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: 'markers',
+        isPowerMode: true,
+        isInterfaceModeLoading: false,
+      }),
+    ).toBe('standard');
+  });
+
+  it('keeps a saved formatted view in Power', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: 'formatted',
+        isPowerMode: true,
+        isInterfaceModeLoading: false,
+      }),
+    ).toBe('formatted');
+  });
+
+  it('shows formatted in Simple when nothing is saved', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: VIEW_TYPE_UNSET,
+        isPowerMode: false,
+        isInterfaceModeLoading: false,
+      }),
+    ).toBe('formatted');
+  });
+
+  it('shows formatted in Simple for a saved standard view', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: 'standard',
+        isPowerMode: false,
+        isInterfaceModeLoading: false,
+      }),
+    ).toBe('formatted');
   });
 });
 

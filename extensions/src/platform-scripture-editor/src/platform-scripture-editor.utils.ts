@@ -105,6 +105,48 @@ export function resolveViewTypeForInterfaceMode(
   return viewType === 'markers' ? 'standard' : viewType;
 }
 
+/**
+ * Sentinel that is never a real {@link ScriptureEditorViewType}. It is the `defaultValue` of the web
+ * view's `viewType` state, so a value equal to it means no view type has been saved for the web
+ * view. `useWebViewState` only reads its default when nothing is persisted and never writes it, so
+ * this value never reaches the store.
+ */
+export const VIEW_TYPE_UNSET = '__view_type_unset_not_a_real_view_type__' as const;
+
+/** The persisted `viewType` state: a saved view type, or {@link VIEW_TYPE_UNSET}. */
+export type PersistedViewType = ScriptureEditorViewType | typeof VIEW_TYPE_UNSET;
+
+/**
+ * Derives the view the editor shows from the persisted view type. The result is for display only
+ * and is never written back.
+ *
+ * While `platform.interfaceMode` loads, `isPowerMode` is always `false`, so coercing then would
+ * hide a Power user's saved Standard view: the persisted value is shown as is, or Preview
+ * ('formatted') when nothing is saved. Once the mode is known, a never-saved Power tab shows
+ * Standard view (the Power default) and everything else goes through
+ * {@link resolveViewTypeForInterfaceMode}.
+ *
+ * @param input.persistedViewType The persisted view type, or {@link VIEW_TYPE_UNSET}
+ * @param input.isPowerMode Whether `platform.interfaceMode` is 'power'
+ * @param input.isInterfaceModeLoading Whether `platform.interfaceMode` has not resolved yet
+ * @returns The view type that should actually be shown
+ */
+export function getDisplayedViewType({
+  persistedViewType,
+  isPowerMode,
+  isInterfaceModeLoading,
+}: {
+  persistedViewType: PersistedViewType;
+  isPowerMode: boolean;
+  isInterfaceModeLoading: boolean;
+}): ScriptureEditorViewType {
+  if (persistedViewType === VIEW_TYPE_UNSET) {
+    return isPowerMode && !isInterfaceModeLoading ? 'standard' : 'formatted';
+  }
+  if (isInterfaceModeLoading) return persistedViewType;
+  return resolveViewTypeForInterfaceMode(persistedViewType, isPowerMode);
+}
+
 /** Narrows an untyped saved value to a {@link ScriptureEditorViewType}. */
 function isScriptureEditorViewType(viewType: unknown): viewType is ScriptureEditorViewType {
   return viewType === 'formatted' || viewType === 'standard' || viewType === 'markers';

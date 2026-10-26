@@ -231,7 +231,9 @@ import {
   resolveFootnotesPaneViewOptions,
   resolveNoteEditingSurface,
   resolveNoteVerseRef,
-  resolveViewTypeForInterfaceMode,
+  getDisplayedViewType,
+  PersistedViewType,
+  VIEW_TYPE_UNSET,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   selectableParagraphMarkers,
   selectCommentThreadInPanelSafe,
@@ -440,14 +442,6 @@ const defaultProjectName = '';
  * should be set on the web view definition
  */
 const NO_UPDATE_TITLE = '__do_not_update_title_not_for_use__';
-
-/**
- * Sentinel that is never a real {@link ScriptureEditorViewType}, used as the `defaultValue` in a
- * one-off `globalThis.getWebViewState('viewType', ...)` probe (see the
- * `hadPersistedViewTypeAtMount` computation below) to detect whether `viewType` was ever explicitly
- * persisted for this web view.
- */
-const VIEW_TYPE_UNSET = '__view_type_unset_not_a_real_view_type__';
 
 const defaultTextDirection = 'ltr';
 
@@ -812,8 +806,8 @@ function PlatformScriptureEditor({
    * Whether `viewType` was already explicitly persisted for this web view when it mounted (as
    * opposed to only ever having been the `useWebViewState` default below). Computed once via a lazy
    * `useState` initializer, mirroring how `useWebViewState`'s own local state is seeded once at
-   * mount (see `use-web-view-state.hook.ts`): only an explicit `saveViewType` call persists a
-   * value, so a `false` here means this web view had no real choice saved as of mount.
+   * mount (see `use-web-view-state.hook.ts`): only an explicit `setViewType` call persists a value,
+   * so a `false` here means this web view had no real choice saved as of mount.
    *
    * We need this because `useSetting`'s `isLoading` starts `true` on every mount (see
    * `create-use-data-hook.util.ts`), so `isPowerMode` is guaranteed `false` on this component's
@@ -830,34 +824,11 @@ function PlatformScriptureEditor({
     () => globalThis.getWebViewState('viewType', VIEW_TYPE_UNSET) !== VIEW_TYPE_UNSET,
   );
 
-  const [persistedViewType, setViewType] = useWebViewState<ScriptureEditorViewType>(
+  // `useWebViewState` only reads this default when nothing is persisted and never writes it, so
+  // `VIEW_TYPE_UNSET` never reaches the store; only `setViewType` persists a value.
+  const [persistedViewType, setViewType] = useWebViewState<PersistedViewType>(
     'viewType',
-    // Saved-state views never flip -- `useWebViewState` only reads this default when nothing is
-    // persisted yet. A first-ever-open power-mode view captures 'formatted' here because
-    // `platform.interfaceMode` has not resolved yet (see evidence above); the displayed `viewType`
-    // below shows Standard view for it until the effect below saves 'standard'.
-    isPowerMode ? 'standard' : 'formatted',
-  );
-
-  /**
-   * Whether this web view has a view type saved: seeded from the mount probe above and set by
-   * `saveViewType`. Unlike `hadPersistedViewTypeAtMount` it is reactive, so the displayed
-   * `viewType` below can show Standard view on a never-saved Power tab from the frame the mode
-   * resolves, instead of showing the captured 'formatted' default until the correction effect's
-   * write lands.
-   */
-  const [isViewTypeSaved, setIsViewTypeSaved] = useState(hadPersistedViewTypeAtMount);
-
-  /**
-   * Saves the view type. Every write of the view type goes through here, so `isViewTypeSaved`
-   * holds.
-   */
-  const saveViewType = useCallback(
-    (newViewType: ScriptureEditorViewType): void => {
-      setViewType(newViewType);
-      setIsViewTypeSaved(true);
-    },
-    [setViewType],
+    VIEW_TYPE_UNSET,
   );
 
   /**
@@ -877,7 +848,7 @@ function PlatformScriptureEditor({
     if (isInterfaceModeLoading) return;
     if (!isPowerMode) return;
     // Re-probe the store fresh at fire time -- the mount snapshot above is only a fast path. The
-    // user could have persisted a genuine choice (e.g. `changeScriptureView`; `saveViewType`
+    // user could have persisted a genuine choice (e.g. `changeScriptureView`; `setViewType`
     // persists synchronously) in the window between mount and `platform.interfaceMode`
     // resolving, and that choice must win over the power-mode default.
     if (globalThis.getWebViewState('viewType', VIEW_TYPE_UNSET) !== VIEW_TYPE_UNSET) {
@@ -888,30 +859,19 @@ function PlatformScriptureEditor({
     // This write is intentionally sticky: it persists 'standard', so future reloads of this web
     // view see a persisted value and skip this whole correction dance. The displayed `viewType`
     // below already shows Standard view, so the write does not change what is on screen.
-    saveViewType('standard');
-  }, [hadPersistedViewTypeAtMount, isInterfaceModeLoading, isPowerMode, saveViewType]);
+    setViewType('standard');
+  }, [hadPersistedViewTypeAtMount, isInterfaceModeLoading, isPowerMode, setViewType]);
 
-  // The view the editor shows, derived from the saved view type (see
-  // `resolveViewTypeForInterfaceMode`). Simple mode has only the formatted view: Standard view must
-  // never be shown there, because simple mode pairs with structure protection, which intentionally
-  // blocks the paragraph-marker edits Standard view's editing affordances are built around. In
-  // Power, a saved 'markers' (a value from earlier versions) shows as Standard view, so once the
-  // interface mode is known this is never 'markers'. A never-saved Power tab shows Standard view,
-  // the Power default, ahead of the correction effect above saving it.
-  // The coercion is DERIVED for display, never written back: persisting it would destroy the
-  // user's choice permanently — flipping back to power mode could not restore it, because the
-  // one-shot power-default correction above is gated on `hadPersistedViewTypeAtMount` and its
-  // fresh re-probe would then find the persisted 'formatted'. Every consumer below reads this
-  // effective value; only an explicit user action (`saveViewType` via toggling or
-  // `setScriptureView`) or the correction effect writes the store. Waits for
+  // The view the editor shows (see `getDisplayedViewType`). It is DERIVED for display and never
+  // written back, so a saved choice that Simple mode shows differently is left alone. Every
+  // consumer below reads this effective value; only an explicit user action (`setViewType` via
+  // toggling or `setScriptureView`) or the correction effect writes the store. It waits for
   // `platform.interfaceMode` to resolve because `isPowerMode` is always `false` while the setting
-  // loads — coercing then would hide a power user's persisted Standard view on every mount's first
-  // frames. The editor is read-only while the mode loads (see `isReadOnlyEffective`).
-  const viewType = useMemo<ScriptureEditorViewType>(() => {
-    if (isInterfaceModeLoading) return persistedViewType;
-    if (isPowerMode && !isViewTypeSaved) return 'standard';
-    return resolveViewTypeForInterfaceMode(persistedViewType, isPowerMode);
-  }, [isInterfaceModeLoading, isPowerMode, isViewTypeSaved, persistedViewType]);
+  // loads. The editor is read-only while the mode loads (see `isReadOnlyEffective`).
+  const viewType = useMemo<ScriptureEditorViewType>(
+    () => getDisplayedViewType({ persistedViewType, isPowerMode, isInterfaceModeLoading }),
+    [isInterfaceModeLoading, isPowerMode, persistedViewType],
+  );
 
   const [unformattedTitle] = useWebViewState<string | undefined>(
     'unformattedTitle',
@@ -2277,7 +2237,7 @@ function PlatformScriptureEditor({
           const nextViewType = getViewTypeToSave(editorMessage, { viewType, isPowerMode });
           if (nextViewType) {
             endPaneNoteEdit();
-            saveViewType(nextViewType);
+            setViewType(nextViewType);
           }
           break;
         }
@@ -2502,7 +2462,7 @@ function PlatformScriptureEditor({
     decorations,
     setDecorations,
     setFootnotesPaneVisible,
-    saveViewType,
+    setViewType,
     viewType,
     isPowerMode,
     runEditMenuCommand,
