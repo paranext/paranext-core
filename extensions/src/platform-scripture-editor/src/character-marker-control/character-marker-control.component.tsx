@@ -277,11 +277,12 @@ export function CharacterMarkerControl({
                 dir={menuDirection}
                 // The prototype's `mt-1.5`. Placement-independent, so a constant rather than a prop.
                 sideOffset={6}
-                // The `\` menu's width, so most descriptions and the search placeholder fit. The
-                // max-w cap shrinks it to fit a narrow pane instead of running off the iframe edge.
+                // The insert-marker menu's width, so most descriptions and the search placeholder
+                // fit. The max-w cap shrinks it to fit a narrow pane instead of running off the
+                // iframe edge.
                 // The 220px list cap is the prototype's.
                 // The list cap is a descendant override on THIS popover, not a prop on MarkerMenu:
-                // MarkerMenu is shared with the `\` keydown menu and the footnote editor, both of
+                // MarkerMenu is shared with the insert-marker menu and the footnote editor, both of
                 // which render in Power mode, so it must stay untouched. `CommandList` already
                 // emits `data-slot="command-list"`, so the selector is stable.
                 className={cn(

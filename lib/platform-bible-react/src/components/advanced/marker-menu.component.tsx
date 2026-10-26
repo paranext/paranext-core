@@ -182,9 +182,9 @@ function MarkerMenuCommandItem({
         )}
       </div>
       {/* Title and detail sit side by side, detail trailing and subordinate. Both truncate rather
-          than wrap — consumers pin this popover as narrow as 200px — and the detail's much larger
-          shrink factor means it gives up its space first, so the title, which identifies the row,
-          keeps as much as it can.
+          than wrap — consumers can pin this popover narrower than its content wants — and the
+          detail's much larger shrink factor means it gives up its space first, so the title, which
+          identifies the row, keeps as much as it can.
 
           Native `title` attributes rather than the Tooltip component: a Radix tooltip inside a cmdk
           list fights the list's own hover and focus handling. */}

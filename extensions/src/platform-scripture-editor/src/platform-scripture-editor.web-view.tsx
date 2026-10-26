@@ -105,7 +105,6 @@ import {
   isPlatformError,
   LocalizeKey,
   serialize,
-  usfmMarkers,
 } from 'platform-bible-utils';
 import {
   BOOKS_PRESENT_DEFAULT,
@@ -213,7 +212,10 @@ import {
   showCommentThreadForInterfaceMode,
   UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY,
 } from './platform-scripture-editor.utils';
-import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
+import {
+  ALL_USFM_MARKER_DESCRIPTION_KEYS,
+  CHARACTER_MARKER_MENU_STRING_KEYS,
+} from './character-marker-menu.utils';
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.component';
 import { MARKER_MENU_POPOVER_WIDTH_CLASSES } from './marker-menu-popover.const';
 import {
@@ -319,9 +321,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ),
   // The footnotes pane's name on the zoom indicator.
   FOOTNOTES_ZOOM_AREA_LABEL_KEY,
-  ...Object.entries(usfmMarkers)
-    .map((item) => item[1].description)
-    .filter((item) => !!item),
+  ...ALL_USFM_MARKER_DESCRIPTION_KEYS,
   // Resolved into the marker-palette items at construction time (the close-tag badge) so palette
   // requests carry no unresolved keys — see `markerMenuItemsToResolvedPaletteItems`.
   '%markerMenu_endTag_label%',

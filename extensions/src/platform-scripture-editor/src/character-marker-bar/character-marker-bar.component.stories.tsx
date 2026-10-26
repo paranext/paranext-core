@@ -1,14 +1,16 @@
 import type { EditorRef } from '@eten-tech-foundation/platform-editor';
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { MARKER_MENU_STRING_KEYS } from 'platform-bible-react';
-import { usfmMarkers } from 'platform-bible-utils';
 import type React from 'react';
 import { useRef } from 'react';
 import { userEvent, within } from 'storybook/test';
 import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from '../character-marker-control/character-marker-control.component';
 import type { CharacterMarkerSelection } from '../character-marker-coverage.utils';
-import { CHARACTER_MARKER_MENU_STRING_KEYS } from '../character-marker-menu.utils';
+import {
+  ALL_USFM_MARKER_DESCRIPTION_KEYS,
+  CHARACTER_MARKER_MENU_STRING_KEYS,
+} from '../character-marker-menu.utils';
 import { CharacterMarkerBar } from './character-marker-bar.component';
 
 // Real `en` values, resolved from the contribution files — the control's keys, the menu's, and the
@@ -17,9 +19,7 @@ const STRINGS = getLocalizedStrings([
   ...CHARACTER_MARKER_CONTROL_STRING_KEYS,
   ...MARKER_MENU_STRING_KEYS,
   ...CHARACTER_MARKER_MENU_STRING_KEYS,
-  ...Object.values(usfmMarkers)
-    .map((marker) => marker.description)
-    .filter((description) => !!description),
+  ...ALL_USFM_MARKER_DESCRIPTION_KEYS,
 ]);
 
 // Mirrors the reserved gutter from `_simple-mode.scss` so the bar is reviewed at the width it
