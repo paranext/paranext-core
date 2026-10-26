@@ -34,7 +34,7 @@ export function shouldRoutePaletteKey(options: {
   return isEditorFocused;
 }
 
-/** The key that opens the inline marker menu in a non-Standard editor. */
+/** The key that opens marker insertion: the palette in Standard view, the inline menu elsewhere. */
 export const INLINE_MARKERS_MENU_TRIGGER = '\\';
 
 /**

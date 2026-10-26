@@ -121,10 +121,9 @@ export type PersistedViewType = ScriptureEditorViewType | typeof VIEW_TYPE_UNSET
  * and is never written back.
  *
  * While `platform.interfaceMode` loads, `isPowerMode` is always `false`, so coercing then would
- * hide a Power user's saved Standard view: the persisted value is shown as is, or Preview
- * ('formatted') when nothing is saved. Once the mode is known, a never-saved Power tab shows
- * Standard view (the Power default) and everything else goes through
- * {@link resolveViewTypeForInterfaceMode}.
+ * hide a Power user's saved Standard view: the persisted value is shown as is, or the formatted
+ * view when nothing is saved. Once the mode is known, a never-saved Power tab shows Standard view
+ * (the Power default) and everything else goes through {@link resolveViewTypeForInterfaceMode}.
  *
  * @param input.persistedViewType The persisted view type, or {@link VIEW_TYPE_UNSET}
  * @param input.isPowerMode Whether `platform.interfaceMode` is 'power'

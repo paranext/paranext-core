@@ -5202,6 +5202,16 @@ describe('getDisplayedViewType', () => {
     ).toBe('formatted');
   });
 
+  it('shows formatted while the mode loads and nothing is saved, even when Power is reported', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: VIEW_TYPE_UNSET,
+        isPowerMode: true,
+        isInterfaceModeLoading: true,
+      }),
+    ).toBe('formatted');
+  });
+
   it('shows the persisted value as is while the mode loads', () => {
     expect(
       getDisplayedViewType({
@@ -5313,6 +5323,8 @@ describe('getViewTypeToSave', () => {
   });
 
   it('saves the requested view type as is for setScriptureView', () => {
+    // `isPowerMode: false` is also what a still-loading interface mode reads as, so this row covers
+    // both Simple and the loading case.
     expect(
       getViewTypeToSave(
         { method: 'setScriptureView', viewType: 'standard' },
@@ -5325,15 +5337,6 @@ describe('getViewTypeToSave', () => {
         { viewType: 'standard', isPowerMode: true },
       ),
     ).toBe('formatted');
-  });
-
-  it('does not coerce a requested Standard view while the interface mode is still loading', () => {
-    expect(
-      getViewTypeToSave(
-        { method: 'setScriptureView', viewType: 'standard' },
-        { viewType: 'formatted', isPowerMode: false },
-      ),
-    ).toBe('standard');
   });
 });
 
