@@ -33,3 +33,36 @@ export function shouldRoutePaletteKey(options: {
   // editor instance, so the popover's `.editor-input` is never mistaken for it.
   return isEditorFocused;
 }
+
+/** The key that opens the inline marker menu in a non-Standard editor. */
+export const INLINE_MARKERS_MENU_TRIGGER = '\\';
+
+/**
+ * Decides whether a keydown should open the inline marker menu. The twin of
+ * `shouldRoutePaletteKey`: Standard view has the marker palette, every other view has this menu.
+ *
+ * The menu's items insert markers, which a read-only editor refuses, so it never opens there. It
+ * opens only for a keystroke aimed at the main editor (focused), and not again while it is already
+ * showing.
+ */
+export function shouldOpenInlineMarkersMenu(options: {
+  /** The key that was pressed. */
+  key: string;
+  /** Whether the inline marker menu is already showing. */
+  isMenuShown: boolean;
+  /** Whether the MAIN editor instance holds DOM focus. */
+  isEditorFocused: boolean;
+  /** Whether the project or view is effectively read-only. */
+  isReadOnly: boolean;
+  /** The editor's current view; Standard view uses the palette instead of this menu. */
+  viewType: string;
+}): boolean {
+  const { key, isMenuShown, isEditorFocused, isReadOnly, viewType } = options;
+  return (
+    !isMenuShown &&
+    isEditorFocused &&
+    !isReadOnly &&
+    viewType !== 'standard' &&
+    key === INLINE_MARKERS_MENU_TRIGGER
+  );
+}

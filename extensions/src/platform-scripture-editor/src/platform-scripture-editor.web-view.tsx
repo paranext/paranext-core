@@ -280,7 +280,11 @@ import { TwoStepDeleteTooltipOverlay } from './two-step-delete-tooltip/two-step-
 import { CharacterMarkerBarOverlay } from './character-marker-bar/character-marker-bar-overlay.component';
 import { CharacterMarkerBar } from './character-marker-bar/character-marker-bar.component';
 import { REMOVE_CHARACTER_MARKER_STRING_KEYS } from './character-marker-bar/use-remove-character-marker.hook';
-import { shouldRoutePaletteKey } from './palette-key-routing.util';
+import {
+  INLINE_MARKERS_MENU_TRIGGER,
+  shouldOpenInlineMarkersMenu,
+  shouldRoutePaletteKey,
+} from './palette-key-routing.util';
 import {
   commitVersionHistorySnapshot,
   EDIT_ACTION_BLOCKED_KEY,
@@ -444,8 +448,6 @@ const defaultProjectName = '';
 const NO_UPDATE_TITLE = '__do_not_update_title_not_for_use__';
 
 const defaultTextDirection = 'ltr';
-
-const defaultMarkersMenuTrigger = '\\';
 
 /**
  * Logs a marker-palette open failure, EXCEPT the routine one: a newer palette request replacing an
@@ -2899,7 +2901,7 @@ function PlatformScriptureEditor({
         }
 
         // Everything below runs only with no open session — the `if (session)` above returns.
-        if (event.key === defaultMarkersMenuTrigger) {
+        if (event.key === INLINE_MARKERS_MENU_TRIGGER) {
           // The editor's own right-click menu is up: CLAIMED, not merely declined. See
           // `isEditorContextMenuOpen` for why, and why Enter below stands down the other way.
           if (isEditorContextMenuOpen(editorContainerRef.current)) {
@@ -2947,11 +2949,13 @@ function PlatformScriptureEditor({
       // and editable: its items insert markers, which a read-only editor refuses
       if (currentSelectionRef.current) {
         if (
-          !showMarkersMenu &&
-          editorRef.current?.isFocused() &&
-          !isReadOnlyEffective &&
-          viewType !== 'standard' &&
-          event.key === defaultMarkersMenuTrigger
+          shouldOpenInlineMarkersMenu({
+            key: event.key,
+            isMenuShown: showMarkersMenu,
+            isEditorFocused: !!editorRef.current?.isFocused(),
+            isReadOnly: isReadOnlyEffective,
+            viewType,
+          })
         ) {
           event.preventDefault();
           // Swallowed while the editor's right-click menu is up rather than opening a second popup
@@ -4416,7 +4420,7 @@ function PlatformScriptureEditor({
         onNoteEdit={onFootnoteEditorNoteEdit}
         scrRef={scrRef}
         editorOptions={paneFootnoteEditorOptions}
-        defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}
+        defaultMarkerMenuTrigger={INLINE_MARKERS_MENU_TRIGGER}
         localizedStrings={localizedStrings}
         parentEditorRef={editorRef}
         markerPalette={footnoteMarkerPalette}
@@ -5692,7 +5696,7 @@ function PlatformScriptureEditor({
             onNoteEdit={onFootnoteEditorNoteEdit}
             scrRef={scrRef}
             editorOptions={editorOptionsWithCopyLimit}
-            defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}
+            defaultMarkerMenuTrigger={INLINE_MARKERS_MENU_TRIGGER}
             localizedStrings={localizedStrings}
             parentEditorRef={editorRef}
             markerPalette={footnoteMarkerPalette}
