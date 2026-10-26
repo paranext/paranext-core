@@ -560,7 +560,7 @@ const INSERT_FOOTNOTE_TITLE_KEY: LocalizeKey =
 const INSERT_CROSS_REFERENCE_TITLE_KEY: LocalizeKey =
   '%webView_platformScriptureEditor_insertCrossReferenceAtSelection%';
 const INSERT_ENDNOTE_TITLE_KEY: LocalizeKey =
-  '%webView_platformScriptureEditor_insertEndnoteAtSelection_2%';
+  '%webView_platformScriptureEditor_insertEndnoteAtSelection%';
 const INSERT_COMMENT_TITLE_KEY: LocalizeKey =
   '%webView_platformScriptureEditor_insertCommentAtSelection%';
 

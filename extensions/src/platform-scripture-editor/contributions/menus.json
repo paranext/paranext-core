@@ -255,8 +255,8 @@
             "command": "platformScriptureEditor.insertCrossReferenceAtSelection"
           },
           {
-            "label": "%webView_platformScriptureEditor_insertEndnoteAtSelection_2%",
-            "localizeNotes": "Scripture editor top menu > Insert > Insert end note",
+            "label": "%webView_platformScriptureEditor_insertEndnoteAtSelection%",
+            "localizeNotes": "Scripture editor top menu > Insert > Insert endnote",
             "iconNameBefore": "square-sigma",
             "group": "platformScriptureEditor.insertTextualNotes",
             "order": 4,
