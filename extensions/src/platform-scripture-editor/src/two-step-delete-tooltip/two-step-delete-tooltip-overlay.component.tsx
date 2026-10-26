@@ -6,14 +6,12 @@ import { findScrollContainer } from '../editor-dom.util';
 import {
   AnchorRect,
   ArmedHint,
-  computeAnchorRect,
-  computeCaretAnchorRect,
   CONFIRMING_KEY_LOCALIZED_STRING_KEYS,
   confirmingKey,
   getConfirmingKeyDisplayLabel,
   hintMessageKey,
-  narrowToArmedMarkerText,
   readArmedHint,
+  resolveArmedAnchorRect,
   TWO_STEP_DELETE_MESSAGE_STRING_KEYS,
 } from './two-step-delete-tooltip.utils';
 
@@ -35,11 +33,19 @@ type Props = { children: React.ReactNode };
  * `platform-bible-react`'s `DestructiveKeyConfirmation`; this component owns only detecting the
  * armed state and where to anchor it.
  *
- * The editor (shared-react's StructureKeyboardPlugin) publishes the armed state to its root as
- * `data-verse-delete-intent`/`data-verse-delete-kind` and marks the armed verse marker with
- * `verse-selected`, or the armed paragraph with `para-merge-armed`; this overlay observes those DOM
- * signals and anchors the hint to the marked element — or, for a paragraph that shows no marker, to
- * the caret. Mirrors
+ * The DOM contract with the editor (shared-react's StructureKeyboardPlugin), which this overlay
+ * observes:
+ *
+ * - The editor root carries `data-verse-delete-intent` and `data-verse-delete-kind` while a delete is
+ *   armed.
+ * - An armed verse marker carries `verse-selected`.
+ * - An armed paragraph's gutter marker carries `para-merge-armed` — or, when the paragraph shows no
+ *   marker, the paragraph itself does. The gutter marker is told apart by its
+ *   `data-text-type="marker"` attribute, and carries `--para-merge-armed-text-left` and
+ *   `--para-merge-armed-text-width`: where its text sits within its box.
+ *
+ * The hint anchors to the marked element, narrowed to a gutter marker's text, or, for a paragraph
+ * that shows no marker, to the caret (see `resolveArmedAnchorRect`). Mirrors
  * {@link ../paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component}.
  */
 export function TwoStepDeleteTooltipOverlay({ children }: Props) {
@@ -78,28 +84,11 @@ export function TwoStepDeleteTooltipOverlay({ children }: Props) {
     scrollContainerRef.current = scrollContainer;
 
     const sync = () => {
-      const root = positionAnchor.querySelector('[data-verse-delete-kind]');
-      const hint = readArmedHint(root);
-      const marker = positionAnchor.querySelector<HTMLElement>(
-        '.verse-selected, .para-merge-armed',
-      );
-      if (!hint || !marker) {
-        setArmed(undefined);
-        return;
-      }
-      // An armed paragraph that shows no marker carries the class itself; the hint goes at the
-      // caret, which the editor left where it was.
-      const isArmedParagraph =
-        marker.classList.contains('para-merge-armed') &&
-        marker.getAttribute('data-text-type') !== 'marker';
-      const caretRect = isArmedParagraph
-        ? computeCaretAnchorRect(window.getSelection(), positionAnchor)
+      const hint = readArmedHint(positionAnchor.querySelector('[data-verse-delete-kind]'));
+      const anchorRect = hint
+        ? resolveArmedAnchorRect(hint, positionAnchor, window.getSelection())
         : undefined;
-      setArmed({
-        ...hint,
-        ...(caretRect ??
-          narrowToArmedMarkerText(computeAnchorRect(marker, positionAnchor), marker)),
-      });
+      setArmed(hint && anchorRect ? { ...hint, ...anchorRect } : undefined);
     };
 
     // The editor toggles the root's data-verse-delete-* attributes, and verse-selected on an armed

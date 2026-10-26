@@ -20,7 +20,8 @@ const ARMED_HINT_KINDS = [
   'removeEmptyPara',
 ] as const;
 
-type ArmedHintKind = (typeof ARMED_HINT_KINDS)[number];
+/** What an armed two-step delete removes, as the editor names it in `data-verse-delete-kind`. */
+export type ArmedHintKind = (typeof ARMED_HINT_KINDS)[number];
 
 function isArmedHintKind(kind: string | null | undefined): kind is ArmedHintKind {
   return ARMED_HINT_KINDS.some((armedHintKind) => armedHintKind === kind);
@@ -69,22 +70,44 @@ export function readArmedHint(root: Element | null | undefined): ArmedHint | und
 export type AnchorRect = { top: number; left: number; width: number; height: number };
 
 /**
- * Computes the armed marker's rect in `positionAnchor` content coordinates, used to place the
- * invisible tooltip trigger over the marker so Radix anchors the tooltip to it.
+ * Class the editor puts on an armed paragraph's gutter marker, or on the paragraph when it shows
+ * none.
+ */
+const PARA_MERGE_ARMED_CLASS = 'para-merge-armed';
+
+/** Class of the element the editor marks for each armed kind; the hint anchors to that element. */
+const ARMED_ELEMENT_CLASSES: Record<ArmedHintKind, string> = {
+  verse: 'verse-selected',
+  selection: 'verse-selected',
+  joinPreviousPara: PARA_MERGE_ARMED_CLASS,
+  joinNextPara: PARA_MERGE_ARMED_CLASS,
+  removeEmptyPara: PARA_MERGE_ARMED_CLASS,
+};
+
+/**
+ * Converts `clientRect`, in viewport coordinates, to `positionAnchor` content coordinates.
  *
  * `positionAnchor` is the position:relative wrapper; the editor's scroll container is an ancestor
- * of it, so `marker` and `positionAnchor` move together as the user scrolls and the viewport-space
- * delta already gives the correct content-relative position (no scrollTop addition needed).
+ * of it, so whatever `clientRect` measures and `positionAnchor` move together as the user scrolls,
+ * and the viewport-space delta already gives the correct content-relative position (no scrollTop
+ * addition needed).
+ */
+function toAnchorRect(clientRect: DOMRect, positionAnchor: HTMLElement): AnchorRect {
+  const anchorRect = positionAnchor.getBoundingClientRect();
+  return {
+    top: clientRect.top - anchorRect.top,
+    left: clientRect.left - anchorRect.left,
+    width: clientRect.width,
+    height: clientRect.height,
+  };
+}
+
+/**
+ * Computes the armed marker's rect in `positionAnchor` content coordinates, used to place the
+ * invisible tooltip trigger over the marker so Radix anchors the tooltip to it.
  */
 export function computeAnchorRect(marker: HTMLElement, positionAnchor: HTMLElement): AnchorRect {
-  const anchorRect = positionAnchor.getBoundingClientRect();
-  const markerRect = marker.getBoundingClientRect();
-  return {
-    top: markerRect.top - anchorRect.top,
-    left: markerRect.left - anchorRect.left,
-    width: markerRect.width,
-    height: markerRect.height,
-  };
+  return toAnchorRect(marker.getBoundingClientRect(), positionAnchor);
 }
 
 /**
@@ -103,13 +126,7 @@ export function computeCaretAnchorRect(
   if (!positionAnchor.contains(range.startContainer)) return undefined;
   const caretRect = range.getBoundingClientRect();
   if (caretRect.width === 0 && caretRect.height === 0) return undefined;
-  const anchorRect = positionAnchor.getBoundingClientRect();
-  return {
-    top: caretRect.top - anchorRect.top,
-    left: caretRect.left - anchorRect.left,
-    width: caretRect.width,
-    height: caretRect.height,
-  };
+  return toAnchorRect(caretRect, positionAnchor);
 }
 
 /**
@@ -124,6 +141,31 @@ export function narrowToArmedMarkerText(rect: AnchorRect, marker: HTMLElement): 
   const textWidth = parseFloat(marker.style.getPropertyValue('--para-merge-armed-text-width'));
   if (Number.isNaN(textLeft) || Number.isNaN(textWidth)) return rect;
   return { ...rect, left: rect.left + textLeft, width: textWidth };
+}
+
+/**
+ * Where the hint for `hint` goes, in `positionAnchor` content coordinates, or undefined when the
+ * editor has marked no element for it:
+ *
+ * - A verse or selection arm: the armed verse marker.
+ * - A paragraph arm on a gutter marker (the armed element is the marker glyph, which the editor tags
+ *   `data-text-type="marker"`): the marker's text, see {@link narrowToArmedMarkerText}.
+ * - A paragraph arm with no marker shown (the armed element is the paragraph): the caret, which the
+ *   editor leaves where it was, else the paragraph's box.
+ */
+export function resolveArmedAnchorRect(
+  hint: ArmedHint,
+  positionAnchor: HTMLElement,
+  selection: Selection | null | undefined,
+): AnchorRect | undefined {
+  const armedClass = ARMED_ELEMENT_CLASSES[hint.kind];
+  const armedElement = positionAnchor.querySelector<HTMLElement>(`.${armedClass}`);
+  if (!armedElement) return undefined;
+  const elementRect = computeAnchorRect(armedElement, positionAnchor);
+  if (armedClass !== PARA_MERGE_ARMED_CLASS) return elementRect;
+  if (armedElement.getAttribute('data-text-type') === 'marker')
+    return narrowToArmedMarkerText(elementRect, armedElement);
+  return computeCaretAnchorRect(selection, positionAnchor) ?? elementRect;
 }
 
 /**

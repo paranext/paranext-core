@@ -2,7 +2,7 @@ import React, { useRef } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { Button } from 'platform-bible-react';
 import { TwoStepDeleteTooltipOverlay } from './two-step-delete-tooltip-overlay.component';
-import { ArmedHint } from './two-step-delete-tooltip.utils';
+import { ArmedHintKind } from './two-step-delete-tooltip.utils';
 
 /**
  * Renders the destructive "press again to delete" hint while a verse marker, a selection containing
@@ -94,7 +94,7 @@ function TwoStepDeleteDemo() {
     if (selectionRef.current) selectionRef.current.style.backgroundColor = 'transparent';
   };
 
-  const arm = (intent: 'deleteBackward' | 'deleteForward', kind: ArmedHint['kind']) => {
+  const arm = (intent: 'deleteBackward' | 'deleteForward', kind: ArmedHintKind) => {
     disarm();
     rootRef.current?.setAttribute('data-verse-delete-intent', intent);
     rootRef.current?.setAttribute('data-verse-delete-kind', kind);
@@ -164,7 +164,7 @@ function TwoStepDeleteDemo() {
               : thou anointest my head with oil; my cup runneth over.
             </p>
             <p style={PARA_STYLE}>
-              <span ref={paraMarkerRef} style={MARKER_STYLE}>
+              <span ref={paraMarkerRef} style={MARKER_STYLE} data-text-type="marker">
                 \p
               </span>
               <span style={MARKER_STYLE}>6</span>
