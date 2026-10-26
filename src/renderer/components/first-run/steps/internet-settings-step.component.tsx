@@ -102,6 +102,21 @@ export function InternetSettingsStep(props: FirstRunStepProps) {
 
   const showConnectingMessage = useDelayedFlag(provider === undefined);
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
+  const [paratext9Lookup, setParatext9Lookup] = useState<Paratext9Lookup>();
+
+  // Started here rather than in the loaded subcomponent, so it overlaps the wait for the provider
+  // and Retry's remount does not repeat it.
+  useEffect(() => {
+    let isCurrent = true;
+    (async () => {
+      // Never rejects: a failed lookup resolves `undefined`.
+      const internetUse = await lookUpParatext9InternetUse();
+      if (isCurrent) setParatext9Lookup({ internetUse });
+    })();
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
 
   // Before the first paint, so the shell's Next never flashes.
   useLayoutEffect(() => {
@@ -138,6 +153,7 @@ export function InternetSettingsStep(props: FirstRunStepProps) {
           key={retryCount}
           provider={provider}
           localizedStrings={localizedStrings}
+          paratext9Lookup={paratext9Lookup}
           onNext={onNext}
           onRetry={() => setRetryCount((c) => c + 1)}
         />
@@ -146,21 +162,31 @@ export function InternetSettingsStep(props: FirstRunStepProps) {
   );
 }
 
+/** What the Paratext 9 lookup found: `internetUse` is `undefined` when it found no setting. */
+type Paratext9Lookup = { internetUse: InternetUse | undefined };
+
 type LoadedProps = {
   provider: IInternetSettingsDataProvider;
   localizedStrings: LanguageStrings;
+  /** `undefined` until the Paratext 9 lookup settles. */
+  paratext9Lookup: Paratext9Lookup | undefined;
   onNext: FirstRunStepProps['onNext'];
   onRetry: () => void;
 };
 
 /** Rendered only once the provider is available. */
-function InternetSettingsLoaded({ provider, localizedStrings, onNext, onRetry }: LoadedProps) {
+function InternetSettingsLoaded({
+  provider,
+  localizedStrings,
+  paratext9Lookup,
+  onNext,
+  onRetry,
+}: LoadedProps) {
   const [value, setData, isLoading] = useData(provider).InternetSettings(
     undefined,
     DEFAULT_INTERNET_SETTINGS,
   );
-  const [hasLookedUpParatext9, setHasLookedUpParatext9] = useState(false);
-  const [paratext9InternetUse, setParatext9InternetUse] = useState<InternetUse | undefined>();
+  const hasLookedUpParatext9 = paratext9Lookup !== undefined;
   const [actionError, setActionError] = useState('');
   const [isBusy, setIsBusy] = useState(false);
   const isMounted = useRef(false);
@@ -172,20 +198,6 @@ function InternetSettingsLoaded({ provider, localizedStrings, onNext, onRetry }:
     isMounted.current = true;
     return () => {
       isMounted.current = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let isCurrent = true;
-    (async () => {
-      // Never rejects: a failed lookup resolves `undefined`.
-      const internetUse = await lookUpParatext9InternetUse();
-      if (!isCurrent) return;
-      setParatext9InternetUse(internetUse);
-      setHasLookedUpParatext9(true);
-    })();
-    return () => {
-      isCurrent = false;
     };
   }, []);
 
@@ -258,6 +270,7 @@ function InternetSettingsLoaded({ provider, localizedStrings, onNext, onRetry }:
     );
   }
 
+  const paratext9InternetUse = paratext9Lookup?.internetUse;
   const unsupportedParatext9SettingKey =
     paratext9InternetUse && UNSUPPORTED_PARATEXT9_SETTING_KEYS[paratext9InternetUse];
 
