@@ -548,7 +548,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   },
   {
     id: 'scripture-toggle-view',
-    purpose: 'Switch between Standard view and Preview (Power mode). Does nothing in Simple mode',
+    purpose:
+      'Switch between Standard view and Preview (Power mode). Does nothing in Simple mode or while a comment draft is open',
     category: 'View',
     context: 'Scripture editor web view',
     // Control on every platform, like ⌃F and ⌃T. No `command`: the Switch scripture view items

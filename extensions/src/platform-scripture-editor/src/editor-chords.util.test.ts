@@ -112,7 +112,12 @@ describe('matchEditorChord', () => {
 });
 
 describe('shouldRunEditorChord', () => {
-  const live = { isReadOnly: false, isEditorFocused: true, isPowerMode: true };
+  const live = {
+    isReadOnly: false,
+    isEditorFocused: true,
+    isPowerMode: true,
+    isCommentEditorOpen: false,
+  };
 
   it.each(['insertFootnote', 'insertCrossReference'] as const)(
     '%s runs in an editable, focused editor in any view',
@@ -142,6 +147,7 @@ describe('shouldRunEditorChord', () => {
         isReadOnly: true,
         isEditorFocused: false,
         isPowerMode: false,
+        isCommentEditorOpen: false,
       }),
     ).toBe(true);
   });
@@ -176,13 +182,56 @@ describe('Ctrl+E (toggleView)', () => {
     [true, false].forEach((isReadOnly) =>
       [true, false].forEach((isEditorFocused) => {
         expect(
-          shouldRunEditorChord('toggleView', { isReadOnly, isEditorFocused, isPowerMode: true }),
+          shouldRunEditorChord('toggleView', {
+            isReadOnly,
+            isEditorFocused,
+            isPowerMode: true,
+            isCommentEditorOpen: false,
+          }),
         ).toBe(true);
         expect(
-          shouldRunEditorChord('toggleView', { isReadOnly, isEditorFocused, isPowerMode: false }),
+          shouldRunEditorChord('toggleView', {
+            isReadOnly,
+            isEditorFocused,
+            isPowerMode: false,
+            isCommentEditorOpen: false,
+          }),
         ).toBe(false);
       }),
     );
+  });
+
+  it('does not run while a comment draft is open, even with the main text focused', () => {
+    expect(
+      shouldRunEditorChord('toggleView', {
+        isReadOnly: false,
+        isEditorFocused: true,
+        isPowerMode: true,
+        isCommentEditorOpen: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('runs again once the comment draft is closed', () => {
+    expect(
+      shouldRunEditorChord('toggleView', {
+        isReadOnly: false,
+        isEditorFocused: false,
+        isPowerMode: true,
+        isCommentEditorOpen: false,
+      }),
+    ).toBe(true);
+  });
+
+  it('leaves the insert chords and F7 unaffected by an open comment draft', () => {
+    const ctx = {
+      isReadOnly: false,
+      isEditorFocused: true,
+      isPowerMode: true,
+      isCommentEditorOpen: true,
+    };
+    expect(shouldRunEditorChord('showFootnotes', ctx)).toBe(true);
+    expect(shouldRunEditorChord('insertFootnote', ctx)).toBe(true);
   });
 
   it('sends the view toggle for this editor', () => {
@@ -257,12 +306,23 @@ describe('runEditorChord', () => {
 /** The web view's keydown path: match, guard, swallow, run. Returns whether the key is swallowed. */
 function pressKey(
   event: ChordEvent,
-  state: { isReadOnly: boolean; isPowerMode: boolean; isEditorFocused?: boolean },
+  state: {
+    isReadOnly: boolean;
+    isPowerMode: boolean;
+    isEditorFocused?: boolean;
+    isCommentEditorOpen?: boolean;
+  },
   effects: EditorChordEffects,
 ): { preventedDefault: boolean } {
   const match = matchEditorChord(event);
   if (!match) return { preventedDefault: false };
-  if (!shouldRunEditorChord(match.chord, { isEditorFocused: true, ...state })) {
+  if (
+    !shouldRunEditorChord(match.chord, {
+      isEditorFocused: true,
+      isCommentEditorOpen: false,
+      ...state,
+    })
+  ) {
     return { preventedDefault: false };
   }
   if (!match.isRepeat) runEditorChord(match.chord, effects);

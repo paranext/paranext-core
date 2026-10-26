@@ -170,6 +170,11 @@ test.describe('Power-mode Standard view and Preview', () => {
       // The comment editor takes focus shortly after it opens, and only its focused text box
       // closes it on Escape.
       await expect(commentEditor.locator('[contenteditable="true"]')).toBeFocused();
+      // Ctrl+E is ignored while a draft is open: the view stays Preview and the draft stays up.
+      await mainPage.keyboard.press('Control+e');
+      await mainPage.waitForTimeout(2_000);
+      await expectPreview();
+      await expect(commentEditor).toBeVisible();
       await mainPage.keyboard.press('Escape');
       await expect(commentEditor).toBeHidden();
     });

@@ -3063,6 +3063,8 @@ function PlatformScriptureEditor({
             // FootnoteEditor/CommentEditor popovers (which have their own `.editor-input`) have focus
             isEditorFocused: !!editorRef.current?.isFocused(),
             isPowerMode,
+            // Open, not focused: the popover stays open when focus returns to the text
+            isCommentEditorOpen: showCommentEditor,
           })
         )
           return;
@@ -3113,6 +3115,7 @@ function PlatformScriptureEditor({
     isMac,
     isReadOnlyEffective,
     isPowerMode,
+    showCommentEditor,
     webViewId,
     viewType,
     styleInfo,

@@ -68,6 +68,8 @@ export type EditorChordContext = {
   isEditorFocused: boolean;
   /** Whether the interface is in Power mode */
   isPowerMode: boolean;
+  /** Whether a comment draft popover is open, focused or not */
+  isCommentEditorOpen: boolean;
 };
 
 /**
@@ -83,11 +85,12 @@ const IS_BASIC_CHECKS_SHOWN: boolean = false;
  * keystroke in a read-only text or in the footnote or comment editor does nothing. Basic checks
  * runs only in Power, and only if its menu item exists (that is, while {@link IS_BASIC_CHECKS_SHOWN}
  * is true). Showing footnotes works in every state. Toggling the view runs only in Power, where the
- * view menu item exists.
+ * view menu item exists, and waits while a comment draft is open, since the switch reloads the
+ * document under the draft.
  */
 export function shouldRunEditorChord(
   chord: EditorChord,
-  { isReadOnly, isEditorFocused, isPowerMode }: EditorChordContext,
+  { isReadOnly, isEditorFocused, isPowerMode, isCommentEditorOpen }: EditorChordContext,
 ): boolean {
   switch (chord) {
     case 'showFootnotes':
@@ -95,7 +98,7 @@ export function shouldRunEditorChord(
     case 'basicChecks':
       return IS_BASIC_CHECKS_SHOWN && isPowerMode;
     case 'toggleView':
-      return isPowerMode;
+      return isPowerMode && !isCommentEditorOpen;
     case 'insertFootnote':
     case 'insertCrossReference':
       return !isReadOnly && isEditorFocused;
