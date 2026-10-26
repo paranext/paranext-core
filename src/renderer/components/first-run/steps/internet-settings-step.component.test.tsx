@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
 import { useDataProvider, useData } from '@renderer/hooks/papi-hooks';
@@ -196,6 +196,14 @@ describe('InternetSettingsStep', () => {
 
     expect(screen.getByTestId('spinner')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Use Product sentinel with internet' })).toBeNull();
+  });
+
+  // So the provider wait and the Paratext 9 lookup overlap instead of adding up.
+  it('starts looking up the Paratext 9 setting before the provider is available', () => {
+    configureHooks({ provider: undefined });
+    renderStep();
+
+    expect(sendCommand).toHaveBeenCalledWith('paratextRegistration.getParatext9InternetUse');
   });
 
   // So the Paratext 9 line does not pop in after the user has started reading.
@@ -426,16 +434,43 @@ describe('InternetSettingsStep', () => {
     expect(screen.queryByRole('button', { name: 'Use Product sentinel with internet' })).toBeNull();
   });
 
+  // The mocked `useData` answers every render with whatever was configured last, so the step must
+  // have stopped re-rendering before the mock is reconfigured. Otherwise the Paratext 9 lookup
+  // settling re-renders it into the loaded state, the Retry button is gone before the click lands,
+  // and nothing is retried.
+  const clickRetryOnceSettled = async () => {
+    await act(async () => {});
+    configureHooks({ value: MOCK_SETTINGS, isLoading: false });
+    await userEvent.click(screen.getByRole('button', { name: /retry/i }));
+  };
+
   it('recovers when Retry remounts the subscription and the read then succeeds', async () => {
     configureHooks({ value: newPlatformError('boom'), isLoading: false });
     renderStep();
 
-    // Reconfigure the mock BEFORE clicking Retry so the remounted subcomponent picks up
-    // MOCK_SETTINGS on its first render.
-    configureHooks({ value: MOCK_SETTINGS, isLoading: false });
-    await userEvent.click(screen.getByRole('button', { name: /retry/i }));
+    await clickRetryOnceSettled();
 
     expect(await continueWithInternetButton()).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('does not look up the Paratext 9 setting again on Retry', async () => {
+    configureCommands('ProxyOnly');
+    configureHooks({ value: newPlatformError('boom'), isLoading: false });
+    renderStep();
+
+    await clickRetryOnceSettled();
+
+    expect(await continueWithInternetButton()).toBeInTheDocument();
+    expect(
+      screen.getByText('Paratext 9 has Proxy sentinel, which is unsupported by Product sentinel'),
+    ).toBeInTheDocument();
+    expect(
+      vi
+        .mocked(sendCommand)
+        .mock.calls.filter(
+          ([command]) => command === 'paratextRegistration.getParatext9InternetUse',
+        ),
+    ).toHaveLength(1);
   });
 });
