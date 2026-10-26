@@ -88,6 +88,45 @@ export function computeAnchorRect(marker: HTMLElement, positionAnchor: HTMLEleme
 }
 
 /**
+ * The caret's rect in `positionAnchor` content coordinates, for an armed paragraph that shows no
+ * marker: the editor leaves the caret where it was, so the hint sits there rather than at an edge
+ * of a paragraph that may be many lines tall. Undefined when `selection` is not a caret inside
+ * `positionAnchor`, or the browser gives the caret no box (as at an empty element), so the caller
+ * can fall back to the paragraph's own rect.
+ */
+export function computeCaretAnchorRect(
+  selection: Selection | null | undefined,
+  positionAnchor: HTMLElement,
+): AnchorRect | undefined {
+  if (!selection || selection.rangeCount === 0 || !selection.isCollapsed) return undefined;
+  const range = selection.getRangeAt(0);
+  if (!positionAnchor.contains(range.startContainer)) return undefined;
+  const caretRect = range.getBoundingClientRect();
+  if (caretRect.width === 0 && caretRect.height === 0) return undefined;
+  const anchorRect = positionAnchor.getBoundingClientRect();
+  return {
+    top: caretRect.top - anchorRect.top,
+    left: caretRect.left - anchorRect.left,
+    width: caretRect.width,
+    height: caretRect.height,
+  };
+}
+
+/**
+ * Narrows `rect`, the armed gutter marker's box, to the marker's text, so the hint points at the
+ * tinted glyph rather than the middle of the box. The editor publishes where the text sits within
+ * the box as `--para-merge-armed-text-left` and `--para-merge-armed-text-width` on the marker (the
+ * paragraph's first-line indent carries the text outside the box); without them, `rect` is returned
+ * unchanged.
+ */
+export function narrowToArmedMarkerText(rect: AnchorRect, marker: HTMLElement): AnchorRect {
+  const textLeft = parseFloat(marker.style.getPropertyValue('--para-merge-armed-text-left'));
+  const textWidth = parseFloat(marker.style.getPropertyValue('--para-merge-armed-text-width'));
+  if (Number.isNaN(textLeft) || Number.isNaN(textWidth)) return rect;
+  return { ...rect, left: rect.left + textLeft, width: textWidth };
+}
+
+/**
  * Localization key naming the physical key whose second press confirms the delete, for the given
  * arming intent. Returns a `LocalizeKey` (rather than the literal `'Backspace'`/`'Delete'`) so
  * callers can look up the localized key name via `useLocalizedStrings`.

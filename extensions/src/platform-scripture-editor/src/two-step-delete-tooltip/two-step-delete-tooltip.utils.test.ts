@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   computeAnchorRect,
+  computeCaretAnchorRect,
   confirmingKey,
   getConfirmingKeyDisplayLabel,
   hintMessageKey,
+  narrowToArmedMarkerText,
   readArmedHint,
 } from './two-step-delete-tooltip.utils';
 
@@ -150,5 +152,92 @@ describe('computeAnchorRect', () => {
       width: 18,
       height: 20,
     });
+  });
+});
+
+describe('narrowToArmedMarkerText', () => {
+  const rect = { top: 100, left: 40, width: 48, height: 20 };
+  // Mock element: only `style.getPropertyValue` is read.
+  /* eslint-disable no-type-assertion/no-type-assertion */
+  const makeStyledEl = (properties: Record<string, string>) =>
+    ({
+      style: { getPropertyValue: (name: string) => properties[name] ?? '' },
+    }) as unknown as HTMLElement;
+  /* eslint-enable no-type-assertion/no-type-assertion */
+
+  it('narrows the rect to the published text bounds', () => {
+    const marker = makeStyledEl({
+      '--para-merge-armed-text-left': '30px',
+      '--para-merge-armed-text-width': '14.5px',
+    });
+    expect(narrowToArmedMarkerText(rect, marker)).toEqual({
+      top: 100,
+      left: 70,
+      width: 14.5,
+      height: 20,
+    });
+  });
+
+  it('keeps the rect when no text bounds are published', () => {
+    expect(narrowToArmedMarkerText(rect, makeStyledEl({}))).toEqual(rect);
+  });
+});
+
+describe('computeCaretAnchorRect', () => {
+  const caretNode = {};
+  const anchor = {
+    ...makeRectEl({ top: -200, left: 50, width: 800, height: 600 }),
+    contains: (node: unknown) => node === caretNode,
+  };
+  // Mock selection: only the members the util reads.
+  /* eslint-disable no-type-assertion/no-type-assertion */
+  const makeSelection = (
+    caret: { top: number; left: number; width: number; height: number },
+    { isCollapsed = true, startContainer = caretNode } = {},
+  ) =>
+    ({
+      rangeCount: 1,
+      isCollapsed,
+      getRangeAt: () => ({
+        startContainer,
+        getBoundingClientRect: () => makeRectEl(caret).getBoundingClientRect(),
+      }),
+    }) as unknown as Selection;
+  const positionAnchor = anchor as unknown as HTMLElement;
+  /* eslint-enable no-type-assertion/no-type-assertion */
+
+  it('returns the caret rect relative to the position anchor', () => {
+    const selection = makeSelection({ top: -100, left: 90, width: 1, height: 18 });
+    expect(computeCaretAnchorRect(selection, positionAnchor)).toEqual({
+      top: 100,
+      left: 40,
+      width: 1,
+      height: 18,
+    });
+  });
+
+  it('returns undefined without a selection', () => {
+    expect(computeCaretAnchorRect(undefined, positionAnchor)).toBeUndefined();
+  });
+
+  it('returns undefined for a range that is not collapsed', () => {
+    const selection = makeSelection(
+      { top: 0, left: 0, width: 40, height: 18 },
+      { isCollapsed: false },
+    );
+    expect(computeCaretAnchorRect(selection, positionAnchor)).toBeUndefined();
+  });
+
+  it('returns undefined for a caret outside the position anchor', () => {
+    const selection = makeSelection(
+      { top: 0, left: 0, width: 1, height: 18 },
+      { startContainer: {} },
+    );
+    expect(computeCaretAnchorRect(selection, positionAnchor)).toBeUndefined();
+  });
+
+  it('returns undefined when the browser gives the caret no box', () => {
+    const selection = makeSelection({ top: 0, left: 0, width: 0, height: 0 });
+    expect(computeCaretAnchorRect(selection, positionAnchor)).toBeUndefined();
   });
 });
