@@ -19,14 +19,8 @@ import {
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
 import { MenuIcon } from 'lucide-react';
-import {
-  GroupsInMultiColumnMenu,
-  Localized,
-  MenuItemContainingCommand,
-  MenuItemContainingSubmenu,
-  MultiColumnMenu,
-} from 'platform-bible-utils';
-import { Fragment, ReactNode, useId, useRef } from 'react';
+import { Localized, MenuItemContainingCommand, MultiColumnMenu } from 'platform-bible-utils';
+import { Fragment, ReactNode, useId, useMemo, useRef } from 'react';
 import { Button } from '@/components/shadcn-ui/button';
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
 import {
@@ -38,14 +32,13 @@ import {
 import { useInteractionModality } from '@/hooks/use-interaction-modality.hook';
 import { ShortcutKeys } from '@/components/basics/shortcut-keys.component';
 import {
-  getColumnGroupKeys,
-  getItemsInGroups,
+  buildMenuTree,
   getLeadingIconSlot,
   getMenuSectionsWithItems,
-  getSubMenuGroupKeysForMenuItemId,
   GroupContent,
   joinGroupsWithSeparators,
   LeadingIconSlot,
+  MenuGroupNode,
 } from './menu.util';
 import { SelectMenuItemHandler } from './platform-menubar.component';
 import MenuItemIcon from './menu-icon.component';
@@ -60,109 +53,104 @@ const createDropdownSeparator = (groupKey: string) => (
  * groups that have items; a column runs its groups together, since the menu does not distinguish
  * the groups within a column.
  *
- * @param groupKeys Keys of the groups to render, already sorted by the groups' `order`
+ * @param groups The groups to render, already sorted by the groups' `order`, with their items
+ *   sorted
  * @param leadingSlot The leading icon slot of the list these items render in. A submenu works out
  *   its own from its items.
  */
 const getGroupContent = (
-  groups: Localized<GroupsInMultiColumnMenu>,
-  items: Localized<(MenuItemContainingCommand | MenuItemContainingSubmenu)[]>,
-  groupKeys: string[],
+  groups: MenuGroupNode[],
   onSelectMenuItem: SelectMenuItemHandler,
   leadingSlot: LeadingIconSlot,
 ): GroupContent<ReactNode>[] =>
-  groupKeys.map((groupKey) => ({
+  groups.map(({ groupKey, items }) => ({
     groupKey,
-    items: items
-      .filter((item) => item.group === groupKey)
-      .sort((a, b) => a.order - b.order)
-      .map((item: Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>) => {
-        // `DropdownMenuSub` is a Radix context provider that renders no DOM node of its own, so a
-        // `TooltipTrigger asChild` wrapped around it drops every cloned prop (including
-        // `aria-describedby`) instead of reaching the trigger that actually renders. The submenu
-        // branch attaches the tooltip to `DropdownMenuSubTrigger` itself instead, which is the
-        // element the tooltip needs to describe anyway.
-        if ('command' in item) {
-          return (
-            <Tooltip key={`tooltip-${item.label}-${item.command}`}>
-              <TooltipTrigger asChild>
-                <DropdownMenuItem
-                  key={`dropdown-menu-item-${item.label}-${item.command}`}
-                  onClick={() => {
-                    // Since the item has a command, we know it is a MenuItemContainingCommand.
-                    // eslint-disable-next-line no-type-assertion/no-type-assertion
-                    onSelectMenuItem(item as MenuItemContainingCommand);
-                  }}
-                >
-                  <MenuItemIcon
-                    iconName={item.iconNameBefore}
-                    icon={item.iconPathBefore}
-                    menuLabel={item.label}
-                    leading
-                    leadingSlot={leadingSlot}
-                  />
-                  {item.label}
-                  <MenuItemIcon
-                    iconName={item.iconNameAfter}
-                    icon={item.iconPathAfter}
-                    menuLabel={item.label}
-                  />
-                  {item.shortcut && (
-                    <DropdownMenuShortcut className="tw:ps-4">
-                      <ShortcutKeys hint={item.shortcut} />
-                    </DropdownMenuShortcut>
-                  )}
-                </DropdownMenuItem>
-              </TooltipTrigger>
-              {item.tooltip && <TooltipContent>{item.tooltip}</TooltipContent>}
-            </Tooltip>
-          );
-        }
-
-        // Only wrap the trigger when there is a tooltip: `TooltipTrigger asChild` clones its own
-        // `data-state` and `data-slot` onto the trigger, hiding the submenu's open state from
-        // `data-open:` styles
-        const subTrigger = (
-          <DropdownMenuSubTrigger>
-            <MenuItemIcon
-              iconName={item.iconNameBefore}
-              menuLabel={item.label}
-              leading
-              leadingSlot={leadingSlot}
-            />
-            {item.label}
-            <MenuItemIcon iconName={item.iconNameAfter} menuLabel={item.label} />
-          </DropdownMenuSubTrigger>
-        );
-        const subGroupKeys = getSubMenuGroupKeysForMenuItemId(groups, item.id);
+    items: items.map(({ item, subGroups = [] }) => {
+      // `DropdownMenuSub` is a Radix context provider that renders no DOM node of its own, so a
+      // `TooltipTrigger asChild` wrapped around it drops every cloned prop (including
+      // `aria-describedby`) instead of reaching the trigger that actually renders. The submenu
+      // branch attaches the tooltip to `DropdownMenuSubTrigger` itself instead, which is the
+      // element the tooltip needs to describe anyway.
+      if ('command' in item) {
         return (
-          <DropdownMenuSub key={`dropdown-menu-sub-${item.label}-${item.id}`}>
-            {item.tooltip ? (
-              <Tooltip>
-                <TooltipTrigger asChild>{subTrigger}</TooltipTrigger>
-                <TooltipContent>{item.tooltip}</TooltipContent>
-              </Tooltip>
-            ) : (
-              subTrigger
-            )}
-
-            <DropdownMenuPortal>
-              <DropdownMenuSubContent>
-                {joinGroupsWithSeparators(
-                  getGroupContent(
-                    groups,
-                    items,
-                    subGroupKeys,
-                    onSelectMenuItem,
-                    getLeadingIconSlot(getItemsInGroups(items, subGroupKeys)),
-                  ),
-                  createDropdownSeparator,
+          <Tooltip key={`tooltip-${item.label}-${item.command}`}>
+            <TooltipTrigger asChild>
+              <DropdownMenuItem
+                key={`dropdown-menu-item-${item.label}-${item.command}`}
+                onClick={() => {
+                  // Since the item has a command, we know it is a MenuItemContainingCommand.
+                  // eslint-disable-next-line no-type-assertion/no-type-assertion
+                  onSelectMenuItem(item as MenuItemContainingCommand);
+                }}
+              >
+                <MenuItemIcon
+                  iconName={item.iconNameBefore}
+                  icon={item.iconPathBefore}
+                  menuLabel={item.label}
+                  leading
+                  leadingSlot={leadingSlot}
+                />
+                {item.label}
+                <MenuItemIcon
+                  iconName={item.iconNameAfter}
+                  icon={item.iconPathAfter}
+                  menuLabel={item.label}
+                />
+                {item.shortcut && (
+                  <DropdownMenuShortcut className="tw:ps-4">
+                    <ShortcutKeys hint={item.shortcut} />
+                  </DropdownMenuShortcut>
                 )}
-              </DropdownMenuSubContent>
-            </DropdownMenuPortal>
-          </DropdownMenuSub>
+              </DropdownMenuItem>
+            </TooltipTrigger>
+            {item.tooltip && <TooltipContent>{item.tooltip}</TooltipContent>}
+          </Tooltip>
         );
-      }),
+      }
+
+      // Only wrap the trigger when there is a tooltip: `TooltipTrigger asChild` clones its own
+      // `data-state` and `data-slot` onto the trigger, hiding the submenu's open state from
+      // `data-open:` styles
+      const subTrigger = (
+        <DropdownMenuSubTrigger>
+          <MenuItemIcon
+            iconName={item.iconNameBefore}
+            menuLabel={item.label}
+            leading
+            leadingSlot={leadingSlot}
+          />
+          {item.label}
+          <MenuItemIcon iconName={item.iconNameAfter} menuLabel={item.label} />
+        </DropdownMenuSubTrigger>
+      );
+      return (
+        <DropdownMenuSub key={`dropdown-menu-sub-${item.label}-${item.id}`}>
+          {item.tooltip ? (
+            <Tooltip>
+              <TooltipTrigger asChild>{subTrigger}</TooltipTrigger>
+              <TooltipContent>{item.tooltip}</TooltipContent>
+            </Tooltip>
+          ) : (
+            subTrigger
+          )}
+
+          <DropdownMenuPortal>
+            <DropdownMenuSubContent>
+              {joinGroupsWithSeparators(
+                getGroupContent(
+                  subGroups,
+                  onSelectMenuItem,
+                  getLeadingIconSlot(
+                    subGroups.flatMap((group) => group.items.map((node) => node.item)),
+                  ),
+                ),
+                createDropdownSeparator,
+              )}
+            </DropdownMenuSubContent>
+          </DropdownMenuPortal>
+        </DropdownMenuSub>
+      );
+    }),
   }));
 
 export type TabDropdownMenuProps = {
@@ -222,13 +210,17 @@ export default function TabDropdownMenu({
   id,
 }: TabDropdownMenuProps) {
   const headingIdPrefix = useId();
+  const menuTree = useMemo(() => buildMenuTree(menuData), [menuData]);
   const sections = getMenuSectionsWithItems(menuData);
   const showHeadings = showSectionHeadings && sections.length > 1;
+  const groupsByColumn = new Map(
+    menuTree.columns.map(({ columnKey, groups }) => [columnKey, groups]),
+  );
+  const groupsOfSection = (columnKey: string) => groupsByColumn.get(columnKey) ?? [];
   // Every section shares one content, so one slot keeps all their labels aligned
   const leadingSlot = getLeadingIconSlot(
-    getItemsInGroups(
-      menuData.items,
-      sections.flatMap(({ columnKey }) => getColumnGroupKeys(menuData.groups, columnKey)),
+    sections.flatMap(({ columnKey }) =>
+      groupsOfSection(columnKey).flatMap((group) => group.items.map((node) => node.item)),
     ),
   );
 
@@ -286,9 +278,7 @@ export default function TabDropdownMenu({
                 )}
                 <TooltipProvider>
                   {getGroupContent(
-                    menuData.groups,
-                    menuData.items,
-                    getColumnGroupKeys(menuData.groups, columnKey),
+                    groupsOfSection(columnKey),
                     onSelectMenuItem,
                     leadingSlot,
                   ).flatMap((group) => group.items)}

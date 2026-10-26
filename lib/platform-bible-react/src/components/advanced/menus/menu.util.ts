@@ -5,6 +5,8 @@ import {
   MenuColumnWithHeader,
   MenuGroupDetailsInColumn,
   MenuGroupDetailsInSubMenu,
+  MenuItemContainingCommand,
+  MenuItemContainingSubmenu,
   MultiColumnMenu,
 } from 'platform-bible-utils';
 import { isLucideIconName } from '../../basics/lucide-icons.util';
@@ -204,4 +206,76 @@ export function joinGroupsWithSeparators<T>(
     hasShownItems = true;
     return [...separator, ...items];
   });
+}
+
+/** A menu item of either kind, as the menu components render it */
+export type MenuItemNodeSource = Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>;
+
+/** One menu item with the groups of its own submenu, if it opens one */
+export type MenuItemNode = {
+  /** The item itself */
+  item: MenuItemNodeSource;
+  /** The submenu's groups, sorted by `order`. Only present on a submenu item. */
+  subGroups?: MenuGroupNode[];
+};
+
+/** One group of a menu list, holding the group's items sorted by `order` */
+export type MenuGroupNode = {
+  /** Key of the group */
+  groupKey: string;
+  /** The group's items, sorted by `order` */
+  items: MenuItemNode[];
+};
+
+/** One column of the menu tree */
+export type MenuColumnNode = MenuColumnEntry & {
+  /** The column's groups, sorted by `order` */
+  groups: MenuGroupNode[];
+};
+
+/** A multi-column menu with its columns, groups, items and submenus resolved and sorted */
+export type MenuTree = {
+  /** The columns, sorted by `order` */
+  columns: MenuColumnNode[];
+};
+
+function buildGroupNodes(
+  menuData: Localized<MultiColumnMenu>,
+  groupKeys: string[],
+): MenuGroupNode[] {
+  return groupKeys.map((groupKey) => ({
+    groupKey,
+    items: menuData.items
+      .filter((item) => item.group === groupKey)
+      .sort((a, b) => a.order - b.order)
+      .map((item) =>
+        'command' in item
+          ? { item }
+          : {
+              item,
+              subGroups: buildGroupNodes(
+                menuData,
+                getSubMenuGroupKeysForMenuItemId(menuData.groups, item.id),
+              ),
+            },
+      ),
+  }));
+}
+
+/**
+ * Resolves a menu's columns, groups, items and submenus once, so the menu components can render by
+ * walking the result instead of filtering and sorting the item list again on every render. An item
+ * whose group is not under any column or submenu does not appear in the tree.
+ *
+ * @param menuData The localized menu, or `undefined` while it is not available
+ * @returns The menu tree, with no columns when there is no menu data
+ */
+export function buildMenuTree(menuData: Localized<MultiColumnMenu> | undefined): MenuTree {
+  if (!menuData) return { columns: [] };
+  return {
+    columns: getSortedMenuColumns(menuData.columns).map((entry) => ({
+      ...entry,
+      groups: buildGroupNodes(menuData, getColumnGroupKeys(menuData.groups, entry.columnKey)),
+    })),
+  };
 }
