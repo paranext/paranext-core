@@ -148,6 +148,13 @@ export class ReadOnlyViewNotifier {
       // If the view is already read-only for another reason, Preview adds nothing to announce
       if (state?.isReadOnly) return;
 
+      // Check if this notification is disabled for this project. This comes before the project
+      // lookups below because each lookup asks every provider.
+      const disabledTime = this.disabledMap[projectId];
+      // If the disable time hasn't elapsed yet, don't send another notification
+      if (disabledTime && Date.now() < disabledTime + READONLY_NOTIFICATION_DISMISS_DURATION_MS)
+        return;
+
       // A user who cannot edit Scripture could not edit in any view. A failed lookup does not
       // suppress the notification.
       if (!(await this.canUserEditScripture(projectId))) return;
@@ -155,12 +162,6 @@ export class ReadOnlyViewNotifier {
       // A project that is not editable is read-only in every view, so the advice to switch to
       // Standard view would be false. A failed lookup does not suppress the notification.
       if (!(await this.isProjectEditable(projectId))) return;
-
-      // Check if this notification is disabled for this project
-      const disabledTime = this.disabledMap[projectId];
-      // If the disable time hasn't elapsed yet, don't send another notification
-      if (disabledTime && Date.now() < disabledTime + READONLY_NOTIFICATION_DISMISS_DURATION_MS)
-        return;
 
       // Acquire a per-project mutex and atomically check/reserve the last-notification timestamp
       // so we don't send the same notification multiple times in quick succession
