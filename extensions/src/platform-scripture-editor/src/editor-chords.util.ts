@@ -78,8 +78,8 @@ const IS_BASIC_CHECKS_SHOWN: boolean = false;
 /**
  * Whether a matched chord should run now. Inserting needs an editable, focused main editor so a
  * keystroke in a read-only text or in the footnote or comment editor does nothing. Basic checks
- * runs only in Power, where its menu item exists, and only while {@link IS_BASIC_CHECKS_SHOWN}.
- * Showing footnotes works in every state.
+ * runs only in Power, and only if its menu item exists (that is, while {@link IS_BASIC_CHECKS_SHOWN}
+ * is true). Showing footnotes works in every state.
  */
 export function shouldRunEditorChord(
   chord: EditorChord,
