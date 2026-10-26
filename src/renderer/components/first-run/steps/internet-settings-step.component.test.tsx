@@ -410,6 +410,20 @@ describe('InternetSettingsStep', () => {
       expect(onNext).not.toHaveBeenCalled();
     });
 
+    // `platform.quit` resolves as soon as shutdown starts, and a quit once started is not cancelled,
+    // so a click while the app shuts down must not save anything.
+    it('keeps both choices disabled once the app is closing', async () => {
+      configureHooks({ value: MOCK_SETTINGS });
+      renderStep();
+
+      await userEvent.click(await closeButton());
+      await waitFor(() => expect(sendCommand).toHaveBeenCalledWith('platform.quit'));
+      await act(async () => {});
+
+      expect(await closeButton()).toBeDisabled();
+      expect(await continueWithInternetButton()).toBeDisabled();
+    });
+
     it('shows the error when the app cannot be closed', async () => {
       configureHooks({ value: MOCK_SETTINGS });
       vi.mocked(sendCommand).mockImplementation(async (command: string) => {
@@ -421,6 +435,8 @@ describe('InternetSettingsStep', () => {
       await userEvent.click(await closeButton());
 
       await waitFor(() => expect(screen.getByText(/quit refused/i)).toBeInTheDocument());
+      expect(await closeButton()).toBeEnabled();
+      expect(await continueWithInternetButton()).toBeEnabled();
     });
   });
 

@@ -235,12 +235,14 @@ function InternetSettingsLoaded({
     setActionError('');
     setIsBusy(true);
     try {
+      // Resolves as soon as shutdown starts, and a started quit is not cancelled, so the choices
+      // stay disabled: a click while the app shuts down must not save anything.
       await sendCommand('platform.quit');
     } catch (err: unknown) {
       if (!isMounted.current) return;
       setActionError(getErrorMessage(err));
+      setIsBusy(false);
     }
-    if (isMounted.current) setIsBusy(false);
   };
 
   if (isPlatformError(value)) {
