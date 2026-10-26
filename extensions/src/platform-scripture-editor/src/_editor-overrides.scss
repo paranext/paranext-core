@@ -43,9 +43,9 @@ $find-current-result-highlight-bg: rgb(255 213 0 / 40%);
   background-color: var(--primary);
 }
 
-// Unfocused: primary at 30%, not `--secondary`, which in Paratext Light is almost the `--muted` that
+// Unfocused: primary at 30%, not `--secondary`, which equals or nearly equals the `--muted` that
 // Simple tints character markers with (`_simple-mode.scss`), so a selection there would disappear.
-// Over a 30% tint the text stays in its own colour.
+// Selected text takes `--foreground`, which reads over the 30% tint in every theme.
 ::selection {
   color: var(--foreground);
   background-color: color-mix(in oklab, var(--primary) 30%, transparent);

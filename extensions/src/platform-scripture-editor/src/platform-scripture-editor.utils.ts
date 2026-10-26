@@ -100,6 +100,33 @@ export function resolveViewTypeForInterfaceMode(
 }
 
 /**
+ * Class on the Scripture editor's root that turns on the Simple-mode tint and hover line for
+ * character markers with no visible style (see `_simple-mode.scss`).
+ */
+export const CHARACTER_MARKER_INDICATORS_CLASS = 'character-marker-indicators';
+
+/**
+ * The Simple-mode marker classes for the Scripture editor's root element (see `_simple-mode.scss`).
+ *
+ * The character-marker indicator warns against typing inside a marker, so it is on only where the
+ * text can be typed into. It also waits for the interface mode, because `isPowerMode` reads `false`
+ * while that setting loads and would otherwise tint a Power session for a frame.
+ */
+export function getSimpleModeRootClassNames({
+  isPowerMode,
+  isInterfaceModeLoading,
+  isDurablyReadOnly,
+}: {
+  isPowerMode: boolean;
+  isInterfaceModeLoading: boolean;
+  isDurablyReadOnly: boolean;
+}): string[] {
+  if (isPowerMode) return [];
+  if (isInterfaceModeLoading || isDurablyReadOnly) return ['editor-container-simple'];
+  return ['editor-container-simple', CHARACTER_MARKER_INDICATORS_CLASS];
+}
+
+/**
  * Computes the next view type for the view-cycling affordance (the `changeScriptureView` command).
  * Power mode cycles formatted -> standard -> markers -> formatted; simple mode skips 'standard'
  * entirely (see {@link resolveViewTypeForInterfaceMode}), cycling formatted <-> markers.

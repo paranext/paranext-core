@@ -210,6 +210,7 @@ import {
   formatEditorTitle,
   generateParagraphMenuListItems,
   getNextViewTypeInCycle,
+  getSimpleModeRootClassNames,
   hasDisplayableParagraphMarkerTitle,
   isChapterBlank,
   isMissingBookError,
@@ -5434,7 +5435,10 @@ function PlatformScriptureEditor({
 
   return (
     <div
-      className={`tw:flex tw:flex-col tw:h-screen${isPowerMode ? '' : ' editor-container-simple scripture-editor-simple'}`}
+      className={[
+        'tw:flex tw:flex-col tw:h-screen',
+        ...getSimpleModeRootClassNames({ isPowerMode, isInterfaceModeLoading, isDurablyReadOnly }),
+      ].join(' ')}
     >
       <TabToolbar
         onSelectProjectMenuItem={menuCommandHandler}

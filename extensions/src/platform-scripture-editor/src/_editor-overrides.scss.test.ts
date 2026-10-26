@@ -33,7 +33,7 @@ describe('_editor-overrides.scss', () => {
   });
 
   it('shows an unfocused selection in primary at 30%, not the --secondary that matches the marker tint', () => {
-    // In Paratext Light `--secondary` is almost identical to `--muted`, the Simple tint on
+    // In every built-in theme `--secondary` equals or nearly equals `--muted`, the Simple tint on
     // character markers with no visible style, so a selection there would vanish into it.
     const unfocusedSelection =
       /(?:^|\n)::selection \{([^}]*)\}/.exec(

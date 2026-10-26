@@ -31,7 +31,7 @@
   background-color: var(--primary);
 }
 
-/*  Unfocused: primary at 30%, not `--secondary`, which in Paratext Light is almost the `--muted` that
+/*  Unfocused: primary at 30%, not `--secondary`, which equals or nearly equals the `--muted` that
     Simple tints character markers with, so a selection there would disappear. */
 ::selection {
   color: var(--foreground);
