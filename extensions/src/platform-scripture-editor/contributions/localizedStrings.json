@@ -362,7 +362,9 @@
       "%webView_scriptureTextGrid_viewOptions_settingsUnavailable%": "Couldn't load your texts.",
       "%webView_scriptureTextGrid_viewOptions_pickerNoProjectNotice%": "No project is selected, so a resource you choose here will be downloaded to this computer but not added to a text collection.",
       "%webView_scriptureTextGrid_viewOptions_removeFromList%": "Remove {resourceName} from list",
+      "%webView_scriptureTextGrid_viewOptions_teamResourcesHeader%": "Team resources",
       "%webView_scriptureTextGrid_viewOptions_textsHeader%": "Texts",
+      "%webView_scriptureTextGrid_viewOptions_userResourcesHeader%": "User resources",
       "%webView_scriptureTextGrid_viewOptions_verse%": "Verse",
       "%webView_scriptureTextGrid_viewOptions_viewHeader%": "View",
       "%webView_selectDblResource_installFailed%": "Failed to install resource. Please try again."
@@ -725,7 +727,9 @@
       "%webView_scriptureTextGrid_viewOptions_settingsUnavailable%": "No se pudieron cargar sus textos.",
       "%webView_scriptureTextGrid_viewOptions_pickerNoProjectNotice%": "No hay ningún proyecto seleccionado, así que el recurso que elija aquí se descargará a esta computadora, pero no se agregará a una colección de textos.",
       "%webView_scriptureTextGrid_viewOptions_removeFromList%": "Quitar {resourceName} de la lista",
+      "%webView_scriptureTextGrid_viewOptions_teamResourcesHeader%": "Recursos del equipo",
       "%webView_scriptureTextGrid_viewOptions_textsHeader%": "Textos",
+      "%webView_scriptureTextGrid_viewOptions_userResourcesHeader%": "Sus recursos",
       "%webView_scriptureTextGrid_viewOptions_verse%": "Versículo",
       "%webView_scriptureTextGrid_viewOptions_viewHeader%": "Vista",
       "%webView_selectDblResource_installFailed%": "No se pudo instalar el recurso. Vuelva a intentarlo."
