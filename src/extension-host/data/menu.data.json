@@ -75,7 +75,7 @@
       {
         "label": "%mainMenu_helpInfo_showTour%",
         "hiddenInterfaceModes": ["power"],
-        "localizeNotes": "Application main menu > Help > Show the tour. Hidden in Power mode: Power's Help menu leaves the tour out; remove \"power\" from hiddenInterfaceModes to restore it",
+        "localizeNotes": "Application main menu > Help > Show the tour",
         "group": "platform.helpInfo",
         "order": 3,
         "command": "platform.showOnboardingTour"
@@ -83,7 +83,7 @@
       {
         "label": "%mainMenu_openDeveloperDocumentation%",
         "hiddenInterfaceModes": ["simple", "power"],
-        "localizeNotes": "Application main menu > Help > Open Developer Documentation. Hidden in both modes: it addresses extension developers, not translators; remove \"power\" from hiddenInterfaceModes to restore it",
+        "localizeNotes": "Application main menu > Help > Open Developer Documentation (opens the documentation for extension developers)",
         "group": "platform.helpMisc",
         "order": 2,
         "command": "platform.openDeveloperDocumentationUrl",
@@ -128,7 +128,7 @@
       {
         "label": "%insertNote%",
         "hiddenInterfaceModes": ["simple", "power"],
-        "localizeNotes": "Web view context menu > Insert note... Hidden in both modes: a placeholder no command handles; notes are inserted from the Scripture editor's own Insert menu. Remove \"power\" from hiddenInterfaceModes to restore it",
+        "localizeNotes": "Web view context menu > Insert note...",
         "group": "platform.insert",
         "order": 1,
         "command": "platform.insertNote"
@@ -136,7 +136,7 @@
       {
         "label": "%menuItemName_wordList%",
         "hiddenInterfaceModes": ["simple", "power"],
-        "localizeNotes": "Web view context menu > Word list... Hidden in both modes: a placeholder no command handles. Remove \"power\" from hiddenInterfaceModes to restore it",
+        "localizeNotes": "Web view context menu > Word list...",
         "group": "platform.wordList",
         "order": 1,
         "command": "platform.openWordList"

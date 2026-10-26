@@ -107,7 +107,7 @@
           {
             "label": "%manageBooks_openMenuItem%",
             "hiddenInterfaceModes": ["simple"],
-            "localizeNotes": "Scripture editor top menu > Project > Manage books… (opens Manage Books targeting the editor's active project; sits between Sync and Project settings in the Project section). Hidden in Simple mode: book management is a Power-mode task there, and the Simple book-not-available message tells the user to ask their project administrator — leaving the item visible would contradict that advice in the very same tab. Same gate the sibling Basic checks and Comments items use",
+            "localizeNotes": "Scripture editor top menu > Project > Manage books… (opens Manage Books targeting the editor's active project; sits between Sync and Project settings in the Project section)",
             "iconNameBefore": "book-copy",
             "group": "platform.projectTop",
             "order": 2,
@@ -169,7 +169,7 @@
             "id": "platformScriptureEditor.viewSubmenu",
             "label": "%webView_platformScriptureEditor_switchScriptureView_2%",
             "hiddenInterfaceModes": ["simple"],
-            "localizeNotes": "Scripture editor top menu (Power) > View > Switch scripture view ▸ — opens the Standard view / Preview flyout. Hidden in Simple mode, which shows only Preview",
+            "localizeNotes": "Scripture editor top menu (Power) > View > Switch scripture view ▸ — opens the Standard view / Preview flyout",
             "iconNameBefore": "eye",
             "group": "platformScriptureEditor.layout",
             "order": 1
@@ -274,7 +274,7 @@
           {
             "label": "%webView_platformScriptureEditor_charactersInventory%",
             "hiddenInterfaceModes": ["simple", "power"],
-            "localizeNotes": "Scripture editor top menu > Tools > Inventory. Hidden in both modes; remove \"power\" from hiddenInterfaceModes to restore it",
+            "localizeNotes": "Scripture editor top menu > Tools > Inventory > Characters",
             "group": "platformScriptureEditor.inventory",
             "order": 1,
             "command": "platformScripture.openCharactersInventory"
@@ -282,7 +282,7 @@
           {
             "label": "%webView_platformScriptureEditor_repeatedWordsInventory%",
             "hiddenInterfaceModes": ["simple", "power"],
-            "localizeNotes": "Scripture editor top menu > Tools > Inventory. Hidden in both modes; remove \"power\" from hiddenInterfaceModes to restore it",
+            "localizeNotes": "Scripture editor top menu > Tools > Inventory > Repeated words",
             "group": "platformScriptureEditor.inventory",
             "order": 2,
             "command": "platformScripture.openRepeatedWordsInventory"
@@ -290,7 +290,7 @@
           {
             "label": "%webView_platformScriptureEditor_markersInventory%",
             "hiddenInterfaceModes": ["simple", "power"],
-            "localizeNotes": "Scripture editor top menu > Tools > Inventory. Hidden in both modes; remove \"power\" from hiddenInterfaceModes to restore it",
+            "localizeNotes": "Scripture editor top menu > Tools > Inventory > Markers",
             "group": "platformScriptureEditor.inventory",
             "order": 3,
             "command": "platformScripture.openMarkersInventory"
@@ -298,7 +298,7 @@
           {
             "label": "%webView_platformScriptureEditor_punctuationInventory%",
             "hiddenInterfaceModes": ["simple", "power"],
-            "localizeNotes": "Scripture editor top menu > Tools > Inventory. Hidden in both modes; remove \"power\" from hiddenInterfaceModes to restore it",
+            "localizeNotes": "Scripture editor top menu > Tools > Inventory > Punctuation",
             "group": "platformScriptureEditor.inventory",
             "order": 4,
             "command": "platformScripture.openPunctuationInventory"
@@ -306,7 +306,7 @@
           {
             "label": "%markersChecklist_menu_openTool%",
             "hiddenInterfaceModes": ["simple", "power"],
-            "localizeNotes": "Scripture editor top menu > Tools > Markers Checklist... (opens the markers checklist for the editor's active project). Hidden in both modes; remove \"power\" from hiddenInterfaceModes to restore it",
+            "localizeNotes": "Scripture editor top menu > Tools > Markers Checklist... (opens the markers checklist for the editor's active project)",
             "group": "platformScriptureEditor.inventory",
             "order": 5,
             "command": "platformScripture.openMarkersChecklist"
@@ -314,7 +314,7 @@
           {
             "label": "%webView_platformScriptureEditor_openChecks_2%",
             "hiddenInterfaceModes": ["simple", "power"],
-            "localizeNotes": "Scripture editor top menu (Power) > Tools > Basic checks — opens the Checks panel for the editor's project as a tab in the third column, or brings that tab to the front. Hidden in both modes; remove \"power\" from hiddenInterfaceModes to restore it",
+            "localizeNotes": "Scripture editor top menu (Power) > Tools > Basic checks — opens the Checks panel for the editor's project as a tab in the third column, or brings that tab to the front",
             "iconNameBefore": "circle-check-big",
             "group": "platformScriptureEditor.checks",
             "order": 3,
@@ -368,7 +368,7 @@
           {
             "label": "%webView_legacyCommentManager_openComments_2%",
             "hiddenInterfaceModes": ["power"],
-            "localizeNotes": "Scripture editor top menu (Simple) > Tools and resources > Comments — brings the project's Comments tab in the third column to the front. Orders after 5 stay free for items other extensions add below the built-in tools",
+            "localizeNotes": "Scripture editor top menu (Simple) > Tools and resources > Comments — brings the project's Comments tab in the third column to the front",
             "iconNameBefore": "message-square",
             "group": "platformScriptureEditor.simpleToolsPanels",
             "order": 6,
