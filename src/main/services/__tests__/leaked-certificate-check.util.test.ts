@@ -109,6 +109,8 @@ describe('registerLeakedCertificateCheck', () => {
     );
   });
 
+  // Electron 39 builds `issuerCert` as a finite chain and never links a root to itself; this pins
+  // the guard that keeps a future Electron that did from looping forever inside every request
   it('stops at a root that names itself as its issuer', () => {
     const root: CertificateChainLink = { data: OTHER_UNRELATED_PEM };
     root.issuerCert = root;

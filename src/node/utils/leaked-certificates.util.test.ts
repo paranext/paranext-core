@@ -10,6 +10,9 @@ import {
 import {
   LEAKED_AAA_CROSS_SIGNED_PEM,
   LEAKED_EMUDHRA_ISSUED_PEM,
+  ROOT_AAA_CERTIFICATE_SERVICES_PEM,
+  ROOT_EMSIGN_CS_G3_PEM,
+  ROOT_EMSIGN_TLS_G3_PEM,
 } from '@node/utils/leaked-certificates.test-utils';
 
 vi.mock('@shared/services/logger.service', () => ({
@@ -51,6 +54,16 @@ describe('removeDistrustedRoots', () => {
     expect(removeDistrustedRoots([root])).toEqual([]);
   });
 
+  // Not in Node.js's bundled list, but the OS store (NODE_USE_SYSTEM_CA, --use-system-ca) or
+  // NODE_EXTRA_CA_CERTS can add them, and each one signs leaked intermediates directly
+  it.each([
+    ['AAA Certificate Services', ROOT_AAA_CERTIFICATE_SERVICES_PEM],
+    ['emSign Root TLS CA - G3', ROOT_EMSIGN_TLS_G3_PEM],
+    ['emSign Root CS CA - G3', ROOT_EMSIGN_CS_G3_PEM],
+  ])('removes %s', (_name, root) => {
+    expect(removeDistrustedRoots([root])).toEqual([]);
+  });
+
   it('keeps every other root in the order given', () => {
     const others = tls
       .getCACertificates('bundled')
@@ -68,11 +81,31 @@ describe('distrustLeakedCertificateRootsInNode', () => {
     tls.setDefaultCACertificates(originalDefaults);
   });
 
-  it('stops new TLS connections from trusting emSign ECC Root CA - G3', () => {
+  it('stops new TLS connections from trusting emSign ECC Root CA - G3 and keeps every other root', () => {
+    const distrusted = [
+      EMSIGN_ECC_ROOT_G3_SHA256,
+      ...[ROOT_AAA_CERTIFICATE_SERVICES_PEM, ROOT_EMSIGN_TLS_G3_PEM, ROOT_EMSIGN_CS_G3_PEM].map(
+        sha256Of,
+      ),
+    ];
+
     distrustLeakedCertificateRootsInNode();
 
-    const defaults = tls.getCACertificates('default').map(sha256Of);
+    // Compared as sets: `setDefaultCACertificates` drops duplicates, which the OS store can contain
+    const defaults = new Set(tls.getCACertificates('default').map(sha256Of));
     expect(defaults).not.toContain(EMSIGN_ECC_ROOT_G3_SHA256);
-    expect(defaults).toHaveLength(originalDefaults.length - 1);
+    expect(defaults).toEqual(
+      new Set(originalDefaults.map(sha256Of).filter((sha256) => !distrusted.includes(sha256))),
+    );
+  });
+
+  it('also removes a distrusted root that the OS store or extra CA certificates added', () => {
+    tls.setDefaultCACertificates([...originalDefaults, ROOT_AAA_CERTIFICATE_SERVICES_PEM]);
+
+    distrustLeakedCertificateRootsInNode();
+
+    expect(tls.getCACertificates('default').map(sha256Of)).not.toContain(
+      sha256Of(ROOT_AAA_CERTIFICATE_SERVICES_PEM),
+    );
   });
 });

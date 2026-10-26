@@ -4315,6 +4315,39 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   now-redundant test in one deliberate commit.
 - **Source:** PR #2425
 
+## adr-leaked-emudhra-certificates-blocked-in-app: The app blocks the leaked eMudhra intermediate certificates itself until Electron is upgraded
+
+- **Date:** 2026-10-27
+- **Status:** Accepted (temporary; superseded once PT-3111 upgrades Electron)
+- **Context:** In October 2026 the private keys of eight eMudhra intermediate certificates (16
+  certificates, including Sectigo `AAA Certificate Services` cross-signs) became recoverable by
+  anyone (https://emudhra.we-have-a-problem.com/). Operating systems and browsers blocked them, but
+  Electron 39.8.8 trusts them in both its Node.js and Chromium network layers, and Electron 39 gets
+  no fix (the first patched releases are 42.11.16, 43.8.1 and 44.9.1). The discovery came days
+  before the code freeze for the 9 November 2026 release (PT-4912).
+- **Decision:** Block them inside the app and stay on Electron 39.
+  `src/node/utils/leaked-certificates.util.ts` drops every root a leaked intermediate can chain to
+  from Node.js's default trusted roots at startup in the main process and the extension host,
+  including roots the OS store or `NODE_EXTRA_CA_CERTS` can add.
+  `src/main/services/leaked-certificate-check.util.ts` registers a certificate verify proc on the
+  default session that refuses any chain, sent or built, whose certificates carry one of the eight
+  leaked public keys. This creates two rules nothing enforces:
+  - every Electron session or partition the app uses must call `registerLeakedCertificateCheck`
+    (including `electron-updater`'s own partition if the updater is turned on);
+  - every Node.js process or worker thread that makes network requests must call
+    `distrustLeakedCertificateRootsInNode`, because the trust change applies only to the calling
+    thread.
+- **Alternatives:** Upgrading Electron to 42.11.16 or later before the freeze was rejected as too
+  large a jump (three major versions and a new Node.js major) to test in time. Shipping as-is, and
+  disclosing the exposure in the release notes, was rejected.
+- **Consequences:** Known gaps: the .NET data provider relies on the OS trust store, so an
+  unpatched system still accepts the leaked certificates there (PT-4913); processes extensions
+  start with `createProcess.fork` and worker threads are not covered (none makes network requests
+  today). Distrusting whole roots also refuses legitimate sites that chain to them; none of the
+  sites the app uses does. Remove both modules, and retire this entry, when PT-3111 upgrades
+  Electron to a release that blocks the certificates itself.
+- **Source:** PR #2938
+
 ## adr-library-string-keys-ship-in-shell-assets: `platform-bible-react` string-key values ship in the platform shell's locale assets by default
 
 - **Date:** 2026-09-10

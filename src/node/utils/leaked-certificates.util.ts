@@ -44,14 +44,21 @@ const LEAKED_PUBLIC_KEY_SHA256_HASHES: ReadonlySet<string> = new Set([
 
 /**
  * Roots removed from Node.js's trusted list. Node.js has no way to distrust an intermediate, only
- * to drop a root, and the leaked intermediates reach a root Node.js trusts only through `emSign ECC
- * Root CA - G3` (which cross-signs `emSign Root TLS CA - G3`). Their other issuer, `AAA Certificate
- * Services`, is not in Node.js's list. Dropping the root also refuses any legitimate site that
- * chains to it; none of the sites the app downloads from does.
+ * to drop a root. In Node.js's bundled list, the leaked intermediates reach a trusted root only
+ * through `emSign ECC Root CA - G3` (which cross-signs `emSign Root TLS CA - G3`). The roots that
+ * sign them directly are not bundled, but the OS store (`NODE_USE_SYSTEM_CA`, `--use-system-ca`) or
+ * `NODE_EXTRA_CA_CERTS` can add them, so they are distrusted too. Dropping a root also refuses any
+ * legitimate site that chains to it; none of the sites the app downloads from does.
  */
 const DISTRUSTED_ROOT_SHA256_FINGERPRINTS: ReadonlySet<string> = new Set([
   // emSign ECC Root CA - G3
   '86A1ECBA089C4A8D3BBE2734C612BA341D813E043CF9E8A862CD5C57A36BBE6B',
+  // AAA Certificate Services (cross-signs all eight; in the Windows and macOS stores)
+  'D7A7A0FB5D7E2731D771E9484EBCDEF71D5F0C3E0A2948782BC83EE0EA699EF4',
+  // emSign Root TLS CA - G3 (issues the TLS intermediates)
+  '7DD78D5F4F13459A83DFF9ABBBA62EDBAF6F2D102BF257FD712F4D9F2746ED8D',
+  // emSign Root CS CA - G3 (issues the code-signing intermediates)
+  'F2EDAAFF3D9B701FB4D14C9F285F8C0BAD90FC3BCC1FA07D47F4718EDABA34A5',
 ]);
 
 function getSha256Fingerprint(pem: string): string {
