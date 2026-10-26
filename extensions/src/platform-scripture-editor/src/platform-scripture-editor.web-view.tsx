@@ -237,7 +237,6 @@ import {
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   selectableParagraphMarkers,
   selectCommentThreadInPanelSafe,
-  showsReadOnlyPreview,
   validateCommentSelection,
   readCommentRangeText,
   hasPendingCommentTextChanged,
@@ -256,6 +255,7 @@ import { MARKER_MENU_POPOVER_WIDTH_CLASSES } from './marker-menu-popover.const';
 import {
   CONTEXT_MENU_ACTION_TO_NOTE_KIND,
   createInsertContextMenuItems,
+  deriveReadOnlyFlags,
   flushRowEditsThenSave,
   forgetCaretSnapshotIfParaMarkerSelected,
   isEditorContextMenuOpen,
@@ -1402,27 +1402,28 @@ function PlatformScriptureEditor({
     [crossRefCallersSetting],
   );
 
-  /**
-   * Whether the editor is effectively read-only, considering the isReadOnly flag, the project's
-   * `platform.isEditable` setting, the user's Scripture-edit permission, sync-blocked state, and
-   * view type: Preview (the formatted view in Power) is read-only.
-   *
-   * Fails CLOSED (read-only) while `isProjectEditable`/`canUserEditScripture` are genuinely still
-   * resolving — see `isCanUserEditScriptureUnresolved` above — and while `platform.interfaceMode`
-   * loads, which decides whether the formatted view is Preview, rather than relying on their
-   * fail-open default values during that window: a briefly-writable editor is worse than a
-   * briefly-read-only one.
-   */
-  const isReadOnlyEffective = useMemo(
+  // The three read-only flags; what each one means (fail-closed while loading, durable excludes the
+  // transient sync block, undefined title flag while resolving) is documented on
+  // `deriveReadOnlyFlags`. `viewType` is the displayed view type.
+  // `isReadOnlyForTitle` is read as `resolvedIsDurablyReadOnly`: the title effect and the root's
+  // Simple-mode classes both wait for it to resolve.
+  const {
+    isReadOnlyEffective,
+    isDurablyReadOnly,
+    isReadOnlyForTitle: resolvedIsDurablyReadOnly,
+  } = useMemo(
     () =>
-      isReadOnly ||
-      isProjectEditableLoading ||
-      !isProjectEditable ||
-      isCanUserEditScriptureUnresolved ||
-      !canUserEditScripture ||
-      isSyncBlocked ||
-      isInterfaceModeLoading ||
-      showsReadOnlyPreview(viewType, isPowerMode),
+      deriveReadOnlyFlags({
+        isReadOnly,
+        isProjectEditableLoading,
+        isProjectEditable,
+        isCanUserEditScriptureUnresolved,
+        canUserEditScripture,
+        isSyncBlocked,
+        isInterfaceModeLoading,
+        viewType,
+        isPowerMode,
+      }),
     [
       isReadOnly,
       isProjectEditableLoading,
@@ -1651,38 +1652,6 @@ function PlatformScriptureEditor({
       setFootnotesPaneVisible,
       startPaneNoteEdit,
       setNoteAnchorSource,
-    ],
-  );
-
-  // The "durable" reasons the editor is read-only — excludes isSyncBlocked, a transient freeze
-  // during an automatic Send/Receive, not a real read-only state. Used for the title instead of
-  // isReadOnlyEffective so the tab doesn't relabel "(Read-only)" and back on every scheduled sync;
-  // SyncBlockedBanner already communicates that transient state.
-  const isDurablyReadOnly = useMemo(
-    () =>
-      isReadOnly ||
-      !isProjectEditable ||
-      !canUserEditScripture ||
-      showsReadOnlyPreview(viewType, isPowerMode),
-    [isReadOnly, isProjectEditable, canUserEditScripture, viewType, isPowerMode],
-  );
-
-  // `undefined` means isProjectEditable/canUserEditScripture are still genuinely resolving (not
-  // latched — see isCanUserEditScriptureUnresolved above), or `platform.interfaceMode` is still
-  // loading, which decides whether the formatted view is the read-only Preview. Two consumers wait
-  // it out: the title effect below skips its update instead of pushing a title, so the
-  // previously-persisted title stays showing, and the root's Simple-mode classes leave the
-  // character-marker tint off.
-  const resolvedIsDurablyReadOnly = useMemo(
-    () =>
-      isProjectEditableLoading || isCanUserEditScriptureUnresolved || isInterfaceModeLoading
-        ? undefined
-        : isDurablyReadOnly,
-    [
-      isProjectEditableLoading,
-      isCanUserEditScriptureUnresolved,
-      isInterfaceModeLoading,
-      isDurablyReadOnly,
     ],
   );
 

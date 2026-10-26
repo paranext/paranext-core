@@ -16,6 +16,7 @@ import { isBlockMarker, isLocalizeKey } from 'platform-bible-utils';
 import {
   CONTEXT_MENU_ACTION_TO_NOTE_KIND,
   createInsertContextMenuItems,
+  deriveReadOnlyFlags,
   flushRowEditsThenSave,
   generateInlineMarkerMenuListItems,
   getChapterKey,
@@ -26,6 +27,7 @@ import {
   NOTE_INSERT_CONFIG,
   forgetCaretSnapshotIfParaMarkerSelected,
   parseCallerSequenceSetting,
+  type ReadOnlyInputs,
   resolveEditingSessionActivity,
   restoreSelectionIfLost,
   returnFocusToScriptureTextIfDocumentFocused,
@@ -827,6 +829,75 @@ describe('shouldSkipNoteInsert', () => {
 
   it('does not skip with a mounted, writable editor', () => {
     expect(shouldSkipNoteInsert(true, false)).toBe(false);
+  });
+});
+
+describe('deriveReadOnlyFlags', () => {
+  const writable: ReadOnlyInputs = {
+    isReadOnly: false,
+    isProjectEditableLoading: false,
+    isProjectEditable: true,
+    isCanUserEditScriptureUnresolved: false,
+    canUserEditScripture: true,
+    isSyncBlocked: false,
+    isInterfaceModeLoading: false,
+    viewType: 'standard',
+    isPowerMode: true,
+  };
+
+  it('is writable when nothing blocks editing', () => {
+    expect(deriveReadOnlyFlags(writable)).toEqual({
+      isReadOnlyEffective: false,
+      isDurablyReadOnly: false,
+      isReadOnlyForTitle: false,
+    });
+  });
+
+  it.each<[string, Partial<ReadOnlyInputs>]>([
+    ['isReadOnly', { isReadOnly: true }],
+    ['project not editable', { isProjectEditable: false }],
+    ['user cannot edit Scripture', { canUserEditScripture: false }],
+    ['Preview in Power mode', { viewType: 'formatted', isPowerMode: true }],
+  ])('is read-only in every output for %s', (_name, override) => {
+    expect(deriveReadOnlyFlags({ ...writable, ...override })).toEqual({
+      isReadOnlyEffective: true,
+      isDurablyReadOnly: true,
+      isReadOnlyForTitle: true,
+    });
+  });
+
+  it('freezes editing but is not durably read-only while a sync blocks it', () => {
+    expect(deriveReadOnlyFlags({ ...writable, isSyncBlocked: true })).toEqual({
+      isReadOnlyEffective: true,
+      isDurablyReadOnly: false,
+      isReadOnlyForTitle: false,
+    });
+  });
+
+  it.each<[string, Partial<ReadOnlyInputs>]>([
+    ['project editability loading', { isProjectEditableLoading: true }],
+    ['permission unresolved', { isCanUserEditScriptureUnresolved: true }],
+    ['interface mode loading', { isInterfaceModeLoading: true }],
+  ])('fails closed with an undefined title flag while %s', (_name, override) => {
+    expect(deriveReadOnlyFlags({ ...writable, ...override })).toEqual({
+      isReadOnlyEffective: true,
+      isDurablyReadOnly: false,
+      isReadOnlyForTitle: undefined,
+    });
+  });
+
+  it('leaves the formatted view writable in Simple mode', () => {
+    expect(deriveReadOnlyFlags({ ...writable, viewType: 'formatted', isPowerMode: false })).toEqual(
+      { isReadOnlyEffective: false, isDurablyReadOnly: false, isReadOnlyForTitle: false },
+    );
+  });
+
+  it.each([true, false])('never makes the markers view read-only (Power: %s)', (isPowerMode) => {
+    expect(deriveReadOnlyFlags({ ...writable, viewType: 'markers', isPowerMode })).toEqual({
+      isReadOnlyEffective: false,
+      isDurablyReadOnly: false,
+      isReadOnlyForTitle: false,
+    });
   });
 });
 
