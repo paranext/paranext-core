@@ -5197,6 +5197,25 @@ function savedGrid(
 }
 
 describe('buildScriptureTextGridWebView', () => {
+  it.each(['simple', 'power'] as const)(
+    'opts its icon in to theme colouring in %s mode',
+    async (interfaceMode) => {
+      const papi = createGridProviderMockPapi(interfaceMode);
+
+      const definition = await buildScriptureTextGridWebView(
+        papi,
+        savedGrid('p1'),
+        {},
+        GRID_ASSETS,
+      );
+
+      expect(definition.iconUrl).toBe(
+        'papi-extension://platformScriptureEditor/assets/library.svg',
+      );
+      expect(definition.isIconMonochrome).toBe(true);
+    },
+  );
+
   it('binds the project a switch supplied rather than the one the tab already had', async () => {
     // The provider half of the re-point. Inverting this precedence leaves the panel on the
     // outgoing project, which is the bug this whole mechanism exists to prevent — and it is only

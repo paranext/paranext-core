@@ -132,9 +132,6 @@ vi.mock('@papi/frontend', () => ({
     notifications: { send: (...args: unknown[]) => notify(...args) },
     // `useTextCollectionProjectId` reads ActiveEditorProjectId off the window data provider.
     window: { dataProviderName: 'platform.windowDataProvider' },
-    // The web view swaps its tab icon on theme change; these tests never exercise that, so the
-    // subscription resolves to a no-op unsubscriber and never delivers a theme.
-    themes: { subscribeCurrentTheme: () => Promise.resolve(() => undefined) },
     // The DBL install lookup re-asks on project changes; these tests never fire one.
     network: { getNetworkEvent: () => undefined },
   },
@@ -224,7 +221,7 @@ vi.mock('./scripture-text-grid/scripture-text-grid.component', () => ({
 }));
 
 // jsdom implements none of ResizeObserver, IntersectionObserver, matchMedia, or scrollIntoView, and
-// this render path touches all four: `useTabIconSelection` observes the body's intersection to
+// this render path touches all four: `useViewVisibility` observes the body's intersection to
 // learn whether its tab is active, and platform-bible-react's Popover/Tooltip/ToggleGroup wire
 // ResizeObservers and query media features. No-op stubs keep rendering from throwing so these tests
 // can assert on what is rendered.

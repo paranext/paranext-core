@@ -2851,6 +2851,8 @@ export async function buildScriptureTextGridWebView(
     content: webViewContent.content,
     styles: webViewContent.styles,
     iconUrl: 'papi-extension://platformScriptureEditor/assets/library.svg',
+    // Drawn in the tab's text colour so it follows the theme, in both modes
+    isIconMonochrome: true,
     scrollGroupScrRef: interfaceMode === 'simple' ? 0 : savedWebView.scrollGroupScrRef,
   };
 }
