@@ -16,17 +16,21 @@
  * NOT covered (need an app relaunch the CDP fixture can't do; verified manually): `useWebViewState`
  * restart-persistence, and feature-flag-OFF hiding the view (registration happens at activation).
  */
+import type { Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/enhanced-resources.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
+import { closeAllNonHomeDockTabs, openEnhancedResource } from './test-helpers';
 import {
-  closeAllNonHomeDockTabs,
   discoverAdminTextConnectionProject,
+  armColumnRenderMeasure,
+  flagResourcesAndOpenGrid,
   flagResourcesAndOpenScriptureTextGrid,
-  openEnhancedResource,
+  openAlignedGridWithResources,
+  readColumnRenderMs,
   openScriptureTextGrid,
   restoreScriptureTextGridProjectSettings,
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
-} from './test-helpers';
+} from './scripture-text-grid.page';
 
 test.describe('Scripture Text Grid (scaffold)', () => {
   test.beforeEach(async ({ mainPage }) => {
@@ -461,22 +465,11 @@ test.describe('Scripture Text Grid renderer', () => {
     );
 
     const stg = await openScriptureTextGrid(mainPage, projectId);
+    // Armed before the switch, read after it: the switch itself ends with an awaited keypress, so
+    // anything that starts the clock afterwards is measuring an already-finished render.
+    await armColumnRenderMeasure(stg.frame, 5);
     await stg.switchToChapterView();
-
-    const elapsedMs = await stg.frame.locator('body').evaluate(async () => {
-      const start = performance.now();
-      await new Promise<void>((resolve) => {
-        const observer = new MutationObserver(() => {
-          if (document.querySelectorAll('[role="region"]').length >= 5) {
-            observer.disconnect();
-            resolve();
-          }
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
-        if (document.querySelectorAll('[role="region"]').length >= 5) resolve();
-      });
-      return performance.now() - start;
-    });
+    const elapsedMs = await readColumnRenderMs(stg.frame);
 
     await expect(stg.frame.locator('[role="region"]')).toHaveCount(5, { timeout: 15_000 });
     // Chapter mode renders full chapters (10–100x a verse cell), so the ~220ms verse threshold does
@@ -545,15 +538,17 @@ test.describe('Scripture Text Grid empty state', () => {
     await expect(stg.frame.getByTestId('scripture-text-grid-empty-state')).toBeVisible({
       timeout: 15_000,
     });
-    await expect(stg.frame.locator('[role="gridcell"]')).toHaveCount(0);
+    // The verse listitem is the cell; `[role="gridcell"]` has matched nothing since PT-4157 removed
+    // that role, so asserting zero of those could not fail.
+    await expect(stg.frame.locator('[role="listitem"]')).toHaveCount(0);
   });
 });
 
 // ---------------------------------------------------------------------------
-// PT-4057 — accessibility pass on top of the PT-4062 renderer. Verse cells are `listitem`s that
-// carry a reference-bearing accessible name, are keyboard-reachable (Tab) and -activatable
-// (Enter/Space) with a visible focus ring, and announce chapter-context open/close through a polite
-// live region. Local-only for the same reason as the renderer specs above (mutate real settings).
+// PT-4057 — accessibility pass on top of the PT-4062 renderer. Each verse row is a `listitem`
+// whose name control (`[data-disclosure-control]`) carries a reference-bearing accessible name, is
+// keyboard-reachable (Tab) and -activatable (Enter/Space) with a visible focus ring; the row
+// announces chapter-context open/close through a polite live region. Local-only for the same reason as the renderer specs above (mutate real settings).
 // ---------------------------------------------------------------------------
 const ACC_RESOURCE_A_ID = 'aabbccddeeff00112233';
 const ACC_RESOURCE_B_ID = 'bbccddeeff0011223344';
@@ -567,7 +562,7 @@ test.describe('Scripture Text Grid accessibility', () => {
     await restoreScriptureTextGridProjectSettings(mainPage);
   });
 
-  test('listitem accessible name includes the resource label and verse reference', async ({
+  test('row control accessible name includes the resource label and verse reference', async ({
     mainPage,
   }) => {
     test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
@@ -585,7 +580,9 @@ test.describe('Scripture Text Grid accessibility', () => {
     ]);
 
     const stg = await openScriptureTextGrid(mainPage, projectId);
-    const firstCell = stg.frame.locator('[role="listitem"]').first();
+    // The name lives on the row's disclosure control, not the row: the row is a `listitem` and the
+    // control owns the accessible name, the tab stop and `aria-expanded`.
+    const firstCell = stg.frame.locator('[data-disclosure-control]').first();
     await expect(firstCell).toBeVisible({ timeout: 15_000 });
     // Accessible name is "<label>, <BOOK C:V>" — anchored so a stray substring can't match.
     // The book id is a 3-char USFM code; only the first char may be a digit (1-4, e.g. 1SA, 2KI,
@@ -593,7 +590,7 @@ test.describe('Scripture Text Grid accessibility', () => {
     await expect(firstCell).toHaveAttribute('aria-label', /^[^,]+,\s[A-Z1-4][A-Z]{2}\s\d+:\d+$/);
   });
 
-  test('Tab moves focus between listitems, not into editor content', async ({ mainPage }) => {
+  test('Tab moves focus between row controls, not into editor content', async ({ mainPage }) => {
     test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
     await waitForAppReady(mainPage);
     const projectId = await discoverAdminTextConnectionProject(mainPage);
@@ -605,10 +602,10 @@ test.describe('Scripture Text Grid accessibility', () => {
     ]);
 
     const stg = await openScriptureTextGrid(mainPage, projectId);
-    const firstCell = stg.frame.locator('[role="listitem"]').first();
+    const firstCell = stg.frame.locator('[data-disclosure-control]').first();
     await expect(firstCell).toBeVisible({ timeout: 15_000 });
 
-    // Capture the first cell's aria-label to verify Tab moves focus to a different cell.
+    // Capture the first control's aria-label to verify Tab moves focus to a different row.
     const firstLabel = await firstCell.getAttribute('aria-label');
     await firstCell.focus();
     await mainPage.keyboard.press('Tab');
@@ -617,15 +614,25 @@ test.describe('Scripture Text Grid accessibility', () => {
     // `FrameLocator` has no `evaluate` (Playwright 1.58). Going through a locator inside the
     // frame runs this in the FRAME's document, which is the point: reading
     // `document.activeElement` from the parent would pass even if focus escaped the iframe.
-    const focused = await stg.frame.locator('body').evaluate(() => ({
-      role: document.activeElement?.getAttribute('role') ?? undefined,
-      label: document.activeElement?.getAttribute('aria-label') ?? undefined,
-    }));
-    expect(focused.role).toBe('listitem');
+    const focused = await stg.frame.locator('body').evaluate(() => {
+      const element = document.activeElement;
+      return {
+        label: element?.getAttribute('aria-label') ?? undefined,
+        isInsideRow: !!element?.closest('[role="listitem"]'),
+        isRowControl: !!element?.matches('[data-disclosure-control], [data-reorder-handle-id]'),
+        isEditable: element instanceof HTMLElement && element.isContentEditable,
+      };
+    });
+    // The grip leads each row, before its name, so Tab from row 1's name lands on row 2's grip (or
+    // on row 2's name when reordering is off). Either way it is a row control, not the editor's
+    // contenteditable surface.
     expect(focused.label).not.toBe(firstLabel);
+    expect(focused.isInsideRow).toBe(true);
+    expect(focused.isRowControl).toBe(true);
+    expect(focused.isEditable).toBe(false);
   });
 
-  test('focused listitem shows a focus ring', async ({ mainPage }) => {
+  test('focused row control shows a focus ring', async ({ mainPage }) => {
     test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
     await waitForAppReady(mainPage);
     const projectId = await discoverAdminTextConnectionProject(mainPage);
@@ -637,7 +644,7 @@ test.describe('Scripture Text Grid accessibility', () => {
     ]);
 
     const stg = await openScriptureTextGrid(mainPage, projectId);
-    const firstCell = stg.frame.locator('[role="listitem"]').first();
+    const firstCell = stg.frame.locator('[data-disclosure-control]').first();
     await expect(firstCell).toBeVisible({ timeout: 15_000 });
     // The ring is `focus-visible`-gated, which Chromium applies only for keyboard-originated focus —
     // a programmatic `.focus()` would not trigger it. Land on the cell, then leave and re-enter via
@@ -646,7 +653,7 @@ test.describe('Scripture Text Grid accessibility', () => {
     await mainPage.keyboard.press('Shift+Tab');
     await mainPage.keyboard.press('Tab');
     const boxShadow = await stg.frame
-      .locator('[role="listitem"]:focus')
+      .locator('[data-disclosure-control]:focus')
       .evaluate((el) => getComputedStyle(el).boxShadow);
     expect(boxShadow).not.toBe('none');
   });
@@ -686,6 +693,154 @@ test.describe('Scripture Text Grid accessibility', () => {
     // Closing announces a distinct "closed" message (a polite region needs a text change to re-fire).
     await expect(status).not.toHaveText('');
     expect(await status.textContent()).not.toBe(openedMessage);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Verse-aligned (Grid) view.
+//
+// Alignment can only be checked where there is layout, so these measure rendered geometry in the
+// running app: every column's block for verse N must have the same top. No unit test can make that
+// assertion (jsdom lays nothing out), and it fails if the subgrid chain breaks anywhere between the
+// grid root and the verse blocks — including inside the editor's own wrappers, which this repo does
+// not own.
+// ---------------------------------------------------------------------------
+test.describe('Scripture Text Grid — verse-aligned (Grid) view', () => {
+  test.beforeEach(async ({ mainPage }) => {
+    await closeAllNonHomeDockTabs(mainPage);
+  });
+
+  test.afterEach(async ({ mainPage }) => {
+    await restoreScriptureTextGridProjectSettings(mainPage);
+  });
+
+  /**
+   * Shared prerequisites: a local admin-writable project and enough downloaded resources. Returns
+   * the project id, or skips the test with a warning naming what is missing.
+   */
+  async function requireProjectAndResources(mainPage: Page, resourceCount: number) {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+    warnAndSkip(
+      REAL_RESOURCE_IDS.length < resourceCount,
+      `Set E2E_TEST_RESOURCE_IDS with at least ${resourceCount} downloaded resource IDs`,
+    );
+    return projectId;
+  }
+
+  test('verse N of every resource shares a row, natively', async ({ mainPage }) => {
+    const projectId = await requireProjectAndResources(mainPage, 2);
+    const stg = await openAlignedGridWithResources(
+      mainPage,
+      projectId,
+      REAL_RESOURCE_IDS.slice(0, 2),
+      'Aligned',
+    );
+
+    const grid = stg.frame.getByTestId('scripture-text-grid-aligned');
+    await expect(stg.frame.locator('.verse-block[data-verse-start]').first()).toBeVisible({
+      timeout: 15_000,
+    });
+
+    const topsByVerse = await grid.evaluate((root) => {
+      const tops: Record<string, number[]> = {};
+      root.querySelectorAll<HTMLElement>('.verse-block[data-verse-start]').forEach((block) => {
+        const verse = block.dataset.verseStart ?? '';
+        (tops[verse] ??= []).push(Math.round(block.getBoundingClientRect().top));
+      });
+      return tops;
+    });
+
+    // Positive control: some verse must be rendered by more than one column, or "every shared verse
+    // aligns" would hold vacuously over a grid where no verse is shared.
+    const sharedVerses = Object.entries(topsByVerse).filter(([, tops]) => tops.length > 1);
+    expect(sharedVerses.length).toBeGreaterThan(0);
+    sharedVerses.forEach(([verse, tops]) => {
+      expect(new Set(tops).size, `verse ${verse} tops: ${tops.join(', ')}`).toBe(1);
+    });
+  });
+
+  test('no interior grid lines between columns', async ({ mainPage }) => {
+    const projectId = await requireProjectAndResources(mainPage, 2);
+    const stg = await openAlignedGridWithResources(
+      mainPage,
+      projectId,
+      REAL_RESOURCE_IDS.slice(0, 2),
+      'Borderless',
+    );
+
+    const columnBorders = await stg.frame
+      .getByTestId('scripture-text-grid-aligned')
+      .evaluate((root) =>
+        Array.from(root.children).map((column) => {
+          const style = getComputedStyle(column);
+          return [style.borderLeftWidth, style.borderRightWidth].join('/');
+        }),
+      );
+
+    expect(columnBorders.length).toBeGreaterThan(1);
+    columnBorders.forEach((borders) => expect(borders).toBe('0px/0px'));
+  });
+
+  test('columns run right-to-left under an RTL locale', async ({ mainPage }) => {
+    const projectId = await requireProjectAndResources(mainPage, 2);
+    const stg = await openAlignedGridWithResources(
+      mainPage,
+      projectId,
+      REAL_RESOURCE_IDS.slice(0, 2),
+      'AlignedRtl',
+    );
+
+    // The chapter row's RTL guard asserts `flex-direction`, which this branch does not use: the
+    // columns here are grid tracks, and a track's inline axis follows `dir` only if nothing pins it
+    // to a physical side. Measure where the first column actually lands instead.
+    const firstColumnLeft = await stg.frame
+      .getByTestId('scripture-text-grid-aligned')
+      .evaluate((root) => {
+        const readFirstLeft = () => {
+          const [first] = Array.from(root.children);
+          return first.getBoundingClientRect().left;
+        };
+        document.documentElement.dir = 'ltr';
+        const ltr = readFirstLeft();
+        document.documentElement.dir = 'rtl';
+        const rtl = readFirstLeft();
+        document.documentElement.dir = 'ltr';
+        return { ltr, rtl };
+      });
+
+    // Same first column, opposite edge of the grid: in LTR it starts at the left, in RTL it starts
+    // further right, because the remaining columns now sit to its left.
+    expect(firstColumnLeft.rtl).toBeGreaterThan(firstColumnLeft.ltr);
+  });
+
+  test('grid frame budget: >=5 aligned columns render under the chapter-mode baseline', async ({
+    mainPage,
+  }) => {
+    const projectId = await requireProjectAndResources(mainPage, 5);
+    // Opened in Verse view, so the switch into Grid is a statement of its own that the measurement
+    // can bracket. `openAlignedGridWithResources` would switch and then await the grid, and the
+    // columns are the grid's own children from the same React pass — nothing left to measure.
+    const stg = await flagResourcesAndOpenGrid(
+      mainPage,
+      projectId,
+      REAL_RESOURCE_IDS.slice(0, 5),
+      'AlignedPerf',
+    );
+
+    await armColumnRenderMeasure(stg.frame, 5);
+    await stg.switchToGridView();
+    const elapsedMs = await readColumnRenderMs(stg.frame);
+
+    await expect(stg.frame.locator('[role="region"]')).toHaveCount(5, { timeout: 15_000 });
+    // Same threshold as the chapter-mode budget: this renders the same five whole chapters, and
+    // alignment is native layout rather than measurement, so it should not cost materially more.
+    // eslint-disable-next-line no-console -- surfaces the measured baseline in CI/local logs
+    console.log(`[aligned frame budget] ${elapsedMs.toFixed(1)}ms for 5 aligned columns`);
+    expect(elapsedMs).toBeLessThan(2000);
   });
 });
 

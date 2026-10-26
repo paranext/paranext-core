@@ -1,4 +1,4 @@
-import { type Frame, type Page } from '@playwright/test';
+import { type Frame, type Locator, type Page } from '@playwright/test';
 import {
   LAUNCH_PHASE_TIMEOUT_MS,
   requireIsolatedProjectRoot,
@@ -6,6 +6,7 @@ import {
   sendPapiRequestOnce,
   waitForPapiMethodRegistered,
 } from './helpers';
+import { suppressOnboardingTour } from './onboarding-tour.page';
 
 // Re-exported so the specs that reach for it through this module keep working: it is defined in
 // helpers.ts, which is the lower-level module and the single home for it.
@@ -369,6 +370,9 @@ function escapeForRegExp(value: string): string {
  * book name localized, and the app under test runs in English, so a book CODE never matches.
  */
 export async function navigateToolbarBcv(mainPage: Page, reference: string): Promise<void> {
+  // Simple-mode specs never reach `waitForHomeTab` (that layout has no Home tab), so this is the
+  // one place every caller passes through before the tour could block the click below.
+  await suppressOnboardingTour(mainPage);
   await mainPage.locator('button[aria-label="book-chapter-trigger"]').first().click();
   const input = mainPage.locator('[data-radix-popper-content-wrapper] input');
   await input.fill(reference);
@@ -525,4 +529,18 @@ export async function findScriptureEditorFrame(page: Page, timeout = 30_000): Pr
     await page.waitForTimeout(500);
   }
   throw new Error(`Scripture editor not found: no Project button visible after ${timeout}ms`);
+}
+
+/**
+ * Click the very start of `glyph`'s rendered text (the boundary immediately BEFORE it) — the
+ * insertion point a user would click to type new content right before a marker glyph, or to reach
+ * the end of the text a closing glyph follows. A plain `.click()` lands mid-glyph at an
+ * unpredictable offset; clicking just inside the left edge (x: 1) is the reliable way to place the
+ * caret at a specific structural boundary in a contentEditable without counting characters (glyph
+ * text length varies with `+`-nesting).
+ */
+export async function clickBeforeGlyph(glyph: Locator): Promise<void> {
+  const box = await glyph.boundingBox();
+  if (!box) throw new Error('Glyph has no bounding box (not visible/attached)');
+  await glyph.click({ position: { x: 1, y: box.height / 2 } });
 }

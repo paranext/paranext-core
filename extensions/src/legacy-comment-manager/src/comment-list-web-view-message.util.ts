@@ -32,9 +32,9 @@ export type CurrentCommentListView = {
  * `message.filters`/`message.scopeFilter` also accept the deprecated legacy shapes
  * ({@link LegacyCommentFilters}, {@link LegacyScopeFilter}) for backward compatibility with
  * out-of-repo senders; `applyFilterOverrides`/`resolveScopeFilter` map both onto the current model
- * and normalize anything unrecognized to its default, so this function never passes an invalid
- * preset or scope through to the caller. This function runs only in a web view, so it supplies the
- * `warn` sink `applyFilterOverrides` needs (see {@link WarnFn}).
+ * and normalize anything unrecognized to `'all'`/`'all-books'`, so this function never passes an
+ * invalid preset or scope through to the caller. This function runs only in a web view, so it
+ * supplies the `warn` sink `applyFilterOverrides` needs (see {@link WarnFn}).
  */
 export function resolveSetFiltersMessage(
   message: {

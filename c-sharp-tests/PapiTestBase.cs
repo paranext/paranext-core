@@ -8,6 +8,8 @@ using Paranext.DataProvider;
 using Paranext.DataProvider.Projects;
 using Paranext.DataProvider.Projects.SendReceive;
 using Paratext.Data;
+using Paratext.Data.ProjectSettingsAccess;
+using PtxUtils;
 
 namespace TestParanextDataProvider
 {
@@ -90,6 +92,21 @@ namespace TestParanextDataProvider
             DummyScrText scrText = new();
             return scrText;
         }
+
+        /// <summary>
+        /// Sets the project's type, giving a derived type the placeholder base project it needs
+        /// </summary>
+        protected static void SetProjectType(ScrText scrText, Enum<ProjectType> type) =>
+            scrText.Settings.TranslationInfo = new TranslationInformation(
+                type,
+                type.IsDerivedType() ? "PlaceholderBase" : ""
+            );
+
+        /// <summary>
+        /// Makes the project a Study Bible Additions project, which Platform.Bible can't open
+        /// </summary>
+        protected static void MakeStudyBibleAdditions(ScrText scrText) =>
+            SetProjectType(scrText, ProjectType.StudyBibleAdditions);
 
         /// <summary>
         /// Creates project details from the specified project

@@ -30,7 +30,8 @@ export const CONFIRM_DIALOG_TYPE = 'platform.confirm';
  */
 export const RESOURCE_PICKER_DIALOG_TYPE = 'platform.resourcePicker';
 /**
- * The tabType for the project picker dialog in `project-picker.dialog.tsx`
+ * The tabType for the project picker dialog in `project-picker.dialog.tsx`. Lists the user's
+ * projects only — editable and read-only — never published resources.
  *
  * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
  *   It is not yet a stable contract.
@@ -47,12 +48,22 @@ export const SHARE_LAYOUT_DIALOG_TYPE = 'platform.shareLayoutDialog';
 
 type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
 
-/** Options to provide when showing the Select Project dialog */
+/**
+ * Options to provide when showing the Select Project dialog. Projects that cannot be opened (see
+ * `ProjectMetadata.unsupportedReason`) are never listed, even when named in `includeProjectIds`.
+ */
 export type SelectProjectDialogOptions = ProjectDialogOptionsBase;
 
-/** Options to provide when showing the Select Multiple Project dialog */
+/**
+ * Options to provide when showing the Select Multiple Project dialog. Projects that cannot be
+ * opened (see `ProjectMetadata.unsupportedReason`) are never listed, even when named in
+ * `includeProjectIds`.
+ */
 export type SelectMultipleProjectsDialogOptions = ProjectDialogOptionsBase & {
-  /** Project IDs that should start selected in the dialog */
+  /**
+   * Project IDs that should start selected in the dialog. The id of a project that cannot be opened
+   * has no row to unselect, so it is returned unchanged on submit.
+   */
   selectedProjectIds?: string[];
 };
 
@@ -99,10 +110,17 @@ export type ResourcePickerDialogOptions = DialogOptions & {
    * one that is already on disk. Defaults to true.
    */
   allowSelectingInstalled?: boolean;
+  /**
+   * When true, texts whose licensing terms prohibit their use as a model or base for a new
+   * translation are shown greyed out, with the reason, and cannot be picked. Set it when picking a
+   * model text, not a reference text. Defaults to false.
+   */
+  disableRestrictedModelTexts?: boolean;
 };
 
 /**
- * Options to provide when showing the Project Picker dialog (no extra options needed)
+ * Options to provide when showing the Project Picker dialog (no extra options needed). The dialog
+ * lists the user's projects only — editable and read-only — never published resources.
  *
  * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
  *   It is not yet a stable contract.

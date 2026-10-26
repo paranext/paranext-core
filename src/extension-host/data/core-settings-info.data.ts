@@ -1,6 +1,6 @@
+import { getAllLoadedInterfaceLanguages } from '@extension-host/services/interface-languages.service';
 import { localization } from '@extension-host/services/papi-backend.service';
 import { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from '@shared/data/platform.data';
-import { localizationService } from '@shared/services/localization.service';
 import { AllSettingsValidators, SettingValidator } from '@shared/services/settings.service-model';
 import { formatZoomPercent, isValidZoomFactor } from '@shared/utils/content-zoom.util';
 import { formatReplacementString, isString, SettingsContribution } from 'platform-bible-utils';
@@ -60,6 +60,11 @@ export const platformSettings: SettingsContribution = [
         default: true,
         isHidden: true,
       },
+      'platform.internetUseChoiceAsked': {
+        label: '%settings_platform_internetUseChoiceAsked_label%',
+        default: false,
+        isHidden: true,
+      },
     },
   },
   // Settings a support person adjusts when helping a user troubleshoot, rather than settings a
@@ -88,12 +93,15 @@ export const platformSettings: SettingsContribution = [
 const interfaceLanguageValidator: SettingValidator<'platform.interfaceLanguage'> = async (
   newValue: string[],
 ): Promise<boolean> => {
-  const validLanguages = await localizationService.getAvailableInterfaceLanguages();
+  // Accept any language with a locale file, not only offered ones. Every write validates the whole
+  // list, so a user who already has a hidden language (primary or fallback) must still be able to
+  // save; and testers and translators set hidden languages on purpose.
+  const validLanguages = await getAllLoadedInterfaceLanguages();
   return (
     typeof newValue === 'object' &&
     Array.isArray(newValue) &&
     newValue.length > 0 &&
-    newValue.every((v) => typeof v === 'string' && v in validLanguages)
+    newValue.every((v) => typeof v === 'string' && Object.hasOwn(validLanguages, v))
   );
 };
 
@@ -109,6 +117,7 @@ const booleanValidator: SettingValidator<
   | 'platform.firstRunComplete'
   | 'platform.syncOnStartup'
   | 'platform.showRegistrationReminderOnStartup'
+  | 'platform.internetUseChoiceAsked'
 > = async (newValue): Promise<boolean> => {
   return typeof newValue === 'boolean';
 };
@@ -195,4 +204,5 @@ export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.firstRunComplete': booleanValidator,
   'platform.syncOnStartup': booleanValidator,
   'platform.showRegistrationReminderOnStartup': booleanValidator,
+  'platform.internetUseChoiceAsked': booleanValidator,
 };

@@ -2,18 +2,50 @@ import type { ReactNode } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { newPlatformError, type PlatformError } from 'platform-bible-utils';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { logger } from '@shared/services/logger.service';
+import { offerRestartAfterInterfaceLanguageChange } from '@renderer/services/interface-language-restart-prompt';
 import { Setting } from './setting.component';
 
-// Setting pulls in useData (only for the UI-language-selector fallback, unused by the string/
-// boolean cases below) and useLocalizedStrings; stub both so the component renders without a live
-// papi backend. Nothing under test reads their values.
+vi.mock('@renderer/services/interface-language-restart-prompt', () => ({
+  offerRestartAfterInterfaceLanguageChange: vi.fn(async () => {}),
+}));
+
+type LanguagesStub = Record<string, { autonym: string }>;
+type UiLanguageSelectorStubProps = {
+  knownUiLanguages: LanguagesStub;
+  primaryLanguage: string;
+  onLanguagesChange?: (newUiLanguages: string[]) => void;
+};
+
+// Lets a test stand in for the loaded offered languages; unset means "still loading", which hands
+// back the component's own default list the way useData does before data arrives.
+const availableLanguages = vi.hoisted(() => {
+  const state: { loaded?: LanguagesStub | PlatformError } = {};
+  return state;
+});
+// Records what the component hands UiLanguageSelector; renders nothing.
+const uiLanguageSelectorStub = vi.hoisted(() =>
+  vi.fn<(props: UiLanguageSelectorStubProps) => undefined>(() => undefined),
+);
+const lastSelectorProps = () => uiLanguageSelectorStub.mock.lastCall?.[0];
+
+// Setting pulls in useData (for the interface-language selector's offered languages) and
+// useLocalizedStrings; stub both so the component renders without a live papi backend. Only the
+// interface-language tests below read the offered languages. Each localized string resolves to its
+// own key, so a test can find a string by key.
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useData: vi.fn(() => ({
-    AvailableInterfaceLanguages: () => [{}, vi.fn(), false],
+    AvailableInterfaceLanguages: (_selector: undefined, defaultValue: unknown) => [
+      availableLanguages.loaded ?? defaultValue,
+      vi.fn(),
+      false,
+    ],
   })),
-  useLocalizedStrings: vi.fn(() => [{}]),
+  useLocalizedStrings: vi.fn((keys: string[]) => [
+    Object.fromEntries(keys.map((key) => [key, key])),
+  ]),
 }));
 
 // The real ErrorPopover only renders `errorDetails` inside a Radix popover that opens on click;
@@ -29,6 +61,7 @@ vi.mock('platform-bible-react', async (importOriginal) => {
         <div data-testid="error-details">{errorDetails}</div>
       </>
     ),
+    UiLanguageSelector: uiLanguageSelectorStub,
   };
 });
 
@@ -53,6 +86,7 @@ const ERROR_STRINGS = {
   '%settings_errorMessages_viewError%': 'View error',
   '%settings_errorMessages_invalidValue%': 'Invalid value',
   '%settings_errorMessages_notWritableYet%': 'Setting not writable yet',
+  '%settings_errorMessages_syncEditBlocked%': 'Editing paused for sync',
 };
 
 /** The stepper's percentage field, which shows the factor as a whole percentage. */
@@ -75,8 +109,13 @@ const baseProps = {
   validateProjectSetting: vi.fn(),
 };
 
+// platform.interfaceLanguage is a user setting, and the props union forbids the project validator
+// there.
+const userSettingProps = { setSetting: baseProps.setSetting, isLoading: baseProps.isLoading };
+
 beforeEach(() => {
   vi.clearAllMocks();
+  availableLanguages.loaded = undefined;
 });
 
 describe('Setting disabled forwarding', () => {
@@ -198,12 +237,12 @@ describe('failed setting writes', () => {
     vi.mocked(useLocalizedStrings).mockReturnValue([{}, false]);
   });
 
-  it('logs a rejected write so the failure outlives the component', async () => {
+  it('shows the localized sync notice, not the raw message, when the write-gate rejects the write', async () => {
     vi.useFakeTimers();
     vi.mocked(useLocalizedStrings).mockReturnValue([ERROR_STRINGS, false]);
-    // The shape of a Send/Receive write-gate rejection, which reports only into component state —
-    // and `setErrorMessage` is a no-op once the settings tab has been closed.
-    const setSetting = vi.fn().mockRejectedValue(new Error('project is syncing (SR_EDIT_BLOCKED)'));
+    const setSetting = vi
+      .fn()
+      .mockRejectedValue(new Error('Project abc is syncing; write rejected (SR_EDIT_BLOCKED)'));
     render(
       <Setting
         setSetting={setSetting}
@@ -216,9 +255,36 @@ describe('failed setting writes', () => {
     );
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Spanish' } });
     await act(() => vi.advanceTimersByTimeAsync(500));
+    const errorDetails = screen.getByTestId('error-details');
+    expect(errorDetails).toHaveTextContent('Editing paused for sync');
+    expect(errorDetails).not.toHaveTextContent(/SR_EDIT_BLOCKED|Error changing setting/);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('SR_EDIT_BLOCKED'));
+  });
+
+  it('shows the raw failure message and logs it when a rejected write is not the sync write-gate', async () => {
+    vi.useFakeTimers();
+    vi.mocked(useLocalizedStrings).mockReturnValue([ERROR_STRINGS, false]);
+    // An unexpected write failure, which would otherwise report only into component state — and
+    // `setErrorMessage` is a no-op once the settings tab has been closed, so the log is what
+    // outlives the component.
+    const setSetting = vi.fn().mockRejectedValue(new Error('disk full'));
+    render(
+      <Setting
+        setSetting={setSetting}
+        isLoading={false}
+        validateProjectSetting={vi.fn().mockResolvedValue(true)}
+        settingKey="platform.language"
+        setting="English"
+        label="Language"
+      />,
+    );
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Spanish' } });
+    await act(() => vi.advanceTimersByTimeAsync(500));
+    expect(screen.getByTestId('error-details')).toHaveTextContent(/Error changing setting/);
+    expect(screen.getByTestId('error-details')).not.toHaveTextContent('Editing paused for sync');
     expect(logger.warn).toHaveBeenCalledTimes(1);
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('platform.language'));
-    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('SR_EDIT_BLOCKED'));
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('disk full'));
   });
 
   it('clears an error left by a failed validation once a later change writes successfully', async () => {
@@ -574,5 +640,316 @@ describe('platform.zoomFactor stepper', () => {
     );
     expect(screen.getByDisplayValue('30')).toBeInTheDocument();
     expect(screen.queryByRole('group')).toBeNull();
+  });
+});
+
+describe('interface language selector', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const renderLanguageSetting = (setting: string[], setSetting = vi.fn()) =>
+    render(
+      // A user setting, so it takes validateOtherSetting rather than baseProps' project validator.
+      <Setting
+        setSetting={setSetting}
+        isLoading={false}
+        validateOtherSetting={vi.fn().mockResolvedValue(true)}
+        settingKey="platform.interfaceLanguage"
+        setting={setting}
+        label="Interface language"
+      />,
+    );
+
+  /** Picks `tag` as the primary language the way UiLanguageSelector reports it, then writes. */
+  const choosePrimary = async (tag: string, fallbackLanguages: string[]) => {
+    act(() => {
+      lastSelectorProps()?.onLanguagesChange?.([
+        tag,
+        ...fallbackLanguages.filter((language) => language !== tag),
+      ]);
+    });
+    await act(() => vi.advanceTimersByTimeAsync(500));
+  };
+
+  it('switching the primary language keeps the other offered languages, the old primary included', async () => {
+    vi.useFakeTimers();
+    const setSetting = vi.fn().mockResolvedValue(undefined);
+    renderLanguageSetting(['es', 'en'], setSetting);
+    await choosePrimary('en', ['en']);
+    expect(setSetting).toHaveBeenCalledWith(['en', 'es']);
+  });
+
+  it('switching the primary language drops languages that are not offered', async () => {
+    vi.useFakeTimers();
+    const setSetting = vi.fn().mockResolvedValue(undefined);
+    renderLanguageSetting(['fr', 'zh-hans', 'es'], setSetting);
+    await choosePrimary('en', ['zh-hans', 'es']);
+    expect(setSetting).toHaveBeenCalledWith(['en', 'es']);
+  });
+
+  it('offers a restart once the new language has been written', async () => {
+    vi.useFakeTimers();
+    const setSetting = vi.fn().mockResolvedValue(undefined);
+    renderLanguageSetting(['en'], setSetting);
+    await choosePrimary('es', []);
+    expect(offerRestartAfterInterfaceLanguageChange).toHaveBeenCalledWith(['en'], ['es', 'en']);
+  });
+
+  it('does not offer a restart when another list setting is written', async () => {
+    vi.useFakeTimers();
+    const setSetting = vi.fn().mockResolvedValue(undefined);
+    render(
+      <Setting
+        setSetting={setSetting}
+        isLoading={false}
+        validateOtherSetting={vi.fn().mockResolvedValue(true)}
+        settingKey="platformGetResources.excludePdpFactoryIdsInHome"
+        setting={[]}
+        label="Excluded factories"
+      />,
+    );
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '["x"]' } });
+    await act(() => vi.advanceTimersByTimeAsync(500));
+    // Positive control: the list was written.
+    expect(setSetting).toHaveBeenCalledWith(['x']);
+    expect(offerRestartAfterInterfaceLanguageChange).not.toHaveBeenCalled();
+  });
+
+  it('does not offer a restart when writing the new language fails', async () => {
+    vi.useFakeTimers();
+    const setSetting = vi.fn().mockRejectedValue(new Error('write rejected'));
+    renderLanguageSetting(['en'], setSetting);
+    await choosePrimary('es', []);
+    // Positive control: the write was attempted.
+    expect(setSetting).toHaveBeenCalled();
+    expect(offerRestartAfterInterfaceLanguageChange).not.toHaveBeenCalled();
+  });
+
+  it('offers exactly English and Español when the offered languages cannot be read', () => {
+    availableLanguages.loaded = newPlatformError('Localization service unavailable');
+    renderLanguageSetting(['en']);
+    expect(Object.keys(lastSelectorProps()?.knownUiLanguages ?? {}).sort()).toEqual(['en', 'es']);
+  });
+
+  it('offers exactly English and Español while the languages load', () => {
+    renderLanguageSetting(['en']);
+    expect(Object.keys(lastSelectorProps()?.knownUiLanguages ?? {}).sort()).toEqual(['en', 'es']);
+  });
+
+  it('keeps a hidden current language, by its autonym, once the offered languages load', () => {
+    availableLanguages.loaded = { en: { autonym: 'English' }, es: { autonym: 'Español' } };
+    renderLanguageSetting(['fr']);
+    expect(lastSelectorProps()?.primaryLanguage).toBe('fr');
+    expect(lastSelectorProps()?.knownUiLanguages.fr?.autonym).toBe('Français');
+    expect(Object.keys(lastSelectorProps()?.knownUiLanguages ?? {}).sort()).toEqual([
+      'en',
+      'es',
+      'fr',
+    ]);
+  });
+
+  it('keeps hidden fallback languages too', () => {
+    availableLanguages.loaded = { en: { autonym: 'English' }, es: { autonym: 'Español' } };
+    renderLanguageSetting(['es', 'zh-hans']);
+    expect(lastSelectorProps()?.knownUiLanguages['zh-hans']?.autonym).toBe('中文（简体）');
+  });
+});
+
+// The setting's label must name its control, or a screen reader announces an unnamed switch/textbox
+// and clicking the label does nothing.
+describe('Setting label association', () => {
+  it('names the Switch for a boolean setting', () => {
+    render(<Setting {...baseProps} settingKey="platform.isEditable" setting label="Editable" />);
+    expect(screen.getByRole('switch')).toHaveAccessibleName('Editable');
+  });
+
+  it('names the Input for a string setting', () => {
+    render(
+      <Setting {...baseProps} settingKey="platform.language" setting="English" label="Language" />,
+    );
+    expect(screen.getByRole('textbox')).toHaveAccessibleName('Language');
+  });
+
+  it('names the JSON-editor Input for an object setting', () => {
+    render(
+      <Setting
+        {...baseProps}
+        settingKey="platformScripture.modelTexts"
+        setting={{ dataVersion: '1.1.0', items: [] }}
+        label="Model texts"
+      />,
+    );
+    expect(screen.getByRole('textbox')).toHaveAccessibleName('Model texts');
+  });
+  it('keeps the associations separate when the same setting is mounted twice', () => {
+    // rc-dock keeps inactive settings tabs mounted, so one settingKey can be on screen twice at
+    // once. A settingKey-derived control id would be duplicated in the DOM and both labels would
+    // name the first control, so each instance must get its own id (hence useId).
+    render(
+      <>
+        <Setting
+          {...baseProps}
+          settingKey="platform.language"
+          setting="English"
+          label="Language (first tab)"
+        />
+        <Setting
+          {...baseProps}
+          settingKey="platform.language"
+          setting="Spanish"
+          label="Language (second tab)"
+        />
+      </>,
+    );
+
+    const first = screen.getByLabelText('Language (first tab)');
+    const second = screen.getByLabelText('Language (second tab)');
+    expect(first).toHaveAccessibleName('Language (first tab)');
+    expect(second).toHaveAccessibleName('Language (second tab)');
+    expect(first.id).not.toBe(second.id);
+  });
+
+  it('names the group around the interface-language selector', () => {
+    // UiLanguageSelector is a composite with its `id` on a wrapper div, which `htmlFor` cannot
+    // label, so the label has to name a group around it instead.
+    render(
+      <Setting
+        {...userSettingProps}
+        settingKey="platform.interfaceLanguage"
+        setting={['en']}
+        label="Interface language"
+      />,
+    );
+    expect(screen.getByRole('group', { name: 'Interface language' })).toBeInTheDocument();
+  });
+});
+
+// The description is otherwise only a hover tooltip on the label, which neither the keyboard nor a
+// screen reader can reach.
+describe('Setting description', () => {
+  it('describes the Input for a string setting', () => {
+    render(
+      <Setting
+        {...baseProps}
+        settingKey="platform.language"
+        setting="English"
+        label="Language"
+        description="The language of the project"
+      />,
+    );
+    expect(screen.getByRole('textbox')).toHaveAccessibleDescription('The language of the project');
+  });
+
+  it('describes the Switch for a boolean setting', () => {
+    render(
+      <Setting
+        {...baseProps}
+        settingKey="platform.isEditable"
+        setting
+        label="Editable"
+        description="Whether the project can be edited"
+      />,
+    );
+    expect(screen.getByRole('switch')).toHaveAccessibleDescription(
+      'Whether the project can be edited',
+    );
+  });
+
+  it('describes the group around the interface-language selector', () => {
+    render(
+      <Setting
+        {...userSettingProps}
+        settingKey="platform.interfaceLanguage"
+        setting={['en']}
+        label="Interface language"
+        description="The languages the interface is shown in"
+      />,
+    );
+    expect(screen.getByRole('group', { name: 'Interface language' })).toHaveAccessibleDescription(
+      'The languages the interface is shown in',
+    );
+  });
+});
+
+describe('Setting error announcement', () => {
+  afterEach(() => {
+    vi.mocked(useLocalizedStrings).mockReturnValue([{}, false]);
+  });
+
+  it('announces the error and marks the control invalid only while the setting is an error', () => {
+    vi.mocked(useLocalizedStrings).mockReturnValue([ERROR_STRINGS, false]);
+    const { rerender } = render(
+      <Setting {...baseProps} settingKey="platform.language" setting="English" label="Language" />,
+    );
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox')).not.toBeInvalid();
+
+    rerender(
+      <Setting
+        {...baseProps}
+        settingKey="platform.language"
+        setting={newPlatformError('Could not read the setting')}
+        label="Language"
+      />,
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('An error occurred');
+    expect(screen.getByRole('textbox')).toBeInvalid();
+  });
+});
+
+describe('Setting debounced write', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const acceptAll = async () => true;
+
+  it('writes once, 500 ms after the last edit, even when the setting re-renders between edits', async () => {
+    const setSetting = vi.fn(async () => {});
+    const props = {
+      setSetting,
+      isLoading: false,
+      validateProjectSetting: acceptAll,
+      settingKey: 'platform.language' as const,
+      label: 'Language',
+    };
+    const { rerender } = render(<Setting {...props} setting="English" />);
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Englis' } });
+    await act(() => vi.advanceTimersByTimeAsync(300));
+    rerender(<Setting {...props} setting="English" />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Engli' } });
+
+    await act(() => vi.advanceTimersByTimeAsync(499));
+    expect(setSetting).not.toHaveBeenCalled();
+
+    await act(() => vi.advanceTimersByTimeAsync(1));
+    expect(setSetting).toHaveBeenCalledTimes(1);
+    expect(setSetting).toHaveBeenCalledWith('Engli');
+  });
+
+  it('writes through the latest props when they change while an edit is pending', async () => {
+    const staleSetSetting = vi.fn(async () => {});
+    const latestSetSetting = vi.fn(async () => {});
+    const props = {
+      isLoading: false,
+      validateProjectSetting: acceptAll,
+      settingKey: 'platform.language' as const,
+      setting: 'English',
+      label: 'Language',
+    };
+    const { rerender } = render(<Setting {...props} setSetting={staleSetSetting} />);
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Spanish' } });
+    rerender(<Setting {...props} setSetting={latestSetSetting} />);
+    await act(() => vi.advanceTimersByTimeAsync(500));
+
+    expect(latestSetSetting).toHaveBeenCalledWith('Spanish');
+    expect(staleSetSetting).not.toHaveBeenCalled();
   });
 });

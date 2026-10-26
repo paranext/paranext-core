@@ -57,6 +57,7 @@ import {
   newPlatformError,
 } from 'platform-bible-utils';
 import { useMemo, useState } from 'react';
+import { getInternetBlockedMessageKey } from './internet-block-notification.utils';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -65,15 +66,16 @@ import { useMemo, useState } from 'react';
  * component.
  */
 export const GET_RESOURCES_STRING_KEYS = Object.freeze([
+  '%data_loading_error_internetAccess_disabled_2%',
   '%general_error_title%',
   '%resources_action%',
+  '%resources_actionDidNotTakeEffect%',
   '%resources_any_language%',
   '%resources_any_type%',
   '%resources_dialog_subtitle%',
   '%resources_dialog_title%',
   '%resources_downloadsUnavailable%',
   '%resources_filterBy%',
-  '%resources_filterInput%',
   '%resources_fullName%',
   '%resources_get%',
   '%resources_installed%',
@@ -88,6 +90,7 @@ export const GET_RESOURCES_STRING_KEYS = Object.freeze([
   '%resources_remove%',
   '%resources_results%',
   '%resources_retry%',
+  '%resources_filterInput_searchPlaceholder%',
   '%resources_showing%',
   '%resources_size%',
   '%resources_type%',
@@ -96,9 +99,7 @@ export const GET_RESOURCES_STRING_KEYS = Object.freeze([
   '%resources_types_searchPlaceholder%',
   '%resources_type_Scripture%',
   '%resources_type_Commentary%',
-  '%resources_type_ER%',
   '%resources_type_SLR%',
-  '%resources_type_XR%',
   '%resources_type_unknown%',
   '%resources_update%',
 ] as const);
@@ -109,28 +110,33 @@ type GetResourcesLocalizedStrings = {
 };
 
 /**
- * The resource types this build offers, each with the key of its type filter label. Typed as a
- * `Record` over `ResourceType` so a type added to that union does not compile until it is listed
- * here — otherwise it would be missing from the type filter and quietly dropped from saved
- * selections.
+ * The resource types Get Resources offers. It does not support Enhanced or XML resources, so it
+ * neither lists them nor offers them in the type filter.
  */
-const RESOURCE_TYPE_LABEL_KEYS: Record<ResourceType, GetResourcesLocalizedStringKey> = {
+type OfferedResourceType = Exclude<ResourceType, 'EnhancedResource' | 'XmlResource'>;
+
+/**
+ * The resource types this build offers, each with the key of its type filter label. Typed as a
+ * `Record` over `OfferedResourceType` so a type added to the `ResourceType` union does not compile
+ * until it is either listed here or excluded above — otherwise it would be missing from the type
+ * filter and quietly dropped from saved selections without anyone deciding that.
+ */
+const RESOURCE_TYPE_LABEL_KEYS: Record<OfferedResourceType, GetResourcesLocalizedStringKey> = {
   ScriptureResource: '%resources_type_Scripture%',
   CommentaryResource: '%resources_type_Commentary%',
-  EnhancedResource: '%resources_type_ER%',
   SourceLanguageResource: '%resources_type_SLR%',
-  XmlResource: '%resources_type_XR%',
 };
 
-function isOfferedResourceType(value: string): value is ResourceType {
+function isOfferedResourceType(value: string): value is OfferedResourceType {
   return Object.keys(RESOURCE_TYPE_LABEL_KEYS).includes(value);
 }
 
 /**
  * The resource types this build offers: the type filter's options, in the order they are listed
- * there, and the set a persisted type selection is narrowed against.
+ * there, and the set a persisted type selection is narrowed against. The Get Resources dialog opens
+ * with all of them selected.
  */
-const RESOURCE_TYPES: ResourceType[] =
+export const RESOURCE_TYPES: OfferedResourceType[] =
   Object.keys(RESOURCE_TYPE_LABEL_KEYS).filter(isOfferedResourceType);
 
 export type ResourceAction = 'install' | 'remove';
@@ -243,6 +249,39 @@ export function isResourceActionProviderNotReadyError(error: unknown): boolean {
   return message.includes(RESOURCE_ACTION_PROVIDER_NOT_READY);
 }
 
+/** Sentinel in the rejection for "the action reported success, but the list never agreed". */
+export const RESOURCE_ACTION_DID_NOT_TAKE_EFFECT = 'platformGetResources.actionDidNotTakeEffect';
+
+/**
+ * Builds the rejection a caller of `onInstallOrRemoveResource` raises when the action itself
+ * succeeded but the refreshed list still does not reflect it — an install whose resource is still
+ * missing, or a removal whose resource is still there.
+ *
+ * Something has to end the row's spinner in that case. The spinner stops when the list agrees, and
+ * a caller that cannot make it agree has no other way to say so: reporting success would leave the
+ * row spinning for as long as the dialog is open.
+ *
+ * `FAILED_PRECONDITION` because the fault is in the state of the system rather than in the request
+ * — the action was valid and was carried out.
+ *
+ * @returns The rejection reason to reject with.
+ */
+export function newResourceActionDidNotTakeEffectError(): PlatformError {
+  return newPlatformError(RESOURCE_ACTION_DID_NOT_TAKE_EFFECT, FAILED_PRECONDITION);
+}
+
+/**
+ * Whether a rejection from `onInstallOrRemoveResource` is "the list never reflected the action".
+ * Matched as a substring, for the reasons given on {@link isResourceActionProviderNotReadyError}.
+ *
+ * @param error The rejection reason.
+ * @returns Whether it is the did-not-take-effect sentinel.
+ */
+export function isResourceActionDidNotTakeEffectError(error: unknown): boolean {
+  const message = isPlatformError(error) ? error.message : getErrorMessage(error);
+  return message.includes(RESOURCE_ACTION_DID_NOT_TAKE_EFFECT);
+}
+
 // PAPI prepends `JSON-RPC Request error (<code>): ` to any rejection that crosses a process
 // boundary, and every real install/uninstall failure crosses one. That prefix is diagnostic noise
 // to whoever reads the alert, so strip it before showing the message. Spelled out rather than
@@ -335,7 +374,7 @@ export function GetResources({
   const anyType: string = getLocalizedString('%resources_any_type%');
   const dialogSubtitleText: string = getLocalizedString('%resources_dialog_subtitle%');
   const dialogTitleText: string = getLocalizedString('%resources_dialog_title%');
-  const filterInputText: string = getLocalizedString('%resources_filterInput%');
+  const filterInputText: string = getLocalizedString('%resources_filterInput_searchPlaceholder%');
   const filterByText: string = getLocalizedString('%resources_filterBy%');
   const fullNameText: string = getLocalizedString('%resources_fullName%');
   const getText: string = getLocalizedString('%resources_get%');
@@ -350,6 +389,9 @@ export function GetResources({
   const noResultsErrorText: string = getLocalizedString('%resources_noResultsError%');
   const retryText: string = getLocalizedString('%resources_retry%');
   const providerNotReadyText: string = getLocalizedString('%resources_providerNotReady%');
+  const actionDidNotTakeEffectText: string = getLocalizedString(
+    '%resources_actionDidNotTakeEffect%',
+  );
   const downloadsUnavailableText: string = getLocalizedString('%resources_downloadsUnavailable%');
   const openText: string = getLocalizedString('%resources_open%');
   const removeText: string = getLocalizedString('%resources_remove%');
@@ -367,20 +409,32 @@ export function GetResources({
   // action callback rejects, so failures are visible rather than only logged by the webview.
   const [actionError, setActionError] = useState<string | undefined>(undefined);
 
+  // This component holds the localized strings, so callers signal the not-ready and
+  // did-not-take-effect cases with sentinels rather than text, and internet blocks are swapped for
+  // the wording that points at the setting responsible. Anything else shows its own message, minus
+  // the cross-process prefix.
+  //
+  // An unresolved key falls back to the raw message: strings load asynchronously, and
+  // `%data_loading_error_...%` reads worse than the failure itself. `useLocalizedStrings` fills each
+  // key with the key itself until its string arrives, so "unresolved" means missing OR equal to the
+  // key.
+  const getActionErrorText = (error: unknown): string => {
+    if (isResourceActionProviderNotReadyError(error)) return providerNotReadyText;
+    if (isResourceActionDidNotTakeEffectError(error)) return actionDidNotTakeEffectText;
+    const blockedMessageKey = getInternetBlockedMessageKey(error);
+    const blockedText = blockedMessageKey
+      ? localizedStringsWithLoadingState[0][blockedMessageKey]
+      : undefined;
+    if (blockedText && blockedText !== blockedMessageKey) return blockedText;
+    return stripCrossProcessPrefix(getErrorMessage(error));
+  };
+
   const handleInstallOrRemoveResource = async (dblEntryUid: string, action: ResourceAction) => {
     setActionError(undefined);
     try {
       await onInstallOrRemoveResource(dblEntryUid, action);
     } catch (e) {
-      // Callers signal "the backing provider has not resolved yet" with a sentinel rather than a
-      // message, because the text the user reads has to be localized and this component is the half
-      // that holds the localized strings. Any other rejection carries a message worth showing —
-      // minus the cross-process prefix, which tells the user nothing.
-      setActionError(
-        isResourceActionProviderNotReadyError(e)
-          ? providerNotReadyText
-          : stripCrossProcessPrefix(getErrorMessage(e)),
-      );
+      setActionError(getActionErrorText(e));
     }
   };
 
@@ -411,12 +465,23 @@ export function GetResources({
   );
 
   /**
+   * The catalogue without the types this build does not offer. Everything below derives from this
+   * list, so an unsupported type cannot come back through "Any type" (an empty selection matches
+   * every type) or reach the Type column, whose labels cover only the offered types.
+   */
+  const offeredResources = useMemo(
+    () => resources.filter((resource) => isOfferedResourceType(resource.type)),
+    [resources],
+  );
+
+  /**
    * The catalogue narrowed to the chosen types. The language options and the grid are both derived
    * from this one list, so a language the filter offers always has rows behind it.
    */
   const typeScopedResources = useMemo(
-    () => resources.filter((resource) => matchesResourceType(resource, selectedResourceTypes)),
-    [resources, selectedResourceTypes],
+    () =>
+      offeredResources.filter((resource) => matchesResourceType(resource, selectedResourceTypes)),
+    [offeredResources, selectedResourceTypes],
   );
 
   // `sortSelected` on the language Filter re-sorts these (starred first, then selected, then
@@ -429,12 +494,12 @@ export function GetResources({
   /**
    * The language selection split into the languages the filter offers and the ones it is holding.
    *
-   * This selection is persisted across sessions and seeded from installed resources, so narrowing
-   * the type filter can leave a language selected that no longer has a row. Filtering on the raw
-   * selection would empty the grid, and the badge for a language absent from the options renders
-   * with no label — an X the user has to guess at. So only `effectiveLanguages` filters rows or
-   * reaches the language filter; held languages are written back on every change and apply again
-   * once the type filter offers them.
+   * This selection persists in web view state for as long as the dialog stays in the layout, so
+   * narrowing the type filter can leave a language selected that no longer has a row. Filtering on
+   * the raw selection would empty the grid, and the badge for a language absent from the options
+   * renders with no label — an X the user has to guess at. So only `effectiveLanguages` filters
+   * rows or reaches the language filter; held languages are written back on every change and apply
+   * again once the type filter offers them.
    */
   const { offered: effectiveLanguages, held: heldLanguages } = useMemo(
     () => partitionFilterSelection(selectedLanguages, languageOptions),
@@ -443,15 +508,17 @@ export function GetResources({
 
   const localizedStrings = localizedStringsWithLoadingState[0];
   const typeOptions: MultiSelectComboBoxEntry[] = useMemo(() => {
-    // Counted over the whole catalogue, not the type-scoped list the language counts use: a type's
+    // Counted over every offered resource, not the type-scoped list the language counts use: a type's
     // own count must not depend on which types are selected, or picking one would zero out the
     // others and there would be no way to see what selecting them would bring back.
     return RESOURCE_TYPES.map((type) => ({
       value: type,
       label: localizedStrings[RESOURCE_TYPE_LABEL_KEYS[type]] ?? RESOURCE_TYPE_LABEL_KEYS[type],
-      secondaryLabel: resources.filter((resource) => resource.type === type).length.toString(),
+      secondaryLabel: offeredResources
+        .filter((resource) => resource.type === type)
+        .length.toString(),
     }));
-  }, [localizedStrings, resources]);
+  }, [localizedStrings, offeredResources]);
 
   const textFilteredResources = useMemo(() => {
     return typeScopedResources.filter((resource) => {
@@ -553,7 +620,7 @@ export function GetResources({
             </div>
             <div className="tw:flex tw:flex-col tw:gap-1">
               <Label className="tw:mb-2 tw:text-muted-foreground">{filterByText}</Label>
-              {/* The type list is five entries long, so it needs neither the scroll cue nor the
+              {/* The type list is three entries long, so it needs neither the scroll cue nor the
                   sort that floats a just-picked entry to the top. */}
               <Filter
                 entries={typeOptions}

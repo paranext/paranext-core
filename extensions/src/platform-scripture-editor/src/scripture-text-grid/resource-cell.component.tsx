@@ -1,7 +1,12 @@
-import { Editorial, EditorOptions, EditorRef } from '@eten-tech-foundation/platform-editor';
-import { EMPTY_USJ } from '@eten-tech-foundation/scripture-utilities';
+import {
+  BLOCK_VERSE_VIEW_MODE,
+  Editorial,
+  EditorOptions,
+  EditorRef,
+  getViewOptions,
+} from '@eten-tech-foundation/platform-editor';
 import { logger } from '@papi/frontend';
-import { useLocalizedStrings, useProjectData, useProjectSetting } from '@papi/frontend/react';
+import { useLocalizedStrings, useProjectSetting } from '@papi/frontend/react';
 import { useExtraValidMarkers } from 'platform-bible-react';
 import {
   getErrorMessage,
@@ -11,33 +16,56 @@ import {
   MIN_ZOOM_FACTOR,
 } from 'platform-bible-utils';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { useCallback, useEffect, useMemo, useRef, type KeyboardEvent } from 'react';
-import { deriveCellState } from './resource-cell.utils';
+import { useCallback, useEffect, useMemo, useRef, type DragEvent, type KeyboardEvent } from 'react';
+import { useChapterUsjWithCopyLimit } from '../copy-limit/use-chapter-usj-with-copy-limit.hook';
+import type { GridResource } from './grid-resources.utils';
+import { deriveCellState, isUsjForChapter, type ResourceCellState } from './resource-cell.utils';
 import {
+  CHAPTER_EMPTY_KEY,
+  EMPTY_KEY,
+  NO_VERSES_TO_SHOW_KEY,
   RESOURCE_CELL_STRING_KEYS,
   ResourceCellView,
+  type ResourceCellViewProps,
   type ZoomMenuLabels,
 } from './resource-cell-view.component';
 import type { ResourceZoomController } from './use-resource-content-zoom.hook';
-import { resolveDisplayVerseNum, sliceUsjToVerse } from './verse-display.utils';
+import {
+  hasAlignableVerse,
+  hasAnyRenderableText,
+  resolveDisplayVerseNum,
+  sliceUsjToVerse,
+} from './verse-display.utils';
+import { VERSE_NUMBER_SCROLL_OFFSET } from '../editor-dom.util';
+import { findVerseMarkerForVerse, isMarkerFullyInPortView } from './reference-scroll.utils';
+import { useReferenceScroll } from './use-reference-scroll.hook';
 import { useCommentaryMarkerStyles } from '../use-commentary-marker-styles.hook';
+import type { ResourceCollectionViewMode } from '../resource-collection-options/resource-collection-options.types';
+import { COPYRIGHT_NOTICE_STRING_KEYS } from '../copyright-notice/copyright-notice.const';
+import { CopyrightNoticeIndicator } from '../copyright-notice/copyright-notice-indicator.component';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
-const STRING_KEYS: LocalizeKey[] = [...RESOURCE_CELL_STRING_KEYS];
+const STRING_KEYS: LocalizeKey[] = [...RESOURCE_CELL_STRING_KEYS, ...COPYRIGHT_NOTICE_STRING_KEYS];
 
-/**
- * A resource to render as a grid cell.
- *
- * `projectId` is `undefined` when the DBL reference could not be resolved to an installed project
- * (e.g., the resource has not been downloaded or is absent from the cached resource list). The cell
- * renders an `'unavailable'` placeholder in that case.
- */
-export type GridResource = { resourceId: string; projectId: string | undefined; label: string };
 type ResourceCellProps = {
   resourceRef: GridResource;
   scrRef: SerializedVerseRef;
   setScrRef: (scrRef: SerializedVerseRef) => void;
-  viewMode?: 'chapter' | 'verse';
+  /** Whether this web view is showing; owned by the web view, which explains why. */
+  isViewVisible: boolean;
+  /**
+   * This cell's position among its siblings, for a chapter column in a reorderable row. A change
+   * re-arms the reference scroll, because reordering moves the column's DOM node and the browser
+   * resets a moved scroll container to the top.
+   */
+  orderIndex?: number;
+  /**
+   * `'chapter'` and `'aligned'` both feed the editor the whole chapter; `'verse'` feeds only the
+   * reference's verse. `'aligned'` additionally asks the editor for its block-verse layout, which
+   * wraps each verse in a positionable element so the grid can put verse N of every resource on one
+   * row, and hands scrolling to the grid root.
+   */
+  viewMode?: ResourceCollectionViewMode;
   /**
    * Content zoom area of this resource's text (`resource-<id>`, or the `text-collection` fallback).
    * The grid computes it once per resource, so a resource's verse row and chapter view always name
@@ -49,7 +77,7 @@ type ResourceCellProps = {
   /** Localized zoom menu copy, passed straight to the view. */
   zoomMenuLabels?: ZoomMenuLabels;
   /**
-   * When true, show a focusable reorder-handle grip in the header (reorder logic lives in the
+   * When true, show a focusable reorder-handle grip before the name (reorder logic lives in the
    * parent).
    */
   showDragHandle?: boolean;
@@ -59,7 +87,15 @@ type ResourceCellProps = {
   reorderHint?: string;
   /** Keydown handler for the grip; the parent owns the arrow-key reorder logic. */
   onReorderKeyDown?: (event: KeyboardEvent) => void;
-};
+  /** Makes the cell's header band the drag source for a reorder; passed straight to the view. */
+  headerDrag?: { onDragStart: (event: DragEvent) => void; onDragEnd: () => void };
+} & Pick<
+  ResourceCellViewProps,
+  | 'onDisclosureActivate'
+  | 'disclosureAccessibleName'
+  | 'isDisclosureExpanded'
+  | 'disclosureControlsId'
+>;
 
 /**
  * One resource, the focused chapter or verse. Reuses the resource-text-panel render path: fetch the
@@ -72,6 +108,8 @@ export function ResourceCell({
   resourceRef,
   scrRef,
   setScrRef,
+  isViewVisible,
+  orderIndex,
   viewMode = 'chapter',
   zoomArea,
   zoom,
@@ -80,6 +118,11 @@ export function ResourceCell({
   reorderHandleLabel,
   reorderHint,
   onReorderKeyDown,
+  headerDrag,
+  onDisclosureActivate,
+  disclosureAccessibleName,
+  isDisclosureExpanded,
+  disclosureControlsId,
 }: ResourceCellProps) {
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
 
@@ -89,24 +132,16 @@ export function ResourceCell({
   // the `<style>` element it injects, so cells showing different commentaries do not fight.
   useCommentaryMarkerStyles(resourceRef.projectId);
 
-  // #region Chapter fetch — data method returns [data, setData, isLoading]; isLoading is index 2.
-  // `projectId` may be undefined for unavailable resources; both hooks must still be called
-  // unconditionally (Rules of Hooks). The hooks accept undefined and return loading/empty state.
-  const [usjPossiblyError, , isLoading] = useProjectData(
-    'platformScripture.USJ_Chapter',
-    resourceRef.projectId,
-  ).ChapterUSJ(
-    useMemo(
-      () => ({
-        book: scrRef.book,
-        chapterNum: scrRef.chapterNum,
-        verseNum: 1,
-        versificationStr: scrRef.versificationStr,
-      }),
-      [scrRef.book, scrRef.chapterNum, scrRef.versificationStr],
-    ),
-    EMPTY_USJ,
-  );
+  // #region Chapter fetch and copy limit
+  // `projectId` may be undefined for unavailable resources; the hook must still be called
+  // unconditionally (Rules of Hooks). `isChapterTextLoading` is also set while the fetch still
+  // holds the previous chapter's or resource's text, so `deriveCellState` below reports
+  // `'downloading'` rather than showing that text under this cell's resource.
+  const {
+    usjPossiblyError,
+    isChapterTextLoading: isLoading,
+    copyLimit,
+  } = useChapterUsjWithCopyLimit(resourceRef.projectId, scrRef);
   // #endregion
 
   // #region Text direction (unwrapped)
@@ -126,18 +161,26 @@ export function ResourceCell({
   }, [textDirectionPossiblyError]);
   // #endregion
 
-  const state = useMemo(
-    () =>
-      resourceRef.projectId === undefined
-        ? 'unavailable'
-        : deriveCellState({
-            usjPossiblyError,
-            isLoading,
-            currentBookNum: Canon.bookIdToNumber(scrRef.book),
-            projectId: resourceRef.projectId,
-          }),
-    [resourceRef.projectId, usjPossiblyError, isLoading, scrRef.book],
-  );
+  const state = useMemo((): ResourceCellState => {
+    if (resourceRef.projectId === undefined) {
+      // No cell state of its own: reuse the loading spinner. Nothing is downloading.
+      if (resourceRef.unresolvedReason === 'checking') return 'downloading';
+      if (resourceRef.unresolvedReason === 'unverified') return 'unverified';
+      return 'unavailable';
+    }
+    return deriveCellState({
+      usjPossiblyError,
+      isLoading,
+      currentBookNum: Canon.bookIdToNumber(scrRef.book),
+      projectId: resourceRef.projectId,
+    });
+  }, [
+    resourceRef.projectId,
+    resourceRef.unresolvedReason,
+    usjPossiblyError,
+    isLoading,
+    scrRef.book,
+  ]);
 
   // #region Zoom — the enabled states and actions of this resource's zoom items, for the view's
   // "⋮" dropdown and right-click menu. The level is the platform's; the controller reads it and
@@ -166,6 +209,42 @@ export function ResourceCell({
   // EditorRef requires null initial value per React ref convention
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | null>(null);
+
+  // This cell's own scroll port, when it has one. React's ref API requires `null` here.
+  // eslint-disable-next-line no-null/no-null
+  const contentRef = useRef<HTMLDivElement>(null);
+  // The reference this cell last published, so the scroll group's echo of the reader's own click
+  // can be told from a genuine navigation. Consumed by `useReferenceScroll`.
+  const lastPublishedScrRefRef = useRef<SerializedVerseRef | undefined>(undefined);
+  // Chapter surfaces render a whole chapter in a short port — the chapter-context split, a chapter
+  // column, the single-resource view — so they have to follow the scroll group's verse themselves.
+  // The other two modes deliberately do not:
+  //   - verse mode has nothing to scroll to; `sliceUsjToVerse` has already reduced the cell to the
+  //     reference's verse;
+  //   - aligned mode hands its scrolling to the grid root, which owns the only port in that view
+  //     (`contentOverflow="visible"`), and `AlignedGrid` runs this same hook there.
+  //
+  // Hidden case (`.claude/rules/cross-view-sync-hidden-views.md`): handled inside the hook, which
+  // defers while the dock tab is inactive and consumes one catch-up on activation, instantly —
+  // `scrollPortToBlock` is `scrollTop` arithmetic, so there is nothing to animate from. In Simple
+  // mode that is the common path, not the edge: column 3 shows one tab at a time.
+  //
+  // Enabled only once the cell shows the chapter the reference names. Right after a navigation the
+  // cell still holds the chapter the reader left, then swaps in a loading placeholder; scrolling
+  // either would aim at the wrong content, and the placeholder shrinking the port would read as the
+  // reader scrolling away and stand the hook down. Turning back on re-arms the hook, which is also
+  // what re-scrolls a cell switched to a different resource at the same reference.
+  useReferenceScroll(contentRef, scrRef, isViewVisible, findVerseMarkerForVerse, {
+    isEnabled:
+      viewMode === 'chapter' &&
+      state === 'ready' &&
+      isUsjForChapter(usjPossiblyError, scrRef.book, scrRef.chapterNum),
+    isTargetVisible: isMarkerFullyInPortView,
+    publishedScrRefRef: lastPublishedScrRefRef,
+    // The lead-in the Scripture editor, the model text panel and the reference panels use.
+    leadInPx: VERSE_NUMBER_SCROLL_OFFSET,
+    rearmKey: orderIndex,
+  });
   // Give the editor this resource's valid markers so it recognizes them (footnote/apparatus and
   // other resource-specific markers) instead of rendering them inline as raw text. Mirrors the
   // resource-text-panel render path this cell reuses.
@@ -180,14 +259,23 @@ export function ResourceCell({
       );
   }, [usjPossiblyError, resourceRef.resourceId]);
   const extraValidMarkers = useExtraValidMarkers(usj);
+  // The block-verse layout is read-only by construction, which costs this grid nothing: every cell
+  // is already read-only and none of them export USJ or address selection by USJ location.
+  // `getViewOptions` returns undefined for an unknown mode, leaving the editor on its default
+  // inline layout. In the grid that column then renders empty rather than aligned — the stylesheet
+  // shows only the verse blocks it can place, and an inline layout produces none. That is a
+  // misconfigured editor, not a supported fallback; `upstream-editor-contract.test.ts` fails by
+  // name when the installed editor lacks the mode.
   const options: EditorOptions = useMemo(
     () => ({
       isReadonly: true,
       hasSpellCheck: false,
       textDirection,
+      copyLimit,
+      ...(viewMode === 'aligned' ? { view: getViewOptions(BLOCK_VERSE_VIEW_MODE) } : {}),
       ...(extraValidMarkers.length > 0 ? { nodes: { extraValidMarkers } } : {}),
     }),
-    [textDirection, extraValidMarkers],
+    [textDirection, copyLimit, viewMode, extraValidMarkers],
   );
   // Only the USJ fed to the editor is resolved — `scrRef` passes through untouched. Keying the memo
   // on the resolved verse (not scrRef.verseNum) also keeps 1:0 -> 1:1 from re-feeding identical
@@ -219,6 +307,8 @@ export function ResourceCell({
   const handleScrRefChange = useCallback(
     (nextScrRef: SerializedVerseRef) => {
       if (viewMode === 'verse' && isFallenForward) return;
+      // Arm the echo latch before publishing; see `useReferenceScroll`'s re-arm effect.
+      lastPublishedScrRefRef.current = nextScrRef;
       setScrRef(nextScrRef);
     },
     [viewMode, isFallenForward, setScrRef],
@@ -240,7 +330,23 @@ export function ResourceCell({
   }, [state, usjPossiblyError, viewMode, verseSlice]);
   // #endregion
 
-  const isVerseEmpty = viewMode === 'verse' && state === 'ready' && (verseSlice?.isEmpty ?? false);
+  // What to show when the resource is fine but this view has nothing to draw from it. The aligned
+  // grid hides everything between verse blocks, so a chapter with no verses would otherwise render
+  // as a blank column with no explanation.
+  let emptyMessage: string | undefined;
+  if (state === 'ready') {
+    // Falling back to the key keeps "should this be empty?" from riding on "did the string
+    // resolve?" — an unresolved key renders as itself, which is visible, rather than as the editor.
+    if (viewMode === 'verse' && (verseSlice?.isEmpty ?? false))
+      emptyMessage = localizedStrings[EMPTY_KEY] ?? EMPTY_KEY;
+    else if (viewMode === 'aligned' && usj && !hasAlignableVerse(usj)) {
+      // Pointing the reader at Verse or Chapter view is only useful advice when there is something
+      // there to read. A book created before any text is entered arrives as a successful, empty
+      // chapter, and the other views have nothing to show for it either.
+      const key = hasAnyRenderableText(usj) ? NO_VERSES_TO_SHOW_KEY : CHAPTER_EMPTY_KEY;
+      emptyMessage = localizedStrings[key] ?? key;
+    }
+  }
 
   return (
     <ResourceCellView
@@ -249,20 +355,40 @@ export function ResourceCell({
       zoomArea={zoomArea}
       textDirection={textDirection}
       localizedStrings={localizedStrings}
-      isVerseEmpty={isVerseEmpty}
+      copyLimit={copyLimit}
+      emptyMessage={emptyMessage}
       nameDisplay={viewMode === 'verse' ? 'inline' : 'header'}
+      // In the aligned grid the single scroll port is the grid root; see `contentOverflow`.
+      contentOverflow={viewMode === 'aligned' ? 'visible' : 'auto'}
+      contentRef={contentRef}
+      // The aligned grid's content wrapper is a subgrid box, so scaling it would scale the shared
+      // row tracks along with the text; the level rides down to the verse blocks instead.
+      zoomTarget={viewMode === 'aligned' ? 'blocks' : 'box'}
       canZoomIn={canZoomIn}
       canZoomOut={canZoomOut}
       canReset={canReset}
       onZoomIn={handleZoomIn}
       onZoomOut={handleZoomOut}
       onResetZoom={handleResetZoom}
-      zoomMenuLabels={zoom && state !== 'unavailable' ? zoomMenuLabels : undefined}
+      zoomMenuLabels={
+        zoom && state !== 'unavailable' && state !== 'unverified' ? zoomMenuLabels : undefined
+      }
       showDragHandle={showDragHandle}
       reorderHandleId={resourceRef.resourceId}
       reorderHandleLabel={reorderHandleLabel}
       reorderHint={reorderHint}
       onReorderKeyDown={onReorderKeyDown}
+      headerDrag={headerDrag}
+      copyrightIndicator={
+        <CopyrightNoticeIndicator
+          projectId={resourceRef.projectId}
+          localizedStrings={localizedStrings}
+        />
+      }
+      onDisclosureActivate={onDisclosureActivate}
+      disclosureAccessibleName={disclosureAccessibleName}
+      isDisclosureExpanded={isDisclosureExpanded}
+      disclosureControlsId={disclosureControlsId}
       editor={
         <Editorial
           ref={editorRef}

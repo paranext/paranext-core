@@ -80,6 +80,8 @@ const EDITOR_WEB_VIEW_TYPE = 'platformScriptureEditor.react';
 const DEFAULT_RECENT_IDS: string[] = [];
 const RECENT_IDS_R1_R2: string[] = ['proj-r1', 'proj-r2'];
 const RECENT_IDS_R1: string[] = ['proj-r1'];
+const RECENT_IDS_R1_RES2: string[] = ['proj-r1', 'res-r2'];
+const RECENT_IDS_RES_R1: string[] = ['res-r1'];
 
 type MetadataFixture = {
   id: string;
@@ -88,7 +90,9 @@ type MetadataFixture = {
   language?: string;
   languageTag?: string;
   isEditable?: boolean;
+  isPublished?: boolean;
   projectInterfaces?: string[];
+  unsupportedReason?: string;
 };
 
 // Fixtures provide the scripture-editor projectInterface by default because that is what the
@@ -286,6 +290,41 @@ describe('useProjectPickerData', () => {
     });
   });
 
+  it('carries unsupportedReason through to the ProjectItem when metadata has one', async () => {
+    const { projectLookupService } = await importMocks();
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([
+        {
+          id: 'sba',
+          fullName: 'Full sba',
+          name: 'Short sba',
+          unsupportedReason: '%project_unsupported_studyBibleAdditions%',
+        },
+      ]) as never,
+    );
+
+    const { result } = renderHook(() => useProjectPickerData());
+
+    await settle(result);
+    expect(result.current.allProjects).toHaveLength(1);
+    expect(result.current.allProjects[0].unsupportedReason).toBe(
+      '%project_unsupported_studyBibleAdditions%',
+    );
+  });
+
+  it('leaves unsupportedReason undefined on the ProjectItem when metadata has none', async () => {
+    const { projectLookupService } = await importMocks();
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([{ id: 'p1', fullName: 'Full p1', name: 'Short p1' }]) as never,
+    );
+
+    const { result } = renderHook(() => useProjectPickerData());
+
+    await settle(result);
+    expect(result.current.allProjects).toHaveLength(1);
+    expect(result.current.allProjects[0].unsupportedReason).toBeUndefined();
+  });
+
   it.each([
     ['missing', {}],
     // A blank name is as unusable as an absent one — it is the field that identifies the row.
@@ -365,6 +404,81 @@ describe('useProjectPickerData', () => {
     await settle(result);
     expect(result.current.allProjects.map((p) => p.id)).toEqual(['editable', 'readonly']);
     expect(result.current.allProjects.map((p) => p.isEditable)).toEqual([true, false]);
+  });
+
+  it('excludes a published resource from recentProjects even when its id is recent', async () => {
+    const { projectLookupService, useData } = await importMocks();
+    vi.mocked(useData).mockImplementation(() => ({
+      RecentProjects: vi.fn().mockReturnValue([RECENT_IDS_R1_RES2, vi.fn(), false]),
+    }));
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([
+        { id: 'proj-r1', fullName: 'Full proj-r1', name: 'Short proj-r1', isEditable: true },
+        { id: 'res-r2', fullName: 'Full res-r2', name: 'Short res-r2', isPublished: true },
+      ]) as never,
+    );
+
+    const { result } = renderHook(() => useProjectPickerData());
+
+    await settle(result);
+    expect(result.current.recentProjects.map((p) => p.id)).toEqual(['proj-r1']);
+  });
+
+  it('excludes a published resource from allProjects', async () => {
+    const { projectLookupService } = await importMocks();
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([
+        { id: 'proj1', fullName: 'Full proj1', name: 'Short proj1', isEditable: true },
+        { id: 'res1', fullName: 'Full res1', name: 'Short res1', isPublished: true },
+      ]) as never,
+    );
+
+    const { result } = renderHook(() => useProjectPickerData());
+
+    await settle(result);
+    expect(result.current.allProjects.map((p) => p.id)).toEqual(['proj1']);
+  });
+
+  it('keeps a read-only, explicitly non-published project in recentProjects', async () => {
+    const { projectLookupService, useData } = await importMocks();
+    vi.mocked(useData).mockImplementation(() => ({
+      RecentProjects: vi.fn().mockReturnValue([RECENT_IDS_R1, vi.fn(), false]),
+    }));
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([
+        {
+          id: 'proj-r1',
+          fullName: 'Full proj-r1',
+          name: 'Short proj-r1',
+          isEditable: false,
+          isPublished: false,
+        },
+      ]) as never,
+    );
+
+    const { result } = renderHook(() => useProjectPickerData());
+
+    await settle(result);
+    expect(result.current.recentProjects.map((p) => p.id)).toEqual(['proj-r1']);
+  });
+
+  it('resolves recentProjects to an empty array without warning when every recent id is a resource', async () => {
+    const { logger } = await import('@shared/services/logger.service');
+    const { projectLookupService, useData } = await importMocks();
+    vi.mocked(useData).mockImplementation(() => ({
+      RecentProjects: vi.fn().mockReturnValue([RECENT_IDS_RES_R1, vi.fn(), false]),
+    }));
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([
+        { id: 'res-r1', fullName: 'Full res-r1', name: 'Short res-r1', isPublished: true },
+      ]) as never,
+    );
+
+    const { result } = renderHook(() => useProjectPickerData());
+
+    await settle(result);
+    expect(result.current.recentProjects).toEqual([]);
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 
   it('fetches metadata once per refresh, shared across all three sections', async () => {

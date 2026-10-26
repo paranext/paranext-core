@@ -4,7 +4,6 @@ import type { BrowserWindow } from 'electron';
 import {
   addWindow,
   areAllWindowsClosing,
-  doesNavigationReplaceRendererRegistrations,
   focusWindow,
   getAbandonedWindowIds,
   getFocusedWindowId,
@@ -1551,36 +1550,5 @@ describe('window state tracking', () => {
 
       expect(areAllWindowsClosing()).toBe(false);
     });
-  });
-});
-
-describe('navigations that end a window’s readiness', () => {
-  test('a reload of the page takes the window out of the routable set', () => {
-    expect(
-      doesNavigationReplaceRendererRegistrations({ isMainFrame: true, isSameDocument: false }),
-    ).toBe(true);
-  });
-
-  test('a web view loading leaves the window routable', () => {
-    // Every web view in the app is an in-page iframe in the renderer's own page, so subframe
-    // navigations happen for as long as the window is open and touch nothing it registered. Acting
-    // on them takes a fully working window out of the routable set with nothing to put it back —
-    // which is what a whole-tab load signal such as `did-start-loading` cannot tell apart.
-    expect(
-      doesNavigationReplaceRendererRegistrations({ isMainFrame: false, isSameDocument: false }),
-    ).toBe(false);
-  });
-
-  test('an in-page navigation leaves the window routable', () => {
-    // Fragment changes and pushState keep the document, and every script and registration in it
-    expect(
-      doesNavigationReplaceRendererRegistrations({ isMainFrame: true, isSameDocument: true }),
-    ).toBe(false);
-  });
-
-  test('an in-page navigation inside a web view leaves the window routable', () => {
-    expect(
-      doesNavigationReplaceRendererRegistrations({ isMainFrame: false, isSameDocument: true }),
-    ).toBe(false);
   });
 });

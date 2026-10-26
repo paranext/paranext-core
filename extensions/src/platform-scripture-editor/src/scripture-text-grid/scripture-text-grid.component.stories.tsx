@@ -11,6 +11,11 @@ import {
   ZOOM_OUT_KEY,
 } from './resource-cell-view.component';
 import type { ResourceZoomController } from './use-resource-content-zoom.hook';
+import type { GridResource } from './grid-resources.utils';
+// The verse rows' grip and name positioning. The real app loads it through
+// `scripture-text-grid.web-view.scss`; Storybook loads story files lazily, so these stories import it
+// themselves rather than relying on another story file having been opened first.
+import '../_scripture-text-grid-verse.scss';
 
 /**
  * The Scripture Text Grid row: one cell per shown resource, all synced to the active scrRef, laid
@@ -41,6 +46,13 @@ const resources = [
   { resourceId: 'heb', projectId: 'heb', label: 'עברית' },
 ];
 
+const resourcesWithUnresolvedCells: GridResource[] = [
+  { resourceId: 'web', projectId: 'web', label: 'WEB' },
+  { resourceId: 'niv', projectId: undefined, label: 'NIV', unresolvedReason: 'unverified' },
+  { resourceId: 'esv', projectId: undefined, label: 'ESV', unresolvedReason: 'checking' },
+  { resourceId: 'nlt', projectId: undefined, label: 'NLT', unresolvedReason: 'notInstalled' },
+];
+
 /** Bounds the grid so its `h-full` layout behaves like a real web-view pane. */
 const GRID_BOX_STYLE: React.CSSProperties = {
   height: '360px',
@@ -61,11 +73,33 @@ export const Row: Story = {
   render: () => (
     <GridBox>
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={noop}
         ariaLabel="Text Collection"
         onChapterContextChange={noop}
+      />
+    </GridBox>
+  ),
+};
+
+/**
+ * A row mixing a resolved cell with the three unresolved placeholder states — `unverified`,
+ * `checking`, and `notInstalled` — so reviewers can confirm they are distinguishable side by side.
+ * These are decided before any PAPI data arrives, so they render even against Storybook's inert
+ * stubs.
+ */
+export const RowWithUnresolvedCells: Story = {
+  render: () => (
+    <GridBox>
+      <ScriptureTextGrid
+        resources={resourcesWithUnresolvedCells}
+        scrRef={scrRef}
+        setScrRef={noop}
+        ariaLabel="Text Collection"
+        onChapterContextChange={noop}
+        isViewVisible
       />
     </GridBox>
   ),
@@ -80,6 +114,7 @@ export const RowDraggable: Story = {
   render: () => (
     <GridBox>
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={noop}
@@ -99,6 +134,7 @@ export const ChapterContextOpen: Story = {
   render: () => (
     <GridBox>
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={noop}
@@ -120,7 +156,7 @@ const localizedStrings = getLocalizedStrings([...RESOURCE_CELL_STRING_KEYS]);
 const zoomMenuLabels = {
   zoomIn: localizedStrings[ZOOM_IN_KEY] ?? 'Zoom in',
   zoomOut: localizedStrings[ZOOM_OUT_KEY] ?? 'Zoom out',
-  reset: localizedStrings[RESET_ZOOM_KEY] ?? 'Reset zoom',
+  reset: localizedStrings[RESET_ZOOM_KEY] ?? 'Zoom reset',
   options: localizedStrings[ZOOM_OPTIONS_KEY] ?? 'Zoom options for {resourceName}',
 };
 
@@ -145,6 +181,7 @@ export const RowWithZoomEnabled: Story = {
   render: () => (
     <GridBox>
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={noop}
@@ -152,6 +189,27 @@ export const RowWithZoomEnabled: Story = {
         viewMode="chapter"
         zoom={stubZoomController}
         zoomMenuLabels={zoomMenuLabels}
+      />
+    </GridBox>
+  ),
+};
+
+/**
+ * The verse-aligned Grid view. Storybook's cells run against inert PAPI stubs, so they render their
+ * "Downloading…" state rather than scripture — what this documents is the grid chrome: one column
+ * per resource, a sticky resource-name header on each, and no interior grid lines. `AlignedGrid`'s
+ * own stories show the row alignment with stand-in verse blocks.
+ */
+export const AlignedGridView: Story = {
+  render: () => (
+    <GridBox>
+      <ScriptureTextGrid
+        isViewVisible
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={noop}
+        viewMode="aligned"
+        ariaLabel="Text Collection"
       />
     </GridBox>
   ),

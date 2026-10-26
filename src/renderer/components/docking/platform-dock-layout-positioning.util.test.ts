@@ -4,6 +4,7 @@ import { render } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { FloatLayout, TabInfo, TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE, WebViewDefinition } from '@shared/models/web-view.model';
+import { BELOW_TOOLBAR_STRIP_HEIGHT_CSS_VARIABLE } from '@renderer/components/toolbar-height.util';
 import {
   getFloatPosition,
   getGroups,
@@ -95,9 +96,11 @@ describe('Dock Layout Component', () => {
       [
         'platformScriptureEditor.bibleTexts',
         'platformScriptureEditor.commentaries',
+        'platformLexicalTools.dictionary',
         'legacyCommentManager.commentListPanel',
         'platformScriptureEditor.scriptureTextGrid',
         'platformScripture.find',
+        'platformScripture.checksSidePanel',
       ].forEach((webViewType) => {
         expect(getTabGroup(makeWebViewTabInfo(webViewType, false))).toBe(TAB_GROUP_RESOURCES);
       });
@@ -154,7 +157,7 @@ describe('Dock Layout Component', () => {
     it('power mode: keeps the original 8px inset on every side (except top)', () => {
       expect(getDockLayoutOuterInset(true)).toEqual({
         position: 'absolute',
-        top: 48,
+        top: 'calc(48px + var(--below-toolbar-strip-height, 0px))',
         bottom: 8,
         left: 8,
         right: 8,
@@ -164,7 +167,7 @@ describe('Dock Layout Component', () => {
     it('simple mode: removes the inset except for the top toolbar clearance', () => {
       expect(getDockLayoutOuterInset(false)).toEqual({
         position: 'absolute',
-        top: 56,
+        top: 'calc(56px + var(--below-toolbar-strip-height, 0px))',
         bottom: 0,
         left: 0,
         right: 0,
@@ -172,11 +175,21 @@ describe('Dock Layout Component', () => {
     });
 
     it('returns a 56px top inset in simple mode (matches the taller tw:h-14 toolbar)', () => {
-      expect(getDockLayoutOuterInset(false).top).toBe(56);
+      expect(getDockLayoutOuterInset(false).top).toMatch(/^calc\(56px \+ /);
     });
 
     it('keeps a 48px top inset in power mode (matches tw:h-12)', () => {
-      expect(getDockLayoutOuterInset(true).top).toBe(48);
+      expect(getDockLayoutOuterInset(true).top).toMatch(/^calc\(48px \+ /);
+    });
+
+    // The extension-host-stopped strip sits in flow below the toolbar and publishes its height in
+    // this variable, so the dock moves down instead of being covered by it.
+    it('adds the height of the strip below the toolbar to the top inset, in both modes', () => {
+      [true, false].forEach((isPowerMode) =>
+        expect(getDockLayoutOuterInset(isPowerMode).top).toContain(
+          `var(${BELOW_TOOLBAR_STRIP_HEIGHT_CSS_VARIABLE}, 0px)`,
+        ),
+      );
     });
   });
 

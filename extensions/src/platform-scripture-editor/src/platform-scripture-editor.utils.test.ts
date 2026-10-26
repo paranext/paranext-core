@@ -1,19 +1,32 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { ScriptureRange } from 'platform-scripture-editor';
 import type PapiBackend from '@papi/backend';
-import { newPlatformError, UsjTextContentLocation } from 'platform-bible-utils';
+import { newPlatformError, normalizeProjectId, UsjTextContentLocation } from 'platform-bible-utils';
 import type { SavedWebViewDefinition } from '@papi/core';
 import { MutableRefObject } from 'react';
-import type { EditorRef } from '@eten-tech-foundation/platform-editor';
-import { USJ_TYPE, USJ_VERSION, type Usj } from '@eten-tech-foundation/scripture-utilities';
+import type { EditorRef, ViewOptions } from '@eten-tech-foundation/platform-editor';
+import {
+  USJ_TYPE,
+  USJ_VERSION,
+  type MarkerObject,
+  type Usj,
+} from '@eten-tech-foundation/scripture-utilities';
 import {
   convertScriptureRangeToEditorRange,
   decideNoteCallerClickAction,
+  decideNoteSessionUpdate,
+  resolveNoteVerseRef,
+  findEditorUsjNotes,
   finalizeProjectSwitch,
   formatEditorTitle,
   getTabTitleProjectName,
   generateParagraphMenuListItems,
   getNextViewTypeInCycle,
+  createUnsupportedProjectIdsCache,
+  getProjectUnsupportedReason,
+  buildScriptureEditorWebViewState,
+  UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY,
+  UNSUPPORTED_PROJECT_IDS_RETRY_DELAY_MS,
   openDefaultActiveProjectIfApplicable,
   resolveOpenEditorDispatch,
   resolveViewTypeForInterfaceMode,
@@ -22,6 +35,7 @@ import {
   updateRelatedFindPanel,
   buildScriptureTextGridWebView,
   resolveGridProviderProjectId,
+  updateRelatedChecksSidePanel,
   updateRelatedTextCollectionPanel,
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
   type OpenEditorDispatch,
@@ -36,8 +50,23 @@ import {
   resolveAddChapterNumberClick,
   isMissingBookError,
   isMissingBookOnScreen,
+  hasDisplayableParagraphMarkerTitle,
+  getParagraphMarkerTitle,
   parseMissingBookError,
   resolveResourceContentState,
+  resolveCallerHighlight,
+  resolveFootnotesPaneViewOptions,
+  resolveNoteEditingSurface,
+  usesPaneNoteModel,
+  shouldEndPaneNoteEditOnRowSelect,
+  shouldPublishPaneDocument,
+  validateCommentSelection,
+  readCommentRangeText,
+  hasPendingCommentTextChanged,
+  withDocumentEndOnText,
+  selectableParagraphMarkers,
+  PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
+  showCommentThreadForInterfaceMode,
 } from './platform-scripture-editor.utils';
 
 /** Build a mock editor ref exposing spies for the methods the generators call. */
@@ -82,6 +111,45 @@ const SAMPLE_USFM_CHAPTER = String.raw`\id GEN GEN - Genesis
 \v 1 In the beginning God created the heavens and the earth.
 \v 2 Now the earth was formless and empty.
 \v 3 And God said, "Let there be light," and there was light.`;
+
+// Sample USJ chapter data for Genesis chapter 2. Chapter USJ only carries the book `id` marker
+// when the chapter is 1 (the intro content before chapter 1 belongs to chapter 1's USJ); a
+// chapter-2 (or later) document has no `id` marker to derive a book ID from.
+const SAMPLE_USJ_CHAPTER_2 = Object.freeze({
+  type: 'USJ',
+  version: '3.0',
+  content: [
+    { type: 'chapter', marker: 'c', number: '2', sid: 'GEN 2' },
+    {
+      type: 'para',
+      marker: 'p',
+      content: [
+        { type: 'verse', marker: 'v', number: '1', sid: 'GEN 2:1' },
+        'Thus the heavens and the earth were finished.',
+      ],
+    },
+  ],
+});
+
+// Sample USJ chapter data for Genesis chapter 1 with a `nd` char span nested in verse 1's text
+const SAMPLE_USJ_CHAPTER_WITH_CHAR_SPAN = Object.freeze({
+  type: 'USJ',
+  version: '3.0',
+  content: [
+    { type: 'book', marker: 'id', code: 'GEN', content: ['GEN - Genesis'] },
+    { type: 'chapter', marker: 'c', number: '1', sid: 'GEN 1' },
+    {
+      type: 'para',
+      marker: 'p',
+      content: [
+        { type: 'verse', marker: 'v', number: '1', sid: 'GEN 1:1' },
+        'In the beginning ',
+        { type: 'char', marker: 'nd', content: ['GOD'] },
+        ' created the heavens and the earth.',
+      ],
+    },
+  ],
+});
 
 // Special object to pass into `createMockPapi` to make the USJ chapter return nothing
 const USJ_NOTHING = {};
@@ -349,6 +417,57 @@ describe('convertScriptureRangeToEditorRange', () => {
     });
   });
 
+  describe('Book ID fallback for USJ document locations outside chapter 1', () => {
+    it("derives the verse from a chapter-2 USJ using the range's own book id", async () => {
+      const { papi } = createMockPapi(SAMPLE_USJ_CHAPTER_2);
+      // UsjFlatChapterLocation format (book + chapterNum + documentLocation); chapter 2's USJ has
+      // no `id` marker to derive a book ID from
+      const range: ScriptureRange = {
+        start: {
+          book: 'GEN',
+          chapterNum: 2,
+          documentLocation: { jsonPath: '$.content[1].content[0]' },
+        },
+        end: {
+          book: 'GEN',
+          chapterNum: 2,
+          documentLocation: { jsonPath: '$.content[1].content[1]', offset: 5 },
+        },
+      };
+
+      const result = await convertScriptureRangeToEditorRange(papi, range, PROJECT_ID);
+
+      expect(result.verseRef.book).toBe('GEN');
+      expect(result.verseRef.chapterNum).toBe(2);
+      expect(result.verseRef.verseNum).toBe(1);
+      expect(result.editorRange.start.jsonPath).toBe('$.content[1].content[0]');
+      expect(result.editorRange.end.jsonPath).toBe('$.content[1].content[1]');
+      expect(getOffset(result.editorRange.end)).toBe(5);
+    });
+  });
+
+  describe('Collapsed ranges', () => {
+    // USFM offset 26 in verse 1 is the settled position right at the start of the `nd` char
+    // span's text ("GOD"), after the marker's own backslash+code: content[2] is the `p`
+    // paragraph, content[2] within that is the `nd` char node, and content[0] within that is its
+    // text
+    const expectedCollapsedLocation = { jsonPath: '$.content[2].content[2].content[0]', offset: 0 };
+
+    it('resolves both ends to the same location when `range.end` equals `range.start`, at settled offset 0 of a char span text', async () => {
+      const { papi } = createMockPapi(SAMPLE_USJ_CHAPTER_WITH_CHAR_SPAN);
+      const point: ScriptureRange['start'] = {
+        scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+        offset: 26,
+      };
+      const range: ScriptureRange = { start: point, end: point };
+
+      const result = await convertScriptureRangeToEditorRange(papi, range, PROJECT_ID);
+
+      expect(result.editorRange.start).toEqual(expectedCollapsedLocation);
+      expect(result.editorRange.end).toEqual(result.editorRange.start);
+    });
+  });
+
   describe('Error handling', () => {
     it('should throw error when range spans different chapters', async () => {
       const { papi } = createMockPapi();
@@ -457,6 +576,7 @@ interface PickerMocks {
   mockDebug: ReturnType<typeof vi.fn>;
   mockProjectDataProvidersGet: ReturnType<typeof vi.fn>;
   mockDataProvidersGet: ReturnType<typeof vi.fn>;
+  mockGetMetadataForAllProjects: ReturnType<typeof vi.fn>;
   mockRecordProjectOpened: ReturnType<typeof vi.fn>;
   mockRecentProjectsGet: ReturnType<typeof vi.fn>;
   /**
@@ -466,22 +586,40 @@ interface PickerMocks {
   setCanUserEditScripture: (projectId: string, canEdit: boolean) => void;
   /** Sets the list of recently opened project IDs. */
   setRecentProjects: (ids: string[]) => void;
-  /** Synthesize a `webViews.onDidOpenWebView` event from within a test. */
-  fireWebViewOpen: () => void;
+  /**
+   * Marks the given project ids as unsupported (`ProjectMetadata.unsupportedReason` set). The
+   * metadata lookup answers with these ids upper-cased, so a test that hands the picker lower-case
+   * candidate ids only passes if the picker normalizes them.
+   */
+  setUnsupportedIds: (ids: string[]) => void;
+  /** Synthesize an `object:onDidCreateNetworkObject` event for an object of this type. */
+  fireNetworkObjectCreated: (objectType: string) => void;
+  /** `true` once the driver has unsubscribed from `object:onDidCreateNetworkObject`. */
+  isNetworkObjectCreatedUnsubscribed: () => boolean;
+  /**
+   * Synthesize a `webViews.onDidOpenWebView` event from within a test. By default the opened web
+   * view is an empty Scripture Editor; pass `projectId` for one opened on a project.
+   */
+  fireWebViewOpen: (projectId?: string) => void;
   /**
    * Synthesize a `webViews.onDidUpdateWebView` event from within a test. The driver filters to
    * Scripture Editor updates, so the default `webViewType` is `SCRIPTURE_EDITOR_WEBVIEW_TYPE`; pass
-   * another value to simulate an unrelated webview update.
+   * another value to simulate an unrelated webview update, and `projectId` for an editor showing a
+   * project.
    */
-  fireWebViewUpdate: (webViewType?: string) => void;
+  fireWebViewUpdate: (webViewType?: string, projectId?: string) => void;
   /** Synthesize a `paratextBibleSendReceive.onSyncStateChanged` event from within a test. */
   fireSync: (event: { isSyncing: boolean }) => void;
+  /** Synthesize a `platform.onDidChangeProjects` event from within a test. */
+  fireProjectsChanged: () => void;
   /** `true` once the driver has unsubscribed from `onDidOpenWebView`. */
   isWebViewOpenUnsubscribed: () => boolean;
   /** `true` once the driver has unsubscribed from `onDidUpdateWebView`. */
   isWebViewUpdateUnsubscribed: () => boolean;
   /** `true` once the driver has unsubscribed from `onSyncStateChanged`. */
   isSyncUnsubscribed: () => boolean;
+  /** `true` once the driver has unsubscribed from `onDidChangeProjects`. */
+  isProjectsChangedUnsubscribed: () => boolean;
 }
 
 function createPickerMocks(): PickerMocks {
@@ -517,17 +655,14 @@ function createPickerMocks(): PickerMocks {
     };
   });
 
-  let syncListener: ((evt: { isSyncing: boolean }) => void) | undefined;
-  let syncUnsubscribed = false;
-  const mockGetNetworkEvent = vi.fn((eventName: string) => (listener: typeof syncListener) => {
-    if (eventName === 'paratextBibleSendReceive.onSyncStateChanged') {
-      syncListener = listener;
-    }
+  // Network-event listeners by event name, and the names the driver has unsubscribed from.
+  const networkEventListeners = new Map<string, (evt: unknown) => void>();
+  const unsubscribedNetworkEvents = new Set<string>();
+  const mockGetNetworkEvent = vi.fn((eventName: string) => (listener: (evt: unknown) => void) => {
+    networkEventListeners.set(eventName, listener);
     return () => {
-      if (eventName === 'paratextBibleSendReceive.onSyncStateChanged') {
-        syncUnsubscribed = true;
-        syncListener = undefined;
-      }
+      unsubscribedNetworkEvents.add(eventName);
+      networkEventListeners.delete(eventName);
     };
   });
 
@@ -542,6 +677,21 @@ function createPickerMocks(): PickerMocks {
   const mockProjectDataProvidersGet = vi.fn(async (_interface: string, projectId: string) => ({
     canUserEditScripture: async () => canUserEditScriptureByProjectId.get(projectId) ?? true,
   }));
+
+  // Backs the picker's unsupported-project lookup. Answers for each id it is asked about, with the
+  // id upper-cased.
+  const unsupportedProjectIds = new Set<string>();
+  const mockGetMetadataForAllProjects = vi.fn(
+    async ({ includeProjectIds }: { includeProjectIds: string[] }) =>
+      includeProjectIds.map((id) => ({
+        id: id.toUpperCase(),
+        projectInterfaces: [],
+        pdpFactoryInfo: {},
+        ...(unsupportedProjectIds.has(id.toUpperCase())
+          ? { unsupportedReason: '%project_unsupported_studyBibleAdditions%' }
+          : {}),
+      })),
+  );
 
   const mockRecentProjects: string[] = [];
   const mockRecentProjectsGet = vi.fn().mockImplementation(async () => [...mockRecentProjects]);
@@ -569,6 +719,7 @@ function createPickerMocks(): PickerMocks {
     network: { getNetworkEvent: mockGetNetworkEvent },
     projectDataProviders: { get: mockProjectDataProvidersGet },
     dataProviders: { get: mockDataProvidersGet },
+    projectLookup: { getMetadataForAllProjects: mockGetMetadataForAllProjects },
     logger: { warn: mockWarn, info: mockInfo, debug: mockDebug },
   } as unknown as typeof PapiBackend;
 
@@ -582,6 +733,7 @@ function createPickerMocks(): PickerMocks {
     mockDebug,
     mockProjectDataProvidersGet,
     mockDataProvidersGet,
+    mockGetMetadataForAllProjects,
     mockRecordProjectOpened,
     mockRecentProjectsGet,
     setCanUserEditScripture,
@@ -589,21 +741,43 @@ function createPickerMocks(): PickerMocks {
       mockRecentProjects.length = 0;
       mockRecentProjects.push(...ids);
     },
-    fireWebViewOpen: () => {
-      if (!webViewOpenListener) throw new Error('fireWebViewOpen: no listener captured');
-      webViewOpenListener({});
+    setUnsupportedIds: (ids: string[]) => {
+      ids.forEach((id) => unsupportedProjectIds.add(id.toUpperCase()));
     },
-    fireWebViewUpdate: (webViewType: string = SCRIPTURE_EDITOR_WEBVIEW_TYPE) => {
+    fireNetworkObjectCreated: (objectType: string) => {
+      const listener = networkEventListeners.get('object:onDidCreateNetworkObject');
+      if (!listener) throw new Error('fireNetworkObjectCreated: no listener captured');
+      listener({ id: `${objectType}-object`, objectType, functionNames: [] });
+    },
+    isNetworkObjectCreatedUnsubscribed: () =>
+      unsubscribedNetworkEvents.has('object:onDidCreateNetworkObject'),
+    fireWebViewOpen: (projectId?: string) => {
+      if (!webViewOpenListener) throw new Error('fireWebViewOpen: no listener captured');
+      webViewOpenListener({ webView: { webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId } });
+    },
+    fireWebViewUpdate: (
+      webViewType: string = SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+      projectId: string | undefined = undefined,
+    ) => {
       if (!webViewUpdateListener) throw new Error('fireWebViewUpdate: no listener captured');
-      webViewUpdateListener({ webView: { webViewType } });
+      webViewUpdateListener({ webView: { webViewType, projectId } });
     },
     fireSync: (event) => {
-      if (!syncListener) throw new Error('fireSync: no listener captured');
-      syncListener(event);
+      const listener = networkEventListeners.get('paratextBibleSendReceive.onSyncStateChanged');
+      if (!listener) throw new Error('fireSync: no listener captured');
+      listener(event);
+    },
+    fireProjectsChanged: () => {
+      const listener = networkEventListeners.get('platform.onDidChangeProjects');
+      if (!listener) throw new Error('fireProjectsChanged: no listener captured');
+      listener(undefined);
     },
     isWebViewOpenUnsubscribed: () => webViewOpenUnsubscribed,
     isWebViewUpdateUnsubscribed: () => webViewUpdateUnsubscribed,
-    isSyncUnsubscribed: () => syncUnsubscribed,
+    isSyncUnsubscribed: () =>
+      unsubscribedNetworkEvents.has('paratextBibleSendReceive.onSyncStateChanged'),
+    isProjectsChangedUnsubscribed: () =>
+      unsubscribedNetworkEvents.has('platform.onDidChangeProjects'),
   };
 }
 
@@ -1881,6 +2055,204 @@ describe('openDefaultActiveProjectIfApplicable', () => {
   });
 
   // #endregion Recents-first behavior (Tasks 2-4)
+
+  // #region Unsupported projects excluded from auto-open
+
+  it('skips an unsupported recent project and opens the next one', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      setRecentProjects,
+      setUnsupportedIds,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    setRecentProjects(['sba', 'p1']);
+    setUnsupportedIds(['sba']);
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'platformScriptureEditor.openScriptureEditor') return undefined;
+      throw new Error(`Unexpected command in test: ${commandName}`);
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'p1',
+    );
+    expect(
+      mockSendCommand.mock.calls
+        .filter(([cmd]) => cmd === 'platformScriptureEditor.openScriptureEditor')
+        .map(([, id]) => id),
+    ).toEqual(['p1']);
+  });
+
+  it('opens the first recent project when none is unsupported (positive control)', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      setRecentProjects,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    setRecentProjects(['sba', 'p1']);
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'platformScriptureEditor.openScriptureEditor') return undefined;
+      throw new Error(`Unexpected command in test: ${commandName}`);
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'sba',
+    );
+  });
+
+  it('never picks an unsupported shared project as the default, even the most recent', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      setUnsupportedIds,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    setUnsupportedIds(['sba']);
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          sba: {
+            id: 'sba',
+            name: 'SBA',
+            fullName: 'SBA',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-09-20T00:00:00Z',
+          },
+          p1: {
+            id: 'p1',
+            name: 'P1',
+            fullName: 'P1',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-01-01T00:00:00Z',
+          },
+        };
+      }
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'p1',
+    );
+  });
+
+  it('reports no-candidate when the only shared project is unsupported', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      setUnsupportedIds,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    setUnsupportedIds(['sba']);
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          sba: {
+            id: 'sba',
+            name: 'SBA',
+            fullName: 'SBA',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-09-20T00:00:00Z',
+          },
+        };
+      }
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('no-candidate');
+  });
+
+  it('never looks a candidate up twice in one run, even when it tries recents and then shared projects', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      mockGetMetadataForAllProjects,
+      setRecentProjects,
+      setUnsupportedIds,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    setRecentProjects(['sba']);
+    setUnsupportedIds(['sba']);
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          sba: {
+            id: 'sba',
+            name: 'SBA',
+            fullName: 'SBA',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-09-20T00:00:00Z',
+          },
+          p1: {
+            id: 'p1',
+            name: 'P1',
+            fullName: 'P1',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-01-01T00:00:00Z',
+          },
+        };
+      }
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'p1',
+    );
+    expect(mockGetMetadataForAllProjects.mock.calls).toEqual([
+      [{ includeProjectIds: ['sba'] }],
+      [{ includeProjectIds: ['p1'] }],
+    ]);
+  });
+
+  // #endregion Unsupported projects excluded from auto-open
 });
 
 // #endregion openDefaultActiveProjectIfApplicable
@@ -2254,6 +2626,20 @@ describe('startDefaultProjectPicker', () => {
     expect(mocks.mockGetSetting).toHaveBeenCalledTimes(1);
   });
 
+  it('re-runs the picker when the set of projects changes', async () => {
+    const mocks = createPickerMocks();
+    setUpFastNoOp(mocks);
+
+    startDefaultProjectPicker(mocks.papi);
+    await vi.waitFor(() => expect(mocks.mockGetSetting).toHaveBeenCalledTimes(1));
+
+    mocks.fireProjectsChanged();
+
+    await vi.waitFor(() => {
+      expect(mocks.mockGetSetting).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it('coalesces multiple triggers during an in-flight run into a single follow-up', async () => {
     const mocks = createPickerMocks();
     // Block the initial picker call on a controllable promise so we can fire triggers while it's
@@ -2296,6 +2682,231 @@ describe('startDefaultProjectPicker', () => {
     expect(mocks.isWebViewOpenUnsubscribed()).toBe(true);
     expect(mocks.isWebViewUpdateUnsubscribed()).toBe(true);
     expect(mocks.isSyncUnsubscribed()).toBe(true);
+    expect(mocks.isProjectsChangedUnsubscribed()).toBe(true);
+    expect(mocks.isNetworkObjectCreatedUnsubscribed()).toBe(true);
+  });
+
+  describe('when a project data provider factory registers after a lookup', () => {
+    /**
+     * Simple mode with an empty editor and one recent project, whose factory has not yet said it
+     * cannot be opened. The mocked dock stays empty, so every trigger runs the picker in full.
+     */
+    function setUpBeforeTheFactoryRegisters(mocks: PickerMocks) {
+      mocks.mockGetSetting.mockResolvedValue('simple');
+      mocks.mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+        asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+      );
+      mocks.setRecentProjects(['sba']);
+      mocks.mockSendCommand.mockImplementation(async (commandName: string) =>
+        commandName === 'paratextBibleSendReceive.getSharedProjects' ? {} : undefined,
+      );
+    }
+
+    const openedProjectIds = (mocks: PickerMocks) =>
+      mocks.mockSendCommand.mock.calls
+        .filter(([commandName]) => commandName === 'platformScriptureEditor.openScriptureEditor')
+        .map(([, projectId]) => projectId);
+
+    it('looks up again, and no longer opens a project the factory reports cannot be opened', async () => {
+      const mocks = createPickerMocks();
+      setUpBeforeTheFactoryRegisters(mocks);
+
+      startDefaultProjectPicker(mocks.papi);
+      await vi.waitFor(() => expect(openedProjectIds(mocks)).toEqual(['sba']));
+      mocks.setUnsupportedIds(['sba']);
+      mocks.fireNetworkObjectCreated('pdpFactory');
+      mocks.fireWebViewOpen();
+
+      await vi.waitFor(() =>
+        expect(mocks.mockDebug).toHaveBeenCalledWith(
+          "Default active project picker: unexpected outcome received: 'no-candidate'",
+        ),
+      );
+      expect(mocks.mockGetMetadataForAllProjects).toHaveBeenCalledTimes(2);
+      expect(openedProjectIds(mocks)).toEqual(['sba']);
+    });
+
+    it('keeps its answers when a network object that is not a factory is created', async () => {
+      const mocks = createPickerMocks();
+      setUpBeforeTheFactoryRegisters(mocks);
+
+      startDefaultProjectPicker(mocks.papi);
+      await vi.waitFor(() => expect(openedProjectIds(mocks)).toEqual(['sba']));
+      mocks.setUnsupportedIds(['sba']);
+      mocks.fireNetworkObjectCreated('networkObject');
+      mocks.fireWebViewOpen();
+
+      await vi.waitFor(() => expect(openedProjectIds(mocks)).toEqual(['sba', 'sba']));
+      expect(mocks.mockGetMetadataForAllProjects).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('for a user whose only projects cannot be opened', () => {
+    /** Simple mode with an empty editor that nothing can fill: every candidate is unsupported. */
+    function setUpOnlyUnsupportedProjects(mocks: PickerMocks) {
+      mocks.mockGetSetting.mockResolvedValue('simple');
+      mocks.mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+        asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+      );
+      mocks.setRecentProjects(['sba']);
+      mocks.setUnsupportedIds(['sba']);
+      mocks.mockSendCommand.mockImplementation(async (commandName: string) => {
+        if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+          return {
+            sba: {
+              id: 'sba',
+              name: 'SBA',
+              fullName: 'SBA',
+              language: 'en',
+              editedStatus: 'edited',
+              lastSendReceiveDate: '2026-09-20T00:00:00Z',
+            },
+          };
+        }
+        return undefined;
+      });
+    }
+
+    it('looks up which projects cannot be opened once, however many triggers fire', async () => {
+      const mocks = createPickerMocks();
+      setUpOnlyUnsupportedProjects(mocks);
+
+      // Each run ends by logging its outcome, so this counts completed runs.
+      const finishedRuns = () =>
+        mocks.mockDebug.mock.calls.filter(([message]) =>
+          String(message).includes("unexpected outcome received: 'no-candidate'"),
+        ).length;
+
+      startDefaultProjectPicker(mocks.papi);
+      await vi.waitFor(() => expect(finishedRuns()).toBe(1));
+      mocks.fireSync({ isSyncing: false });
+      await vi.waitFor(() => expect(finishedRuns()).toBe(2));
+      mocks.fireSync({ isSyncing: false });
+      await vi.waitFor(() => expect(finishedRuns()).toBe(3));
+
+      expect(mocks.mockGetMetadataForAllProjects).toHaveBeenCalledTimes(1);
+      expect(mocks.mockSendCommand).not.toHaveBeenCalledWith(
+        'platformScriptureEditor.openScriptureEditor',
+        expect.anything(),
+      );
+    });
+
+    const sharedProjectsQueries = (mocks: PickerMocks) =>
+      mocks.mockSendCommand.mock.calls.filter(
+        ([commandName]) => commandName === 'paratextBibleSendReceive.getSharedProjects',
+      ).length;
+
+    /** Lets any run a trigger started finish, so a count that should not move has had the chance. */
+    const settle = () =>
+      new Promise((resolve) => {
+        setTimeout(resolve, 20);
+      });
+
+    it('does not ask for shared projects again when an empty editor opens or updates', async () => {
+      const mocks = createPickerMocks();
+      setUpOnlyUnsupportedProjects(mocks);
+
+      startDefaultProjectPicker(mocks.papi);
+      await vi.waitFor(() => expect(sharedProjectsQueries(mocks)).toBe(1));
+      mocks.fireWebViewOpen();
+      mocks.fireWebViewUpdate();
+      await settle();
+
+      expect(sharedProjectsQueries(mocks)).toBe(1);
+    });
+
+    it.each([
+      {
+        label: 'a sync ends',
+        fire: (mocks: PickerMocks) => mocks.fireSync({ isSyncing: false }),
+      },
+      {
+        label: 'the set of projects changes',
+        fire: (mocks: PickerMocks) => mocks.fireProjectsChanged(),
+      },
+      {
+        label: 'a project data provider factory registers',
+        fire: (mocks: PickerMocks) => {
+          mocks.fireNetworkObjectCreated('pdpFactory');
+          mocks.fireWebViewOpen();
+        },
+      },
+      {
+        // Opening a project records it as recent, which can give the next empty editor a candidate.
+        label: 'a project opens in the editor',
+        fire: (mocks: PickerMocks) =>
+          mocks.fireWebViewUpdate(SCRIPTURE_EDITOR_WEBVIEW_TYPE, 'other-project'),
+      },
+    ])('asks for shared projects again once $label', async ({ fire }) => {
+      const mocks = createPickerMocks();
+      setUpOnlyUnsupportedProjects(mocks);
+
+      startDefaultProjectPicker(mocks.papi);
+      await vi.waitFor(() => expect(sharedProjectsQueries(mocks)).toBe(1));
+      fire(mocks);
+
+      await vi.waitFor(() => expect(sharedProjectsQueries(mocks)).toBe(2));
+    });
+
+    it('keeps reacting to a change of projects that lands while a run is finding no candidate', async () => {
+      const mocks = createPickerMocks();
+      setUpOnlyUnsupportedProjects(mocks);
+      let releaseSharedProjects: () => void = () => {};
+      const sendCommand = mocks.mockSendCommand.getMockImplementation();
+      mocks.mockSendCommand.mockImplementationOnce(
+        (commandName: string) =>
+          new Promise((resolve) => {
+            releaseSharedProjects = () => resolve(sendCommand?.(commandName));
+          }),
+      );
+
+      startDefaultProjectPicker(mocks.papi);
+      await vi.waitFor(() => expect(sharedProjectsQueries(mocks)).toBe(1));
+      mocks.fireProjectsChanged();
+      releaseSharedProjects();
+      await vi.waitFor(() =>
+        expect(mocks.mockDebug).toHaveBeenCalledWith(
+          "Default active project picker: unexpected outcome received: 'no-candidate'",
+        ),
+      );
+      mocks.fireWebViewOpen();
+
+      await vi.waitFor(() => expect(sharedProjectsQueries(mocks)).toBe(2));
+    });
+
+    it('looks up again once the set of projects changes', async () => {
+      const mocks = createPickerMocks();
+      setUpOnlyUnsupportedProjects(mocks);
+
+      startDefaultProjectPicker(mocks.papi);
+      await vi.waitFor(() => expect(mocks.mockGetMetadataForAllProjects).toHaveBeenCalledTimes(1));
+      mocks.fireProjectsChanged();
+
+      await vi.waitFor(() => expect(mocks.mockGetMetadataForAllProjects).toHaveBeenCalledTimes(2));
+    });
+
+    it('looks up again after a failed lookup once the set of projects changes, without waiting out the retry delay', async () => {
+      // Fake timers keep the clock from reaching the retry delay; `vi.waitFor` advances it by
+      // only its polling interval.
+      vi.useFakeTimers();
+      try {
+        const mocks = createPickerMocks();
+        setUpOnlyUnsupportedProjects(mocks);
+        mocks.mockGetMetadataForAllProjects.mockRejectedValueOnce(new Error('boom'));
+
+        startDefaultProjectPicker(mocks.papi);
+        await vi.waitFor(() =>
+          expect(mocks.mockGetMetadataForAllProjects).toHaveBeenCalledTimes(1),
+        );
+        mocks.fireProjectsChanged();
+
+        await vi.waitFor(() =>
+          expect(mocks.mockGetMetadataForAllProjects).toHaveBeenCalledTimes(2),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   it('warns and keeps running when openDefaultActiveProjectIfApplicable throws unexpectedly', async () => {
@@ -2376,35 +2987,115 @@ function createProjectKindMocks(projectKind: ProjectKind) {
 
 // #region syncOnProjectSwitch
 
-function createSyncMockPapi(projectKind: ProjectKind = EDITABLE_PROJECT) {
+/** Stubbed answer meaning "this read or request rejects" rather than resolving. */
+const READ_THROWS = Symbol('read throws');
+
+/**
+ * What the project-switch reads answer: `finalizeProjectSwitch` reads the mode and passes it on,
+ * and `syncOnProjectSwitch` (which takes the mode as an argument) requests consent. The option
+ * names match the main-process task suites' `createSettingsStub`
+ * (`src/main/settings-stub.test-util.ts`), which this workspace cannot import. Defaults are Simple
+ * mode with consent granted, so assertions exercise syncing rather than the gate.
+ */
+type SyncGateStub = {
+  /** `platform.interfaceMode` */
+  mode?: 'simple' | 'power' | typeof READ_THROWS;
+  /** The `platform.getAutomaticSyncConsent` command */
+  consent?: 'granted' | 'unconfirmed' | 'deferred' | typeof READ_THROWS;
+};
+
+/**
+ * The papi pieces the project-switch gate touches. `mockSendCommand` records only the sync
+ * commands: the consent request is answered by `mockGetConsent` instead, so a test that replaces
+ * `mockSendCommand`'s implementation still gets past the gate. A settings read of anything but the
+ * mode throws, so a newly added read cannot pass unnoticed.
+ */
+function createSyncGateStubs({ mode = 'simple', consent = 'granted' }: SyncGateStub) {
   const mockSendCommand = vi.fn().mockResolvedValue(undefined);
-  const mockWarn = vi.fn();
+  const mockGetConsent = vi.fn(async () => {
+    if (consent === READ_THROWS) throw new Error('consent check unavailable');
+    return consent;
+  });
+  const sendCommand = async (commandName: string, ...args: unknown[]) =>
+    commandName === 'platform.getAutomaticSyncConsent'
+      ? mockGetConsent()
+      : mockSendCommand(commandName, ...args);
+  const mockGetSetting = vi.fn(async (key: string) => {
+    if (key !== 'platform.interfaceMode')
+      throw new Error(`Unexpected settings key in test stub: ${key}`);
+    if (mode === READ_THROWS) throw new Error('settings service unavailable');
+    return mode;
+  });
+  return {
+    sendCommand,
+    mockSendCommand,
+    mockGetConsent,
+    mockGetSetting,
+    mockWarn: vi.fn(),
+    mockInfo: vi.fn(),
+  };
+}
+
+function createSyncMockPapi(gate: SyncGateStub = {}, projectKind: ProjectKind = EDITABLE_PROJECT) {
+  const { sendCommand, mockGetSetting, mockWarn, mockInfo, ...mocks } = createSyncGateStubs(gate);
   const { mockProjectDataProvidersGet, setProjectKind } = createProjectKindMocks(projectKind);
   // Must cast since the mock only includes the papi properties used by syncOnProjectSwitch.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const papi = {
-    commands: { sendCommand: mockSendCommand },
+    commands: { sendCommand },
     projectDataProviders: { get: mockProjectDataProvidersGet },
-    logger: { warn: mockWarn },
+    logger: { warn: mockWarn, info: mockInfo },
+    settings: { get: mockGetSetting },
   } as unknown as typeof PapiBackend;
-  return { papi, mockSendCommand, mockWarn, mockProjectDataProvidersGet, setProjectKind };
+  return { papi, mockWarn, mockInfo, mockProjectDataProvidersGet, setProjectKind, ...mocks };
 }
+
+/**
+ * The sync commands `syncOnProjectSwitch` dispatches, in dispatch order: a deep sync of the
+ * incoming project, then a shallower send/receive of the outgoing one.
+ */
+const PROJECT_SWITCH_SYNC_COMMANDS = [
+  'paratextBibleSendReceive.syncProjects',
+  'paratextBibleSendReceive.sendReceiveProjects',
+];
 
 describe('syncOnProjectSwitch', () => {
   it('calls syncProjects with the incoming project ID', async () => {
     const { papi, mockSendCommand } = createSyncMockPapi();
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', undefined);
+    await syncOnProjectSwitch(papi, 'proj-incoming', undefined, 'simple');
+
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'paratextBibleSendReceive.syncProjects',
+      ['proj-incoming'],
+      true,
+    );
+  });
+
+  it('keeps the progress toast for the incoming sync in Power mode', async () => {
+    const { papi, mockSendCommand } = createSyncMockPapi();
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', undefined, 'power');
 
     expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
       'proj-incoming',
     ]);
   });
 
-  it('calls sendReceiveProjects with the outgoing project ID when provided', async () => {
+  it('keeps the progress toast for the incoming sync when the mode is unknown', async () => {
     const { papi, mockSendCommand } = createSyncMockPapi();
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+    await syncOnProjectSwitch(papi, 'proj-incoming', undefined, undefined);
+
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
+      'proj-incoming',
+    ]);
+  });
+
+  it('calls sendReceiveProjects with only the outgoing project ID when provided, even in Simple mode', async () => {
+    const { papi, mockSendCommand } = createSyncMockPapi();
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
     expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
       'proj-outgoing',
@@ -2418,7 +3109,7 @@ describe('syncOnProjectSwitch', () => {
       callOrder.push(commandName);
     });
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
     expect(callOrder).toEqual([
       'paratextBibleSendReceive.syncProjects',
@@ -2429,7 +3120,7 @@ describe('syncOnProjectSwitch', () => {
   it('does not call sendReceiveProjects when outgoingProjectId is undefined', async () => {
     const { papi, mockSendCommand } = createSyncMockPapi();
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', undefined);
+    await syncOnProjectSwitch(papi, 'proj-incoming', undefined, 'simple');
 
     expect(mockSendCommand.mock.calls.map(([cmd]) => cmd)).not.toContain(
       'paratextBibleSendReceive.sendReceiveProjects',
@@ -2442,7 +3133,7 @@ describe('syncOnProjectSwitch', () => {
       if (commandName === 'paratextBibleSendReceive.syncProjects') throw new Error('sync failed');
     });
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
     expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
       'proj-outgoing',
@@ -2454,7 +3145,7 @@ describe('syncOnProjectSwitch', () => {
     mockSendCommand.mockRejectedValue(new Error('network error'));
 
     await expect(
-      syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing'),
+      syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple'),
     ).resolves.toBeUndefined();
   });
 
@@ -2464,7 +3155,7 @@ describe('syncOnProjectSwitch', () => {
       if (commandName === 'paratextBibleSendReceive.syncProjects') throw new Error('sync failed');
     });
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', undefined);
+    await syncOnProjectSwitch(papi, 'proj-incoming', undefined, 'simple');
 
     expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-incoming'));
   });
@@ -2476,16 +3167,16 @@ describe('syncOnProjectSwitch', () => {
         throw new Error('S/R failed');
     });
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
     expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-outgoing'));
   });
 
   it('still syncs an outgoing translation project with editing switched off', async () => {
     // `Editable=F` locks the Scripture text, not comments, so the project can hold new work.
-    const { papi, mockSendCommand } = createSyncMockPapi(READ_ONLY_PROJECT);
+    const { papi, mockSendCommand } = createSyncMockPapi({}, READ_ONLY_PROJECT);
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
     expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
       'proj-outgoing',
@@ -2497,10 +3188,10 @@ describe('syncOnProjectSwitch', () => {
     // Classifies the outgoing project, not the incoming one.
     setProjectKind('proj-outgoing', PUBLISHED_RESOURCE);
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
     expect(mockSendCommand.mock.calls).toEqual([
-      ['paratextBibleSendReceive.syncProjects', ['proj-incoming']],
+      ['paratextBibleSendReceive.syncProjects', ['proj-incoming'], true],
     ]);
   });
 
@@ -2510,11 +3201,76 @@ describe('syncOnProjectSwitch', () => {
     const { papi, mockSendCommand, mockProjectDataProvidersGet } = createSyncMockPapi();
     mockProjectDataProvidersGet.mockRejectedValue(new Error('pdp unavailable'));
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
     expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
       'proj-outgoing',
     ]);
+  });
+
+  it('sends both sync commands once first-run sync consent is granted', async () => {
+    const { papi, mockSendCommand, mockGetConsent } = createSyncMockPapi();
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
+
+    expect(mockGetConsent).toHaveBeenCalled();
+    expect(mockSendCommand.mock.calls.map(([commandName]) => commandName)).toEqual(
+      PROJECT_SWITCH_SYNC_COMMANDS,
+    );
+  });
+
+  it.each([
+    ['the first-run wizard has not been answered', 'unconfirmed'],
+    ['the user chose "Don\'t sync yet" earlier this session', 'deferred'],
+  ] as const)('syncs nothing while %s', async (_, consent) => {
+    const { papi, mockSendCommand, mockInfo } = createSyncMockPapi({ consent });
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
+
+    expect(mockSendCommand).not.toHaveBeenCalled();
+    // A silent skip is indistinguishable from a switch that never reached the sync, so the gate
+    // must say it closed — at info, since packaged builds drop debug.
+    expect(mockInfo).toHaveBeenCalledWith(
+      `Project-switch sync skipped: first-run sync consent is ${consent}`,
+    );
+  });
+
+  it('syncs nothing when the consent check rejects (fails closed)', async () => {
+    const { papi, mockSendCommand, mockWarn } = createSyncMockPapi({ consent: READ_THROWS });
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
+
+    expect(mockSendCommand).not.toHaveBeenCalled();
+    expect(mockWarn).toHaveBeenCalledWith(
+      expect.stringContaining('could not check first-run sync consent'),
+    );
+  });
+
+  it('does not consult the consent gate in power mode', async () => {
+    // The first-run completion flag is never written outside Simple mode, so gating a power-mode
+    // caller on it would suppress that caller's sync permanently.
+    const { papi, mockSendCommand, mockGetConsent } = createSyncMockPapi({
+      consent: 'unconfirmed',
+    });
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'power');
+
+    expect(mockGetConsent).not.toHaveBeenCalled();
+    expect(mockSendCommand.mock.calls.map(([commandName]) => commandName)).toEqual(
+      PROJECT_SWITCH_SYNC_COMMANDS,
+    );
+  });
+
+  it('still applies the consent gate when the caller could not read the interface mode', async () => {
+    // An unreadable mode must not become a way past the gate.
+    const { papi, mockSendCommand, mockGetConsent } = createSyncMockPapi({
+      consent: 'unconfirmed',
+    });
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', undefined);
+
+    expect(mockGetConsent).toHaveBeenCalled();
+    expect(mockSendCommand).not.toHaveBeenCalled();
   });
 });
 
@@ -2524,10 +3280,15 @@ describe('syncOnProjectSwitch', () => {
 
 const GRID_WEBVIEW_ID = 'text-collection-1';
 
-function createFinalizeMockPapi(projectKind: ProjectKind = EDITABLE_PROJECT) {
+// `finalizeProjectSwitch` reads the interface mode itself and dispatches `syncOnProjectSwitch`, which
+// reads it too and checks consent. The Simple-mode default matches the common case: the switch this
+// replays side effects for only ever originates from a Power -> Simple mode change.
+function createFinalizeMockPapi(
+  gate: SyncGateStub = {},
+  projectKind: ProjectKind = EDITABLE_PROJECT,
+) {
   const { mockProjectDataProvidersGet } = createProjectKindMocks(projectKind);
-  const mockSendCommand = vi.fn().mockResolvedValue(undefined);
-  const mockWarn = vi.fn();
+  const { sendCommand, mockGetSetting, mockWarn, mockInfo, ...mocks } = createSyncGateStubs(gate);
   const mockRecordProjectOpened = vi.fn().mockResolvedValue(undefined);
   const mockDataProvidersGet = vi.fn().mockImplementation(async (name: string) => {
     if (name === 'platformScripture.recentlyOpenedProjects') {
@@ -2535,9 +3296,6 @@ function createFinalizeMockPapi(projectKind: ProjectKind = EDITABLE_PROJECT) {
     }
     return undefined;
   });
-  // Defaults to 'simple' - matches the common case (the switch this replays side effects for only
-  // ever originates from a Power -> Simple mode change), so most tests don't need to set it.
-  const mockSettingsGet = vi.fn().mockResolvedValue('simple');
   // The Text Collection re-point runs from here, so the mock needs a webViews surface; without one
   // it would take the swallowed-failure path and the assertions below would pass vacuously.
   const mockGetAllOpenWebViewDefinitions = vi
@@ -2552,26 +3310,26 @@ function createFinalizeMockPapi(projectKind: ProjectKind = EDITABLE_PROJECT) {
   // Must cast since the mock only includes the papi properties finalizeProjectSwitch uses.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const papi = {
-    commands: { sendCommand: mockSendCommand },
+    commands: { sendCommand },
     dataProviders: { get: mockDataProvidersGet },
     projectDataProviders: { get: mockProjectDataProvidersGet },
-    settings: { get: mockSettingsGet },
+    settings: { get: mockGetSetting },
     webViews: {
       getAllOpenWebViewDefinitions: mockGetAllOpenWebViewDefinitions,
       reloadWebView: mockReloadWebView,
     },
-    logger: { warn: mockWarn, error: mockError },
+    logger: { warn: mockWarn, info: mockInfo, error: mockError },
   } as unknown as typeof PapiBackend;
   return {
     papi,
-    mockSendCommand,
     mockWarn,
+    mockInfo,
     mockError,
     mockRecordProjectOpened,
     mockDataProvidersGet,
-    mockSettingsGet,
     mockGetAllOpenWebViewDefinitions,
     mockReloadWebView,
+    ...mocks,
   };
 }
 
@@ -2581,12 +3339,48 @@ describe('finalizeProjectSwitch', () => {
 
     await finalizeProjectSwitch(papi, 'proj-1', undefined);
 
-    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
-      'proj-1',
-    ]);
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'paratextBibleSendReceive.syncProjects',
+      ['proj-1'],
+      true,
+    );
     expect(mockSendCommand.mock.calls.map(([cmd]) => cmd)).not.toContain(
       'paratextBibleSendReceive.sendReceiveProjects',
     );
+  });
+
+  it('keeps the progress toast when the user has switched back to Power mode', async () => {
+    const { papi, mockSendCommand } = createFinalizeMockPapi({ mode: 'power' });
+
+    await finalizeProjectSwitch(papi, 'proj-1', undefined);
+
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
+      'proj-1',
+    ]);
+  });
+
+  it('still syncs, with the progress toast, when the mode read rejects', async () => {
+    const { papi, mockSendCommand, mockWarn } = createFinalizeMockPapi({ mode: READ_THROWS });
+
+    await finalizeProjectSwitch(papi, 'proj-1', undefined);
+
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
+      'proj-1',
+    ]);
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('platform.interfaceMode'));
+  });
+
+  it('skips the Simple-only work but still records the project when the mode read rejects', async () => {
+    const { papi, mockReloadWebView, mockRecordProjectOpened } = createFinalizeMockPapi({
+      mode: READ_THROWS,
+    });
+    const applyForProject = vi.fn().mockResolvedValue(undefined);
+
+    await finalizeProjectSwitch(papi, 'proj-1', applyForProject);
+
+    expect(mockReloadWebView).not.toHaveBeenCalled();
+    expect(applyForProject).not.toHaveBeenCalled();
+    expect(mockRecordProjectOpened).toHaveBeenCalledWith('proj-1');
   });
 
   it('does not await the sync before returning - a hung sync must not block applyForProject or recordProjectOpened', async () => {
@@ -2617,7 +3411,7 @@ describe('finalizeProjectSwitch', () => {
 
   it('does not re-point the Text Collection at a published resource', async () => {
     // The same rule as the editor-column switch, applied through the same function.
-    const { papi, mockReloadWebView } = createFinalizeMockPapi(PUBLISHED_RESOURCE);
+    const { papi, mockReloadWebView } = createFinalizeMockPapi({}, PUBLISHED_RESOURCE);
 
     await finalizeProjectSwitch(papi, 'resource-1', undefined);
 
@@ -2640,8 +3434,7 @@ describe('finalizeProjectSwitch', () => {
   });
 
   it('does not re-point the Text Collection once the user is back in Power mode', async () => {
-    const { papi, mockReloadWebView, mockSettingsGet } = createFinalizeMockPapi();
-    mockSettingsGet.mockResolvedValue('power');
+    const { papi, mockReloadWebView } = createFinalizeMockPapi({ mode: 'power' });
 
     await finalizeProjectSwitch(papi, 'proj-1', undefined);
 
@@ -2658,8 +3451,7 @@ describe('finalizeProjectSwitch', () => {
   });
 
   it('does not call applyForProject when the user has since switched back to Power mode', async () => {
-    const { papi, mockSettingsGet } = createFinalizeMockPapi();
-    mockSettingsGet.mockResolvedValue('power');
+    const { papi } = createFinalizeMockPapi({ mode: 'power' });
     const applyForProject = vi.fn().mockResolvedValue(undefined);
 
     await finalizeProjectSwitch(papi, 'proj-1', applyForProject);
@@ -2682,8 +3474,7 @@ describe('finalizeProjectSwitch', () => {
   });
 
   it('records the project as recently opened even when no longer in Simple mode', async () => {
-    const { papi, mockSettingsGet, mockRecordProjectOpened } = createFinalizeMockPapi();
-    mockSettingsGet.mockResolvedValue('power');
+    const { papi, mockRecordProjectOpened } = createFinalizeMockPapi({ mode: 'power' });
 
     await finalizeProjectSwitch(papi, 'proj-1', undefined);
 
@@ -2730,6 +3521,48 @@ describe('generateParagraphMenuListItems', () => {
     expect(notify).not.toHaveBeenCalled();
   });
 
+  it('while a chapter is loading: action does not call formatPara or restore the selection', () => {
+    const { ref, formatPara } = makeMockEditorRef();
+    const restoreSelection = vi.fn();
+    const items = generateParagraphMenuListItems(
+      ref,
+      {},
+      false,
+      vi.fn(),
+      restoreSelection,
+      () => true,
+    );
+
+    items[0].action?.();
+
+    expect(formatPara).not.toHaveBeenCalled();
+    expect(restoreSelection).not.toHaveBeenCalled();
+  });
+
+  // Equality, not spot checks: a partial-match assertion would miss both a marker silently dropped
+  // from the offered set and an extra one silently added.
+  it("offers exactly selectableParagraphMarkers' markers, matching neither more nor fewer", () => {
+    const { ref } = makeMockEditorRef();
+    const items = generateParagraphMenuListItems(ref, {}, false, vi.fn());
+
+    expect(items.map((item) => item.marker).sort()).toEqual([...selectableParagraphMarkers].sort());
+  });
+
+  it('offers li2, s1, bare q, lh, b, and cp, and excludes id and c', () => {
+    const { ref } = makeMockEditorRef();
+    const items = generateParagraphMenuListItems(ref, {}, false, vi.fn());
+    const markers = items.map((item) => item.marker);
+
+    expect(markers).toContain('li2');
+    expect(markers).toContain('s1');
+    expect(markers).toContain('q'); // bare `q`, distinct from `q1`
+    expect(markers).toContain('lh');
+    expect(markers).toContain('b');
+    expect(markers).toContain('cp'); // genuine paragraph-style marker in USFM, unlike `c`
+    expect(markers).not.toContain('id'); // programmatically-applied only
+    expect(markers).not.toContain('c'); // programmatically-applied only
+  });
+
   it('fills the detail column from the marker description, so the paragraph menu is not the one menu with an empty second column', () => {
     const { ref } = makeMockEditorRef();
     const items = generateParagraphMenuListItems(
@@ -2760,6 +3593,18 @@ describe('generateParagraphMenuListItems', () => {
     });
   });
 
+  it('falls back to the bare marker code for the title while its description string is still loading, never a raw localize key', () => {
+    const { ref } = makeMockEditorRef();
+    const items = generateParagraphMenuListItems(ref, {}, false, vi.fn());
+
+    const paragraphItem = items.find((item) => item.marker === 'p');
+
+    expect(paragraphItem?.title).toBe('p');
+    items.forEach((item) => {
+      expect(item.title).not.toMatch(/^%.*%$/);
+    });
+  });
+
   it('restores the caret before formatting, so a pick made after the menu took focus still lands', () => {
     const { ref, formatPara } = makeMockEditorRef();
     const restoreSelection = vi.fn();
@@ -2786,6 +3631,77 @@ describe('generateParagraphMenuListItems', () => {
 
     expect(restoreSelection).not.toHaveBeenCalled();
     expect(formatPara).not.toHaveBeenCalled();
+  });
+});
+
+describe('selectableParagraphMarkers', () => {
+  it('includes every USFM paragraph-style marker that a user can validly apply directly', () => {
+    expect(selectableParagraphMarkers).toContain('li2');
+    expect(selectableParagraphMarkers).toContain('s1');
+    expect(selectableParagraphMarkers).toContain('q'); // bare `q`, distinct from `q1`
+    expect(selectableParagraphMarkers).toContain('q3');
+    expect(selectableParagraphMarkers).toContain('lh');
+    expect(selectableParagraphMarkers).toContain('b');
+    expect(selectableParagraphMarkers).toContain('h'); // Headers category — deliberately not excluded
+    expect(selectableParagraphMarkers).toContain('cl'); // DivisionMarks category — deliberately not excluded
+    expect(selectableParagraphMarkers).toContain('cp'); // genuine paragraph-style marker in USFM, unlike `c`
+  });
+
+  // The confirmed, deliberate exclusions (see the comment on PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS):
+  it('excludes id and c even though isParagraphMarker is true for both', () => {
+    expect(selectableParagraphMarkers).not.toContain('id');
+    expect(selectableParagraphMarkers).not.toContain('c');
+  });
+
+  it('excludes markers that are not paragraph markers', () => {
+    expect(selectableParagraphMarkers).not.toContain('v'); // Character, special-cased by isBlockMarker only
+    expect(selectableParagraphMarkers).not.toContain('nd'); // Character
+    expect(selectableParagraphMarkers).not.toContain('qs'); // Character
+    expect(selectableParagraphMarkers).not.toContain('qac'); // Character
+  });
+
+  it('PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS contains id and c', () => {
+    expect(PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS.has('id')).toBe(true);
+    expect(PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS.has('c')).toBe(true);
+  });
+});
+
+describe('hasDisplayableParagraphMarkerTitle', () => {
+  it('is true for every marker offered by the switcher', () => {
+    expect(
+      selectableParagraphMarkers.every((marker) => hasDisplayableParagraphMarkerTitle(marker)),
+    ).toBe(true);
+  });
+
+  // `id` and `c` are applied through their own dedicated mechanisms and must never be a switcher
+  // choice, but the trigger label and gutter tooltip should still name one when the caret/selection
+  // is actually on it, rather than falling back to the generic "Miscellaneous Marker" text or a raw
+  // marker echo.
+  it('is true for id and c even though both are excluded from selectableParagraphMarkers', () => {
+    expect(selectableParagraphMarkers).not.toContain('id');
+    expect(selectableParagraphMarkers).not.toContain('c');
+    expect(hasDisplayableParagraphMarkerTitle('id')).toBe(true);
+    expect(hasDisplayableParagraphMarkerTitle('c')).toBe(true);
+  });
+
+  it('is false for a marker with no title at all', () => {
+    expect(hasDisplayableParagraphMarkerTitle('notamarker')).toBe(false);
+  });
+});
+
+describe('getParagraphMarkerTitle', () => {
+  it("resolves id's title once loaded, even though id is not offered by the switcher", () => {
+    expect(
+      getParagraphMarkerTitle('id', { '%paragraphMenu_id_markerDescription%': 'Book identifier' }),
+    ).toBe('Book identifier');
+  });
+
+  it("leaves id's title undefined while its string is still loading", () => {
+    expect(getParagraphMarkerTitle('id', {})).toBeUndefined();
+  });
+
+  it('returns undefined for a marker with no title available at all', () => {
+    expect(getParagraphMarkerTitle('notamarker', {})).toBeUndefined();
   });
 });
 
@@ -2927,11 +3843,13 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     popoverShown: false,
     paneVisible: false,
     paneRendered: false,
-    isAutoShowEnabled: false,
+    isPowerMode: true,
+    surface: 'popover' as const,
+    usesPaneModel: false,
   };
 
   it('opens the popover for a plain collapsed-caller click (pane hidden, no session)', () => {
-    expect(decideNoteCallerClickAction(base)).toEqual({
+    expect(decideNoteCallerClickAction({ ...base, isPowerMode: false })).toEqual({
       clearStaleEditingSession: false,
       action: 'open-popover',
       sendPaneFocusRequest: false,
@@ -2960,9 +3878,14 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
   });
 
   it('self-heals a stale session key (no popover shown) instead of dead-ending the click', () => {
-    // Pre-fix, a leftover editingNoteKey silently swallowed every future caller click.
+    // A leftover editingNoteKey must not silently swallow every future caller click.
     expect(
-      decideNoteCallerClickAction({ ...base, editingNoteKey: 'note-1', popoverShown: false }),
+      decideNoteCallerClickAction({
+        ...base,
+        editingNoteKey: 'note-1',
+        popoverShown: false,
+        isPowerMode: false,
+      }),
     ).toEqual({
       clearStaleEditingSession: true,
       action: 'open-popover',
@@ -2972,8 +3895,8 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
   });
 
   it('still opens the popover when the pane is rendered — the pane highlight rides alongside', () => {
-    // The popover is the only surface that can EDIT a note today, so a routed click always opens
-    // it; the rendered pane additionally highlights the clicked note (PT9 navigate-to-note).
+    // On the popover surface (every view but a pane-model one), a routed click opens the popover; the
+    // rendered pane additionally highlights the clicked note (PT9 navigate-to-note).
     expect(decideNoteCallerClickAction({ ...base, paneVisible: true, paneRendered: true })).toEqual(
       {
         clearStaleEditingSession: false,
@@ -2984,8 +3907,8 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     );
   });
 
-  it('shows a closed pane when auto-show is on, and highlights the note once it mounts', () => {
-    expect(decideNoteCallerClickAction({ ...base, isAutoShowEnabled: true })).toEqual({
+  it('Power Formatted reveals a hidden pane alongside the popover, and highlights the note once it mounts', () => {
+    expect(decideNoteCallerClickAction({ ...base, isPowerMode: true })).toEqual({
       clearStaleEditingSession: false,
       action: 'open-popover',
       sendPaneFocusRequest: true,
@@ -2993,21 +3916,59 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     });
   });
 
-  it('leaves a closed pane closed when auto-show is off', () => {
-    expect(decideNoteCallerClickAction({ ...base, isAutoShowEnabled: false })).toEqual({
+  it('a pane-model view ignores clicks while a popover opened before switching to it is still shown', () => {
+    // The popover applies its text only on Save, so opening the row editor (which closes the
+    // popover) would discard what was typed. The popover is finished through its own Save or X.
+    expect(
+      decideNoteCallerClickAction({
+        ...base,
+        isPowerMode: false,
+        surface: 'pane',
+        usesPaneModel: true,
+        editingNoteKey: 'note-1',
+        popoverShown: true,
+        paneVisible: true,
+        paneRendered: true,
+      }),
+    ).toEqual({
       clearStaleEditingSession: false,
-      action: 'open-popover',
+      action: 'ignore-popover-open',
       sendPaneFocusRequest: false,
       showPane: false,
     });
   });
 
+  it('Simple pane-model view: opens the row editor and reveals a hidden pane', () => {
+    expect(
+      decideNoteCallerClickAction({
+        ...base,
+        isPowerMode: false,
+        surface: 'pane',
+        usesPaneModel: true,
+      }),
+    ).toEqual({
+      clearStaleEditingSession: false,
+      action: 'open-pane-editor',
+      sendPaneFocusRequest: true,
+      showPane: true,
+    });
+  });
+
+  it('Simple read-only pane-model view: navigates only, revealing a hidden pane', () => {
+    expect(
+      decideNoteCallerClickAction({
+        ...base,
+        isPowerMode: false,
+        surface: 'none',
+        usesPaneModel: true,
+      }),
+    ).toMatchObject({ action: 'navigate-only', showPane: true, sendPaneFocusRequest: true });
+  });
+
   it('does not re-show a pane that is already toggled visible but still mounting its data', () => {
     // paneVisible without paneRendered: the toggle is on but the data has not loaded — nothing to
     // show and nothing to highlight yet.
-    expect(
-      decideNoteCallerClickAction({ ...base, paneVisible: true, isAutoShowEnabled: true }),
-    ).toEqual({
+    expect(decideNoteCallerClickAction({ ...base, paneVisible: true, isPowerMode: true })).toEqual({
       clearStaleEditingSession: false,
       action: 'open-popover',
       sendPaneFocusRequest: false,
@@ -3029,6 +3990,392 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
       sendPaneFocusRequest: true,
       showPane: false,
     });
+  });
+
+  it('Standard view: opens the pane editor and reveals a hidden pane', () => {
+    const d = decideNoteCallerClickAction({ ...base, surface: 'pane', usesPaneModel: true });
+    expect(d).toEqual({
+      clearStaleEditingSession: false,
+      action: 'open-pane-editor',
+      showPane: true,
+      sendPaneFocusRequest: true,
+    });
+  });
+
+  it('Standard view: an open pane session is not stale bookkeeping', () => {
+    const d = decideNoteCallerClickAction({
+      ...base,
+      surface: 'pane',
+      usesPaneModel: true,
+      editingNoteKey: 'k1',
+      paneVisible: true,
+      paneRendered: true,
+    });
+    expect(d.clearStaleEditingSession).toBe(false);
+    expect(d.action).toBe('open-pane-editor');
+  });
+
+  it('read-only Standard view: navigates only, still revealing the pane in Power mode', () => {
+    const d = decideNoteCallerClickAction({ ...base, surface: 'none', usesPaneModel: true });
+    expect(d.action).toBe('navigate-only');
+    expect(d.showPane).toBe(true);
+    expect(d.sendPaneFocusRequest).toBe(true);
+  });
+
+  it.each([true, false])(
+    'read-only outside a pane-model view leaves the caller inert (isPowerMode=%s)',
+    (isPowerMode) => {
+      expect(
+        decideNoteCallerClickAction({
+          ...base,
+          surface: 'none',
+          usesPaneModel: false,
+          isPowerMode,
+          paneVisible: true,
+          paneRendered: true,
+        }),
+      ).toEqual({
+        clearStaleEditingSession: false,
+        action: 'ignore-read-only',
+        sendPaneFocusRequest: false,
+        showPane: false,
+      });
+    },
+  );
+
+  it('expanded caller is ignored regardless of surface', () => {
+    expect(
+      decideNoteCallerClickAction({
+        ...base,
+        surface: 'pane',
+        usesPaneModel: true,
+        isCollapsed: false,
+      }).action,
+    ).toBe('ignore-expanded');
+  });
+
+  it('popover surface keeps ignoring a click while the popover is open', () => {
+    expect(
+      decideNoteCallerClickAction({ ...base, popoverShown: true, editingNoteKey: 'k' }).action,
+    ).toBe('ignore-popover-open');
+  });
+
+  it('popover shown without a tracked key still blocks the click (never open a second popover)', () => {
+    // popoverShown alone is enough to block a routed click, even without editingNoteKey: opening a
+    // second popover while one is already on screen would be the bug, not the safe outcome.
+    const d = decideNoteCallerClickAction({
+      ...base,
+      surface: 'popover',
+      popoverShown: true,
+      editingNoteKey: undefined,
+    });
+    expect(d.action).toBe('ignore-popover-open');
+    expect(d.clearStaleEditingSession).toBe(false);
+  });
+});
+
+describe('decideNoteSessionUpdate (a row edit must not reload the row editor)', () => {
+  it('re-keys without reloading when the row editor replaced its own note', () => {
+    expect(
+      decideNoteSessionUpdate({
+        sessionKeyResolves: false,
+        insertedKeyIsNote: true,
+        noteChanged: false,
+      }),
+    ).toEqual({ action: 'rekey', reloadRowEditor: false, refreshBaseline: true });
+  });
+
+  it('refreshes the comparison baseline on that re-key, so the next external change compares against what the row applied', () => {
+    // The defect this pins: leaving the baseline at the ops the row was LOADED with makes every
+    // later external change look like a change to this note, reloading the row editor once per
+    // edit cycle and dropping whatever is still inside the row editor's apply debounce.
+    const decision = decideNoteSessionUpdate({
+      sessionKeyResolves: false,
+      insertedKeyIsNote: true,
+      noteChanged: false,
+    });
+    expect(decision.refreshBaseline).toBe(true);
+    expect(decision.reloadRowEditor).toBe(false);
+  });
+
+  it('ends the session when the note is gone and nothing replaced it', () => {
+    expect(
+      decideNoteSessionUpdate({
+        sessionKeyResolves: false,
+        insertedKeyIsNote: false,
+        noteChanged: false,
+      }),
+    ).toEqual({ action: 'end-session', reloadRowEditor: false, refreshBaseline: false });
+  });
+
+  it('leaves the row editor alone when the change was somewhere else in the chapter', () => {
+    expect(
+      decideNoteSessionUpdate({
+        sessionKeyResolves: true,
+        insertedKeyIsNote: false,
+        noteChanged: false,
+      }),
+    ).toEqual({ action: 'follow-note', reloadRowEditor: false, refreshBaseline: false });
+  });
+
+  it('reloads the row editor when this note itself changed elsewhere', () => {
+    expect(
+      decideNoteSessionUpdate({
+        sessionKeyResolves: true,
+        insertedKeyIsNote: false,
+        noteChanged: true,
+      }),
+    ).toEqual({ action: 'follow-note', reloadRowEditor: true, refreshBaseline: true });
+  });
+
+  it('keeps following the still-resolving note even when an insert came with the change', () => {
+    // A note inserted elsewhere in the chapter does not re-key the session's own note, so the
+    // insert must not divert the session into the re-key branch.
+    expect(
+      decideNoteSessionUpdate({
+        sessionKeyResolves: true,
+        insertedKeyIsNote: true,
+        noteChanged: false,
+      }).action,
+    ).toBe('follow-note');
+  });
+
+  it('never reloads without refreshing the baseline (a reload is what the baseline tracks)', () => {
+    const cases = [true, false].flatMap((sessionKeyResolves) =>
+      [true, false].flatMap((insertedKeyIsNote) =>
+        [true, false].map((noteChanged) =>
+          decideNoteSessionUpdate({ sessionKeyResolves, insertedKeyIsNote, noteChanged }),
+        ),
+      ),
+    );
+    expect(
+      cases.filter((decision) => decision.reloadRowEditor && !decision.refreshBaseline),
+    ).toEqual([]);
+  });
+});
+
+describe('usesPaneNoteModel', () => {
+  it.each([
+    ['standard', true, true],
+    ['formatted', true, false],
+    ['markers', true, false],
+    ['formatted', false, true],
+    ['markers', false, false],
+  ] as const)('%s view, isPowerMode=%s → %s', (viewType, isPowerMode, expected) => {
+    expect(usesPaneNoteModel({ viewType, isPowerMode, isInterfaceModeLoading: false })).toBe(
+      expected,
+    );
+  });
+
+  it('does not apply the Simple answer while the interface mode is still loading', () => {
+    expect(
+      usesPaneNoteModel({
+        viewType: 'formatted',
+        isPowerMode: false,
+        isInterfaceModeLoading: true,
+      }),
+    ).toBe(false);
+    expect(
+      usesPaneNoteModel({ viewType: 'standard', isPowerMode: false, isInterfaceModeLoading: true }),
+    ).toBe(true);
+  });
+});
+
+describe('resolveNoteEditingSurface', () => {
+  it('routes a pane-model view to the pane', () => {
+    expect(resolveNoteEditingSurface({ usesPaneModel: true, isReadOnly: false })).toBe('pane');
+  });
+
+  it('routes every other view to the popover', () => {
+    expect(resolveNoteEditingSurface({ usesPaneModel: false, isReadOnly: false })).toBe('popover');
+  });
+
+  it('has no editing surface when read-only, in any view', () => {
+    expect(resolveNoteEditingSurface({ usesPaneModel: true, isReadOnly: true })).toBe('none');
+    expect(resolveNoteEditingSurface({ usesPaneModel: false, isReadOnly: true })).toBe('none');
+  });
+});
+
+describe('resolveFootnotesPaneViewOptions', () => {
+  const mainViewOptions: ViewOptions = {
+    markerMode: 'hidden',
+    noteMode: 'collapsed',
+    hasSpacing: true,
+    isFormattedFont: true,
+  };
+  const standardViewOptions: ViewOptions = {
+    markerMode: 'editable',
+    noteMode: 'collapsed',
+    hasSpacing: true,
+    isFormattedFont: true,
+  };
+
+  it('leaves Power on the main editor’s view options', () => {
+    expect(
+      resolveFootnotesPaneViewOptions({
+        isPowerMode: true,
+        isInterfaceModeLoading: false,
+        mainViewOptions,
+        standardViewOptions,
+      }),
+    ).toBe(mainViewOptions);
+  });
+
+  it('gives Simple Standard’s view options, so the pane shows markers', () => {
+    expect(
+      resolveFootnotesPaneViewOptions({
+        isPowerMode: false,
+        isInterfaceModeLoading: false,
+        mainViewOptions,
+        standardViewOptions,
+      }),
+    ).toBe(standardViewOptions);
+  });
+
+  it('keeps the main editor’s view options while the interface mode is still loading', () => {
+    // `isPowerMode` reads false until the mode loads, so a Power user's pane must not take
+    // Simple's answer in the meantime.
+    expect(
+      resolveFootnotesPaneViewOptions({
+        isPowerMode: false,
+        isInterfaceModeLoading: true,
+        mainViewOptions,
+        standardViewOptions,
+      }),
+    ).toBe(mainViewOptions);
+  });
+});
+
+describe('shouldEndPaneNoteEditOnRowSelect', () => {
+  it('ends the row session when a different row is selected', () => {
+    // Tab from the row editor onto another note, then Space: that note is selected and its caller
+    // highlighted, so an editor left open on the first note reads as editing the wrong one.
+    expect(shouldEndPaneNoteEditOnRowSelect({ paneEditingIndex: 1, selectedIndex: 3 })).toBe(true);
+  });
+
+  it('has nothing to end when no row is being edited', () => {
+    expect(
+      shouldEndPaneNoteEditOnRowSelect({ paneEditingIndex: undefined, selectedIndex: 3 }),
+    ).toBe(false);
+  });
+
+  it('keeps the session when the row selected is the one being edited', () => {
+    expect(shouldEndPaneNoteEditOnRowSelect({ paneEditingIndex: 3, selectedIndex: 3 })).toBe(false);
+  });
+});
+
+describe('resolveCallerHighlight', () => {
+  it('highlights the selected note while a pane-model view has the pane focused', () => {
+    expect(
+      resolveCallerHighlight({ usesPaneModel: true, paneHasFocus: true, selectedIndex: 0 }),
+    ).toBe(0);
+  });
+
+  it('clears the highlight while the pane has no selection', () => {
+    expect(
+      resolveCallerHighlight({
+        usesPaneModel: true,
+        paneHasFocus: true,
+        selectedIndex: undefined,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('clears the highlight while focus is outside the pane', () => {
+    expect(
+      resolveCallerHighlight({ usesPaneModel: true, paneHasFocus: false, selectedIndex: 2 }),
+    ).toBeUndefined();
+  });
+
+  it('clears the highlight outside a pane-model view', () => {
+    expect(
+      resolveCallerHighlight({ usesPaneModel: false, paneHasFocus: true, selectedIndex: 2 }),
+    ).toBeUndefined();
+  });
+
+  it('highlights the row keyboard focus is on, ahead of the selected row', () => {
+    // Tab and the arrow keys move focus through the rows without selecting any of them; the
+    // focused row is where the pane's caret is, so its note is the one marked.
+    expect(
+      resolveCallerHighlight({
+        usesPaneModel: true,
+        paneHasFocus: true,
+        focusedRowIndex: 3,
+        selectedIndex: 1,
+      }),
+    ).toBe(3);
+    expect(
+      resolveCallerHighlight({
+        usesPaneModel: true,
+        paneHasFocus: true,
+        focusedRowIndex: 3,
+        selectedIndex: undefined,
+      }),
+    ).toBe(3);
+  });
+
+  it('falls back to the selected row when no row holds focus', () => {
+    expect(
+      resolveCallerHighlight({
+        usesPaneModel: true,
+        paneHasFocus: true,
+        focusedRowIndex: undefined,
+        selectedIndex: 1,
+      }),
+    ).toBe(1);
+  });
+
+  it('marks no focused row while focus is outside the pane', () => {
+    expect(
+      resolveCallerHighlight({
+        usesPaneModel: true,
+        paneHasFocus: false,
+        focusedRowIndex: 3,
+        selectedIndex: 1,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('restores the highlight when a pane-model view comes back with the pane untouched', () => {
+    // A view round trip leaves the pane mounted, its row selected, and DOM focus where it was, so
+    // re-deriving on the way back has to give the index again rather than staying cleared.
+    const paneState = { paneHasFocus: true, selectedIndex: 2 };
+    expect(resolveCallerHighlight({ usesPaneModel: true, ...paneState })).toBe(2);
+    expect(resolveCallerHighlight({ usesPaneModel: false, ...paneState })).toBeUndefined();
+    expect(resolveCallerHighlight({ usesPaneModel: true, ...paneState })).toBe(2);
+  });
+});
+
+describe('shouldPublishPaneDocument (the pane repaints only when its notes change)', () => {
+  const note = (text: string): MarkerObject => ({
+    type: 'note',
+    marker: 'f',
+    caller: '+',
+    content: [{ type: 'char', marker: 'ft', content: [text] }],
+  });
+
+  it('publishes the first document the pane ever sees', () => {
+    expect(shouldPublishPaneDocument([note('a')], undefined)).toBe(true);
+  });
+
+  it('skips a document whose notes are unchanged', () => {
+    // The typing hot path: every keystroke in the Scripture body re-settles the document and
+    // changes no note. Republishing there re-renders the whole web view per character.
+    expect(shouldPublishPaneDocument([note('a')], [note('a')])).toBe(false);
+  });
+
+  it("publishes when a note's content changed", () => {
+    expect(shouldPublishPaneDocument([note('a')], [note('b')])).toBe(true);
+  });
+
+  it('publishes when a note was added or removed', () => {
+    expect(shouldPublishPaneDocument([note('a'), note('b')], [note('a')])).toBe(true);
+    expect(shouldPublishPaneDocument([], [note('a')])).toBe(true);
+  });
+
+  it('publishes a document whose notes could not be read', () => {
+    // A document this reader cannot walk must never wedge the pane on a stale note list.
+    expect(shouldPublishPaneDocument(undefined, [note('a')])).toBe(true);
   });
 });
 
@@ -3781,6 +5128,50 @@ describe('openOrUpdateRelatedPanels', () => {
 
 // #endregion openOrUpdateRelatedPanels
 
+describe('updateRelatedChecksSidePanel', () => {
+  it.each([
+    ['an editable project', EDITABLE_PROJECT],
+    ['a translation project with editing switched off', READ_ONLY_PROJECT],
+  ])(
+    're-points the Checks side panel at %s with the new editor id',
+    async (_label, projectKind) => {
+      const { papi, mockSendCommand } = createRelatedPanelsMockPapi([], projectKind);
+
+      await updateRelatedChecksSidePanel(papi, 'proj-b', 'editor-2');
+
+      expect(mockSendCommand.mock.calls).toEqual([
+        ['platformScripture.updateChecksSidePanelProject', 'proj-b', 'editor-2'],
+      ]);
+    },
+  );
+
+  it('does not follow a published resource', async () => {
+    const { papi, mockSendCommand } = createRelatedPanelsMockPapi([], PUBLISHED_RESOURCE);
+
+    await updateRelatedChecksSidePanel(papi, 'proj-b', 'editor-2');
+
+    expect(mockSendCommand).not.toHaveBeenCalled();
+  });
+
+  it('does nothing in Power mode, where each Checks panel belongs to the editor it was opened for', async () => {
+    const { papi, mockSendCommand, mockSettingsGet } = createRelatedPanelsMockPapi();
+    mockSettingsGet.mockResolvedValue('power');
+
+    await updateRelatedChecksSidePanel(papi, 'proj-b', 'editor-2');
+
+    expect(mockSettingsGet).toHaveBeenCalledWith('platform.interfaceMode');
+    expect(mockSendCommand).not.toHaveBeenCalled();
+  });
+
+  it('logs and swallows a rejection, since the project switch has already succeeded', async () => {
+    const { papi, mockSendCommand, mockWarn } = createRelatedPanelsMockPapi();
+    mockSendCommand.mockRejectedValue(new Error('platformScripture is down'));
+
+    await expect(updateRelatedChecksSidePanel(papi, 'proj-b', 'editor-2')).resolves.toBeUndefined();
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('platformScripture is down'));
+  });
+});
+
 describe('getTabTitleProjectName', () => {
   /** A PAPI whose `platform.base` PDP returns the settings this test hands it. */
   function papiWithSettings(settings: Record<string, unknown>) {
@@ -3974,6 +5365,810 @@ describe('buildScriptureTextGridWebView', () => {
     await expect(buildScriptureTextGridWebView(papi, wrongType, {}, GRID_ASSETS)).rejects.toThrow(
       'someOther.webView',
     );
+  });
+});
+
+// #endregion
+
+describe('withDocumentEndOnText', () => {
+  /** `\p \v 1 In the b` as the document's last paragraph; its text is `$.content[2].content[1]`. */
+  const lastParagraph = {
+    type: 'para',
+    marker: 'p',
+    content: [{ type: 'verse', marker: 'v', number: '1' }, 'In the b'],
+  };
+  const endsInText: Usj = {
+    type: USJ_TYPE,
+    version: USJ_VERSION,
+    content: [
+      { type: 'book', marker: 'id', code: 'GEN' },
+      { type: 'chapter', marker: 'c', number: '1' },
+      lastParagraph,
+    ],
+  };
+
+  it('brings the document-end spelling (one past the text) onto the end of the text', () => {
+    expect(
+      withDocumentEndOnText({ jsonPath: '$.content[2].content[1]', offset: 9 }, 8, endsInText),
+    ).toEqual({ jsonPath: '$.content[2].content[1]', offset: 8 });
+  });
+
+  it.each<[string, UsjTextContentLocation]>([
+    ['an offset inside the text', { jsonPath: '$.content[2].content[1]', offset: 3 }],
+    ['the end of the text', { jsonPath: '$.content[2].content[1]', offset: 8 }],
+    ['an offset no location rule produces', { jsonPath: '$.content[2].content[1]', offset: 10 }],
+  ])('leaves %s alone', (_name, location) => {
+    expect(withDocumentEndOnText(location, 8, endsInText)).toBe(location);
+  });
+
+  it('leaves one past the end alone on a text that is not the last in the document', () => {
+    const location: UsjTextContentLocation = { jsonPath: '$.content[2].content[1]', offset: 9 };
+    const followed: Usj = {
+      ...endsInText,
+      content: [...endsInText.content, { type: 'para', marker: 'p', content: ['God said'] }],
+    };
+
+    expect(withDocumentEndOnText(location, 8, followed)).toBe(location);
+  });
+});
+describe('validateCommentSelection', () => {
+  const NOT_RESOLVED = '%webView_platformScriptureEditor_error_selectionNotResolved%';
+  const CONTAINS_MARKERS = '%webView_platformScriptureEditor_error_selectionContainsMarkers%';
+  const NO_TEXT = '%webView_platformScriptureEditor_error_noTextSelected%';
+
+  const refrain = 'for his loving kindness endures forever.';
+  const doc: Usj = {
+    type: USJ_TYPE,
+    version: USJ_VERSION,
+    content: [
+      { type: 'book', marker: 'id', code: 'PSA' },
+      { type: 'chapter', marker: 'c', number: '136' },
+      // 2: verse text with a footnote and a \nd span
+      {
+        type: 'para',
+        marker: 'p',
+        content: [
+          { type: 'verse', marker: 'v', number: '1' },
+          'In the beginning',
+          {
+            type: 'note',
+            marker: 'f',
+            caller: '+',
+            content: [{ type: 'char', marker: 'ft', content: ['a note'] }],
+          },
+          ' God said ',
+          { type: 'char', marker: 'nd', content: ['LORD'] },
+          ' hello',
+        ],
+      },
+      { type: 'para', marker: 'q2', content: [refrain] },
+      { type: 'para', marker: 'b' },
+      { type: 'para', marker: 'q1', content: [{ type: 'verse', marker: 'v', number: '2' }] },
+      { type: 'para', marker: 'q2', content: [refrain] },
+      {
+        type: 'para',
+        marker: 'p',
+        content: [{ type: 'char', marker: 'w', lemma: 'grace', content: ['grace'] }, ' end'],
+      },
+    ],
+  };
+  const text = '$.content[2].content[1]';
+
+  it('anchors a text range as is', () => {
+    expect(
+      validateCommentSelection(
+        { start: { jsonPath: text, offset: 7 }, end: { jsonPath: text, offset: 16 } },
+        doc,
+      ),
+    ).toEqual({
+      range: { start: { jsonPath: text, offset: 7 }, end: { jsonPath: text, offset: 16 } },
+    });
+  });
+
+  it('expands a collapsed caret to the word around it', () => {
+    expect(validateCommentSelection({ start: { jsonPath: text, offset: 10 } }, doc)).toEqual({
+      range: { start: { jsonPath: text, offset: 7 }, end: { jsonPath: text, offset: 16 } },
+    });
+  });
+
+  it('refuses a collapsed caret between whitespace', () => {
+    expect(
+      validateCommentSelection({ start: { jsonPath: '$.content[2].content[3]', offset: 0 } }, doc),
+    ).toEqual({ notice: NO_TEXT });
+  });
+
+  it('warns for a text path that does not resolve', () => {
+    const result = validateCommentSelection(
+      { start: { jsonPath: '$.content[40].content[1]', offset: 2 } },
+      doc,
+    );
+    expect(result).toMatchObject({ notice: NOT_RESOLVED });
+    expect(result).toHaveProperty('warning');
+  });
+
+  it('warns for an end offset past the length of the text', () => {
+    const result = validateCommentSelection(
+      { start: { jsonPath: text, offset: 2 }, end: { jsonPath: text, offset: 40 } },
+      doc,
+    );
+    expect(result).toMatchObject({ notice: NOT_RESOLVED });
+    expect(result).toHaveProperty('warning');
+  });
+
+  it('warns for a collapsed caret past the length of the text', () => {
+    const result = validateCommentSelection({ start: { jsonPath: text, offset: 17 } }, doc);
+    expect(result).toMatchObject({ notice: NOT_RESOLVED });
+    expect(result).toHaveProperty('warning');
+  });
+
+  it('accepts the document end on the last text', () => {
+    const lastText: Usj = {
+      ...doc,
+      content: [...doc.content.slice(0, 2), { type: 'para', marker: 'p', content: ['The end'] }],
+    };
+    expect(
+      validateCommentSelection(
+        {
+          start: { jsonPath: '$.content[2].content[0]', offset: 4 },
+          end: { jsonPath: '$.content[2].content[0]', offset: 8 },
+        },
+        lastText,
+      ),
+    ).toEqual({
+      range: {
+        start: { jsonPath: '$.content[2].content[0]', offset: 4 },
+        end: { jsonPath: '$.content[2].content[0]', offset: 7 },
+      },
+    });
+  });
+
+  it('refuses a range across a character span', () => {
+    expect(
+      validateCommentSelection(
+        {
+          start: { jsonPath: '$.content[2].content[3]', offset: 2 },
+          end: { jsonPath: '$.content[2].content[5]', offset: 3 },
+        },
+        doc,
+      ),
+    ).toEqual({ notice: CONTAINS_MARKERS });
+  });
+
+  it('refuses a range across two identical strings in different paragraphs', () => {
+    expect(
+      validateCommentSelection(
+        {
+          start: { jsonPath: '$.content[3].content[0]', offset: 4 },
+          end: { jsonPath: '$.content[6].content[0]', offset: 10 },
+        },
+        doc,
+      ),
+    ).toEqual({ notice: CONTAINS_MARKERS });
+  });
+
+  it.each([
+    ['an empty paragraph marker', { jsonPath: "$.content[4]['marker']", propertyOffset: 1 }],
+    [
+      'a line-final verse number',
+      { jsonPath: "$.content[5].content[0]['number']", propertyOffset: 1 },
+    ],
+    [
+      'a lemma that equals the word',
+      { jsonPath: "$.content[7].content[0]['lemma']", propertyOffset: 2 },
+    ],
+  ])('refuses a collapsed caret on %s without a warning', (_name, start) => {
+    expect(validateCommentSelection({ start }, doc)).toEqual({ notice: NO_TEXT });
+  });
+
+  it('refuses a range ending on a property location without a warning', () => {
+    expect(
+      validateCommentSelection(
+        {
+          start: { jsonPath: text, offset: 2 },
+          end: { jsonPath: "$.content[5].content[0]['number']", propertyOffset: 1 },
+        },
+        doc,
+      ),
+    ).toEqual({ notice: CONTAINS_MARKERS });
+  });
+
+  it('treats a range end on the next marker as the end of the text before it', () => {
+    const viaMarker = validateCommentSelection(
+      { start: { jsonPath: text, offset: 7 }, end: { jsonPath: '$.content[2].content[2]' } },
+      doc,
+    );
+    const viaText = validateCommentSelection(
+      { start: { jsonPath: text, offset: 7 }, end: { jsonPath: text, offset: 16 } },
+      doc,
+    );
+    expect(viaMarker).toEqual(viaText);
+    expect(viaMarker).toHaveProperty('range');
+  });
+});
+
+// #region resolveNoteVerseRef
+
+describe('resolveNoteVerseRef (picking a note navigates to its verse)', () => {
+  const currentScrRef = {
+    book: 'GEN',
+    chapterNum: 1,
+    verseNum: 1,
+    versificationStr: 'English',
+  };
+
+  function note(text: string): object {
+    return {
+      type: 'note',
+      marker: 'f',
+      caller: '+',
+      content: [{ type: 'char', marker: 'ft', content: [text] }],
+    };
+  }
+
+  const chapterWithNotesInTwoVerses: Usj = {
+    type: USJ_TYPE,
+    version: USJ_VERSION,
+    content: [
+      { type: 'book', marker: 'id', code: 'GEN', content: ['Test'] },
+      { type: 'chapter', marker: 'c', number: '1' },
+      {
+        type: 'para',
+        marker: 'p',
+        content: [
+          { type: 'verse', marker: 'v', number: '1' },
+          'a ',
+          note('alpha'),
+          { type: 'verse', marker: 'v', number: '4' },
+          'b ',
+          note('beta'),
+        ],
+      },
+    ],
+  };
+
+  it('resolves each note to the verse it sits in', () => {
+    expect(resolveNoteVerseRef(chapterWithNotesInTwoVerses, 0, currentScrRef)).toEqual({
+      book: 'GEN',
+      chapterNum: 1,
+      verseNum: 1,
+      versificationStr: 'English',
+    });
+    expect(resolveNoteVerseRef(chapterWithNotesInTwoVerses, 1, currentScrRef)).toEqual({
+      book: 'GEN',
+      chapterNum: 1,
+      verseNum: 4,
+      versificationStr: 'English',
+    });
+  });
+
+  // The editor stamps its documents 3.1 and the markers map is declared for 3.0; left uncorrected,
+  // the reader warns on every pick.
+  it("reads the editor's own document version without logging it", () => {
+    expect(chapterWithNotesInTwoVerses.version).toBe('3.1');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      expect(resolveNoteVerseRef(chapterWithNotesInTwoVerses, 1, currentScrRef)?.verseNum).toBe(4);
+      expect(findEditorUsjNotes(chapterWithNotesInTwoVerses)).toHaveLength(2);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('changes nothing but the verse — the editor holds one chapter', () => {
+    const resolved = resolveNoteVerseRef(chapterWithNotesInTwoVerses, 1, {
+      book: 'GEN',
+      chapterNum: 1,
+      verseNum: 1,
+      versificationStr: 'Vulgate',
+    });
+    expect(resolved).toEqual({
+      book: 'GEN',
+      chapterNum: 1,
+      verseNum: 4,
+      versificationStr: 'Vulgate',
+    });
+  });
+
+  it('drops the verse range the caret was in, which names a different verse than the note', () => {
+    const resolved = resolveNoteVerseRef(chapterWithNotesInTwoVerses, 1, {
+      ...currentScrRef,
+      verseNum: 2,
+      verse: '2-3',
+    });
+    expect(resolved?.verseNum).toBe(4);
+    expect(resolved).not.toHaveProperty('verse');
+  });
+
+  it('resolves a note that sits before the first verse to verse 0, not to nothing', () => {
+    const noteInAHeading: Usj = {
+      type: USJ_TYPE,
+      version: USJ_VERSION,
+      content: [
+        { type: 'book', marker: 'id', code: 'GEN', content: ['Test'] },
+        { type: 'chapter', marker: 'c', number: '1' },
+        { type: 'para', marker: 's', content: ['Heading ', note('about the heading')] },
+        {
+          type: 'para',
+          marker: 'p',
+          content: [{ type: 'verse', marker: 'v', number: '1' }, 'a'],
+        },
+      ],
+    };
+    expect(resolveNoteVerseRef(noteInAHeading, 0, currentScrRef)?.verseNum).toBe(0);
+  });
+
+  it('leaves the reference alone when there is no note at that index', () => {
+    expect(resolveNoteVerseRef(chapterWithNotesInTwoVerses, 5, currentScrRef)).toBeUndefined();
+    expect(resolveNoteVerseRef(chapterWithNotesInTwoVerses, -1, currentScrRef)).toBeUndefined();
+    expect(resolveNoteVerseRef(undefined, 0, currentScrRef)).toBeUndefined();
+  });
+
+  it('reports nothing rather than throwing out of a click handler on USJ it cannot read', () => {
+    // Content that is not an array at all: the reader throws walking it, and a caller-click
+    // handler must see `undefined` rather than an exception.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const unreadable = { type: USJ_TYPE, version: USJ_VERSION, content: 'oops' } as unknown as Usj;
+    expect(resolveNoteVerseRef(unreadable, 0, currentScrRef)).toBeUndefined();
+  });
+});
+
+// #endregion resolveNoteVerseRef
+
+describe('readCommentRangeText', () => {
+  const makeDoc = (content: Usj['content'][number][]): Usj => ({
+    type: USJ_TYPE,
+    version: USJ_VERSION,
+    content: [{ type: 'book', marker: 'id', code: 'PSA' }, ...content],
+  });
+  const path = '$.content[1].content[0]';
+  const range = (startOffset: number, endOffset: number) => ({
+    start: { jsonPath: path, offset: startOffset },
+    end: { jsonPath: path, offset: endOffset },
+  });
+  const doc = makeDoc([{ type: 'para', marker: 'p', content: ['In the beginning'] }]);
+
+  it.each([
+    ['a slice of the text', doc, range(3, 6), 'the'],
+    ['the whole text', doc, range(0, 16), 'In the beginning'],
+    [
+      'a path that is gone',
+      makeDoc([{ type: 'para', marker: 'p', content: [] }]),
+      range(3, 6),
+      undefined,
+    ],
+    [
+      'a path that is now a marker',
+      makeDoc([
+        {
+          type: 'para',
+          marker: 'p',
+          content: [{ type: 'char', marker: 'nd', content: ['the'] }],
+        },
+      ]),
+      range(3, 6),
+      undefined,
+    ],
+    [
+      'text that is now shorter than the range',
+      makeDoc([{ type: 'para', marker: 'p', content: ['In'] }]),
+      range(3, 6),
+      undefined,
+    ],
+  ])('reads %s', (_name, usj, r, expected) => {
+    expect(readCommentRangeText(r, usj)).toBe(expected);
+  });
+});
+
+describe('hasPendingCommentTextChanged', () => {
+  const path = '$.content[1].content[0]';
+  const pending = {
+    range: { start: { jsonPath: path, offset: 3 }, end: { jsonPath: path, offset: 6 } },
+    anchoredText: 'the',
+  };
+  const docWith = (text: string): Usj => ({
+    type: USJ_TYPE,
+    version: USJ_VERSION,
+    content: [
+      { type: 'book', marker: 'id', code: 'PSA' },
+      { type: 'para', marker: 'p', content: [text] },
+    ],
+  });
+
+  it.each([
+    ['the anchored text is unchanged', 'In the beginning', false],
+    ['text after the range changed', 'In the beginnings', false],
+    ['text before the range shifted it', 'Oh, in the beginning', true],
+    ['the anchored text itself changed', 'In her beginning', true],
+    ['the text became too short', 'In', true],
+  ])('when %s', (_name, text, expected) => {
+    expect(hasPendingCommentTextChanged(pending, docWith(text))).toBe(expected);
+  });
+});
+
+// #region showCommentThreadForInterfaceMode
+
+describe('showCommentThreadForInterfaceMode', () => {
+  function makeMockPapi() {
+    const sendCommand = vi.fn().mockResolvedValue('web-view-id');
+    const warn = vi.fn();
+    // Mock literal cannot satisfy the full PAPI interface — cast for test isolation.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const papi = { commands: { sendCommand }, logger: { warn } } as unknown as typeof PapiBackend;
+    return { papi, sendCommand, warn };
+  }
+
+  const options = { editorWebViewId: 'editor-1', threadId: 'thread-1' };
+
+  it("raises the Column 3 Comments tab on the thread in Simple mode, for the editor's project, and opens nothing else", async () => {
+    const { papi, sendCommand } = makeMockPapi();
+
+    await showCommentThreadForInterfaceMode(papi, { ...options, isPowerMode: false });
+
+    expect(sendCommand).toHaveBeenCalledTimes(1);
+    expect(sendCommand).toHaveBeenCalledWith(
+      'legacyCommentManager.selectCommentThreadInPanel',
+      'thread-1',
+      true,
+      'editor-1',
+    );
+  });
+
+  it("opens the editor's comment list on the thread in Power mode, and opens nothing else", async () => {
+    const { papi, sendCommand } = makeMockPapi();
+
+    await showCommentThreadForInterfaceMode(papi, { ...options, isPowerMode: true });
+
+    expect(sendCommand).toHaveBeenCalledTimes(1);
+    expect(sendCommand).toHaveBeenCalledWith('legacyCommentManager.openCommentList', 'editor-1', {
+      threadIdToSelect: 'thread-1',
+    });
+  });
+
+  it.each([
+    ['Simple', false],
+    ['Power', true],
+  ])(
+    'warns instead of throwing when the %s-mode navigation rejects',
+    async (_mode, isPowerMode) => {
+      const { papi, sendCommand, warn } = makeMockPapi();
+      sendCommand.mockRejectedValue(new Error('navigation failed'));
+
+      await expect(
+        showCommentThreadForInterfaceMode(papi, { ...options, isPowerMode }),
+      ).resolves.toBeUndefined();
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('navigation failed'));
+    },
+  );
+
+  it.each([
+    ['Simple', false],
+    ['Power', true],
+  ])(
+    'warns instead of throwing when the %s-mode navigation finds no web view',
+    async (_mode, isPowerMode) => {
+      const { papi, sendCommand, warn } = makeMockPapi();
+      sendCommand.mockResolvedValue(undefined);
+
+      await expect(
+        showCommentThreadForInterfaceMode(papi, { ...options, isPowerMode }),
+      ).resolves.toBeUndefined();
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('thread-1'));
+    },
+  );
+});
+
+// #endregion showCommentThreadForInterfaceMode
+
+// #region unsupported projects
+
+/** A PAPI whose project lookup answers with the functions a test hands it. */
+function stubPapi(projectLookup: {
+  getMetadataForProject?: (projectId: string) => Promise<unknown>;
+  getMetadataForAllProjects?: (options: { includeProjectIds: string[] }) => Promise<unknown>;
+}) {
+  // Must cast since the mock only includes the papi properties these helpers use.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return {
+    projectLookup,
+    logger: { warn: vi.fn(), debug: vi.fn(), info: vi.fn() },
+  } as unknown as typeof PapiBackend;
+}
+
+describe('getProjectUnsupportedReason', () => {
+  it('returns the reason on the project’s metadata', async () => {
+    const papi = stubPapi({
+      getMetadataForProject: async () => ({
+        id: 'SBA',
+        projectInterfaces: [],
+        pdpFactoryInfo: {},
+        unsupportedReason: '%project_unsupported_studyBibleAdditions%',
+      }),
+    });
+    await expect(getProjectUnsupportedReason(papi, 'SBA')).resolves.toBe(
+      '%project_unsupported_studyBibleAdditions%',
+    );
+  });
+
+  it('treats a project with no reason as openable', async () => {
+    const papi = stubPapi({
+      getMetadataForProject: async () => ({ id: 'P1', projectInterfaces: [], pdpFactoryInfo: {} }),
+    });
+    await expect(getProjectUnsupportedReason(papi, 'P1')).resolves.toBe('');
+  });
+
+  it('treats a reason the lookup left present but undefined as openable', async () => {
+    const papi = stubPapi({
+      getMetadataForProject: async () => ({
+        id: 'P1',
+        projectInterfaces: [],
+        pdpFactoryInfo: {},
+        unsupportedReason: undefined,
+      }),
+    });
+    await expect(getProjectUnsupportedReason(papi, 'P1')).resolves.toBe('');
+  });
+
+  it('treats a failed lookup as openable, so an error never locks a user out', async () => {
+    const papi = stubPapi({
+      getMetadataForProject: async () => {
+        throw new Error('No project found');
+      },
+    });
+    await expect(getProjectUnsupportedReason(papi, 'P1')).resolves.toBe('');
+  });
+
+  // An interface only C#'s Paratext factory serves makes the lookup wait for that factory, whose
+  // answer carries the reason, rather than settling on whichever factory registered first.
+  it('asks for the project through the interface every Paratext project serves', async () => {
+    const getMetadataForProject = vi.fn(async () => ({
+      id: 'P1',
+      projectInterfaces: [],
+      pdpFactoryInfo: {},
+    }));
+    const papi = stubPapi({ getMetadataForProject });
+
+    await getProjectUnsupportedReason(papi, 'P1');
+
+    expect(getMetadataForProject).toHaveBeenCalledWith(
+      'P1',
+      'platformScripture.scriptureEditPermissions',
+    );
+  });
+});
+
+describe('buildScriptureEditorWebViewState', () => {
+  const SBA_REASON = '%project_unsupported_studyBibleAdditions%';
+
+  /** A lookup that answers every project with `unsupportedReason`. */
+  function papiReporting(unsupportedReason: string | undefined) {
+    return stubPapi({
+      getMetadataForProject: vi.fn(async (id: string) => ({
+        id,
+        projectInterfaces: [],
+        pdpFactoryInfo: {},
+        unsupportedReason,
+      })),
+    });
+  }
+
+  it('gives an unsupported project its reason, keeping the rest of the state', async () => {
+    const state = await buildScriptureEditorWebViewState(papiReporting(SBA_REASON), 'SBA', {
+      isReadOnly: false,
+    });
+
+    expect(state).toEqual({
+      isReadOnly: false,
+      [UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY]: SBA_REASON,
+    });
+  });
+
+  it('clears a reason saved in the layout once the project can be opened', async () => {
+    const state = await buildScriptureEditorWebViewState(papiReporting(undefined), 'P1', {
+      [UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY]: SBA_REASON,
+    });
+
+    expect(state[UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY]).toBe('');
+  });
+
+  it('treats a failed lookup as openable, even over a saved reason', async () => {
+    const papi = stubPapi({
+      getMetadataForProject: async () => {
+        throw new Error('No project found');
+      },
+    });
+
+    const state = await buildScriptureEditorWebViewState(papi, 'P1', {
+      [UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY]: SBA_REASON,
+    });
+
+    expect(state[UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY]).toBe('');
+  });
+
+  it('looks nothing up for a view with no project', async () => {
+    const papi = papiReporting(SBA_REASON);
+
+    const state = await buildScriptureEditorWebViewState(papi, undefined, {});
+
+    expect(state[UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY]).toBe('');
+    expect(papi.projectLookup.getMetadataForProject).not.toHaveBeenCalled();
+  });
+});
+
+describe('createUnsupportedProjectIdsCache', () => {
+  function unsupportedMetadata() {
+    return [
+      { id: 'SBA', projectInterfaces: [], pdpFactoryInfo: {}, unsupportedReason: '%x%' },
+      { id: 'P1', projectInterfaces: [], pdpFactoryInfo: {} },
+      { id: 'P2', projectInterfaces: [], pdpFactoryInfo: {}, unsupportedReason: undefined },
+    ];
+  }
+
+  /** A lookup that answers only for the ids it is asked about, as the lookup service does. */
+  function filteringLookup() {
+    return vi.fn(async ({ includeProjectIds }: { includeProjectIds: string[] }) =>
+      unsupportedMetadata().filter((m) => includeProjectIds.includes(m.id)),
+    );
+  }
+
+  it('names its candidates in one lookup, and reports which of them cannot be opened', async () => {
+    // Naming them is what lets the lookup service wait for a factory that has not registered yet.
+    const getMetadataForAllProjects = filteringLookup();
+    const cache = createUnsupportedProjectIdsCache(stubPapi({ getMetadataForAllProjects }));
+
+    await expect(cache.getUnsupportedProjectIds(['SBA', 'P1'])).resolves.toEqual(new Set(['SBA']));
+    expect(getMetadataForAllProjects.mock.calls).toEqual([[{ includeProjectIds: ['SBA', 'P1'] }]]);
+  });
+
+  it('reports only the candidates it was asked about', async () => {
+    const cache = createUnsupportedProjectIdsCache(
+      stubPapi({ getMetadataForAllProjects: async () => unsupportedMetadata() }),
+    );
+
+    await expect(cache.getUnsupportedProjectIds(['P1'])).resolves.toEqual(new Set());
+  });
+
+  it('returns normalized ids, so a candidate id in another case still finds its match', async () => {
+    // The metadata id is lower-cased here, unlike the upper-cased ids the data provider sends, so
+    // the result is normalized by the cache itself rather than by whoever built the metadata.
+    const cache = createUnsupportedProjectIdsCache(
+      stubPapi({
+        getMetadataForAllProjects: async () => [
+          { id: 'abc123', projectInterfaces: [], pdpFactoryInfo: {}, unsupportedReason: '%x%' },
+        ],
+      }),
+    );
+
+    const unsupported = await cache.getUnsupportedProjectIds(['abc123']);
+
+    expect(unsupported).toEqual(new Set([normalizeProjectId('abc123')]));
+  });
+
+  it('looks nothing up when there are no candidates', async () => {
+    const getMetadataForAllProjects = vi.fn(async () => unsupportedMetadata());
+    const cache = createUnsupportedProjectIdsCache(stubPapi({ getMetadataForAllProjects }));
+
+    await expect(cache.getUnsupportedProjectIds([])).resolves.toEqual(new Set());
+    expect(getMetadataForAllProjects).not.toHaveBeenCalled();
+  });
+
+  it('treats a failed lookup as every project openable', async () => {
+    const cache = createUnsupportedProjectIdsCache(
+      stubPapi({
+        getMetadataForAllProjects: async () => {
+          throw new Error('boom');
+        },
+      }),
+    );
+
+    await expect(cache.getUnsupportedProjectIds(['SBA'])).resolves.toEqual(new Set());
+  });
+
+  it('shares one lookup between concurrent calls naming the same project', async () => {
+    const getMetadataForAllProjects = filteringLookup();
+    const cache = createUnsupportedProjectIdsCache(stubPapi({ getMetadataForAllProjects }));
+
+    await Promise.all([
+      cache.getUnsupportedProjectIds(['SBA']),
+      cache.getUnsupportedProjectIds(['sba']),
+    ]);
+
+    expect(getMetadataForAllProjects).toHaveBeenCalledTimes(1);
+  });
+
+  it('looks up only the candidates it holds no answer for, until invalidated', async () => {
+    const getMetadataForAllProjects = filteringLookup();
+    const cache = createUnsupportedProjectIdsCache(stubPapi({ getMetadataForAllProjects }));
+
+    await cache.getUnsupportedProjectIds(['SBA']);
+    await expect(cache.getUnsupportedProjectIds(['SBA', 'P1'])).resolves.toEqual(new Set(['SBA']));
+    await cache.getUnsupportedProjectIds(['P1', 'SBA']);
+    expect(getMetadataForAllProjects.mock.calls).toEqual([
+      [{ includeProjectIds: ['SBA'] }],
+      [{ includeProjectIds: ['P1'] }],
+    ]);
+
+    cache.invalidate();
+    await cache.getUnsupportedProjectIds(['SBA']);
+    expect(getMetadataForAllProjects).toHaveBeenCalledTimes(3);
+  });
+
+  describe('after a failed lookup', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    function failOnceThenSucceed() {
+      return vi
+        .fn()
+        .mockRejectedValueOnce(new Error('boom'))
+        .mockResolvedValue(unsupportedMetadata());
+    }
+
+    it('answers every project openable, and looks nothing up again before the retry delay has passed', async () => {
+      const getMetadataForAllProjects = failOnceThenSucceed();
+      const cache = createUnsupportedProjectIdsCache(stubPapi({ getMetadataForAllProjects }));
+
+      await expect(cache.getUnsupportedProjectIds(['SBA'])).resolves.toEqual(new Set());
+      vi.advanceTimersByTime(UNSUPPORTED_PROJECT_IDS_RETRY_DELAY_MS - 1);
+
+      await expect(cache.getUnsupportedProjectIds(['SBA'])).resolves.toEqual(new Set());
+      expect(getMetadataForAllProjects).toHaveBeenCalledTimes(1);
+    });
+
+    it('looks up again once the retry delay has passed, and keeps a success from then on', async () => {
+      const getMetadataForAllProjects = failOnceThenSucceed();
+      const cache = createUnsupportedProjectIdsCache(stubPapi({ getMetadataForAllProjects }));
+      await cache.getUnsupportedProjectIds(['SBA']);
+
+      vi.advanceTimersByTime(UNSUPPORTED_PROJECT_IDS_RETRY_DELAY_MS);
+      await expect(cache.getUnsupportedProjectIds(['SBA'])).resolves.toEqual(new Set(['SBA']));
+      expect(getMetadataForAllProjects).toHaveBeenCalledTimes(2);
+
+      vi.advanceTimersByTime(UNSUPPORTED_PROJECT_IDS_RETRY_DELAY_MS * 2);
+      await cache.getUnsupportedProjectIds(['SBA']);
+      expect(getMetadataForAllProjects).toHaveBeenCalledTimes(2);
+    });
+
+    it('looks up again straight away once invalidated', async () => {
+      const getMetadataForAllProjects = failOnceThenSucceed();
+      const cache = createUnsupportedProjectIdsCache(stubPapi({ getMetadataForAllProjects }));
+      await cache.getUnsupportedProjectIds(['SBA']);
+
+      cache.invalidate();
+
+      await expect(cache.getUnsupportedProjectIds(['SBA'])).resolves.toEqual(new Set(['SBA']));
+      expect(getMetadataForAllProjects).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not let a failure from a lookup that invalidate superseded discard the newer answer', async () => {
+      let failSupersededLookup: (error: Error) => void = () => {};
+      const getMetadataForAllProjects = vi
+        .fn()
+        .mockImplementationOnce(
+          () =>
+            new Promise((_resolve, reject) => {
+              failSupersededLookup = reject;
+            }),
+        )
+        .mockResolvedValue(unsupportedMetadata());
+      const cache = createUnsupportedProjectIdsCache(stubPapi({ getMetadataForAllProjects }));
+      const superseded = cache.getUnsupportedProjectIds(['SBA']);
+      cache.invalidate();
+      await cache.getUnsupportedProjectIds(['SBA']);
+
+      failSupersededLookup(new Error('late failure'));
+      await superseded;
+      vi.advanceTimersByTime(UNSUPPORTED_PROJECT_IDS_RETRY_DELAY_MS);
+
+      await expect(cache.getUnsupportedProjectIds(['SBA'])).resolves.toEqual(new Set(['SBA']));
+      expect(getMetadataForAllProjects).toHaveBeenCalledTimes(2);
+    });
   });
 });
 

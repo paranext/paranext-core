@@ -38,6 +38,8 @@ import {
   makeProjectSelectorCustomData,
   normalizeFullName,
   normalizeProjectId,
+  notifyProjectOpenBlocked,
+  NotifyProjectOpenBlockedDependencies,
   resolveLocalizedString,
 } from 'platform-bible-utils';
 import { getBookIdsFromBooksPresent } from 'platform-bible-utils/experimental';
@@ -63,11 +65,18 @@ import {
   GreekEstherTemplatePicker,
   GreekEstherTemplatePickerLocalizedStrings,
 } from './greek-esther-template-picker.component';
+import { getProjectOpenBlockedReasonKeyFromResult } from './project-open-blocked.util';
 import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 
 const NETWORK_OBJECT_ID = 'platformScripture.manageBooks';
 const BOOKS_PRESENT_DEFAULT = '0'.repeat(123);
+
+const PROJECT_OPEN_BLOCKED_NOTIFY_DEPENDENCIES: NotifyProjectOpenBlockedDependencies = {
+  getLocalizedStrings: (localizeKeys) => papi.localization.getLocalizedStrings({ localizeKeys }),
+  sendNotification: (notification) => papi.notifications.send(notification),
+  logWarning: (message) => logger.warn(message),
+};
 
 // Only Scripture Editor tabs should mark a project as "open" in the ProjectSelector.
 // Other project-bound tabs (Manage Books itself, Checks side panel, etc.) carry a `projectId`
@@ -122,6 +131,11 @@ type ProjectListResult = {
      * list so the frontend does not have to fetch `platformScripture.versification` per project.
      */
     versification: string;
+    /**
+     * Whether licensing terms prohibit using the project as the base of new text. Mirrors the C#
+     * `ProjectSummary.IsRestrictedAsBase` wire field.
+     */
+    isRestrictedAsBase: boolean;
   }[];
 };
 
@@ -874,6 +888,8 @@ global.webViewComponent = function ManageBooksWebView({
         // versification grouping. The localized name is resolved on the dialog side (it owns the
         // localizedStrings → versificationLabelKey map); here we forward the raw id.
         versificationId: p.versification,
+        // Licensing-restricted texts stay listed in the Create "Based on" picker but cannot be chosen
+        isRestrictedAsBase: p.isRestrictedAsBase,
         // Project type for the Copy "From" picker's type grouping. Already on this same wire
         // response, so it adds no round-trip. There is no localized display name on the wire, so
         // the raw key doubles as the section heading.
@@ -989,6 +1005,11 @@ global.webViewComponent = function ManageBooksWebView({
       // of leaking the raw technical message at error severity.
       if (isSyncEditBlockedError(entry.text)) {
         notifySyncEditBlocked();
+        return;
+      }
+      const openBlockedReasonKey = getProjectOpenBlockedReasonKeyFromResult(entry.text);
+      if (openBlockedReasonKey) {
+        notifyProjectOpenBlocked(openBlockedReasonKey, PROJECT_OPEN_BLOCKED_NOTIFY_DEPENDENCIES);
         return;
       }
       // notificationService is exposed on @papi/frontend; per ui-spec-manage-books.md:118 toasts

@@ -9,6 +9,7 @@ namespace Paranext.DataProvider.Checks;
 internal sealed class CheckForProject(ScriptureCheckBase check, string checkId, string projectId)
 {
     private readonly Dictionary<int, CheckResultsRecorder> _recordersByBookNum = new();
+    private readonly Dictionary<int, int> _editCountsByBookNum = new();
     private readonly object _lock = new();
 
     public ScriptureCheckBase Check { get; } = check;
@@ -51,15 +52,52 @@ internal sealed class CheckForProject(ScriptureCheckBase check, string checkId, 
         }
     }
 
+    /// <summary>
+    /// Clears the results for a book because its text was edited. The edit is counted even when
+    /// this check has no results for the book, so a run that read the book's text before the edit
+    /// can tell that it ran on old text (see <see cref="GetEditCount"/>).
+    /// </summary>
     public void ClearResultsForBook(int bookNum)
     {
         lock (_lock)
         {
-            _recordersByBookNum[bookNum].ClearResults();
+            _editCountsByBookNum[bookNum] = _editCountsByBookNum.GetValueOrDefault(bookNum) + 1;
+            if (_recordersByBookNum.TryGetValue(bookNum, out var recorder))
+                recorder.ClearResults();
         }
     }
 
-    public void Run(ChecksDataSource dataSource, int bookNum, ErrorMessageDenials denials)
+    /// <summary>
+    /// The number of edits to a book that this check has been told about. Read it before reading
+    /// the book's text and pass it to <see cref="Run"/>.
+    /// </summary>
+    public int GetEditCount(int bookNum)
+    {
+        lock (_lock)
+        {
+            return _editCountsByBookNum.GetValueOrDefault(bookNum);
+        }
+    }
+
+    /// <summary>
+    /// Runs the check on a book and records its results. The results are marked ready only if no
+    /// edit to the book was counted since <paramref name="editCountBeforeTextRead"/>; otherwise the
+    /// check ran on text that has since been edited, its results are dropped, and the next run has
+    /// to redo it. The count only reflects edits whose background clear has already reached this
+    /// check. An edit whose clear has not, including one made while this check runs (the clear
+    /// cannot take this check's lock until the run ends), leaves the results marked ready until that
+    /// clear drops them; a job that reads them before then delivers them, and the invalidation the
+    /// clear sends makes consumers run the checks again.
+    /// </summary>
+    /// <param name="editCountBeforeTextRead">
+    /// <see cref="GetEditCount"/> for the book, read before the text the check runs on was read
+    /// </param>
+    public void Run(
+        ChecksDataSource dataSource,
+        int bookNum,
+        ErrorMessageDenials denials,
+        int editCountBeforeTextRead
+    )
     {
         AccessResults(
             bookNum,
@@ -68,7 +106,14 @@ internal sealed class CheckForProject(ScriptureCheckBase check, string checkId, 
                 recorder.ClearResultsFromBook(bookNum);
                 Check.Run(bookNum, dataSource, recorder);
                 recorder.PostProcessResults(denials);
-                recorder.ResultsReady = true;
+                // Same lock as ClearResultsForBook, so the comparison and the mark are consistent
+                // with every clear that has reached this check; a later clear drops the results
+                // after the mark. Results from text that has since been edited are dropped, not
+                // kept as not ready.
+                if (_editCountsByBookNum.GetValueOrDefault(bookNum) == editCountBeforeTextRead)
+                    recorder.ResultsReady = true;
+                else
+                    recorder.ClearResults();
             }
         );
     }

@@ -25,6 +25,12 @@ import path from 'path';
 import '@main/global-this.model';
 import '@node/utils/log-archiver.util';
 import { announceAppWindowInput, startAppWindowInputEvent } from '@main/app-window-input.util';
+import {
+  announceAppWillShutDown,
+  announceExtensionHostStopped,
+  startLifecycleEvents,
+} from '@main/lifecycle-events.util';
+import { registerExtensionHostStoppedStateCommand } from '@main/extension-host-stopped-state.command';
 import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util';
 import { getVerseNavigationCommand } from '@main/verse-navigation-shortcuts.util';
 import { getPhysicalHistoryNavigationDirection } from '@main/reference-history-keyboard.util';
@@ -39,6 +45,10 @@ import {
 import { startDialogServiceRouter } from '@main/services/dialog.service-router';
 import { startUsersnapServiceRouter } from '@main/services/usersnap.service-router';
 import { startBookChapterControlServiceRouter } from '@main/services/book-chapter-control.service-router';
+import {
+  applyPendingFirstRunReset,
+  startFirstRunServiceRouter,
+} from '@main/services/first-run.service-router';
 import { startOnboardingTourServiceRouter } from '@main/services/onboarding-tour.service-router';
 import { startScrollGroupNavigationCommands } from '@main/services/scroll-group-navigation.commands';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
@@ -50,6 +60,10 @@ import { extensionHostService } from '@main/services/extension-host.service';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
 import { registerPowerMonitorListeners } from '@main/services/power-monitor-logging.service';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
+import {
+  deferAutomaticSyncForSession,
+  getAutomaticSyncConsent,
+} from '@main/first-run-consent.util';
 import {
   performShutdownTasks,
   performWindowCloseTasks,
@@ -96,7 +110,6 @@ import {
   addWindow,
   announceRoutingTargetChange,
   countWindowsThatCouldBeTheLastOne,
-  doesNavigationReplaceRendererRegistrations,
   focusWindow,
   getFocusedWindowId,
   getTargetWindowId,
@@ -121,6 +134,11 @@ import {
   setWindowPendingContentPredicate,
   startFocusedWindowIdEvent,
 } from '@main/services/window-state.service';
+import {
+  closeAllPorts as closeAllPapiPorts,
+  closeWindowPort as closePapiPortForWindow,
+  registerWindow as registerWindowWithPapiPortBroker,
+} from '@main/services/papi-port-broker.service';
 import { confirmCloseAllWindows } from '@main/services/close-all-prompt.service';
 import { decideWindowClose } from '@main/services/window-close-decision.service';
 import {
@@ -216,7 +234,7 @@ import {
   WINDOW_AWAITING_FIRST_ACTIVATION_QUERY_PARAMETER,
   WINDOW_ID,
 } from '@shared/data/platform.data';
-import { GET_METHODS } from '@shared/data/rpc.model';
+import { GET_METHODS, INTENTIONAL_CLOSE_CODE } from '@shared/data/rpc.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import { WINDOW_MIN_WIDTH_PX } from '@shared/models/window-constraints.model';
 import * as commandService from '@shared/services/command.service';
@@ -417,6 +435,22 @@ async function main() {
   // the gestures that dismiss transient overlays
   await startAppWindowInputEvent();
 
+  // Register the lifecycle events, then forward the extension host service's unexpected stops to
+  // every window. Subscribed before the extension host is started further down, so the very first
+  // process is covered too.
+  await startLifecycleEvents();
+  extensionHostService.onDidStopUnexpectedly(announceExtensionHostStopped);
+  // Registered this early so a window that connects while main is still starting up can already ask
+  // whether the extension host stopped; a later registration would answer it "no handler". A failure
+  // costs only that catch-up, so it is logged rather than aborting startup.
+  try {
+    await registerExtensionHostStoppedStateCommand();
+  } catch (error) {
+    logger.error(
+      `Failed to register platform.getExtensionHostStoppedState; windows opened after a stop will not show the notice: ${getErrorMessage(error)}`,
+    );
+  }
+
   // Register the focused-window-id event so the `focus`/`blur` handlers wired up per window below
   // can announce every change made through `setFocusedWindowId`/`removeWindow`
   await startFocusedWindowIdEvent();
@@ -448,6 +482,7 @@ async function main() {
       started: startBookChapterControlServiceRouter(),
     },
     { name: 'onboarding tour service router', started: startOnboardingTourServiceRouter() },
+    { name: 'first-run service router', started: startFirstRunServiceRouter() },
     { name: 'scripture navigation commands', started: startScrollGroupNavigationCommands() },
     { name: 'notification service router', started: startNotificationServiceRouter() },
     { name: 'window service router', started: startWindowServiceRouter() },
@@ -638,6 +673,9 @@ async function main() {
   // handler's graceful shutdown has already started.
   app.on('before-quit', () => {
     markQuitRequested();
+    // Before any window is destroyed, so a window can read its own connection dying a moment later
+    // as the quit it is, rather than as a failure. Best effort; see the event's doc.
+    announceAppWillShutDown();
   });
 
   // #region Set up the protocol client to receive navigation to this app's URI scheme
@@ -913,6 +951,18 @@ async function main() {
         ? restoreInfo.entry.windowId
         : undefined,
     );
+    // Before `loadURL` below: the page asks for its PAPI port as soon as its preload runs, so the
+    // handler has to exist first. Registered on the WebContents, so it survives reloads.
+    //
+    // A window is routable only while it has a live PAPI channel and its window service shard has
+    // registered over it, so the ready mark follows the channel: it is cleared whenever the window's
+    // port closes, and the shard registering over the next port sets it again. A navigation that
+    // starts and is abandoned leaves the channel, and the mark, alone; one that completes, or a
+    // crash, closes the channel and clears the mark; and a reload that ends on an error page still
+    // clears it, because the old page's port has closed.
+    registerWindowWithPapiPortBroker(newWindow.webContents, windowId, {
+      onPortClosed: () => markWindowNotReady(windowId),
+    });
 
     // Tie the window to its persisted identity so layout persistence can serve and save it. If the
     // entry has gone (the user closed it while this window was starting), `assignEntryToWindow`
@@ -1210,16 +1260,6 @@ async function main() {
       );
       newWindow.webContents.reload();
     });
-    // A reload replaces the page and everything it registered, the same as a crash does. This also
-    // fires for the very first load, before the window was ever ready, which changes nothing.
-    //
-    // Deliberately NOT `did-start-loading`: that is a whole-tab signal with no frame information,
-    // and every web view in the app is an in-page iframe in this page, so it fires again every time
-    // the user opens a tab — which would strip a fully working window of its readiness with nothing
-    // to restore it. See `doesNavigationReplaceRendererRegistrations` for which navigations count.
-    newWindow.webContents.on('did-start-navigation', (details) => {
-      if (doesNavigationReplaceRendererRegistrations(details)) markWindowNotReady(windowId);
-    });
     newWindow.webContents.on(
       // @ts-expect-error - TS seems confused, as this matches the d.ts file and the docs
       'did-fail-load',
@@ -1436,6 +1476,15 @@ async function main() {
      * would no longer give the same answer.
      */
     let isAppGoingDown = false;
+    /**
+     * Destroy the window, closing its PAPI port first: `destroy()` skips the page's unload and so
+     * the page's own clean close, and a port left to die with the page reads as an unclean 1006 on
+     * main.
+     */
+    const closePapiPortAndDestroy = () => {
+      closePapiPortForWindow(windowId, 1001, 'window closing');
+      newWindow.destroy();
+    };
     newWindow.on('close', async (event) => {
       // A second close click while the first close is still working falls through to Electron's
       // default close on purpose: with the sync's request timeout disabled by the extension, the
@@ -1627,6 +1676,9 @@ async function main() {
         // the tracked list, and until that fires a fan-out would still ask a window that cannot
         // answer — and report the coverage of whatever it was doing as incomplete because of it.
         markWindowNotReady(windowId);
+        // The PAPI port is closed from here only on the paths that destroy the window, because
+        // `destroy()` skips the page's unload and so its `pagehide` close. On the `close()` path
+        // the page closes its own port with 1001 after its `beforeunload` teardown has used it.
         // The escape hatch above takes the window down on a second close click, which can happen
         // any time during the wait this handler just came out of
         if (newWindow.isDestroyed()) {
@@ -1636,7 +1688,7 @@ async function main() {
         } else if (isAppGoingDown) {
           // `event.preventDefault()` above suppresses Electron's default close; destroy() here
           // triggers the 'closed' event and allows the app to quit.
-          newWindow.destroy();
+          closePapiPortAndDestroy();
         } else {
           // Closed rather than destroyed, because the app is staying up and the page still has
           // teardown of its own to run — `destroy()` skips `beforeunload`, which is what prunes
@@ -1653,7 +1705,7 @@ async function main() {
             logger.warn(
               `Window ${windowId} did not finish closing within ${WINDOW_CLOSE_TIME_OUT_MS} ms; destroying it`,
             );
-            newWindow.destroy();
+            closePapiPortAndDestroy();
           }, WINDOW_CLOSE_TIME_OUT_MS);
           newWindow.once('closed', () => clearTimeout(forceCloseTimeout));
         }
@@ -2312,6 +2364,9 @@ async function main() {
         dotnetDataProvider.waitForClose(PROCESS_CLOSE_TIME_OUT_MS),
         extensionHostService.waitForClose(PROCESS_CLOSE_TIME_OUT_MS),
       ]);
+      // Windows are normally destroyed by now, so this closes nothing; it is the backstop for a
+      // port still open when the network goes down, so it reads as an intentional close.
+      closeAllPapiPorts(INTENTIONAL_CLOSE_CODE, 'app shutdown');
       await networkService.shutdown();
 
       // In development, the dotnet watcher was killed so we have to wait here.
@@ -2376,6 +2431,8 @@ async function main() {
           logger.info(`Failed to build the macOS menubar ${error}`);
         }
       }
+
+      await applyPendingFirstRunReset();
 
       // Caught here rather than left to reject this chain: `createWindow` refuses outright during a
       // quit and the restore reads from disk, so this can fail — and a rejection would skip the
@@ -2522,7 +2579,11 @@ async function main() {
 
   commandService.registerCommand('platform.restartExtensionHost', restartExtensionHost, {
     method: {
-      summary: 'Restart the extension host which reloads and reinitializes TS/JS extensions',
+      summary:
+        'Restart the extension host which reloads and reinitializes TS/JS extensions. Resolves ' +
+        'once the new process is forked. A call while a restart is already in flight (until the ' +
+        'new extension host announces its start) joins that restart and resolves with it, at ' +
+        'once if the new process is already forked.',
       params: [],
       result: {
         name: 'return value',
@@ -2699,6 +2760,33 @@ async function main() {
     {
       method: {
         summary: 'Get the os platform ("win32", "darwin", "linux")',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand('platform.getAutomaticSyncConsent', getAutomaticSyncConsent, {
+    method: {
+      summary:
+        'Whether the first-run sync consent gate allows an automatic Simple-mode Send/Receive to start now',
+      params: [],
+      result: {
+        name: 'return value',
+        schema: { type: 'string', enum: ['granted', 'unconfirmed', 'deferred'] },
+      },
+    },
+  });
+
+  commandService.registerCommand(
+    'platform.deferAutomaticSyncForSession',
+    async () => deferAutomaticSyncForSession(),
+    {
+      method: {
+        summary: 'Withhold automatic Simple-mode Send/Receive for the rest of this app session',
         params: [],
         result: {
           name: 'return value',

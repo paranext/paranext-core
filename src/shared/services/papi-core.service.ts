@@ -5,6 +5,7 @@ export default core;
 export type { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
 export type { ExecutionToken } from '@node/models/execution-token.model';
 export type { DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
+export type { NetworkObjectState } from '@renderer/hooks/hook-generators/create-use-network-object-hook.util';
 export type { UseDialogCallbackOptions } from '@renderer/hooks/papi-hooks/use-dialog-callback.hook';
 export type {
   CommandPaletteItem,
@@ -36,6 +37,10 @@ export type {
 } from '@shared/models/docking-framework.model';
 export type { ElevatedPrivileges } from '@shared/models/elevated-privileges.model';
 export type {
+  ExtensionHostStoppedEvent,
+  ExtensionHostStopReason,
+} from '@shared/models/extension-host-lifecycle.model';
+export type {
   HandleUri,
   RegisterUriHandler,
   UriHandler,
@@ -63,8 +68,17 @@ export type {
   SingleNotificationDocumentation,
 } from '@shared/models/openrpc.model';
 export type {
+  RequestRegistryTokens,
+  RegistryAccessToken,
+  RegistryAccessTokenRequest,
+  RegistryReadScope,
+} from '@shared/models/request-registry-tokens-privilege.model';
+export type {
+  ExtensionDataEnumerationProjectDataTypes,
+  ExtensionDataListScope,
   ExtensionDataScope,
   MandatoryProjectDataTypes,
+  WithProjectDataProviderEngineExtensionDataEnumerationMethods,
 } from '@shared/models/project-data-provider.model';
 export type { IProjectDataProviderEngine } from '@shared/models/project-data-provider-engine.model';
 export type {

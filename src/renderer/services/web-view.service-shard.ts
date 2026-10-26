@@ -32,6 +32,7 @@ import {
   setContentZoomActiveArea,
   setContentZoomAreas,
 } from '@renderer/services/web-view-content-zoom.service';
+import { registerWebViewRoot } from '@renderer/services/web-view-root.registry';
 import { spliceIntoWebViewHead } from '@renderer/services/web-view-head.util';
 import { isCreateElementAllowedByStack } from '@renderer/services/renderer-create-element-guard.util';
 import { localThemeService } from '@renderer/services/theme.service';
@@ -72,6 +73,7 @@ import { sendCommand } from '@shared/services/command.service';
 import { dataProviderService } from '@shared/services/data-provider.service';
 import { logger } from '@shared/services/logger.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
+import type { ProjectMetadata } from '@shared/models/project-metadata.model';
 import { startWorkspaceUpdate } from '@renderer/services/workspace-updating-store';
 import {
   getLastOpenedProject,
@@ -1224,7 +1226,12 @@ function getLegacySavedLayout(defaultLayout: LayoutInfo): {
     lowestPrefixedWindowId !== undefined
       ? localStorage.getItem(`${lowestPrefixedWindowId}_${DOCK_LAYOUT_KEY}`)
       : localStorage.getItem(DOCK_LAYOUT_KEY);
-  const savedLayout: LayoutInfo | undefined = saved ? deserialize(saved) : undefined;
+  // Only a stored object is a layout; any other JSON value (`null`, a number, a string, an array,
+  // a boolean) is not one, and healing it would hand rc-dock an empty layout
+  const parsed = saved ? deserialize(saved) : undefined;
+  const savedLayout: LayoutInfo | undefined =
+    // `deserialize` turns a stored `null` into `undefined`, so `typeof` alone excludes it
+    typeof parsed === 'object' && !Array.isArray(parsed) ? reconcileSavedLayout(parsed) : undefined;
   return savedLayout
     ? { layout: savedLayout, isBakedDefault: false }
     : { layout: defaultLayout, isBakedDefault: true };
@@ -1458,8 +1465,9 @@ function trackSimpleEditorReplaceTab(layout: Layout, newTabId: WebViewId): void 
  * enough), none of which a Power-mode editor tab can ever carry, so this needs no `isPowerMode`
  * check to stay accurate.
  *
- * Excludes published resources from the cache: `platform.isPublished` is stable, cheap metadata, so
- * checking it here keeps a resource from ever becoming a Power → Simple switch's fast-path target.
+ * Excludes published resources and unsupported projects from the cache: `platform.isPublished` and
+ * `unsupportedReason` are stable, cheap metadata, so checking them here keeps such a project from
+ * ever becoming a Power → Simple switch's fast-path target.
  */
 function cacheLastOpenedSimpleProject(webView: SavedWebViewDefinition): void {
   if (webView.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE) return;
@@ -1469,7 +1477,7 @@ function cacheLastOpenedSimpleProject(webView: SavedWebViewDefinition): void {
   projectLookupService
     .getMetadataForProject(projectId)
     .then((metadata) => {
-      if (metadata.isPublished) return undefined;
+      if (!isUsableForSimple(metadata)) return undefined;
       return setLastOpenedProject({ id: projectId });
     })
     .catch((err) => {
@@ -1600,11 +1608,11 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
 
 /**
  * Bound on the whole {@link getMostRecentUsableProjectId} walk (recents fetch plus every candidate's
- * `isPublished` check) while resolving the Simple-mode cold-start path (no cached last-opened
- * project). Without this, a slow or not-yet-registered PDP factory can leave
+ * usability lookup) while resolving the Simple-mode slow path (no cached last-opened project).
+ * Without this, a slow or not-yet-registered PDP factory can leave
  * `projectLookupService.getMetadataForProject` waiting up to 20s for a factory plus a further
- * startup-grace retry loop (see `project-lookup.service-model.ts`), stalling the whole switch for
- * tens of seconds - defeating the point of this being the "fast" switch path.
+ * startup-grace retry loop (see `project-lookup.service-model.ts`), stalling the whole
+ * project-bound switch for tens of seconds while the overlay is up.
  */
 export const COLD_START_LOOKUP_TIMEOUT_MS = 3000;
 
@@ -1713,11 +1721,13 @@ async function isThisWindowRunningTheSwitchToSimple(): Promise<boolean> {
  * with no empty-placeholder → reload round-trip.
  *
  * Fast path: `getLastOpenedProject` returns the cached id synchronously (kept current by the
- * Scripture Editor tab event subscription further down this file).
+ * Scripture Editor tab event subscription further down this file). It is taken with no lookup: only
+ * a project whose lookup showed it usable is ever cached.
  *
- * Slow path: cold start (no cache yet) — fall back to {@link getMostRecentUsableProjectId}, which
- * walks the recents list trying each candidate until one isn't a published resource, bounded
- * overall by {@link COLD_START_LOOKUP_TIMEOUT_MS}.
+ * Slow path: cold start (no cache) — fall back to {@link getMostRecentUsableProjectId}, which picks
+ * the most recent usable candidate, bounded overall by {@link COLD_START_LOOKUP_TIMEOUT_MS}. The
+ * pick is cached only when its lookup succeeded; one that failed is still opened (fail open) but
+ * left uncached, and a timed-out walk loads the bare layout.
  *
  * Fallback: if neither cache nor recents can produce a usable project, load the bare `simpleLayout`
  * and let the picker do the slow legacy path.
@@ -1767,23 +1777,20 @@ export async function handleSwitchToSimpleMode(
       return;
     }
 
-    const resolvedId = await withTimeout(
-      getMostRecentUsableProjectId,
-      COLD_START_LOOKUP_TIMEOUT_MS,
-    );
-    if (resolvedId === LOOKUP_TIMED_OUT) {
+    const resolved = await withTimeout(getMostRecentUsableProjectId, COLD_START_LOOKUP_TIMEOUT_MS);
+    if (resolved === LOOKUP_TIMED_OUT) {
       logger.warn(
         `Timed out after ${COLD_START_LOOKUP_TIMEOUT_MS}ms resolving a usable most-recent project while switching to Simple mode; loading the bare layout instead.`,
       );
     }
-    if (!resolvedId || resolvedId === LOOKUP_TIMED_OUT) {
+    if (!resolved || resolved === LOOKUP_TIMED_OUT) {
       await loadLayoutWithWarning(generation);
       return;
     }
-    // Populate the cache so the next switch can take the fast path.
-    setLastOpenedProject({ id: resolvedId });
-    await runProjectBoundSimpleSwitch(resolvedId, generation);
-    switchedProjectId = resolvedId;
+    // The fast path trusts the cache without a lookup, so only a verified pick may go in it.
+    if (resolved.isVerifiedUsable) setLastOpenedProject({ id: resolved.projectId });
+    await runProjectBoundSimpleSwitch(resolved.projectId, generation);
+    switchedProjectId = resolved.projectId;
   } catch (err) {
     // `runProjectBoundSimpleSwitch` logs its own warning and deliberately rethrows on failure (see
     // its own catch/comment), so this catch is the normal recovery point when the project-bound load
@@ -1948,22 +1955,27 @@ function waitForNextPaint(): Promise<void> {
 }
 
 /**
- * Resolves the most-recently-opened project id that's usable as a Simple-mode switch target: the
- * first entry in `recentlyOpenedProjects` (most-recent first, already capped at
- * `MAX_RECENT_PROJECTS` by the provider) that isn't a published resource, or `undefined` if the
- * list holds none. Mirrors `tryOpenFromRecentlyOpened`'s same try-next-candidate pattern in
- * `platform-scripture-editor.utils.ts` (the default project picker's own recents fallback) - but
- * scoped to what this fast-path switch needs: a project id, not an opened editor. A published
- * resource is never a valid target here, matching `cacheLastOpenedSimpleProject`'s exclusion on the
- * live event-driven cache-write path - this is a different mechanism (a one-shot recents read, not
- * a webview event), so it needs its own check to stay consistent with that one.
+ * Resolves the most-recently-opened project that's usable as a Simple-mode switch target: the first
+ * entry in `recentlyOpenedProjects` (most-recent first, already capped at `MAX_RECENT_PROJECTS` by
+ * the provider) that isn't a published resource or otherwise unsupported, or `undefined` if the
+ * list holds none. A candidate whose lookup failed counts as usable, and comes back with
+ * `isVerifiedUsable: false` so the caller does not cache it. Mirrors `tryOpenFromRecentlyOpened`'s
+ * same try-next-candidate pattern in `platform-scripture-editor.utils.ts` (the default project
+ * picker's own recents fallback) - but scoped to what the project-bound switch needs: a project id,
+ * not an opened editor. An unusable project is never a valid target here, matching
+ * `cacheLastOpenedSimpleProject`'s exclusion on the live event-driven cache-write path - this is a
+ * different mechanism (a one-shot recents read, not a webview event), so it needs its own check to
+ * stay consistent with that one.
  *
  * The whole walk (recents fetch + every candidate's metadata lookup) shares one bound from the
  * caller ({@link COLD_START_LOOKUP_TIMEOUT_MS}, via `withTimeout`), not a bound per candidate -
- * otherwise a full walk of a slow list could take several times the intended "fast path" budget.
- * That shared bound is also why the candidates are checked concurrently rather than one at a time.
+ * otherwise a full walk of a slow list could take several times the project-bound switch's intended
+ * budget. That shared bound is also why the candidates are checked concurrently rather than one at
+ * a time.
  */
-async function getMostRecentUsableProjectId(): Promise<string | undefined> {
+async function getMostRecentUsableProjectId(): Promise<
+  { projectId: string; isVerifiedUsable: boolean } | undefined
+> {
   try {
     const recentsProvider = await dataProviderService.get(
       'platformScripture.recentlyOpenedProjects',
@@ -1972,15 +1984,18 @@ async function getMostRecentUsableProjectId(): Promise<string | undefined> {
     const recents = await recentsProvider.getRecentProjects(undefined);
     if (!Array.isArray(recents)) return undefined;
     // Checked CONCURRENTLY, then picked in recents order. Checking them one at a time would stop
-    // at the first usable candidate and so issue fewer lookups, but every published resource ahead
+    // at the first usable candidate and so issue fewer lookups, but every unusable candidate ahead
     // of that candidate adds a full round trip - `getMetadataForProject` waits on a PDP factory and
     // then retries - and the whole walk shares one {@link COLD_START_LOOKUP_TIMEOUT_MS} budget. A
-    // run of resources at the head of the list could therefore exhaust the budget and leave Simple
-    // mode with no project at all, which became reachable once the titlebar picker started
-    // offering read-only projects. The list is already capped at `MAX_RECENT_PROJECTS`, so the
-    // extra lookups are bounded, and concurrently they cost about what one costs.
-    const publishedFlags = await Promise.all(recents.map(resolveProjectIsPublished));
-    return recents.find((_candidateId, index) => !publishedFlags[index]);
+    // run of unusable candidates at the head of the list could therefore exhaust the budget and
+    // leave Simple mode with no project at all - a real case, since the title bar picker opens
+    // read-only resources and each one opened goes to the head of the list. It is capped at
+    // `MAX_RECENT_PROJECTS`, so the extra lookups are bounded, and concurrently they cost about
+    // what one costs.
+    const usabilities = await Promise.all(recents.map(resolveSimpleSwitchCandidateUsability));
+    const index = usabilities.findIndex((usability) => usability !== 'unusable');
+    if (index < 0) return undefined;
+    return { projectId: recents[index], isVerifiedUsable: usabilities[index] === 'usable' };
   } catch (err) {
     // Distinct from a timeout (logged separately by the caller, which races this whole function
     // against COLD_START_LOOKUP_TIMEOUT_MS via withTimeout): this is a genuine failure of the
@@ -1995,21 +2010,30 @@ async function getMostRecentUsableProjectId(): Promise<string | undefined> {
 }
 
 /**
- * Resolves whether a candidate project from {@link getMostRecentUsableProjectId} is a published
- * (read-only) resource. Defaults to `false` on a lookup failure, matching `platform.isPublished`'s
- * own "absent means not a resource" default (see `project-metadata.model.ts`) - the safer
- * assumption is to proceed with the candidate rather than silently skip it over a transient lookup
- * error.
+ * Whether a project can be a Simple-mode switch target: not a published (read-only) resource, and
+ * no `unsupportedReason` (see `ProjectMetadata.unsupportedReason`). Read-only is a separate
+ * question (`platform.isEditable`).
  */
-async function resolveProjectIsPublished(projectId: string): Promise<boolean> {
+function isUsableForSimple(metadata: ProjectMetadata): boolean {
+  return !metadata.isPublished && !metadata.unsupportedReason;
+}
+
+/**
+ * Looks up whether a candidate from {@link getMostRecentUsableProjectId} is usable (see
+ * {@link isUsableForSimple}). A failed lookup is `'unverified'`, which the caller treats as usable -
+ * a transient error must not skip a real project - but never caches.
+ */
+async function resolveSimpleSwitchCandidateUsability(
+  projectId: string,
+): Promise<'usable' | 'unusable' | 'unverified'> {
   try {
     const metadata = await projectLookupService.getMetadataForProject(projectId);
-    return metadata.isPublished === true;
+    return isUsableForSimple(metadata) ? 'usable' : 'unusable';
   } catch (err) {
     logger.warn(
-      `Could not resolve whether project ${projectId} is a published resource while switching to Simple mode, assuming it is not: ${getErrorMessage(err)}`,
+      `Could not resolve whether project ${projectId} is usable while switching to Simple mode, assuming it is: ${getErrorMessage(err)}`,
     );
-    return false;
+    return 'unverified';
   }
 }
 
@@ -2555,6 +2579,8 @@ globalThis.reportContentZoomActiveAreaById = (webViewId, areaId) => {
     logger.warn(`Content zoom active area report failed for ${webViewId}: ${getErrorMessage(e)}`);
   }
 };
+// The bootstrap reports each React root it creates so the web view component can unmount it
+globalThis.registerWebViewRootById = registerWebViewRoot;
 
 // #endregion Set up global variables to use in `openWebView`'s `imports` below
 
@@ -2691,6 +2717,28 @@ async function admitContentToDock(operation: string): Promise<void> {
 }
 
 /**
+ * Waits, re-arming up to the full patient budget, for a web view provider whose owning extension
+ * may still be activating — see {@link webViewProviderService.getWebViewProvider}'s
+ * `shouldWaitPatiently` parameter. Resolves once the provider registers (discarding the value —
+ * callers that need the provider itself ask for it again, cheaply, once it is known to exist) or
+ * throws once the budget is spent.
+ *
+ * Called by `retrieveWebViewContent` — both its tab-restore and extension-reload-re-fetch callers —
+ * BEFORE `reloadWebView`, rather than threading a patience flag through
+ * `reloadWebView`/`openOrReloadWebView` to wait internally, because `openOrReloadWebView` reads the
+ * dock and mints the nonce the web view provider's `getWebView` call relies on — and both are
+ * supposed to describe the dock as it is right now, not as it was whenever the provider wait
+ * finally settles. Waiting here first keeps the window between that read and the write it leads to
+ * at its ordinary short size regardless of how long the provider takes, so a tab that leaves the
+ * dock mid-wait is simply gone by the time `reloadWebView` reads it (bailing out before any
+ * controller is ever created) instead of leaving one orphaned by a dock-membership check that only
+ * ever cleaned up a nonce.
+ */
+export async function waitForWebViewProviderToRegister(webViewType: string): Promise<void> {
+  await webViewProviderService.getWebViewProvider(webViewType, true);
+}
+
+/**
  * Creates a new WebView or reloads an existing one based on the saved WebView definition.
  *
  * @param savedWebViewDefinition Saved WebView definition to pass to
@@ -2731,8 +2779,11 @@ export async function openOrReloadWebView(
   // trace once it is over — recorded here, ahead of both, so the recheck further down can tell.
   const layoutLoadGenerationBeforeProvider = layoutLoadGeneration;
 
-  // Get the WebView definition from the webview provider
-  const webViewProvider = await webViewProviderService.getWebViewProvider(webViewType);
+  // Get the WebView definition from the webview provider. A caller who can afford to wait longer
+  // for a still-activating extension (tab restore) does so itself, via
+  // `waitForWebViewProviderToRegister`, before ever reaching here — see that function's doc for why
+  // the wait does not belong on this side of the dock read.
+  const webViewProvider = await webViewProviderService.getWebViewProvider(webViewType, false);
   if (!webViewProvider)
     throw new Error(`getWebView: Cannot find Web View Provider for webview type ${webViewType}`);
 
@@ -2834,6 +2885,7 @@ export async function openOrReloadWebView(
   var resetContentZoomById = window.parent.resetContentZoomById;
   var reportContentZoomAreasById = window.parent.reportContentZoomAreasById;
   var reportContentZoomActiveAreaById = window.parent.reportContentZoomActiveAreaById;
+  var registerWebViewRootById = window.parent.registerWebViewRootById;
   window.fetch = papi.fetch;
   window.WebSocket = papi.WebSocket;
   window.XMLHttpRequest = papi.XMLHttpRequest;
@@ -2926,6 +2978,35 @@ export async function openOrReloadWebView(
           legacyTokenNames,
         );
 
+      // The bootstrap unmounts this document's React root when the document unloads. React comes
+      // from the parent window, so the root would otherwise outlive this document: a reload only
+      // swaps the iframe's `srcdoc`, and a root left mounted keeps rendering with `window` resolving
+      // to the replacement document.
+      //
+      // The bootstrap's `pagehide` handler registers a one-time `unload` listener rather than
+      // unmounting itself. The handler is registered before any web view effect runs, and
+      // unmounting runs every effect cleanup, so an unmount during `pagehide` would remove a
+      // listener the web view registered in an effect before the browser reached it, losing a last
+      // save made there. `unload` follows every `pagehide` listener and still precedes the
+      // replacement document. Being added during `pagehide`, the listener also follows any `unload`
+      // listener the web view added earlier, so those still see its React tree.
+      //
+      // The unmount is then a microtask, not a timer: on a navigation it runs as soon as the
+      // `unload` listener returns, before the replacement document exists. When the renderer's React
+      // removes the iframe, both events fire inside that commit, where an inline unmount would warn,
+      // so `web-view.component.tsx` unmounts the root as well: its deferred unmount on close, or its
+      // iframe load handler when a tab move re-inserts the iframe and a new document loads.
+      // Correctness does not depend on whether the queued microtask still runs in that case, because
+      // a second `root.unmount()` is a no-op.
+      //
+      // The component can only unmount a root it knows about, and a document replaced before it ever
+      // loads is never the iframe's document at a load. So the bootstrap hands each root to
+      // `registerWebViewRootById` as soon as it creates it, together with its document and a
+      // `hasUnloaded` flag that an `unload` listener added at that point sets, even if the first
+      // render throws. The component warns when it has to unmount a replaced root whose document
+      // loaded but whose flag is still false; a document replaced before it loaded may never see
+      // `unload`, so that case unmounts silently.
+      //
       // Add the component as a script
       // WARNING: DO NOT add anything between the closing of the script tag and the insertion of
       // reactWebView.contents. Doing so would mess up debugging web views
@@ -2949,6 +3030,24 @@ export async function openOrReloadWebView(
               function initializeReact() {
                 const container = document.getElementById('root');
                 const root = createRoot(container);
+                const unmountRoot = root.unmount.bind(root);
+                // Reported to the renderer so the web view component can unmount this root even if
+                // this document goes away before its unload-time unmount runs
+                const registeredRoot = { unmountRoot, document, hasUnloaded: false };
+                try {
+                  registerWebViewRootById?.('${webView.id}', registeredRoot);
+                } catch (e) {
+                  console.log('Error registering WebView React root', e);
+                }
+                // Added here, ahead of the first render, so a render that throws still leaves the
+                // flag to be set when the document unloads
+                window.addEventListener(
+                  'unload',
+                  () => {
+                    registeredRoot.hasUnloaded = true;
+                  },
+                  { once: true },
+                );
 
                 function renderRoot(savedDefinition) {
                   // Set up WebViewProps to pass into the WebView component
@@ -2990,23 +3089,36 @@ export async function openOrReloadWebView(
                   },
                 );
 
-                const unsubscriber = () => {
+                const handlePageHide = () => {
                   try {
                     unsubscribeUpdateWebView();
-                    window.removeEventListener('pagehide', unsubscriber);
+                    window.removeEventListener('pagehide', handlePageHide);
                   } catch (e) {
                     console.log('Error unsubscribing from WebView updates', e);
                   }
+                  // On unload, then queued: see the bootstrap comment in web-view.service-shard.ts
+                  window.addEventListener(
+                    'unload',
+                    () =>
+                      queueMicrotask(() => {
+                        try {
+                          root.unmount();
+                        } catch (e) {
+                          console.log('Error unmounting WebView React root', e);
+                        }
+                      }),
+                    { once: true },
+                  );
                 };
 
                 renderRoot();
 
                 // Store cleanup functions globally so they can be called from parent window
                 globalThis.webViewCleanup = {
-                  unmountRoot: root.unmount.bind(root),
+                  unmountRoot,
                 };
 
-                window.addEventListener('pagehide', unsubscriber);
+                window.addEventListener('pagehide', handlePageHide);
               }
 
               if (document.readyState === 'loading')

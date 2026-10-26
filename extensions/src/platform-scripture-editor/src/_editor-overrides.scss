@@ -15,9 +15,9 @@ $find-current-result-highlight-bg: rgb(255 213 0 / 40%);
 
 // NOTE: `height: 100%` / `overflow-y: auto` below are currently inert. Wrapper divs between the
 // web view's sized flex column and this element (EditorKeyboardShortcuts, the paragraph-marker
-// tooltip overlay) leave it auto-height, so it grows to its content and the web view's outer
-// `tw:overflow-auto` wrapper is what actually scrolls. Scroll code must not assume this element
-// scrolls — editor-dom.util.ts discovers the scroll container dynamically (findScrollContainer).
+// tooltip overlay) leave it auto-height, so it grows to its content and the Scripture text's panel
+// in `FootnotesLayout` is what actually scrolls. Scroll code must not assume this element scrolls —
+// editor-dom.util.ts discovers the scroll container dynamically (findScrollContainer).
 .editor-container {
   height: 100%;
   max-width: none;
@@ -74,9 +74,13 @@ $find-current-result-highlight-bg: rgb(255 213 0 / 40%);
   outline-offset: 2px;
   --tw-ring-offset-width: 2px;
   --tw-ring-color: var(--ring);
-  --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width)
+  // The empty fallback in `var(--tw-ring-inset,)` is load-bearing: Tailwind 4 registers
+  // `--tw-ring-inset` with no initial value, so a bare `var()` of it is invalid, both shadows
+  // fall back to transparent, and no focus ring renders at all. Tailwind's own ring utilities
+  // use the same empty fallback.
+  --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width)
     var(--tw-ring-offset-color);
-  --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width))
+  --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width))
     var(--tw-ring-color);
   --tw-ring-offset-color: var(--background);
   box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
@@ -225,6 +229,41 @@ button.toolbar-item {
 .typeahead-popover li:hover {
   background-color: var(--accent);
   color: var(--accent-foreground);
+}
+
+// The 200px cap on `.typeahead-popover ul` is sized for the marker typeahead's long, FILTERABLE
+// list, where scrolling past a fold is the point. The right-click context menu reuses the same
+// popover markup but is a short fixed list (~36px per item) with no filter to narrow it, so under
+// that cap its last items sit behind a fold. Capped to the viewport instead: the menu portal is
+// `position: fixed`, so `vh` is the height of the panel it opens in. Every item shows whenever
+// there is room, and the menu still can't outgrow the panel when there isn't.
+// Needs the `.typeahead-popover` qualifier to out-specify that rule — the plugin puts both classes
+// on the menu's outer element and nests a second `.typeahead-popover` inside it.
+// Drop this override once `paranext/scripture-editors`' own editor stylesheet caps
+// `.typeahead-popover.auto-embed-menu ul` to the viewport itself — check that repo directly, not
+// merely whether `_editor.scss` was refreshed: the fix is not on `scripture-editors` `main` today,
+// and the upstream PR this is adapted from (eten-tech-foundation/scripture-editors#555) closed
+// unmerged, so a routine refresh from either source reinstates the fixed 200px cap with a hidden
+// scrollbar. Pinned by `_editor-overrides.scss.test.ts`.
+.typeahead-popover.auto-embed-menu ul {
+  max-height: calc(100vh - 16px);
+
+  // The vendored rule pairs `overflow-y: scroll` with a hidden scrollbar, which suits the marker
+  // typeahead — you narrow that list by typing, not by scrolling. This menu has no filter, so when
+  // the panel is too short for the whole list the only way to the rest of it is to scroll, and a
+  // hidden scrollbar leaves nothing on screen saying there is more. `auto` keeps the gutter out of
+  // the way at the heights where the whole menu already fits.
+  overflow-y: auto;
+  scrollbar-width: thin;
+
+  // Without this, a wheel gesture that reaches the end of the list chains to the ancestor
+  // scroller. That ancestor's scroll event does not originate inside the menu, so the
+  // close-on-scroll listener reads it as the page moving out from under a fixed-positioned menu
+  // and closes the menu mid-read — exactly when the list is long enough to need scrolling. This
+  // protects the CHAINED ancestor scroll specifically: the close-on-scroll listener's own
+  // scroll-target check (scripture-editors#14) already exempts a scroll of the list itself, but
+  // that exemption does not cover a scroll that chains past it to an ancestor.
+  overscroll-behavior: contain;
 }
 
 .CommentPlugin_CommentInputBox_Editor,

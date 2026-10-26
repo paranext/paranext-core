@@ -32,7 +32,7 @@ beforeAll(() => {
 // Sentinel strings: deliberately differ from production English to prove localization wiring.
 const mockLocalizedStrings: LanguageStrings = {
   '%internetSettings_webView_title%': 'Title sentinel',
-  '%internetSettings_webView_subtitle%': 'Subtitle sentinel',
+  '%internetSettings_webView_subtitle_2%': 'Subtitle sentinel',
   '%paratextRegistration_button_reset%': 'Discard changes sentinel',
   '%paratextRegistration_button_saveAndRestart%': 'Save and restart sentinel',
   '%paratextRegistration_button_restarting%': 'Restarting sentinel',
@@ -42,9 +42,9 @@ const mockLocalizedStrings: LanguageStrings = {
   '%paratextRegistration_alert_updatedRegistration_description_hasRestarted%': 'Restarted sentinel',
   // Minimum required for sub-components to render
   '%paratextRegistration_description_internetUse_option_Enabled_2%': 'Unrestricted',
-  '%paratextRegistration_description_internetUse_option_Enabled_details%': '',
+  '%paratextRegistration_description_internetUse_option_Enabled_details_2%': '',
   '%paratextRegistration_description_internetUse_option_VpnRequired_2%': 'VPN sentinel',
-  '%paratextRegistration_description_internetUse_option_VpnRequired_details%': '',
+  '%paratextRegistration_description_internetUse_option_VpnRequired_details_2%': '',
   '%paratextRegistration_description_internetUse_option_Disabled_2%': 'Blocked sentinel',
   '%paratextRegistration_description_internetUse_option_Disabled_details%': '',
   '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%':
@@ -53,12 +53,11 @@ const mockLocalizedStrings: LanguageStrings = {
   '%paratextRegistration_description_internetUse_option_ProxyOnly%': 'Proxy sentinel',
   '%paratextRegistration_description_internetUse_option_ProxyOnly_details%': '',
   '%paratextRegistration_internetUse_comingSoon%': 'Coming soon',
-  '%paratextRegistration_internetUse_footer%': 'Footer sentinel',
   '%paratextRegistration_developer_section_label%': 'Developer only',
-  '%paratextRegistration_label_serverType_option_Production%': 'Production',
-  '%paratextRegistration_label_serverType_option_QualityAssurance%': 'Quality Assurance',
-  '%paratextRegistration_label_serverType_option_Development%': 'Development',
-  '%paratextRegistration_label_serverType_option_Test%': 'Test',
+  '%paratextRegistration_label_serverType_option_Production_2%': 'Production server',
+  '%paratextRegistration_label_serverType_option_QualityAssurance_2%': 'Quality assurance server',
+  '%paratextRegistration_label_serverType_option_Development_2%': 'Development server',
+  '%paratextRegistration_label_serverType_option_Test_2%': 'Test server',
 };
 
 const defaultSettings: InternetSettings = {
@@ -77,6 +76,7 @@ function renderForm(overrides: Partial<InternetSettingsFormProps> = {}) {
     saveState: SaveState.HasNotSaved,
     saveError: '',
     onSaveAndRestart: vi.fn(),
+    canEditServer: false,
   };
   return render(<InternetSettingsForm {...defaults} {...overrides} />);
 }
@@ -161,6 +161,16 @@ describe('InternetSettingsForm', () => {
     expect(screen.queryByText('Restarting description sentinel')).not.toBeInTheDocument();
   });
 
+  test('does not render the server-selection control when canEditServer is false', () => {
+    renderForm({ canEditServer: false });
+    expect(screen.queryByRole('button', { name: /Developer only/ })).not.toBeInTheDocument();
+  });
+
+  test('renders the server-selection control when canEditServer is true', () => {
+    renderForm({ canEditServer: true });
+    expect(screen.getByRole('button', { name: /Developer only/ })).toBeInTheDocument();
+  });
+
   describe('focus management', () => {
     function buildProps(
       overrides: Partial<InternetSettingsFormProps> = {},
@@ -174,6 +184,7 @@ describe('InternetSettingsForm', () => {
         saveState: SaveState.HasNotSaved,
         saveError: '',
         onSaveAndRestart: vi.fn(),
+        canEditServer: false,
         ...overrides,
       };
     }

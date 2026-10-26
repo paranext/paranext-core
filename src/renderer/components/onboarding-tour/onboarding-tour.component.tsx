@@ -10,6 +10,7 @@ import {
   SIMPLE_PANEL_ID_RESOURCES,
 } from '@renderer/components/docking/simple-layout.data';
 import { Tour, TourStep, TOUR_LOCALIZE_KEYS } from './tour.component';
+import { STEP_LOCALIZE_KEYS } from './onboarding-tour.const';
 import {
   getTourReplayCount,
   readTourDone,
@@ -32,22 +33,6 @@ import {
  * target below and what the readiness gate waits for in Power.
  */
 const PROFILE_TRIGGER_SELECTOR = '[data-testid="user-profile-popover-trigger"]';
-
-const STEP_LOCALIZE_KEYS: LocalizeKey[] = [
-  '%onboardingTour_step_project_title%',
-  '%onboardingTour_step_project_description%',
-  '%onboardingTour_step_modelText_title%',
-  '%onboardingTour_step_modelText_description%',
-  '%onboardingTour_step_resources_title%',
-  '%onboardingTour_step_resources_description%',
-  // The Send/Receive stop's heading reuses the toolbar's own label for the control it spotlights,
-  // rather than shipping a third "Sync" for translators alongside %toolbar_sync% and
-  // %firstRun_button_sync%.
-  '%toolbar_sync%',
-  '%onboardingTour_step_sendReceive_description%',
-  '%onboardingTour_step_profile_title%',
-  '%onboardingTour_step_profile_description%',
-];
 
 // The tour's own chrome keys come from Tour itself, so the button/counter half of this list has a
 // single source rather than being restated here.
@@ -83,8 +68,8 @@ function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
     setFinishedThisSession(true);
   }, []);
 
-  // Stop order is deliberately semantic — project, then model text, then resources, then the two
-  // toolbar controls — and is NOT mirrored for RTL. The sequence follows what a new user needs to
+  // Stop order is deliberately semantic — project, then Base or Model text, then resources, then the
+  // two toolbar controls — and is NOT mirrored for RTL. The sequence follows what a new user needs to
   // understand in order, not where the columns sit on screen; only each card's *placement* is
   // direction-aware (Tour resolves the logical `start`/`end` sides below).
   const steps: TourStep[] = useMemo(
@@ -101,8 +86,8 @@ function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
       },
       {
         target: `[data-dockid="${SIMPLE_PANEL_ID_MODEL_TEXT}"]`,
-        title: strings['%onboardingTour_step_modelText_title%'] ?? '',
-        description: strings['%onboardingTour_step_modelText_description%'] ?? '',
+        title: strings['%onboardingTour_step_baseOrModelText_title%'] ?? '',
+        description: strings['%onboardingTour_step_baseOrModelText_description%'] ?? '',
         side: 'end',
         spotlightPadding: 1,
       },
@@ -120,13 +105,13 @@ function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
         // expected there, not a defect. Nothing here changes between the two builds.
         target: '[data-testid="toolbar-sync-area"]',
         title: strings['%toolbar_sync%'] ?? '',
-        description: strings['%onboardingTour_step_sendReceive_description%'] ?? '',
+        description: strings['%onboardingTour_step_sendReceive_description_2%'] ?? '',
         side: 'bottom',
       },
       {
         target: PROFILE_TRIGGER_SELECTOR,
         title: strings['%onboardingTour_step_profile_title%'] ?? '',
-        description: strings['%onboardingTour_step_profile_description%'] ?? '',
+        description: strings['%onboardingTour_step_profile_description_2%'] ?? '',
         side: 'bottom',
       },
     ],

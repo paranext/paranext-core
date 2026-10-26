@@ -25,7 +25,11 @@ export const RC_DOCK_DIVIDER_MIN_WIDTH_RESERVE_PX = 4;
  */
 export const SIMPLE_COLUMN_MIN_WIDTH_PX = 297;
 
-/** Rc-dock panel IDs for the Simple-mode layout. Used by the onboarding tour to locate panels. */
+/**
+ * Rc-dock panel IDs for the Simple-mode layout. Used by the onboarding tour to locate panels.
+ * `SIMPLE_PANEL_ID_RESOURCES` is also mirrored in `platform-scripture`
+ * (`simple-resources-panel-id.const.ts`), which opens its Checks tab into Column 3 by this ID.
+ */
 export const SIMPLE_PANEL_ID_MODEL_TEXT = 'simple-panel-model-text';
 export const SIMPLE_PANEL_ID_PROJECT = 'simple-panel-project';
 export const SIMPLE_PANEL_ID_RESOURCES = 'simple-panel-resources';
@@ -41,9 +45,9 @@ export const SIMPLE_PANEL_ID_RESOURCES = 'simple-panel-resources';
  * value as closable, so without it every fixed tab renders with a close button until its provider's
  * async round-trip lands. Closing one in that window is unrecoverable — Simple mode never persists
  * layout, so nothing restores the tab, and re-invoking the feature falls through to its create
- * branch and builds a new panel outside the 3-column layout. Declaring it here also means
- * `getTabGroup` routes each tab to its column's group from the first render instead of flipping
- * groups mid-startup.
+ * branch and builds a new panel outside the 3-column layout (a panel opened beside a column never
+ * joins it). Declaring it here also means `getTabGroup` routes each tab to its column's group from
+ * the first render instead of flipping groups mid-startup.
  *
  * This layout is only ever loaded in Simple mode, so the value is unconditional here; the providers
  * still need their per-mode computation for the Power-mode case.
@@ -129,6 +133,17 @@ export const simpleLayout: LayoutBase = {
                 data: {
                   webViewType: 'platformScriptureEditor.commentaries',
                   id: '6c950d23-f8d7-4482-a384-93ea0481698b',
+                  contentType: 'react',
+                  isClosable: false,
+                  state: {},
+                },
+              },
+              {
+                id: 'd4f6a1b0-9e2c-4a7d-8f3b-5c6e0a1d2b4f',
+                tabType: TAB_TYPE_WEBVIEW,
+                data: {
+                  webViewType: 'platformLexicalTools.dictionary',
+                  id: 'd4f6a1b0-9e2c-4a7d-8f3b-5c6e0a1d2b4f',
                   contentType: 'react',
                   isClosable: false,
                   state: {},

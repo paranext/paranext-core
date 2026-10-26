@@ -59,7 +59,7 @@ describe('insertCommentAtCurrentSelection anchor guard (platform-scripture-edito
   it('returns before recording the pending comment range or setting the highlight annotation, not just before opening the popover', () => {
     const guardIndex = callbackBody.indexOf('if (!editorContainer) return;');
     const pendingRangeAssignIndex = callbackBody.indexOf(
-      'pendingCommentAnnotationRange.current = { range: annotationRange, verseRef: scrRef };',
+      'pendingCommentAnnotationRange.current = {',
     );
     const setAnnotationIndex = callbackBody.indexOf('editorRef.current?.setAnnotation(');
 

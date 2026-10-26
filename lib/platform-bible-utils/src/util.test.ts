@@ -1,5 +1,10 @@
 import { afterEach, vi } from 'vitest';
-import { debounce, DEBOUNCE_CANCELED_ERROR_MESSAGE, retryUntil } from './util';
+import {
+  debounce,
+  DEBOUNCE_CANCELED_ERROR_MESSAGE,
+  isErrorMessageAboutParatextBlockingInternetAccess,
+  retryUntil,
+} from './util';
 
 /** A promise plus its settlers, so a test can hold an invocation open at a chosen point. */
 function makeDeferred<T>() {
@@ -325,5 +330,34 @@ describe('retryUntil', () => {
     expect(attempt).toHaveBeenCalledTimes(2);
     // Resolves right after attempt 2 without advancing further → no trailing wait after the last.
     await expect(promise).resolves.toBe('retry');
+  });
+});
+
+describe('isErrorMessageAboutParatextBlockingInternetAccess', () => {
+  it("recognizes ParatextData's own block", () => {
+    expect(
+      isErrorMessageAboutParatextBlockingInternetAccess(
+        'Bug in Paratext caused attempted access to Internet. Request has been blocked.',
+      ),
+    ).toBe(true);
+  });
+
+  // The gate's message is localized, so only its sentinel can be matched
+  it("recognizes the data provider's gate by its sentinel, in any language", () => {
+    expect(
+      isErrorMessageAboutParatextBlockingInternetAccess(
+        new Error(
+          'JSON-RPC Request error (-32000): El acceso a Internet está deshabilitado. (INTERNET_SERVICES_BLOCKED)',
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it('ignores other failures', () => {
+    expect(
+      isErrorMessageAboutParatextBlockingInternetAccess(
+        new Error('JSON-RPC Request error (-32000): This resource is no longer available'),
+      ),
+    ).toBe(false);
   });
 });

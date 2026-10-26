@@ -38,6 +38,7 @@ type DecoratorConfig = {
   isFormDisabled?: boolean;
   saveState?: SaveState;
   saveError?: string;
+  canEditServer?: boolean;
 };
 
 /** Wraps the form in state so the radio list and developer toggle remain interactive. */
@@ -61,6 +62,7 @@ function createDecorator(config: DecoratorConfig) {
           isFormDisabled: config.isFormDisabled ?? false,
           saveState: config.saveState ?? SaveState.HasNotSaved,
           saveError: config.saveError ?? '',
+          canEditServer: config.canEditServer ?? true,
           onSaveAndRestart: () =>
             alertCommand(
               'paratextRegistration.internetSettingsDataProvider → setInternetSettings',
@@ -75,6 +77,29 @@ function createDecorator(config: DecoratorConfig) {
 /** Default: VPN-required selected, Reset and Save buttons disabled (no changes yet). */
 export const Default: Story = {
   decorators: [createDecorator({})],
+};
+
+/**
+ * The stored setting names an option this app does not implement yet. `InternetSettings.xml` is
+ * seeded once from a co-installed Paratext 9 on first launch, so this is what an inherited file can
+ * look like. The row stays selected — the panel never silently swaps it — and a banner says why
+ * nothing acts on it until the user picks an available option.
+ */
+export const UnsupportedStoredValue: Story = {
+  decorators: [
+    createDecorator({
+      initialSettings: {
+        permittedInternetUse: 'Disabled',
+        selectedServer: 'Production',
+        proxyPort: 0,
+      },
+      savedInternetSettings: {
+        permittedInternetUse: 'Disabled',
+        selectedServer: 'Production',
+        proxyPort: 0,
+      },
+    }),
+  ],
 };
 
 /** Initial load in flight — `savedInternetSettings` is undefined; both buttons are disabled. */
@@ -97,6 +122,15 @@ export const UnsavedChanges: Story = {
       savedInternetSettings: defaultSettings,
     }),
   ],
+};
+
+/**
+ * Server selection hidden — the default state for everyone except a Shift-click/Shift-Enter on
+ * "Internet & connectivity" (or an already non-Production server). No locked label, no hint of any
+ * kind: the control is simply absent.
+ */
+export const ServerSelectionHidden: Story = {
+  decorators: [createDecorator({ canEditServer: false })],
 };
 
 /** Developer section expanded — Production/Development toggle visible. */

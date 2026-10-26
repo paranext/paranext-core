@@ -11,7 +11,8 @@ import {
 // CUSTOM: Import readDirection for RTL support
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { cn } from '@/utils/shadcn-ui/utils';
-import { IconCheck, IconChevronRight } from '@tabler/icons-react';
+// CUSTOM: Import IconChevronLeft so the submenu chevron can point into the flyout in RTL
+import { IconCheck, IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
 // CUSTOM: Import shared z-index constants so dropdown menus join the same overlay tier as
 // popover, select, and context-menu instead of falling back to Tailwind's tw:z-50.
 import { Z_INDEX_ABOVE_DOCK, Z_INDEX_ABOVE_POPOVER } from '@/components/z-index';
@@ -359,6 +360,9 @@ function DropdownMenuSubTrigger({
 }: DropdownMenuSubTriggerProps) {
   // CUSTOM: Use menu context to apply variant-driven styles
   const context = useMenuContext();
+  // CUSTOM: In RTL, Radix opens the submenu to the left and maps ArrowRight to close, so the
+  // chevron direction follows readDirection() instead of a hardcoded right-pointing icon.
+  const dir: Direction = readDirection();
   return (
     <DropdownMenuPrimitive.SubTrigger
       data-slot="dropdown-menu-sub-trigger"
@@ -372,7 +376,13 @@ function DropdownMenuSubTrigger({
       {...props}
     >
       {children}
-      <IconChevronRight className="tw:ms-auto" />
+      {/* CUSTOM: Chevron direction follows readDirection() instead of a hardcoded right-pointing
+      icon, so it points into the flyout in both LTR and RTL */}
+      {dir === 'rtl' ? (
+        <IconChevronLeft className="tw:ms-auto" />
+      ) : (
+        <IconChevronRight className="tw:ms-auto" />
+      )}
     </DropdownMenuPrimitive.SubTrigger>
   );
 }

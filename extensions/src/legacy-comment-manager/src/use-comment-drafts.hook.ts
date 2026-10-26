@@ -177,25 +177,22 @@ export function useCommentDrafts({
     });
   }, [drafts, debouncedSaveDrafts]);
 
-  // Flush (not cancel) on unmount, so a debounced write that hasn't fired yet -- e.g. the user
-  // typed and then immediately closed this panel or the app -- is never lost.
+  // Flush (not cancel) on teardown, so a debounced write that hasn't fired yet -- e.g. the user
+  // typed and then immediately switched project, closed this panel, or closed the app -- is never
+  // lost. The listeners flush before any unmount of this React root:
   //
-  // Unmount cleanup ALONE does not reach either teardown path that actually matters for a web
-  // view, so `pagehide`/`beforeunload` listeners below carry the real weight:
+  // - Project switch: `openCommentListPanel` calls `reloadWebView`, so the iframe navigates to a
+  //   new `srcDoc` document. The web view bootstrap unmounts this root only on the old document's
+  //   `unload`, after every `pagehide` listener has run.
+  // - Panel close: the renderer removes the iframe inside its own React commit, which fires
+  //   `pagehide` synchronously, before the renderer's deferred unmount.
+  // - Window/app close: the renderer and every iframe in it go away with no React unmount at all,
+  //   and a window destroyed outright can skip `pagehide`, so `beforeunload` is the pair for this
+  //   path, matching the pairing `platform-scripture-editor.web-view.tsx` uses for its own teardown
+  //   flush.
   //
-  // - Panel close / project switch: `web-view.component.tsx` renders this web view's content via
-  //   `srcDoc`, and `openCommentListPanel` calls `reloadWebView` on every project switch. Each
-  //   reload regenerates the nonce baked into `content`, so the iframe's `srcDoc` changes and the
-  //   iframe navigates to a brand-new document -- the PARENT `WebView` component never unmounts,
-  //   so this React root (and its effect cleanups) never runs.
-  // - Window/app close: destroys the renderer, and every iframe in it, the same way -- again with
-  //   no React unmount in between.
-  //
-  // `pagehide` fires on the iframe's own window whenever ITS document is being torn down, whether
-  // that's the iframe navigating to a new `srcDoc` or the whole renderer going away, so it covers
-  // both paths. `beforeunload` is the belt-and-suspenders pair for the real-window-close path.
-  // Matches the pairing `platform-scripture-editor.web-view.tsx` already uses for its own
-  // teardown flush.
+  // The unmount cleanup flushes as well, for an unmount that tears no document down; after a
+  // `pagehide` flush it has nothing left to write.
   useEffect(() => {
     const flush = () => debouncedSaveDrafts.flush();
     window.addEventListener('pagehide', flush);
@@ -212,9 +209,9 @@ export function useCommentDrafts({
   // filter/scope state, but `commentThreads` comes from a query subscription that only catches up
   // later -- and `isLoadingCommentThreads` can't fill the gap because it too lags: it is raised by
   // a passive effect (create-use-data-hook.util.ts) that has not run yet on the very render a
-  // narrowed preset or scope widens back to default. On that render `isShowingAllCommentThreads`
-  // and `isLoadingCommentThreads` both already look "safe to prune", while `commentThreads` is
-  // still the stale, narrow array the old selection produced. Advancing this only when
+  // narrowed preset or scope widens back to showing every thread. On that render
+  // `isShowingAllCommentThreads` and `isLoadingCommentThreads` both already look "safe to prune",
+  // while `commentThreads` is still the stale, narrow array the old selection produced. Advancing this only when
   // `commentThreads` itself changes -- never merely because the selection changed -- means a
   // selection flip on its own can never be mistaken for data that has caught up with it.
   const [settledIsShowingAllCommentThreads, setSettledIsShowingAllCommentThreads] = useState(
@@ -248,6 +245,10 @@ export function useCommentDrafts({
    * just the whole-draft level.
    */
   const prunableThreads = useMemo<readonly PrunableThread[] | undefined>(() => {
+    // TODO(PT-4887): Prune under any filter and scope. A list opens on the current chapter, so this
+    // guard keeps most users from ever pruning; a narrowed query can't be trusted even at the
+    // `commentEdits` level, because the provider filters a same-id thread's pieces before merging
+    // them, so a returned thread can lack comments that still exist.
     if (!isShowingAllCommentThreads || isLoadingCommentThreads) return undefined;
     // The guard must be satisfied by the data, not by state that leads the query: until
     // `settledIsShowingAllCommentThreads` catches up with `isShowingAllCommentThreads`, the held

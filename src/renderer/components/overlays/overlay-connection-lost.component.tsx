@@ -18,6 +18,10 @@ import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useWindowBlockingOverlay } from '@renderer/hooks/use-window-blocking-overlay.hook';
 import { getToolbarHeight } from '@renderer/components/toolbar-height.util';
 import { CANCEL_ENTER_ZOOM_STYLE } from '@renderer/components/overlays/full-screen-dialog.util';
+import {
+  ALARM_STRIP_ACTIONS_CLASS_NAME,
+  ALARM_STRIP_ALERT_CLASS_NAME,
+} from '@renderer/components/alarm-strip.util';
 import { useIsConnectionLost } from '@renderer/hooks/use-is-connection-lost.hook';
 
 // Declared without a `LocalizeKey` annotation so each keeps its literal type, which is what makes
@@ -149,12 +153,13 @@ const NEUTRALIZED_BACKDROP = 'tw:bg-transparent tw:supports-backdrop-filter:back
  *   behind the scrim, so besides opening a menu whose items dispatch over the dead socket, it pulls
  *   focus out of the scope entirely.
  *
- * The first two categories need main to be told the renderer has latched — a design change rather
- * than a patch, and out of scope here (TODO(main-renderer-shutdown-relay); see
- * `adr-connection-lost-is-renderer-local` for the marker's meaning). The third is renderer-local
- * and so is closable without that relay: `PlatformMenubar` would need its `useHotkeys` call gated
- * by a new prop. It is grouped here rather than fixed because gating it alone would leave the
- * guarantee just as false while looking fixed. All three are a known, documented limit.
+ * The first two categories need main to notice on its own that this window's port died — this
+ * renderer cannot tell it, its only link is the one that broke. TODO(PT-4851): suppress main's
+ * accelerators and the document-level hotkeys while this state is shown. The third is
+ * renderer-local and so is closable inside the renderer, without main having to notice the dead
+ * port: `PlatformMenubar` would need its `useHotkeys` call gated by a new prop. It is grouped here
+ * rather than fixed because gating it alone would leave the guarantee just as false while looking
+ * fixed. All three are a known, documented limit.
  *
  * The alternatives considered and rejected — a hand-rolled `document` keydown trap (blind to
  * keydowns inside a web view's iframe), and letting content behind the scrim stay selectable — are
@@ -191,6 +196,9 @@ export function ConnectionLostOverlayPresentational({
           // also the ground the text contrast below is measured against. A fully saturated
           // `tw:bg-destructive` would flatten that contrast instead.
           className="tw:absolute tw:inset-x-0 tw:bg-background"
+          // Right below the toolbar, not below the strip that can sit under it (`getDockTop`):
+          // this state covers the whole window, and that strip, the extension-host-stopped banner,
+          // empties itself while it is shown, so there is nothing there to keep clear.
           style={{ top: getToolbarHeight(isPowerMode) }}
         >
           <Alert
@@ -199,32 +207,8 @@ export function ConnectionLostOverlayPresentational({
             // already announces this text through the title and description below, so leaving the
             // live region in place would announce it twice. Spread last, so this wins.
             role={undefined}
-            // A full-width strip below the toolbar rather than a floating card: no rounding, and
-            // borders only where the strip meets the content above and below it. `tw:bg-transparent`
-            // drops the variant's `tw:bg-card` so the wrapper's `tw:bg-background` is the ground.
-            //
-            // The third grid column holds the reload button in normal flow. `Alert`'s own action
-            // slot positions its children absolutely over the text and reserves only 72px for them,
-            // which suits a one-word action or an icon; this label is two words and this strip is as
-            // wide as the window, so in flow is the only layout that cannot overlap the message.
-            //
-            // The text and icon take `diff-deleted` rather than the variant's own `destructive`.
-            // `--destructive` is background-grade in the Platform dark theme (`index.css` says so
-            // where `--diff-deleted` is defined): at `oklch(0.396 …)` on a slate-950 ground it
-            // reaches roughly 2:1, well under the 4.5:1 AA needs. `--diff-deleted` is the
-            // text-grade red the themes provision — red-600 on light, red-400 on dark.
-            //
-            // The strip carries the destructive tone through its border and icon only, with no
-            // background tint. A `tw:bg-destructive/10` wash costs about 0.6:1, which is the whole
-            // margin in the light themes: on it the title reaches 4.18 (Platform light) and 3.99
-            // (paratext-light) against the 4.5:1 AA needs, and the description another 0.2 below
-            // that. Over the wrapper's opaque `tw:bg-background` the worst case across all four
-            // themes is 4.52. Darkening the light-theme token to red-700 would buy real headroom
-            // instead of a thin pass, but `index.css` requires UX approval for a token change.
-            //
-            // This is the screen a user reaches when nothing else in the app works, so reading it
-            // cannot depend on the theme.
-            className="tw:rounded-none tw:border-x-0 tw:border-destructive/40 tw:bg-transparent tw:px-3 tw:text-diff-deleted tw:has-[>svg]:grid-cols-[auto_1fr_auto] tw:*:data-[slot=alert-description]:text-diff-deleted/90"
+            // The shared alarm-strip look; its doc holds the layout and contrast rationale.
+            className={ALARM_STRIP_ALERT_CLASS_NAME}
           >
             <TriangleAlert aria-hidden="true" />
             {/* `asChild` so the dialog's accessible name and description ARE the banner's own title
@@ -242,7 +226,7 @@ export function ConnectionLostOverlayPresentational({
                   tinted strip. Naming it on the child makes it a child prop, which wins. */}
               <AlertDescription data-slot="alert-description">{message}</AlertDescription>
             </DialogDescription>
-            <div className="tw:col-start-3 tw:row-span-2 tw:row-start-1 tw:self-center tw:ps-3">
+            <div className={ALARM_STRIP_ACTIONS_CLASS_NAME}>
               <Button variant="outline" size="sm" onClick={onReload}>
                 {reloadLabel}
               </Button>

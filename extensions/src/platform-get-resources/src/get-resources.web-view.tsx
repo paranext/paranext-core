@@ -2,15 +2,20 @@ import { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import { useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
 import { useRetryablePromise } from 'platform-bible-react';
+import type { DblResourceData } from 'platform-bible-utils';
 import { getErrorMessage } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { shouldReportCatalogFailure } from './dbl-catalog.utils';
 import {
   GetResources,
   GET_RESOURCES_STRING_KEYS,
+  newResourceActionDidNotTakeEffectError,
   newResourceActionProviderNotReadyError,
   ResourceAction,
+  RESOURCE_TYPES,
 } from './get-resources.component';
+import { getInternetBlockedNotification } from './internet-block-notification.utils';
+import { openResourceFrom } from './open-home-item';
 
 type InstallInfo = {
   dblEntryUid: string;
@@ -26,6 +31,18 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const installResource = dblResourcesProvider?.installDblResource;
   const uninstallResource = dblResourcesProvider?.uninstallDblResource;
 
+  // The dialog reports the failure itself; this notification is what carries the action that opens
+  // the Internet & connectivity setting responsible for it.
+  const notifyIfInternetBlocked = useCallback((error: unknown) => {
+    const notification = getInternetBlockedNotification(error);
+    if (notification) papi.notifications.send(notification);
+  }, []);
+
+  // Held for the effect below rather than reported from inside the fetch: a fetch that a retry has
+  // superseded still runs its own `catch`, so notifying there would leave a stale block notification
+  // over a list that has since loaded.
+  const catalogErrorRef = useRef<unknown>(undefined);
+
   const {
     data: catalog,
     isLoading,
@@ -33,11 +50,21 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
     hasSettled,
     refetch: refetchResources,
   } = useRetryablePromise(
-    useCallback(
-      async () => papi.commands.sendCommand('platformGetResources.getCachedResources'),
-      [],
-    ),
+    useCallback(async () => {
+      try {
+        return await papi.commands.sendCommand('platformGetResources.getCachedResources');
+      } catch (e) {
+        catalogErrorRef.current = e;
+        throw e;
+      }
+    }, []),
   );
+
+  // `hasError` tracks only the fetch the hook is still waiting on, so this reports the failure the
+  // user is actually looking at.
+  useEffect(() => {
+    if (isResourcesError) notifyIfInternetBlocked(catalogErrorRef.current);
+  }, [isResourcesError, notifyIfInternetBlocked]);
 
   // `!hasSettled` counts as loading, not just `isLoading`. A retry clears the error synchronously
   // while `usePromise` only raises its loading flag in an effect, so the render in between would
@@ -48,6 +75,12 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
     () => (catalog?.status === 'available' ? catalog.resources : []),
     [catalog],
   );
+
+  // Mirrors the list for the async action handlers, which cannot read a value captured at render.
+  const resolvedResourcesRef = useRef(resolvedResources);
+  useEffect(() => {
+    resolvedResourcesRef.current = resolvedResources;
+  }, [resolvedResources]);
 
   // The two unavailable reasons need opposite treatments. `notReady` means the provider has not
   // registered yet — transient, so a retry genuinely can work and it earns the error state (see
@@ -62,49 +95,47 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
     resolvedResources.length > 0,
   );
 
-  const [isInitialized, setIsInitialized] = useState<boolean>(false);
-
-  const [selectedTypes, setSelectedTypes] = useWebViewState<string[]>('typeFilter', [
-    'ScriptureResource',
-  ]);
+  // A dialog restored with a saved layout keeps any selection saved in its state, which can differ
+  // from the defaults below. A saved language selection may have been filled in automatically from
+  // the installed resources rather than chosen; it cannot be told apart from a choice, so it is
+  // kept. Reopening the dialog starts from the defaults, since it gets a new web view id and so
+  // empty state.
+  const [selectedTypes, setSelectedTypes] = useWebViewState<string[]>('typeFilter', RESOURCE_TYPES);
 
   const [selectedLanguages, setSelectedLanguages] = useWebViewState<string[]>('languageFilter', []);
 
-  const openResource = useCallback(
-    (projectId: string) =>
-      papi.commands.sendCommand('platformScriptureEditor.openResourceViewer', projectId),
-    [],
-  );
-
-  // When no languages are selected on the first render of this component, set default selection to
-  // languages that have resources installed
-  useEffect(() => {
-    if (isInitialized) return;
-    if (selectedLanguages.length > 0) {
-      setIsInitialized(true);
-      return;
+  // The same as Home's Open: in Simple mode the middle column keeps the project, and the resource
+  // goes to its reference tab instead. Repeat opens of a resource still opening are ignored, as in
+  // Home: each would queue another show behind it.
+  const openingResourceIdsRef = useRef(new Set<string>());
+  const openResource = useCallback(async (projectId: string) => {
+    if (openingResourceIdsRef.current.has(projectId)) return;
+    openingResourceIdsRef.current.add(projectId);
+    try {
+      await openResourceFrom('Get Resources', projectId);
+    } finally {
+      openingResourceIdsRef.current.delete(projectId);
     }
-    if (resolvedResources.length > 0 && selectedLanguages.length === 0) {
-      setSelectedLanguages(
-        Array.from(
-          new Set(
-            resolvedResources
-              .filter((resource) => resource.installed === true)
-              .map((resource) => resource.bestLanguageName),
-          ),
-        ),
-      );
-      setIsInitialized(true);
-    }
-  }, [
-    selectedLanguages.length,
-    setSelectedLanguages,
-    isInitialized,
-    setIsInitialized,
-    resolvedResources,
-  ]);
+  }, []);
 
   const [installInfo, setInstallInfo] = useState<InstallInfo[]>([]);
+
+  // Actions waiting to see themselves in the list, by uid. An action is not finished when the data
+  // provider returns: installing a resource already on disk succeeds as a no-op, and a removal can
+  // fail to register, so the row's spinner — which stops only once the list agrees — would run for
+  // the life of the dialog. Holding the action's promise until a newer list settles the question is
+  // what turns that into an error the user can see and retry.
+  const pendingActionsRef = useRef(
+    new Map<
+      string,
+      {
+        action: InstallInfo['action'];
+        /** The list in hand when this action started waiting; only a later one can judge it. */
+        listWhenRegistered: DblResourceData[];
+        settle: (didTakeEffect: boolean) => void;
+      }
+    >(),
+  );
 
   const installOrRemoveResource = useCallback(
     (dblEntryUid: string, action: ResourceAction): Promise<void> | void => {
@@ -126,26 +157,43 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
 
       return actionFunction(dblEntryUid)
         .then(async () => {
-          // Wait for the derived flags to catch up before refetching. `getCachedResources` answers
-          // from the array it already has and syncs in the background, so refetching straight away
-          // returns the pre-action flags. An install or removal survives that, because the row's
-          // spinner clears on `installed` flipping and the following refetch corrects it; an
-          // update does not, because nothing about the row changes except `updateAvailable` and
-          // there is no event to announce the correction — the row would keep offering "Update"
-          // until the dialog was reopened.
-          await papi.commands.sendCommand('platformGetResources.refreshResourceFlags');
+          // Let the derived flags catch up before refetching, or the refetch returns the pre-action
+          // flags: an install that succeeded as a no-op leaves the row spinning, and an update keeps
+          // offering "Update". A failure here is logged, not rethrown — the action itself succeeded,
+          // and reaching the `.catch` below would report it to the user as failed.
+          try {
+            await papi.commands.sendCommand('platformGetResources.refreshResourceFlags');
+          } catch (error) {
+            logger.warn(
+              `Could not refresh resource flags after ${action}: ${getErrorMessage(error)}`,
+            );
+          }
+          // Registered before the refetch so the list it brings back cannot arrive unwatched.
+          const listAgreed = new Promise<void>((resolve, reject) => {
+            // Nothing should be able to act on a row while its action is in flight — the table
+            // renders progress there instead of a button — but if one ever did, dropping the
+            // displaced entry would leave its promise pending forever, and its row spinning.
+            pendingActionsRef.current.get(dblEntryUid)?.settle(false);
+            pendingActionsRef.current.set(dblEntryUid, {
+              action: newInstallInfo.action,
+              listWhenRegistered: resolvedResourcesRef.current,
+              settle: (didTakeEffect) =>
+                didTakeEffect ? resolve() : reject(newResourceActionDidNotTakeEffectError()),
+            });
+          });
           refetchResources();
-          return undefined;
+          return listAgreed;
         })
         .catch((error) => {
           logger.debug(getErrorMessage(error));
+          notifyIfInternetBlocked(error);
           // The action failed, so clear its optimistic in-progress entry and re-throw so the
           // component can surface the error to the user.
           setInstallInfo((prevInfo) => prevInfo.filter((info) => info.dblEntryUid !== dblEntryUid));
           throw error;
         });
     },
-    [installResource, uninstallResource, refetchResources],
+    [installResource, uninstallResource, refetchResources, notifyIfInternetBlocked],
   );
 
   // Correct the update badges once the list is up. `getCachedResources` answers one refresh behind,
@@ -170,6 +218,42 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
         logger.warn(`Could not refresh DBL resource update flags: ${getErrorMessage(e)}`),
       );
   }, [hasSettled, refetchResources]);
+
+  /**
+   * Settles each action waiting to see itself in the list.
+   *
+   * Two things can end the wait, and the failure one cannot be expressed as a change to the list.
+   * `usePromise` keeps the previous value through a rejection, so a failed refetch leaves the list
+   * at the same identity and the same contents — it will never agree with the action, and never
+   * visibly disagree either. `isResourcesUnavailable` does not fill the gap: it is `false` whenever
+   * there are rows to show, which there always are once a user has clicked one. So a failed fetch
+   * is read from the fetch's own outcome instead, and an action that cannot be confirmed is
+   * reported as one rather than left spinning for the life of the dialog.
+   */
+  useEffect(() => {
+    if (pendingActionsRef.current.size === 0) return;
+
+    // `hasSettled` is what distinguishes a fetch that failed from one still in flight: `refetch`
+    // clears it, and the fetch sets it on both of its paths.
+    const hasFetchFailed = hasSettled && isResourcesError;
+
+    pendingActionsRef.current.forEach((pending, dblEntryUid) => {
+      const hasLaterList = resolvedResources !== pending.listWhenRegistered;
+      // Still waiting: no newer list yet, and no failure to report.
+      if (!hasLaterList && !hasFetchFailed) return;
+
+      const resource = resolvedResources.find((res) => res.dblEntryUid === dblEntryUid);
+      // A fetch that failed cannot confirm anything, and a row that has dropped out of the catalog
+      // cannot answer for its own resource either way.
+      const didTakeEffect =
+        !hasFetchFailed &&
+        resource !== undefined &&
+        (pending.action === 'installing' ? resource.installed : !resource.installed);
+
+      pendingActionsRef.current.delete(dblEntryUid);
+      pending.settle(didTakeEffect);
+    });
+  }, [resolvedResources, hasSettled, isResourcesError]);
 
   /** Removes resources from array of resources that are currently being handled */
   useEffect(() => {

@@ -3,8 +3,14 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Unsubscriber } from 'platform-bible-utils';
 import { leftEdgeRect, LivePopoverAnchorSource, measureBox } from 'platform-bible-react';
 
-/** The offset in pixels from the top of the window to scroll to show the verse number */
-const VERSE_NUMBER_SCROLL_OFFSET = 80;
+/**
+ * How far below the top of its scroll container a scrolled-to verse number lands, in pixels.
+ *
+ * Shared rather than restated so every view that lands on a reference frames it the same way: the
+ * Scripture editor, the model text panel, the reference panels and the Text Collection's chapter
+ * surfaces all leave this much of the preceding verse showing above the target.
+ */
+export const VERSE_NUMBER_SCROLL_OFFSET = 80;
 
 /**
  * How far below the scroll viewport's top edge a scrolled-to range's first line lands, before
@@ -131,9 +137,9 @@ export function runOnFirstLoad(callback: () => void): Unsubscriber {
  *
  * The scroll container is discovered, not assumed: wrapper elements between the web view's sized
  * flex column and `.editor-container` leave `.editor-container` auto-height, so it grows to its
- * content height and scrolling it is a silent no-op — the web view's outer `tw:overflow-auto`
- * wrapper is what actually scrolls (regression diagnosed 2026-07-09). If a future layout change
- * re-constrains `.editor-container`, discovery resolves there instead — correct either way.
+ * content height and scrolling it is a silent no-op — the Scripture text's panel in
+ * `FootnotesLayout` is what actually scrolls. If a future layout change re-constrains
+ * `.editor-container`, discovery resolves there instead — correct either way.
  *
  * @param fromElement Element whose scroll container to find
  * @param options `requireOverflow` (default `true`) also requires the candidate to actually
@@ -357,7 +363,8 @@ export function scrollToVerse(
  * leading edge against the bottom of the viewport, with the text itself still out of sight:
  *
  * - A range already FULLY inside the viewport stays put, so stepping between results on one screen
- *   does not make the text jump.
+ *   does not make the text jump — unless the caller says the view in front of the user is not the
+ *   one being measured (`stayPutWhenInView: false`), in which case there is nothing to keep still.
  * - Otherwise the range's first line lands {@link RANGE_SCROLL_TOP_OFFSET} below the top edge, capped
  *   to a quarter of the viewport's own height. A short pane (Power mode gives an editor little
  *   room) would otherwise land the match past the midpoint, with barely any of the surrounding text
@@ -369,7 +376,8 @@ export function scrollToVerse(
  * - The target is clamped to the container's scroll range, so a range at the very start or end of a
  *   chapter lands wherever the chapter's own edge allows — still fully in view.
  *
- * @returns The `scrollTop` to scroll to, or `undefined` when the range is already fully in view
+ * @returns The `scrollTop` to scroll to, or `undefined` when the range is already fully in view and
+ *   `stayPutWhenInView` is not `false`
  */
 export function computeRangeScrollTop({
   rangeTop,
@@ -377,14 +385,18 @@ export function computeRangeScrollTop({
   scrollTop,
   clientHeight,
   scrollHeight,
+  stayPutWhenInView = true,
 }: {
   rangeTop: number;
   rangeBottom: number;
   scrollTop: number;
   clientHeight: number;
   scrollHeight: number;
+  /** `false` to land the range at its offset even when it is already fully in view */
+  stayPutWhenInView?: boolean;
 }): number | undefined {
   if (
+    stayPutWhenInView &&
     rangeTop >= scrollTop - SCROLL_GEOMETRY_EPSILON_PX &&
     rangeBottom <= scrollTop + clientHeight + SCROLL_GEOMETRY_EPSILON_PX
   )
@@ -409,6 +421,70 @@ export function clampToScrollRange(
 }
 
 /**
+ * Scrolls `scrollContainerElement` so a target whose box is `rect` is in view, landing where
+ * {@link computeRangeScrollTop} says — except that a target already nearer the container's BOTTOM
+ * edge is aligned there instead, so it travels the shorter distance. Does nothing when the target
+ * is already fully visible.
+ *
+ * Serves the targets that are not a single text range: an annotation, which can paint several
+ * ranges, and a note's caller.
+ *
+ * @param rect The target's box, read now
+ * @param scrollContainerElement The target's scroll container
+ */
+function scrollRectIntoScrollContainer(rect: DOMRect, scrollContainerElement: HTMLElement): void {
+  const viewport = {
+    scrollTop: scrollContainerElement.scrollTop,
+    clientHeight: scrollContainerElement.clientHeight,
+    scrollHeight: scrollContainerElement.scrollHeight,
+  };
+
+  const targetTopWithin = getTopWithinScrollContainer(rect, scrollContainerElement);
+  const targetBottomWithin = targetTopWithin + rect.height;
+
+  // The top-aligned landing spot, and — by answering `undefined` — whether the target is already
+  // fully visible and needs no scroll at all. Shared with `scrollToRange` so the two cannot drift on
+  // where a target lands or on what counts as "already in view". Aligning to the BOTTOM edge instead
+  // is the one part of the decision below that is this function's own.
+  const topAlignedScrollTop = computeRangeScrollTop({
+    rangeTop: targetTopWithin,
+    rangeBottom: targetBottomWithin,
+    ...viewport,
+  });
+  if (topAlignedScrollTop === undefined) return;
+
+  // Align to whichever edge the target is already closer to, so it travels the shorter distance.
+  const distanceToTop = Math.abs(targetTopWithin - viewport.scrollTop);
+  const distanceToBottom = Math.abs(
+    viewport.scrollTop + viewport.clientHeight - targetBottomWithin,
+  );
+  const targetTop =
+    distanceToTop <= distanceToBottom
+      ? topAlignedScrollTop
+      : clampToScrollRange(
+          targetBottomWithin - viewport.clientHeight + VERSE_NUMBER_SCROLL_OFFSET,
+          viewport,
+        );
+
+  scrollContainerElement.scrollTo({
+    behavior: resolveScrollBehavior('smooth'),
+    top: targetTop,
+  });
+}
+
+/**
+ * Scrolls `element`'s scroll container so the element is in view (see
+ * {@link scrollRectIntoScrollContainer}). Does nothing when the element has no scrollable ancestor.
+ *
+ * @param element The element to bring into view
+ */
+function scrollElementIntoScrollContainer(element: HTMLElement): void {
+  const scrollContainerElement = findScrollContainer(element);
+  if (!scrollContainerElement) return;
+  scrollRectIntoScrollContainer(element.getBoundingClientRect(), scrollContainerElement);
+}
+
+/**
  * The DOM range of the current selection, when that selection is inside the editor content.
  *
  * Lexical writes the DOM selection when the engine applies a selection whether or not the editor
@@ -428,6 +504,17 @@ export function getEditorSelectionRange(): Range | undefined {
       ? commonAncestorContainer
       : commonAncestorContainer.parentElement;
   return element?.closest('.editor-container') ? range : undefined;
+}
+
+/**
+ * The editor content's current scroll position, read from the container that actually scrolls it.
+ *
+ * @returns That container's `scrollTop`, or `undefined` when no editor content is mounted or
+ *   nothing scrolls it
+ */
+export function getEditorScrollTop(): number | undefined {
+  const editorContainer = document.querySelector<HTMLElement>('.editor-container');
+  return editorContainer ? findScrollContainer(editorContainer)?.scrollTop : undefined;
 }
 
 /**
@@ -517,11 +604,18 @@ export function measureRangeScrollGeometry(
  * @param behavior `'smooth'` for a jump the user watches; `'instant'` to catch up a view that was
  *   hidden when the jump was asked for. Downgraded to `'instant'` automatically for a user who
  *   prefers reduced motion — see {@link resolveScrollBehavior}
+ * @param options `stayPutWhenInView: false` when the view has moved since the user asked for the
+ *   jump, so a range that is now in view is landed at its offset rather than left wherever that
+ *   move put it — see {@link computeRangeScrollTop}. `stayPutWhenInView` defaults to `true`
  * @returns `true` when the range was measured, whether or not it needed a scroll; `false` when it
  *   has no layout to measure (inside a `display: none` iframe every rect is zeros), so the caller
  *   can fall back
  */
-export function scrollToRange(range: Range, behavior: ScrollBehavior): boolean {
+export function scrollToRange(
+  range: Range,
+  behavior: ScrollBehavior,
+  { stayPutWhenInView = true }: { stayPutWhenInView?: boolean } = {},
+): boolean {
   const measurement = measureRangeScrollGeometry(range);
   if (measurement.status === 'no-layout') return false;
   // No scroll container: nothing overflows, so everything is already in view.
@@ -533,6 +627,7 @@ export function scrollToRange(range: Range, behavior: ScrollBehavior): boolean {
     scrollTop: measurement.scrollTop,
     clientHeight: measurement.clientHeight,
     scrollHeight: measurement.scrollHeight,
+    stayPutWhenInView,
   });
   if (targetTop !== undefined)
     measurement.scrollContainer.scrollTo({
@@ -543,37 +638,26 @@ export function scrollToRange(range: Range, behavior: ScrollBehavior): boolean {
 }
 
 /**
- * The selector for every element of the annotation with the given ID within the editor content.
- * Annotation/comment ids can contain CSS metacharacters (":", ".", etc.); escaping the whole class
- * token via CSS.escape keeps the selector valid (same approach as selectorForAnnotationIds in
- * platform-enhanced-resources' scripture-pane.component.tsx).
+ * Answers the live DOM ranges over everything one annotation paints, in document order, empty when
+ * nothing paints it — the editor's `EditorRef.getAnnotationRanges` for that annotation. Asked again
+ * on every measurement, since the ranges are over the editor's current DOM and go stale with the
+ * next edit.
+ *
+ * Ranges rather than elements, because the editor paints part of a display byte (a verse number, a
+ * marker glyph, an attribute run) with a CSS Custom Highlight: no element carries the annotation's
+ * class there, so looking it up by class misses it.
  */
-function annotationSelector(id: string): string {
-  return `.editor-container .${CSS.escape(`annotationId-${id}`)}`;
-}
+export type AnnotationRangesSource = () => Range[];
 
 /**
- * Finds the (first) element of the annotation with the given ID within the editor content.
+ * The viewport rect around everything an annotation paints. An annotation over wrapped or partly
+ * formatted text paints several fragments, each with one or more line boxes.
  *
- * @param id The ID of the annotation to find
- * @returns The DOM element of the annotation if found; otherwise undefined
+ * @param getRanges The ranges the annotation paints
+ * @returns The union of the ranges' client rects, or undefined when nothing is rendered
  */
-function getAnnotationElement(id: string): HTMLElement | undefined {
-  return document.querySelector<HTMLElement>(annotationSelector(id)) ?? undefined;
-}
-
-/**
- * The viewport rect around every rendered fragment of the annotation with the given ID. An
- * annotation over wrapped or partly formatted text renders as several elements, each with one or
- * more line boxes.
- *
- * @param id The ID of the annotation to measure
- * @returns The union of the fragments' client rects, or undefined when nothing is rendered
- */
-export function measureAnnotation(id: string): DOMRect | undefined {
-  const rects = Array.from(document.querySelectorAll(annotationSelector(id))).flatMap((element) =>
-    Array.from(element.getClientRects()),
-  );
+export function measureAnnotation(getRanges: AnnotationRangesSource): DOMRect | undefined {
+  const rects = getRanges().flatMap((range) => Array.from(range.getClientRects()));
   const [first, ...rest] = rects;
   if (!first) return undefined;
   const bounds = rest.reduce(
@@ -593,12 +677,30 @@ export function measureAnnotation(id: string): DOMRect | undefined {
   );
 }
 
-/** The text nodes under `element`, in document order. */
-function textNodesIn(element: Element): Text[] {
-  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+/** The part of one text node a range covers: `node.data.slice(start, end)`. */
+type TextSlice = { node: Text; start: number; end: number };
+
+/**
+ * The parts of text nodes `range` covers, in document order. A range over a `<mark>`'s contents
+ * covers its text nodes whole; a range a highlight paints can start or end inside one.
+ */
+function textSlicesIn(range: Range): TextSlice[] {
+  const root = range.commonAncestorContainer;
   const nodes: Text[] = [];
-  while (walker.nextNode()) if (walker.currentNode instanceof Text) nodes.push(walker.currentNode);
-  return nodes;
+  if (root instanceof Text) nodes.push(root);
+  else {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode())
+      if (walker.currentNode instanceof Text && range.intersectsNode(walker.currentNode))
+        nodes.push(walker.currentNode);
+  }
+  return nodes
+    .map((node) => ({
+      node,
+      start: node === range.startContainer ? range.startOffset : 0,
+      end: node === range.endContainer ? range.endOffset : node.length,
+    }))
+    .filter(({ start, end }) => end > start);
 }
 
 /**
@@ -630,44 +732,44 @@ function findCaretOffsetInAnnotation(
 
 /**
  * The current viewport rect of a caret that sat `caretOffset` characters into `textAtOpen` before
- * the editor re-rendered that text into the annotation with the given ID. The caret is rebuilt as a
- * collapsed range in the annotation's own text nodes, so its rect follows the text through any
- * reflow — onto another line, a new pane width or a new zoom level.
+ * the editor re-rendered that text into the annotation `getRanges` reports. The caret is rebuilt as
+ * a collapsed range in the text the annotation's ranges cover, so its rect follows the text through
+ * any reflow — onto another line, a new pane width or a new zoom level.
  *
- * @param id The ID of the annotation the caret's text now renders in.
+ * @param getRanges The ranges the annotation the caret's text now renders in paints.
  * @param textAtOpen The text of the node the caret sat in.
  * @param caretOffset The caret's offset in `textAtOpen`.
  * @returns The caret's rect, or `undefined` when the rendered annotation does not contain the caret
  *   or paints nothing there.
  */
 function measureCaretInAnnotation(
-  id: string,
+  getRanges: AnnotationRangesSource,
   textAtOpen: string,
   caretOffset: number,
 ): DOMRect | undefined {
-  const textNodes = Array.from(document.querySelectorAll(annotationSelector(id))).flatMap(
-    textNodesIn,
-  );
+  const slices = getRanges().flatMap(textSlicesIn);
   const offsetInAnnotation = findCaretOffsetInAnnotation(
     textAtOpen,
     caretOffset,
-    textNodes.map((node) => node.data).join(''),
+    slices.map(({ node, start, end }) => node.data.slice(start, end)).join(''),
   );
   if (offsetInAnnotation === undefined) return undefined;
 
-  // A caret on the boundary between two text nodes goes at the start of the later one, where the
-  // next character paints; one at the very end goes at the end of the last node.
-  let nodeIndex = 0;
-  let nodeStart = 0;
+  // A caret on the boundary between two slices goes at the start of the later one, where the next
+  // character paints; one at the very end goes at the end of the last slice.
+  let sliceIndex = 0;
+  let sliceStart = 0;
+  const sliceLength = ({ start, end }: TextSlice) => end - start;
   while (
-    nodeIndex < textNodes.length - 1 &&
-    offsetInAnnotation >= nodeStart + textNodes[nodeIndex].length
+    sliceIndex < slices.length - 1 &&
+    offsetInAnnotation >= sliceStart + sliceLength(slices[sliceIndex])
   ) {
-    nodeStart += textNodes[nodeIndex].length;
-    nodeIndex += 1;
+    sliceStart += sliceLength(slices[sliceIndex]);
+    sliceIndex += 1;
   }
+  const { node, start } = slices[sliceIndex];
   const caret = document.createRange();
-  caret.setStart(textNodes[nodeIndex], offsetInAnnotation - nodeStart);
+  caret.setStart(node, start + offsetInAnnotation - sliceStart);
   caret.collapse(true);
   return measureBox(caret);
 }
@@ -693,13 +795,13 @@ function measureCaretInAnnotation(
  * @param range The DOM range the selection had when the popover opened. The caller clones it from
  *   the live selection first, since a live selection range keeps moving as the user reads or
  *   edits.
- * @param annotationId The id of the annotation the editor renders for the pending comment.
+ * @param getAnnotationRanges The ranges the editor paints the pending comment's annotation with.
  * @param contextElement Element to report as `contextElement`; passed straight through.
  * @returns The anchor source for `useLivePopoverAnchor().setSource`.
  */
 export function createPendingCommentAnchorSource(
   range: Range,
-  annotationId: string,
+  getAnnotationRanges: AnnotationRangesSource,
   contextElement: Element,
 ): LivePopoverAnchorSource {
   const { startContainer, startOffset, endContainer, endOffset } = range;
@@ -715,7 +817,7 @@ export function createPendingCommentAnchorSource(
 
   return {
     measure: () => {
-      const annotationRect = measureAnnotation(annotationId);
+      const annotationRect = measureAnnotation(getAnnotationRanges);
       if (!annotationRect) {
         // Between the re-render and the mark appearing, a moved range would place the popover at
         // the start of the text node; keep the last good rect instead.
@@ -725,7 +827,7 @@ export function createPendingCommentAnchorSource(
       }
       const caretRect =
         caretTextAtOpen !== undefined
-          ? measureCaretInAnnotation(annotationId, caretTextAtOpen, startOffset)
+          ? measureCaretInAnnotation(getAnnotationRanges, caretTextAtOpen, startOffset)
           : undefined;
       return new DOMRect(
         caretRect?.left ?? annotationRect.left,
@@ -794,64 +896,166 @@ export function createPendingCommentCenterAnchorSource(
 }
 
 /**
- * Scrolls to the annotation with the given ID within the editor content.
- *
- * @param id The ID of the annotation to scroll to
- * @returns The DOM element of the annotation if found; otherwise undefined
+ * The element a range starts in: its start container when that is an element, otherwise the element
+ * holding its start text node.
  */
-export function scrollToAnnotation(id: string): HTMLElement | undefined {
-  const annotationElement = getAnnotationElement(id);
+function rangeStartElement(range: Range): HTMLElement | undefined {
+  const { startContainer } = range;
+  const element = startContainer instanceof Element ? startContainer : startContainer.parentElement;
+  return element instanceof HTMLElement ? element : undefined;
+}
+
+/**
+ * Scrolls everything an annotation paints into view within the editor content.
+ *
+ * @param getRanges The ranges the annotation paints
+ * @returns The element the annotation's first range starts in; undefined when the editor reports no
+ *   range for it
+ */
+export function scrollToAnnotation(getRanges: AnnotationRangesSource): HTMLElement | undefined {
+  const [firstRange] = getRanges();
+  const annotationElement = firstRange && rangeStartElement(firstRange);
 
   const scrollContainerElement = annotationElement
     ? findScrollContainer(annotationElement)
     : undefined;
-
-  // Scroll if we find the annotation
-  if (scrollContainerElement && annotationElement) {
-    const viewport = {
-      scrollTop: scrollContainerElement.scrollTop,
-      clientHeight: scrollContainerElement.clientHeight,
-      scrollHeight: scrollContainerElement.scrollHeight,
-    };
-
-    // Read the annotation's rect once; both its top-within-container and its height derive from it.
-    const annotationRect = annotationElement.getBoundingClientRect();
-    const annotationTop = getTopWithinScrollContainer(annotationRect, scrollContainerElement);
-    const annotationBottom = annotationTop + annotationRect.height;
-
-    // The top-aligned landing spot, and — by answering `undefined` — whether the annotation is
-    // already fully visible and needs no scroll at all. Shared with `scrollToRange` so the two
-    // cannot drift on where a target lands or on what counts as "already in view". An annotation is
-    // the only target that may instead be aligned to the BOTTOM edge, which is the one part of the
-    // decision below that is this function's own.
-    const topAlignedScrollTop = computeRangeScrollTop({
-      rangeTop: annotationTop,
-      rangeBottom: annotationBottom,
-      ...viewport,
-    });
-    if (topAlignedScrollTop === undefined) return annotationElement;
-
-    // Align to whichever edge the annotation is already closer to, so it travels the shorter
-    // distance.
-    const distanceToTop = Math.abs(annotationTop - viewport.scrollTop);
-    const distanceToBottom = Math.abs(
-      viewport.scrollTop + viewport.clientHeight - annotationBottom,
-    );
-    const targetTop =
-      distanceToTop <= distanceToBottom
-        ? topAlignedScrollTop
-        : clampToScrollRange(
-            annotationBottom - viewport.clientHeight + VERSE_NUMBER_SCROLL_OFFSET,
-            viewport,
-          );
-
-    scrollContainerElement.scrollTo({
-      behavior: resolveScrollBehavior('smooth'),
-      top: targetTop,
-    });
-  }
+  // No rect means no layout (a hidden pane): nothing to measure or scroll by.
+  const annotationRect = scrollContainerElement ? measureAnnotation(getRanges) : undefined;
+  if (scrollContainerElement && annotationRect)
+    scrollRectIntoScrollContainer(annotationRect, scrollContainerElement);
 
   return annotationElement;
+}
+
+/**
+ * Scrolls the text so a note's caller is visible.
+ *
+ * @param noteElement The note's element in the Scripture editor (`EditorRef.getElementByKey` of the
+ *   note's key) - resolved by key rather than by a document query, since every mounted editor (the
+ *   footnotes pane's row editor, the note popover's) renders note elements of its own
+ */
+export function scrollToNoteCaller(noteElement: HTMLElement): void {
+  scrollElementIntoScrollContainer(noteElement);
+}
+
+/**
+ * Finds the element {@link keepScrollPositionAcross} anchors its restore to: the first verse marker
+ * whose top edge is inside the scroll container's visible area, so the reader's place is kept to
+ * the verse even inside a long paragraph that re-wraps. With no such verse (a view scrolled into
+ * one verse longer than the view, or a text with no verse markers), it is the first direct child of
+ * the editor's content-editable root (`.editor-input`, or `textElement` itself when no such root
+ * exists inside it) whose bottom edge is below the scroll container's top edge — the topmost
+ * paragraph not yet fully scrolled past.
+ *
+ * @param textElement The element `keepScrollPositionAcross` was asked to keep in place
+ * @param scrollContainer Its scroll container
+ * @returns The anchor element, or `undefined` when none qualifies
+ */
+function findScrollAnchorElement(
+  textElement: HTMLElement,
+  scrollContainer: HTMLElement,
+): HTMLElement | undefined {
+  const contentRoot = textElement.querySelector<HTMLElement>('.editor-input') ?? textElement;
+  const { top: containerTop, bottom: containerBottom } = scrollContainer.getBoundingClientRect();
+  const verse = Array.from(contentRoot.querySelectorAll<HTMLElement>('span[data-marker="v"]')).find(
+    (verseElement) => {
+      const { top, height } = verseElement.getBoundingClientRect();
+      return height > 0 && top >= containerTop && top < containerBottom;
+    },
+  );
+  if (verse) return verse;
+  return Array.from(contentRoot.children).find(
+    (child): child is HTMLElement =>
+      child instanceof HTMLElement && child.getBoundingClientRect().bottom > containerTop,
+  );
+}
+
+/**
+ * Runs `action`, then puts the scroll container of `textElement` back where it was before it ran.
+ *
+ * For handing focus back to the text without moving the reader's view: the editor engine scrolls
+ * the caret into view on every focus, so focusing the text after the reader has scrolled away from
+ * the caret would otherwise carry the view back to the caret. The engine commits (and scrolls) on a
+ * microtask, so the position is put back on the next animation frame, which runs before that frame
+ * is painted.
+ *
+ * Anchored to the text rather than a bare pixel offset, because `action` can itself change the text
+ * panel's width (e.g. a footnotes pane opening or closing beside it instead of below it), and a
+ * width change re-wraps the text, so the raw `scrollTop` captured beforehand would land on a
+ * different passage. The anchor (the first verse whose top is in view, see
+ * {@link findScrollAnchorElement}) has its content-space position read before and after `action`
+ * (via {@link getTopWithinScrollContainer}, which does not depend on the current `scrollTop`), and
+ * the restored `scrollTop` is shifted by however far re-wrapping moved it, so the anchor lands at
+ * the same screen offset either way. When nothing re-wraps, the anchor does not move and this is a
+ * plain pixel restore.
+ *
+ * @param textElement An element inside the text whose scroll position to keep (e.g. its
+ *   `.editor-container`); when it has no scroll container, `action` simply runs
+ * @param action What to run, e.g. focusing the text or toggling the footnotes pane
+ */
+export function keepScrollPositionAcross(
+  textElement: HTMLElement | undefined,
+  action: () => void,
+): void {
+  if (!textElement) {
+    action();
+    return;
+  }
+  const scrollContainer = findScrollContainer(textElement);
+  if (!scrollContainer) {
+    action();
+    return;
+  }
+
+  const { scrollTop } = scrollContainer;
+  const anchor = findScrollAnchorElement(textElement, scrollContainer);
+  const anchorContentTop = anchor
+    ? getTopWithinScrollContainer(anchor.getBoundingClientRect(), scrollContainer)
+    : undefined;
+
+  action();
+
+  requestAnimationFrame(() => {
+    if (anchor === undefined || anchorContentTop === undefined || !anchor.isConnected) {
+      scrollContainer.scrollTop = scrollTop;
+      return;
+    }
+    const newAnchorContentTop = getTopWithinScrollContainer(
+      anchor.getBoundingClientRect(),
+      scrollContainer,
+    );
+    scrollContainer.scrollTop = scrollTop + (newAnchorContentTop - anchorContentTop);
+  });
+}
+
+/**
+ * Attribute that marks the footnotes pane's own element, so a query for one of its rows cannot
+ * reach another list in the document (a portalled menu's options are `role="option"` too).
+ */
+export const FOOTNOTES_PANE_ATTRIBUTE = 'data-footnotes-pane';
+
+/**
+ * Puts DOM focus on the footnotes pane's selected row, which is where a row-editing session was
+ * opened from. Call it after ending a session from inside the row editor (Escape): the editor is
+ * unmounting, so without this focus falls to the document body and the next keystroke goes
+ * nowhere.
+ *
+ * Does nothing while this document does not hold focus. A session can also end because the chapter
+ * changed under it, driven from the toolbar or another view, and focusing a row then would pull
+ * focus out of wherever the user is working.
+ *
+ * @returns The selected row element, or `undefined` when the pane has no selected row or the
+ *   document does not hold focus
+ */
+export function focusPaneSelectedRow(): HTMLElement | undefined {
+  if (!document.hasFocus()) return undefined;
+  const row =
+    document.querySelector<HTMLElement>(
+      `[${FOOTNOTES_PANE_ATTRIBUTE}] [role="option"][aria-selected="true"]`,
+    ) ?? undefined;
+  row?.focus();
+
+  return row;
 }
 
 /**
@@ -913,6 +1117,15 @@ export function hasNewScrollTarget(
     lastScrolledFor.scrRef.verseNum !== scrRef.verseNum
   );
 }
+
+/**
+ * Time in ms to delay taking action to wait for the editor to load. Hope to be obsoleted by a way
+ * to listen for the editor to finish loading
+ *
+ * This is best used for when the editor is transitioning between loads. For the first time the
+ * editor loads, use {@link runOnFirstLoad} instead
+ */
+export const EDITOR_LOAD_DELAY_TIME = 200;
 
 /**
  * Max ms to wait for a verse scroll to become possible before giving up — the rAF retry in the

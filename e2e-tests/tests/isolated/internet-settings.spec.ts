@@ -4,21 +4,40 @@
  * Covers:
  *
  * - Opening via profile popover
- * - Radio row visibility (2 active with descriptions, 3 coming-soon with badges)
+ * - Radio row visibility (2 active, 3 coming-soon with badges) and descriptions revealed from each
+ *   option's info button
+ * - Descriptions staying shut for a programmatic focus, which the panel takes on load
  * - Reset and Save and restart button state (disabled when no changes, enabled after change)
  * - Reset restores original selection (buttons become disabled again)
- * - Developer section expand/collapse
+ * - The server-selection control is gated: hidden on a plain click while on Production, shown after a
+ *   Shift+click, shown via Shift+Enter (keyboard equivalent), and shown on a plain click once the
+ *   persisted server is already something other than Production
+ * - The profile popover's server badge names the current server
  *
  * "Save and restart" is NOT tested here — it triggers a real app restart. onSaveAndRestart callback
- * wiring is covered by unit tests.
+ * wiring is covered by unit tests. The "already off Production" case below needs the persisted
+ * server changed without going through that button; see `setPersistedServer`'s doc comment for why
+ * that does not cross the same line.
  */
 import { test, expect } from '../../fixtures/isolated.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
 import {
+  descriptionTooltip,
+  discardChangesButton,
+  expandDeveloperSection,
   internetSettingsFrame,
+  internetUseRadio,
   openInternetSettings,
+  openInternetSettingsPanel,
   openUserProfilePopover,
+  optionInfoButton,
+  saveAndRestartButton,
   selectTheOtherConnectivityOption,
+  serverBadge,
+  serverBadgeTooltip,
+  serverTypeRadio,
+  setPersistedServer,
+  waitForSettingsLoaded,
 } from './internet-settings.page';
 
 test.describe('Internet & Connectivity settings', () => {
@@ -34,130 +53,248 @@ test.describe('Internet & Connectivity settings', () => {
 
     const frame = internetSettingsFrame(mainPage);
     await expect(frame.locator('h2')).toBeVisible({ timeout: 15_000 });
-    // %internetSettings_webView_title_2%
+    // Lowercase "connectivity" — this is %internetSettings_webView_title_2%, and toContainText is
+    // case-sensitive for plain strings.
     await expect(frame.locator('h2')).toContainText('Internet & connectivity');
-    await expect(frame.locator('p').first()).toContainText('only apply to the Paratext app');
+    await expect(frame.locator('p').first()).toContainText('apply only to Paratext 10 —');
   });
 
-  test('shows 2 active radio rows with descriptions and 3 coming-soon rows with badges', async ({
-    mainPage,
-  }) => {
+  // A key the panel asks for but the localization data no longer carries resolves to the bare
+  // `%key%` as a debug safety net, which the panel then renders verbatim. Asserting the ABSENCE of
+  // a retired English string cannot catch that — the raw key is absent too — so assert positively
+  // that nothing key-shaped reaches the screen.
+  //
+  // Opened with Shift held so the server section (and its own localization keys) renders — a plain
+  // click on Production leaves it hidden; see `computeCanEditServer`. Pinned to Production first
+  // (like the Shift+click/Shift+Enter tests below) so this still exercises that path on a machine
+  // already persisted off Production, where Shift would otherwise do nothing observable.
+  test('renders no unresolved localization keys', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
-    await openInternetSettings(mainPage);
+    const originalServer = await setPersistedServer(mainPage, 'Production');
 
-    const frame = internetSettingsFrame(mainPage);
-    await expect(frame.locator('h2')).toBeVisible({ timeout: 15_000 });
+    try {
+      await openInternetSettings(mainPage, { shiftKey: true });
+      const frame = internetSettingsFrame(mainPage);
+      await waitForSettingsLoaded(frame);
+      await expandDeveloperSection(frame);
 
-    // Active rows have enabled radio buttons
-    await expect(frame.getByRole('radio', { name: 'Unrestricted' })).toBeEnabled({
-      timeout: 10_000,
-    });
+      const text = await frame.locator('body').innerText();
+      expect(text).not.toMatch(/%[a-zA-Z0-9_]+%/);
+      // Positive control: this corpus is the panel's real text, not an empty string that would
+      // satisfy the assertion above no matter what.
+      expect(text).toContain('Internet & connectivity');
+    } finally {
+      await setPersistedServer(mainPage, originalServer);
+    }
+  });
+
+  test('shows 2 active radio rows and 3 coming-soon rows with badges', async ({ mainPage }) => {
+    const frame = await openInternetSettingsPanel(mainPage);
+    await waitForSettingsLoaded(frame);
+
+    // Both active rows have enabled radio buttons
+    await expect(internetUseRadio(frame, 'Unrestricted')).toBeEnabled();
     await expect(
-      frame.getByRole('radio', { name: /Disable access to some Bible translation services/ }),
+      internetUseRadio(frame, /Disable access to some Bible translation services/),
     ).toBeEnabled();
 
-    // Active rows have always-visible description text (no hover required)
-    await expect(
-      frame.getByText(/Allows Paratext to use the internet for all services/),
-    ).toBeVisible();
-    await expect(frame.getByText(/Disables access to Registry, Send\/Receive/)).toBeVisible();
+    // Each description still reaches the panel, but only as the screen-reader copy — never as body
+    // copy, and no tooltip is open until an info button is used. (`sr-only` is a 1x1 clipped
+    // box that Playwright counts as visible, so assert on element type rather than visibility.)
+    const enabledDescription = /Allows Paratext to use the internet for all services/;
+    await expect(frame.getByText(enabledDescription)).toHaveCount(1);
+    await expect(frame.locator('p').filter({ hasText: enabledDescription })).toHaveCount(0);
+    await expect(descriptionTooltip(frame)).toHaveCount(0);
 
     // Coming-soon rows have disabled radio buttons
     // %paratextRegistration_description_internetUse_option_Disabled_2%
-    await expect(frame.getByRole('radio', { name: 'Disable all Internet access' })).toBeDisabled();
+    await expect(internetUseRadio(frame, 'Disable all Internet access')).toBeDisabled();
     await expect(
-      frame.getByRole('radio', { name: /Block internet when in sensitive locations/ }),
+      internetUseRadio(frame, /Block internet when in sensitive locations/),
     ).toBeDisabled();
-    await expect(frame.getByRole('radio', { name: /Configure proxy/ })).toBeDisabled();
+    await expect(internetUseRadio(frame, /Configure proxy/)).toBeDisabled();
 
     // Three "Coming soon" badges appear
     await expect(frame.getByText('Coming soon')).toHaveCount(3);
 
-    // Footer text is present
-    await expect(frame.getByText(/Disabled options are planned for future updates/)).toBeVisible();
+    // The per-row "Coming soon" badges above are the only marker of the unavailable options; the
+    // list carries no footer note, which also keeps the first-run wizard's Next button in view.
+    await expect(frame.getByText(/Disabled options are planned for future updates/)).toHaveCount(0);
+  });
+
+  // The panel focuses the checked radio once its fetch resolves. Descriptions open only from each
+  // option's info button, so that load-time focus must reveal nothing — asserted in a real browser,
+  // since how Radix and Chromium treat a programmatic focus is exactly what jsdom cannot reproduce.
+  test('a programmatic focus on a radio reveals no tooltip', async ({ mainPage }) => {
+    const frame = await openInternetSettingsPanel(mainPage);
+    await waitForSettingsLoaded(frame);
+
+    // Reproduce the panel's own call rather than waiting on its load focus, whose target depends on
+    // whichever option this machine has persisted.
+    const radio = internetUseRadio(frame, 'Unrestricted');
+    await radio.evaluate((el) => el.focus());
+    await expect(radio).toBeFocused();
+
+    // Focus opens a Radix tooltip with no delay, so waiting out the hover delay leaves no window in
+    // which one could still appear.
+    await mainPage.waitForTimeout(500);
+    await expect(descriptionTooltip(frame)).toHaveCount(0);
+  });
+
+  test("hovering an option's info button reveals its description in a tooltip", async ({
+    mainPage,
+  }) => {
+    const frame = await openInternetSettingsPanel(mainPage);
+    await waitForSettingsLoaded(frame);
+
+    // Nothing is revealed until the pointer settles on an info button.
+    await expect(descriptionTooltip(frame)).toHaveCount(0);
+
+    await optionInfoButton(frame, /Allows Paratext to use the internet for all services/).hover();
+
+    // toBeVisible, not just present: this is the assertion that would catch the tooltip painting
+    // behind a higher-stacking ancestor.
+    await expect(descriptionTooltip(frame)).toBeVisible();
+    await expect(descriptionTooltip(frame)).toContainText(
+      /Allows Paratext to use the internet for all services/,
+    );
   });
 
   test('Reset and Save and restart are disabled until settings load and change is made', async ({
     mainPage,
   }) => {
-    await waitForAppReady(mainPage);
-    await openInternetSettings(mainPage);
+    const frame = await openInternetSettingsPanel(mainPage);
+    await waitForSettingsLoaded(frame);
 
-    const frame = internetSettingsFrame(mainPage);
-    await expect(frame.locator('h2')).toBeVisible({ timeout: 15_000 });
-
-    // Wait for the form to finish loading (buttons become present but disabled)
-    const saveButton = frame.getByRole('button', { name: 'Save and restart' });
-    const resetButton = frame.getByRole('button', { name: 'Discard changes' });
-
-    await expect(saveButton).toBeDisabled({ timeout: 10_000 });
-    await expect(resetButton).toBeDisabled();
+    // Loaded and unmodified: both buttons are rendered but disabled.
+    await expect(saveAndRestartButton(frame)).toBeDisabled();
+    await expect(discardChangesButton(frame)).toBeDisabled();
   });
 
   test('selecting a different option enables Reset and Save and restart', async ({ mainPage }) => {
-    await waitForAppReady(mainPage);
-    await openInternetSettings(mainPage);
-
-    const frame = internetSettingsFrame(mainPage);
-    await expect(frame.locator('h2')).toBeVisible({ timeout: 15_000 });
-
-    const saveButton = frame.getByRole('button', { name: 'Save and restart' });
-    const resetButton = frame.getByRole('button', { name: 'Discard changes' });
-    await expect(saveButton).toBeDisabled({ timeout: 10_000 });
+    const frame = await openInternetSettingsPanel(mainPage);
+    await waitForSettingsLoaded(frame);
 
     await selectTheOtherConnectivityOption(frame);
 
-    await expect(saveButton).toBeEnabled();
-    await expect(resetButton).toBeEnabled();
+    await expect(saveAndRestartButton(frame)).toBeEnabled();
+    await expect(discardChangesButton(frame)).toBeEnabled();
   });
 
   test('Reset button restores original selection and disables both buttons', async ({
     mainPage,
   }) => {
-    await waitForAppReady(mainPage);
-    await openInternetSettings(mainPage);
-
-    const frame = internetSettingsFrame(mainPage);
-    await expect(frame.locator('h2')).toBeVisible({ timeout: 15_000 });
-
-    const saveButton = frame.getByRole('button', { name: 'Save and restart' });
-    const resetButton = frame.getByRole('button', { name: 'Discard changes' });
-    await expect(saveButton).toBeDisabled({ timeout: 10_000 });
+    const frame = await openInternetSettingsPanel(mainPage);
+    await waitForSettingsLoaded(frame);
 
     // Change selection
     const originalOption = await selectTheOtherConnectivityOption(frame);
     await expect(originalOption).not.toBeChecked();
-    await expect(saveButton).toBeEnabled();
+    await expect(saveAndRestartButton(frame)).toBeEnabled();
 
     // Click Reset — should restore original state
-    await resetButton.click();
+    await discardChangesButton(frame).click();
 
     // The selection the panel loaded with comes back, and with no unsaved changes left both
     // buttons disable again. The selection assertion is what makes this a reset test rather than a
     // button-state test: clearing the dirty flag without restoring the radio would satisfy the
     // button assertions alone.
     await expect(originalOption).toBeChecked({ timeout: 5_000 });
-    await expect(saveButton).toBeDisabled({ timeout: 5_000 });
-    await expect(resetButton).toBeDisabled();
+    await expect(saveAndRestartButton(frame)).toBeDisabled({ timeout: 5_000 });
+    await expect(discardChangesButton(frame)).toBeDisabled();
   });
 
-  test('developer section is collapsed by default and expands on click', async ({ mainPage }) => {
+  // The server-selection control is hidden unless the user held Shift while opening the panel, or
+  // the persisted server is already something other than Production — the friction only guards
+  // leaving Production. See `computeCanEditServer`.
+  test('a plain click while on Production opens the dialog with no server section', async ({
+    mainPage,
+  }) => {
     await waitForAppReady(mainPage);
-    await openInternetSettings(mainPage);
+    // Seeded rather than assumed: a developer machine can legitimately be persisted on QA.
+    const originalServer = await setPersistedServer(mainPage, 'Production');
 
-    const frame = internetSettingsFrame(mainPage);
-    await expect(frame.locator('h2')).toBeVisible({ timeout: 15_000 });
+    try {
+      const frame = await openInternetSettingsPanel(mainPage);
+      await waitForSettingsLoaded(frame);
 
-    // Toggle items are not visible initially
-    await expect(frame.getByTestId('server-type-production')).not.toBeVisible({ timeout: 5_000 });
+      await expect(frame.getByRole('button', { name: /Developer only/ })).not.toBeVisible();
+    } finally {
+      await setPersistedServer(mainPage, originalServer);
+    }
+  });
 
-    // Click the Developer only header
-    await frame.getByRole('button', { name: /Developer only/ }).click();
+  test('a Shift+click while on Production opens the dialog with the server section visible', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
+    // Seeded rather than assumed: a developer machine can legitimately be persisted on QA, where
+    // the server section would already be visible without Shift and the test would pass even if
+    // the Shift gesture did nothing.
+    const originalServer = await setPersistedServer(mainPage, 'Production');
 
-    // Toggle items become visible
-    await expect(frame.getByTestId('server-type-production')).toBeVisible({ timeout: 5_000 });
-    await expect(frame.getByTestId('server-type-quality-assurance')).toBeVisible();
-    await expect(frame.getByTestId('server-type-development')).toBeVisible();
-    await expect(frame.getByTestId('server-type-test')).toBeVisible();
+    try {
+      await openInternetSettings(mainPage, { shiftKey: true });
+      const frame = internetSettingsFrame(mainPage);
+      await waitForSettingsLoaded(frame);
+
+      await expandDeveloperSection(frame);
+      await expect(serverTypeRadio(frame, 'production')).toBeVisible();
+    } finally {
+      await setPersistedServer(mainPage, originalServer);
+    }
+  });
+
+  test('Shift+Enter on the focused row reveals the server section, matching Shift+click', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
+    // Seeded rather than assumed: a developer machine can legitimately be persisted on QA, where
+    // the server section would already be visible without Shift and the test would pass even if
+    // the Shift gesture did nothing.
+    const originalServer = await setPersistedServer(mainPage, 'Production');
+
+    try {
+      await openInternetSettings(mainPage, { shiftKey: true, activation: 'keyboard' });
+
+      const frame = internetSettingsFrame(mainPage);
+      await waitForSettingsLoaded(frame);
+      await expandDeveloperSection(frame);
+      await expect(serverTypeRadio(frame, 'production')).toBeVisible();
+    } finally {
+      await setPersistedServer(mainPage, originalServer);
+    }
+  });
+
+  // Complements the "while on Production" case above: once the persisted server is already
+  // something else, no modifier is needed — the friction only guards leaving Production.
+  test('a plain click while already off Production opens the dialog already unlocked, and the badge names the new server', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
+    const originalServer = await setPersistedServer(mainPage, 'QualityAssurance');
+
+    try {
+      // Reading the popover's own badge (rather than only the dialog) also pins that the badge
+      // reflects a live, non-default server — not just a hardcoded "production" default.
+      // Retried as a whole for the same reason `openInternetSettings` is: a dock rebuild can take
+      // the open popover, and the badge with it, down between the hover and the assertion.
+      await expect(async () => {
+        await openUserProfilePopover(mainPage);
+        const badge = serverBadge(mainPage);
+        await expect(badge).toHaveText('QA', { timeout: 2_000 });
+        await badge.hover({ timeout: 5_000 });
+        await expect(serverBadgeTooltip(mainPage)).toBeVisible({ timeout: 5_000 });
+      }).toPass({ timeout: 30_000 });
+      await expect(serverBadgeTooltip(mainPage)).toContainText('Quality assurance server');
+
+      // Reopens the popover if the hover or a dock rebuild closed it, and retries the click.
+      await openInternetSettings(mainPage);
+      const frame = internetSettingsFrame(mainPage);
+      await waitForSettingsLoaded(frame);
+      await expect(frame.getByRole('button', { name: /Developer only/ })).toBeVisible();
+    } finally {
+      await setPersistedServer(mainPage, originalServer);
+    }
   });
 });

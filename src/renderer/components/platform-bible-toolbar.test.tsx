@@ -41,7 +41,10 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%toolbar_sync_open_status%': 'Test Sync status',
       '%toolbar_sync_status_synced%': 'Test Synced',
       '%toolbar_sync_status_syncing%': 'Test Syncing',
+      '%toolbar_sync_popover_unsynced_receive%': 'Test Changes to receive:',
+      '%toolbar_sync_popover_unsynced_send%': 'Test Changes to send:',
       '%toolbar_sync_status_unknown%': 'Test Sync status unavailable',
+      '%toolbar_sync_status_unsynced%': 'Test Unsynced changes',
       '%mainMenu_openHome%': 'Home',
       '%projectPicker_no_results%': 'Test no projects found',
       '%projectPicker_readOnly_label%': 'Test read-only',
@@ -415,9 +418,9 @@ describe('PlatformBibleToolbar — Sync button', () => {
 
   it('is rendered despite unavailable send/receive once the backend reports a sync', async () => {
     // Syncs also start from paths that never touch the send/receive extension — `startup-tasks.ts`
-    // calls the dotnet `syncProjects` command directly. In Simple mode the persistent toast is
-    // suppressed in favour of this indicator, so hiding it on a settled `false` would leave a real,
-    // multi-minute sync with no surface and no way to cancel.
+    // calls the dotnet `syncProjects` command directly. In Simple mode that call suppresses the
+    // dotnet progress toast in favour of this indicator, so hiding it on a settled `false` would
+    // leave a real, multi-minute sync with no surface and no way to cancel.
     vi.mocked(useSendReceiveAvailability).mockReturnValue(false);
     mockSendCommand(false);
     render(<PlatformBibleToolbar />);
@@ -1917,5 +1920,80 @@ describe('PlatformBibleToolbar — project selector accessible name', () => {
     expect(requireCapturedProjectSelectorProps().localizedStrings?.ariaLabel).toBe(
       'Test select a project, no projects',
     );
+  });
+});
+
+describe('PlatformBibleToolbar — unsupported reason localization', () => {
+  const SBA_REASON_KEY = '%project_unsupported_studyBibleAdditions%';
+  const OTHER_REASON_KEY = '%project_unsupported_other%';
+
+  let defaultPickerData: (() => ProjectPickerData) | undefined;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    mockSendCommand(true);
+    const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
+    defaultPickerData ??= vi.mocked(useProjectPickerData).getMockImplementation();
+  });
+
+  afterEach(async () => {
+    const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
+    if (defaultPickerData) vi.mocked(useProjectPickerData).mockImplementation(defaultPickerData);
+  });
+
+  /** Answers every picker-data read with new list identities, as each refresh does. */
+  async function answerWithNewLists(makeAllProjects: () => ProjectPickerData['allProjects']) {
+    const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
+    vi.mocked(useProjectPickerData).mockImplementation(() => ({
+      currentSimpleProject: undefined,
+      recentProjects: [],
+      allProjects: makeAllProjects(),
+      currentSimpleProjectError: undefined,
+      isLoading: false,
+    }));
+  }
+
+  /** The key lists `useLocalizedStrings` received that `matches` picks out. */
+  async function requestedKeyLists(matches: (keys: string[]) => boolean) {
+    const { useLocalizedStrings } = await import('@renderer/hooks/papi-hooks');
+    return vi
+      .mocked(useLocalizedStrings)
+      .mock.calls.map(([keys]) => keys)
+      .filter(matches);
+  }
+
+  it('keeps one reason key list across refreshes that bring the same reasons', async () => {
+    let isReversed = false;
+    await answerWithNewLists(() => {
+      const projects = [
+        { id: 'sba', shortName: 'SBA', fullName: 'SBA', unsupportedReason: SBA_REASON_KEY },
+        { id: 'oth', shortName: 'OTH', fullName: 'Other', unsupportedReason: OTHER_REASON_KEY },
+        { id: 'ok', shortName: 'OK', fullName: 'Openable' },
+      ];
+      return isReversed ? projects.reverse() : projects;
+    });
+    const { rerender } = render(<PlatformBibleToolbar />);
+    await screen.findByTestId('project-selector-stub');
+
+    isReversed = true;
+    rerender(<PlatformBibleToolbar />);
+
+    const reasonKeyLists = await requestedKeyLists((keys) => keys.includes(SBA_REASON_KEY));
+    expect(reasonKeyLists.length).toBeGreaterThan(1);
+    expect(reasonKeyLists[0]).toHaveLength(2);
+    reasonKeyLists.forEach((keys) => expect(keys).toBe(reasonKeyLists[0]));
+  });
+
+  it('keeps one empty key list across refreshes when no project has a reason', async () => {
+    await answerWithNewLists(() => [{ id: 'ok', shortName: 'OK', fullName: 'Openable' }]);
+    const { rerender } = render(<PlatformBibleToolbar />);
+    await screen.findByTestId('project-selector-stub');
+
+    rerender(<PlatformBibleToolbar />);
+
+    const emptyKeyLists = await requestedKeyLists((keys) => keys.length === 0);
+    expect(emptyKeyLists.length).toBeGreaterThan(1);
+    emptyKeyLists.forEach((keys) => expect(keys).toBe(emptyKeyLists[0]));
   });
 });

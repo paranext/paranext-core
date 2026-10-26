@@ -158,6 +158,17 @@ and why every escape instrument is pinned.
 - An exception is pinned to one text hash, so the block returns the moment the package changes its
   license text — and the entry has to be reviewed again. `version` records what the determination
   was read against; it does not gate.
+- An exception recording a conjunction records `copyrightByOperand`, so each operand's canonical
+  text is credited to the holder that grants it rather than to whichever notice the package's
+  license file states first. Copy each notice from the pinned file whole lines at a time, never
+  across a blank line, and separate several with `; `; credit every notice the file states, even
+  one for code the package does not ship today. An operand with no key is printed as having no
+  notice, and `{}` says that of every operand. A notice the license file does not state - `pako`'s
+  zlib notices, in `lib/zlib/README` - may be copied from a file listed in `creditFiles`. The gate
+  compares each credit with those files' lines and refuses one it does not find. It does not judge
+  which lines are notices, so whether a credit is the whole notice, the right operand's, and
+  complete is the reviewer's call. The field is refused on a single identifier, where it would
+  never print.
 - Only one `exceptions` entry per package. Re-review edits the entry in place; appending a second
   leaves the stale one in force, and `loadPolicy` refuses the file.
 

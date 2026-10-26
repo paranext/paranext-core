@@ -15,7 +15,7 @@ import type {
   OpenCommentListWebViewOptions,
   ScopeFilter,
 } from 'legacy-comment-manager';
-import { serialize } from 'platform-bible-utils';
+import { getErrorMessage, serialize } from 'platform-bible-utils';
 import commentListWebView from './comment-list.web-view?inline';
 import tailwindStyles from './tailwind.css?inline';
 import { presetToLabelKey, scopeFilterToLabelKey } from './comment-list-filters.model';
@@ -170,21 +170,130 @@ async function openCommentListPanel(projectId: string | undefined): Promise<stri
 }
 
 /**
- * Selects/scrolls to a specific thread in the fixed Column 3 Comment List panel — without reloading
- * the panel. Reloading (as {@link openCommentListPanel} does) remounts the panel's React root, which
- * would discard any in-progress inline edit; this function assumes the panel is already showing the
- * right project (it does not accept a `projectId`) and only changes which thread is selected and,
- * optionally, which tab is in front.
+ * Raises an open tab of the requested type without reloading it, and creates nothing when none is
+ * open. Mirrors `showOrCreateTab` in
+ * `extensions/src/platform-scripture-editor/src/show-panel.util.ts`, which the scripture editor's
+ * other Simple Tools items use; keep the two in step so every Tools item raises its tab the same
+ * way.
+ */
+const RAISE_EXISTING_TAB_ONLY: OpenWebViewOptions = {
+  existingId: '?',
+  createNewIfNotFound: false,
+  bringToFront: true,
+};
+
+/**
+ * Brings the Comments tab to the front, the way clicking it would. An open tab is raised, never
+ * reloaded, so an in-progress comment edit survives. If no tab is open, opens one for the editor's
+ * project.
+ *
+ * @param editorWebViewId The scripture editor the request came from
+ * @returns The Comments web view's ID, or `undefined` if it couldn't be shown
+ */
+async function showCommentListPanel(
+  editorWebViewId: string | undefined,
+): Promise<string | undefined> {
+  const existingId = await papi.webViews.openWebView(
+    commentListPanelWebViewType,
+    undefined,
+    RAISE_EXISTING_TAB_ONLY,
+  );
+  if (existingId) return existingId;
+  let projectId: string | undefined;
+  if (editorWebViewId) {
+    // getOpenWebViewDefinition throws if no window claimed the web view and some window could not be
+    // asked. That is not this command's problem to fail over — degrade to "no project id" so a new
+    // Comments tab still opens, unlabeled, rather than rejecting the whole show request.
+    try {
+      projectId = (await papi.webViews.getOpenWebViewDefinition(editorWebViewId))?.projectId;
+    } catch (e) {
+      logger.warn(
+        `Could not resolve the project for web view ${editorWebViewId}: ${getErrorMessage(e)}`,
+      );
+    }
+  }
+  const openOptions: CommentListPanelOptions = { projectId };
+  return papi.webViews.openWebView(commentListPanelWebViewType, { type: 'tab' }, openOptions);
+}
+
+/**
+ * Points the Column 3 Comment List panel at the editor's project when it is showing a different
+ * one, by reloading it with that project in the reload's options (which the panel's provider
+ * reads). Otherwise a thread from that editor can't be found in the panel. Reloading remounts the
+ * panel, so it happens only on a mismatch. If either project can't be resolved, the panel is left
+ * as it is.
+ *
+ * @param panelWebViewId The ID of the open Column 3 Comment List panel
+ * @param editorWebViewId The scripture editor whose project the panel should show
+ * @throws If the panel shows another project and reloading it onto the editor's project fails
+ */
+async function showEditorProjectInCommentListPanel(
+  panelWebViewId: string,
+  editorWebViewId: string,
+): Promise<void> {
+  let editorProjectId: string | undefined;
+  let panelProjectId: string | undefined;
+  try {
+    const [editorDefinition, panelDefinition] = await Promise.all([
+      papi.webViews.getOpenWebViewDefinition(editorWebViewId),
+      papi.webViews.getOpenWebViewDefinition(panelWebViewId),
+    ]);
+    editorProjectId = editorDefinition?.projectId;
+    panelProjectId = panelDefinition?.projectId;
+  } catch (e) {
+    logger.warn(
+      `Could not compare the projects of web view ${editorWebViewId} and the Comment List panel: ${getErrorMessage(e)}`,
+    );
+    return;
+  }
+  if (!editorProjectId || editorProjectId === panelProjectId) return;
+
+  // `reloadWebView` hands its options to the panel's provider as `openWebViewOptions`, so the project
+  // travels with this one reload instead of through the module-level pending slot, which a
+  // concurrent project switch also writes.
+  const reloadOptions: CommentListPanelOptions = {
+    projectId: editorProjectId,
+    // The caller's probe already raised the tab if it was asked to
+    bringToFront: false,
+  };
+  let failure: string | undefined;
+  try {
+    const reloadedWebViewId = await papi.webViews.reloadWebView(
+      commentListPanelWebViewType,
+      panelWebViewId,
+      reloadOptions,
+    );
+    if (!reloadedWebViewId) failure = 'the reload returned no web view';
+  } catch (e) {
+    failure = getErrorMessage(e);
+  }
+  if (failure)
+    throw new Error(
+      `Could not point the Comment List panel at project ${editorProjectId}: ${failure}`,
+    );
+}
+
+/**
+ * Selects/scrolls to a specific thread in the fixed Column 3 Comment List panel. The panel is
+ * reloaded only when `editorWebViewId` is given and the panel shows a different project; reloading
+ * remounts the panel's React root, which discards any in-progress inline edit. Otherwise this only
+ * changes which thread is selected and, optionally, which tab is in front.
  *
  * This implements the `legacyCommentManager.selectCommentThreadInPanel` command.
  *
  * @param threadId The ID of the thread to select and scroll to in the panel
  * @param bringToFront Whether to also bring the panel's tab to the front
+ * @param editorWebViewId The scripture editor the thread belongs to. If given, the panel is first
+ *   pointed at that editor's project when it shows another one. If omitted, the panel is assumed to
+ *   show the right project already.
  * @returns The webView ID of the panel, or `undefined` if it isn't open in the current layout
+ * @throws If the panel shows another project and can't be pointed at the editor's project, since
+ *   the thread can't be found there and selecting it would leave the panel waiting for it
  */
 async function selectCommentThreadInPanel(
   threadId: string,
   bringToFront: boolean,
+  editorWebViewId?: string,
 ): Promise<string | undefined> {
   // Same existingId: '?' probe openCommentListPanel uses to find the singleton Column 3 panel.
   const panelWebViewId = await papi.webViews.openWebView(
@@ -195,6 +304,8 @@ async function selectCommentThreadInPanel(
   if (!panelWebViewId) {
     throw new Error('Comment List Panel is not open in the current layout');
   }
+
+  if (editorWebViewId) await showEditorProjectInCommentListPanel(panelWebViewId, editorWebViewId);
 
   const panelController = await papi.webViews.getWebViewController(
     commentListPanelWebViewType,
@@ -386,10 +497,40 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
             summary: "Whether to also bring the panel's tab to the front",
             schema: { type: 'boolean' },
           },
+          {
+            name: 'editorWebViewId',
+            required: false,
+            summary:
+              "The ID of the scripture editor web view the thread belongs to. If given and the panel shows another project, the panel is first reloaded onto the editor's project",
+            schema: { type: 'string' },
+          },
         ],
         result: {
           name: 'return value',
           summary: 'The webView ID of the panel',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
+  const showCommentListPanelPromise = papi.commands.registerCommand(
+    'legacyCommentManager.showCommentListPanel',
+    showCommentListPanel,
+    {
+      method: {
+        summary: 'Bring the Comments tab to the front, opening it if it is not open',
+        params: [
+          {
+            name: 'editorWebViewId',
+            required: false,
+            summary: 'The scripture editor the request came from',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the Comments web view, or undefined if it could not be shown',
           schema: { type: 'string' },
         },
       },
@@ -469,8 +610,9 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
                 // OpenRPC contract honest about what the shim actually accepts.
                 enum: [...Object.keys(scopeFilterToLabelKey), 'unfiltered'],
                 description:
-                  'Scope to pre-apply; omitting it resets scope to all-books. Also accepts the ' +
-                  "deprecated 'unfiltered' value, which maps to all-books.",
+                  'Scope to pre-apply. Omitting it resets scope to all-books when filtersToSet ' +
+                  'is given; an open with neither uses the stored scope, or current-chapter. ' +
+                  "Also accepts the deprecated 'unfiltered' value, which maps to all-books.",
               },
             },
           },
@@ -494,6 +636,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await openCommentListPromise,
     await openCommentListPanelPromise,
     await selectCommentThreadInPanelPromise,
+    await showCommentListPanelPromise,
     await commentsUsjPdpefPromise,
   );
 

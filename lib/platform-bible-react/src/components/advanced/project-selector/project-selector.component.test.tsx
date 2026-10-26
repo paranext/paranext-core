@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { useState } from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import {
@@ -1309,6 +1309,70 @@ describe('ProjectSelector — project name display', () => {
   });
 });
 
+describe('ProjectSelector — per-row disabled', () => {
+  const PROJECTS_WITH_DISABLED: ProjectSelectorProject[] = [
+    { id: 'first', shortName: 'FIRST', fullName: 'First enabled project' },
+    {
+      id: 'locked',
+      shortName: 'LOCKED',
+      fullName: 'A locked project',
+      isDisabled: true,
+      disabledReason: 'Cannot be opened here',
+    },
+    { id: 'last', shortName: 'LAST', fullName: 'Last enabled project' },
+  ];
+
+  function renderWithDisabledRow() {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={PROJECTS_WITH_DISABLED}
+        openTabs={[]}
+        selection={{ projectId: undefined }}
+        onChangeSelection={vi.fn()}
+        localizedStrings={HARNESS_STRINGS}
+      />,
+    );
+  }
+
+  it('shows the disabled reason in text readable on the tooltip bubble', async () => {
+    const user = setupUser();
+    renderWithDisabledRow();
+    await user.click(screen.getByRole('combobox', { name: /^Project/ }));
+
+    await user.hover(screen.getByText('A locked project'));
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Cannot be opened here');
+
+    // The tooltip bubble inverts the theme (`bg-foreground`), so muted text on it is unreadable;
+    // the reason line inherits the bubble's text color like its sibling secondary lines. The row's
+    // own `hidden` copy of the reason, which only screen readers read, is not a tooltip line.
+    const reasonLines = screen
+      .getAllByText('Cannot be opened here')
+      .filter((reasonLine) => !reasonLine.hidden);
+    expect(reasonLines.length).toBeGreaterThan(0);
+    reasonLines.forEach((reasonLine) => {
+      expect(reasonLine).toHaveClass('tw:italic');
+      expect(reasonLine).not.toHaveClass('tw:text-muted-foreground');
+    });
+  });
+
+  it('does not move the highlight onto the disabled row when the pointer moves over it', async () => {
+    const user = setupUser();
+    renderWithDisabledRow();
+    await user.click(screen.getByRole('combobox', { name: /^Project/ }));
+
+    // Positive control: hovering an enabled row moves cmdk's highlight to it.
+    const lastRow = screen.getByRole('option', { name: /LAST/ });
+    await user.hover(lastRow);
+    expect(lastRow).toHaveAttribute('aria-selected', 'true');
+
+    const disabledRow = screen.getByRole('option', { name: /LOCKED/ });
+    await user.hover(disabledRow);
+    expect(disabledRow).toHaveAttribute('aria-selected', 'false');
+    expect(lastRow).toHaveAttribute('aria-selected', 'true');
+  });
+});
+
 describe('ProjectSelector — trigger accessible name', () => {
   it('names the selected project alongside the group label', () => {
     render(<ProjectSelectorHarness initialSelected="web" />);
@@ -1362,5 +1426,117 @@ describe('ProjectSelector — trigger accessible name', () => {
     // Simple-mode toolbar composes its own `ariaLabel` for exactly this reason. Matched exactly: a
     // prefix match would accept an appended selection this asserts is absent.
     expect(screen.getByRole('combobox', { name: 'Project' })).toBeInTheDocument();
+  });
+});
+
+describe('disabled rows', () => {
+  const REASON = 'Licensing terms prohibit using this text as a base.';
+  const projectsWithDisabled: ProjectSelectorProject[] = SAMPLE_PROJECTS.map((project) =>
+    project.id === 'web' ? { ...project, isDisabled: true, disabledReason: REASON } : project,
+  );
+
+  function renderWithDisabledRow() {
+    const onChangeSelection = vi.fn();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={projectsWithDisabled}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: undefined }}
+        onChangeSelection={onChangeSelection}
+        localizedStrings={HARNESS_STRINGS}
+      />,
+    );
+    return { onChangeSelection };
+  }
+
+  async function openAndFindRow(user: ReturnType<typeof setupUser>, shortName: string) {
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    const row = (await screen.findByText(shortName)).closest<HTMLElement>('[cmdk-item]');
+    if (!row) throw new Error(`${shortName} row not found`);
+    return row;
+  }
+
+  it('marks the row disabled and gives screen readers the reason as its description', async () => {
+    const user = setupUser();
+    renderWithDisabledRow();
+
+    const row = await openAndFindRow(user, 'WEB');
+
+    expect(row).toHaveAttribute('aria-disabled', 'true');
+    expect(row).toHaveAccessibleDescription(REASON);
+    expect(row).not.toHaveAccessibleName(expect.stringContaining(REASON));
+  });
+
+  it('shows the reason in a tooltip when the row is hovered', async () => {
+    const user = setupUser();
+    renderWithDisabledRow();
+
+    await user.hover(await openAndFindRow(user, 'WEB'));
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(REASON);
+  });
+
+  it('keeps receiving the pointer, so hovering it can open the tooltip in a real browser', async () => {
+    const user = setupUser();
+    renderWithDisabledRow();
+
+    const row = await openAndFindRow(user, 'WEB');
+
+    // jsdom applies no Tailwind CSS, so the `pointer-events` rule a disabled command item gets can
+    // only be observed through the classes that survive the merge.
+    expect(row.className).toContain('tw:data-[disabled=true]:pointer-events-auto');
+    expect(row.className).not.toContain('tw:data-[disabled=true]:pointer-events-none');
+  });
+
+  it('does not select the row when it is clicked', async () => {
+    const user = setupUser();
+    const { onChangeSelection } = renderWithDisabledRow();
+
+    await user.click(await openAndFindRow(user, 'WEB'));
+
+    expect(onChangeSelection).not.toHaveBeenCalled();
+  });
+
+  it('selects an enabled row when it is clicked', async () => {
+    const user = setupUser();
+    const { onChangeSelection } = renderWithDisabledRow();
+
+    await user.click(await openAndFindRow(user, 'ESVUS16'));
+
+    expect(onChangeSelection).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: 'esvus16' }),
+    );
+  });
+
+  it('offers no Open button on a disabled row whose selected tab is closed', async () => {
+    const user = setupUser();
+    render(
+      <ProjectSelector
+        mode="project-multi"
+        projects={projectsWithDisabled}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{
+          pairs: [
+            { projectId: 'web', scrollGroupId: 0 },
+            { projectId: 'esvus16', scrollGroupId: 1 },
+          ],
+        }}
+        onChangeSelection={vi.fn()}
+        onOpenProjectInGroup={vi.fn()}
+        localizedStrings={HARNESS_STRINGS}
+      />,
+    );
+
+    await user.click(screen.getByRole('combobox', { name: /^Project/ }));
+    // A project can be listed more than once (e.g. its bound-but-closed row and its not-open row).
+    const openButtonsIn = async (shortName: string) =>
+      (await screen.findAllByText(shortName)).flatMap((label) => {
+        const row = label.closest<HTMLElement>('[cmdk-item]');
+        return row ? within(row).queryAllByRole('button', { name: 'Open' }) : [];
+      });
+
+    expect(await openButtonsIn('ESVUS16')).toHaveLength(1);
+    expect(await openButtonsIn('WEB')).toHaveLength(0);
   });
 });

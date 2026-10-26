@@ -109,23 +109,28 @@ export type { VersionHistoryType } from './components/advanced/extension-marketp
 export { default as Footer } from './components/advanced/extension-marketplace/footer.component';
 export { default as Filter } from './components/advanced/filter.component';
 export type {
+  FootnoteCaretPosition,
   FootnoteItemProps,
   FootnoteLayout,
   FootnoteListProps,
 } from './components/advanced/footnotes/footnotes.types';
+export { getCaretPositionFromClick } from './components/advanced/footnotes/footnote-caret.utils';
 export {
   default as FootnoteEditor,
+  INLINE_APPLY_DEBOUNCE_MS,
+  type FootnoteEditorHandle,
   type FootnoteEditorProps,
-  type FootnoteEditorMarkerPalette,
-  markerMenuItemToPaletteItem,
 } from './components/advanced/footnote-editor/footnote-editor.component';
 // The marker-palette session/keydown/filter utilities are exported from `./experimental.ts` —
-// they are new, still-moving API surface.
+// they are new, still-moving API surface. `FootnoteEditorMarkerPalette` and
+// `markerMenuItemToPaletteItem` are there for the same reason: they arrived with the Standard View
+// port and are still moving, so they do not belong in this stable entry point.
 export {
   FOOTNOTE_EDITOR_STRING_KEYS,
   type FootnoteEditorLocalizedStrings,
   type FootnoteCallerType,
 } from './components/advanced/footnote-editor/footnote-editor.types';
+export { isUnclosedNoteOp } from './components/advanced/footnote-editor/footnote-editor.utils';
 export { default as FootnoteItem } from './components/advanced/footnotes/footnote-item.component';
 export { default as FootnoteList } from './components/advanced/footnotes/footnote-list.component';
 export {
@@ -162,6 +167,7 @@ export {
   type MultiSelectComboBoxEntry,
 } from './components/advanced/multi-select-combo-box.component';
 export type { SelectMenuItemHandler } from './components/advanced/menus/platform-menubar.component';
+export { isGroupUnderColumnOrSubMenu } from './components/advanced/menus/menu.util';
 export {
   default as SettingsSidebar,
   type SettingsSidebarProps,
@@ -348,6 +354,7 @@ export { ToggleGroup, ToggleGroupItem } from './components/shadcn-ui/toggle-grou
 export {
   Tooltip,
   TooltipContent,
+  TooltipPortalContainerProvider,
   TooltipProvider,
   TooltipTrigger,
 } from './components/shadcn-ui/tooltip';

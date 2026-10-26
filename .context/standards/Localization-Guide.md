@@ -1,10 +1,10 @@
 ---
 title: Localization Guide
 description: Mandatory localization patterns for all user-facing text in paranext-core — UI web views (TS) and C# backend services.
-version: 1.8.0
+version: 1.9.0
 status: active
 created: 2026-03-04
-last_updated: 2026-09-24
+last_updated: 2026-10-26
 toc: true
 ---
 
@@ -72,14 +72,17 @@ The extension-host merges all contribution files into a unified store. Both TS a
 
 ## Fallback Chain (How Missing Translations Are Handled)
 
-Resolution order for any localize key lookup (see `findFirstLocalization` / `findLocalizationForFallbackLanguageAndOrKey` in `src/extension-host/services/localization.service-host.ts`):
+Resolution order for any localize key lookup (see `getLocalizedString` and `findLocalizationForFallbackLanguageAndOrKey` in `src/extension-host/services/localization.service-host.ts`). The languages tried are the user's interface languages from the `platform.interfaceLanguage` setting (an ordered array), with English (`BACKUP_LANGUAGE = 'en'`) always appended:
 
-1. **User's preferred languages** — from the `platform.interfaceLanguage` setting (ordered array)
-2. **English** — `BACKUP_LANGUAGE = 'en'` is hardcoded and always appended to the fallback list
-3. **`fallbackKey` metadata** — if a key declares `fallbackKey` in the `metadata` section (e.g. `%inventoryName_Character%` → `%CheckType_3%`), that sibling key is tried across all languages. Exactly **one** hop is followed: the target is looked up in the language data only, so it must hold a value of its own. A `fallbackKey` pointing at a missing key, or at another key that is itself only a `fallbackKey` redirect, resolves to nothing and the user gets the bare key at step 4
-4. **Bare key** — if everything fails, the localize key (`%foo%`) itself is returned as a debug safety net
+1. **The key, in the first interface language that has strings** — a language with no localized strings at all is skipped.
+2. **That key's `fallbackKey`, in that same language** — if the key declares `fallbackKey` in the `metadata` section (e.g. `%inventoryName_Character%` → `%CheckType_3%`), the target key is tried in that one language before any other language is consulted.
+3. **The key, across the remaining interface languages and then English.**
+4. **The `fallbackKey`, across those same languages.**
+5. **Bare key** — if everything fails, the localize key (`%foo%`) itself is returned as a debug safety net.
 
-**Practical implication**: if you add an English entry for a key, users in languages without that key automatically fall back to English. You do **not** need custom fallback logic in the consumer.
+Exactly **one** `fallbackKey` hop is followed: the target is looked up in the language data only, so it must hold a value of its own. A `fallbackKey` pointing at a missing key, or at another key that is itself only a `fallbackKey` redirect, resolves to nothing and the user gets the bare key at step 5.
+
+**Practical implication**: an English entry makes a key resolve for every language, so you do **not** need custom fallback logic in the consumer — but a `fallbackKey` that has a value in the user's own language is tried before English.
 
 ---
 
@@ -409,33 +412,82 @@ Common reusable keys (check if they exist first):
 
 ### If a String Needs Replacement
 
-If a string needs to be replaced with a different value:
+When a string needs a different value, add a new key; the old key and its values stay exactly as they are. This is the one replacement recipe, whether a single label changes or a term changes across the whole product:
 
-1. **Create a NEW key** with the desired value
-2. **Add a fallback mapping** in the `metadata` section to redirect the old key:
+1. **Add the NEW key** with the new value in every language the old key has a value in.
+2. **Put `fallbackKey` on the NEW key**, pointing at the OLD key.
+3. **Switch every consumer** to the new key.
+4. **Verify the old key has no remaining consumer** in implementation code: the only hits for it should be the strings file and the metadata.
+5. **Re-point any `fallbackKey` that targets the old key** (an older key that has no value of its own and resolves through it) at the new key.
+6. **Add `deprecationInfo` to the OLD key's metadata**, recording that it was superseded and naming the new key. The old key and all its values stay.
 
 ```json
 {
   "metadata": {
-    "%oldKey_thatNeedsReplacement%": {
-      "fallbackKey": "%newKey_withCorrectValue%"
+    "%feature_label%": {
+      "deprecationInfo": {
+        "date": "2026-10-19",
+        "message": "Superseded by %feature_label_2%."
+      }
+    },
+    "%feature_label_2%": {
+      "fallbackKey": "%feature_label%"
     }
   },
   "localizedStrings": {
     "en": {
-      "%newKey_withCorrectValue%": "The new correct text"
-    },
-    "es": {
-      "%newKey_withCorrectValue%": "El nuevo texto correcto"
+      "%feature_label%": "The old text",
+      "%feature_label_2%": "The new text"
     }
   }
 }
 ```
 
+The example shows English only for brevity; every language the old key has a value in gets the new key too.
+
 **What this achieves:**
-- Old code using `%oldKey_thatNeedsReplacement%` continues to work (falls back to new key)
-- New code uses the new key directly
-- No breaking changes to existing translations
+- A language that has not translated the new key yet shows its old translation (in the user's first interface language that has strings — see [Fallback Chain](#fallback-chain-how-missing-translations-are-handled)).
+- Anyone still requesting the old key — a third-party extension, a translator working from an older export — keeps getting the old text, unchanged.
+
+**Why the `fallbackKey` sits on the new key:** the lookup reads a key's `fallbackKey` only in a language where the key itself has no value. The old key has a value in every language the new key has, so a `fallbackKey` on the OLD key never fires; the one on the NEW key is what carries the fallback. `deprecationInfo` is where "superseded by" is recorded, and it only logs a warning when the old key is requested. The same shape — a key borrowing an existing key's translations — is the house pattern for `fallbackKey` across the repo, most often a Paratext 10 key falling back to its Paratext 9 counterpart.
+
+### Renaming Terminology Users See
+
+A product-wide wording change (for example "Send/Receive" becoming "sync") is the worked example of the recipe above. It changes what the user reads, so it is a replacement, not a style fix — and the old key stays intact, because third-party extensions and translators may still reference it, and the old value is still correct for anyone who has not adopted the new term:
+
+1. **Add the new key** with the new wording in every language the old key has a value in (for most keys `en` and `es`; a key this repo ships in English only gets its new key in English only). Leave the old key and all its values untouched.
+2. **Add `fallbackKey` on the NEW key**, pointing at the old key, so a language that has not translated the new key yet still shows its old translation instead of the English fallback. This holds for the user's first interface language that has strings; for a second interface language the new key's value from a later interface language, or English, wins over the old translation, because the key is looked up across the remaining languages before the `fallbackKey` is (see [Fallback Chain](#fallback-chain-how-missing-translations-are-handled)).
+3. **Switch every consumer** in this repo to the new key — `t()` calls, menu contributions, English fallback literals in TSX and C#, `displayData.json`.
+4. **Verify the old key has no remaining consumer** in implementation code: search the repo for it and confirm the only hits are the strings file and the metadata. Record the search in the PR. Also search `metadata` for any `fallbackKey` that targets the old key (an older key that has no value of its own and resolves through it) and re-point it at the new key.
+5. **Add `deprecationInfo`** (date + "the new key is …") to the old key's metadata entry.
+
+```json
+{
+  "metadata": {
+    "%feature_label%": {
+      "deprecationInfo": {
+        "date": "2026-10-13",
+        "message": "\"Send/Receive\" is now called \"sync\". The new key is %feature_label_2%."
+      }
+    },
+    "%feature_label_2%": {
+      "fallbackKey": "%feature_label%"
+    }
+  },
+  "localizedStrings": {
+    "en": {
+      "%feature_label%": "Send/Receive this project",
+      "%feature_label_2%": "Sync this project"
+    },
+    "es": {
+      "%feature_label%": "Enviar/Recibir este proyecto",
+      "%feature_label_2%": "Sincronizar este proyecto"
+    }
+  }
+}
+```
+
+[Fallback Chain](#fallback-chain-how-missing-translations-are-handled) gives the lookup order that makes this work.
 
 ### Exception: Fixing Errors or Applying a Revised Style Rule
 
@@ -443,7 +495,7 @@ The immutability rule above protects a key's **meaning** — not the exact chara
 - Spelling, grammar, or punctuation corrections.
 - Bringing an existing string in line with a style rule that was revised or newly clarified after the string shipped (e.g. a capitalization or verb-mood rule changed).
 
-**If the meaning changes at all** — including a "clarification" that changes what the user understands, not just how it's phrased — that's not a correction. Treat it as a replacement and follow [If a String Needs Replacement](#if-a-string-needs-replacement) above (new key + `fallbackKey`) instead of editing in place. In-place edits are invisible to anyone (a downstream consumer, a third-party translator working from an old export) holding a reference to the old value; only a meaning-preserving fix is safe to make silently.
+**If the meaning changes at all** — including a "clarification" that changes what the user understands, not just how it's phrased — that's not a correction. Treat it as a replacement and follow the recipe in [If a String Needs Replacement](#if-a-string-needs-replacement) above (a new key whose `fallbackKey` points at the old key, with the old key and its values left as they are) instead of editing in place. In-place edits are invisible to anyone (a downstream consumer, a third-party translator working from an old export) holding a reference to the old value; only a meaning-preserving fix is safe to make silently.
 
 **Process for revising a documented decision:**
 1. For a language whose decisions are sourced from an external document (e.g. the [Spanish tab of the Localization Decisions Google Doc](#spanish-es-localization-decisions)), update the source document first — it is the authoritative record, and this guide is a synced snapshot of it.
@@ -540,7 +592,7 @@ Before completing any UI work:
 - [ ] Spanish translations added to `localizedStrings.json`
 - [ ] No hardcoded English strings in JSX
 - [ ] Dynamic values use `formatReplacementString`
-- [ ] NO existing key/value pairs were modified (used `metadata.fallbackKey` if replacement needed)
+- [ ] NO existing key/value pairs were modified (if replacement was needed, followed [If a String Needs Replacement](#if-a-string-needs-replacement): a new key with `fallbackKey` → the old key)
 
 ---
 
@@ -549,8 +601,8 @@ Before completing any UI work:
 The following are **blocking issues** that must be resolved before the work can be marked complete:
 
 1. **Hardcoded English text** - Any user-visible text not going through localization
-2. **Missing translations** - Keys exist in `en` but not `es` (or vice versa)
-3. **Modified existing strings** - Changing values of existing keys (use `metadata.fallbackKey` instead)
+2. **Missing translations** - Keys exist in `en` but not `es` (or vice versa) — except a new key that replaces a key which is itself English-only; see [If a String Needs Replacement](#if-a-string-needs-replacement)
+3. **Modified existing strings** - Changing values of existing keys (add a new key whose `fallbackKey` points at the old key instead — see [If a String Needs Replacement](#if-a-string-needs-replacement))
 4. **Duplicate keys** - Creating new keys for strings that already exist
 
 ---
@@ -696,7 +748,8 @@ This was learned the hard way: the markers-checklist port shipped two backend st
 
 | Version | Date       | Change          |
 | ------- | ---------- | --------------- |
-| 1.8.0   | 2026-09-24 | Rewrote the component-localization guidance (§3) around the shared value-shape reader: every read goes through `resolveLocalizedString` from `platform-bible-utils`, with a new normative "Do not use `??` here" passage explaining why the nullish idiom is dead — `useLocalizedStrings` seeds its map with `{ [key]: key }`, and the localization service returns the key itself when nothing resolves, so an unresolved lookup is a *defined* string that `??` passes to the user. Notes that this holds on the `Partial<Record<…>>` prop shape too, even though an indexed read of it is genuinely `string \| undefined`, and that `noUncheckedIndexedAccess` is off repo-wide so TypeScript flags neither the bug nor the now-dead `??`. Named `paranext/no-nullish-localized-fallback` as the rule that catches it. Sourced from PT-4673. |
+| 1.9.0   | 2026-10-26 | Rewrote the component-localization guidance (§3) around the shared value-shape reader: every read goes through `resolveLocalizedString` from `platform-bible-utils`, with a new normative "Do not use `??` here" passage explaining why the nullish idiom is dead — `useLocalizedStrings` seeds its map with `{ [key]: key }`, and the localization service returns the key itself when nothing resolves, so an unresolved lookup is a *defined* string that `??` passes to the user. Notes that this holds on the `Partial<Record<…>>` prop shape too, even though an indexed read of it is genuinely `string \| undefined`, and that `noUncheckedIndexedAccess` is off repo-wide so TypeScript flags neither the bug nor the now-dead `??`. Named `paranext/no-nullish-localized-fallback` as the rule that catches it. Sourced from PT-4673. |
+| 1.8.0   | 2026-10-13 | Added "Renaming Terminology Users See" under Existing Strings Are Immutable: a product-wide wording change (first case: "Send/Receive" → "sync", PT-4810) adds a new key with `fallbackKey` pointing at the OLD key, leaves the old key and values untouched, switches every consumer, and verifies the old key has no remaining consumer; corrected the Fallback Chain order and made the forward fallback (new key → old key, old values untouched) the one replacement recipe. |
 | 1.7.0   | 2026-07-28 | Ported from the embedded profile (authored 2026-06-18, landed via #2438): Added "Testing Localized C# Backends" section: `DummyPapiClient.SendRequestAsync<T>` returns `default(T)` for unregistered services, so `GetLocalizedString` falls back to its `defaultValue` and wire integration tests still see English when a fallback is supplied — a green literal-asserting test does not prove resolution works. Added "Porting PT9 Features" section: don't inherit PT9's English-only surfaces (e.g. early-startup error dialogs shown before the localizer bootstraps) — the PT10 equivalent MUST be internationalized; catalogue PT9 `Localizer.Str` user-facing strings during discovery so all keys are known before backend TDD (markers-checklist shipped two strings as English literals because the gap was found late). Cross-referenced `pt9-archaeologist.md` and `test-runner/reference.md`. |
 | 1.6.0   | 2026-07-28 | Code-review pass on the 1.5.0 additions. Fixed TOC section order (Spanish now listed before Text Direction, matching the body). Added the source Google Doc link and a "Last synced" date to the Spanish section. Split out language-agnostic content into a new "Translation Style (All Languages)" subsection under Conventions (terminology priority, plain vocabulary, non-literal clarity, length, neutral error tone, sentence-case capitalization, classifying ambiguous UI text, placeholder-text categorization) so it's not scoped to Spanish only. Closed a gap in Spanish verb-mood rules for tooltips/placeholders/progress indicators/status-bar labels (gerund for in-progress, past participle for current-state, infinitive as the default fallback), with Spanish examples. Reworded the "Favor de + infinitive" guidance from "non-standard" to a regional-preference note, since it's a well-established Mexican/Latin American variant the team simply isn't adopting. Added a "Flag Unclear or Non-Standard English Source Text" step to the Localization Pattern. Documented `getLocalizeKeyForPhysicalKey`/`NameablePhysicalKey` (landed via [#2590](https://github.com/paranext/paranext-core/pull/2590), merged 2026-07-30) and the per-language policy for translating vs. preserving physical key names. Moved "Revising an Existing Localization Decision" under "Existing Strings Are Immutable" as a named, meaning-preservation-scoped exception (`Exception: Fixing Errors or Applying a Revised Style Rule`), and clarified the sync direction (Google Doc first, then this guide, then shipped strings). Fixed the `formatReplacementStringToArray` example's placeholder count to match its cited reference implementation and added the missing `.map`/`Fragment` key-wrapping it also uses. Documented a real correctness defect in the `interleavePlaceholders` duplicate helper (its `\w+` regex silently drops hyphenated placeholder names) and filed [PT-4269](https://paratextstudio.atlassian.net/browse/PT-4269) to track migrating it to the shared utility. |
 | 1.5.0   | 2026-07-27 | Added "Embedding JSX in Localized Text with formatReplacementStringToArray" section (mid-sentence JSX interpolation, e.g. links/`Kbd` elements, via the existing `formatReplacementStringToArray` utility — was previously undocumented and had already been reimplemented once as a local helper; also notes to use the shadcn `Kbd`/`KbdGroup` components and, once merged, `getLocalizeKeyForPhysicalKey` for key names rather than hardcoding them). Added "Spanish (es) Localization Decisions" section distilled from the team's "Localization decisions - Paratext 10 Studio" Google Doc (Spanish tab): regional-variant/priority guidance, formal `usted` register, error-message templates, capitalization rules, and verb-mood rules (infinitive for controls, conjugated imperative for messages/alerts). French tab exists but is not yet authoritative, so not captured. |

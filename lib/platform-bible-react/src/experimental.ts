@@ -76,11 +76,12 @@ export { Z_INDEX_TOOLTIP } from './components/z-index';
 export { ALL_BOOK_IDS } from './components/shared/book.utils';
 export { readDirection, persistDirection, type Direction } from './utils/dir-helper.util';
 // The standard-view marker-palette machinery: the shared keydown forwarding table, the shared
-// open-session orchestration, and the shared filter/ranking — one API family, kept together.
+// open-session orchestration, the shared editor-side key routing, and the shared filter/ranking —
+// one API family, kept together.
 export {
   clearPaletteSessionIfCurrent,
-  type ForwardedSessionKind,
   getMarkerPaletteClaimedKeys,
+  resolveFilterCharacter,
   handleMarkerPaletteSessionKeyDown,
   type MarkerPaletteKeyEvent,
   type MarkerPaletteKeyOutcome,
@@ -89,15 +90,42 @@ export {
   type MarkerPaletteSessionState,
 } from './components/advanced/marker-palette-keydown.util';
 export {
+  captureEditorContentSnapshot,
+  hasEditorChanged,
+  type EditorContentSnapshot,
+} from './components/advanced/marker-palette-change-guard.util';
+export {
   type MarkerPaletteOpenSession,
   runMarkerPaletteSession,
   type RunMarkerPaletteSessionOptions,
 } from './components/advanced/marker-palette-session.util';
 export {
   filterAndRankPaletteItems,
+  isNoteMarker,
   stripMarkerNestingPrefix,
   type PaletteFilterMode,
 } from './components/advanced/marker-palette-filter.util';
+export {
+  routeMarkerPaletteKey,
+  type RouteMarkerPaletteKeyOptions,
+} from './components/advanced/marker-palette-keys.util';
+export {
+  type FootnoteEditorMarkerPalette,
+  markerMenuItemToPaletteItem,
+} from './components/advanced/footnote-editor/footnote-editor.component';
+export {
+  useMarkerPaletteCompositionClose,
+  type UseMarkerPaletteCompositionCloseOptions,
+} from './components/advanced/use-marker-palette-composition-close.hook';
+export {
+  useMarkerPaletteSessionWriters,
+  type UseMarkerPaletteSessionWritersOptions,
+} from './components/advanced/use-marker-palette-session-writers.hook';
+export {
+  useMarkerPaletteFocusOutCapture,
+  type UseMarkerPaletteFocusOutCaptureOptions,
+} from './components/advanced/use-marker-palette-focus-out-capture.hook';
+export { isEditorContextMenuOpenFor } from './components/advanced/editor-context-menu.util';
 export {
   default as NavigationHistoryButtons,
   NAVIGATION_HISTORY_BUTTONS_STRING_KEYS,
@@ -106,12 +134,25 @@ export {
   type NavigationHistoryItem,
 } from './components/advanced/navigation-history-buttons/navigation-history-buttons.component';
 export {
+  default as BaseOrModelTextExplanation,
+  BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS,
+} from './components/advanced/base-or-model-text-explanation/base-or-model-text-explanation.component';
+export type {
+  BaseOrModelTextExplanationLocalizedStrings,
+  BaseOrModelTextExplanationProps,
+} from './components/advanced/base-or-model-text-explanation/base-or-model-text-explanation.component';
+export {
   default as InternetAccessOptionList,
   INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
+  isSupportedInternetUse,
 } from './components/advanced/internet-access-option-list/internet-access-option-list.component';
-export type { InternetAccessOptionListProps } from './components/advanced/internet-access-option-list/internet-access-option-list.component';
+export type {
+  InternetAccessOptionListProps,
+  InternetUse,
+} from './components/advanced/internet-access-option-list/internet-access-option-list.component';
 export {
   default as DeveloperSection,
   DEVELOPER_SECTION_STRING_KEYS,
 } from './components/advanced/developer-section/developer-section.component';
 export type { DeveloperSectionProps } from './components/advanced/developer-section/developer-section.component';
+export { ShortcutKeys, type ShortcutKeysProps } from './components/basics/shortcut-keys.component';

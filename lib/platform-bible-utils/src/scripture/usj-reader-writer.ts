@@ -956,14 +956,44 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     };
   }
 
-  jsonPathToUsjNodeAndDocumentLocation(
+  /**
+   * Finds the node associated with the JSONPath provided and the location of that node.
+   *
+   * A string is located by the path it was found at, not by looking its value up in its parent, so
+   * a string with an identical sibling resolves to the one the path names. A property value (such
+   * as `$.content[3]['marker']`) is not content and does not resolve.
+   *
+   * @param jsonPathQuery JSONPath search expression that indicates a node within this USJ data
+   * @returns The node and its location
+   * @throws If the query names nothing, or names a property value
+   */
+  private jsonPathToNodeAndLocation(
     jsonPathQuery: string,
   ): UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation> {
     const { node, parent } = this.jsonPathToNodeAndParentIfString(jsonPathQuery);
+    if (!isString(node)) return this.nodeToUsjNodeAndDocumentLocation(node);
 
-    const usjNodeAndDocumentLocation = this.nodeToUsjNodeAndDocumentLocation(node, parent);
+    if (!Array.isArray(parent))
+      throw new Error(`JSONPath query names a property value, not content: ${jsonPathQuery}`);
 
-    return usjNodeAndDocumentLocation;
+    // A path in any other spelling than `$.content[N]...` cannot be walked here, so it falls back
+    // to finding the string in its parent by value
+    if (!/^\$(\.content\[\d+\])+$/.test(jsonPathQuery))
+      return this.nodeToUsjNodeAndDocumentLocation(node, parent);
+
+    // The regular expression above guarantees the query is a `ContentJsonPath`
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const workingStack = this.convertJsonPathToWorkingStack(jsonPathQuery as ContentJsonPath);
+    return {
+      node,
+      documentLocation: UsjReaderWriter.convertNodeToUsjDocumentLocation(node, workingStack),
+    };
+  }
+
+  jsonPathToUsjNodeAndDocumentLocation(
+    jsonPathQuery: string,
+  ): UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation> {
+    return this.jsonPathToNodeAndLocation(jsonPathQuery);
   }
 
   // #endregion JSONPath > USJ location
@@ -974,11 +1004,9 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     jsonPathQuery: string,
     bookIdIfNotFound?: string,
   ): UsfmVerseRefVerseLocation {
-    const { node, parent } = this.jsonPathToNodeAndParentIfString(jsonPathQuery);
+    const { documentLocation } = this.jsonPathToNodeAndLocation(jsonPathQuery);
 
-    const usfmVerseLocation = this.nodeToUsfmVerseRefVerseLocation(node, parent, bookIdIfNotFound);
-
-    return usfmVerseLocation;
+    return this.usjDocumentLocationToUsfmVerseRefVerseLocation(documentLocation, bookIdIfNotFound);
   }
 
   usjDocumentLocationToUsfmVerseRefVerseLocation(
