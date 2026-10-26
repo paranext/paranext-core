@@ -2452,6 +2452,75 @@ describe('Marker problems are reported once each, not once per occurrence', () =
   });
 });
 
+describe('shouldAllowInvisibleCharacters (the project setting platformScripture.allowInvisibleCharacters)', () => {
+  const NBSP = '\u00A0';
+  /** A chapter carrying a no-break space and a tilde in verse text and inside a character span. */
+  const usjWithNbspAndTilde: Usj = {
+    type: USJ_TYPE,
+    // testing 3.0. Usj can be any version, but the `Usj` type says only 3.1
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    version: '3.0' as typeof USJ_VERSION,
+    content: [
+      { type: 'book', marker: 'id', code: 'MAT', content: [] },
+      { type: 'chapter', marker: 'c', number: '1', sid: 'MAT 1' },
+      {
+        type: 'para',
+        marker: 'p',
+        content: [
+          { type: 'verse', marker: 'v', number: '1', sid: 'MAT 1:1' },
+          `one${NBSP}two three~four `,
+          { type: 'char', marker: 'nd', content: [`five${NBSP}six`] },
+          ' seven',
+        ],
+      },
+    ],
+  };
+
+  function readerWriter(shouldAllowInvisibleCharacters?: boolean): UsjReaderWriter {
+    return new UsjReaderWriter(usjWithNbspAndTilde, {
+      ...usjReaderWriterOptionsParatext3_0,
+      shouldAllowInvisibleCharacters,
+    });
+  }
+
+  test('off (the default): toUsfm spells a no-break space as ~, and a ~ stays ~', () => {
+    const usfm = readerWriter().toUsfm();
+
+    expect(usfm).toContain('one~two three~four \\nd five~six\\nd* seven');
+    expect(usfm).not.toContain(NBSP);
+    expect(readerWriter(false).toUsfm()).toBe(usfm);
+  });
+
+  test('on: toUsfm writes a no-break space and a ~ verbatim and distinct', () => {
+    const usfm = readerWriter(true).toUsfm();
+
+    expect(usfm).toContain(`one${NBSP}two three~four \\nd five${NBSP}six\\nd* seven`);
+  });
+
+  test('either way, USFM indices and USJ locations agree, because ~ and a no-break space are one code unit each', () => {
+    const textAfterNbsps: UsjDocumentLocation = { jsonPath: '$.content[2].content[3]', offset: 1 };
+    const [off, on] = [readerWriter(false), readerWriter(true)];
+
+    const offLocation = off.usjDocumentLocationToUsfmVerseRefVerseLocation(textAfterNbsps);
+    const onLocation = on.usjDocumentLocationToUsfmVerseRefVerseLocation(textAfterNbsps);
+    expect(onLocation).toEqual(offLocation);
+
+    const offIndex = off.usfmVerseLocationToIndexInUsfm(offLocation);
+    expect(on.usfmVerseLocationToIndexInUsfm(onLocation)).toBe(offIndex);
+    expect(off.toUsfm().substring(offIndex)).toMatch(/^seven\s*$/);
+    expect(on.toUsfm().substring(offIndex)).toMatch(/^seven\s*$/);
+  });
+
+  test('either way, search reads the USJ text, so ~ matches only a tilde and a no-break space matches only itself', () => {
+    [false, true].forEach((shouldAllowInvisibleCharacters) => {
+      const rw = readerWriter(shouldAllowInvisibleCharacters);
+
+      expect(rw.search(/~/g).map(({ text }) => text)).toEqual(['~']);
+      expect(rw.search(/\u00A0/g)).toHaveLength(2);
+    });
+  });
+});
+
 describe('toUsfm transform USJ 3.1 to spec USFM 3.1', () => {
   test('2SA 1 testUSFM', () => {
     const usjDoc = new UsjReaderWriter(testUSFM2SACh1UsjCanonical3_1, usjReaderWriterOptions3_1);
