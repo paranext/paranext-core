@@ -540,19 +540,29 @@ const CHAPTERS: ChapterCase[] = [
       {
         label: 'deleting a selection that runs into the \\wj span (3:15)',
         units: ['3:15'],
-        perform: deleteRange(WJ_DELETE_FROM, WJ_DELETE_TO),
         // Hidden markers: the selection holds text only, so the opener stays and the span keeps
-        // its remaining words. Standard: the selection holds the opener's glyph too, and deleting
-        // an opener removes the whole style, so the closer goes with it though it was not
-        // selected (`$charNodeDeletionTransform` unwraps the span). That is accepted as a
-        // convenience (catalog row EV-2); Paratext 9 would keep the closer as an unmatched marker.
+        // its remaining words. Standard: the selection holds the opener's glyph too, so its bytes
+        // go — and only its bytes: the closer was not selected, so it stays.
+        // Standard view removing the unselected closer as well is accepted for now (TJ,
+        // 2026-10-26) and open to a UX/PO ruling (no ticket yet); Paratext 9 keeps the closer as
+        // an unmatched marker. A change that keeps the closer fails this pin; remove the pin then.
+        knownDeviation: {
+          finding: 'EV-2',
+          summary:
+            "Standard view: deleting a selection that holds a char opener also deletes the span's unselected closer (`$charNodeDeletionTransform` unwraps the span)",
+          applies: (view) => view.areMarkersText,
+          expected: () => ({
+            '3:15': [
+              [WJ_DELETE_SPAN_USFM, 'said to it now'],
+              [WJ_CLOSER_USFM, WJ_CLOSER_USFM.replace('\\wj*', '')],
+            ],
+          }),
+        },
+        perform: deleteRange(WJ_DELETE_FROM, WJ_DELETE_TO),
         expected: (view) => ({
-          '3:15': view.areMarkersText
-            ? [
-                [WJ_DELETE_SPAN_USFM, 'said to it now'],
-                [WJ_CLOSER_USFM, WJ_CLOSER_USFM.replace('\\wj*', '')],
-              ]
-            : [[WJ_DELETE_SPAN_USFM, 'said to \\wj it now']],
+          '3:15': [
+            [WJ_DELETE_SPAN_USFM, view.areMarkersText ? 'said to it now' : 'said to \\wj it now'],
+          ],
         }),
       },
     ],
