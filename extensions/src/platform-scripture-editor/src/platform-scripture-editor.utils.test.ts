@@ -3003,7 +3003,7 @@ type SyncGateStub = {
   /** `platform.interfaceMode` */
   mode?: 'simple' | 'power' | typeof READ_THROWS;
   /** The `platform.getAutomaticSyncConsent` command */
-  consent?: 'granted' | 'unconfirmed' | 'deferred' | typeof READ_THROWS;
+  consent?: 'granted' | 'unconfirmed' | 'unreadable' | 'deferred' | typeof READ_THROWS;
 };
 
 /**
@@ -3223,6 +3223,7 @@ describe('syncOnProjectSwitch', () => {
 
   it.each([
     ['the first-run wizard has not been answered', 'unconfirmed'],
+    ['the first-run flag cannot be read', 'unreadable'],
     ['the user chose "Don\'t sync yet" earlier this session', 'deferred'],
   ] as const)('syncs nothing while %s', async (_, consent) => {
     const { papi, mockSendCommand, mockInfo } = createSyncMockPapi({ consent });
@@ -3642,16 +3643,49 @@ describe('syncOnSwitchToPower', () => {
     expect(mockSendCommand).not.toHaveBeenCalled();
   });
 
-  it('syncs nothing when the user chose "Don\'t sync yet" this session', async () => {
+  it.each([
+    ['the user chose "Don\'t sync yet" this session', 'deferred'],
+    ['the first-run flag cannot be read (fails closed)', 'unreadable'],
+  ] as const)('syncs nothing when %s', async (_, consent) => {
     const { papi, mockSendCommand, mockInfo } = createSwitchToPowerMockPapi({
-      consent: 'deferred',
+      consent,
       seed: PROJ_1_UNSENT,
     });
 
     await syncOnSwitchToPower(papi, 'proj-1');
 
     expect(mockSendCommand).not.toHaveBeenCalled();
-    expect(mockInfo).toHaveBeenCalledWith(expect.stringContaining('deferred'));
+    expect(mockInfo).toHaveBeenCalledWith(
+      `Switch-to-Power sync skipped: first-run sync consent is ${consent}`,
+    );
+  });
+
+  it('syncs nothing when the user chooses "Don\'t sync yet" while it waits for unsent changes', async () => {
+    const { papi, mockSendCommand, mockGetConsent, mockInfo, emitUnsyncedChanges } =
+      createSwitchToPowerMockPapi({ consent: 'unconfirmed' });
+
+    const syncing = syncOnSwitchToPower(papi, 'proj-1');
+    await flushMicrotasks();
+    expect(mockGetConsent).toHaveBeenCalledTimes(1);
+    mockGetConsent.mockResolvedValue('deferred');
+    emitUnsyncedChanges(PROJ_1_UNSENT);
+    await syncing;
+
+    expect(mockSendCommand).not.toHaveBeenCalled();
+    expect(mockInfo).toHaveBeenCalledWith(
+      'Switch-to-Power sync skipped: first-run sync consent is deferred',
+    );
+  });
+
+  it('does not log that consent lets the sync run when there turns out to be nothing to send', async () => {
+    const { papi, mockInfo } = createSwitchToPowerMockPapi({ consent: 'unconfirmed' });
+
+    const syncing = syncOnSwitchToPower(papi, 'proj-1');
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS);
+    await syncing;
+
+    expect(mockInfo).toHaveBeenCalledWith(expect.stringContaining('no changes to send'));
+    expect(mockInfo).not.toHaveBeenCalledWith(expect.stringContaining('does not stop this sync'));
   });
 
   it('syncs when first-run consent is unconfirmed, as for a user who started in Power mode', async () => {

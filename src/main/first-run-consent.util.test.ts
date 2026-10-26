@@ -52,10 +52,10 @@ describe('getAutomaticSyncConsent', () => {
   it('withholds consent when the flag cannot be read (fails CLOSED) rather than rejecting, and says so', async () => {
     // Syncing without consent cannot be undone, so an unreadable flag must never be what lets a
     // sync through. Resolving rather than rejecting is what lets every call site gate on this
-    // without its own try/catch, and the warn is the only record that a failed read closed the gate.
+    // without its own try/catch, and the warn is the only record of the error behind it.
     mockSettingsGet.mockRejectedValue(new Error('settings unavailable'));
 
-    await expect(getAutomaticSyncConsent()).resolves.toBe('unconfirmed');
+    await expect(getAutomaticSyncConsent()).resolves.toBe('unreadable');
     expect(mockLoggerWarn).toHaveBeenCalledWith(
       expect.stringContaining('Could not read platform.firstRunComplete'),
     );

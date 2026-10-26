@@ -2073,8 +2073,9 @@ const projectIdsDecidingSyncOnSwitchToPower = new Set<string>();
  *
  * Skipped when:
  *
- * - The user chose "Don't sync yet" this session (`deferred`), or the consent request rejects. An
- *   `unconfirmed` answer does NOT skip it, including one caused by an unreadable first-run flag: a
+ * - The user chose "Don't sync yet" this session (`deferred`), the first-run flag cannot be read
+ *   (`unreadable`), or the consent request rejects. Asked before and after the wait for unsent
+ *   changes, so a decline during the wait still counts. An `unconfirmed` answer does NOT skip it: a
  *   user who started in Power mode never sees the wizard that records consent. See
  *   `adr-switch-to-power-sends-unsent-changes`.
  * - The mode no longer reads `'power'` when the sync would start: the switch back to Simple makes its
@@ -2121,13 +2122,13 @@ export async function syncOnSwitchToPower(
 }
 
 /**
- * The checks {@link syncOnSwitchToPower} makes before it syncs: consent, unsent changes, the mode,
- * and the internet setting. Logs why it answers `false`.
+ * The first-run sync consent gate's answer when it lets the switch-to-Power sync run, or
+ * `undefined` (logged) when it does not. Only `granted` and `unconfirmed` let it run, so an answer
+ * this does not know fails closed.
  */
-async function shouldSyncOnSwitchToPower(
+async function getSwitchToPowerSyncConsent(
   papi: typeof PapiBackend,
-  projectId: string,
-): Promise<boolean> {
+): Promise<'granted' | 'unconfirmed' | undefined> {
   let consent;
   try {
     consent = await papi.commands.sendCommand('platform.getAutomaticSyncConsent');
@@ -2135,18 +2136,22 @@ async function shouldSyncOnSwitchToPower(
     papi.logger.warn(
       `Switch-to-Power sync: could not check first-run sync consent (${getErrorMessage(e)}); skipping sync`,
     );
-    return false;
+    return undefined;
   }
-  if (consent === 'deferred') {
-    papi.logger.info(`Switch-to-Power sync skipped: first-run sync consent is ${consent}`);
-    return false;
-  }
-  // Logged at info because every other automatic sync would skip here, so a support log must show
-  // why this one ran
-  if (consent !== 'granted')
-    papi.logger.info(
-      `Switch-to-Power sync: first-run sync consent is ${consent}, which does not stop this sync`,
-    );
+  if (consent === 'granted' || consent === 'unconfirmed') return consent;
+  papi.logger.info(`Switch-to-Power sync skipped: first-run sync consent is ${consent}`);
+  return undefined;
+}
+
+/**
+ * The checks {@link syncOnSwitchToPower} makes before it syncs: consent, unsent changes, the mode,
+ * the internet setting, and consent again. Logs why it answers `false`.
+ */
+async function shouldSyncOnSwitchToPower(
+  papi: typeof PapiBackend,
+  projectId: string,
+): Promise<boolean> {
+  if (!(await getSwitchToPowerSyncConsent(papi))) return false;
 
   const hasUnsentChanges = await waitForUnsentChanges(papi, projectId);
   if (hasUnsentChanges !== true) {
@@ -2182,6 +2187,17 @@ async function shouldSyncOnSwitchToPower(
     );
     return false;
   }
+
+  // Asked again because the wait above can last minutes, and "Don't sync yet" chosen meanwhile
+  // must still stop this sync
+  const consent = await getSwitchToPowerSyncConsent(papi);
+  if (!consent) return false;
+  // Logged at info because every other automatic sync would skip here, so a support log must show
+  // why this one ran
+  if (consent !== 'granted')
+    papi.logger.info(
+      `Switch-to-Power sync of ${projectId}: first-run sync consent is ${consent}, which does not stop this sync`,
+    );
   return true;
 }
 

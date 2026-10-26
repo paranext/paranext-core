@@ -135,14 +135,16 @@ declare module 'papi-shared-types' {
     'platform.isFullScreen': () => Promise<boolean>;
     /**
      * Whether the first-run sync consent gate allows an automatic Simple-mode Send/Receive to start
-     * now: `granted`; `unconfirmed` when the first-run wizard has not been answered or its
-     * completion flag could not be read; or `deferred` when the user chose "Don't sync yet" earlier
-     * in this app session. Only meaningful in Simple mode: the completion flag is never written in
-     * Power mode, so a Power-mode sync must not consult this.
+     * now: `granted`; `unconfirmed` when the first-run wizard has not been answered; `unreadable`
+     * when its completion flag could not be read; or `deferred` when the user chose "Don't sync
+     * yet" earlier in this app session. Only meaningful in Simple mode: the completion flag is
+     * never written in Power mode, so a Power-mode sync must not consult this.
      *
      * @experimental This command is unstable and may change or disappear without notice
      */
-    'platform.getAutomaticSyncConsent': () => Promise<'granted' | 'unconfirmed' | 'deferred'>;
+    'platform.getAutomaticSyncConsent': () => Promise<
+      'granted' | 'unconfirmed' | 'unreadable' | 'deferred'
+    >;
     /**
      * Withhold automatic Simple-mode Send/Receive for the rest of this app session. Called when the
      * user chooses "Don't sync yet" in the first-run wizard; the next launch syncs as usual.

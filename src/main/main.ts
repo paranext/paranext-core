@@ -2776,7 +2776,7 @@ async function main() {
       params: [],
       result: {
         name: 'return value',
-        schema: { type: 'string', enum: ['granted', 'unconfirmed', 'deferred'] },
+        schema: { type: 'string', enum: ['granted', 'unconfirmed', 'unreadable', 'deferred'] },
       },
     },
   });

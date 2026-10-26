@@ -2081,9 +2081,9 @@ function finalizeProjectSwitch(projectId: string): void {
  */
 function getSimpleEditorProjectId(): string | undefined {
   try {
-    return getAllOpenWebViewDefinitionsSync().find((definition) =>
-      simpleEditorTabIds.has(definition.id),
-    )?.projectId;
+    return getDockLayoutSync()
+      .getAllWebViewDefinitions()
+      .find((definition) => simpleEditorTabIds.has(definition.id))?.projectId;
   } catch (err) {
     logger.warn(
       `Could not read which project the Simple-mode Scripture Editor is showing, so nothing typed in Simple mode is synced on the switch to Power mode: ${getErrorMessage(err)}`,

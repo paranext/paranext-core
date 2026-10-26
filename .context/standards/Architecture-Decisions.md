@@ -8848,8 +8848,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   sends `platformScriptureEditor.syncOnSwitchToPower` without awaiting it. That command
   (`syncOnSwitchToPower` in `platform-scripture-editor.utils.ts`) asks `waitForUnsentChanges` whether
   the project is in `UnsyncedChangesSnapshot.toSend`, re-reads the mode, checks the saved internet
-  setting, and runs `sendReceiveProjects([projectId])` with no `suppressNotification`, so Power
-  mode's progress and failure toasts show (`adr-sync-surface-per-interface-mode`).
+  setting, asks for consent again, and runs `sendReceiveProjects([projectId])` with no
+  `suppressNotification`, so Power mode's progress and failure toasts show
+  (`adr-sync-surface-per-interface-mode`).
 
   **Internet:** the sync is skipped when the saved setting is `VpnRequired` or `Disabled`, the values
   `InternetServicesGate` refuses (`adr-internet-services-gate`), so a user who turned Send/Receive
@@ -8868,13 +8869,18 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   grace window (`UNSENT_CHANGES_GRACE_MS`). A second switch of the same project while the first is
   still deciding joins it rather than deciding, and syncing, separately.
 
-  **Consent:** this trigger is skipped only when the gate answers `deferred` ("Don't sync yet" this
-  session); `unconfirmed` does not stop it. Only the Simple-mode wizard records consent, and it is
-  resolved at app mount, never on a live switch to Simple, so a user who started in Power mode reads
-  `unconfirmed` for the whole session — and this sync runs in Power mode, which has no consent step.
-  The gate also answers `unconfirmed` when it cannot read the first-run flag, and the two cannot be
-  told apart, so an unreadable flag does not stop this sync either; only a rejected consent request
-  does.
+  **Consent:** unlike the other syncs that ask the gate, `unconfirmed` does not stop this one. Only
+  the Simple-mode wizard records consent, and it is resolved at app mount, never on a live switch to
+  Simple, so a user who started in Power mode reads `unconfirmed` for the whole session — and this
+  sync runs in Power mode, which has no consent step. Every other answer still stops it: `deferred`
+  ("Don't sync yet" this session), `unreadable` (the first-run flag could not be read), and a
+  rejected request. It asks before the wait for unsent changes and again just before it syncs,
+  since the wait can last minutes and a decline during it must still count.
+
+  A Power-mode project switch (`syncOnProjectSwitch`) does not ask the gate at all, so it still
+  syncs after "Don't sync yet" while this trigger does not. That difference is deliberate: the
+  decline was given in the Simple-mode wizard, and this sync sends work typed in Simple mode, while
+  a Power-mode project switch is Power mode's own behavior, which that consent never governed.
 - **Alternatives:** **Trigger from the main process's mode-switch orchestration** — rejected: by the
   time main reacts, the renderer is already replacing the Simple layout, so main cannot reliably ask
   which project the Simple editor showed. **Fall back to the last-opened-project cache** — rejected:
@@ -8894,9 +8900,19 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   daily commit already committed, on a project with no record yet (an upgraded installation before
   that project's first successful sync), starts no sync — accepted. A sync that another trigger
   starts between the check and this one makes the backend refuse this one; that is logged and not
-  retried. Whether the sync locks the editor, and what the user sees offline, are decided by the
-  Send/Receive implementation, not by this trigger; as of 2026-10-23 both are verified only by hand
-  in a Paratext 10 build.
+  retried. Only the project the Simple editor shows at the switch is considered: if the user
+  switched projects inside Simple mode first, and that switch's own sync was skipped (consent not
+  `granted`) or failed, the earlier project's changes stay unsent until that project's next sync.
+  They are committed locally, not lost. Covering every project shown since Simple mode was entered
+  would need this command to take a list and send them in one `sendReceiveProjects`, because the
+  backend refuses overlapping syncs — accepted for now. Right after launch the backend checks every
+  project once, one at a time, and `isRechecking` does not cover that scan, so a project it has not
+  reached yet reads as having nothing to send: a switch within seconds of launch can miss changes
+  left from an earlier session if nothing was typed this session. They go with the project's next
+  sync. Widening `isRechecking` to the scan would change a flag the sync status indicator also
+  reads, so it is left alone. Whether the sync locks the editor, and what the user sees offline, are
+  decided by the Send/Receive implementation, not by this trigger; as of 2026-10-23 both are
+  verified only by hand in a Paratext 10 build.
 - **Source:** PT-4826.
 
 ## adr-sync-surface-per-interface-mode: Each sync gets one persistent progress surface per interface mode, chosen by its caller

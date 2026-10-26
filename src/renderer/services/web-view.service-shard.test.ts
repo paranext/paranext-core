@@ -1577,6 +1577,52 @@ describe('handleSwitchToSimpleMode', () => {
   });
 });
 
+// Matches the mocked `simple-layout.builder` module's `SIMPLE_LAYOUT_EDITOR_TAB_ID` (see the
+// hoisted mock above) - the baked slot id `loadLayout`'s no-arg branch mints a fresh id from.
+const BAKED_EDITOR_TAB_ID = simpleLayoutEditorTabIdMock;
+
+/** A layout whose one tab is the Simple editor slot `loadLayout`'s no-arg branch mints from */
+function editorSlotLayout(): LayoutInfo {
+  return {
+    dockbox: {
+      mode: 'horizontal',
+      children: [
+        {
+          tabs: [
+            {
+              id: BAKED_EDITOR_TAB_ID,
+              tabType: TAB_TYPE_WEBVIEW,
+              data: {
+                id: BAKED_EDITOR_TAB_ID,
+                webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+                state: {},
+              },
+            },
+          ],
+        },
+      ],
+    },
+    // This fixture only carries the fields the code under test reads.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+  } as unknown as LayoutInfo;
+}
+
+/**
+ * Waits for a just-registered dock layout carrying the Simple editor slot to have its
+ * fire-and-forget no-arg `loadLayout` mint that slot a fresh id, via the real `mintFreshWebViewIds`
+ * rather than a seeded fixture. `simpleEditorTabIds` (the set `cacheLastOpenedSimpleProject`,
+ * `trackSimpleEditorReplaceTab` and `getSimpleEditorProjectId` filter against) only ever grows from
+ * a real materialization's minted ids, so that is the only way a test can produce an id these tests
+ * need to be tracked.
+ */
+async function mintEditorTabId(fakeDockLayout: PapiDockLayout): Promise<string> {
+  await vi.waitFor(() => expect(fakeDockLayout.loadLayout).toHaveBeenCalled());
+  const [loadedLayout] = vi.mocked(fakeDockLayout.loadLayout).mock.calls[0];
+  const mintedId = tabIdsIn(loadedLayout).find((id) => id !== BAKED_EDITOR_TAB_ID);
+  if (!mintedId) throw new Error('expected the Simple editor tab to receive a freshly minted id');
+  return mintedId;
+}
+
 describe('a switch from Simple to Power mode syncs what was typed in Simple', () => {
   const SYNC_ON_SWITCH_TO_POWER = 'platformScriptureEditor.syncOnSwitchToPower';
   // The id the mocked `buildSimpleLayoutForProject` mints for the Simple editor slot, so the switch
@@ -1669,6 +1715,62 @@ describe('a switch from Simple to Power mode syncs what was typed in Simple', ()
     expect(events).toEqual(['load', 'sync proj-1']);
   });
 
+  it('asks for the project of the Simple editor the app started with', async () => {
+    interfaceMode = 'simple';
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout(editorSlotLayout());
+    host.registerDockLayout(fakeDockLayout);
+    const editorTabId = await mintEditorTabId(fakeDockLayout);
+    vi.mocked(fakeDockLayout.getAllWebViewDefinitions).mockReturnValue([
+      // Partial: the switch reads only these fields
+      {
+        id: editorTabId,
+        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+        projectId: 'proj-startup',
+      } as WebViewDefinition,
+    ]);
+    vi.mocked(fakeDockLayout.loadLayout).mockImplementation(() => {
+      events.push('load');
+    });
+    await vi.waitFor(() => expect(interfaceModeCallback).toBeDefined());
+
+    await changeModeTo('power');
+
+    expect(events).toEqual(['load', 'sync proj-startup']);
+  });
+
+  it('asks for the project an in-Simple project switch moved the Simple editor to', async () => {
+    const host = await registerWindowShowingEditor(SIMPLE_EDITOR_TAB_ID, 'proj-1');
+    await switchToSimpleShowing('proj-1');
+    // The in-Simple switch replaces the Simple editor tab with one that has a fresh id
+    const NEW_EDITOR_TAB_ID = 'replacement-editor-tab';
+    getWebViewProviderMock.mockResolvedValue({
+      getWebView: vi.fn(async () => ({
+        id: NEW_EDITOR_TAB_ID,
+        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+        content: '',
+      })),
+    });
+    await host.openOrReloadWebView(
+      { id: NEW_EDITOR_TAB_ID, webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE },
+      { type: 'replace-tab', targetTabId: SIMPLE_EDITOR_TAB_ID },
+      {},
+    );
+    vi.mocked(host.getDockLayoutSync().getAllWebViewDefinitions).mockReturnValue([
+      // Partial: the switch reads only these fields
+      {
+        id: NEW_EDITOR_TAB_ID,
+        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+        projectId: 'proj-2',
+      } as WebViewDefinition,
+    ]);
+    events = [];
+
+    await changeModeTo('power');
+
+    expect(events).toEqual(['load', 'sync proj-2']);
+  });
+
   it('asks for no such sync on a switch to Simple', async () => {
     await registerWindowShowingEditor(SIMPLE_EDITOR_TAB_ID, 'proj-1');
 
@@ -1747,51 +1849,6 @@ describe('a switch from Simple to Power mode syncs what was typed in Simple', ()
 });
 
 describe('Scripture Editor tab events keep last-opened-project-cache current', () => {
-  // Matches the mocked `simple-layout.builder` module's `SIMPLE_LAYOUT_EDITOR_TAB_ID` (see the
-  // hoisted mock above) - the baked slot id `loadLayout`'s no-arg branch mints a fresh id from.
-  const BAKED_EDITOR_TAB_ID = simpleLayoutEditorTabIdMock;
-
-  /** A layout whose one tab is the Simple editor slot `loadLayout`'s no-arg branch mints from */
-  function editorSlotLayout(): LayoutInfo {
-    return {
-      dockbox: {
-        mode: 'horizontal',
-        children: [
-          {
-            tabs: [
-              {
-                id: BAKED_EDITOR_TAB_ID,
-                tabType: TAB_TYPE_WEBVIEW,
-                data: {
-                  id: BAKED_EDITOR_TAB_ID,
-                  webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-                  state: {},
-                },
-              },
-            ],
-          },
-        ],
-      },
-      // This fixture only carries the fields the code under test reads.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-    } as unknown as LayoutInfo;
-  }
-
-  /**
-   * Registers a dock layout carrying the Simple editor slot and waits for the fire-and-forget
-   * no-arg `loadLayout` to mint it a fresh id, via the real `mintFreshWebViewIds` - not a seeded
-   * fixture. `simpleEditorTabIds` (the set `cacheLastOpenedSimpleProject`/
-   * `trackSimpleEditorReplaceTab` filter against) only ever grows from a real materialization's
-   * minted ids, so that is the only way a test can produce an id these tests need to be tracked.
-   */
-  async function mintEditorTabId(fakeDockLayout: PapiDockLayout): Promise<string> {
-    await vi.waitFor(() => expect(fakeDockLayout.loadLayout).toHaveBeenCalled());
-    const [loadedLayout] = vi.mocked(fakeDockLayout.loadLayout).mock.calls[0];
-    const mintedId = tabIdsIn(loadedLayout).find((id) => id !== BAKED_EDITOR_TAB_ID);
-    if (!mintedId) throw new Error('expected the Simple editor tab to receive a freshly minted id');
-    return mintedId;
-  }
-
   beforeEach(() => {
     vi.resetModules();
     clearNetworkEventHandlers();
