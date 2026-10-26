@@ -1859,9 +1859,9 @@ export type InternetUse = "Enabled" | "VpnRequired" | "Disabled" | "ProxyOnly";
  *
  * `InternetSettings.xml` is seeded once from a co-installed Paratext 9 on first launch (the two
  * apps keep separate copies thereafter), so a stored value may name an option this app does not
- * implement yet (the "Coming soon" rows). Such a value is shown selected and called out in a banner
- * rather than silently replaced — callers that gate on a usable selection (the first-run wizard's
- * Next button) should refuse to advance until this returns true.
+ * implement yet (the rows marked not yet available). Such a value is shown selected and called out
+ * in a banner rather than silently replaced — callers that gate on a usable selection (the
+ * first-run wizard's Next button) should refuse to advance until this returns true.
  *
  * @experimental This export is unstable and may change shape or disappear without notice
  */
@@ -1877,7 +1877,7 @@ export type InternetAccessOptionListProps = {
 	 * that needs the user to make an explicit choice rather than accept the stored value.
 	 */
 	value: InternetUse | undefined;
-	/** Called when the user selects an active (non-coming-soon) option. */
+	/** Called when the user selects an active (available) option. */
 	onChange: (value: InternetUse) => void;
 	/** When true, all rows are non-interactive (loading or saving in progress). */
 	disabled: boolean;

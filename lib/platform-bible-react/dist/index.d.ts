@@ -2748,6 +2748,8 @@ export type UiLanguageSelectorProps = {
 	className?: string;
 	/** Optional id for the root element */
 	id?: string;
+	/** When true, the language cannot be changed. Defaults to `false`. */
+	disabled?: boolean;
 };
 /**
  * A component for selecting the user interface language and managing fallback languages. Allows
@@ -2755,7 +2757,7 @@ export type UiLanguageSelectorProps = {
  *
  * @param {UiLanguageSelectorProps} props - The props for the component.
  */
-export declare function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, id, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, id, disabled, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Immutable array of localization keys this component uses. Pass into `useLocalizedStrings` and
  * feed the result to the `localizedStrings` prop.
