@@ -47,10 +47,11 @@ const MAX_FLOAT_HEIGHT_FRACTION = 0.85;
 
 /**
  * Build the rc-dock group config for `TAB_GROUP`. The shape depends on `platform.interfaceMode`:
- * power mode allows new tabs (`panelExtra` "+"), simple mode locks tabs in place (`tabLocked`) and
- * drops `panelExtra`. In simple mode, also registers `HEADLESS_GROUP` (for the home and editor
- * columns, whose tab bars are hidden via CSS) and `TAB_GROUP_RESOURCES` (for the resources column,
- * which still shows its tab bar) so tabs can't be dragged across columns.
+ * power mode allows new tabs (`panelExtra` "+"), simple mode locks tabs in place (`tabLocked`),
+ * turns off docking (`disableDock`) and drops `panelExtra`. In simple mode, also registers
+ * `HEADLESS_GROUP` (for the home and editor columns, whose tab bars are hidden via CSS) and
+ * `TAB_GROUP_RESOURCES` (for the resources column, which still shows its tab bar) so tabs can't be
+ * dragged across columns.
  */
 export function getGroups(isPowerMode: boolean): { [key: string]: TabGroup } {
   const baseConfig: TabGroup = {
@@ -77,11 +78,15 @@ export function getGroups(isPowerMode: boolean): { [key: string]: TabGroup } {
     };
   }
 
-  // Simple mode: lock tabs (no drag-to-reorder, no drag-to-split) and hide the "+" new-tab button.
+  // Simple mode: no drag docks or undocks anything (floats can still be moved), and the "+" new-tab
+  // button is hidden. `tabLocked` covers only a dragged single tab, not a whole tab group (which is
+  // how a float moves), so `disableDock` turns off rc-dock's drop squares for any drag from these
+  // groups (`dockMove` calls are unaffected). Drops onto another tab bar are blocked in
+  // `dock-layout-wrapper.simple-mode.scss`; `floatable: false` prevents undocking.
   // Register `HEADLESS_GROUP` (home + editor columns) and `TAB_GROUP_RESOURCES` (resources column)
   // so tabs can't be dragged across columns. `TAB_GROUP` itself is kept as the default group for
   // floating tabs and any tab not pinned to a fixed column — see `getTabGroup`.
-  const simpleConfig: TabGroup = { ...baseConfig, tabLocked: true };
+  const simpleConfig: TabGroup = { ...baseConfig, tabLocked: true, disableDock: true };
   return {
     [TAB_GROUP]: simpleConfig,
     [HEADLESS_GROUP]: simpleConfig,
