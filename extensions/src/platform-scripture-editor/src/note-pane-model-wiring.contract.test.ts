@@ -99,9 +99,9 @@ describe('note pane model wiring', () => {
         "shouldRoutePaletteKey: if (viewType !== 'standard') return false;",
       ],
       'platform-scripture-editor.utils.ts': [
-        // Standard view is Power-only, and the view cycle steps through it
-        "resolveViewTypeForInterfaceMode: if (viewType === 'standard' && !isPowerMode) return 'formatted';",
-        "getNextViewTypeInCycle: if (current === 'standard') return 'markers';",
+        // Standard and Markers views are Power-only, and the view cycle steps through Standard
+        "resolveViewTypeForInterfaceMode: if ((viewType === 'standard' || viewType === 'markers') && !isPowerMode) return 'formatted';",
+        "getNextViewTypeInCycle: if (viewType === 'standard') return 'markers';",
         // The one place the note model itself is decided
         "usesPaneNoteModel: if (viewType === 'standard') return true;",
       ],
@@ -110,8 +110,6 @@ describe('note pane model wiring', () => {
         'getViewOptionsForType',
         // The `\` marker menu in the main text; Standard view types markers in place instead
         'main-text marker menu trigger',
-        // The insert shortcuts stay Standard-only
-        'Ctrl+T insert',
         // Which stylesheet mode the text renders in; not a note check
         'useProjectStylesheet',
       ],
