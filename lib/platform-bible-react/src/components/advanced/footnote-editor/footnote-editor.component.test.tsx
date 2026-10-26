@@ -194,6 +194,7 @@ function renderFootnoteEditor(
     applyUpdate: vi.fn(),
     replaceEmbedUpdate: vi.fn(),
     getSelection: vi.fn(),
+    getSelectedParaMarker: vi.fn(),
     setSelection: vi.fn(),
     setAnnotation: vi.fn(),
     removeAnnotation: vi.fn(),
