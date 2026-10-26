@@ -7,7 +7,7 @@
 
 // Semi-transparent amber for the Find current-result highlight, shared by the base rule and the
 // ::selection re-apply below. Deliberately a fixed amber rather than a theme token: it must read on
-// top of the ::selection primary/secondary colors and stay distinct from them in both light and
+// top of the focused and unfocused ::selection colors and stay distinct from them in both light and
 // dark mode (see the find-result-highlight rules).
 $find-current-result-highlight-bg: rgb(255 213 0 / 40%);
 
@@ -43,9 +43,12 @@ $find-current-result-highlight-bg: rgb(255 213 0 / 40%);
   background-color: var(--primary);
 }
 
+// Unfocused: primary at 30%, not `--secondary`, which in Paratext Light is almost the `--muted` that
+// Simple tints character markers with (`_simple-mode.scss`), so a selection there would disappear.
+// Over a 30% tint the text stays in its own colour.
 ::selection {
-  color: var(--secondary-foreground);
-  background-color: var(--secondary);
+  color: var(--foreground);
+  background-color: color-mix(in oklab, var(--primary) 30%, transparent);
 }
 
 // Find/Replace current-result highlight.
@@ -53,16 +56,16 @@ $find-current-result-highlight-bg: rgb(255 213 0 / 40%);
 // 'find-current-result') from the Find web view (platform-scripture/src/find.web-view.tsx), which
 // wraps the match in a TypedMarkNode carrying this class. Semi-transparent amber so it reads on top
 // of the ::selection color above (selectRange selects the same match) and stays distinct from the
-// primary/secondary selection in both light and dark mode.
+// focused and unfocused selection in both light and dark mode.
 .editor-typed-mark-external-find-result-highlight {
   background-color: $find-current-result-highlight-bg;
   border-radius: 2px;
 }
 
 // The Find web view also calls selectRange on the current match, so the native ::selection color
-// (--primary when focused, --secondary when not) paints on top of the semi-transparent amber above
-// and hides it — the inactive --secondary reads as grayish-blue. Re-apply the amber to the selected
-// glyphs inside the find-result mark so the current result stays amber regardless of pane focus.
+// (--primary when focused, primary at 30% when not) paints on top of the semi-transparent amber
+// above and hides or tints it. Re-apply the amber to the selected glyphs inside the find-result mark
+// so the current result stays amber regardless of pane focus.
 .editor-typed-mark-external-find-result-highlight::selection,
 .editor-typed-mark-external-find-result-highlight ::selection {
   background-color: $find-current-result-highlight-bg;

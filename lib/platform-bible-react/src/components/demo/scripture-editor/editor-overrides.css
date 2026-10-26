@@ -31,9 +31,11 @@
   background-color: var(--primary);
 }
 
+/*  Unfocused: primary at 30%, not `--secondary`, which in Paratext Light is almost the `--muted` that
+    Simple tints character markers with, so a selection there would disappear. */
 ::selection {
-  color: var(--secondary-foreground);
-  background-color: var(--secondary);
+  color: var(--foreground);
+  background-color: color-mix(in oklab, var(--primary) 30%, transparent);
 }
 
 /*  focus ring */
