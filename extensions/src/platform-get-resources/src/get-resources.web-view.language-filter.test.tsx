@@ -127,7 +127,9 @@ describe('Get Resources filters', () => {
 
   it('ignores a saved source language type, and drops it on the next type filter change', async () => {
     // Saved layouts can still name the type, since the filter once offered it.
-    renderGetResourcesWebView({ typeFilter: ['ScriptureResource', 'SourceLanguageResource'] });
+    const { webViewState } = renderGetResourcesWebView({
+      typeFilter: ['ScriptureResource', 'SourceLanguageResource'],
+    });
 
     expect(await screen.findByText('World English Bible')).toBeInTheDocument();
     expect(screen.queryByText('Matthew Henry Commentary')).not.toBeInTheDocument();
@@ -141,7 +143,8 @@ describe('Get Resources filters', () => {
     if (!removeScripture) throw new Error('No Scripture badge in the type filter');
     fireEvent.click(removeScripture);
 
-    // Only an emptied selection shows the placeholder; a kept source language would leave a badge.
+    // The filter never shows the source language type, so only the saved state can show it was kept.
+    expect(webViewState.typeFilter).toEqual([]);
     expect(screen.getByText('%resources_any_type%')).toBeInTheDocument();
     expect(screen.getByText('Matthew Henry Commentary')).toBeInTheDocument();
   });
