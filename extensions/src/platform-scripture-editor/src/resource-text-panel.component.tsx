@@ -7,10 +7,16 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   Spinner,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
   useExtraValidMarkers,
   useViewVisibility,
 } from 'platform-bible-react';
@@ -21,8 +27,17 @@ import {
   PlatformError,
   ResourceType,
 } from 'platform-bible-utils';
-import { ChevronDown } from 'lucide-react';
-import { ComponentProps, ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
+import { ChevronDown, Lock } from 'lucide-react';
+import {
+  ComponentProps,
+  Fragment,
+  ReactNode,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+} from 'react';
 import {
   hasNewScrollTarget,
   isEchoOfPublishedScrRef,
@@ -31,6 +46,7 @@ import {
   waitForLayoutToSettle,
 } from './editor-dom.util';
 import { getRefLabel, getResourceReferenceRowId } from './resource-reference.utils';
+import { splitPickerResourcesBySource } from './resource-selection.utils';
 import type { PickerResource } from './downloaded-resources.utils';
 import type { ResourcePanelReadiness } from './resource-panel-readiness.utils';
 import { PanelReadinessView } from './panel-readiness-view.component';
@@ -87,8 +103,19 @@ type ResourceSelectorDropdownProps = {
   /** Undefined hides the option: downloading adds to the project's list, so needs a project */
   onShowResourcePicker: (() => void) | undefined;
   downloadResourcesLabel: string;
+  /** Heading over the resources the project administrator put in the team layout */
+  teamResourcesLabel: string;
+  /** Heading over the user's own resources */
+  userResourcesLabel: string;
+  /** Tells the user a team resource is not theirs to remove */
+  teamResourceLockLabel: string;
 };
 
+/**
+ * The panel's resource selector. When the team shared any resources for this tab, they are listed
+ * first under their own heading, each with a lock saying the user can't remove it, and the user's
+ * own follow under a second heading. With none, the rows are one unlabeled list.
+ */
 function ResourceSelectorDropdown({
   filteredResources,
   selectedRef,
@@ -96,7 +123,57 @@ function ResourceSelectorDropdown({
   onSelectResource,
   onShowResourcePicker,
   downloadResourcesLabel,
+  teamResourcesLabel,
+  userResourcesLabel,
+  teamResourceLockLabel,
 }: ResourceSelectorDropdownProps) {
+  const headingIdPrefix = useId();
+  const teamHeadingId = `${headingIdPrefix}-team`;
+  const userHeadingId = `${headingIdPrefix}-user`;
+  const selectedRowId = selectedRef ? getResourceReferenceRowId(selectedRef.reference) : undefined;
+  // TODO(PT-4063): order the team's rows the way the administrator pins them.
+  const { team, user } = splitPickerResourcesBySource(filteredResources);
+
+  const renderRow = (row: PickerResource, isTeamRow: boolean) => {
+    const rowId = getResourceReferenceRowId(row.reference);
+    const item = (
+      <DropdownMenuCheckboxItem
+        checked={rowId === selectedRowId}
+        onCheckedChange={() => {
+          onSelectResource(rowId);
+        }}
+      >
+        {/* `dir="auto"` on the name rather than the item: `getRefLabel` returns the joined
+            short/full name as one text node, so the name needs its own direction, while the check
+            and the lock keep to the panel's side. */}
+        <span className="tw:min-w-0" dir="auto">
+          {getRefLabel(row.reference, dblResources)}
+        </span>
+        {/* `role="img"` puts the label in the item's accessible name for screen readers; the
+            tooltip, which Radix describes the item with only while it is open, is for everyone
+            else. */}
+        {isTeamRow && (
+          <span
+            role="img"
+            aria-label={teamResourceLockLabel}
+            className="tw:ms-auto tw:flex tw:shrink-0 tw:text-muted-foreground"
+          >
+            <Lock aria-hidden />
+          </span>
+        )}
+      </DropdownMenuCheckboxItem>
+    );
+    if (!isTeamRow) return <Fragment key={rowId}>{item}</Fragment>;
+    // On the whole item rather than the icon, so the hint also opens when keyboard focus reaches
+    // the row; the icon alone is never focused.
+    return (
+      <Tooltip key={rowId}>
+        <TooltipTrigger asChild>{item}</TooltipTrigger>
+        <TooltipContent>{teamResourceLockLabel}</TooltipContent>
+      </Tooltip>
+    );
+  };
+
   return (
     <div className="tw:px-2 tw:py-1">
       <DropdownMenu>
@@ -114,24 +191,25 @@ function ResourceSelectorDropdown({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="tw:w-72">
-          {filteredResources.map((ref) => {
-            const refId = getResourceReferenceRowId(ref.reference);
-            return (
-              <DropdownMenuCheckboxItem
-                key={refId}
-                checked={
-                  refId ===
-                  (selectedRef ? getResourceReferenceRowId(selectedRef.reference) : undefined)
-                }
-                onCheckedChange={() => {
-                  onSelectResource(refId);
-                }}
-                dir="auto"
-              >
-                {getRefLabel(ref.reference, dblResources)}
-              </DropdownMenuCheckboxItem>
-            );
-          })}
+          {team.length === 0 ? (
+            filteredResources.map((row) => renderRow(row, false))
+          ) : (
+            <TooltipProvider>
+              <DropdownMenuGroup aria-labelledby={teamHeadingId}>
+                <DropdownMenuLabel id={teamHeadingId}>{teamResourcesLabel}</DropdownMenuLabel>
+                {team.map((row) => renderRow(row, true))}
+              </DropdownMenuGroup>
+              {user.length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup aria-labelledby={userHeadingId}>
+                    <DropdownMenuLabel id={userHeadingId}>{userResourcesLabel}</DropdownMenuLabel>
+                    {user.map((row) => renderRow(row, false))}
+                  </DropdownMenuGroup>
+                </>
+              )}
+            </TooltipProvider>
+          )}
           {onShowResourcePicker && (
             <>
               <DropdownMenuSeparator />
@@ -746,6 +824,12 @@ export function ResourceTextPanel({
         downloadResourcesLabel={localize(
           localizedStrings,
           '%webView_resourcePanel_downloadResources%',
+        )}
+        teamResourcesLabel={localize(localizedStrings, '%webView_resourcePanel_teamResources%')}
+        userResourcesLabel={localize(localizedStrings, '%webView_resourcePanel_userResources%')}
+        teamResourceLockLabel={localize(
+          localizedStrings,
+          '%webView_resourcePanel_teamResourceLock%',
         )}
       />
 

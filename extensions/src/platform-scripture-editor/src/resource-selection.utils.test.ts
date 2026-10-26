@@ -4,6 +4,7 @@ import {
   findSelectedRow,
   matchesSelectedResourceId,
   resolveResourceSelection,
+  splitPickerResourcesBySource,
 } from './resource-selection.utils';
 
 const dblRow = (id: string): PickerResource => ({
@@ -147,5 +148,36 @@ describe('resolveResourceSelection', () => {
     const result = resolveResourceSelection([], 'dbl:abc', undefined);
     expect(result.selectedRow).toBeUndefined();
     expect(result.nextSelectedResourceId).toBeUndefined();
+  });
+});
+
+describe('splitPickerResourcesBySource', () => {
+  const row = (id: string, source: PickerResource['source']): PickerResource => ({
+    ...dblRow(id),
+    source,
+  });
+
+  it("puts the team's rows in one group and everything else in the other, keeping their order", () => {
+    // Interleaved so that a split which sorted, or which kept only the first run of each source,
+    // would come out in a different order.
+    const rows = [
+      row('a', 'admin'),
+      row('b', 'user'),
+      row('c', 'admin'),
+      row('d', 'downloaded'),
+      row('e', 'user'),
+    ];
+
+    const { team, user } = splitPickerResourcesBySource(rows);
+
+    expect(team.map((r) => r.reference.name)).toEqual(['a', 'c']);
+    expect(user.map((r) => r.reference.name)).toEqual(['b', 'd', 'e']);
+  });
+
+  it('returns no team rows when the team shared nothing', () => {
+    const { team, user } = splitPickerResourcesBySource([row('b', 'user'), row('d', 'downloaded')]);
+
+    expect(team).toEqual([]);
+    expect(user).toHaveLength(2);
   });
 });

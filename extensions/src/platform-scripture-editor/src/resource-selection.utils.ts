@@ -138,3 +138,25 @@ export function resolveResourceSelection(
     selectedRow: displayRow,
   };
 }
+
+/**
+ * Split picker rows into the team's — those the project administrator put in the team layout — and
+ * the user's own, which includes downloaded resources nobody referenced. Each half keeps the order
+ * it had in `rows`.
+ *
+ * A team row is identified by `source === 'admin'` alone. While the DBL catalog is unavailable a
+ * team `dblResource` reference cannot be resolved (see `buildPickerResources`), so an installed
+ * team resource comes back as a `downloaded` row and lands in `user`.
+ *
+ * @param rows The rows to split
+ * @returns The team's rows and the user's rows
+ */
+export function splitPickerResourcesBySource(rows: PickerResource[]): {
+  team: PickerResource[];
+  user: PickerResource[];
+} {
+  return {
+    team: rows.filter((row) => row.source === 'admin'),
+    user: rows.filter((row) => row.source !== 'admin'),
+  };
+}
