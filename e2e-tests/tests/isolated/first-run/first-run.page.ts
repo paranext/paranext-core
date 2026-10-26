@@ -34,18 +34,18 @@ export class FirstRunPage {
     return this.dialog.getByRole('button', { name: /^sync$/i });
   }
 
-  /** "Use Paratext 10 with internet access" on the Internet Settings step. */
+  /** "Use Platform.Bible with internet access" on the Internet Settings step. */
   get continueWithInternetButton(): Locator {
     // %firstRun_step_internetSettings_useWithInternet%
     return this.dialog.getByRole('button', {
-      name: 'Use Paratext 10 with internet access',
+      name: 'Use Platform.Bible with internet access',
     });
   }
 
-  /** "Close Paratext 10" on the Internet Settings step. */
+  /** "Close Platform.Bible" on the Internet Settings step. */
   get closeAppButton(): Locator {
     // %firstRun_step_internetSettings_closeApp%
-    return this.dialog.getByRole('button', { name: 'Close Paratext 10' });
+    return this.dialog.getByRole('button', { name: 'Close Platform.Bible' });
   }
 
   /**
@@ -89,9 +89,9 @@ export class FirstRunPage {
   }
 
   /**
-   * Choose "Use Paratext 10 with internet access" on the Internet Settings step, which saves it and
-   * moves on to Identify. Long timeout for the same reason as clickNext: the choices render only
-   * once the async settings read and the Paratext 9 lookup land.
+   * Choose "Use Platform.Bible with internet access" on the Internet Settings step, which saves it
+   * and moves on to Identify. Long timeout for the same reason as clickNext: the choices render
+   * only once the async settings read and the Paratext 9 lookup land.
    */
   async chooseUnrestrictedInternetAccess(): Promise<void> {
     await this.continueWithInternetButton.click({ timeout: 60_000 });

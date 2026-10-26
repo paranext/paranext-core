@@ -31,13 +31,15 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_step_internetSettings_loadError%':
         "We couldn't get things ready. Please try again in a moment.",
       '%firstRun_step_internetSettings_paratext9Unsupported%':
-        'Paratext 9 has {setting}, which is unsupported',
+        'Paratext 9 has {setting}, which is unsupported by {%product_name%}',
       '%firstRun_step_internetSettings_paratext9Setting_Disabled%': 'Disable all sentinel',
       '%firstRun_step_internetSettings_paratext9Setting_VpnRequired%': 'Sensitive sentinel',
       '%firstRun_step_internetSettings_paratext9Setting_ProxyOnly%': 'Proxy sentinel',
-      '%firstRun_step_internetSettings_sensitiveCountries%': 'Sensitive countries sentinel',
-      '%firstRun_step_internetSettings_useWithInternet%': 'Use with internet sentinel',
-      '%firstRun_step_internetSettings_closeApp%': 'Close app sentinel',
+      '%firstRun_step_internetSettings_sensitiveCountries%':
+        'Sensitive countries sentinel for {%product_name%}',
+      '%firstRun_step_internetSettings_useWithInternet%': 'Use {%product_name%} with internet',
+      '%firstRun_step_internetSettings_closeApp%': 'Close {%product_name%}',
+      '%product_name%': 'Product sentinel',
     },
     false,
   ]),
@@ -137,8 +139,8 @@ function renderStep() {
 }
 
 const continueWithInternetButton = () =>
-  screen.findByRole('button', { name: 'Use with internet sentinel' });
-const closeButton = () => screen.findByRole('button', { name: 'Close app sentinel' });
+  screen.findByRole('button', { name: 'Use Product sentinel with internet' });
+const closeButton = () => screen.findByRole('button', { name: 'Close Product sentinel' });
 
 describe('InternetSettingsStep', () => {
   beforeEach(() => {
@@ -185,7 +187,7 @@ describe('InternetSettingsStep', () => {
     renderStep();
 
     expect(screen.getByTestId('spinner')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Use with internet sentinel' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Use Product sentinel with internet' })).toBeNull();
   });
 
   it('shows a spinner and no choices while the settings are still loading', () => {
@@ -193,7 +195,7 @@ describe('InternetSettingsStep', () => {
     renderStep();
 
     expect(screen.getByTestId('spinner')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Use with internet sentinel' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Use Product sentinel with internet' })).toBeNull();
   });
 
   // So the Paratext 9 line does not pop in after the user has started reading.
@@ -208,13 +210,15 @@ describe('InternetSettingsStep', () => {
     renderStep();
 
     expect(screen.getByTestId('spinner')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Use with internet sentinel' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Use Product sentinel with internet' })).toBeNull();
 
     answerParatext9('Disabled');
 
     expect(await continueWithInternetButton()).toBeInTheDocument();
     expect(
-      screen.getByText('Paratext 9 has Disable all sentinel, which is unsupported'),
+      screen.getByText(
+        'Paratext 9 has Disable all sentinel, which is unsupported by Product sentinel',
+      ),
     ).toBeInTheDocument();
   });
 
@@ -224,7 +228,9 @@ describe('InternetSettingsStep', () => {
 
     expect(await continueWithInternetButton()).toBeEnabled();
     expect(await closeButton()).toBeEnabled();
-    expect(screen.getByText('Sensitive countries sentinel')).toBeInTheDocument();
+    expect(
+      screen.getByText('Sensitive countries sentinel for Product sentinel'),
+    ).toBeInTheDocument();
   });
 
   // Paratext 9's own setting, not Platform.Bible's copy: startup turns a copied VpnRequired into
@@ -240,7 +246,9 @@ describe('InternetSettingsStep', () => {
       renderStep();
 
       await continueWithInternetButton();
-      expect(screen.getByText(`Paratext 9 has ${label}, which is unsupported`)).toBeInTheDocument();
+      expect(
+        screen.getByText(`Paratext 9 has ${label}, which is unsupported by Product sentinel`),
+      ).toBeInTheDocument();
     });
 
     // `null` is what "no setting" looks like after the trip from C#, so the test has to send one.
@@ -268,7 +276,7 @@ describe('InternetSettingsStep', () => {
     });
   });
 
-  describe('"Use Paratext 10 with internet access"', () => {
+  describe('"Use <product name> with internet access"', () => {
     it('saves Enabled, keeping the other settings, and moves on', async () => {
       const { setData } = configureHooks({ value: MOCK_SETTINGS });
       const { onNext } = renderStep();
@@ -381,7 +389,7 @@ describe('InternetSettingsStep', () => {
     });
   });
 
-  describe('"Close Paratext 10"', () => {
+  describe('"Close <product name>"', () => {
     // The saved setting stays as it is, so the next launch asks again.
     it('quits the app without saving anything', async () => {
       const { setData } = configureHooks({ value: MOCK_SETTINGS });
@@ -415,7 +423,7 @@ describe('InternetSettingsStep', () => {
     expect(screen.getByText(/couldn't get things ready/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
     expect(screen.queryByText(/boom/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Use with internet sentinel' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Use Product sentinel with internet' })).toBeNull();
   });
 
   it('recovers when Retry remounts the subscription and the read then succeeds', async () => {
