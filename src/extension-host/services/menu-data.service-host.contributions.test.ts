@@ -80,6 +80,7 @@ describe('The shipped main menu is pinned exactly, per mode', () => {
     'platform.showOnboardingTour',
     ...PRODUCT_FEEDBACK_ITEMS,
     'platform.visitFAQsPage',
+    'platform.visitGettingStartedPage',
   ];
 
   const POWER_MAIN_MENU = [

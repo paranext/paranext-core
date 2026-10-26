@@ -56,8 +56,7 @@
       },
       {
         "label": "%mainMenu_helpInfo_visitGettingStartedPage_2%",
-        "hiddenInterfaceModes": ["simple"],
-        "localizeNotes": "Application main menu > Help > Browse help. Hidden in Simple mode: Simple's Help menu offers one support destination, Community support, rather than several overlapping web pages",
+        "localizeNotes": "Application main menu > Help > Browse help (opens the Paratext 10 help articles on paratext.org)",
         "group": "platform.helpInfo",
         "order": 1,
         "command": "platform.visitGettingStartedPage",
