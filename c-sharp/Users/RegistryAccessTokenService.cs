@@ -127,8 +127,7 @@ internal sealed class RegistryAccessTokenService(
                 extensionName,
                 resource,
                 PlatformErrorCodes.Unavailable,
-                "Checking the Internet & connectivity settings, including this computer's location, "
-                    + "took too long."
+                "Reading the Paratext registration and Internet & connectivity settings took too long."
             );
         }
         catch (Exception ex)
