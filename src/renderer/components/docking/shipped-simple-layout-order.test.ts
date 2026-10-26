@@ -107,6 +107,7 @@ const TAB_FOR_COMMAND: Record<string, string> = {
   'legacyCommentManager.showCommentListPanel': 'legacyCommentManager.commentListPanel',
   'platformScriptureEditor.showTextCollectionPanel': 'platformScriptureEditor.scriptureTextGrid',
   'platformScripture.openFind': 'platformScripture.find',
+  'platformLexicalTools.openDictionary': 'platformLexicalTools.dictionary',
 };
 
 type MenuItemJson = {
@@ -274,7 +275,7 @@ describe('shipped Simple-mode Column 3 order', () => {
     ]);
   });
 
-  it('lists a TOOLS item for every third-column tab except the always-open Dictionary', () => {
+  it('lists a TOOLS item for every third-column tab', () => {
     const merged = mergeDefaultLayoutSupplement(simpleLayout, supplementEntries, 'simple');
     const mappedTabs = simpleToolsCommands().map((command) => TAB_FOR_COMMAND[command]);
     // TAB_FOR_COMMAND[command] is undefined for an unmapped command, and a missing layout slot is
@@ -283,11 +284,7 @@ describe('shipped Simple-mode Column 3 order', () => {
     mappedTabs.forEach((tab) => expect(tab).toBeDefined());
     // The menu's own order is the design's (Text collection before Comments), not the column's;
     // what must hold is that every tab a user can bring forward has an item.
-    expect([...mappedTabs].sort()).toEqual(
-      columnWebViewTypes(merged, 2)
-        .filter((webViewType) => webViewType !== 'platformLexicalTools.dictionary')
-        .sort(),
-    );
+    expect([...mappedTabs].sort()).toEqual(columnWebViewTypes(merged, 2).sort());
   });
 
   it('the real supplement leaves nothing Simple-mode-only behind in a power-mode merge', () => {

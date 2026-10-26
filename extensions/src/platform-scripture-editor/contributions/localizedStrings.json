@@ -1337,12 +1337,6 @@
         "message": "The Simple editor menu now shares the Comments label with the Power menu. The new key is %webView_legacyCommentManager_openComments_2%."
       }
     },
-    "%webView_platformScriptureEditor_showDictionaryPanel%": {
-      "deprecationInfo": {
-        "date": "2026-10-20",
-        "message": "The Simple editor menu no longer has a Dictionary item: the Dictionary tab is always open in its third column. Retired with no replacement key."
-      }
-    },
     "%webView_platformScriptureEditor_structureProtection_lockStructure%": {
       "deprecationInfo": {
         "date": "2026-09-21",
