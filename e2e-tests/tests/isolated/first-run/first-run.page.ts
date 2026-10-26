@@ -124,10 +124,11 @@ export class FirstRunPage {
    * (`isSaveDisabled` in identify-step.component.tsx requires a trimmed name; only the code
    * validation is bypassed), so this fills a placeholder name first.
    *
-   * Saving the internet choice just before Identify can bring up the "Updating project view" cover
-   * behind the wizard, a modal of its own that holds focus while it is up, and a fill types into
-   * whatever has focus. So this waits for the cover to go, then retries the fill until the name
-   * sticks.
+   * A project switch in the app behind the wizard, such as the one startup makes, raises the
+   * "Updating project view" cover, a modal of its own that takes focus from the wizard while it is
+   * up, and a fill types into whatever has focus. So this waits for the cover to go, then retries
+   * the fill until the name sticks. TODO(PT-4923): drop the wait once the cover no longer takes
+   * focus from the first-run wizard.
    */
   async clickSaveAndRestart(): Promise<void> {
     const nameInput = this.dialog.getByLabel('Registration name');

@@ -343,6 +343,32 @@ describe('InternetSettingsStep', () => {
       await waitFor(() => expect(onNext).toHaveBeenCalledTimes(1));
     });
 
+    // Back stays available while the save runs. A save that finishes after the user left must not
+    // pull them forward again, though it still counts as their choice.
+    it('does not move on when the step is left before the save finishes', async () => {
+      let finishSave: () => void = () => {};
+      configureHooks({
+        value: MOCK_SETTINGS,
+        setData: vi.fn(
+          () =>
+            new Promise<void>((resolve) => {
+              finishSave = resolve;
+            }),
+        ),
+      });
+      const { onNext, unmount } = renderStep();
+
+      await userEvent.click(await continueWithInternetButton());
+      unmount();
+      finishSave();
+
+      await waitFor(() =>
+        expect(settingsService.set).toHaveBeenCalledWith('platform.internetUseChoiceAsked', true),
+      );
+      expect(noteInternetSettingsSaved).toHaveBeenCalled();
+      expect(onNext).not.toHaveBeenCalled();
+    });
+
     it('bails without saving or moving on when setData is unavailable', async () => {
       // A defined provider whose useData has not yet produced a setter (setData === undefined).
       configureHooks({ value: MOCK_SETTINGS, setData: undefined });
