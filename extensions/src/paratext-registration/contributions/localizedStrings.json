@@ -163,11 +163,21 @@
         "date": "2026-09-09"
       }
     },
+    "%paratextRegistration_internetUse_comingSoon%": {
+      "deprecationInfo": {
+        "message": "Said \"Coming soon\", which promises a delivery date nobody has set. The badge now says the option is not yet available. The new key is %paratextRegistration_internetUse_notYetAvailable%.",
+        "date": "2026-10-23"
+      }
+    },
     "%paratextRegistration_internetUse_footer%": {
       "deprecationInfo": {
         "message": "Removed. The per-row \"Coming soon\" badge (%paratextRegistration_internetUse_comingSoon%) already marks the unavailable options, and dropping the line keeps the first-run wizard's Next button in view. No replacement key.",
         "date": "2026-08-19"
       }
+    },
+    "%paratextRegistration_internetUse_notYetAvailable%": {
+      "fallbackKey": "%paratextRegistration_internetUse_comingSoon%",
+      "notes": "Short badge on an internet-access option that is shown in the list but does not work yet. The user cannot turn it on. \"Available\" means \"can be used\", not \"in stock\" or \"not busy\". Keep it short: it sits beside the option's label."
     }
   },
   "localizedStrings": {
@@ -221,6 +231,7 @@
       "%paratextRegistration_exception_register_before_accessing_dbl_resources%": "You must provide a valid Paratext registration before opening resources from the Digital Bible Library.",
       "%paratextRegistration_internetUse_comingSoon%": "Coming soon",
       "%paratextRegistration_internetUse_footer%": "Disabled options are planned for future updates.",
+      "%paratextRegistration_internetUse_notYetAvailable%": "Not yet available",
       "%paratextRegistration_internetUse_unsupportedSelection_description%": "Your Paratext internet settings have “{selectedOption}” selected. This version of Paratext does not support that option yet, so choose one of the available options to continue.",
       "%paratextRegistration_internetUse_unsupportedSelection_title%": "This internet setting is not supported yet",
       "%paratextRegistration_label_emailAddress%": "Email address",
@@ -308,6 +319,7 @@
       "%paratextRegistration_exception_register_before_accessing_dbl_resources%": "Debe proporcionar credenciales de Registro de Paratext válidas antes de abrir recursos de la Biblioteca Bíblica Digital.",
       "%paratextRegistration_internetUse_comingSoon%": "Próximamente",
       "%paratextRegistration_internetUse_footer%": "Las opciones deshabilitadas están previstas para futuras actualizaciones.",
+      "%paratextRegistration_internetUse_notYetAvailable%": "Aún no disponible",
       "%paratextRegistration_internetUse_unsupportedSelection_description%": "Su configuración de internet de Paratext tiene seleccionada la opción “{selectedOption}”. Esta versión de Paratext aún no admite esa opción, así que elija una de las opciones disponibles para continuar.",
       "%paratextRegistration_internetUse_unsupportedSelection_title%": "Esta configuración de internet aún no es compatible",
       "%paratextRegistration_label_emailAddress%": "Dirección de correo electrónico",

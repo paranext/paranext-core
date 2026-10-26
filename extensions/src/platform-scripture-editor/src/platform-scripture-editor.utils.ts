@@ -40,6 +40,7 @@ import {
   LanguageStrings,
   LocalizeKey,
   normalizeProjectId,
+  retryUntil,
   serialize,
   Unsubscriber,
   USFM_MARKERS_MAP_PARATEXT_3_0,
@@ -51,6 +52,8 @@ import {
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { ScriptureEditorViewType, ScriptureRange } from 'platform-scripture-editor';
 import type { SharedProjectsInfo } from 'platform-scripture';
+import type { UnsyncedChangesSnapshot } from 'paratext-bible-send-receive';
+import type { InternetUse } from 'paratext-registration';
 import type { SettingTypes } from 'papi-shared-types';
 import type { MutableRefObject } from 'react';
 // import type ONLY: this module is reachable from main.ts (the extension host), and any RUNTIME
@@ -1994,6 +1997,310 @@ export async function syncOnProjectSwitch(
         `Project-switch sync: outgoing sync for ${outgoingProjectId} failed: ${getErrorMessage(e)}`,
       );
     }
+  }
+}
+
+/**
+ * How long {@link waitForUnsentChanges} keeps listening, once no sync is running, for a project to
+ * be reported as holding changes to send. Well past the backend's debounce after a project's last
+ * write plus its repository check, so an edit whose save was still on its way when the wait began
+ * is still seen.
+ */
+export const UNSENT_CHANGES_GRACE_MS = 10_000;
+
+/**
+ * Upper bound on how long {@link waitForUnsentChanges} waits for a running sync, and the recheck
+ * after it, to finish before giving up without an answer. Long, because a sync can take minutes.
+ */
+export const UNSENT_CHANGES_SYNC_WAIT_MS = 10 * 60_000;
+
+/** Attempts to read the unsynced-changes snapshot. A cold-start rejection must be retried. */
+const UNSYNCED_CHANGES_SEED_ATTEMPTS = 5;
+const UNSYNCED_CHANGES_SEED_RETRY_MS = 1_000;
+
+/**
+ * Checks only the fields {@link waitForUnsentChanges} reads. The renderer and Home keep guards of
+ * their own, which this extension cannot import.
+ */
+function isUnsyncedChangesSnapshot(value: unknown): value is UnsyncedChangesSnapshot {
+  if (typeof value !== 'object' || !value) return false;
+  if (!('toSend' in value) || !Array.isArray(value.toSend)) return false;
+  return value.toSend.every(isString);
+}
+
+/**
+ * Whether a project holds local changes this user's next Send/Receive would send, read from the
+ * backend's `paratextBibleSendReceive.onUnsyncedChangesChanged` signal.
+ *
+ * One read is not enough: the backend checks a project a short while after its last write, and
+ * while a sync is running (`isRechecking`) the list may predate it, still naming projects that sync
+ * is sending. So this ignores the list while a sync is running; once none is, it answers `true` as
+ * soon as a snapshot lists the project, or `false` after {@link UNSENT_CHANGES_GRACE_MS} without
+ * one. Callers should not block on it.
+ *
+ * @param papi Backend PAPI instance.
+ * @param projectId The project to ask about.
+ * @returns `true` if the project has changes to send, `false` if it has none, or `undefined` if no
+ *   snapshot could be read or a running sync did not finish within
+ *   {@link UNSENT_CHANGES_SYNC_WAIT_MS}.
+ */
+export async function waitForUnsentChanges(
+  papi: typeof PapiBackend,
+  projectId: string,
+): Promise<boolean | undefined> {
+  const normalizedProjectId = normalizeProjectId(projectId);
+  return new Promise((resolve) => {
+    let isAnswered = false;
+    let hasReceivedEvent = false;
+    let graceTimer: ReturnType<typeof setTimeout> | undefined;
+    let settleTimer: ReturnType<typeof setTimeout> | undefined;
+    let unsubscribe: Unsubscriber | undefined;
+
+    const answer = (hasUnsentChanges: boolean | undefined) => {
+      if (isAnswered) return;
+      isAnswered = true;
+      clearTimeout(graceTimer);
+      clearTimeout(settleTimer);
+      unsubscribe?.();
+      resolve(hasUnsentChanges);
+    };
+
+    settleTimer = setTimeout(() => {
+      papi.logger.warn(
+        `Could not tell whether ${projectId} has changes to send: a sync was still running after ${UNSENT_CHANGES_SYNC_WAIT_MS}ms`,
+      );
+      answer(undefined);
+    }, UNSENT_CHANGES_SYNC_WAIT_MS);
+
+    const consider = (snapshot: unknown) => {
+      if (!isUnsyncedChangesSnapshot(snapshot)) {
+        papi.logger.warn('The unsynced-changes snapshot had an unexpected shape; ignoring it');
+        return;
+      }
+      if (snapshot.isRechecking === true) {
+        clearTimeout(graceTimer);
+        graceTimer = undefined;
+        return;
+      }
+      if (snapshot.toSend.some((id) => normalizeProjectId(id) === normalizedProjectId)) {
+        answer(true);
+        return;
+      }
+      graceTimer ??= setTimeout(() => answer(false), UNSENT_CHANGES_GRACE_MS);
+    };
+
+    // Subscribed before the seed is read, so no change can land between the two unseen
+    try {
+      unsubscribe = papi.network.getNetworkEvent(
+        'paratextBibleSendReceive.onUnsyncedChangesChanged',
+      )((snapshot) => {
+        if (isUnsyncedChangesSnapshot(snapshot)) hasReceivedEvent = true;
+        consider(snapshot);
+      });
+    } catch (e) {
+      papi.logger.warn(
+        `Could not tell whether ${projectId} has changes to send: could not subscribe to the unsynced-changes signal: ${getErrorMessage(e)}`,
+      );
+      answer(undefined);
+      return;
+    }
+
+    let lastSeedError: unknown;
+    const readSeed = async (): Promise<UnsyncedChangesSnapshot | undefined> => {
+      try {
+        const snapshot = await papi.commands.sendCommand(
+          'paratextBibleSendReceive.getUnsyncedChanges',
+        );
+        if (isUnsyncedChangesSnapshot(snapshot)) return snapshot;
+        lastSeedError = new Error('the unsynced-changes snapshot had an unexpected shape');
+      } catch (e) {
+        lastSeedError = e;
+      }
+      return undefined;
+    };
+
+    (async () => {
+      const seed = await retryUntil(
+        readSeed,
+        (snapshot) => snapshot !== undefined || isAnswered || hasReceivedEvent,
+        { maxAttempts: UNSYNCED_CHANGES_SEED_ATTEMPTS, delayMs: UNSYNCED_CHANGES_SEED_RETRY_MS },
+      );
+      // An event that arrived meanwhile is newer than the seed
+      if (isAnswered || hasReceivedEvent) return;
+      if (seed) {
+        consider(seed);
+        return;
+      }
+      papi.logger.warn(
+        `Could not tell whether ${projectId} has changes to send: ${getErrorMessage(lastSeedError)}`,
+      );
+      answer(undefined);
+    })();
+  });
+}
+
+/**
+ * Projects whose switch-to-Power sync is still deciding whether to send, by normalized id. A second
+ * switch for the same project joins the first instead of deciding separately: both would see the
+ * same snapshot and start two overlapping syncs, which the backend refuses.
+ */
+const projectIdsDecidingSyncOnSwitchToPower = new Set<string>();
+
+/**
+ * After a switch from Simple to Power mode, sends what was typed in Simple. Send/receives the
+ * project only when {@link waitForUnsentChanges} answers `true`, since a sync with nothing to send
+ * would show notifications for no reason. No `suppressNotification`, so Power mode's progress and
+ * failure toasts show. Never rejects.
+ *
+ * Skipped when:
+ *
+ * - The user chose "Don't sync yet" this session (`deferred`), the first-run flag cannot be read
+ *   (`unreadable`), or the consent request rejects. Asked before and after the wait for unsent
+ *   changes, so a decline during the wait still counts. An `unconfirmed` answer does NOT skip it: a
+ *   user who started in Power mode never sees the wizard that records consent. See
+ *   `adr-switch-to-power-sends-unsent-changes`.
+ * - The mode no longer reads `'power'` when the sync would start: the switch back to Simple makes its
+ *   own (consent-gated) sync decision, and anything still unsent goes on the next switch to Power.
+ * - The saved internet setting turns Send/Receive off (`VpnRequired` or `Disabled`). Whether the
+ *   machine is actually online cannot be known without trying, so offline is left to the sync's own
+ *   failure notification.
+ * - An earlier switch-to-Power sync of the same project is still deciding; it covers this one.
+ *
+ * @param papi Backend PAPI instance.
+ * @param projectId The project the Simple-mode Scripture Editor was showing.
+ */
+export async function syncOnSwitchToPower(
+  papi: typeof PapiBackend,
+  projectId: string,
+): Promise<void> {
+  // Any PAPI client can send the command, so the argument is checked rather than trusted
+  if (!isString(projectId)) {
+    papi.logger.warn('Switch-to-Power sync: ignoring a project id that is not a string');
+    return;
+  }
+  const normalizedProjectId = normalizeProjectId(projectId);
+  if (projectIdsDecidingSyncOnSwitchToPower.has(normalizedProjectId)) {
+    papi.logger.info(
+      `Switch-to-Power sync of ${projectId} is already deciding; not starting another`,
+    );
+    return;
+  }
+
+  projectIdsDecidingSyncOnSwitchToPower.add(normalizedProjectId);
+  let shouldSync: boolean;
+  try {
+    shouldSync = await shouldSyncOnSwitchToPower(papi, projectId);
+  } finally {
+    projectIdsDecidingSyncOnSwitchToPower.delete(normalizedProjectId);
+  }
+  if (!shouldSync) return;
+
+  try {
+    await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [projectId]);
+  } catch (e) {
+    papi.logger.warn(`Switch-to-Power sync of ${projectId} failed: ${getErrorMessage(e)}`);
+  }
+}
+
+/**
+ * The first-run sync consent gate's answer when it lets the switch-to-Power sync run, or
+ * `undefined` (logged) when it does not. Only `granted` and `unconfirmed` let it run, so an answer
+ * this does not know fails closed.
+ */
+async function getSwitchToPowerSyncConsent(
+  papi: typeof PapiBackend,
+): Promise<'granted' | 'unconfirmed' | undefined> {
+  let consent;
+  try {
+    consent = await papi.commands.sendCommand('platform.getAutomaticSyncConsent');
+  } catch (e) {
+    papi.logger.warn(
+      `Switch-to-Power sync: could not check first-run sync consent (${getErrorMessage(e)}); skipping sync`,
+    );
+    return undefined;
+  }
+  if (consent === 'granted' || consent === 'unconfirmed') return consent;
+  papi.logger.info(`Switch-to-Power sync skipped: first-run sync consent is ${consent}`);
+  return undefined;
+}
+
+/**
+ * The checks {@link syncOnSwitchToPower} makes before it syncs: consent, unsent changes, the mode,
+ * the internet setting, and consent again. Logs why it answers `false`.
+ */
+async function shouldSyncOnSwitchToPower(
+  papi: typeof PapiBackend,
+  projectId: string,
+): Promise<boolean> {
+  if (!(await getSwitchToPowerSyncConsent(papi))) return false;
+
+  const hasUnsentChanges = await waitForUnsentChanges(papi, projectId);
+  if (hasUnsentChanges !== true) {
+    // Logged, not shown, even when it could not tell: the switch itself succeeded, the edits stay
+    // on disk for the next sync, and like every other automatic sync's skip there is nothing the
+    // user could act on. A sync that runs and fails does show its failure notification.
+    papi.logger.info(
+      `Switch-to-Power sync skipped: ${hasUnsentChanges === false ? 'no' : 'could not tell whether there are'} changes to send in ${projectId}`,
+    );
+    return false;
+  }
+
+  let interfaceMode: SettingTypes['platform.interfaceMode'] | undefined;
+  try {
+    interfaceMode = await papi.settings.get('platform.interfaceMode');
+  } catch (e) {
+    papi.logger.warn(
+      `Switch-to-Power sync: could not read platform.interfaceMode (${getErrorMessage(e)}); skipping sync of ${projectId}`,
+    );
+    return false;
+  }
+  if (interfaceMode !== 'power') {
+    papi.logger.info(
+      `Switch-to-Power sync of ${projectId} skipped: the interface mode is ${interfaceMode} now, and that switch decides its own sync`,
+    );
+    return false;
+  }
+
+  const internetUse = await readPermittedInternetUse(papi);
+  if (internetUse === 'VpnRequired' || internetUse === 'Disabled') {
+    papi.logger.info(
+      `Switch-to-Power sync of ${projectId} skipped: the internet setting is ${internetUse}, which turns Send/Receive off`,
+    );
+    return false;
+  }
+
+  // Asked again because the wait above can last minutes, and "Don't sync yet" chosen meanwhile
+  // must still stop this sync
+  const consent = await getSwitchToPowerSyncConsent(papi);
+  if (!consent) return false;
+  // Logged at info because every other automatic sync would skip here, so a support log must show
+  // why this one ran
+  if (consent !== 'granted')
+    papi.logger.info(
+      `Switch-to-Power sync of ${projectId}: first-run sync consent is ${consent}, which does not stop this sync`,
+    );
+  return true;
+}
+
+/**
+ * The saved internet setting, or `undefined` when it cannot be read. Blocked values mirror the
+ * backend's `InternetServicesGate.IsBlocked`, which enforces them on every Send/Receive; this check
+ * only spares a sync that gate would refuse. So an unreadable setting lets the sync go ahead.
+ */
+async function readPermittedInternetUse(
+  papi: typeof PapiBackend,
+): Promise<InternetUse | undefined> {
+  try {
+    const provider = await papi.dataProviders.get(
+      'paratextRegistration.internetSettingsDataProvider',
+    );
+    if (!provider) throw new Error('the internet settings data provider is not available');
+    return (await provider.getInternetSettings(undefined)).permittedInternetUse;
+  } catch (e) {
+    papi.logger.warn(
+      `Switch-to-Power sync: could not read the internet setting (${getErrorMessage(e)}); leaving it to Send/Receive`,
+    );
+    return undefined;
   }
 }
 
