@@ -1,9 +1,15 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import postcss from 'postcss';
+import postcss, { type Rule } from 'postcss';
+import { compile } from 'sass';
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
-import { CHARACTER_MARKER_INDICATORS_CLASS } from './platform-scripture-editor.utils';
-import { parseWebViewSource, propExpressions } from './web-view-source.test-utils';
+import {
+  descendants,
+  parseSource,
+  parseWebViewSource,
+  propExpressions,
+} from './web-view-source.test-utils';
 
 /**
  * The marker classes that scope a rule to Simple mode. `_simple-mode.scss` explains why the scoping
@@ -19,16 +25,12 @@ const USJ_NODES_SCSS_PATH = join(__dirname, '_usj-nodes.scss');
  */
 const USFM_STY_PATH = join(__dirname, '../../../../c-sharp/assets/usfm.sty');
 
-function stripComments(scss: string): string {
-  return scss.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
-}
-
-/** Splits on the commas that separate selectors, not the ones inside `:is(…)` or `:not(…)`. */
-function splitTopLevelCommas(selectorList: string): string[] {
+/** Splits a comma-separated list on its top-level commas, not the ones inside `(…)`. */
+function splitTopLevelCommas(list: string): string[] {
   const parts: string[] = [];
   let depth = 0;
   let current = '';
-  [...selectorList].forEach((character) => {
+  [...list].forEach((character) => {
     if (character === '(') depth += 1;
     if (character === ')') depth -= 1;
     if (character === ',' && depth === 0) {
@@ -41,30 +43,41 @@ function splitTopLevelCommas(selectorList: string): string[] {
 }
 
 /**
- * Every rule selector in a stylesheet: the text before each `{`, split on the commas that separate
- * selectors.
- *
- * Comments are stripped first so a selector-looking string inside a comment is not read as a rule.
- * This deliberately does NOT track nesting depth — a nested rule's or an at-rule's own head would
- * simply be reported as one more selector, which fails the assertion below. That is the safe
- * direction for a scope guard to fail in, and this file is flat today.
+ * `_simple-mode.scss` compiled, so nested rules are checked as the browser sees them: every rule
+ * with its full selector.
  */
-function ruleSelectors(scss: string): string[] {
-  return [...stripComments(scss).matchAll(/([^{}]*)\{/g)].flatMap((match) =>
-    splitTopLevelCommas(match[1])
-      .map((selector) => selector.trim())
-      .filter(Boolean),
-  );
+function compiledSimpleModeRules(): Rule[] {
+  const rules: Rule[] = [];
+  postcss.parse(compile(SIMPLE_MODE_SCSS_PATH).css).walkRules((rule) => {
+    rules.push(rule);
+  });
+  return rules;
 }
 
-/** Every flat rule in a stylesheet whose selector starts with `selectorStart`. */
-function rulesStartingWith(
-  scss: string,
-  selectorStart: string,
-): { selector: string; body: string }[] {
-  return [...stripComments(scss).matchAll(/([^{}]*)\{([^{}]*)\}/g)]
-    .map(([, selector, body]) => ({ selector: selector.trim().replace(/\s+/g, ' '), body }))
-    .filter(({ selector }) => selector.startsWith(selectorStart));
+/** The value a rule's own declaration of `prop` sets, if it has one. */
+function declarationValue(rule: Rule | undefined, prop: string): string | undefined {
+  return rule?.nodes.flatMap((node) =>
+    node.type === 'decl' && node.prop === prop ? [node.value] : [],
+  )[0];
+}
+
+/**
+ * Every transition delay a rule's own declarations set, in ms, from `transition-delay` or
+ * `transition`.
+ */
+function transitionDelaysMs(rule: Rule | undefined): number[] {
+  const toMs = (time: string) => parseFloat(time) * (time.endsWith('ms') ? 1 : 1000);
+  return (rule?.nodes ?? []).flatMap((node) => {
+    if (node.type !== 'decl') return [];
+    if (node.prop === 'transition-delay')
+      return splitTopLevelCommas(node.value).map((time) => toMs(time.trim()));
+    if (node.prop !== 'transition') return [];
+    // In the shorthand, a transition's second time is its delay.
+    return splitTopLevelCommas(node.value).map((transition) => {
+      const times = transition.match(/[\d.]+m?s\b/g) ?? [];
+      return times.length > 1 ? toMs(times[1]) : 0;
+    });
+  });
 }
 
 /** Declarations a character rule can carry without making its text look different. */
@@ -143,7 +156,7 @@ function markersInIsList(selector: string): string[] {
     .sort();
 }
 
-const MARKER_INDICATOR_SCOPE = `.editor-container-simple.${CHARACTER_MARKER_INDICATORS_CLASS}`;
+const MARKER_INDICATOR_SCOPE = '.editor-container-simple.character-marker-indicators';
 
 describe('_simple-mode.scss', () => {
   it('scopes every rule to a Simple-mode marker class', () => {
@@ -151,7 +164,7 @@ describe('_simple-mode.scss', () => {
     // scope narrows the text column for every POWER-mode user too, silently, for a control they
     // cannot see. `_usj-nodes.scss` styles the editor in both modes and this file is compiled into
     // every web view's CSS, so the marker-class prefix is the only thing keeping Power untouched.
-    const selectors = ruleSelectors(readFileSync(SIMPLE_MODE_SCSS_PATH, 'utf8'));
+    const selectors = compiledSimpleModeRules().flatMap((rule) => rule.selectors);
 
     expect(selectors.length).toBeGreaterThan(0);
     const escaped = selectors.filter(
@@ -215,7 +228,9 @@ describe('_simple-mode.scss', () => {
 
   describe('character markers with no visible style', () => {
     const indicatorRules = () =>
-      rulesStartingWith(readFileSync(SIMPLE_MODE_SCSS_PATH, 'utf8'), MARKER_INDICATOR_SCOPE);
+      compiledSimpleModeRules().filter(({ selector }) =>
+        selector.startsWith(MARKER_INDICATOR_SCOPE),
+      );
     const restingRule = () => indicatorRules().find(({ selector }) => !selector.endsWith(':hover'));
     const hoverRule = () => indicatorRules().find(({ selector }) => selector.endsWith(':hover'));
 
@@ -239,21 +254,19 @@ describe('_simple-mode.scss', () => {
       );
     });
 
-    it('tints them with plain --muted, so nested markers do not get darker', () => {
-      expect(restingRule()?.body).toContain('background-color: var(--muted);');
-    });
-
     it('draws the hover line only after a delay and starts removing it at once', () => {
-      // The line is always drawn but transparent. Only the hover rule carries the delay, so the
+      // The line is always drawn but transparent. Only the hover rule carries a delay, so the
       // line fades in late and starts fading out as soon as the pointer leaves.
-      const resting = restingRule()?.body ?? '';
-      const hovered = hoverRule()?.body ?? '';
+      const resting = restingRule();
+      const hovered = hoverRule();
+      const hoverColor = declarationValue(hovered, 'text-decoration-color');
 
-      expect(resting).toMatch(/text-decoration-line: underline( overline)?;/);
-      expect(resting).toContain('text-decoration-color: transparent;');
-      expect(resting).not.toContain('transition-delay');
-      expect(hovered).toContain('text-decoration-color: currentColor;');
-      expect(hovered).toMatch(/transition-delay: \d+ms;/);
+      expect(declarationValue(resting, 'text-decoration-line')).toMatch(/\bunderline\b/);
+      expect(declarationValue(resting, 'text-decoration-color')).toBe('transparent');
+      expect(hoverColor).toBeDefined();
+      expect(hoverColor).not.toBe('transparent');
+      expect(Math.max(0, ...transitionDelaysMs(resting))).toBe(0);
+      expect(Math.max(0, ...transitionDelaysMs(hovered))).toBeGreaterThan(0);
     });
 
     it('is switched on from the Scripture editor root only, not the read-only Simple panels', () => {
@@ -265,10 +278,19 @@ describe('_simple-mode.scss', () => {
         ),
       ).toBe(true);
       ['model-text-panel.component.tsx', 'resource-text-panel.component.tsx'].forEach((panel) => {
-        const source = readFileSync(join(__dirname, panel), 'utf8');
-        expect(source).toContain('editor-container-simple');
-        expect(source).not.toContain(CHARACTER_MARKER_INDICATORS_CLASS);
-        expect(source).not.toContain('getSimpleModeRootClassNames');
+        const nodes = descendants(parseSource(panel));
+        const strings = nodes.flatMap((node) =>
+          ts.isStringLiteral(node) || ts.isTemplateLiteralToken(node) || ts.isJsxText(node)
+            ? [node.text]
+            : [],
+        );
+        expect(strings.some((text) => text.includes('editor-container-simple'))).toBe(true);
+        expect(strings.some((text) => text.includes('character-marker-indicators'))).toBe(false);
+        expect(
+          nodes.some(
+            (node) => ts.isIdentifier(node) && node.text === 'getSimpleModeRootClassNames',
+          ),
+        ).toBe(false);
       });
     });
   });

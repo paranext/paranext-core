@@ -2,6 +2,7 @@ import { Editorial, getDefaultViewOptions } from '@eten-tech-foundation/platform
 import { USJ_TYPE, USJ_VERSION, type Usj } from '@eten-tech-foundation/scripture-utilities';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
+import { expect, waitFor } from 'storybook/test';
 // The demo editor's stylesheet stands in for the web view's, which Storybook does not load.
 /* eslint-disable import/no-relative-packages -- the demo editor stylesheet is not part of
    platform-bible-react's package exports, so it can only be pulled in by relative path, as
@@ -10,10 +11,7 @@ import '../../../../lib/platform-bible-react/src/components/demo/scripture-edito
 /* eslint-enable import/no-relative-packages */
 // The production Simple-mode rules, not a copy.
 import './_simple-mode.scss';
-import {
-  CHARACTER_MARKER_INDICATORS_CLASS,
-  getSimpleModeRootClassNames,
-} from './platform-scripture-editor.utils';
+import { getSimpleModeRootClassNames } from './platform-scripture-editor.utils';
 
 /**
  * Genesis 11:26–29 with `\w` (no visible style) beside `\nd` (underlined) and `\bd` (bold), so the
@@ -84,7 +82,11 @@ function CharacterMarkerIndicators({ isTextEditable, lineStyle }: CharacterMarke
       {lineStyle === 'underline overline' && (
         // Previews the one-word change in `_simple-mode.scss`. Same selector weight as the real
         // rule, so it wins by coming later. `\w` is the only invisible marker in this text.
-        <style>{`.editor-container-simple.${CHARACTER_MARKER_INDICATORS_CLASS} .usfm_w { text-decoration-line: underline overline; }`}</style>
+        <style>
+          {
+            '.editor-container-simple.character-marker-indicators .usfm_w { text-decoration-line: underline overline; }'
+          }
+        </style>
       )}
       <Editorial defaultUsj={GENESIS_11_USJ} scrRef={SCR_REF} options={EDITOR_OPTIONS} />
     </div>
@@ -99,8 +101,10 @@ const meta: Meta<typeof CharacterMarkerIndicators> = {
   argTypes: {
     lineStyle: { control: 'inline-radio', options: ['underline', 'underline overline'] },
   },
-  // The editor mounts asynchronously, so a snapshot can catch it half-drawn.
-  parameters: { chromatic: { disableSnapshot: true } },
+  // The editor mounts asynchronously; wait for its text so a snapshot never catches it half-drawn.
+  play: async ({ canvasElement }) => {
+    await waitFor(() => expect(canvasElement.querySelector('.usfm_w')).not.toBeNull());
+  },
 };
 export default meta;
 

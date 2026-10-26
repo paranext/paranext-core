@@ -23,7 +23,6 @@ import {
   generateParagraphMenuListItems,
   getNextViewTypeInCycle,
   getSimpleModeRootClassNames,
-  CHARACTER_MARKER_INDICATORS_CLASS,
   createUnsupportedProjectIdsCache,
   getProjectUnsupportedReason,
   buildScriptureEditorWebViewState,
@@ -4404,6 +4403,63 @@ describe('resolveViewTypeForInterfaceMode (standard view is power-mode-only)', (
   });
 });
 
+describe('getSimpleModeRootClassNames', () => {
+  it('turns the character-marker indicator on for text a Simple user can type into', () => {
+    expect(
+      getSimpleModeRootClassNames({
+        isPowerMode: false,
+        isInterfaceModeLoading: false,
+        isDurablyReadOnly: false,
+      }),
+    ).toEqual(['editor-container-simple', 'character-marker-indicators']);
+  });
+
+  it('leaves the indicator off when the text cannot be typed into', () => {
+    // It warns against typing inside a marker, so read-only text has nothing to warn about.
+    expect(
+      getSimpleModeRootClassNames({
+        isPowerMode: false,
+        isInterfaceModeLoading: false,
+        isDurablyReadOnly: true,
+      }),
+    ).toEqual(['editor-container-simple']);
+  });
+
+  it('leaves the indicator off until the interface mode is known', () => {
+    // `isPowerMode` reads `false` while the setting loads, so a Power session would otherwise be
+    // tinted for a frame.
+    expect(
+      getSimpleModeRootClassNames({
+        isPowerMode: false,
+        isInterfaceModeLoading: true,
+        isDurablyReadOnly: false,
+      }),
+    ).toEqual(['editor-container-simple']);
+  });
+
+  it('leaves the indicator off until edit permissions are known', () => {
+    // The permission reads default to "editable" while they load, so a read-only project would
+    // otherwise be tinted until they resolve.
+    expect(
+      getSimpleModeRootClassNames({
+        isPowerMode: false,
+        isInterfaceModeLoading: false,
+        isDurablyReadOnly: undefined,
+      }),
+    ).toEqual(['editor-container-simple']);
+  });
+
+  it('adds no Simple-mode classes in Power mode', () => {
+    expect(
+      getSimpleModeRootClassNames({
+        isPowerMode: true,
+        isInterfaceModeLoading: false,
+        isDurablyReadOnly: false,
+      }),
+    ).toEqual([]);
+  });
+});
+
 describe('getNextViewTypeInCycle', () => {
   it('cycles formatted -> standard -> markers -> formatted in power mode', () => {
     expect(getNextViewTypeInCycle('formatted', true)).toBe('standard');
@@ -6175,60 +6231,3 @@ describe('createUnsupportedProjectIdsCache', () => {
 });
 
 // #endregion
-
-describe('getSimpleModeRootClassNames', () => {
-  it('turns the character-marker indicator on for text a Simple user can type into', () => {
-    expect(
-      getSimpleModeRootClassNames({
-        isPowerMode: false,
-        isInterfaceModeLoading: false,
-        isDurablyReadOnly: false,
-      }),
-    ).toEqual(['editor-container-simple', CHARACTER_MARKER_INDICATORS_CLASS]);
-  });
-
-  it('leaves the indicator off when the text cannot be typed into', () => {
-    // It warns against typing inside a marker, so read-only text has nothing to warn about.
-    expect(
-      getSimpleModeRootClassNames({
-        isPowerMode: false,
-        isInterfaceModeLoading: false,
-        isDurablyReadOnly: true,
-      }),
-    ).toEqual(['editor-container-simple']);
-  });
-
-  it('leaves the indicator off until the interface mode is known', () => {
-    // `isPowerMode` reads `false` while the setting loads, so a Power session would otherwise be
-    // tinted for a frame.
-    expect(
-      getSimpleModeRootClassNames({
-        isPowerMode: false,
-        isInterfaceModeLoading: true,
-        isDurablyReadOnly: false,
-      }),
-    ).toEqual(['editor-container-simple']);
-  });
-
-  it('leaves the indicator off until edit permissions are known', () => {
-    // The permission reads default to "editable" while they load, so a read-only project would
-    // otherwise be tinted until they resolve.
-    expect(
-      getSimpleModeRootClassNames({
-        isPowerMode: false,
-        isInterfaceModeLoading: false,
-        isDurablyReadOnly: undefined,
-      }),
-    ).toEqual(['editor-container-simple']);
-  });
-
-  it('adds no Simple-mode classes in Power mode', () => {
-    expect(
-      getSimpleModeRootClassNames({
-        isPowerMode: true,
-        isInterfaceModeLoading: false,
-        isDurablyReadOnly: false,
-      }),
-    ).toEqual([]);
-  });
-});

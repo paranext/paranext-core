@@ -100,13 +100,9 @@ export function resolveViewTypeForInterfaceMode(
 }
 
 /**
- * Class on the Scripture editor's root that turns on the Simple-mode tint and hover line for
- * character markers with no visible style (see `_simple-mode.scss`).
- */
-export const CHARACTER_MARKER_INDICATORS_CLASS = 'character-marker-indicators';
-
-/**
  * The Simple-mode marker classes for the Scripture editor's root element (see `_simple-mode.scss`).
+ * `character-marker-indicators` turns on the tint and hover line for character markers with no
+ * visible style.
  *
  * The character-marker indicator warns against typing inside a marker, so it is on only where the
  * text can be typed into, and stays off until that is known: `isPowerMode` reads `false` while the
@@ -128,7 +124,7 @@ export function getSimpleModeRootClassNames({
 }): string[] {
   if (isPowerMode) return [];
   if (isInterfaceModeLoading || isDurablyReadOnly !== false) return ['editor-container-simple'];
-  return ['editor-container-simple', CHARACTER_MARKER_INDICATORS_CLASS];
+  return ['editor-container-simple', 'character-marker-indicators'];
 }
 
 /**

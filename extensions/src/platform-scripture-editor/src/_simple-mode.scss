@@ -121,9 +121,8 @@
 
 // Character markers with no visible style. Simple styles character markers only through the static
 // `_usj-nodes.scss`, where these set nothing but `font-size: 100%`, so their text looks like plain
-// text and users type inside them unawares. `simple-mode.scss.test.ts` keeps both lists in step
-// with `_usj-nodes.scss`. The list is written out twice, not shared through a Sass variable or a
-// nested `&:hover`, because that test reads this file as flat CSS.
+// text and users type inside them unawares. `simple-mode.scss.test.ts` keeps the list in step
+// with `_usj-nodes.scss`.
 //
 // The tint is solid `--muted`, so nested markers are no darker. It keeps the text's own color on
 // purpose: `--muted-foreground` would dim Scripture. Find, comments and the selection paint above
@@ -158,30 +157,11 @@
   text-decoration-line: underline;
   text-decoration-color: transparent;
   transition: text-decoration-color 150ms;
-}
 
-.editor-container-simple.character-marker-indicators
-  :is(
-    .usfm_ior,
-    .usfm_liv,
-    .usfm_liv1,
-    .usfm_liv2,
-    .usfm_liv3,
-    .usfm_liv4,
-    .usfm_liv5,
-    .usfm_ndx,
-    .usfm_no,
-    .usfm_rb,
-    .usfm_w,
-    .usfm_wa,
-    .usfm_wg,
-    .usfm_wh,
-    .usfm_zpa-d,
-    .usfm_zpa-xb,
-    .usfm_zpa-xv
-  ):hover {
-  text-decoration-color: currentColor;
-  transition-delay: 500ms;
+  &:hover {
+    text-decoration-color: currentColor;
+    transition-delay: 500ms;
+  }
 }
 /* stylelint-enable selector-class-pattern */
 
