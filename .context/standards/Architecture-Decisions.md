@@ -8337,9 +8337,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `isReadOnly`/`isHidden` would cover settings added to the group later, but it was deferred: a
   per-setting flag keeps the option of one editable setting in an otherwise read-only group, and
   no request needs the group-wide rule yet.
-- **Consequences:** Any extension can make a setting read-only or hide a whole group from JSON
-  alone. A setting whose read-only state depends on other values (e.g. `platform.isEditable` while
-  `platform.isPublished`) still needs renderer logic; a static flag cannot express it.
+- **Consequences:** An extension can make any of its own settings read-only or hide a whole group
+  from JSON alone. A setting whose read-only state depends on other values (e.g.
+  `platform.isEditable` while `platform.isPublished`) still needs renderer logic; a static flag
+  cannot express it.
 - **Source:** PT-4646.
 
 ## adr-shard-discovery-by-type: Service routers discover shards by network-object type, not by rebuilding the scoped name
