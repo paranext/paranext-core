@@ -299,6 +299,86 @@ namespace TestParanextDataProvider.ParatextUtils
             Assert.That(Directory.EnumerateFiles(folder), Is.Empty);
         }
 
+        // ----- ReadParatext9InternetUse -----
+
+        /// <summary>A Paratext app-data folder holding only an InternetSettings.xml.</summary>
+        private string MakeFolderWithInternetSettings(string name, string permittedInternetUse)
+        {
+            var folder = Path.Combine(_root, name);
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(
+                Path.Combine(folder, "InternetSettings.xml"),
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?><InternetSettingsMemento>"
+                    + $"<PermittedInternetUse>{permittedInternetUse}</PermittedInternetUse>"
+                    + "</InternetSettingsMemento>"
+            );
+            return folder;
+        }
+
+        // A Paratext 9 user who never registered still has an internet setting, so no
+        // registration is needed, unlike seeding.
+        [Test]
+        public void ReadParatext9InternetUse_ReadsTheNewestParatext8Or9Folder()
+        {
+            MakeFolderWithInternetSettings("Paratext84", "Enabled");
+            MakeFolderWithInternetSettings("Paratext95", "VpnRequired");
+            MakeFolderWithInternetSettings("Paratext100", "Disabled");
+
+            var result = new PlatformParatextInfo(_root).ReadParatext9InternetUse();
+
+            Assert.That(result, Is.EqualTo(InternetUse.VpnRequired));
+        }
+
+        [Test]
+        public void ReadParatext9InternetUse_SkipsAParatext9FolderWithoutInternetSettings()
+        {
+            MakeFolderWithInternetSettings("Paratext94", "ProxyOnly");
+            Directory.CreateDirectory(Path.Combine(_root, "Paratext96"));
+
+            var result = new PlatformParatextInfo(_root).ReadParatext9InternetUse();
+
+            Assert.That(result, Is.EqualTo(InternetUse.ProxyOnly));
+        }
+
+        // Platform.Bible's own copy is not Paratext 9's setting: startup migrates it, and a new
+        // user's copy holds ParatextData's default.
+        [Test]
+        public void ReadParatext9InternetUse_NoParatext9_ReturnsNull()
+        {
+            MakeFolderWithInternetSettings("Paratext100", "Disabled");
+
+            Assert.That(new PlatformParatextInfo(_root).ReadParatext9InternetUse(), Is.Null);
+        }
+
+        [Test]
+        public void ReadParatext9InternetUse_NoLocalAppDataRoot_ReturnsNull()
+        {
+            var missingRoot = Path.Combine(_root, "missing");
+
+            Assert.That(new PlatformParatextInfo(missingRoot).ReadParatext9InternetUse(), Is.Null);
+        }
+
+        [Test]
+        public void ReadParatext9InternetUse_UnreadableValue_ReturnsNull()
+        {
+            MakeFolderWithInternetSettings("Paratext95", "Sometimes");
+
+            Assert.That(new PlatformParatextInfo(_root).ReadParatext9InternetUse(), Is.Null);
+        }
+
+        [Test]
+        public void ReadParatext9InternetUse_LeavesBothFoldersAlone()
+        {
+            var paratext9 = MakeFolderWithInternetSettings("Paratext95", "Disabled");
+            var before = HashFolder(paratext9);
+
+            new PlatformParatextInfo(_root).ReadParatext9InternetUse();
+
+            Assert.That(HashFolder(paratext9), Is.EqualTo(before));
+            // Reading Paratext 9's setting must not seed Platform.Bible's folder as a side effect.
+            Assert.That(Directory.Exists(Path.Combine(_root, "Paratext100")), Is.False);
+        }
+
         [Test]
         public void NeverChangesTheParatext9Folder()
         {

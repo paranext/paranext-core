@@ -52,11 +52,7 @@ import { FirstRunPage } from './first-run.page';
 // shows the app immediately and the wizard never appears.
 test.use({
   interfaceMode: 'simple',
-  seedSettings: {
-    'platform.firstRunComplete': false,
-    // So a saved Disabled shows as "Disable all Internet access", whatever an earlier run chose.
-    'platform.internetUseDisableSomeServicesChosen': false,
-  },
+  seedSettings: { 'platform.firstRunComplete': false },
 });
 
 /**
@@ -145,24 +141,23 @@ test.describe('First-run wizard', () => {
     await expect(frPage.dontSyncYetButton).not.toBeVisible();
     await frPage.clickNext(); // Language → Internet Settings
 
-    // Internet Settings step: Back appears; "Don't sync yet" stays hidden. Neither selectable
-    // option is selected and Next stays disabled until the user picks one, whatever setting is
-    // already stored.
+    // Internet Settings step: Back appears; "Don't sync yet" stays hidden. The step offers only its
+    // own two choices, with the sensitive-countries warning, and hides Next, so the saved setting
+    // can't be accepted without a choice.
     await expect(frPage.dialog.getByRole('button', { name: 'Back' })).toBeVisible({
       timeout: 5_000,
     });
     await expect(frPage.dontSyncYetButton).not.toBeVisible();
-    const unrestricted = frPage.dialog.getByRole('radio', { name: 'Unrestricted' });
-    await expect(unrestricted).toBeVisible({ timeout: 60_000 });
-    await expect(unrestricted).not.toBeChecked();
+    await expect(frPage.continueWithInternetButton).toBeVisible({ timeout: 60_000 });
+    await expect(frPage.closeAppButton).toBeVisible();
     await expect(
-      frPage.dialog.getByRole('radio', {
-        name: 'Disable access to some Bible translation services',
-      }),
-    ).not.toBeChecked();
-    await expect(nextBtn).toBeDisabled();
-    await frPage.chooseUnrestrictedInternetAccess();
-    await frPage.clickNext(); // Internet Settings → Identify
+      frPage.dialog.getByText(
+        'Paratext 10 uses the internet. Only use Paratext 10 when you are not in a sensitive country.',
+      ),
+    ).toBeVisible();
+    await expect(frPage.dialog.getByRole('radiogroup')).toHaveCount(0);
+    await expect(frPage.dialog.getByRole('button', { name: /^(Next|Finish)$/i })).not.toBeVisible();
+    await frPage.chooseUnrestrictedInternetAccess(); // Internet Settings → Identify
 
     // Identify step: Next is hidden entirely (setCanProceed(undefined)) — the step owns its own
     // "Save and restart" primary action. Back is still visible.
@@ -183,16 +178,15 @@ test.describe('First-run wizard', () => {
 
     await frPage.clickNext(); // Language → Internet Settings
 
-    // Wait for the step's loaded content (the internet-access radio list) before asserting on what
-    // it does NOT contain — otherwise the assertion could trivially pass while the step is still
-    // showing its loading spinner.
-    await expect(frPage.dialog.getByRole('radiogroup')).toBeVisible({ timeout: 10_000 });
+    // Wait for the step's loaded content (its choices) before asserting on what it does NOT contain
+    // — otherwise the assertion could trivially pass while the step is still showing its loading
+    // spinner.
+    await expect(frPage.continueWithInternetButton).toBeVisible({ timeout: 60_000 });
     await expect(frPage.dialog.getByRole('button', { name: /Developer only/ })).not.toBeVisible();
   });
 
-  // In Paratext 9, Disabled is "Disable all Internet access", which this app cannot honor yet. A user
-  // who leaves without choosing keeps Disabled saved, so the next run asks again.
-  test('shows a stored Disabled as "Disable all Internet access" until the user chooses "Disable access…", across reloads', async ({
+  // Whatever was saved before, including a Paratext 9 setting the app does not support yet.
+  test('"Use Paratext 10 with internet access" saves Unrestricted and moves on to Identify', async ({
     mainPage,
   }) => {
     if (!savedInternetSettings) throw new Error('expected the saved internet settings to be read');
@@ -202,56 +196,15 @@ test.describe('First-run wizard', () => {
     });
     await injectDemoMode(mainPage);
     const frPage = new FirstRunPage(mainPage);
-    const nextBtn = frPage.dialog.getByRole('button', { name: 'Next' });
-    const disableAll = frPage.dialog.getByRole('radio', { name: 'Disable all Internet access' });
-    const disableSome = frPage.dialog.getByRole('radio', {
-      name: 'Disable access to some Bible translation services',
+    await frPage.waitForWizard();
+    await frPage.clickNext(); // Language → Internet Settings
+
+    await frPage.chooseUnrestrictedInternetAccess(); // Internet Settings → Identify
+
+    await expect(frPage.dialog.getByRole('button', { name: /save and restart/i })).toBeVisible({
+      timeout: 15_000,
     });
-
-    const expectDisableAllShown = async () => {
-      await expect(disableAll).toBeChecked({ timeout: 60_000 });
-      await expect(disableAll).toBeDisabled();
-      await expect(disableSome).not.toBeChecked();
-      await expect(
-        frPage.dialog
-          .getByRole('status')
-          .filter({ hasText: '“Disable all Internet access” is not supported yet' }),
-      ).toBeVisible();
-      await expect(nextBtn).toBeDisabled();
-    };
-
-    await frPage.waitForWizard();
-    await frPage.clickNext(); // Language → Internet Settings
-    await expectDisableAllShown();
-
-    // A reload stands in for leaving without choosing: nothing was saved, so the wizard asks again.
-    await mainPage.reload();
-    await frPage.waitForWizard();
-    await frPage.clickNext(); // Language → Internet Settings
-    await expectDisableAllShown();
-
-    // The label, not the radio: the label's click target covers the row (see
-    // FirstRunPage.chooseUnrestrictedInternetAccess).
-    await frPage.dialog
-      .locator('label', { hasText: /^Disable access to some Bible translation services$/ })
-      .click();
-    await expect(disableSome).toBeChecked();
-    await expect(disableAll).not.toBeChecked();
-    await expect(nextBtn).toBeEnabled({ timeout: 15_000 });
-
-    // The choice is saved, so the next run treats the saved Disabled as "Disable access…": like any
-    // other value the app supports, nothing is selected until the user picks again.
-    await mainPage.reload();
-    await frPage.waitForWizard();
-    await frPage.clickNext(); // Language → Internet Settings
-    await expect(frPage.dialog.getByRole('radio', { name: 'Unrestricted' })).toBeVisible({
-      timeout: 60_000,
-    });
-    await expect(disableAll).not.toBeChecked();
-    await expect(disableSome).not.toBeChecked();
-    await expect(
-      frPage.dialog.getByRole('status').filter({ hasText: 'is not supported yet' }),
-    ).toHaveCount(0);
+    expect((await readSavedInternetSettings()).permittedInternetUse).toBe('Enabled');
   });
 
   test('"Don\'t sync yet" on Sync consent closes the wizard', async ({ mainPage }) => {
@@ -262,8 +215,7 @@ test.describe('First-run wizard', () => {
 
     // Navigate to Sync consent.
     await frPage.clickNext(); // Language → Internet Settings
-    await frPage.chooseUnrestrictedInternetAccess();
-    await frPage.clickNext(); // Internet Settings → Identify
+    await frPage.chooseUnrestrictedInternetAccess(); // Internet Settings → Identify
     await frPage.clickSaveAndRestart(); // Identify → Sync consent (demo: calls onNext())
 
     // "Don't sync yet" invokes declineFirstRunSync(), which records the session's sync deferral and
@@ -286,8 +238,7 @@ test.describe('First-run wizard', () => {
 
     // Navigate to Sync progress (the step under test for PT-4179).
     await frPage.clickNext(); // Language → Internet Settings
-    await frPage.chooseUnrestrictedInternetAccess();
-    await frPage.clickNext(); // Internet Settings → Identify
+    await frPage.chooseUnrestrictedInternetAccess(); // Internet Settings → Identify
     await frPage.clickSaveAndRestart(); // Identify → Sync consent (demo: calls onNext())
     // SyncConsentStep (PT-4178) hides Next and shows its own "Sync" primary button. In demo mode,
     // clicking "Sync" resolves the defaultSyncFn immediately without a real backend call.
@@ -364,7 +315,7 @@ async function getInternetSettings(): Promise<InternetSettings> {
 
 /**
  * Put the permitted internet use back to what the machine started with. The Internet Settings step
- * writes each selection straight to ParatextData's own internet settings, which every
+ * writes the user's choice straight to ParatextData's own internet settings, which every
  * Platform.Bible build on this account shares rather than being scoped to the test profile. Writes
  * back what the provider just returned with only that one field changed — the same write the step
  * makes, so the masked secrets in the read are kept as they are.
@@ -419,10 +370,10 @@ async function reachSyncConsentAfterUnrestricted(
 
   const gateWindowStart = capture.mark();
   await frPage.clickNext(); // Language → Internet Settings
-  await expect(frPage.unrestrictedOption).toBeEnabled({ timeout: 60_000 });
+  await expect(frPage.continueWithInternetButton).toBeEnabled({ timeout: 60_000 });
   const originalInternetUse = (await getInternetSettings()).permittedInternetUse;
   try {
-    await frPage.selectUnrestricted();
+    await frPage.chooseUnrestrictedInternetAccess(); // Internet Settings → Identify
 
     await makeSampleProjectEditable();
     await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
@@ -430,7 +381,6 @@ async function reachSyncConsentAfterUnrestricted(
       .poll(() => capture.textFrom(gateWindowStart), { timeout: 30_000 })
       .toContain(projectSwitchSyncSkippedLog('unconfirmed'));
 
-    await frPage.clickNext(); // Internet Settings → Identify
     await frPage.clickSaveAndRestart(); // Identify → Sync consent (demo: calls onNext())
     await expect(frPage.syncButton).toBeVisible({ timeout: 10_000 });
     // Still only the positive control's toast.

@@ -84,6 +84,7 @@ declare module 'papi-shared-types' {
   import type {
     RegistrationData,
     InternetSettings,
+    InternetUse,
     IInternetSettingsDataProvider,
   } from 'paratext-registration';
   import type { ResetFirstRunRegistration } from 'papi-shared-types';
@@ -163,6 +164,18 @@ declare module 'papi-shared-types' {
      * @experimental This command is unstable and may change or disappear without notice
      */
     'paratextRegistration.isRegistrationCopiedFromParatext9': () => Promise<boolean>;
+    /**
+     * The internet use Paratext 9 has saved now, read from the newest Paratext 8 or 9 install on
+     * this computer. Read-only: Paratext 9's settings are never changed. Differs from
+     * Platform.Bible's own setting, which is copied from Paratext 9 only once and which startup
+     * changes from `VpnRequired` to `Disabled`.
+     *
+     * @returns The saved value, or nothing when Paratext 9 is not installed or its setting cannot
+     *   be read. Nothing arrives as `null` over the network, so compare against the values rather
+     *   than checking for `undefined`.
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextRegistration.getParatext9InternetUse': () => Promise<InternetUse | undefined>;
     /**
      * Registration half of `platform.resetFirstRun`, which is the command to call: it also resets
      * first-run progress and restarts the app, which this needs afterwards. Developer and tester

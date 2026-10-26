@@ -65,11 +65,6 @@ export const platformSettings: SettingsContribution = [
         default: false,
         isHidden: true,
       },
-      'platform.internetUseDisableSomeServicesChosen': {
-        label: '%settings_platform_internetUseDisableSomeServicesChosen_label%',
-        default: false,
-        isHidden: true,
-      },
     },
   },
   // Settings a support person adjusts when helping a user troubleshoot, rather than settings a
@@ -123,7 +118,6 @@ const booleanValidator: SettingValidator<
   | 'platform.syncOnStartup'
   | 'platform.showRegistrationReminderOnStartup'
   | 'platform.internetUseChoiceAsked'
-  | 'platform.internetUseDisableSomeServicesChosen'
 > = async (newValue): Promise<boolean> => {
   return typeof newValue === 'boolean';
 };
@@ -211,5 +205,4 @@ export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.syncOnStartup': booleanValidator,
   'platform.showRegistrationReminderOnStartup': booleanValidator,
   'platform.internetUseChoiceAsked': booleanValidator,
-  'platform.internetUseDisableSomeServicesChosen': booleanValidator,
 };

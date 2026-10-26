@@ -1848,7 +1848,7 @@ export declare function BaseOrModelTextExplanation({ localizedStrings, className
  * SYNC WARNING: Keep this alias identical to `InternetUse` in
  * extensions/src/paratext-registration/src/types/paratext-registration.d.ts and the matching C#
  * enum. Structural typing makes them mutually assignable today, but divergence (e.g. C# adding a
- * new value) will silently break the wizard step's prop wiring. Update this alias whenever the
+ * new value) will silently break the settings panel's prop wiring. Update this alias whenever the
  * authoritative type changes.
  *
  * @experimental This export is unstable and may change shape or disappear without notice
@@ -1860,14 +1860,12 @@ export type InternetUse = "Enabled" | "VpnRequired" | "Disabled" | "ProxyOnly";
  * `InternetSettings.xml` is seeded once from a co-installed Paratext 9 on first launch (the two
  * apps keep separate copies thereafter), so a stored value may name an option this app does not
  * implement yet (the "Coming soon" rows). Such a value is shown selected and called out in a banner
- * rather than swapped for another row — callers that gate on a usable selection (the first-run
- * wizard's Next button) should refuse to advance until this returns true. `Disabled` counts only
- * when the user chose "Disable access to some Bible translation services" (see
- * `hasChosenDisableSomeServices` on the list).
+ * rather than swapped for another row. (The data provider replaces a stored `VpnRequired` with
+ * `Disabled` at startup, so in practice this is `ProxyOnly`.)
  *
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function isSupportedInternetUse(value: InternetUse, hasChosenDisableSomeServices?: boolean): boolean;
+export declare function isSupportedInternetUse(value: InternetUse): boolean;
 /** @experimental This export is unstable and may change shape or disappear without notice */
 export declare const INTERNET_ACCESS_OPTION_LIST_STRING_KEYS: LocalizeKey[];
 /** @experimental This export is unstable and may change shape or disappear without notice */
@@ -1883,14 +1881,6 @@ export type InternetAccessOptionListProps = {
 	onChange: (value: InternetUse) => void;
 	/** When true, all rows are non-interactive (loading or saving in progress). */
 	disabled: boolean;
-	/**
-	 * Whether the user chose "Disable access to some Bible translation services", which saves
-	 * `Disabled`. Otherwise a `Disabled` value selects the Coming soon "Disable all Internet access"
-	 * row under the not-supported banner: that is what `Disabled` means in Paratext 9, and this app
-	 * cannot honor it yet. Any choice of `Disabled` reported through `onChange` is "Disable access…",
-	 * since "Disable all" cannot be selected.
-	 */
-	hasChosenDisableSomeServices?: boolean;
 };
 /**
  * The internet-access options as radio rows. Each row's description sits behind an info icon
@@ -1903,7 +1893,7 @@ export type InternetAccessOptionListProps = {
  *
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function InternetAccessOptionList({ localizedStrings, value, onChange, disabled, hasChosenDisableSomeServices, }: InternetAccessOptionListProps): import("react/jsx-runtime").JSX.Element;
+export declare function InternetAccessOptionList({ localizedStrings, value, onChange, disabled, }: InternetAccessOptionListProps): import("react/jsx-runtime").JSX.Element;
 type ServerType = "Production" | "QualityAssurance" | "Development" | "Test";
 /** @experimental This export is unstable and may change shape or disappear without notice */
 export declare const DEVELOPER_SECTION_STRING_KEYS: LocalizeKey[];

@@ -75,6 +75,12 @@
       "message": "The wizard now asks the user to choose an option before Next is enabled, so the lead-in asks them to choose rather than to manage the setting. The new key is %firstRun_step_internetSettings_body_2%."
     }
   },
+  "%firstRun_step_internetSettings_paratext9Setting_Disabled%": {
+    "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.cmbxInternetUse.Items[2]%"
+  },
+  "%firstRun_step_internetSettings_paratext9Setting_VpnRequired%": {
+    "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.cmbxInternetUse.Items[1]%"
+  },
   "%firstRun_step_language_placeholder%": {
     "deprecationInfo": {
       "date": "2026-07-20",
