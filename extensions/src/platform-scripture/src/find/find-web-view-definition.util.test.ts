@@ -36,19 +36,21 @@ describe('buildFindWebViewFields', () => {
 
       expect(fields.isClosable).toBe(false);
       expect(fields.iconUrl).toBe(FIND_ICON_URL);
+      expect(fields.isIconMonochrome).toBe(true);
       expect(fields.tooltip).toBe(LOCALIZED_TITLE);
     });
 
-    it('leaves the tab closable and un-iconed in power mode, preserving any saved icon', () => {
+    it('leaves the tab closable and shows the default logo in power mode, dropping any saved icon', () => {
       const fields = buildFindWebViewFields(
-        savedWebView({ iconUrl: 'saved-icon.svg' }),
+        savedWebView({ iconUrl: 'saved-icon.svg', isIconMonochrome: true }),
         findOptions(),
         'power',
         LOCALIZED_TITLE,
       );
 
       expect(fields.isClosable).toBe(true);
-      expect(fields.iconUrl).toBe('saved-icon.svg');
+      expect(fields.iconUrl).toBeUndefined();
+      expect(fields.isIconMonochrome).toBeUndefined();
     });
 
     it('sets the tooltip in both modes and leaves the redundancy for the renderer to suppress', () => {

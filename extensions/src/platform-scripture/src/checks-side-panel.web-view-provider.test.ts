@@ -54,19 +54,21 @@ describe('ChecksSidePanelWebViewProvider', () => {
     const result = await new ChecksSidePanelWebViewProvider().getWebView(savedWebView, options);
 
     expect(result?.iconUrl).toBe(CHECKS_SIDE_PANEL_ICON_URL);
+    expect(result?.isIconMonochrome).toBe(true);
     expect(CHECKS_SIDE_PANEL_ICON_URL).toBe(
       'papi-extension://platformScripture/assets/icons/clipboard-check.svg',
     );
   });
 
-  it('keeps the saved icon in Power mode, where tabs are labeled with text', async () => {
+  it('shows the default logo in Power mode, dropping any saved icon', async () => {
     mocks.getSetting.mockResolvedValue('power');
 
     const result = await new ChecksSidePanelWebViewProvider().getWebView(
-      { ...savedWebView, iconUrl: 'saved-icon.svg' },
+      { ...savedWebView, iconUrl: 'saved-icon.svg', isIconMonochrome: true },
       options,
     );
 
-    expect(result?.iconUrl).toBe('saved-icon.svg');
+    expect(result?.iconUrl).toBeUndefined();
+    expect(result?.isIconMonochrome).toBeUndefined();
   });
 });

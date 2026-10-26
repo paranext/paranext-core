@@ -55,9 +55,11 @@ export class ChecksSidePanelWebViewProvider implements IWebViewProvider {
       // TODO(PT-4405) move this into the renderer.
       isClosable: interfaceMode !== 'simple',
       // Icon only in Simple mode, like the Find tab beside it: Column 3 collapses its tabs to icons
-      // there, and a tab with no icon falls back to the generic app logo. Power mode tabs are labeled
-      // with text.
-      iconUrl: interfaceMode === 'simple' ? CHECKS_SIDE_PANEL_ICON_URL : savedWebView.iconUrl,
+      // there, and a tab with no icon falls back to the generic app logo. The icon is drawn in the
+      // tab's text colour so it follows the theme. Power mode tabs are labeled with text and show
+      // the default logo; a saved icon is dropped since it may name an asset that no longer exists.
+      iconUrl: interfaceMode === 'simple' ? CHECKS_SIDE_PANEL_ICON_URL : undefined,
+      isIconMonochrome: interfaceMode === 'simple' ? true : undefined,
       content: checksSidePanelWebView,
       styles: tailwindStyles,
       scrollGroupScrRef: getWebViewOptions.editorScrollGroupId,
