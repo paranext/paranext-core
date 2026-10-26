@@ -10,18 +10,15 @@ import {
   getEnterMenuItems,
   getMarkerMenuItems,
   GENERATOR_NOTE_CALLER,
-  getDefaultViewOptions,
-  getViewOptions,
   HIDDEN_NOTE_CALLER,
   isInsertEmbedOpOfType,
   MarkerMenuContext,
   MarkerMenuItem,
-  PARAGRAPH_STRUCTURE_VIEW_MODE,
   SelectionRange,
   SetUsjOptions,
-  STANDARD_VIEW_MODE,
   StructureProtectionMode,
   StyleInfo,
+  toUsfmNbspSpelling,
   TypedMarkOnClick,
   TypedMarkOnRemove,
   TypedMarkRemovalCause,
@@ -170,6 +167,7 @@ import {
   scheduleCaretRestore,
   ScheduledCaretRestore,
 } from './caret-restore.util';
+import { getEditorViewOptions } from './editor-view-options.util';
 import {
   applyChapterSavePreparation,
   CARET_AT_DOCUMENT_END,
@@ -499,30 +497,6 @@ function runInsertFromContextMenu(
  */
 type MarkerMenuAnchorContext = MarkerMenuContext & {
   anchorRect?: { x: number; y: number; width: number; height: number };
-};
-
-// Return the appropriate ViewOptions for the given webview `viewType`.
-// Centralizes the logic so initialization and effects can call the same helper
-// instead of duplicating the shallow-copy code.
-const getViewOptionsForType = (
-  viewType: ScriptureEditorViewType,
-  isPowerMode: boolean,
-): ViewOptions => {
-  if (viewType === 'standard') {
-    return getViewOptions(STANDARD_VIEW_MODE) ?? getDefaultViewOptions();
-  }
-  // Power users get to choose their own view options, so don't force the paragraph-structure
-  // preset on them. The markers tweaks below predate this and are required to keep the read-only
-  // markers view working.
-  if (isPowerMode) {
-    const base = getDefaultViewOptions();
-    if (viewType === 'markers') return { ...base, markerMode: 'visible', noteMode: 'expanded' };
-    return base;
-  }
-  const paragraphStructure =
-    getViewOptions(PARAGRAPH_STRUCTURE_VIEW_MODE) ?? getDefaultViewOptions();
-  if (viewType === 'markers') return { ...paragraphStructure, noteMode: 'expanded' };
-  return paragraphStructure;
 };
 
 /**
@@ -917,6 +891,21 @@ function PlatformScriptureEditor({
     // Using || to make sure we get default if it is an empty string or if it is undefined
     return textDirectionPossiblyError || defaultTextDirection;
   }, [textDirectionPossiblyError]);
+
+  // Whether the project keeps `~` (a literal tilde) and a no-break space distinct. Off, its USFM
+  // spells a no-break space `~`; on, both are written as themselves. Anything here that turns this
+  // project's USJ into USFM has to spell it the project's way.
+  const [allowInvisibleCharactersPossiblyError] = useProjectSetting(
+    projectId,
+    'platformScripture.allowInvisibleCharacters',
+    false,
+  );
+  const allowInvisibleCharacters: boolean = isPlatformError(allowInvisibleCharactersPossiblyError)
+    ? false
+    : allowInvisibleCharactersPossiblyError;
+  // For callbacks that run after the render that created them, such as the caret restore's retries
+  const allowInvisibleCharactersRef = useRef(allowInvisibleCharacters);
+  allowInvisibleCharactersRef.current = allowInvisibleCharacters;
 
   // The next two reactive signals gate whether the Scripture Editor is writable: whether the
   // project itself is editable (`platform.isEditable`) and whether the current user has a
@@ -1742,9 +1731,10 @@ function PlatformScriptureEditor({
     });
   }, [newTitleIfUpdated, updateWebViewDefinition]);
 
-  const viewOptions = useMemo<ViewOptions>(() => {
-    return getViewOptionsForType(viewType, isPowerMode);
-  }, [viewType, isPowerMode]);
+  const viewOptions = useMemo<ViewOptions>(
+    () => getEditorViewOptions(viewType, isPowerMode, allowInvisibleCharacters),
+    [viewType, isPowerMode, allowInvisibleCharacters],
+  );
 
   /**
    * Always-current {@link closeFootnoteEditor}, which is declared far below this point: the ref
@@ -2769,7 +2759,7 @@ function PlatformScriptureEditor({
 
   // Ctrl+F opens Find for this editor's own project. Uses the same hook as the read-only reference
   // panels so there is a single Ctrl+F→openFind implementation across every scripture tab type.
-  useOpenFindShortcut(webViewId, projectId);
+  useOpenFindShortcut(webViewId, projectId, viewOptions);
 
   // `.editor-input` is the Lexical content element (the same selector the marker-menu handler uses).
   const getSelectionBeforePointerPress = useSelectionSnapshot('.editor-input');
@@ -2785,11 +2775,15 @@ function PlatformScriptureEditor({
    * immediately re-run a search, overwriting whatever term the user already had in an open Find
    * panel.
    */
-  const getMenuFindSelectionText = useCallback(
-    () =>
-      resolveFindSelectionText(window.getSelection()?.toString(), getSelectionBeforePointerPress()),
-    [getSelectionBeforePointerPress],
-  );
+  const getMenuFindSelectionText = useCallback(() => {
+    // Searched for as the project spells a no-break space, not as the editor displays it.
+    const respell = (text: string | undefined) =>
+      text === undefined ? undefined : toUsfmNbspSpelling(text, viewOptions);
+    return resolveFindSelectionText(
+      respell(window.getSelection()?.toString()),
+      respell(getSelectionBeforePointerPress()),
+    );
+  }, [getSelectionBeforePointerPress, viewOptions]);
 
   // Listen for the marker menu trigger to open the marker menu, for Ctrl+T / Ctrl+Shift+T to
   // insert a footnote/cross-reference, and for
@@ -3823,7 +3817,13 @@ function PlatformScriptureEditor({
             const selection = editorRef.current?.getSelection();
             return (
               !!selection &&
-              isCaretPlacedAt(repairedUsj, selection.start, target.start, savedChapterSelector.book)
+              isCaretPlacedAt(
+                repairedUsj,
+                selection.start,
+                target.start,
+                savedChapterSelector.book,
+                allowInvisibleCharactersRef.current,
+              )
             );
           },
           focus: () => editorRef.current?.focus(),

@@ -11,6 +11,7 @@ import {
   EditorRef,
   GENERATOR_NOTE_CALLER,
   getDefaultViewOptions,
+  toUsfmNbspSpelling,
   getMarkerMenuItems,
   HIDDEN_NOTE_CALLER,
   isInsertEmbedOpOfType,
@@ -1113,8 +1114,12 @@ export default function FootnoteEditor({
   const handleCopy = async () => {
     const editorInput = editorParentRef.current?.getElementsByClassName('editor-input')[0];
     if (!editorInput?.textContent) return;
-    // The Copy button honors the same copy limit as a copy from the editor itself.
-    const text = truncateToCopyLimit(editorInput.textContent, editorOptions.copyLimit);
+    // The Copy button honors the same copy limit as a copy from the editor itself, and writes a
+    // no-break space the way the project spells it rather than as the editor displays it.
+    const text = truncateToCopyLimit(
+      toUsfmNbspSpelling(editorInput.textContent, editorOptions.view),
+      editorOptions.copyLimit,
+    );
     if (!text) return;
     try {
       await navigator.clipboard.writeText(text);

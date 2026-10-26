@@ -275,6 +275,7 @@ describe('FootnoteEditor Copy button', () => {
   function clickCopy(
     copyLimit: number | undefined,
     writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined),
+    { shown = 'note text', allowInvisibleCharacters = false } = {},
   ) {
     Object.defineProperty(navigator, 'clipboard', {
       value: { writeText },
@@ -282,10 +283,15 @@ describe('FootnoteEditor Copy button', () => {
       configurable: true,
     });
     const { editorInput, getByRole } = renderFootnoteEditor({
-      view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true },
+      view: {
+        markerMode: 'editable',
+        hasSpacing: true,
+        isFormattedFont: true,
+        allowInvisibleCharacters,
+      },
       copyLimit,
     });
-    editorInput.textContent = 'note text';
+    editorInput.textContent = shown;
     act(() => {
       getByRole('button', { name: '%footnoteEditor_copyButton_tooltip%' }).click();
     });
@@ -300,6 +306,18 @@ describe('FootnoteEditor Copy button', () => {
     const writeText = clickCopy(4);
     expect(writeText).toHaveBeenCalledTimes(1);
     expect(writeText).toHaveBeenCalledWith('note');
+  });
+
+  // Standard view shows a stored no-break space as `~`, or as `⍽` (U+237D) where `~` is an
+  // ordinary character; the copy holds the project's spelling either way.
+  it('copies a no-break space shown as ⍽ as U+00A0 when the project allows invisible characters', () => {
+    expect(
+      clickCopy(undefined, undefined, { shown: 'a~b\u237Dc', allowInvisibleCharacters: true }),
+    ).toHaveBeenCalledWith('a~b\u00A0c');
+  });
+
+  it('copies a no-break space shown as ~ as ~ when it does not', () => {
+    expect(clickCopy(undefined, undefined, { shown: 'a~b' })).toHaveBeenCalledWith('a~b');
   });
 
   it('copies nothing while the copy limit is 0', () => {
