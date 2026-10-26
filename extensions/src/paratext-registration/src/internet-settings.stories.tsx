@@ -39,8 +39,6 @@ type DecoratorConfig = {
   saveState?: SaveState;
   saveError?: string;
   canEditServer?: boolean;
-  /** Whether the saved Disabled is the user's choice of "Disable access…". Defaults to true. */
-  savedHasChosenDisableSomeServices?: boolean;
 };
 
 /** Wraps the form in state so the radio list and developer toggle remain interactive. */
@@ -50,10 +48,6 @@ function createDecorator(config: DecoratorConfig) {
   ) {
     const [internetSettings, setInternetSettings] = useState<InternetSettings>(
       config.initialSettings ?? defaultSettings,
-    );
-    const savedHasChosenDisableSomeServices = config.savedHasChosenDisableSomeServices ?? true;
-    const [hasChosenDisableSomeServices, setHasChosenDisableSomeServices] = useState(
-      savedHasChosenDisableSomeServices,
     );
     const saved =
       'savedInternetSettings' in config ? config.savedInternetSettings : defaultSettings;
@@ -74,9 +68,6 @@ function createDecorator(config: DecoratorConfig) {
               'paratextRegistration.internetSettingsDataProvider → setInternetSettings',
               internetSettings,
             ),
-          hasChosenDisableSomeServices,
-          savedHasChosenDisableSomeServices,
-          onHasChosenDisableSomeServicesChange: setHasChosenDisableSomeServices,
         }}
       />
     );
@@ -104,15 +95,6 @@ export const UnsupportedStoredValue: Story = {
       savedInternetSettings: { ...defaultSettings, permittedInternetUse: 'ProxyOnly' },
     }),
   ],
-};
-
-/**
- * A saved `Disabled` the user did not choose here, such as one carried over from Paratext 9, where
- * it means "Disable all Internet access". That row is selected under the banner; choosing "Disable
- * access to some Bible translation services" keeps the value but counts as a change to save.
- */
-export const DisabledNotChosenHere: Story = {
-  decorators: [createDecorator({ savedHasChosenDisableSomeServices: false })],
 };
 
 /** Initial load in flight — `savedInternetSettings` is undefined; both buttons are disabled. */

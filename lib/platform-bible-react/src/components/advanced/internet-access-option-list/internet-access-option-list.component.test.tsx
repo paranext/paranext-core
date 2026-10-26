@@ -36,9 +36,6 @@ const mockLocalizedStrings: LanguageStrings = {
   '%paratextRegistration_description_internetUse_option_VpnRequired_2%': 'Disable access sentinel',
   '%paratextRegistration_description_internetUse_option_DisableSomeServices_details%':
     'Desc Disable access sentinel',
-  '%paratextRegistration_description_internetUse_option_Disabled_2%': 'Disable all sentinel',
-  '%paratextRegistration_description_internetUse_option_Disabled_details%':
-    'Desc Disable all sentinel',
   '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%':
     'Block sensitive sentinel',
   '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%':
@@ -68,16 +65,11 @@ function renderList(overrides: Partial<InternetAccessOptionListProps> = {}) {
 const ROWS: [label: string, description: string][] = [
   ['Unrestricted', 'Desc Enabled sentinel'],
   ['Disable access sentinel', 'Desc Disable access sentinel'],
-  ['Disable all sentinel', 'Desc Disable all sentinel'],
   ['Block sensitive sentinel', 'Desc Sensitive sentinel'],
   ['Configure proxy sentinel', 'Desc Proxy sentinel'],
 ];
 
-const COMING_SOON_LABELS = [
-  'Disable all sentinel',
-  'Block sensitive sentinel',
-  'Configure proxy sentinel',
-];
+const COMING_SOON_LABELS = ['Block sensitive sentinel', 'Configure proxy sentinel'];
 
 /** A row's info button, found by the description it carries as its accessible name. */
 function infoButtonFor(description: string) {
@@ -171,11 +163,11 @@ describe('InternetAccessOptionList', () => {
     expect(screen.getByLabelText('Unrestricted')).toHaveFocus();
     await user.tab(); // Unrestricted's info button
     await user.tab(); // Disable access's info button
-    await user.tab(); // Disable all's info button, on the first not-yet-available row
-    expect(infoButtonFor('Desc Disable all sentinel')).toHaveFocus();
+    await user.tab(); // Block sensitive's info button, on the first not-yet-available row
+    expect(infoButtonFor('Desc Sensitive sentinel')).toHaveFocus();
 
     await waitFor(() => expect(visibleTooltips()).toHaveLength(1));
-    expect(visibleTooltips()[0]).toHaveTextContent('Desc Disable all sentinel');
+    expect(visibleTooltips()[0]).toHaveTextContent('Desc Sensitive sentinel');
   });
 
   test.each([
@@ -263,50 +255,19 @@ describe('InternetAccessOptionList', () => {
       expect(radio).toBeDisabled();
     });
 
-    test('Enabled shows no banner', () => {
-      renderList({ value: 'Enabled' });
+    test.each(['Enabled', 'Disabled'] as const)('%s shows no banner', (value) => {
+      renderList({ value });
       expect(screen.queryByRole('status')).not.toBeInTheDocument();
     });
   });
 
-  // "Disable access to some Bible translation services" and "Disable all Internet access" both save
-  // Disabled. In Paratext 9, Disabled is "Disable all", which the app cannot honor yet, so Disabled
-  // shows as that option unless the user chose "Disable access…" here.
-  describe('a Disabled value', () => {
-    test('selects "Disable all" under the banner', () => {
-      renderList({ value: 'Disabled' });
-      const disableAll = screen.getByLabelText('Disable all sentinel');
-      expect(disableAll).toBeChecked();
-      expect(disableAll).toBeDisabled();
-      expect(screen.getByLabelText('Disable access sentinel')).not.toBeChecked();
-      expect(screen.getByRole('status')).toHaveTextContent(
-        'Disable all sentinel is not supported sentinel',
-      );
-    });
-
-    test('choosing "Disable access" from there reports Disabled', () => {
-      const onChange = vi.fn();
-      renderList({ value: 'Disabled', onChange });
-      fireEvent.click(screen.getByLabelText('Disable access sentinel'));
-      expect(onChange).toHaveBeenCalledWith('Disabled');
-    });
-
-    test('selects "Disable access" with no banner once the user has chosen it', () => {
-      renderList({ value: 'Disabled', hasChosenDisableSomeServices: true });
-      expect(screen.getByLabelText('Disable access sentinel')).toBeChecked();
-      expect(screen.getByLabelText('Disable all sentinel')).not.toBeChecked();
-      expect(screen.queryByRole('status')).not.toBeInTheDocument();
-    });
-
-    test('that choice does not move other values off their own rows', () => {
-      renderList({ value: 'Enabled', hasChosenDisableSomeServices: true });
-      expect(screen.getByLabelText('Unrestricted')).toBeChecked();
-      expect(screen.queryByRole('status')).not.toBeInTheDocument();
-    });
+  test('a Disabled value selects "Disable access"', () => {
+    renderList({ value: 'Disabled' });
+    expect(screen.getByLabelText('Disable access sentinel')).toBeChecked();
   });
 
-  // The first-run wizard passes `undefined` until the user picks an option, so a stored value they
-  // never chose is not presented as their choice.
+  // A caller that needs the user to make an explicit choice passes `undefined`, so a stored value
+  // they never chose is not presented as their choice.
   describe('no value', () => {
     test('selects no option and shows no banner', () => {
       renderList({ value: undefined });
@@ -328,18 +289,12 @@ describe('InternetAccessOptionList', () => {
   // Consumers that gate on a usable selection (the first-run wizard's Next button) read this
   // instead of re-deriving which options the app implements.
   describe('isSupportedInternetUse', () => {
-    test('Enabled is supported', () => {
-      expect(isSupportedInternetUse('Enabled')).toBe(true);
-    });
-
-    test('Disabled is supported only once the user chose "Disable access…"', () => {
-      expect(isSupportedInternetUse('Disabled')).toBe(false);
-      expect(isSupportedInternetUse('Disabled', true)).toBe(true);
+    test.each(['Enabled', 'Disabled'] as const)('%s is supported', (value) => {
+      expect(isSupportedInternetUse(value)).toBe(true);
     });
 
     test.each(['VpnRequired', 'ProxyOnly'] as const)('%s is not supported', (value) => {
       expect(isSupportedInternetUse(value)).toBe(false);
-      expect(isSupportedInternetUse(value, true)).toBe(false);
     });
   });
 });

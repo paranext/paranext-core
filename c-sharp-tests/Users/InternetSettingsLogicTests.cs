@@ -214,4 +214,54 @@ public class InternetSettingsLogicTests
         var result = InternetSettingsLogic.MigratedRawStatus(savedInternetUse);
         Assert.That(result, Is.Null);
     }
+
+    // ----- ParsePermittedInternetUse -----
+
+    // As ParatextData writes InternetSettings.xml: UTF-8 with a byte order mark and a declaration.
+    private static string InternetSettingsXml(string permittedInternetUseElement) =>
+        "﻿<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+        + "<InternetSettingsMemento>\n"
+        + "  <SelectedServer>Production</SelectedServer>\n"
+        + $"  {permittedInternetUseElement}\n"
+        + "  <ProxyPort>0</ProxyPort>\n"
+        + "</InternetSettingsMemento>";
+
+    [TestCase(InternetUse.Enabled)]
+    [TestCase(InternetUse.VpnRequired)]
+    [TestCase(InternetUse.Disabled)]
+    [TestCase(InternetUse.ProxyOnly)]
+    public void ParsePermittedInternetUse_ReadsTheSavedValue(InternetUse saved)
+    {
+        var result = InternetSettingsLogic.ParsePermittedInternetUse(
+            InternetSettingsXml($"<PermittedInternetUse>{saved}</PermittedInternetUse>")
+        );
+        Assert.That(result, Is.EqualTo(saved));
+    }
+
+    [Test]
+    public void ParsePermittedInternetUse_NoPermittedInternetUse_ReturnsNull()
+    {
+        var result = InternetSettingsLogic.ParsePermittedInternetUse(InternetSettingsXml(""));
+        Assert.That(result, Is.Null);
+    }
+
+    // A number parses as an enum value of its own, so it must not slip through as one.
+    [TestCase("Sometimes")]
+    [TestCase("7")]
+    [TestCase("")]
+    public void ParsePermittedInternetUse_UnknownValue_ReturnsNull(string value)
+    {
+        var result = InternetSettingsLogic.ParsePermittedInternetUse(
+            InternetSettingsXml($"<PermittedInternetUse>{value}</PermittedInternetUse>")
+        );
+        Assert.That(result, Is.Null);
+    }
+
+    [TestCase("")]
+    [TestCase("<InternetSettingsMemento><PermittedInternetUse>Enabled")]
+    [TestCase("not xml")]
+    public void ParsePermittedInternetUse_MalformedXml_ReturnsNull(string xml)
+    {
+        Assert.That(InternetSettingsLogic.ParsePermittedInternetUse(xml), Is.Null);
+    }
 }

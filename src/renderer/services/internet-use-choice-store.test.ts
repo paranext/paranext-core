@@ -6,7 +6,6 @@ import { networkObjectStatusService } from '@shared/services/network-object-stat
 import { settingsService } from '@shared/services/settings.service';
 import {
   askForInternetUseChoiceIfNeeded,
-  hasSavedInternetUseChoice,
   markInternetUseChoiceSaved,
   resetInternetUseChoiceForTesting,
 } from './internet-use-choice-store';
@@ -32,25 +31,16 @@ const mockSendCommand = vi.mocked(sendCommand);
 const mockGetProvider = vi.mocked(dataProviderService.get);
 const mockWaitForNetworkObject = vi.mocked(networkObjectStatusService.waitForNetworkObject);
 
-/**
- * Stubs the saved `platform.internetUseChoiceAsked` and
- * `platform.internetUseDisableSomeServicesChosen`, and the provider's saved internet use.
- */
+/** Stubs the saved `platform.internetUseChoiceAsked` and the provider's saved internet use. */
 function stub({
   wasAsked,
-  hasChosenDisableSomeServices,
   permittedInternetUse = 'Disabled',
 }: {
   wasAsked?: boolean;
-  hasChosenDisableSomeServices?: boolean;
   permittedInternetUse?: string;
 }) {
-  // A setting that was never saved reads as its default, false.
-  mockGetSetting.mockImplementation(async (key) =>
-    key === 'platform.internetUseChoiceAsked'
-      ? (wasAsked ?? false)
-      : (hasChosenDisableSomeServices ?? false),
-  );
+  // @ts-expect-error ts(2345) - `undefined` stands in for a setting that was never saved
+  mockGetSetting.mockResolvedValue(wasAsked);
   const getInternetSettings = vi.fn().mockResolvedValue({
     permittedInternetUse,
     selectedServer: 'Production',
@@ -72,12 +62,9 @@ beforeEach(() => {
 });
 
 describe('markInternetUseChoiceSaved', () => {
-  it('records the choice for this session and durably', () => {
-    expect(hasSavedInternetUseChoice()).toBe(false);
-
+  it('records durably that the user was asked', () => {
     markInternetUseChoiceSaved();
 
-    expect(hasSavedInternetUseChoice()).toBe(true);
     expect(mockSetSetting).toHaveBeenCalledWith('platform.internetUseChoiceAsked', true);
   });
 
@@ -91,7 +78,6 @@ describe('markInternetUseChoiceSaved', () => {
         expect.stringContaining('settings offline'),
       ),
     );
-    expect(hasSavedInternetUseChoice()).toBe(true);
   });
 });
 
@@ -111,15 +97,6 @@ describe('askForInternetUseChoiceIfNeeded', () => {
       expect(mockSetSetting).toHaveBeenCalledWith('platform.internetUseChoiceAsked', true);
     },
   );
-
-  it('does not open the settings for a Disabled the user chose as "Disable access…", but records it asked', async () => {
-    stub({ permittedInternetUse: 'Disabled', hasChosenDisableSomeServices: true });
-
-    await askForInternetUseChoiceIfNeeded();
-
-    expect(mockSendCommand).not.toHaveBeenCalled();
-    expect(mockSetSetting).toHaveBeenCalledWith('platform.internetUseChoiceAsked', true);
-  });
 
   it('does not open the settings when the saved value blocks nothing, but records it asked', async () => {
     stub({ permittedInternetUse: 'Enabled' });

@@ -1,3 +1,5 @@
+using System.Xml;
+using System.Xml.Linq;
 using Paratext.Data;
 using Paratext.Data.Users;
 
@@ -61,4 +63,28 @@ internal static class InternetSettingsLogic
     // for "Disable access to some Bible translation services" into "sensitive locations".
     public static InternetUse? MigratedRawStatus(InternetUse savedRawStatus) =>
         savedRawStatus == InternetUse.VpnRequired ? InternetUse.Disabled : null;
+
+    /// <summary>
+    /// The <c>PermittedInternetUse</c> saved in an <c>InternetSettings.xml</c> document, or null when
+    /// it is missing, is not one of the <see cref="InternetUse"/> names, or the document is not
+    /// well-formed XML.
+    /// </summary>
+    public static InternetUse? ParsePermittedInternetUse(string xml)
+    {
+        XDocument document;
+        try
+        {
+            // ParatextData writes a byte order mark, which XDocument.Parse rejects in a string.
+            document = XDocument.Parse(xml.TrimStart('﻿'));
+        }
+        catch (XmlException)
+        {
+            return null;
+        }
+        var value = document.Root?.Element("PermittedInternetUse")?.Value.Trim();
+        // By name only: Enum.TryParse also accepts any number as a value of its own.
+        return Enum.GetValues<InternetUse>()
+            .Select(internetUse => (InternetUse?)internetUse)
+            .FirstOrDefault(internetUse => internetUse.ToString() == value);
+    }
 }

@@ -17,6 +17,18 @@
         "date": "2026-07-26"
       }
     },
+    "%paratextRegistration_description_internetUse_option_Disabled_2%": {
+      "deprecationInfo": {
+        "message": "Removed the \"Disable all Internet access\" option. Disabled is now labeled with %paratextRegistration_description_internetUse_option_VpnRequired_2%.",
+        "date": "2026-10-22"
+      }
+    },
+    "%paratextRegistration_description_internetUse_option_Disabled_details%": {
+      "deprecationInfo": {
+        "message": "Removed the \"Disable all Internet access\" option. Disabled is now described by %paratextRegistration_description_internetUse_option_DisableSomeServices_details%.",
+        "date": "2026-10-22"
+      }
+    },
     "%paratextRegistration_description_internetUse_option_DisableSomeServices_details%": {
       "fallbackKey": "%paratextRegistration_description_internetUse_option_VpnRequired_details_2%"
     },

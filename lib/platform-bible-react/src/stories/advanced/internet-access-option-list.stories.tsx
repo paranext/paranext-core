@@ -15,9 +15,6 @@ const localizedStrings = {
     'Disable access to some Bible translation services',
   '%paratextRegistration_description_internetUse_option_DisableSomeServices_details%':
     'Disables access to Registry, Send-Receive (sync), and the Digital Bible Library within Paratext 10. Paratext may connect to other internet services! This option will automatically change to “Disable all Internet access” once available.',
-  '%paratextRegistration_description_internetUse_option_Disabled_2%': 'Disable all Internet access',
-  '%paratextRegistration_description_internetUse_option_Disabled_details%':
-    'Blocks all internet access within the Paratext app. Other applications on your computer are not affected.',
   '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%':
     'Block internet when in sensitive locations',
   '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%':
@@ -40,23 +37,9 @@ function Controlled(
     initialValue: InternetUse | undefined;
   },
 ) {
-  const { initialValue, hasChosenDisableSomeServices: initialHasChosen, ...rest } = props;
+  const { initialValue, ...rest } = props;
   const [value, setValue] = useState<InternetUse | undefined>(initialValue);
-  // As the real callers do: any `Disabled` the user picks is "Disable access…".
-  const [hasChosenDisableSomeServices, setHasChosenDisableSomeServices] = useState(
-    initialHasChosen ?? false,
-  );
-  return (
-    <InternetAccessOptionList
-      {...rest}
-      value={value}
-      hasChosenDisableSomeServices={hasChosenDisableSomeServices}
-      onChange={(next) => {
-        setValue(next);
-        setHasChosenDisableSomeServices(next === 'Disabled');
-      }}
-    />
-  );
+  return <InternetAccessOptionList {...rest} value={value} onChange={setValue} />;
 }
 
 /**
@@ -123,11 +106,13 @@ export const DescriptionTooltipOnKeyboardFocus: Story = {
   render: (args) => <Controlled {...args} initialValue="Enabled" />,
   play: async ({ canvasElement, userEvent }) => {
     const unavailableOptionDescription =
-      localizedStrings['%paratextRegistration_description_internetUse_option_Disabled_details%'];
+      localizedStrings[
+        '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%'
+      ];
     await userEvent.tab(); // the checked radio
     await userEvent.tab(); // Unrestricted's info button
     await userEvent.tab(); // "Disable access to some Bible translation services" info button
-    // "Disable all Internet access" info button, on an unavailable row
+    // "Block internet when in sensitive locations" info button, on an unavailable row
     await userEvent.tab();
     await expect(
       within(canvasElement).getByRole('button', { name: unavailableOptionDescription }),
@@ -172,9 +157,9 @@ export const RowClickTargets: Story = {
 };
 
 /**
- * Roughly the width the first-run wizard gives this list, where the longer labels wrap onto a
- * second line. The info button stays with its label's last word instead of drifting out to the
- * row's edge next to the "Not yet available" badge, which reads as if it belonged to the badge.
+ * A narrow column, where the longer labels wrap onto a second line. The info button stays with its
+ * label's last word instead of drifting out to the row's edge next to the "Not yet available"
+ * badge, which reads as if it belonged to the badge.
  */
 export const NarrowColumn: Story = {
   render: (args) => (
@@ -184,28 +169,14 @@ export const NarrowColumn: Story = {
   ),
 };
 
-/**
- * Option 2 selected — "Disable access to some Bible translation services", which the user chose. It
- * saves `Disabled`, as "Disable all Internet access" would.
- */
+/** Option 2 selected — "Disable access to some Bible translation services", which saves `Disabled`. */
 export const DisabledAccess: Story = {
   render: (args) => <Controlled {...args} initialValue="Disabled" />,
-  args: { hasChosenDisableSomeServices: true },
 };
 
 /**
- * A stored `Disabled` the user did not choose here. In Paratext 9 that value means "Disable all
- * Internet access", which the app cannot honor yet, so that row is selected under the banner until
- * the user picks another option.
- */
-export const DisabledShownAsDisableAll: Story = {
-  render: (args) => <Controlled {...args} initialValue="Disabled" />,
-};
-
-/**
- * No option selected — how the first-run wizard shows the list until the user picks one, so a
- * stored value they never chose is not presented as their choice. No banner: nothing unsupported is
- * selected.
+ * No option selected — for a caller that needs the user to choose rather than accept a stored value
+ * they never chose. No banner: nothing unsupported is selected.
  */
 export const NothingSelected: Story = {
   render: (args) => <Controlled {...args} initialValue={undefined} />,
