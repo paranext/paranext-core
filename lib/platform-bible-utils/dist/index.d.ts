@@ -1724,19 +1724,21 @@ export type MenuItemBase = OrderedItem & {
 	 */
 	hiddenInterfaceModes?: InterfaceMode[];
 	/**
-	 * Lucide icon name (kebab-case, e.g. `refresh-cw`) to display before the menu text. The icon
-	 * takes the text colour of the item. The curated names are listed in `LUCIDE_ICON_NAMES`
-	 * (exported from `platform-bible-react/experimental`). Wins over `iconPathBefore` when both are
-	 * set, unless the name is not in that set: then `iconPathBefore` is shown if set, else no icon.
+	 * Lucide icon name (kebab-case, e.g. `refresh-cw`) identifying the icon to display before the
+	 * menu text. The icon takes the text colour of the item. The curated names are listed in
+	 * `LUCIDE_ICON_NAMES` (exported from `platform-bible-react/experimental`). Wins over
+	 * `iconPathBefore` when both are set, unless the name is not in that set: then `iconPathBefore`
+	 * is shown if set, else no icon.
 	 *
 	 * @experimental This field is unstable and may change or disappear without notice
 	 */
 	iconNameBefore?: string;
 	/**
-	 * Lucide icon name (kebab-case, e.g. `external-link`) to display after the menu text. The icon
-	 * takes the text colour of the item. The curated names are listed in `LUCIDE_ICON_NAMES`
-	 * (exported from `platform-bible-react/experimental`). Wins over `iconPathAfter` when both are
-	 * set, unless the name is not in that set: then `iconPathAfter` is shown if set, else no icon.
+	 * Lucide icon name (kebab-case, e.g. `external-link`) identifying the icon to display after the
+	 * menu text. The icon takes the text colour of the item. The curated names are listed in
+	 * `LUCIDE_ICON_NAMES` (exported from `platform-bible-react/experimental`). Wins over
+	 * `iconPathAfter` when both are set, unless the name is not in that set: then `iconPathAfter` is
+	 * shown if set, else no icon.
 	 *
 	 * @experimental This field is unstable and may change or disappear without notice
 	 */
