@@ -2953,6 +2953,38 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** Review of PR #2665 (`remove-character-marker`) — reuse findings on duplicated snapshot
   and sync-notice blocks.
 
+## adr-editor-nbsp-spelling-follows-project-setting: The editor learns the project's `AllowInvisibleChars` through `ViewOptions`, and Standard view shows a stored U+00A0 as `⍽` where `~` is an ordinary character
+
+- **Date:** 2026-10-26
+- **Status:** Proposed
+- **Context:** Paratext's per-project `AllowInvisibleChars` (`platformScripture.allowInvisibleCharacters`)
+  decides how the USFM spells a no-break space. Measured with ParatextData 9.5: off, the file spells
+  U+00A0 as `~` and a literal tilde cannot exist; on, the file, the USX/USJ and the save all carry
+  `~` and U+00A0 verbatim and distinct. The scripture editor never learned the setting, and Standard
+  view shows a stored U+00A0 as `~` — so in a project with the setting on, a literal `~` was read as a
+  no-break space and saved as U+00A0. Standard view cannot show the U+00A0 itself: a displayed NBSP
+  means a space (a space-run member or a marker separator) throughout the marker-edit engine.
+- **Decision:** The editor gets the setting as `ViewOptions.allowInvisibleCharacters`, which the
+  scripture editor web view sets for every view type (`getEditorViewOptions`) and the footnote
+  editor inherits; `getViewMode` ignores it. With it on, Standard view spells a stored U+00A0 as
+  `⍽` (U+237D) — in display, in the settle's USFM fragments, in paste, in copy (written back as
+  U+00A0) and for a typed U+00A0 — and `~` is an ordinary character. One helper in the editor
+  (`getNbspSpelling`) supplies the spelling to every layer. Host code that reads the editor's
+  display text as project text respells it with `toUsfmNbspSpelling`.
+- **Alternatives:** **A top-level `EditorOptions` field** (where `styleInfo` lives) — rejected:
+  every place the whitespace regime is decided already receives `ViewOptions`, so a separate field
+  would have to be threaded to all of them and a missed one would load under one spelling and save
+  under another. **Show the raw U+00A0 as Paratext 9 does** — rejected: it is indistinguishable from
+  the engine's display spaces, and dozens of rules (space runs, separators, lone-NBSP spacers) would
+  have to tell them apart by position. **Escape a literal `~` instead** — no 1:1 spelling exists,
+  and positions depend on display and data lengths agreeing.
+- **Consequences:** With the setting on, a literal U+237D in the project's text saves from Standard
+  view as U+00A0. Note ops between the main editor and the footnote popover carry display text in
+  both modes, so both editors must get the same setting (they do, through the inherited view). A
+  new editor host must pass the setting, or Standard view corrupts the project's tildes. Revisit if
+  Paratext projects are found that use U+237D as text.
+- **Source:** PT-4197 data-fidelity catalog row AI-1.
+
 ## adr-editor-opener-rename-renames-closer: A char opener rename renames its closer, and a pending `getUsj()` equals the settled document
 
 - **Date:** 2026-10-01
