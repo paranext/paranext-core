@@ -2867,7 +2867,7 @@ function PlatformScriptureEditor({
 
   // Listen for the marker menu trigger to open the marker menu, for F7 (footnotes), Ctrl+Shift+R
   // (Basic checks) and Ctrl+T / Ctrl+Shift+T (insert a footnote/cross-reference) in every view, and
-  // for Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at
+  // for Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert a comment at the
   // selection
   useEffect(() => {
     /**
