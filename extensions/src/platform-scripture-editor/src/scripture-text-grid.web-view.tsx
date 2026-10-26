@@ -532,6 +532,12 @@ function ScriptureTextGridProjectView({
     ),
   );
 
+  // One label for the button, its tooltip and the empty state that names it, so they cannot drift.
+  const viewOptionsLabel = resolveLocalizedString(
+    localizedStrings[VIEW_OPTIONS_BUTTON_KEY],
+    'View Options',
+  );
+
   return (
     <>
       <div className="tw:flex tw:items-center tw:justify-end tw:border-b tw:p-1">
@@ -543,10 +549,7 @@ function ScriptureTextGridProjectView({
                   <Button
                     variant="ghost"
                     size="icon"
-                    aria-label={resolveLocalizedString(
-                      localizedStrings[VIEW_OPTIONS_BUTTON_KEY],
-                      'View Options',
-                    )}
+                    aria-label={viewOptionsLabel}
                     // Explicit themed colors so the icon is visible in both light and dark themes; a
                     // plain ghost button inherits the (un-themed) default color and vanishes on dark
                     // tabs.
@@ -556,9 +559,7 @@ function ScriptureTextGridProjectView({
                   </Button>
                 </PopoverTrigger>
               </TooltipTrigger>
-              <TooltipContent>
-                {resolveLocalizedString(localizedStrings[VIEW_OPTIONS_BUTTON_KEY], 'View Options')}
-              </TooltipContent>
+              <TooltipContent>{viewOptionsLabel}</TooltipContent>
             </Tooltip>
           </TooltipProvider>
           <PopoverContent className="tw:max-h-[70vh] tw:overflow-y-auto">
@@ -603,7 +604,8 @@ function ScriptureTextGridProjectView({
           Gate the message on loading being finished so it can't flash before data arrives —
           `sources` undefined and `cachedResources` still loading each make `resources` transiently
           empty. The grid branch renders while strings are still loading, so every string it passes
-          down resolves to English rather than relying on that guard.
+          down goes through `resolveLocalizedString` and shows its English fallback until the
+          translation arrives.
 
           The body itself is not a zoom area: each cell marks only its resource's text, with that
           resource's own area (`resource-<id>`, see `resource-zoom-area.utils.ts`), so the cells'
@@ -638,10 +640,7 @@ function ScriptureTextGridProjectView({
                   'No texts to display. Open {viewOptionsLabel} to choose which texts to show.',
                 ),
                 {
-                  viewOptionsLabel: resolveLocalizedString(
-                    localizedStrings[VIEW_OPTIONS_BUTTON_KEY],
-                    'View Options',
-                  ),
+                  viewOptionsLabel,
                 },
               )}
             />

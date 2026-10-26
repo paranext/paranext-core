@@ -186,7 +186,9 @@ typelessRuleTester.run('no-nullish-localized-fallback (no type information)', ru
  * deliberate second copy of the one behind `isResolvedLocalizedValue` in
  * `lib/platform-bible-utils/src/localization.util.ts`. These cases are the table both copies must
  * classify alike. It pins this copy only; the same table is restated in that package's
- * `localization.util.test.ts`, so an unmirrored change to either copy fails in its own suite.
+ * `localization.util.test.ts`, so a change to either copy that reclassifies any row fails in its
+ * own suite. A change that classifies every row the same way passes both — keep the rows covering
+ * the edges a plausible edit would move.
  */
 const sharedResolutionCases: { value: string | undefined; isResolved: boolean }[] = [
   // A localization key is not resolved text.
@@ -197,6 +199,11 @@ const sharedResolutionCases: { value: string | undefined; isResolved: boolean }[
   { value: '   ', isResolved: false },
   { value: 'Select Chapter', isResolved: true },
   { value: undefined, isResolved: false },
+  // Real keys can contain dots, so a pattern tightened to word characters would miss them.
+  { value: '%Paratext.MainForm.developmentServerMenuItem.Text%', isResolved: false },
+  // The documented trade-off: copy that is a single `%…%` span reads as a key, as does `%%`.
+  { value: '%100%', isResolved: false },
+  { value: '%%', isResolved: false },
 ];
 
 /** The canonical predicate's composition, evaluated against the plugin's copy of the pattern. */

@@ -21,8 +21,9 @@ import { LocalizeKey } from './extension-contributions/menus.model';
  * `lib/eslint-plugin-paranext/src/rules/no-nullish-localized-fallback.ts` carries a deliberate
  * second copy of this pattern — the plugin does not depend on this workspace — and the two must
  * agree. Each side's tests classify the same table of values, but the table is duplicated rather
- * than imported, so editing one pattern alone fails a test while editing a pattern AND its own
- * table together ships drift silently. Change both together, tables included.
+ * than imported, so editing one pattern alone fails a test only if it reclassifies a row, and
+ * editing a pattern AND its own table together ships drift silently. Change both together, tables
+ * included.
  */
 const LOCALIZATION_KEY_PATTERN = /^%[^%]*%$/;
 

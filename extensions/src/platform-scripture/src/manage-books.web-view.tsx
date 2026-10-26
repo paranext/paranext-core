@@ -498,13 +498,16 @@ global.webViewComponent = function ManageBooksWebView({
   // initial title (cold open) and update title (project switch) both produce
   // `${titleTemplate}` (no project) or `${titleTemplate} — {projectName}`.
   //
-  // `lastAppliedTitleInputRef` dedupes when this effect re-runs without changing what the title
-  // would say. It keys on the template as well as the project because the template starts out as
-  // the English fallback and is replaced when the localization service delivers a translation —
+  // `lastTitleInputRef` dedupes when this effect re-runs without changing what the title would
+  // say. It keys on the template as well as the project because the template starts out as the
+  // English fallback and is replaced when the localization service delivers a translation —
   // keying on `projectId` alone would strand the English title for the rest of the session.
-  // It must be a ref (not state) so the dedupe survives React's render → cleanup →
-  // re-run cycle without cancelling the in-flight async PDP fetch.
-  const lastAppliedTitleInputRef = useRef<string | undefined>(undefined);
+  // Every re-run first runs the previous cleanup, which cancels that run's fetch, so the cleanup
+  // forgets the input unless its run already applied the title; otherwise a re-run with the same
+  // input would return early and nothing would replace the cancelled fetch.
+  const lastTitleInputRef = useRef<{ projectId: string; titleTemplate: string } | undefined>(
+    undefined,
+  );
   useEffect(() => {
     if (!projectId) return undefined;
 
@@ -514,12 +517,13 @@ global.webViewComponent = function ManageBooksWebView({
       localizedStrings['%manageBooks_dialog_title%'],
       'Manage books',
     );
-    // `\u0000` cannot occur in a projectId or in localized copy, so it cannot forge a collision.
-    const titleInput = `${projectId}\u0000${titleTemplate}`;
-    if (lastAppliedTitleInputRef.current === titleInput) return undefined;
-    lastAppliedTitleInputRef.current = titleInput;
+    const lastInput = lastTitleInputRef.current;
+    if (lastInput?.projectId === projectId && lastInput.titleTemplate === titleTemplate)
+      return undefined;
+    lastTitleInputRef.current = { projectId, titleTemplate };
 
     let cancelled = false;
+    let applied = false;
     (async () => {
       // Resolve the projectName (display name) the same way the provider does:
       // `platform.name` setting, falling back to projectId when unavailable.
@@ -537,6 +541,7 @@ global.webViewComponent = function ManageBooksWebView({
         ? formatReplacementString(`${titleTemplate} — {projectName}`, { projectName })
         : titleTemplate;
 
+      applied = true;
       try {
         const ok = updateWebViewDefinition({ projectId, title });
         if (!ok) {
@@ -553,6 +558,7 @@ global.webViewComponent = function ManageBooksWebView({
 
     return () => {
       cancelled = true;
+      if (!applied) lastTitleInputRef.current = undefined;
     };
   }, [projectId, updateWebViewDefinition, localizedStrings]);
 

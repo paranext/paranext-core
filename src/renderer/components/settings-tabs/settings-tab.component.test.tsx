@@ -1,10 +1,11 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeAll, beforeEach } from 'vitest';
 import { useIsProjectAutoSyncBlocked } from '@renderer/hooks/use-is-project-auto-sync-blocked.hook';
 import userEvent from '@testing-library/user-event';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { projectDataProviders } from '@renderer/services/papi-frontend.service';
+import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import type { ProjectMetadata } from '@shared/models/project-metadata.model';
 import { SettingsTab } from './settings-tab.component';
 import {
@@ -200,6 +201,40 @@ describe('SettingsTab project picker localization', () => {
 
     await user.type(search, 'zzzz');
     expect(await screen.findByText(PICKER_NO_RESULTS)).toBeInTheDocument();
+  });
+});
+
+describe('SettingsTab sidebar strings before localization resolves', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useIsProjectAutoSyncBlocked).mockReturnValue(false);
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([
+      { id: 'projA', projectInterfaces: [], pdpFactoryInfo: {} },
+    ]);
+    // Echo each requested key back as its own value, which is what useLocalizedStrings does before
+    // it resolves and keeps doing if localization fails.
+    vi.mocked(useLocalizedStrings).mockImplementation((keys) => [
+      Object.fromEntries(keys.map((key) => [key, key])),
+      true,
+    ]);
+  });
+
+  afterEach(() => {
+    vi.mocked(useLocalizedStrings).mockReset();
+  });
+
+  it('shows the sidebar’s own English wording rather than raw localize keys', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(<SettingsTab />);
+
+    expect(await screen.findByText('General Settings')).toBeInTheDocument();
+    expect(screen.getByText('Project Settings')).toBeInTheDocument();
+    const trigger = screen.getByRole('combobox', { name: 'Project Settings' });
+    expect(trigger).toHaveTextContent('Select project');
+
+    await user.click(trigger);
+    expect(await screen.findByPlaceholderText('Search projects & resources')).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/%\w+%/);
   });
 });
 

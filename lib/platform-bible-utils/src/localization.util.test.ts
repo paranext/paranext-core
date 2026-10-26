@@ -116,7 +116,8 @@ describe('localizedStringOrUndefined', () => {
  * deliberate second copy of the one behind {@link isResolvedLocalizedValue}. This is the table both
  * copies must classify alike, restated verbatim in
  * `lib/eslint-plugin-paranext/src/rules/no-nullish-localized-fallback.test.ts`. Each copy is pinned
- * in its own suite, so an unmirrored change to either one fails there.
+ * in its own suite, so a change to either one that reclassifies any row fails there; a change that
+ * classifies every row the same way passes both.
  */
 const sharedResolutionCases: { value: string | undefined; isResolved: boolean }[] = [
   // A localization key is not resolved text.
@@ -127,6 +128,11 @@ const sharedResolutionCases: { value: string | undefined; isResolved: boolean }[
   { value: '   ', isResolved: false },
   { value: 'Select Chapter', isResolved: true },
   { value: undefined, isResolved: false },
+  // Real keys can contain dots, so a pattern tightened to word characters would miss them.
+  { value: '%Paratext.MainForm.developmentServerMenuItem.Text%', isResolved: false },
+  // The documented trade-off: copy that is a single `%…%` span reads as a key, as does `%%`.
+  { value: '%100%', isResolved: false },
+  { value: '%%', isResolved: false },
 ];
 
 describe('shared resolution table', () => {

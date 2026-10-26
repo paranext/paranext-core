@@ -870,7 +870,8 @@ export function Find({
   // Find "can't include" it explains an absence that isn't Find's doing.
   // TODO(PT-4103): Raw read - renders the key while strings load, and permanently if localization
   // fails. `no-nullish-localized-fallback` cannot see it (there is no `??`), so it will not turn up
-  // in that sweep's warning list.
+  // in that sweep's warning list. It is one of many in this file — aria-labels and the preview
+  // options among them — and every raw `localizedStrings[…]` read here belongs to the same sweep.
   const extraMaterialNotSearchedExplanation = useMemo(
     () =>
       hasExcludedExtraMaterial

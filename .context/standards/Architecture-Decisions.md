@@ -9945,36 +9945,36 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `lib/platform-bible-react`, 67 across 49 files in `extensions`), the identifier holding one is
   `localizedStrings` (80 sites), `strings` (31), `stringsBag` (6), and a tail including
   `stringsMap`, `langStrings` and `localizedStringsDefaulted` — while unrelated maps (`widths`,
-  `scrRefs`, `listeners`, `acc`) share the same syntactic shape. No rule in `lib/eslint-plugin-paranext`
-  was type-aware, and its shared `ruleTester` (`src/test.utils.ts`) configures no `project`, so it
-  could not type-check fixtures. Separately: `.eslintrc.js` (what CI's `npm run lint` runs) loads the
-  `paranext` plugin but enabled only `require-disable-comment`; every other plugin rule lived in
-  `.eslintrc.ai.js`, run by `lint:ai-strict`, which no workflow in `.github/` invokes. And
-  `extensions/.eslintrc.cjs` sets no `root: true`, so ESLint cascades it onto the top-level
-  `.eslintrc.js` rather than replacing it. One registration in `.eslintrc.js` therefore reaches all
-  136 sites, including the 67 in `extensions` and the most important known instance, the `t` lookup
-  callback in
+  `scrRefs`, `listeners`, `acc`) share the same syntactic shape. No rule in
+  `lib/eslint-plugin-paranext` was type-aware, and its shared `ruleTester` (`src/test.utils.ts`)
+  configures no `project`, so it could not type-check fixtures. Separately: `.eslintrc.js` (what
+  CI's `npm run lint` runs) loads the `paranext` plugin but enabled only `require-disable-comment`;
+  every other plugin rule lived in `.eslintrc.ai.js`, run by `lint:ai-strict`, which no workflow in
+  `.github/` invokes. And `extensions/.eslintrc.cjs` sets no `root: true`, so ESLint cascades it
+  onto the top-level `.eslintrc.js` rather than replacing it. One registration in `.eslintrc.js`
+  therefore reaches all 136 sites, including the 67 in `extensions` and the most important known
+  instance, the `t` lookup callback in
   `extensions/src/platform-scripture/src/manage-books-dialog/manage-books-dialog.component.tsx`.
   Confirm this by resolved config rather than by reading: `eslint --print-config` on an extension
   file shows `paranext/require-disable-comment`, which only the root config enables.
 - **Decision:** The rule keys on the *type* of the indexed object (assignable to `LanguageStrings`,
   or indexed by `LocalizeKey`), making it the plugin's first type-aware rule. `src/test.utils.ts`
   gains a `typeAwareRuleTester` alongside the existing untyped one, backed by a fixture tsconfig in
-  `src/fixtures/`. The rule is registered at `warn` in `.eslintrc.js` alone (not in `.eslintrc.ai.js`), and
-  `extensions/.eslintrc.cjs` is left untouched. The cascade carries the rule and both its
-  story/test overrides onto extension source unchanged. A second registration there would be
-  redundant, and would have to live outside that file's
-  `#region shared with …paranext-extension-template` — which opens at line 1 and closes at the last
-  line, so every rule block inside it is template-shared — because
-  `paranext-extension-template` cannot resolve the plugin. Registering once in the root config
-  avoids that divergence entirely rather than managing it. A type-aware rule also throws when
-  `ESLintUtils.getParserServices` is called on a file linted without type information, which ESLint
-  turns into a rule-loading failure that aborts the entire run rather than skipping the file; this
-  broke `npm run lint` once the rule was registered, because `lib/browserslist-config-detect-electron`
-  nulls `parserOptions.project` for `*.js` in its own override. The rule now stands down — registers
-  no listeners and returns — whenever type information is unavailable, which is the general shape any
-  future type-aware rule in this plugin needs, and also makes `configs.recommended` safe for a
-  downstream repo that lints without type information.
+  `src/fixtures/`. The rule is registered at `warn` in `.eslintrc.js` alone (not in
+  `.eslintrc.ai.js`), and `extensions/.eslintrc.cjs` is left untouched. The cascade carries the rule
+  and both its story/test overrides onto extension source unchanged. A second registration there
+  would be redundant, and would have to live outside that file's `#region shared with
+  …paranext-extension-template` — which opens at line 1 and closes at the last line, so every rule
+  block inside it is template-shared — because `paranext-extension-template` cannot resolve the
+  plugin. Registering once in the root config avoids that divergence entirely rather than managing
+  it. A type-aware rule also throws when `ESLintUtils.getParserServices` is called on a file linted
+  without type information, which ESLint turns into a rule-loading failure that aborts the entire
+  run rather than skipping the file; this broke `npm run lint` once the rule was registered, because
+  `lib/browserslist-config-detect-electron` nulls `parserOptions.project` for `*.js` in its own
+  override. The rule now stands down — registers no listeners and returns — whenever type
+  information is unavailable, which is the general shape any future type-aware rule in this plugin
+  needs, and also makes `configs.recommended` safe for a downstream repo that lints without type
+  information.
 - **Alternatives:** (a) identifier-name heuristic — rejected: needs a curated regex over ambiguous
   names (`strings`), still misses aliases, and false-positives on the unrelated tail. (b) Register
   in `.eslintrc.ai.js` beside the sibling localization rules — rejected: no workflow runs
@@ -9985,25 +9985,25 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   where it buys a permanent divergence against a hypothetical. If that file ever does become a root
   config, the same `--print-config` check that establishes the cascade will show it.
 - **Consequences:** type-aware rules are now an available pattern here, at the cost of type
-  information during lint (already computed — `.eslintrc.js` sets
-  `parserOptions.project: './tsconfig.lint.json'`) and of a mandatory stand-down path for any file
-  linted without a type-checked program. `extensions/.eslintrc.cjs` is unchanged, so this rule
-  raises no template-propagation question at all. That matters because the file is marked at its own
-  top as shared with `paranext-extension-template`, which has no `eslint-plugin-paranext` — the
-  plugin is a root-only `file:./lib/eslint-plugin-paranext` dependency and is never published — and
-  an unresolvable `plugins` entry there is not a skipped rule but `Failed to load plugin 'paranext'`,
-  a hard failure that aborts the entire ESLint run for every file in that repo. Any future
-  `paranext` rule should likewise be registered in the root config only. Relatedly, a type-aware
-  rule's own tests must set `disallowAutomaticSingleRunInference` in the RuleTester's
-  `parserOptions`: with `CI` set, `typescript-estree` infers single-run mode and never type-checks
-  RuleTester's in-memory source, so type-dependent cases silently stop reporting and `valid` cases
-  stop being able to fail. `npm run lint`'s aggregate count for this rule (203) is inflated by the root `workspaces`
-  array (`["lib/*","extensions","extensions/src/*"]`), which lints extension source twice — a
-  distortion that affects every rule's aggregate, not just this one, and is worth remembering the
-  next time a lint count is read as a site count. The rule's warning count is the follow-up sweep's
-  work list, tracked as PT-4103 — which predates this rule, scopes itself to `lib/platform-bible-react`
-  alone, and prescribes the `?? 'English'` idiom this entry's sibling
-  (`adr-localized-string-resolution-helper`) disproves; it has been rewritten around the shared reader
+  information during lint (already computed — `.eslintrc.js` sets `parserOptions.project:
+  './tsconfig.lint.json'`) and of a mandatory stand-down path for any file linted without a
+  type-checked program. `extensions/.eslintrc.cjs` is unchanged, so this rule raises no
+  template-propagation question at all. That matters because the file is marked at its own top as
+  shared with `paranext-extension-template`, which has no `eslint-plugin-paranext` — the plugin is a
+  root-only `file:./lib/eslint-plugin-paranext` dependency and is never published — and an
+  unresolvable `plugins` entry there is not a skipped rule but `Failed to load plugin 'paranext'`, a
+  hard failure that aborts the entire ESLint run for every file in that repo. Any future `paranext`
+  rule should likewise be registered in the root config only. Relatedly, a type-aware rule's own
+  tests must set `disallowAutomaticSingleRunInference` in the RuleTester's `parserOptions`: with
+  `CI` set, `typescript-estree` infers single-run mode and never type-checks RuleTester's in-memory
+  source, so type-dependent cases silently stop reporting and `valid` cases stop being able to fail.
+  `npm run lint`'s aggregate count for this rule (203) is inflated by the root `workspaces` array
+  (`["lib/*","extensions","extensions/src/*"]`), which lints extension source twice — a distortion
+  that affects every rule's aggregate, not just this one, and is worth remembering the next time a
+  lint count is read as a site count. The rule's warning count is the follow-up sweep's work list,
+  tracked as PT-4103. That ticket predates this rule: as first written it scoped itself to
+  `lib/platform-bible-react` alone and prescribed the `?? 'English'` idiom this entry's sibling
+  (`adr-localized-string-resolution-helper`) disproves, so it was rewritten around the shared reader
   and widened to the repo. **Revisit** to escalate the rule to `error` once that count reaches zero,
   and to reconsider whether `lint:ai-strict` should run in CI at all given nothing invokes it.
 - **Source:** PT-4673 / PR #2834, a follow-up from PR #2829 review finding 16.

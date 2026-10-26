@@ -10,8 +10,8 @@ const createRule = ESLintUtils.RuleCreator(() => '');
  * `lib/platform-bible-utils/src/localization.util.ts`: this plugin does not depend on the
  * workspace, so the two must be kept in agreement by hand. The same table of values is restated in
  * each package's tests — `no-nullish-localized-fallback.test.ts` here and
- * `localization.util.test.ts` there — so an unmirrored change to either copy fails in its own
- * suite.
+ * `localization.util.test.ts` there — so a change to either copy that reclassifies any row fails in
+ * its own suite; one that classifies every row the same way does not.
  */
 export const LOCALIZATION_KEY_PATTERN = /^%[^%]*%$/;
 
@@ -228,15 +228,16 @@ export default createRule({
 
       // The key test is a literal check or one `getTypeAtLocation`; the map test can walk every
       // property of the type. Order them cheap-first — this runs on every `x[y] ?? z` in the repo.
-      // The object's type is resolved inside the second operand so the common case (a key that is
-      // neither `%…%`-shaped nor `LocalizeKey`) costs no `getTypeAtLocation` at all.
+      // The object's type is resolved inside the second operand, so a key that already identifies
+      // the read as localized skips the object's type lookup and the member walk; the per-file
+      // memo keeps that walk to once per map type.
       const looksLocalized =
         isLocalizeKeyNode(left.property) ||
         isLocalizedStringsTypeMemoized(checker.getTypeAtLocation(objectTsNode));
       if (!looksLocalized) return;
 
       // A fallback whose text is the key being read cannot differ from the unresolved value, so
-      // the operator can only ever hand over the raw key - no choice of operand makes it readable.
+      // the operator can only ever hand over the raw key - no choice of operator makes it readable.
       const isDeadKeyFallback =
         sourceCode.getText(node.right) === sourceCode.getText(left.property);
 

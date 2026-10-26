@@ -280,16 +280,14 @@ function resolveStrings(
   // Resolved field by field rather than by spreading `partial` over the defaults, because a spread
   // cannot tell "the caller did not set this" from "the caller set it to something unusable":
   // `buildProjectSelectorLocalizedStrings` emits a property for every shared field, and a
-  // present-but-`undefined` property overwrites the default just as a real value would. What counts
-  // as usable
-  // is `resolveLocalizedString`'s to decide — see `isResolvedLocalizedValue` for the three states
-  // it rejects.
+  // present-but-`undefined` property overwrites the default just as a real value would. What
+  // counts as usable is `resolveLocalizedString`'s to decide — see `isResolvedLocalizedValue` for
+  // the three states it rejects.
   //
   // The per-field guarantee lives on `PROJECT_SELECTOR_DEFAULT_STRINGS` (and the `Required<…>`
   // return type) rather than on a written-out object literal here: every field the type declares
-  // must appear there, so
-  // it is still a compile error to add a field to the type and leave it unhandled, and the loop
-  // below then covers the new field automatically.
+  // must appear there, so it is still a compile error to add a field to the type and leave it
+  // unhandled, and the loop below then covers the new field automatically.
   const resolved = { ...PROJECT_SELECTOR_DEFAULT_STRINGS };
   PROJECT_SELECTOR_STRING_FIELDS.forEach((key) => {
     resolved[key] = resolveLocalizedString(given[key], PROJECT_SELECTOR_DEFAULT_STRINGS[key]);

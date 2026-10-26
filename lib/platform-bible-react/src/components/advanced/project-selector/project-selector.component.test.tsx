@@ -556,8 +556,9 @@ describe('unresolved localized strings', () => {
 
     expect(screen.getByPlaceholderText('Search projects & resources')).toBeInTheDocument();
     expect(screen.getByRole('menuitemradio', { name: 'None' })).toBeInTheDocument();
-    // The load-bearing half: asserting the English string alone would still pass if the fallback
-    // were reached some other way. Nothing may render a raw key.
+    // The English assertions above check one string each; this sweep covers every string the open
+    // popover and menu render, so a field still showing its raw key fails here even when the
+    // fields checked above are fine.
     expect(screen.queryAllByPlaceholderText(RAW_KEY)).toHaveLength(0);
     expect(screen.queryAllByText(RAW_KEY)).toHaveLength(0);
   });
@@ -590,8 +591,9 @@ describe('unresolved localized strings', () => {
     await user.type(searchInput, 'zzzzz');
     expect(await screen.findByText('No projects found')).toBeInTheDocument();
 
-    // The load-bearing half: asserting the English strings alone would still pass if the fallback
-    // were reached some other way. Nothing may render a raw key, whatever its prefix.
+    // The English assertions above check one string each; this sweep covers every string the
+    // picker renders, so a field still showing its raw key — whatever its prefix — fails here even
+    // when the fields checked above are fine.
     expect(screen.queryAllByPlaceholderText(RAW_KEY)).toHaveLength(0);
     expect(screen.queryAllByText(RAW_KEY)).toHaveLength(0);
   });

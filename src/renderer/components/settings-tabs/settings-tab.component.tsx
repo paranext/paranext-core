@@ -18,7 +18,9 @@ import {
   formatReplacementString,
   Localized,
   LocalizeKey,
+  localizedStringOrUndefined,
   normalizeFullName,
+  resolveLocalizedString,
 } from 'platform-bible-utils';
 import { SettingsContributionInfo } from '@shared/utils/settings-document-combiner-base';
 import { ProjectSettingsContributionInfo } from '@shared/utils/project-settings-document-combiner';
@@ -313,11 +315,27 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
           selectedSidebarItem={selectedSidebarItem}
           searchValue={searchQuery}
           onSearch={handleSearchInput}
-          extensionsSidebarGroupLabel={localizedStrings['%settings_sidebar_generalSettingsLabel%']}
-          projectsSidebarGroupLabel={localizedStrings['%settings_sidebar_projectSettingsLabel%']}
-          buttonPlaceholderText={localizedStrings['%settings_sidebar_projectsComboBoxPlaceholder%']}
-          searchPlaceholderText={localizedStrings[PROJECT_SELECTOR_SEARCH_PLACEHOLDER_KEY]}
-          noResultsText={localizedStrings[PROJECT_SELECTOR_NO_RESULTS_KEY]}
+          extensionsSidebarGroupLabel={resolveLocalizedString(
+            localizedStrings['%settings_sidebar_generalSettingsLabel%'],
+            'General Settings',
+          )}
+          projectsSidebarGroupLabel={resolveLocalizedString(
+            localizedStrings['%settings_sidebar_projectSettingsLabel%'],
+            'Project Settings',
+          )}
+          buttonPlaceholderText={resolveLocalizedString(
+            localizedStrings['%settings_sidebar_projectsComboBoxPlaceholder%'],
+            'Select project',
+          )}
+          // The picker's own two strings stay undefined while unresolved, so it uses its defaults.
+          searchPlaceholderText={localizedStringOrUndefined(
+            localizedStrings,
+            PROJECT_SELECTOR_SEARCH_PLACEHOLDER_KEY,
+          )}
+          noResultsText={localizedStringOrUndefined(
+            localizedStrings,
+            PROJECT_SELECTOR_NO_RESULTS_KEY,
+          )}
         >
           <div className="project-or-settings-list-container">
             {selectedSidebarItem.projectId ? (

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState, type ComponentType } from 'react';
 import type { WebViewProps } from '@papi/core';
@@ -38,12 +38,17 @@ type MockWireProject = {
   isRestrictedAsBase: boolean;
 };
 
-const { mockRecentProjects, mockWireProjects } = vi.hoisted(() => {
-  // Annotated rather than asserted: `undefined`/`[]` would otherwise narrow to types no test can
-  // assign a real fixture to.
+const { mockLocalizedValues, mockRecentProjects, mockWireProjects } = vi.hoisted(() => {
+  // Annotated rather than asserted: `undefined`/`[]`/`{}` would otherwise narrow to types no test
+  // can assign a real fixture to.
+  const localizedValues: { value: { [key: string]: string } } = { value: {} };
   const recentProjects: { value: unknown } = { value: undefined };
   const wireProjects: { value: MockWireProject[] } = { value: [] };
-  return { mockRecentProjects: recentProjects, mockWireProjects: wireProjects };
+  return {
+    mockLocalizedValues: localizedValues,
+    mockRecentProjects: recentProjects,
+    mockWireProjects: wireProjects,
+  };
 });
 
 vi.mock('@papi/frontend', () => ({
@@ -75,8 +80,14 @@ vi.mock('@papi/frontend/react', async () => {
     // Echo each requested key back as its own value, which is what useLocalizedStrings does before
     // it resolves. The shared `%projectSelector_*%` block is the exception — the picker treats a
     // key echoed as its own value as unresolved, so those get a resolved-looking value instead.
+    // A test delivers a translation for any key through `mockLocalizedValues`.
     useLocalizedStrings: (keys: string[]) => [
-      Object.fromEntries(keys.map((key) => [key, isSharedKey(key) ? valueFor(key) : key])),
+      Object.fromEntries(
+        keys.map((key) => [
+          key,
+          mockLocalizedValues.value[key] ?? (isSharedKey(key) ? valueFor(key) : key),
+        ]),
+      ),
       false,
     ],
     useProjectSetting: (_projectId: unknown, _key: unknown, defaultValue: unknown) => [
@@ -180,6 +191,7 @@ function getGroupByTrigger(popover: HTMLElement): HTMLElement {
 }
 
 afterEach(() => {
+  mockLocalizedValues.value = {};
   vi.clearAllMocks();
 });
 
@@ -316,5 +328,63 @@ describe('ManageBooksWebView create reference picker', () => {
     expect(niv).toHaveAttribute('aria-disabled', 'true');
     // The flag, not the project's being a resource, is what disables the row.
     expect(kjv).not.toHaveAttribute('aria-disabled', 'true');
+  });
+});
+
+describe('ManageBooksWebView tab title', () => {
+  const TITLE_KEY = '%manageBooks_dialog_title%';
+
+  /** Every title the web view has handed to `updateWebViewDefinition`, in call order. */
+  function appliedTitles(props: WebViewProps): unknown[] {
+    return vi
+      .mocked(props.updateWebViewDefinition)
+      .mock.calls.map(([definition]) => definition.title)
+      .filter((title) => title !== undefined);
+  }
+
+  it('applies the title when the translation arrives while the first fetch is in flight', async () => {
+    mockRecentProjects.value = [];
+    mockWireProjects.value = [wireProject({})];
+    const props = makeProps();
+    const ManageBooksWebView = getManageBooksWebView();
+
+    // The first render sees the seed (key echoed as value) and resolves the English fallback. The
+    // re-render delivers the shipped `en` value, which equals that fallback, so the title text is
+    // unchanged — but the re-render still cancels the first render's fetch.
+    const { rerender } = render(<ManageBooksWebView {...props} />);
+    mockLocalizedValues.value = { [TITLE_KEY]: 'Manage books' };
+    rerender(<ManageBooksWebView {...props} />);
+
+    await waitFor(() => expect(appliedTitles(props)).toContain('Manage books — PROJECT-A'));
+  });
+
+  it('replaces the title when a translation arrives, and does not reapply an unchanged one', async () => {
+    mockRecentProjects.value = [];
+    mockWireProjects.value = [wireProject({})];
+    const props = makeProps();
+    const ManageBooksWebView = getManageBooksWebView();
+
+    const { rerender } = render(<ManageBooksWebView {...props} />);
+    await waitFor(() => expect(appliedTitles(props)).toEqual(['Manage books — PROJECT-A']));
+
+    mockLocalizedValues.value = { [TITLE_KEY]: 'Gérer les livres' };
+    rerender(<ManageBooksWebView {...props} />);
+    await waitFor(() =>
+      expect(appliedTitles(props)).toEqual([
+        'Manage books — PROJECT-A',
+        'Gérer les livres — PROJECT-A',
+      ]),
+    );
+
+    rerender(<ManageBooksWebView {...props} />);
+    // Let any fetch a re-run would have started settle before asserting nothing new was applied.
+    await screen.findByTestId('manage-books-sidebar-project-trigger');
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    expect(appliedTitles(props)).toEqual([
+      'Manage books — PROJECT-A',
+      'Gérer les livres — PROJECT-A',
+    ]);
   });
 });
