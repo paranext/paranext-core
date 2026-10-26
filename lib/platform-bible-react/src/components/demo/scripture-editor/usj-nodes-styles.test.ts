@@ -295,7 +295,10 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
     it('colors the empty-verse ellipsis with the token directly plus a hex fallback', () => {
       expect(css).toMatch(
         rule(
-          ['.psc-gutter-markers .verse.psc-empty-text::after'],
+          [
+            '.psc-gutter-markers .verse.psc-empty-text::after',
+            '.psc-gutter-markers .verse.psc-empty-text-active::after',
+          ],
           'color: var(--muted-foreground, #6b7280);',
         ),
       );
@@ -345,6 +348,20 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
     it('renders the active-text outline via ::after, never ::before (book-code collision)', () => {
       expect(css).toMatch(/\.psc-active-focus \.psc-active-text::after\s*\{/);
       expect(declarations).not.toMatch(/\.psc-active-focus \.psc-active-text::before/);
+    });
+    it("keeps the cursor's empty-verse ellipsis in place, with the caret host over it", () => {
+      expect(declarations).toMatch(
+        /\.verse:not\(\.marker\)\.psc-empty-text-active::after \{[^}]*color: transparent;[^}]*forced-color-adjust: none;/,
+      );
+      expect(declarations).toMatch(
+        /\.psc-empty-text-active \+ \[data-lexical-text\] \{[^}]*margin-inline-start: calc\(-1 \* var\(--psc-empty-verse-ellipsis-width\)\);[^}]*margin-inline-end: var\(--psc-empty-verse-ellipsis-width\);[^}]*text-wrap-mode: nowrap;/,
+      );
+      expect(declarations).toMatch(
+        /\.psc-empty-text-active \+ \[data-lexical-text\]::after \{[^}]*content: '\\2060';/,
+      );
+      expect(declarations).toMatch(
+        /\.verse:not\(\.marker\)\.psc-empty-text::after,\s*\.psc-gutter-markers \.verse:not\(\.marker\)\.psc-empty-text-active::after \{[^}]*inline-size: var\(--psc-empty-verse-ellipsis-width\);/,
+      );
     });
     it('does not override text-align in the RTL gutter rule (Chrome/Firefox bidi paint quirk)', () => {
       const rtlGutter = declarations.match(

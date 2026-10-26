@@ -258,6 +258,21 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
         /\.psc-active-focus \.psc-active-text::before/,
       );
     });
+    it("keeps the cursor's empty-verse ellipsis in place, with the caret host over it", () => {
+      const rules = scss.replace(/\/\*[\s\S]*?\*\//g, '');
+      expect(rules).toMatch(
+        /\.verse:not\(\.marker\)\.psc-empty-text-active::after \{[^}]*color: transparent;[^}]*forced-color-adjust: none;/,
+      );
+      expect(rules).toMatch(
+        /\.psc-empty-text-active \+ \[data-lexical-text\] \{[^}]*margin-inline-start: calc\(-1 \* var\(--psc-empty-verse-ellipsis-width\)\);[^}]*margin-inline-end: var\(--psc-empty-verse-ellipsis-width\);[^}]*text-wrap-mode: nowrap;/,
+      );
+      expect(rules).toMatch(
+        /\.psc-empty-text-active \+ \[data-lexical-text\]::after \{[^}]*content: '\\2060';/,
+      );
+      expect(rules).toMatch(
+        /\.verse:not\(\.marker\)\.psc-empty-text::after,\s*\.psc-gutter-markers \.verse:not\(\.marker\)\.psc-empty-text-active::after \{[^}]*inline-size: var\(--psc-empty-verse-ellipsis-width\);/,
+      );
+    });
     it('does not override text-align in the RTL gutter rule (Chrome/Firefox bidi paint quirk)', () => {
       const rtlGutter = scss
         .replace(/\/\*[\s\S]*?\*\//g, '')

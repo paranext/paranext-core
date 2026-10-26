@@ -2724,6 +2724,9 @@ span.read img {
   /* Gutter width. The marker inline-start offset uses calc(-(--psc-gutter-width) + 0.5em),
      so both values must be updated together if the gutter size changes. */
   --psc-gutter-width: 4em;
+  /* An empty verse's ellipsis placeholder is a box of this fixed width, so a hidden one can be
+     cancelled out exactly (see the caret host rule below). */
+  --psc-empty-verse-ellipsis-width: 18px;
 }
 
 .psc-gutter-markers .usfm_v,
@@ -2764,20 +2767,50 @@ span.read img {
    stand alone in their paragraph. (The `.marker` class is only present in markerMode "visible";
    in paragraph-structure view the verse number is rendered by ImmutableVerseNode.decorate, so
    we attach the ellipsis to `.verse` directly.) */
-.psc-gutter-markers .verse.psc-empty-text::after {
+.psc-gutter-markers .verse.psc-empty-text::after,
+.psc-gutter-markers .verse.psc-empty-text-active::after {
   content: '…';
   cursor: text;
-  /* Padding instead of margin so the I-beam cursor extends across the spacing on either
-     side of the ellipsis, not just the glyph itself. Inline-logical so the gap follows
-     writing direction (flips in RTL) without per-direction overrides. */
-  padding-inline-start: 0.25em;
-  padding-inline-end: 0.25em;
   /* Same --muted-foreground contract mismatch as the UnknownNode rules above: this repo's token
      holds a complete color value, so it is used directly instead of being wrapped in hsl(). The
      hex fallback covers a host that defines no --muted-foreground. */
   color: var(--muted-foreground, #6b7280);
   font-style: italic;
   font-weight: normal;
+}
+/* A fixed-width box with the glyph centered in it, rather than the glyph's own width: the hidden
+   ellipsis below is cancelled by a margin of exactly this width. The box also extends the I-beam
+   cursor across the spacing on either side of the glyph. Not for a `.marker` verse (markerMode
+   "visible"), whose ::after is the verse number itself. */
+.psc-gutter-markers .verse:not(.marker).psc-empty-text::after,
+.psc-gutter-markers .verse:not(.marker).psc-empty-text-active::after {
+  display: inline-block;
+  inline-size: var(--psc-empty-verse-ellipsis-width);
+  text-align: center;
+}
+
+/* The empty verse the cursor is in (ActiveTextPlugin) hides its ellipsis but keeps it in place, so
+   placing the cursor there changes neither the line's width nor where it can wrap. The caret host
+   that follows the verse number (EmptyVerseCaretGuardPlugin) is pulled back over the hidden
+   ellipsis by a margin of its width, and pushes what follows forward by the same amount: it takes
+   no room of its own, and the caret it holds is drawn right after the number, where typed text
+   will go. The host's zero-width space is a line-break opportunity, which a run of empty verses
+   otherwise has none of, so the host doesn't wrap and ends in a word joiner: that keeps the break
+   inside the host, where it is not allowed. (`text-wrap-mode` rather than `white-space`, which
+   would also make a typed space a no-break space.) Scoped to hidden markers, where the verse
+   number is an ImmutableVerseNode decorator and the text that follows an empty one can only be its
+   host. Forced colors would otherwise paint the hidden ellipsis. */
+.psc-gutter-markers .verse:not(.marker).psc-empty-text-active::after {
+  color: transparent;
+  forced-color-adjust: none;
+}
+.psc-gutter-markers.marker-hidden .verse.psc-empty-text-active + [data-lexical-text] {
+  margin-inline-start: calc(-1 * var(--psc-empty-verse-ellipsis-width));
+  margin-inline-end: var(--psc-empty-verse-ellipsis-width);
+  text-wrap-mode: nowrap;
+}
+.psc-gutter-markers.marker-hidden .verse.psc-empty-text-active + [data-lexical-text]::after {
+  content: '\2060';
 }
 
 .psc-gutter-markers .usfm_s,
