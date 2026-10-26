@@ -1847,7 +1847,7 @@ describe('Scripture Editor tab events keep last-opened-project-cache current', (
       { type: 'replace-tab', targetTabId: editorTabId },
       {},
     );
-    expect(getWebViewProviderMock).toHaveBeenCalledWith(SCRIPTURE_EDITOR_WEBVIEW_TYPE);
+    expect(getWebViewProviderMock).toHaveBeenCalledWith(SCRIPTURE_EDITOR_WEBVIEW_TYPE, false);
 
     // The fresh id must now be recognized - not just the original minted one.
     emitNetworkEvent(EVENT_NAME_ON_DID_UPDATE_WEB_VIEW, {

@@ -104,6 +104,13 @@ const dblRef = (resource: DblResourceData): DblResourceReference => ({
 type DecoratorConfig = {
   /** Initially-configured model text refs (admin-level). */
   initialAdmin?: DblResourceReference[];
+  /** Model text refs the user picked themselves (user-level), newest first. */
+  initialUser?: DblResourceReference[];
+  /**
+   * A project that lacks Genesis, so the missing-book message shows while it is the model text.
+   * Other texts still load, so picking one from the message shows its content.
+   */
+  missingBookProjectId?: string;
   /** Resource list seed. */
   resources?: DblResourceData[];
   /** Whether the panel has a project. */
@@ -154,7 +161,7 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
   // stories now that `ModelTextPanel` no longer writes admin-level settings itself (that write path
   // moved to the Share Layout dialog).
   const [adminItems] = useState<DblResourceReference[]>(config.initialAdmin ?? []);
-  const [userItems, setUserItems] = useState<DblResourceReference[]>([]);
+  const [userItems, setUserItems] = useState<DblResourceReference[]>(config.initialUser ?? []);
   const [scrRef, setScrRef] = useState<SerializedVerseRef>({
     book: 'GEN',
     chapterNum: 1,
@@ -187,6 +194,19 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
     });
   }, []);
 
+  // Stable, as the web view's is: the panel refetches the chapter whenever this changes, so a new
+  // function on every harness render would flicker the content each time the picker opens.
+  const { missingBookProjectId } = config;
+  const getResourceChapter = useCallback(
+    async (resourceProjectId: string) => {
+      // The data provider's wording for a missing book, which the panel recognizes
+      if (resourceProjectId === missingBookProjectId)
+        throw new Error(`Book number 1 not found in project ${resourceProjectId}.`);
+      return { usj: sampleUsj, textDirection: 'ltr' };
+    },
+    [missingBookProjectId],
+  );
+
   const resolvePicker = useCallback((resource?: DblResourceData) => {
     setPickerOpen(false);
     pickerResolveRef.current?.(resource);
@@ -208,7 +228,9 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
           // eslint-disable-next-line no-console
           console.log('onRetryCatalog');
         }}
-        getUserModelTexts={async () => undefined}
+        // The stored user list, as in the app, so picks accumulate and an earlier one can be
+        // picked again
+        getUserModelTexts={async () => ({ dataVersion: DATA_VERSION, items: userItems })}
         scrRef={scrRef}
         onScrRefChange={setScrRef}
         installResource={async (uid) => {
@@ -239,7 +261,7 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
           );
         }}
         showResourcePicker={showResourcePicker}
-        getResourceChapter={async () => ({ usj: sampleUsj, textDirection: 'ltr' })}
+        getResourceChapter={getResourceChapter}
         resourceCopyLimit={undefined}
         copyrightNotice={config.copyrightNotice}
       />
@@ -319,11 +341,26 @@ export const InstalledButUnavailable: Story = {
   ],
 };
 
-/** The configured model text id isn't present in the DBL list. */
+/**
+ * The admin's model text id isn't present in the DBL list. A pick could never replace the admin's
+ * text, so the message points to the team layout and offers no button.
+ */
 export const UnknownResource: Story = {
   decorators: [
     createDecorator({
       initialAdmin: [{ type: 'dblResource', id: 'uid-missing', name: 'Missing' }],
+    }),
+  ],
+};
+
+/**
+ * The model text the user picked isn't present in the DBL list. It is theirs to change, so the
+ * message offers "Pick model text…".
+ */
+export const UserChosenUnknownResource: Story = {
+  decorators: [
+    createDecorator({
+      initialUser: [{ type: 'dblResource', id: 'uid-missing', name: 'Missing' }],
     }),
   ],
 };
@@ -333,9 +370,48 @@ export const NoProject: Story = {
   decorators: [createDecorator({ hasProject: false })],
 };
 
-/** A non-admin user picks a model text — it persists at the user level (logged to console). */
+/**
+ * A non-admin user picks a first model text from the empty state — it persists at the user level
+ * (logged to console). `UserChosen` starts from a text they already picked.
+ */
 export const NonAdminPick: Story = {
   decorators: [createDecorator({ canWriteProjectSettings: false })],
+};
+
+/**
+ * The admin has chosen nothing and the user picked WEB themselves, so the header is a button that
+ * reopens the picker. Pick ASV, then pick WEB again from the header: each earlier pick stays
+ * selectable.
+ */
+export const UserChosen: Story = {
+  decorators: [createDecorator({ initialUser: [dblRef(seedResources[0])] })],
+};
+
+/**
+ * The text the user picked lacks this book. The message offers "Pick model text…", which opens the
+ * same picker as the header; picking ASV shows its text.
+ */
+export const UserChosenMissingBook: Story = {
+  decorators: [
+    createDecorator({
+      initialUser: [dblRef(seedResources[0])],
+      missingBookProjectId: seedResources[0].projectId,
+    }),
+  ],
+};
+
+/**
+ * The admin's text lacks this book. The user cannot change it from here, so the header stays a
+ * label, the message offers no button, and it says a project admin can change it in the team
+ * layout.
+ */
+export const AdminChosenMissingBook: Story = {
+  decorators: [
+    createDecorator({
+      initialAdmin: [dblRef(seedResources[0])],
+      missingBookProjectId: seedResources[0].projectId,
+    }),
+  ],
 };
 
 /** The configured list is still resolving — the panel must not guess at an empty state. */

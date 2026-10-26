@@ -38,6 +38,7 @@ type DecoratorConfig = {
   isFormDisabled?: boolean;
   saveState?: SaveState;
   saveError?: string;
+  canEditServer?: boolean;
 };
 
 /** Wraps the form in state so the radio list and developer toggle remain interactive. */
@@ -61,6 +62,7 @@ function createDecorator(config: DecoratorConfig) {
           isFormDisabled: config.isFormDisabled ?? false,
           saveState: config.saveState ?? SaveState.HasNotSaved,
           saveError: config.saveError ?? '',
+          canEditServer: config.canEditServer ?? true,
           onSaveAndRestart: () =>
             alertCommand(
               'paratextRegistration.internetSettingsDataProvider → setInternetSettings',
@@ -120,6 +122,15 @@ export const UnsavedChanges: Story = {
       savedInternetSettings: defaultSettings,
     }),
   ],
+};
+
+/**
+ * Server selection hidden — the default state for everyone except a Shift-click/Shift-Enter on
+ * "Internet & connectivity" (or an already non-Production server). No locked label, no hint of any
+ * kind: the control is simply absent.
+ */
+export const ServerSelectionHidden: Story = {
+  decorators: [createDecorator({ canEditServer: false })],
 };
 
 /** Developer section expanded — Production/Development toggle visible. */

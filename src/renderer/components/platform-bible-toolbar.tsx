@@ -758,7 +758,9 @@ export function PlatformBibleToolbar() {
   );
 
   // The union of both sections. The hook returns them disjoint (`allProjects` already excludes
-  // recents), so concatenating cannot duplicate a project.
+  // recents), so concatenating cannot duplicate a project. Both sections also exclude published
+  // resources (`isPickableProject` in `use-project-picker-data.hook.ts`), so this titlebar
+  // switcher never offers one to switch to — same exclusion as the "More projects…" dialog.
   const pickerProjects = useMemo(
     () => [...recentProjects, ...allProjects],
     [recentProjects, allProjects],
@@ -806,28 +808,23 @@ export function PlatformBibleToolbar() {
   // with a wrapper div carrying the live-measured caption-button width (see
   // useWindowControlsOverlay), so it isn't reserved twice. macOS's fixed-width traffic lights
   // still use the static class as-is.
-  const windowControlsOverlayRect = useWindowControlsOverlay();
+  const windowControlsOverlayInsets = useWindowControlsOverlay();
   const toolbarReservedSpaceStyle: CSSProperties | undefined =
     osPlatformToReserveSpaceFor !== undefined &&
     osPlatformToReserveSpaceFor !== 'darwin' &&
-    windowControlsOverlayRect
+    windowControlsOverlayInsets
       ? {
-          // Physical paddingLeft/paddingRight, chosen from the live-measured rect: Windows moves
-          // the caption buttons to the physical left in RTL locales. Deriving the side from
-          // windowControlsOverlayRect itself is correct in both directions since it reflects the
-          // buttons' actual measured position.
+          // Physical paddingLeft/paddingRight, chosen from the live-measured insets: Windows moves
+          // the caption buttons to the physical left in RTL locales. Deriving the side from the
+          // insets themselves is correct in both directions since they reflect the buttons'
+          // actual measured position.
           // +RESERVED_SPACE_BREATHING_ROOM_PX — without it, content sits pixel-flush against the
           // native buttons, which reads as cramped even though nothing actually overlaps.
-          ...(windowControlsOverlayRect.left > 0
-            ? { paddingLeft: windowControlsOverlayRect.left + RESERVED_SPACE_BREATHING_ROOM_PX }
+          ...(windowControlsOverlayInsets.left > 0
+            ? { paddingLeft: windowControlsOverlayInsets.left + RESERVED_SPACE_BREATHING_ROOM_PX }
             : undefined),
-          ...(window.innerWidth - windowControlsOverlayRect.right > 0
-            ? {
-                paddingRight:
-                  window.innerWidth -
-                  windowControlsOverlayRect.right +
-                  RESERVED_SPACE_BREATHING_ROOM_PX,
-              }
+          ...(windowControlsOverlayInsets.right > 0
+            ? { paddingRight: windowControlsOverlayInsets.right + RESERVED_SPACE_BREATHING_ROOM_PX }
             : undefined),
           // @ts-ignore Electron-only property, not in React's CSSProperties type. Toolbar's own
           // drag area (shouldUseAsAppDragArea) doesn't extend into this wrapper, so this strip

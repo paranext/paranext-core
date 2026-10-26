@@ -20,6 +20,7 @@ const {
   mockUseChapterCopyLimit,
   capturedGetResourceChapter,
   capturedResourceCopyLimit,
+  capturedSetUserModelTexts,
 } = vi.hoisted(() => ({
   mockUseEffectiveResourceReferenceList: vi.fn(),
   mockGetProjectDataProvider: vi.fn(),
@@ -32,6 +33,8 @@ const {
   capturedGetResourceChapter: vi.fn(),
   /** Collects the `resourceCopyLimit` prop the web view passes on each render. */
   capturedResourceCopyLimit: vi.fn(),
+  /** Collects the `setUserModelTexts` callback the web view builds. */
+  capturedSetUserModelTexts: vi.fn(),
 }));
 
 // @papi/frontend — papi default export used for projectDataProviders.get
@@ -94,18 +97,22 @@ vi.mock('./use-open-find-shortcut.hook', () => ({
   default: vi.fn(),
 }));
 
-// Captures the `getResourceChapter` callback and the `resourceCopyLimit` the web view hands to
+// Captures the `getResourceChapter` and `setUserModelTexts` callbacks and the `resourceCopyLimit`
+// the web view hands to
 // `ModelTextPanel`, without rendering the real (editor-dependent) component.
 vi.mock('./model-text-panel.component', () => ({
   ModelTextPanel: ({
     getResourceChapter,
     resourceCopyLimit,
+    setUserModelTexts,
   }: {
     getResourceChapter: unknown;
     resourceCopyLimit: unknown;
+    setUserModelTexts: unknown;
   }) => {
     capturedGetResourceChapter(getResourceChapter);
     capturedResourceCopyLimit(resourceCopyLimit);
+    capturedSetUserModelTexts(setUserModelTexts);
     return React.createElement('div', { 'data-testid': 'model-text-panel-stub' });
   },
   MODEL_TEXT_PANEL_STRING_KEYS: [],
@@ -283,5 +290,23 @@ describe('ModelTextPanelWebView — copy limit', () => {
       'applied-by-caller',
     );
     expect(capturedResourceCopyLimit).toHaveBeenLastCalledWith(8);
+  });
+});
+
+describe('ModelTextPanelWebView setUserModelTexts', () => {
+  it('fails a write while the settings provider is unavailable, instead of reporting it saved', async () => {
+    // The panel waits for the written list to come back. A write that silently did nothing would
+    // leave it showing "Selecting…" with no update ever coming; a failed write ends the pick.
+    mockUseEffectiveResourceReferenceList.mockReturnValue({
+      status: 'ready',
+      list: { dataVersion: '1.0.0', items: [] },
+    });
+    mockUseChapterCopyLimit.mockReturnValue(undefined);
+    const ModelTextPanelWebView = getWebViewComponent();
+    render(<ModelTextPanelWebView {...makeProps()} />);
+    const [setUserModelTexts] = capturedSetUserModelTexts.mock.lastCall ?? [];
+    expect(setUserModelTexts).toBeInstanceOf(Function);
+
+    await expect(setUserModelTexts({ dataVersion: '1.0.0', items: [] })).rejects.toThrow();
   });
 });

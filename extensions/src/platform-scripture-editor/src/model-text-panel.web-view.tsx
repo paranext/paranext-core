@@ -152,9 +152,13 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     refetchCatalog,
   );
 
+  // Rejects rather than resolving when there is no provider yet: the panel treats a resolved write
+  // as saved and waits for the new list, which would then never come.
   const setUserModelTexts = useCallback(
     async (list: ResourceReferenceList) => {
-      await textConnectionsProvider?.setUserModelTexts(list);
+      if (!textConnectionsProvider)
+        throw new Error('Text connection settings are not available yet');
+      await textConnectionsProvider.setUserModelTexts(list);
     },
     [textConnectionsProvider],
   );

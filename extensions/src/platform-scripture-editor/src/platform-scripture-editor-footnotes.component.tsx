@@ -118,10 +118,10 @@ export type FootnotesLayoutProps = PropsWithChildren<{
   onFocusedFootnoteChange?: (index: number | undefined) => void;
   /**
    * Whether an applied `focusRequest` should put DOM focus on the selected row. Set where the pane
-   * is the request's destination and opens no row editor of its own — a read-only Standard view,
-   * where PT9 still moves the caret into the note, and the caller highlight follows the focused
-   * pane. Views that answer a caller click with a popover leave it unset, so the pane never takes
-   * focus off that editor.
+   * is the request's destination and opens no row editor of its own — a read-only view using the
+   * pane note model (Standard view, or Simple's Formatted view), where PT9 still moves the caret
+   * into the note, and the caller highlight follows the focused pane. Views that answer a caller
+   * click with a popover leave it unset, so the pane never takes focus off that editor.
    */
   focusRowOnFocusRequest?: boolean;
   /**

@@ -76,6 +76,7 @@ function renderForm(overrides: Partial<InternetSettingsFormProps> = {}) {
     saveState: SaveState.HasNotSaved,
     saveError: '',
     onSaveAndRestart: vi.fn(),
+    canEditServer: false,
   };
   return render(<InternetSettingsForm {...defaults} {...overrides} />);
 }
@@ -160,6 +161,16 @@ describe('InternetSettingsForm', () => {
     expect(screen.queryByText('Restarting description sentinel')).not.toBeInTheDocument();
   });
 
+  test('does not render the server-selection control when canEditServer is false', () => {
+    renderForm({ canEditServer: false });
+    expect(screen.queryByRole('button', { name: /Developer only/ })).not.toBeInTheDocument();
+  });
+
+  test('renders the server-selection control when canEditServer is true', () => {
+    renderForm({ canEditServer: true });
+    expect(screen.getByRole('button', { name: /Developer only/ })).toBeInTheDocument();
+  });
+
   describe('focus management', () => {
     function buildProps(
       overrides: Partial<InternetSettingsFormProps> = {},
@@ -173,6 +184,7 @@ describe('InternetSettingsForm', () => {
         saveState: SaveState.HasNotSaved,
         saveError: '',
         onSaveAndRestart: vi.fn(),
+        canEditServer: false,
         ...overrides,
       };
     }

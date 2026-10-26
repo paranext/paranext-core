@@ -73,18 +73,17 @@ describe('buildLocalNonDblResources — filtering', () => {
 
   it('excludes projects matched by startsWith(dblEntryUid) when the entry is installed', () => {
     const result = buildLocalNonDblResources(
-      [readOnlyProject('72dd0b9b0f2b4024_some_suffix')],
-      [dblEntry({ dblEntryUid: '72dd0b9b0f2b4024', projectId: 'installed-proj', installed: true })],
+      [readOnlyProject('97196133a859179b_some_suffix')],
+      [dblEntry({ dblEntryUid: '97196133a859179b', projectId: 'installed-proj', installed: true })],
     );
     expect(result).toHaveLength(0);
   });
 
-  it('does NOT exclude via startsWith when the DBL entry is not installed (reassigned UID guard)', () => {
-    // A local resource installed under an old UID should not be hidden just because an uninstalled
-    // DBL entry has a UID that is a prefix of the local project ID (old UID reassigned to a different
-    // resource in the current catalog).
+  it('does NOT exclude via startsWith when the DBL entry is not installed (uninstalled-entry guard)', () => {
+    // A local resource should not be hidden just because an uninstalled DBL entry's UID is a prefix
+    // of the local project ID: only an installed entry stands for a local project.
     const result = buildLocalNonDblResources(
-      [readOnlyProject('090f7cbf7924b245_old_tnn_suffix')],
+      [readOnlyProject('090f7cbf7924b245_local_suffix')],
       [dblEntry({ dblEntryUid: '090f7cbf7924b245', projectId: '', installed: false })],
     );
     expect(result).toHaveLength(1);
@@ -140,12 +139,12 @@ describe('buildLocalNonDblResources — synthetic entry shape', () => {
 });
 
 describe('buildLocalNonDblResources — commentary classification', () => {
-  it('classifies TNN (current UID 72dd0b9b0f2b4024) as CommentaryResource', () => {
+  it('classifies North Tanna (72dd0b9b0f2b4024, a Scripture text) as ScriptureResource', () => {
     const [entry] = buildLocalNonDblResources([readOnlyProject('72dd0b9b0f2b4024_suffix')], []);
-    expect(entry.type).toBe('CommentaryResource');
+    expect(entry.type).toBe('ScriptureResource');
   });
 
-  it('classifies TNN (old UID 090f7cbf7924b245) as CommentaryResource', () => {
+  it('classifies TNN (090f7cbf7924b245) as CommentaryResource', () => {
     const [entry] = buildLocalNonDblResources([readOnlyProject('090f7cbf7924b245_suffix')], []);
     expect(entry.type).toBe('CommentaryResource');
   });
@@ -156,22 +155,22 @@ describe('buildLocalNonDblResources — commentary classification', () => {
   });
 
   it('is case-insensitive when matching commentary UIDs', () => {
-    const [entry] = buildLocalNonDblResources([readOnlyProject('72DD0B9B0F2B4024_uppercase')], []);
+    const [entry] = buildLocalNonDblResources([readOnlyProject('090F7CBF7924B245_uppercase')], []);
     expect(entry.type).toBe('CommentaryResource');
   });
 });
 
 describe('LOCAL_COMMENTARY_UIDS', () => {
-  it('contains the TNN current UID', () => {
-    expect(LOCAL_COMMENTARY_UIDS.has('72dd0b9b0f2b4024')).toBe(true);
-  });
-
-  it('contains the TNN legacy UID retained for pre-reassignment installs', () => {
+  it("contains TNN's UID", () => {
     expect(LOCAL_COMMENTARY_UIDS.has('090f7cbf7924b245')).toBe(true);
   });
 
-  it('has exactly 14 entries (13 from C# whitelist + 1 legacy TNN UID)', () => {
-    expect(LOCAL_COMMENTARY_UIDS.size).toBe(14);
+  it("does not contain North Tanna's UID, which is a Scripture text", () => {
+    expect(LOCAL_COMMENTARY_UIDS.has('72dd0b9b0f2b4024')).toBe(false);
+  });
+
+  it('has exactly 13 entries, one per commentary in the C# CommentariesWhiteList', () => {
+    expect(LOCAL_COMMENTARY_UIDS.size).toBe(13);
   });
 });
 

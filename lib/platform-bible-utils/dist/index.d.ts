@@ -5035,11 +5035,14 @@ export declare function toProjectOpenBlockedReasonKey(unsupportedReason: string)
 export declare function getProjectOpenBlockedReasonKey(error: unknown): LocalizeKey | undefined;
 /** What {@link notifyProjectOpenBlocked} needs from PAPI, passed in so it runs in any process. */
 export type NotifyProjectOpenBlockedDependencies = {
+	/** Looks up the translations of `localizeKeys`, e.g. `papi.localization.getLocalizedStrings` */
 	getLocalizedStrings: (localizeKeys: LocalizeKey[]) => Promise<LanguageStrings>;
+	/** Shows `notification` to the user, e.g. `papi.notifications.send` */
 	sendNotification: (notification: {
 		message: LocalizeKey;
 		severity: "warning";
 	}) => Promise<unknown>;
+	/** Logs `message` as a warning, e.g. `logger.warn` */
 	logWarning: (message: string) => void;
 };
 /**
@@ -5255,9 +5258,17 @@ export type SettingBase = StateBase & {
 	/**
 	 * Boolean that controls whether a setting should be hidden or not. If hidden, the setting will
 	 * not show up in the settings dialog in `paranext-core`, and thus will not be configurable by the
-	 * user unless an extension provides a way to interact with the setting.
+	 * user unless an extension provides a way to interact with the setting. If every setting in a
+	 * group is hidden, the group does not show up either.
 	 */
 	isHidden?: boolean;
+	/**
+	 * Boolean that controls whether a setting is read-only in the settings dialog. If read-only, the
+	 * setting still shows up in the settings dialog in `paranext-core`, but the user cannot change it
+	 * there. A read-only text field can still be selected and copied; controls with no read-only
+	 * state, such as switches, are disabled. Extensions can still change the setting's value.
+	 */
+	isReadOnly?: boolean;
 };
 /** The data an extension provides to inform Platform.Bible of the project settings it provides */
 export type ProjectSettingsContribution = ProjectSettingsGroup | ProjectSettingsGroup[];
@@ -5646,6 +5657,10 @@ export declare const projectSettingsDocumentSchema: {
 						description: string;
 						type: string;
 					};
+					isReadOnly: {
+						description: string;
+						type: string;
+					};
 				};
 				required: string[];
 				$ref?: undefined;
@@ -5939,6 +5954,10 @@ export declare const settingsDocumentSchema: {
 						$ref: string;
 					};
 					isHidden: {
+						description: string;
+						type: string;
+					};
+					isReadOnly: {
 						description: string;
 						type: string;
 					};

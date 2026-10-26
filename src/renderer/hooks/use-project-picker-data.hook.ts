@@ -84,6 +84,15 @@ function resolveLanguage(
 }
 
 /**
+ * Whether a project belongs in the picker's lists: a published (read-only reference) resource never
+ * does, regardless of how it's reached. Absence of `isPublished` means "not a resource" — the
+ * registered default for `platform.isPublished` is `false`.
+ */
+function isPickableProject(m: ProjectMetadata): boolean {
+  return !m.isPublished;
+}
+
+/**
  * Converts cheap project metadata (already fetched via `projectLookupService`) into a `ProjectItem`
  * for display, without opening a project data provider. `name` falls back to the project id so the
  * identifying string is always defined; `fullName` does not, because a project with no full name of
@@ -400,10 +409,12 @@ export function useProjectPickerData(): ProjectPickerData {
         );
         // Preserve safeRecentIds' recency order; drop ids with no metadata (not found / errored).
         // Read-only projects are deliberately kept: a project the user can open but not edit is
-        // still a project they can reach, and the row marks it as read-only.
+        // still a project they can reach, and the row marks it as read-only. Published resources
+        // are never kept, even if recently opened — see isPickableProject.
         return safeRecentIds
           .map((id: string) => metadataById.get(normalizeProjectId(id)))
           .filter((m: ProjectMetadata | undefined): m is ProjectMetadata => !!m)
+          .filter(isPickableProject)
           .map(metadataToProjectItem);
       } catch (e) {
         logger.warn(
@@ -419,9 +430,10 @@ export function useProjectPickerData(): ProjectPickerData {
     useCallback(async () => {
       try {
         const metadata = await getAllMetadata();
-        // The service already filtered to PICKER_PROJECT_INTERFACE; nothing further is excluded.
-        // Read-only projects belong in the list, marked rather than hidden.
-        return metadata.map(metadataToProjectItem);
+        // The service already filtered to PICKER_PROJECT_INTERFACE. Read-only projects belong in
+        // the list, marked rather than hidden; published resources are excluded — see
+        // isPickableProject.
+        return metadata.filter(isPickableProject).map(metadataToProjectItem);
       } catch (e) {
         logger.warn(`ProjectPicker: could not fetch project metadata: ${getErrorMessage(e)}`);
         return [];
