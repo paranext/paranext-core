@@ -81,8 +81,9 @@ function renderForm(overrides: Partial<InternetSettingsFormProps> = {}) {
 }
 
 describe('InternetSettingsForm', () => {
-  // The form renders platform-bible-react's committed build, so this also catches a build that was
-  // not rebuilt after the badge key changed.
+  // The form imports `platform-bible-react/experimental`, which that package's exports map resolves
+  // to its committed `dist` build, so this also fails when that build is out of date with the
+  // source.
   test('marks each option that cannot be chosen yet as not yet available', () => {
     renderForm();
     expect(screen.getAllByText('Not yet available')).toHaveLength(3);

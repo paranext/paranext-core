@@ -59,7 +59,7 @@ describe('not-yet-available badge', () => {
 
   it('marks the "Coming soon" key it replaces as deprecated', () => {
     expect(
-      metadata['%paratextRegistration_internetUse_comingSoon%'].deprecationInfo?.message,
+      metadata['%paratextRegistration_internetUse_comingSoon%']?.deprecationInfo?.message,
     ).toContain(key);
   });
 });

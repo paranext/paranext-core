@@ -401,25 +401,21 @@ describe.each([...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS])('View Options label 
 });
 
 // The hint under a disabled Chapter toggle falls back to the "coming soon" key it replaces, so a
-// dropped value would silently bring back a promised delivery date nobody has set.
+// dropped value would silently bring back a promised delivery date nobody has set. The View Options
+// label tests above catch a dropped value; this checks that the value itself makes no such promise.
 describe('View Options chapter hint', () => {
   const key = '%webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%';
 
   it.each(['en', 'es'])('has a %s string that does not promise a delivery date', (locale) => {
-    const value = localizedStrings[locale][key];
-    expect(value).toBeTruthy();
-    expect(value).not.toMatch(/coming soon|próximamente|pronto/i);
+    expect(localizedStrings[locale][key]).not.toMatch(/coming soon|próximamente|pronto/i);
   });
 });
 
 describe('retired "coming soon" View Options strings', () => {
-  const retiredKeys = [
-    '%webView_scriptureTextGrid_viewOptions_chapterComingSoon%',
-    '%webView_scriptureTextGrid_viewOptions_comingSoon%',
-  ];
-
-  it.each(retiredKeys)('%s is no longer requested by the panel', (key) => {
-    expect(RESOURCE_COLLECTION_OPTIONS_STRING_KEYS).not.toContain(key);
+  it('no longer requests the "coming soon" chapter hint', () => {
+    expect(RESOURCE_COLLECTION_OPTIONS_STRING_KEYS).not.toContain(
+      '%webView_scriptureTextGrid_viewOptions_chapterComingSoon%',
+    );
   });
 
   it('marks the chapter hint key as replaced by the not-yet-available hint', () => {

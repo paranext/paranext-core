@@ -133,7 +133,7 @@ describe.each(Object.entries(NOT_YET_AVAILABLE_KEYS))(
     });
 
     it('marks the key it replaces as deprecated', () => {
-      expect(metadata[replaces].deprecationInfo?.message).toContain(key);
+      expect(metadata[replaces]?.deprecationInfo?.message).toContain(key);
     });
   },
 );

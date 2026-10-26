@@ -1113,9 +1113,9 @@ global.webViewComponent = function ManageBooksWebView({
   // Project canons and Registry have no PT10 cross-launch target yet, so the wiring layer
   // simply omits the `onOpenProjectCanons` / `onOpenRegistry` props from <ManageBooksDialog>.
   // The dialog renders each button as disabled with a not-yet-available tooltip on hover (the
-  // convention used elsewhere in the dialog for not-yet-implemented affordances). When real platform commands ship, replace the omission with `useCallback`
-  // handlers that route to those commands — the buttons will auto-enable and the
-  // disabled+tooltip stub disappears.
+  // convention used elsewhere in the dialog for not-yet-implemented affordances). When real
+  // platform commands ship, replace the omission with `useCallback` handlers that route to those
+  // commands — the buttons will auto-enable and the disabled+tooltip stub disappears.
 
   // ===== File picker stub (DEF-UI-009 / FN-010 spike) ========================
   // No platform multi-file picker exists in PT10. The component falls back to

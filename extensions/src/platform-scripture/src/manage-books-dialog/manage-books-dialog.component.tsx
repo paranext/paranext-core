@@ -2253,9 +2253,9 @@ export function ManageBooksDialog({
                     and Compare versions are not yet implemented in PT10. We render each as a
                     disabled Button wrapped in a Tooltip so hover says it is not yet available —
                     the convention used elsewhere in this dialog (e.g., the apply button when
-                    invalid). The handler props are optional in
-                    ManageBooksDialogProps; when an `onOpen*` handler is eventually supplied, the
-                    corresponding button auto-enables and wires the real cross-launch.
+                    invalid). The handler props are optional in ManageBooksDialogProps; when an
+                    `onOpen*` handler is eventually supplied, the corresponding button
+                    auto-enables and wires the real cross-launch.
                   */}
                       {(() => {
                         const stubTooltip = t(
