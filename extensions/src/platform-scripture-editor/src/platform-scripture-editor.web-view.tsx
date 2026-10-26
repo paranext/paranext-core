@@ -5434,7 +5434,7 @@ function PlatformScriptureEditor({
 
   return (
     <div
-      className={`tw:flex tw:flex-col tw:h-screen${isPowerMode ? '' : ' editor-container-simple'}`}
+      className={`tw:flex tw:flex-col tw:h-screen${isPowerMode ? '' : ' editor-container-simple scripture-editor-simple'}`}
     >
       <TabToolbar
         onSelectProjectMenuItem={menuCommandHandler}

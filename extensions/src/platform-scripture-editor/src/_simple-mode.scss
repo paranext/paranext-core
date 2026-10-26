@@ -7,7 +7,9 @@
 // via plain marker classes applied directly to each web view's own root element instead:
 // `.editor-container-simple` (unconditional in model-text-panel.component.tsx and
 // resource-text-panel.web-view.tsx — both Simple-mode-only web views; conditional on
-// `!isPowerMode` in platform-scripture-editor.web-view.tsx, which is used in both modes) and
+// `!isPowerMode` in platform-scripture-editor.web-view.tsx, which is used in both modes),
+// `.scripture-editor-simple` (on the same element as `.editor-container-simple` in
+// platform-scripture-editor.web-view.tsx only, for rules that must skip the read-only panels) and
 // `.scripture-editor-tab-nav-simple` (conditional in platform-scripture-editor.web-view.tsx only).
 //
 // This file is @used from _editor-overrides.scss, which all three web-view entry points already
@@ -116,6 +118,70 @@
       var(--platform-content-zoom-main, var(--platform-content-zoom-default, 1))
   );
 }
+
+// Character markers with no visible style. Simple's character styling is the static `_usj-nodes.scss`
+// (the project stylesheet is applied in Standard view only), and there these markers set nothing
+// but `font-size: 100%`, so their text looks exactly like plain text and users type inside them
+// unawares. `simple-mode.scss.test.ts` derives the list from `_usj-nodes.scss` and fails when the
+// two drift: a marker that gains a visible style there must leave both lists below.
+//
+// Limited to the Scripture editor by `.scripture-editor-simple`: the model-text and resource panels
+// also carry `.editor-container-simple`, but their text is read-only, so there is nothing to warn
+// about there.
+//
+// The tint is plain `--muted`, not a translucent mix, so a marker nested in another one is no darker.
+// It sits under Find's amber, the comment highlights and the selection, which all paint on the
+// inner mark element or on top. Inside an expanded footnote the footnote's own light-blue tint
+// (`.marker-hidden .note.expanded .char`, one class more specific) still wins.
+//
+// The hover line is always drawn but transparent; hovering fades its colour in after the delay, and
+// leaving starts fading it out at once because only the hover rule carries the delay. Chromium
+// paints the line in the selection's text colour while the text is selected, so selected marker
+// text keeps a cue even where an opaque selection hides the tint. For an underline plus an
+// overline, change `text-decoration-line` to `underline overline`.
+/* stylelint-disable selector-class-pattern -- `usfm_<marker>` is the editor library's class name */
+.editor-container-simple.scripture-editor-simple
+  :is(
+    .usfm_liv,
+    .usfm_liv1,
+    .usfm_liv2,
+    .usfm_liv3,
+    .usfm_liv4,
+    .usfm_liv5,
+    .usfm_ndx,
+    .usfm_no,
+    .usfm_rb,
+    .usfm_w,
+    .usfm_wa,
+    .usfm_wg,
+    .usfm_wh
+  ) {
+  background-color: var(--muted);
+  text-decoration-line: underline;
+  text-decoration-color: transparent;
+  transition: text-decoration-color 150ms;
+}
+
+.editor-container-simple.scripture-editor-simple
+  :is(
+    .usfm_liv,
+    .usfm_liv1,
+    .usfm_liv2,
+    .usfm_liv3,
+    .usfm_liv4,
+    .usfm_liv5,
+    .usfm_ndx,
+    .usfm_no,
+    .usfm_rb,
+    .usfm_w,
+    .usfm_wa,
+    .usfm_wg,
+    .usfm_wh
+  ):hover {
+  text-decoration-color: currentColor;
+  transition-delay: 500ms;
+}
+/* stylelint-enable selector-class-pattern */
 
 // RTL: `_usj-nodes.scss`'s mirror rule (`.usfm.psc-gutter-markers[dir='rtl']`) re-asserts
 // `padding-left: 10px` PHYSICALLY — the same side `padding-inline-end` resolves to in RTL — at
