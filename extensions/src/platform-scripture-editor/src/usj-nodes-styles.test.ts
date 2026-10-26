@@ -21,6 +21,14 @@ import path from 'path';
 describe('_usj-nodes.scss vendored editor stylesheet', () => {
   const scss = readFileSync(path.resolve(__dirname, '_usj-nodes.scss'), 'utf8');
 
+  // The editor holds a stored no-break space as U+001A where `~` is an ordinary character, and a
+  // browser draws a control character as a box unless the FIRST family has a glyph for it.
+  it("leads the Scripture font stack with the editor's no-break-space stand-in family", () => {
+    expect(scss.replace(/\/\*[\s\S]*?\*\//g, '')).toMatch(
+      /\.usfm\.formatted-font \{[^}]*font-family: 'PlatformEditorNbspStandIn', var\(--usj-font-fallback, serif\);/,
+    );
+  });
+
   it('still styles the UnknownNode containers (guards against reading the wrong/empty file)', () => {
     expect(scss).toContain('.marker-editable .unknown-block');
     expect(scss).toContain('.marker-editable .unknown-inline');

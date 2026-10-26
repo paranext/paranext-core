@@ -44,10 +44,13 @@ editor behaviors exist only to satisfy these, so changing one changes the editor
    USFM holds U+00A0 itself and `~` is an ordinary character. Every `UsjReaderWriter` that writes a
    project's USFM gets the setting as `shouldAllowInvisibleCharacters`, and every editor host puts
    it in the editor's `ViewOptions.allowInvisibleCharacters` (`getEditorViewOptions` in the
-   scripture editor web view), so Standard view keeps `~` and U+00A0 apart (it shows a stored U+00A0
-   as `⍽` with the setting on). Text a host reads from the editor's display (a DOM selection, an
-   element's `textContent`) goes through the editor's `toUsfmNbspSpelling` before it is copied or
-   searched for.
+   scripture editor web view), so Standard view keeps `~` and U+00A0 apart (with the setting on it
+   holds a stored U+00A0 as an internal stand-in, U+001A, drawn as a blank the width of a space by
+   the editor's `NBSP_STAND_IN_FONT_FAMILY`, which must lead every Scripture `font-family` — the
+   vendored `_usj-nodes.scss` puts it first). Every op, clipboard flavor and callback text the
+   editor gives a host has U+00A0, but text a host reads from the editor's display (a DOM
+   selection, an element's `textContent`) still holds the stand-in, so it goes through the editor's
+   `toUsfmNbspSpelling` before it is copied or searched for.
 
    _Consequence:_ a writer or editor that does not get the setting rewrites every no-break space or
    every tilde of such a project the next time it saves.

@@ -63,8 +63,11 @@
 .usfm.formatted-font {
   /* Same `serif` fallback the generated project rules carry: a `var()` whose property turns out to
      be invalid at computed-value time takes the whole declaration with it, dropping Scripture text
-     onto the inherited UI font. */
-  font-family: var(--usj-font-fallback, serif);
+     onto the inherited UI font. The editor's no-break-space stand-in family leads, as in every rule
+     `generateUsjCss` emits: it draws U+001A alone (the editor adds the face itself), and a browser
+     draws a control character as a box unless the FIRST family has a glyph for it
+     (`NBSP_STAND_IN_FONT_FAMILY` in the editor library). */
+  font-family: 'PlatformEditorNbspStandIn', var(--usj-font-fallback, serif);
   font-size: 12pt;
 }
 
