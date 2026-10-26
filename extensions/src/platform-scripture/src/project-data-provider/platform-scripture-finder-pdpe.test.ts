@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
 import { FindResult, ScriptureRangeUsjChapterOrUsfmVerseLocation } from 'platform-scripture';
-import { USFM_MARKERS_MAP_PARATEXT_3_0, UsjReaderWriter } from 'platform-bible-utils';
+import {
+  getErrorMessage,
+  USFM_MARKERS_MAP_PARATEXT_3_0,
+  UsjReaderWriter,
+} from 'platform-bible-utils';
 import papi from '@papi/backend';
 import {
   ScriptureFinderProjectDataProviderEngine,
@@ -2518,33 +2522,78 @@ describe('ScriptureFinderProjectDataProviderEngine replaces only the matched tex
   <chapter eid="MAT 1"/>
 </usx>`;
 
+    /**
+     * Matches that cross a paragraph or verse marker, which Simple mode's structure protection
+     * guards.
+     */
+    const STRUCTURE_CROSSINGS = [
+      ['across a paragraph break', 'bAnd'],
+      ['across a verse boundary inside a paragraph', 'cDverse'],
+    ];
+    /** Matches that cross a note or character marker, which nothing guards. */
+    const INLINE_CROSSINGS = [
+      ['into a footnote', 'word1:3'],
+      ['out of a character span', 'Lord God'],
+    ];
+
     let pdps: ScriptureFinderOverlayPDPs;
     let engine: ScriptureFinderProjectDataProviderEngine;
 
-    beforeEach(() => {
-      vi.mocked(papi.settings.get).mockResolvedValue('power');
+    function setUp(interfaceMode: 'power' | 'simple') {
+      vi.mocked(papi.settings.get).mockResolvedValue(interfaceMode);
       pdps = createSingleUsxMockPdps(CROSS_MARKER_USX);
       engine = new ScriptureFinderProjectDataProviderEngine(pdps);
-    });
+    }
 
-    it.fails.each([
-      ['across a paragraph break', 'bAnd'],
-      ['across a verse boundary inside a paragraph', 'cDverse'],
-      ['into a footnote', 'word1:3'],
-      ['out of a character span', 'Lord God'],
-    ])('FR-5 (expected failure): %s', async (_case, searchString) => {
+    /** The chapter's markers after replacing what Find reports for `searchString` with `X`. */
+    async function markersAfterReplacing(searchString: string): Promise<string[]> {
       const results = await findInMat1(engine, searchString);
       // Whether or not a fix keeps finding these, replacing what Find reports must not lose a
-      // marker.
+      // marker. Refusing the replace (structure protection) loses none.
       if (results.length > 0)
-        await engine.replace(
-          results.map(({ start, end }) => ({ start, end })),
-          'X',
-        );
+        await engine
+          .replace(
+            results.map(({ start, end }) => ({ start, end })),
+            'X',
+          )
+          .catch((error: unknown) => {
+            if (!getErrorMessage(error).includes(STRUCTURE_PROTECTED_ERROR)) throw error;
+          });
 
       // Nothing written means the chapter is unchanged.
-      const after = writtenChapterUsfm(pdps) ?? usfmOf(CROSS_MARKER_USX);
-      expect(markerSequence(after)).toEqual(markerSequence(usfmOf(CROSS_MARKER_USX)));
+      return markerSequence(writtenChapterUsfm(pdps) ?? usfmOf(CROSS_MARKER_USX));
+    }
+
+    describe('in Power mode (unguarded)', () => {
+      beforeEach(() => setUp('power'));
+
+      it.fails.each([...STRUCTURE_CROSSINGS, ...INLINE_CROSSINGS])(
+        'FR-5 (expected failure, PT-4910): %s',
+        async (_crossing, searchString) => {
+          expect(await markersAfterReplacing(searchString)).toEqual(
+            markerSequence(usfmOf(CROSS_MARKER_USX)),
+          );
+        },
+      );
+    });
+
+    describe('in Simple mode (structure protection)', () => {
+      beforeEach(() => setUp('simple'));
+
+      it.each(STRUCTURE_CROSSINGS)('FR-5: %s', async (_crossing, searchString) => {
+        expect(await markersAfterReplacing(searchString)).toEqual(
+          markerSequence(usfmOf(CROSS_MARKER_USX)),
+        );
+      });
+
+      it.fails.each(INLINE_CROSSINGS)(
+        'FR-5 (expected failure, PT-4910): %s',
+        async (_crossing, searchString) => {
+          expect(await markersAfterReplacing(searchString)).toEqual(
+            markerSequence(usfmOf(CROSS_MARKER_USX)),
+          );
+        },
+      );
     });
   });
 
@@ -2572,7 +2621,7 @@ describe('ScriptureFinderProjectDataProviderEngine replaces only the matched tex
     });
 
     it.fails(
-      'FR-2 (expected failure): text inserted earlier in the verse after Find does not move what Replace overwrites',
+      'FR-2 (expected failure, PT-4910): text inserted earlier in the verse after Find does not move what Replace overwrites',
       async () => {
         const results = await findInMat1(engine, 'Isaac');
         expect(results.map((result) => result.text)).toEqual(['Isaac']);

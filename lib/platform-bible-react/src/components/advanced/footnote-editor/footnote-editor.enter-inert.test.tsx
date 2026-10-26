@@ -8,6 +8,8 @@
  * dropped on Save (which writes only the note). Until those views support `\fp`, Enter — with or
  * without Shift — does nothing there: text, caret and note stay as they were.
  *
+ * TODO(PT-4909): once those views make a `\fp` break on Enter, assert the break here instead.
+ *
  * Mounts the REAL `Editorial` (see footnote-editor.test-harness): the split is Lexical's own
  * keydown handling, unobservable with a mocked editor.
  */
