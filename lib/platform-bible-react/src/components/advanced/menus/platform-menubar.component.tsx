@@ -16,26 +16,18 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
-import {
-  GroupsInMultiColumnMenu,
-  Localized,
-  MenuItemContainingCommand,
-  MenuItemContainingSubmenu,
-  MultiColumnMenu,
-} from 'platform-bible-utils';
-import { ReactNode, RefObject, useEffect, useRef } from 'react';
+import { Localized, MenuItemContainingCommand, MultiColumnMenu } from 'platform-bible-utils';
+import { ReactNode, RefObject, useEffect, useMemo, useRef } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
 import { ShortcutKeys } from '@/components/basics/shortcut-keys.component';
 import {
-  getColumnGroupKeys,
-  getItemsInGroups,
+  buildMenuTree,
   getLeadingIconSlot,
-  getSortedMenuColumns,
-  getSubMenuGroupKeysForMenuItemId,
   GroupContent,
   joinGroupsWithSeparators,
   LeadingIconSlot,
+  MenuGroupNode,
 } from './menu.util';
 import MenuItemIcon from './menu-icon.component';
 
@@ -64,87 +56,81 @@ const createMenubarSeparator = (groupKey: string) => (
  * submenu both join the entries with {@link joinGroupsWithSeparators}, so a separator only ever sits
  * between two groups that have items.
  *
- * @param groupKeys Keys of the groups to render, already sorted by the groups' `order`
+ * @param groups The groups to render, already sorted by the groups' `order`, with their items
+ *   sorted
  * @param leadingSlot The leading icon slot of the list these items render in. A submenu works out
  *   its own from its items.
  */
 const getMenubarContent = (
-  groups: Localized<GroupsInMultiColumnMenu>,
-  items: Localized<(MenuItemContainingCommand | MenuItemContainingSubmenu)[]>,
-  groupKeys: string[],
+  groups: MenuGroupNode[],
   onSelectMenuItem: SelectMenuItemHandler,
   leadingSlot: LeadingIconSlot,
 ): GroupContent<ReactNode>[] =>
-  groupKeys.map((groupKey) => ({
+  groups.map(({ groupKey, items }) => ({
     groupKey,
-    items: items
-      .filter((item) => item.group === groupKey)
-      .sort((a, b) => a.order - b.order)
-      .map((item: Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>) => {
-        const subGroupKeys =
-          'command' in item ? [] : getSubMenuGroupKeysForMenuItemId(groups, item.id);
-        return (
-          <Tooltip key={`tooltip-${item.label}-${'command' in item ? item.command : item.id}`}>
-            <TooltipTrigger asChild>
-              {'command' in item ? (
-                <MenubarItem
-                  key={`menubar-item-${item.label}-${item.command}`}
-                  onClick={() => {
-                    // Since the item has a command, we know it is a MenuItemContainingCommand.
-                    // eslint-disable-next-line no-type-assertion/no-type-assertion
-                    onSelectMenuItem(item as MenuItemContainingCommand);
-                  }}
-                >
+    items: items.map(({ item, subGroups = [] }) => {
+      return (
+        <Tooltip key={`tooltip-${item.label}-${'command' in item ? item.command : item.id}`}>
+          <TooltipTrigger asChild>
+            {'command' in item ? (
+              <MenubarItem
+                key={`menubar-item-${item.label}-${item.command}`}
+                onClick={() => {
+                  // Since the item has a command, we know it is a MenuItemContainingCommand.
+                  // eslint-disable-next-line no-type-assertion/no-type-assertion
+                  onSelectMenuItem(item as MenuItemContainingCommand);
+                }}
+              >
+                <MenuItemIcon
+                  iconName={item.iconNameBefore}
+                  icon={item.iconPathBefore}
+                  menuLabel={item.label}
+                  leading
+                  leadingSlot={leadingSlot}
+                />
+                {item.label}
+                <MenuItemIcon
+                  iconName={item.iconNameAfter}
+                  icon={item.iconPathAfter}
+                  menuLabel={item.label}
+                />
+                {item.shortcut && (
+                  <MenubarShortcut className="tw:ps-4">
+                    <ShortcutKeys hint={item.shortcut} />
+                  </MenubarShortcut>
+                )}
+              </MenubarItem>
+            ) : (
+              <MenubarSub key={`menubar-sub-${item.label}-${item.id}`}>
+                <MenubarSubTrigger>
                   <MenuItemIcon
                     iconName={item.iconNameBefore}
-                    icon={item.iconPathBefore}
                     menuLabel={item.label}
                     leading
                     leadingSlot={leadingSlot}
                   />
                   {item.label}
-                  <MenuItemIcon
-                    iconName={item.iconNameAfter}
-                    icon={item.iconPathAfter}
-                    menuLabel={item.label}
-                  />
-                  {item.shortcut && (
-                    <MenubarShortcut className="tw:ps-4">
-                      <ShortcutKeys hint={item.shortcut} />
-                    </MenubarShortcut>
-                  )}
-                </MenubarItem>
-              ) : (
-                <MenubarSub key={`menubar-sub-${item.label}-${item.id}`}>
-                  <MenubarSubTrigger>
-                    <MenuItemIcon
-                      iconName={item.iconNameBefore}
-                      menuLabel={item.label}
-                      leading
-                      leadingSlot={leadingSlot}
-                    />
-                    {item.label}
-                    <MenuItemIcon iconName={item.iconNameAfter} menuLabel={item.label} />
-                  </MenubarSubTrigger>
-                  <MenubarSubContent>
-                    {joinGroupsWithSeparators(
-                      getMenubarContent(
-                        groups,
-                        items,
-                        subGroupKeys,
-                        onSelectMenuItem,
-                        getLeadingIconSlot(getItemsInGroups(items, subGroupKeys)),
+                  <MenuItemIcon iconName={item.iconNameAfter} menuLabel={item.label} />
+                </MenubarSubTrigger>
+                <MenubarSubContent>
+                  {joinGroupsWithSeparators(
+                    getMenubarContent(
+                      subGroups,
+                      onSelectMenuItem,
+                      getLeadingIconSlot(
+                        subGroups.flatMap((group) => group.items.map((node) => node.item)),
                       ),
-                      createMenubarSeparator,
-                    )}
-                  </MenubarSubContent>
-                </MenubarSub>
-              )}
-            </TooltipTrigger>
-            {item.tooltip && <TooltipContent>{item.tooltip}</TooltipContent>}
-          </Tooltip>
-        );
-      }),
+                    ),
+                    createMenubarSeparator,
+                  )}
+                </MenubarSubContent>
+              </MenubarSub>
+            )}
+          </TooltipTrigger>
+          {item.tooltip && <TooltipContent>{item.tooltip}</TooltipContent>}
+        </Tooltip>
+      );
+    }),
   }));
 
 type PlatformMenubarProps = {
@@ -190,6 +176,8 @@ export function PlatformMenubar({
   // Ref is always defined before use; the non-null assertion avoids redundant null checks
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const helpMenuRef = useRef<HTMLButtonElement>(undefined!);
+
+  const menuTree = useMemo(() => buildMenuTree(menuData), [menuData]);
 
   const getRefForColumn = (columnKey: string) => {
     switch (columnKey) {
@@ -269,8 +257,7 @@ export function PlatformMenubar({
 
   return (
     <Menubar ref={menubarRef} className="pr-twp tw:border-0 tw:bg-transparent" variant={variant}>
-      {getSortedMenuColumns(menuData.columns).map(({ columnKey, column }) => {
-        const columnGroupKeys = getColumnGroupKeys(menuData.groups, columnKey);
+      {menuTree.columns.map(({ columnKey, column, groups }) => {
         return (
           <MenubarMenu key={columnKey}>
             <MenubarTrigger ref={getRefForColumn(columnKey)}>{column.label}</MenubarTrigger>
@@ -280,11 +267,11 @@ export function PlatformMenubar({
               <TooltipProvider>
                 {joinGroupsWithSeparators(
                   getMenubarContent(
-                    menuData.groups,
-                    menuData.items,
-                    columnGroupKeys,
+                    groups,
                     onSelectMenuItem,
-                    getLeadingIconSlot(getItemsInGroups(menuData.items, columnGroupKeys)),
+                    getLeadingIconSlot(
+                      groups.flatMap((group) => group.items.map((node) => node.item)),
+                    ),
                   ),
                   createMenubarSeparator,
                 )}
