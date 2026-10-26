@@ -167,7 +167,7 @@
           },
           {
             "id": "platformScriptureEditor.viewSubmenu",
-            "label": "%webView_platformScriptureEditor_switchScriptureView_2%",
+            "label": "%webView_platformScriptureEditor_switchScriptureView%",
             "hiddenInterfaceModes": ["simple"],
             "localizeNotes": "Scripture editor top menu (Power) > View > Switch scripture view ▸ — opens the Standard view / Preview flyout",
             "iconNameBefore": "eye",

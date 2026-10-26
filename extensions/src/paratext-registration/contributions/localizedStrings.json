@@ -16,7 +16,7 @@
       }
     },
     "%mainMenu_openParatextRegistration_2%": {
-      "fallbackKey": "%mainMenu_openParatextRegistration%"
+      "fallbackKey": "%Paratext.RegistrationForm.RegistrationForm.Text%"
     },
     "%paratextRegistrationProfile_webView_title%": {
       "deprecationInfo": {
@@ -25,7 +25,7 @@
       }
     },
     "%paratextRegistrationProfile_webView_title_2%": {
-      "fallbackKey": "%paratextRegistrationProfile_webView_title%"
+      "fallbackKey": "%Paratext.RegistrationForm.RegistrationForm.Text%"
     },
     "%paratextRegistration_alert_updatedInternetSettings_2%": {
       "deprecationInfo": {
