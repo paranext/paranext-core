@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi, afterEach, beforeAll, beforeEach } from 'vitest';
 import { useIsProjectAutoSyncBlocked } from '@renderer/hooks/use-is-project-auto-sync-blocked.hook';
+import { useProjectSettingLocks } from '@renderer/hooks/use-project-setting-locks.hook';
 import userEvent from '@testing-library/user-event';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { projectDataProviders } from '@renderer/services/papi-frontend.service';
@@ -23,6 +24,18 @@ const NO_SETTINGS_FOUND = 'No settings found';
 // The hook under wiring test — controlled per test to simulate a blocked / unblocked project.
 vi.mock('@renderer/hooks/use-is-project-auto-sync-blocked.hook', () => ({
   useIsProjectAutoSyncBlocked: vi.fn(),
+}));
+
+// A published project, so a group that received the tab's locks is recognisable in the DOM.
+const PROJECT_SETTING_LOCKS = vi.hoisted(() => ({
+  isPublished: true,
+  isShared: false,
+  isCurrentUserAdministrator: true,
+}));
+vi.mock('@renderer/hooks/use-project-setting-locks.hook', () => ({
+  useProjectSettingLocks: vi.fn((projectId?: string) =>
+    projectId ? PROJECT_SETTING_LOCKS : undefined,
+  ),
 }));
 
 vi.mock('@renderer/hooks/papi-hooks', () => ({
@@ -47,11 +60,17 @@ vi.mock('./settings-components/project-or-other-settings-list.component', () => 
   ProjectOrOtherSettingsList: ({
     groupLabel,
     projectId,
+    projectSettingLocks,
   }: {
     groupLabel: string;
     projectId?: string;
+    projectSettingLocks?: { isPublished: boolean };
   }) => (
-    <div data-testid="settings-group" data-project-id={projectId}>
+    <div
+      data-testid="settings-group"
+      data-project-id={projectId}
+      data-published={String(projectSettingLocks?.isPublished)}
+    >
       {groupLabel}
     </div>
   ),
@@ -211,6 +230,24 @@ describe('SettingsTab sync-blocked notice dedup', () => {
     await waitFor(() => expect(screen.getAllByTestId('settings-group')).toHaveLength(1));
     expect(useIsProjectAutoSyncBlocked).toHaveBeenCalledWith(undefined);
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+});
+
+describe('SettingsTab project setting locks', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useIsProjectAutoSyncBlocked).mockReturnValue(false);
+  });
+
+  it("reads the project's locks once for the tab and hands them to every group", async () => {
+    render(<SettingsTab projectIdToLimitSettings="projA" />);
+
+    await waitFor(() => expect(screen.getAllByTestId('settings-group')).toHaveLength(3));
+
+    expect(useProjectSettingLocks).toHaveBeenCalledWith('projA');
+    screen
+      .getAllByTestId('settings-group')
+      .forEach((group) => expect(group).toHaveAttribute('data-published', 'true'));
   });
 });
 

@@ -41,6 +41,19 @@ public sealed class ProjectSettingsNames
     public const string PB_IS_PUBLISHED = "platform.isPublished";
 
     /// <summary>
+    /// Whether the project is shared with a team through Send/Receive
+    /// (<c>ScrText.IsProjectShared</c>). A computed, read-only setting with no Paratext setting
+    /// name, like <see cref="PB_IS_PUBLISHED"/>.
+    /// </summary>
+    public const string PB_IS_SHARED = "platform.isShared";
+
+    /// <summary>
+    /// Whether the current user has the administrator role on the project. A computed, read-only
+    /// setting with no Paratext setting name, like <see cref="PB_IS_PUBLISHED"/>.
+    /// </summary>
+    public const string PB_IS_CURRENT_USER_ADMINISTRATOR = "platform.isCurrentUserAdministrator";
+
+    /// <summary>
     /// The copyright notice to show when the project is opened (see <c>CopyrightNotice</c>). This
     /// is a computed, read-only setting derived from the project's Copyright, full name and DBL id.
     /// Intentionally NOT included in s_platformBibleToParatextSettingsNames because no Paratext

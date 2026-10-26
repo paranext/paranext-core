@@ -1884,6 +1884,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (settingName == ProjectSettingsNames.PB_IS_PUBLISHED)
             return scrText.IsResourceProject;
 
+        if (settingName == ProjectSettingsNames.PB_IS_SHARED)
+            return scrText.IsProjectShared;
+
+        if (settingName == ProjectSettingsNames.PB_IS_CURRENT_USER_ADMINISTRATOR)
+            return IsUserProjectAdministrator();
+
         // The copyright notice is computed from several settings; no Settings.xml key holds it
         if (settingName == ProjectSettingsNames.PB_COPYRIGHT_NOTICE)
             return CopyrightNotice.FromScrText(scrText);
@@ -2010,10 +2016,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             throw new InvalidOperationException(
                 $"{ProjectSettingsNames.PB_IS_PUBLISHED} is a read-only computed setting."
             );
-        if (settingName == ProjectSettingsNames.PB_COPYRIGHT_NOTICE)
-            throw new InvalidOperationException(
-                $"{ProjectSettingsNames.PB_COPYRIGHT_NOTICE} is a read-only computed setting."
-            );
+        if (
+            settingName == ProjectSettingsNames.PB_COPYRIGHT_NOTICE
+            || settingName == ProjectSettingsNames.PB_IS_SHARED
+            || settingName == ProjectSettingsNames.PB_IS_CURRENT_USER_ADMINISTRATOR
+        )
+            throw new InvalidOperationException($"{settingName} is a read-only computed setting.");
 
         // Figure out which setting name to use (resolved early so the admin gate below can use it
         // before the IsValid network round-trip — unauthorized writes are rejected immediately).
@@ -2029,6 +2037,26 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // lists, overlay, init) are intentionally UNGATED.
         if (
             paratextSettingName == ProjectSettingsNames.PT_REFERENCED_PROJECTS_AND_RESOURCES
+            && !IsUserProjectAdministrator()
+        )
+            throw new UnauthorizedAccessException(
+                $"Only project administrators may write '{settingName}'."
+            );
+
+        // A shared project is registered, and Paratext changes a registered project's names only
+        // through the registry, never locally.
+        if (
+            (
+                paratextSettingName == ProjectSettingsNames.PT_NAME
+                || paratextSettingName == ProjectSettingsNames.PT_FULL_NAME
+            ) && scrText.IsProjectShared
+        )
+            throw new InvalidOperationException(
+                $"'{settingName}' of a shared project can only be changed through the registry."
+            );
+
+        if (
+            paratextSettingName == ProjectSettingsNames.PT_LANGUAGE
             && !IsUserProjectAdministrator()
         )
             throw new UnauthorizedAccessException(

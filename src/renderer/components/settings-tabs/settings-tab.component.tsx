@@ -14,6 +14,7 @@ import './settings-tab.component.scss';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useIsProjectAutoSyncBlocked } from '@renderer/hooks/use-is-project-auto-sync-blocked.hook';
+import { useProjectSettingLocks } from '@renderer/hooks/use-project-setting-locks.hook';
 import {
   formatReplacementString,
   Localized,
@@ -153,6 +154,8 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
   // Undefined (general/user settings) is never blocked — see the hook's own doc comment.
   const tabProjectId = projectIdToLimitSettings ?? selectedSidebarItem.projectId;
   const isProjectSyncBlocked = useIsProjectAutoSyncBlocked(tabProjectId);
+  // Read once for the tab rather than per group or per setting, like `isProjectSyncBlocked`.
+  const projectSettingLocks = useProjectSettingLocks(tabProjectId);
 
   const handleSearchInput = (newSearchTerm: string) => {
     setSearchQuery(newSearchTerm);
@@ -237,12 +240,18 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
                   groupDescription={settingsGroup.description}
                   className="project-or-settings-list"
                   disabled={isProjectSyncBlocked}
+                  projectSettingLocks={projectSettingLocks}
                 />
               ))
             : [],
       );
     },
-    [filteredAndMatchedProjectSettingsContributions, localizedStrings, isProjectSyncBlocked],
+    [
+      filteredAndMatchedProjectSettingsContributions,
+      localizedStrings,
+      isProjectSyncBlocked,
+      projectSettingLocks,
+    ],
   );
 
   const showZeroResultsState = useMemo(() => {

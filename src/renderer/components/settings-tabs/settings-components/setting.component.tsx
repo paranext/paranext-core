@@ -68,7 +68,8 @@ type BaseSettingProps<TSettingKey, TSettingValue> = {
   /**
    * When true, the user can read but not change the setting: text stays focusable, selectable and
    * scrollable, and controls with no read-only state (switches, steppers, selects) are disabled.
-   * Used for settings contributed with `isReadOnly`. Defaults to `false`.
+   * Used for settings contributed with `isReadOnly` and for project settings the project's locks
+   * forbid changing (see `getSettingReadOnlyReasonKey`). Defaults to `false`.
    */
   readOnly?: boolean;
   /** Localized explanation shown in a tooltip over the control while `readOnly` is true */

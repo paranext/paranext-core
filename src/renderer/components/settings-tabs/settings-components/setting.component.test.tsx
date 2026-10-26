@@ -6,6 +6,7 @@ import { newPlatformError, type PlatformError } from 'platform-bible-utils';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { logger } from '@shared/services/logger.service';
 import { offerRestartAfterInterfaceLanguageChange } from '@renderer/services/interface-language-restart-prompt';
+import userEvent from '@testing-library/user-event';
 import { Setting } from './setting.component';
 
 vi.mock('@renderer/services/interface-language-restart-prompt', () => ({
@@ -113,6 +114,21 @@ const baseProps = {
 // platform.interfaceLanguage is a user setting, and the props union forbids the project validator
 // there.
 const userSettingProps = { setSetting: baseProps.setSetting, isLoading: baseProps.isLoading };
+
+beforeAll(() => {
+  // Radix Tooltip uses ResizeObserver; jsdom doesn't provide it.
+  global.ResizeObserver = class {
+    // jsdom stub: empty no-op intentionally has no `this` usage
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+    observe() {}
+    // jsdom stub: empty no-op intentionally has no `this` usage
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+    unobserve() {}
+    // jsdom stub: empty no-op intentionally has no `this` usage
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+    disconnect() {}
+  };
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -608,21 +624,6 @@ const INTERFACE_SCALING_STRINGS = {
 };
 
 describe('platform.zoomFactor stepper', () => {
-  beforeAll(() => {
-    // Radix Tooltip uses ResizeObserver; jsdom doesn't provide it.
-    global.ResizeObserver = class {
-      // jsdom stub: empty no-op intentionally has no `this` usage
-      // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-      observe() {}
-      // jsdom stub: empty no-op intentionally has no `this` usage
-      // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-      unobserve() {}
-      // jsdom stub: empty no-op intentionally has no `this` usage
-      // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-      disconnect() {}
-    };
-  });
-
   beforeEach(() => {
     // Both label families are available, so a stepper that borrowed the content-zoom wording
     // would find it and the per-key assertions below would catch that.
@@ -958,6 +959,86 @@ describe('Setting description', () => {
     expect(screen.getByRole('group', { name: 'Interface language' })).toHaveAccessibleDescription(
       'The languages the interface is shown in',
     );
+  });
+});
+
+describe('Setting label info icon', () => {
+  it('marks a label that has a description to show', () => {
+    const { container } = render(
+      <Setting
+        {...baseProps}
+        settingKey="platform.language"
+        setting="English"
+        label="Language"
+        description="The language of the project"
+      />,
+    );
+    expect(container.querySelector('.setting-label-info-icon')).toBeInTheDocument();
+    // The icon is decoration, so it stays out of the control's name.
+    expect(screen.getByRole('textbox')).toHaveAccessibleName('Language');
+  });
+
+  it('leaves a label with no description unmarked', () => {
+    const { container } = render(
+      <Setting {...baseProps} settingKey="platform.language" setting="English" label="Language" />,
+    );
+    expect(container.querySelector('.setting-label-info-icon')).not.toBeInTheDocument();
+  });
+});
+
+describe('Setting read-only reason', () => {
+  it('describes a read-only control with its reason as well as its description', () => {
+    render(
+      <Setting
+        {...baseProps}
+        settingKey="platform.isEditable"
+        setting={false}
+        label="Editable"
+        description="Whether the project can be edited"
+        readOnly
+        readOnlyReason="The project is published"
+      />,
+    );
+    expect(screen.getByRole('switch')).toHaveAccessibleDescription(
+      'Whether the project can be edited The project is published',
+    );
+  });
+
+  it('shows the reason when the pointer is over the disabled control', async () => {
+    const user = userEvent.setup();
+    render(
+      <Setting
+        {...baseProps}
+        settingKey="platform.isEditable"
+        setting={false}
+        label="Editable"
+        readOnly
+        readOnlyReason="The project is published"
+      />,
+    );
+
+    // A disabled switch takes no pointer events, so the pointer lands on the wrapper around it.
+    const tooltipTrigger = screen.getByRole('switch').parentElement;
+    if (!tooltipTrigger) throw new Error('The switch has no wrapper to hover');
+    await user.hover(tooltipTrigger);
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('The project is published');
+  });
+
+  it('gives an editable control no reason, even when one is passed', () => {
+    render(
+      <Setting
+        {...baseProps}
+        settingKey="platform.language"
+        setting="English"
+        label="Language"
+        readOnlyReason="Only an administrator can change this"
+      />,
+    );
+    expect(screen.getByRole('textbox')).not.toHaveAccessibleDescription(
+      'Only an administrator can change this',
+    );
+    expect(screen.queryByText('Only an administrator can change this')).not.toBeInTheDocument();
   });
 });
 

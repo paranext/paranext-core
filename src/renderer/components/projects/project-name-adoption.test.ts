@@ -214,6 +214,11 @@ const EXEMPT: { file: string; contains: string; reason: string }[] = [
     contains: "triggerLabelFormat === 'shortNameAndFullName'",
     reason: 'compares a prop value whose name happens to end in `FullName`',
   },
+  {
+    file: 'src/renderer/components/settings-tabs/settings-components/setting-read-only-reason.util.ts',
+    contains: "settingKey === 'platform.fullName'",
+    reason: 'compares a setting key to decide whether it is locked; reads no name',
+  },
 ];
 
 /** Whether a line is a comment (line comment, block-comment body, or JSDoc/TSDoc line). */

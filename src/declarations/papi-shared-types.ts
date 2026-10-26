@@ -732,6 +732,28 @@ declare module 'papi-shared-types' {
      */
     'platform.isPublished': boolean;
     /**
+     * Whether this project is shared with a team through Send/Receive, as opposed to existing only
+     * on this computer. A shared project is registered, so its
+     * {@link ProjectSettingTypes['platform.name'] | `platform.name`} and
+     * {@link ProjectSettingTypes['platform.fullName'] | `platform.fullName`} can be changed only
+     * through the registry.
+     *
+     * Computed by the project data provider; it cannot be set.
+     *
+     * Defaults to `false`.
+     */
+    'platform.isShared': boolean;
+    /**
+     * Whether the current user has the administrator role on this project. Unlike most project
+     * settings, the answer depends on who is asking. A project with no notion of roles counts its
+     * user as its administrator.
+     *
+     * Computed by the project data provider; it cannot be set.
+     *
+     * Defaults to `true`.
+     */
+    'platform.isCurrentUserAdministrator': boolean;
+    /**
      * Which way the project's text flows. 'ltr' = left-to-right; 'rtl' = right-to-left. '' or
      * undefined = left-to-right (may be changed in the future to detect). Defaults to ''. This is
      * generally derived from the language definition for the project's language code. Note that
