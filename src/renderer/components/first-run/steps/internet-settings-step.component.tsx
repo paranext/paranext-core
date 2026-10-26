@@ -54,6 +54,9 @@ const STRING_KEYS: LocalizeKey[] = [
   '%firstRun_step_internetSettings_sensitiveCountries%',
   '%firstRun_step_internetSettings_useWithInternet%',
   '%firstRun_step_internetSettings_closeApp%',
+  // Referenced via {%product_name%} in the choices and the warnings; formatReplacementString
+  // expands it.
+  '%product_name%',
 ];
 
 /**
@@ -73,20 +76,20 @@ async function lookUpParatext9InternetUse(): Promise<InternetUse | undefined> {
 }
 
 /**
- * First-run wizard step that asks the user to allow Paratext 10 unrestricted internet access before
- * registration, or to close the app. Every other option needs a feature the app does not have yet,
- * or leaves the user unable to get any project but the bundled sample, so onboarding offers only
- * these two; "Disable access to some Bible translation services" stays available afterwards in the
+ * First-run wizard step that asks the user to allow the app unrestricted internet access before
+ * registration, or to close it. Every other option needs a feature the app does not have yet, or
+ * leaves the user unable to get any project but the bundled sample, so onboarding offers only these
+ * two; "Disable access to some Bible translation services" stays available afterwards in the
  * Internet & connectivity settings.
  *
  * When Paratext 9's own setting is one the app does not support yet, the step names it, so a user
- * who relied on it knows it will not carry over. "Close Paratext 10" saves nothing, so the next
+ * who relied on it knows it will not carry over. "Close <product name>" saves nothing, so the next
  * launch asks again.
  *
- * The step hides the shell's Next and moves on itself once "Use Paratext 10 with internet access"
- * is saved. The setting takes effect after a restart, which the Identify step performs: "Save and
- * restart" when registering, or "Restart and continue" for an existing registration when the saved
- * settings differ from the ones this step first loaded. The step says so up front.
+ * The step hides the shell's Next and moves on itself once "Use <product name> with internet
+ * access" is saved. The setting takes effect after a restart, which the Identify step performs:
+ * "Save and restart" when registering, or "Restart and continue" for an existing registration when
+ * the saved settings differ from the ones this step first loaded. The step says so up front.
  *
  * Availability: `useDataProvider` returns `undefined` until the C# InternetSettingsDataProvider
  * registers, giving a natural spinner without any startup-race retry heuristics.
@@ -266,11 +269,19 @@ function InternetSettingsLoaded({ provider, localizedStrings, onNext, onRetry }:
           <p>
             {formatReplacementString(
               localizedStrings['%firstRun_step_internetSettings_paratext9Unsupported%'] ?? '',
-              { setting: localizedStrings[unsupportedParatext9SettingKey] ?? '' },
+              {
+                ...localizedStrings,
+                setting: localizedStrings[unsupportedParatext9SettingKey] ?? '',
+              },
             )}
           </p>
         )}
-        <p>{localizedStrings['%firstRun_step_internetSettings_sensitiveCountries%']}</p>
+        <p>
+          {formatReplacementString(
+            localizedStrings['%firstRun_step_internetSettings_sensitiveCountries%'] ?? '',
+            localizedStrings,
+          )}
+        </p>
       </div>
       {actionError && (
         <Alert variant="destructive">
@@ -279,10 +290,16 @@ function InternetSettingsLoaded({ provider, localizedStrings, onNext, onRetry }:
       )}
       <div className="tw:flex tw:flex-col tw:gap-2">
         <Button onClick={continueWithInternetAccess} disabled={isBusy}>
-          {localizedStrings['%firstRun_step_internetSettings_useWithInternet%']}
+          {formatReplacementString(
+            localizedStrings['%firstRun_step_internetSettings_useWithInternet%'] ?? '',
+            localizedStrings,
+          )}
         </Button>
         <Button variant="outline" onClick={closeApp} disabled={isBusy}>
-          {localizedStrings['%firstRun_step_internetSettings_closeApp%']}
+          {formatReplacementString(
+            localizedStrings['%firstRun_step_internetSettings_closeApp%'] ?? '',
+            localizedStrings,
+          )}
         </Button>
       </div>
     </div>

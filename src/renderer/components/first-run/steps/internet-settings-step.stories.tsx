@@ -18,9 +18,10 @@ const PROVIDER = { __brand: 'internetSettingsDataProvider' };
 /**
  * Point useDataProvider/useData at a chosen state, mirroring how the component consumes them, and
  * answer the step's commands without the network Storybook does not have: the Paratext 9 lookup
- * with `paratext9InternetUse`, and "Close Paratext 10" with nothing, so it does not quit anything.
- * `provider: undefined` simulates the provider not yet registered (the outer spinner); otherwise
- * useData yields `[value, setData, isLoading]`. Returns a cleanup that restores the spies.
+ * with `paratext9InternetUse`, and "Close <product name>" with nothing, so it does not quit
+ * anything. `provider: undefined` simulates the provider not yet registered (the outer spinner);
+ * otherwise useData yields `[value, setData, isLoading]`. Returns a cleanup that restores the
+ * spies.
  */
 function mockHooks(
   config: {

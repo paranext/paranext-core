@@ -152,7 +152,7 @@ test.describe('First-run wizard', () => {
     await expect(frPage.closeAppButton).toBeVisible();
     await expect(
       frPage.dialog.getByText(
-        'Paratext 10 uses the internet. Only use Paratext 10 when you are not in a sensitive country.',
+        'Platform.Bible uses the internet. Only use Platform.Bible when you are not in a sensitive country.',
       ),
     ).toBeVisible();
     await expect(frPage.dialog.getByRole('radiogroup')).toHaveCount(0);
@@ -186,7 +186,7 @@ test.describe('First-run wizard', () => {
   });
 
   // Whatever was saved before, including a Paratext 9 setting the app does not support yet.
-  test('"Use Paratext 10 with internet access" saves Unrestricted and moves on to Identify', async ({
+  test('"Use Platform.Bible with internet access" saves Unrestricted and moves on to Identify', async ({
     mainPage,
   }) => {
     if (!savedInternetSettings) throw new Error('expected the saved internet settings to be read');
