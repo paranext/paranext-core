@@ -119,9 +119,10 @@ const HISTORY_DEBOUNCE_DELAY_MS = 5000;
 /** Stable empty-array reference so the History data subscription's default doesn't change identity. */
 const DEFAULT_RECENT_SEARCHES: string[] = [];
 /**
- * Whether Find offers Replace All. Off because Replace All rewrites every match across the scope in
- * one go and the user has no way to undo it in the app (only by reverting to the history point it
- * saves first). Turn it back on once Replace All has an undo or asks for confirmation first.
+ * Whether Find offers Replace All. Off because it rewrites every match in the scope at once and
+ * can't be undone in the app after its 1-second Cancel window (only by reverting to the history
+ * point it saves first). Turn it back on once it has an undo or a confirmation, and un-skip the
+ * Replace All e2e test in replace.spec.ts.
  */
 const IS_REPLACE_ALL_ENABLED = false;
 
