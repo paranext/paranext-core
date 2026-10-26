@@ -308,11 +308,12 @@ describe('FootnoteEditor Copy button', () => {
     expect(writeText).toHaveBeenCalledWith('note');
   });
 
-  // Standard view shows a stored no-break space as `~`, or as `⍽` (U+237D) where `~` is an
-  // ordinary character; the copy holds the project's spelling either way.
-  it('copies a no-break space shown as ⍽ as U+00A0 when the project allows invisible characters', () => {
+  // Standard view shows a stored no-break space as `~`, or holds it as an internal stand-in
+  // (U+001A, drawn as a blank) where `~` is an ordinary character; the copy holds the project's
+  // spelling either way.
+  it('copies the stand-in for a no-break space as U+00A0 when the project allows invisible characters', () => {
     expect(
-      clickCopy(undefined, undefined, { shown: 'a~b\u237Dc', allowInvisibleCharacters: true }),
+      clickCopy(undefined, undefined, { shown: 'a~b\u001Ac', allowInvisibleCharacters: true }),
     ).toHaveBeenCalledWith('a~b\u00A0c');
   });
 

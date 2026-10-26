@@ -28,6 +28,14 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
   const declarations = css.replace(/\/\*[\s\S]*?\*\//g, '');
 
   const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  // The editor holds a stored no-break space as U+001A where `~` is an ordinary character, and a
+  // browser draws a control character as a box unless the FIRST family has a glyph for it.
+  it("leads the Scripture font stack with the editor's no-break-space stand-in family", () => {
+    expect(declarations).toMatch(
+      /\.usfm\.formatted-font \{[^}]*font-family: 'PlatformEditorNbspStandIn', var\(--usj-font-fallback, serif\);/,
+    );
+  });
   /** Selector text, with each space kept as a REQUIRED descendant combinator. */
   const selectorPattern = (value: string) => escape(value.trim()).replace(/\s+/g, '\\s+');
   /** Declaration text, with every space optional so formatting choices cannot fail a pin. */

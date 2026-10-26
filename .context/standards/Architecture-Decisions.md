@@ -2953,7 +2953,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** Review of PR #2665 (`remove-character-marker`) — reuse findings on duplicated snapshot
   and sync-notice blocks.
 
-## adr-editor-nbsp-spelling-follows-project-setting: The editor learns the project's `AllowInvisibleChars` through `ViewOptions`, and Standard view shows a stored U+00A0 as `⍽` where `~` is an ordinary character
+## adr-editor-nbsp-spelling-follows-project-setting: The editor learns the project's `AllowInvisibleChars` through `ViewOptions`, and Standard view holds a stored U+00A0 as an internal U+001A stand-in, drawn as a blank, where `~` is an ordinary character
 
 - **Date:** 2026-10-26
 - **Status:** Proposed
@@ -2962,27 +2962,58 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   U+00A0 as `~` and a literal tilde cannot exist; on, the file, the USX/USJ and the save all carry
   `~` and U+00A0 verbatim and distinct. The scripture editor never learned the setting, and Standard
   view shows a stored U+00A0 as `~` — so in a project with the setting on, a literal `~` was read as a
-  no-break space and saved as U+00A0. Standard view cannot show the U+00A0 itself: a displayed NBSP
+  no-break space and saved as U+00A0. Standard view cannot hold the U+00A0 itself: a displayed NBSP
   means a space (a space-run member or a marker separator) throughout the marker-edit engine.
 - **Decision:** The editor gets the setting as `ViewOptions.allowInvisibleCharacters`, which the
   scripture editor web view sets for every view type (`getEditorViewOptions`) and the footnote
-  editor inherits; `getViewMode` ignores it. With it on, Standard view spells a stored U+00A0 as
-  `⍽` (U+237D) — in display, in the settle's USFM fragments, in paste, in copy (written back as
-  U+00A0) and for a typed U+00A0 — and `~` is an ordinary character. One helper in the editor
-  (`getNbspSpelling`) supplies the spelling to every layer. Host code that reads the editor's
-  display text as project text respells it with `toUsfmNbspSpelling`.
-- **Alternatives:** **A top-level `EditorOptions` field** (where `styleInfo` lives) — rejected:
-  every place the whitespace regime is decided already receives `ViewOptions`, so a separate field
-  would have to be threaded to all of them and a missed one would load under one spelling and save
-  under another. **Show the raw U+00A0 as Paratext 9 does** — rejected: it is indistinguishable from
-  the engine's display spaces, and dozens of rules (space runs, separators, lone-NBSP spacers) would
-  have to tell them apart by position. **Escape a literal `~` instead** — no 1:1 spelling exists,
-  and positions depend on display and data lengths agreeing.
-- **Consequences:** With the setting on, a literal U+237D in the project's text saves from Standard
-  view as U+00A0. Note ops between the main editor and the footnote popover carry display text in
-  both modes, so both editors must get the same setting (they do, through the inherited view). A
-  new editor host must pass the setting, or Standard view corrupts the project's tildes. Revisit if
-  Paratext projects are found that use U+237D as text.
+  editor inherits; `getViewMode` ignores it. With it on, Standard view holds a stored U+00A0 as
+  `NBSP_STAND_IN`, U+001A (SUBSTITUTE) — in its tree, in the settle's USFM fragments, in paste and
+  for a typed U+00A0 — and `~` is an ordinary character. One helper in the editor
+  (`getNbspSpelling`) supplies the spelling to every layer.
+  - **Why U+001A:** ParatextData's `ScrText.GetText` turns U+0001–U+0008 and U+000E–U+001F into
+    spaces on every read (measured), so no project text can hold it and the stand-in collides with
+    nothing. Bidi class BN, line-break class CM (no break before it), one grapheme. Not U+0000 (the
+    editor's settle-scope signature separator), U+000B/U+000C (whitespace to JavaScript) or
+    U+001C–U+001F (bidi separators).
+  - **It looks like a no-break space:** a one-glyph font, `NBSP_STAND_IN_FONT_FAMILY` (an empty
+    glyph a quarter of an em wide, `unicode-range: U+1A`), draws it as a blank the width of a space.
+    The editor adds the face to its document through the CSS Font Loading API, from bytes, so no
+    content security policy is involved (the web view's `font-src` allows `data:` anyway).
+    Chromium draws a control character as a box unless the FIRST family in the font stack has a
+    glyph for it, so the family leads every Scripture `font-family`: `generateUsjCss` emits it
+    first, and `_usj-nodes.scss` (and the demo copy) put it in front of `--usj-font-fallback`.
+    Measured in the Electron app: 4.02 px against a 4.69 px space at the editor's size, no box, in
+    the main text and in the footnote popover.
+  - **It never leaves the editor:** `getUsj`/`onUsjChange`, the ops the editor gives out
+    (`onUsjChange`, `getNoteOps`, `getOpsAfterNote`, `takeOpsAfterNote`, and the `getNoteOps` a
+    note caller's click handler receives), the clipboard and drag flavors, annotation callback text
+    and note-caller previews all carry U+00A0. Ops going out also carry a space where the view shows
+    a space of a run as an NBSP, and ops coming in (`applyUpdate`, `replaceEmbedUpdate`) take a
+    U+00A0 that is not a marker's separator as a stored no-break space, so the footnote popover's
+    op round trip keeps both. Text a host reads from the editor's DOM still holds the stand-in; host
+    code respells it with `toUsfmNbspSpelling`.
+  - **Nothing from outside becomes it:** Standard view turns every incoming C0 control character but
+    tab, LF and CR into a space (load, paste, drop, typing, applied ops), as ParatextData would read
+    it back; a drop now goes in as a paste of the same data does.
+- **Alternatives:** **`⍽` (U+237D), a visible picture of a no-break space** — the first version of
+  this decision; rejected because U+237D can occur in Paratext 9 text, so a literal one saved from
+  Standard view as a no-break space, and because the owner asked that a no-break space look like
+  one. **A noncharacter or private-use code point** — private use is used by some projects' scripts;
+  a noncharacter has no blank rendering and the editor already uses U+FDD0 as an internal placeholder.
+  **A top-level `EditorOptions` field** (where `styleInfo` lives) — rejected: every place the
+  whitespace regime is decided already receives `ViewOptions`, so a separate field would have to be
+  threaded to all of them and a missed one would load under one spelling and save under another.
+  **Show the raw U+00A0 as Paratext 9 does** — rejected: it is indistinguishable from the engine's
+  display spaces, and dozens of rules (space runs, separators, lone-NBSP spacers) would have to tell
+  them apart by position. **Escape a literal `~` instead** — no 1:1 spelling exists, and positions
+  depend on display and data lengths agreeing.
+- **Consequences:** No project character is lost to the stand-in. Every editing host must pass the
+  setting, or Standard view corrupts the project's tildes, and every host stylesheet that sets a
+  Scripture `font-family` of its own must name `NBSP_STAND_IN_FONT_FAMILY` first or the stand-in
+  shows as a box. The ops Standard view hands out with the setting on carry spaces, not U+00A0, for
+  displayed space runs. An attribute value's U+00A0 (`\w g|lemma="h~i"\w*`) is shown raw in its
+  attribute run and a settle of its paragraph reads it as a space — in both settings, not changed
+  by this decision. Status stays Proposed until the owner ratifies the stand-in in review.
 - **Source:** PT-4197 data-fidelity catalog row AI-1.
 
 ## adr-editor-opener-rename-renames-closer: A char opener rename renames its closer, and a pending `getUsj()` equals the settled document

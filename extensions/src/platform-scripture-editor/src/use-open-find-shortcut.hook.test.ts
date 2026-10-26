@@ -94,17 +94,17 @@ describe('useOpenFindShortcut', () => {
     vi.restoreAllMocks();
   });
 
-  // Standard view shows a stored no-break space as `⍽` (U+237D) where `~` is an ordinary
-  // character, and the search must look for the project's own text.
+  // Standard view holds a stored no-break space as an internal stand-in (U+001A, drawn as a blank)
+  // where `~` is an ordinary character, and the search must look for the project's own text.
   it.each([
     { allowInvisibleCharacters: true, searched: 'a~b\u00A0c' },
-    { allowInvisibleCharacters: false, searched: 'a~b\u237Dc' },
+    { allowInvisibleCharacters: false, searched: 'a~b\u001Ac' },
   ])(
-    'searches for a no-break space shown as ⍽ as the project spells it (allowInvisibleCharacters $allowInvisibleCharacters)',
+    'searches for a no-break space the editor holds as its stand-in as the project spells it (allowInvisibleCharacters $allowInvisibleCharacters)',
     ({ allowInvisibleCharacters, searched }) => {
       // Only toString() is exercised by the hook; a full Selection cannot be constructed here.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const fakeSelection = { toString: () => 'a~b\u237Dc' } as unknown as Selection;
+      const fakeSelection = { toString: () => 'a~b\u001Ac' } as unknown as Selection;
       const getSelection = vi.spyOn(window, 'getSelection').mockReturnValue(fakeSelection);
       renderHook(() =>
         useOpenFindShortcut('wv-1', 'proj', {

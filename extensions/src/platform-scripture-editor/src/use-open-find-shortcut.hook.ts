@@ -20,8 +20,8 @@ import { getOpenFindTriggerArgs } from './find-trigger.util';
  * @param sourceProjectId Project id of the scripture to search, or `undefined` while none is
  *   resolved.
  * @param viewOptions The view options of the editor the selection is in, when the tab shows one, so
- *   a no-break space the editor displays as `⍽` is searched for as the project spells it (see
- *   `toUsfmNbspSpelling`).
+ *   a no-break space the editor holds as its internal stand-in is searched for as the project
+ *   spells it (see `toUsfmNbspSpelling`).
  */
 export function useOpenFindShortcut(
   webViewId: string,
