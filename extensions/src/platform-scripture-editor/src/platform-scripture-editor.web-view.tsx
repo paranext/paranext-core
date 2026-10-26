@@ -788,7 +788,7 @@ function PlatformScriptureEditor({
   );
 
   // `platform.interfaceMode` is read here (rather than down by its other consumers, `bcvControls`
-  // etc.) because the `viewType` state below needs `isPowerMode` for its default value.
+  // etc.) because the displayed `viewType` and the correction effect below need `isPowerMode`.
   const [interfaceModePossiblyError, , , isInterfaceModeLoading] = useSetting(
     'platform.interfaceMode',
     'simple',
@@ -811,14 +811,12 @@ function PlatformScriptureEditor({
    *
    * We need this because `useSetting`'s `isLoading` starts `true` on every mount (see
    * `create-use-data-hook.util.ts`), so `isPowerMode` is guaranteed `false` on this component's
-   * very first render regardless of the real, eventually-resolved setting value. `useWebViewState`
-   * captures its default into local state via a lazy initializer that runs only once, so a stale
-   * 'formatted' default captured on that first render will not self-correct once `isPowerMode`
-   * later resolves `true` -- it would otherwise be stuck at 'formatted' for the life of this
-   * webview instance. The correction effect below uses this flag only as a fast-path short-circuit;
-   * because it is a mount-time snapshot that can go stale (the user could persist a choice between
-   * mount and `platform.interfaceMode` resolving), the effect re-probes the store fresh at fire
-   * time and that fresh probe is the decider.
+   * very first render regardless of the real, eventually-resolved setting value. The correction
+   * effect below therefore waits for the mode to resolve, then persists 'standard' once for a
+   * never-saved Power tab so the choice is saved for later reloads. It uses this flag only as a
+   * fast-path short-circuit; because it is a mount-time snapshot that can go stale (the user could
+   * persist a choice between mount and `platform.interfaceMode` resolving), the effect re-probes
+   * the store fresh at fire time and that fresh probe is the decider.
    */
   const [hadPersistedViewTypeAtMount] = useState(
     () => globalThis.getWebViewState('viewType', VIEW_TYPE_UNSET) !== VIEW_TYPE_UNSET,
