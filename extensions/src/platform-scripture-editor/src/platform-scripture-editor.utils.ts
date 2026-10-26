@@ -182,6 +182,33 @@ export function getNextViewTypeInCycle(
   return viewType === 'standard' ? 'formatted' : 'standard';
 }
 
+/** The two editor messages that can change the saved view type. */
+export type ViewChangeMessage =
+  | { method: 'changeScriptureView' }
+  | { method: 'setScriptureView'; viewType: ScriptureEditorViewType };
+
+/**
+ * Decides which view type, if any, a view-changing message should save.
+ *
+ * `changeScriptureView` toggles per {@link getNextViewTypeInCycle}; in Simple mode there is nothing
+ * to toggle to, so nothing is saved. `setScriptureView` saves the requested view type exactly as
+ * given and is never coerced by the interface mode: the displayed view type is derived from the
+ * saved one by {@link resolveViewTypeForInterfaceMode}, and persisting that coercion (for example
+ * while `platform.interfaceMode` is still loading and reads as not Power) would overwrite the
+ * user's Power choice.
+ *
+ * @param message The view-changing message received
+ * @param context The current view type and whether `platform.interfaceMode` is 'power'
+ * @returns The view type to save, or `undefined` when the saved view type must be left alone
+ */
+export function getViewTypeToSave(
+  message: ViewChangeMessage,
+  context: { viewType: ScriptureEditorViewType; isPowerMode: boolean },
+): ScriptureEditorViewType | undefined {
+  if (message.method === 'setScriptureView') return message.viewType;
+  return getNextViewTypeInCycle(context.viewType, context.isPowerMode);
+}
+
 /**
  * Check deep equality of two values such that two equal objects or arrays created in two different
  * iframes successfully test as equal

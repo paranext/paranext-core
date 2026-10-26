@@ -215,8 +215,8 @@ import {
   findEditorUsjNotes,
   formatEditorTitle,
   generateParagraphMenuListItems,
-  getNextViewTypeInCycle,
   getSimpleModeRootClassNames,
+  getViewTypeToSave,
   hasDisplayableParagraphMarkerTitle,
   isChapterBlank,
   isMissingBookError,
@@ -2269,23 +2269,16 @@ function PlatformScriptureEditor({
           setDecorations(updatedDecorations);
           break;
         }
-        case 'changeScriptureView': {
-          // Toggles Standard view and Preview in Power; see `getNextViewTypeInCycle`. Simple mode
-          // has only the formatted view, so there it changes nothing and the view type saved in
-          // Power stays.
-          const nextViewType = getNextViewTypeInCycle(viewType, isPowerMode);
+        case 'changeScriptureView':
+        case 'setScriptureView': {
+          // `changeScriptureView` toggles Standard view and Preview in Power; `setScriptureView`
+          // saves the requested view type as is. A Power tab's saved choice is left alone by
+          // Simple, which shows only the formatted view.
+          const nextViewType = getViewTypeToSave(editorMessage, { viewType, isPowerMode });
           if (nextViewType) {
             endPaneNoteEdit();
             saveViewType(nextViewType);
           }
-          break;
-        }
-        case 'setScriptureView': {
-          // The request is persisted as is. Standard view is Power-only, so outside Power the
-          // displayed `viewType` above coerces it to formatted while the saved choice survives a
-          // switch back to Power.
-          endPaneNoteEdit();
-          saveViewType(editorMessage.viewType);
           break;
         }
         case 'undo': {

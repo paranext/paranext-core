@@ -28,6 +28,7 @@ import {
   buildScriptureEditorWebViewState,
   UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY,
   UNSUPPORTED_PROJECT_IDS_RETRY_DELAY_MS,
+  getViewTypeToSave,
   showsReadOnlyPreview,
   openDefaultActiveProjectIfApplicable,
   resolveOpenEditorDispatch,
@@ -5214,6 +5215,51 @@ describe('getNextViewTypeInCycle', () => {
     allViewTypes.forEach((current) => {
       expect(getNextViewTypeInCycle(current, false)).toBeUndefined();
     });
+  });
+});
+
+describe('getViewTypeToSave', () => {
+  const change = { method: 'changeScriptureView' } as const;
+
+  it('toggles Standard view and Preview for changeScriptureView in Power', () => {
+    expect(getViewTypeToSave(change, { viewType: 'standard', isPowerMode: true })).toBe(
+      'formatted',
+    );
+    expect(getViewTypeToSave(change, { viewType: 'formatted', isPowerMode: true })).toBe(
+      'standard',
+    );
+    expect(getViewTypeToSave(change, { viewType: 'markers', isPowerMode: true })).toBe('standard');
+  });
+
+  it('saves nothing for changeScriptureView in Simple, whatever the current view', () => {
+    const allViewTypes = ['formatted', 'markers', 'standard'] as const;
+    allViewTypes.forEach((viewType) => {
+      expect(getViewTypeToSave(change, { viewType, isPowerMode: false })).toBeUndefined();
+    });
+  });
+
+  it('saves the requested view type as is for setScriptureView', () => {
+    expect(
+      getViewTypeToSave(
+        { method: 'setScriptureView', viewType: 'standard' },
+        { viewType: 'formatted', isPowerMode: false },
+      ),
+    ).toBe('standard');
+    expect(
+      getViewTypeToSave(
+        { method: 'setScriptureView', viewType: 'formatted' },
+        { viewType: 'standard', isPowerMode: true },
+      ),
+    ).toBe('formatted');
+  });
+
+  it('does not coerce a requested Standard view while the interface mode is still loading', () => {
+    expect(
+      getViewTypeToSave(
+        { method: 'setScriptureView', viewType: 'standard' },
+        { viewType: 'formatted', isPowerMode: false },
+      ),
+    ).toBe('standard');
   });
 });
 
