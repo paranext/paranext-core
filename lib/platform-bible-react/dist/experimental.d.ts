@@ -1685,7 +1685,7 @@ export interface UseMarkerPaletteFocusOutCaptureOptions {
 	/** The element containing this editor's `.editor-input`. Scopes the capture to THIS editor. */
 	containerRef: React$1.RefObject<HTMLElement | null>;
 	/** The editor whose selection and content are read. */
-	editorRef: React$1.RefObject<EditorRef | null>;
+	editorRef: React$1.RefObject<Pick<EditorRef, "getSelection" | "getSelectedParaMarker" | "getUsj"> | null>;
 	/** Receives the last live selection, for the restore every session end performs. */
 	selectionRef: React$1.MutableRefObject<SelectionRange | undefined>;
 	/** Receives the change-guard baseline, taken only while a palette session is open. */
@@ -1711,7 +1711,10 @@ export interface UseMarkerPaletteFocusOutCaptureOptions {
  * restore from it when they find the live selection gone.
  *
  * Only overwrites when the selection is readable: if it is already gone at `focusout`, the previous
- * capture is the best remaining approximation.
+ * capture is the best remaining approximation. A selected paragraph marker is the exception: it has
+ * no text range, and the previous capture is a caret the user has since left, so restoring it would
+ * move the selection to another paragraph. The capture is cleared instead — a marker cannot be
+ * re-selected from a capture, and while it stays selected nothing needs restoring.
  *
  * The baseline is taken at the same moment and for the same reason — it has to describe the editor
  * as THIS session's palette took focus, which is exactly now. Scoped to this editor's own

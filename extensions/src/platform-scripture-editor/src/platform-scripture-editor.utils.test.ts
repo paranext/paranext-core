@@ -74,17 +74,27 @@ import {
 } from './platform-scripture-editor.utils';
 import { restoreSelectionIfLost } from './platform-scripture-editor.web-view.utils';
 
-/** Build a mock editor ref exposing spies for the methods the generators call. */
-function makeMockEditorRef() {
+/**
+ * Build a mock editor ref exposing spies for the methods the generators call. It has no text
+ * selection; pass `selectedParaMarker` to have a paragraph's gutter marker selected instead.
+ */
+function makeMockEditorRef(selectedParaMarker?: string) {
   const formatPara = vi.fn();
   const insertMarker = vi.fn();
-  const getSelectedParaMarker = vi.fn<() => string | undefined>();
+  const getSelectedParaMarker = vi.fn<() => string | undefined>(() => selectedParaMarker);
+  const setSelection = vi.fn();
   // Mock literal cannot satisfy the full EditorRef interface — cast for test isolation.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const ref = {
-    current: { formatPara, insertMarker, getSelectedParaMarker },
+    current: {
+      formatPara,
+      insertMarker,
+      getSelection: () => undefined,
+      getSelectedParaMarker,
+      setSelection,
+    },
   } as unknown as MutableRefObject<EditorRef | null>;
-  return { ref, formatPara, insertMarker, getSelectedParaMarker };
+  return { ref, formatPara, insertMarker, getSelectedParaMarker, setSelection };
 }
 
 // Sample USJ chapter data for Genesis chapter 1 with multiple verses
@@ -4227,6 +4237,25 @@ describe('generateParagraphMenuListItems', () => {
     expect(restoreSelection.mock.invocationCallOrder[0]).toBeLessThan(
       formatPara.mock.invocationCallOrder[0],
     );
+  });
+
+  it('does not restore an older caret, and still calls formatPara, while a paragraph marker is selected', () => {
+    // Wired as the web view wires it: the real restore, over an editor whose gutter marker is
+    // selected. A selected marker has no text range, and the caret captured before it was selected
+    // is in another paragraph — restoring it would make `formatPara` retag that paragraph instead.
+    const olderCaret: SelectionRange = {
+      start: { jsonPath: '$.content[2].content[1]', offset: 5 },
+    };
+    const { ref, formatPara, setSelection } = makeMockEditorRef('q1');
+    const items = generateParagraphMenuListItems(ref, {}, false, vi.fn(), () =>
+      restoreSelectionIfLost(ref.current, olderCaret),
+    );
+
+    const item = items[0];
+    item.action?.();
+
+    expect(setSelection).not.toHaveBeenCalled();
+    expect(formatPara).toHaveBeenCalledWith(item.marker);
   });
 
   it('when protected: does not restore the caret either (nothing is applied)', () => {

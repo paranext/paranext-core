@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { SelectionRange } from '@eten-tech-foundation/platform-editor';
 import {
   EDIT_MENU_COMMANDS,
   handleEditMenuCommand,
   isEditMenuCommand,
   runEditMenuAction,
 } from './edit-menu-actions.util';
+import { restoreSelectionIfLost } from './platform-scripture-editor.web-view.utils';
 
 function makeEditor() {
   return { undo: vi.fn(), redo: vi.fn(), cut: vi.fn(), copy: vi.fn(), paste: vi.fn() };
@@ -71,6 +73,30 @@ describe('handleEditMenuCommand', () => {
     expect(effects.focusEditor).toHaveBeenCalledTimes(1);
     expect(effects.notifyActionBlocked).not.toHaveBeenCalled();
     expect(effects.notifySyncEditBlocked).not.toHaveBeenCalled();
+  });
+
+  it('does not restore an older caret while a paragraph marker is selected', () => {
+    // Wired as the web view wires it: the real restore, over an editor whose gutter marker is
+    // selected. A selected marker has no text range, and the caret captured before it was selected
+    // is in another paragraph — restoring it would paste the text there instead.
+    const olderCaret: SelectionRange = {
+      start: { jsonPath: '$.content[2].content[1]', offset: 5 },
+    };
+    const editor = {
+      ...makeEditor(),
+      getSelection: () => undefined,
+      getSelectedParaMarker: () => 'q1',
+      setSelection: vi.fn(),
+    };
+    const effects = {
+      ...makeEffects(),
+      restoreSelectionIfLost: (target: typeof editor) => restoreSelectionIfLost(target, olderCaret),
+    };
+
+    handleEditMenuCommand(PASTE, editor, EDITABLE, effects);
+
+    expect(editor.setSelection).not.toHaveBeenCalled();
+    expect(editor.paste).toHaveBeenCalledTimes(1);
   });
 
   it('names Send/Receive when a sync is the only reason editing is blocked', () => {
