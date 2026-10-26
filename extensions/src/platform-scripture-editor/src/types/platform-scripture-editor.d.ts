@@ -356,7 +356,7 @@ declare module 'platform-scripture-editor' {
     /**
      * Ways Scripture project text can be viewed in the editor
      *
-     * Defaults to 'formatted'.
+     * Defaults to 'standard' in Power mode and 'formatted' otherwise.
      *
      * @experimental
      */
