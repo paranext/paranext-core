@@ -1289,6 +1289,11 @@ export function generateParagraphMenuListItems(
           notifyStructureProtected();
           return;
         }
+        // Re-picking a selected marker's own marker (a second Enter on the menu the editor opened,
+        // which highlights that row) must change nothing. `formatPara` would still rewrite the
+        // marker and leave an undo step that does nothing, so skip it. Only for a selected marker:
+        // with a range selection, the same pick retags the other paragraphs the range covers.
+        if (editorRef.current?.getSelectedParaMarker() === marker) return;
         // Restore the caret BEFORE applying, exactly as the `\` and Enter marker palettes do
         // before their applies: this menu opens in a popover that takes focus off the editor
         // input, so by the time an item is picked the live selection may already be gone, and

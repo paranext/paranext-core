@@ -178,6 +178,8 @@ export function useCharacterMarkerState({
 
   const onClose = useCallback(() => {
     setCoverage(undefined);
+    // TODO(PT-4764): Restore the caret before focusing, as `returnFocusToScriptureText` does. A
+    // bare `focus()` after the blur nulled the selection can put the caret at the chapter end.
     editorRef.current?.focus();
   }, [editorRef]);
 

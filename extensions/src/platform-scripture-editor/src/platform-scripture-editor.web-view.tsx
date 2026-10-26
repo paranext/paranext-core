@@ -136,6 +136,7 @@ import {
   PARAGRAPH_STYLE_TRIGGER_STRING_KEYS,
 } from './paragraph-style-trigger.component';
 import { useMarkerSettleDelay } from './use-marker-settle-delay.hook';
+import { useParagraphMenuOpenState } from './use-paragraph-menu-open-state.hook';
 import { useStructureProtectionState } from './use-structure-protection-state.hook';
 import { EmptyChapterView, EMPTY_CHAPTER_VIEW_STRING_KEYS } from './empty-chapter-view.component';
 import {
@@ -247,6 +248,7 @@ import {
   CONTEXT_MENU_ACTION_TO_NOTE_KIND,
   createInsertContextMenuItems,
   flushRowEditsThenSave,
+  forgetCaretSnapshotIfParaMarkerSelected,
   isEditorContextMenuOpen,
   generateInlineMarkerMenuListItems,
   getChapterKey,
@@ -274,6 +276,7 @@ import {
   commitVersionHistorySnapshot,
   EDIT_ACTION_BLOCKED_KEY,
   notifyEditMenuActionBlocked,
+  notifyStructureProtected as sendStructureProtectedNotification,
   notifySyncEditBlocked as sendSyncEditBlockedNotification,
   SYNC_EDIT_BLOCKED_KEY,
 } from './editor-side-effects.utils';
@@ -1860,14 +1863,7 @@ function PlatformScriptureEditor({
     [],
   );
 
-  const notifyStructureProtected = useCallback(
-    () =>
-      papi.notifications.send({
-        message: '%webView_platformScriptureEditor_error_structureProtected%',
-        severity: 'warning',
-      }),
-    [],
-  );
+  const notifyStructureProtected = useCallback(() => sendStructureProtectedNotification(), []);
 
   /** This editor's own notification ids. See {@link getSaveNotificationIds}. */
   const saveNotificationIds = useMemo(() => getSaveNotificationIds(webViewId), [webViewId]);
@@ -1931,7 +1927,8 @@ function PlatformScriptureEditor({
   // (where `formatPara` then needs a selection, so the retag would refuse) and a mouse click on a
   // marker palette, which renders outside this document. The single place every palette commit and
   // dismissal goes through, so one rule covers them all — as does every path that hands focus back
-  // to the text (see `returnFocusToScriptureText`). A no-op when the selection is intact.
+  // to the text (see `returnFocusToScriptureText`). A no-op when the selection is intact, and while
+  // a paragraph marker is selected, which survives the blur and is left as it is.
   const restoreEditorSelection = useCallback(() => {
     restoreSelectionIfLost(editorRef.current, lastFocusOutSelectionRef.current);
   }, []);
@@ -1954,6 +1951,23 @@ function PlatformScriptureEditor({
       isChapterLoading,
     ],
   );
+
+  const forgetCaretSnapshotForParagraphMenu = useCallback(
+    () => forgetCaretSnapshotIfParaMarkerSelected(editorRef.current, lastFocusOutSelectionRef),
+    [],
+  );
+
+  const {
+    isMenuOpen: isParagraphMenuOpen,
+    setIsMenuOpen: setIsParagraphMenuOpen,
+    requestMenuFromEditor: handleParagraphMarkerMenuRequest,
+  } = useParagraphMenuOpenState({
+    isReadOnly: isReadOnlyEffective,
+    isStructureProtected,
+    hasBlockMarker: !!blockMarker,
+    notifyStructureProtected,
+    onBeforeMenuOpen: forgetCaretSnapshotForParagraphMenu,
+  });
 
   const insertCommentAtCurrentSelection = useCallback(() => {
     // The editor's own read flushes pending marker edits, so it is always the settled selection;
@@ -5291,6 +5305,7 @@ function PlatformScriptureEditor({
               logger={logger}
               onUsjChange={isReadOnlyEffective ? undefined : handleEditorialUsjChange}
               onSelectionChange={handleSelectionChange}
+              onParaMarkerMenuRequest={handleParagraphMarkerMenuRequest}
               onStateChange={(state) => {
                 setCanUndo(state.canUndo);
                 setCanRedo(state.canRedo);
@@ -5466,6 +5481,9 @@ function PlatformScriptureEditor({
                   isStructureProtected={isStructureProtected}
                   markerMenuItems={paragraphSwitcherMenuItems}
                   localizedStrings={localizedStrings}
+                  isMenuOpen={isParagraphMenuOpen}
+                  onMenuOpenChange={setIsParagraphMenuOpen}
+                  onReturnFocusToEditor={() => returnFocusToScriptureText()}
                 />
               </>
             )}

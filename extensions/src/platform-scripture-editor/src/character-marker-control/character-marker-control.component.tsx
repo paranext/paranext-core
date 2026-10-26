@@ -27,6 +27,7 @@ import {
   SYNC_BLOCKED_KEY,
 } from './character-marker-control.const';
 import { MARKER_MENU_POPOVER_WIDTH_CLASSES } from '../marker-menu-popover.const';
+import { wrapMarkerMenuItemsWithClose } from '../marker-menu.utils';
 
 export { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control.const';
 
@@ -204,18 +205,9 @@ export function CharacterMarkerControl({
   }, [onClose]);
 
   // This is a single-select control, so picking a marker must close the menu — and closing is also
-  // what returns focus to the editor, via `onClose`. `MarkerMenu` wires `onSelect` straight to
-  // `item.action` and knows nothing about its host's open state, so the host wraps each action
-  // rather than the menu closing itself.
+  // what returns focus to the editor, via `onClose`.
   const closingMarkerMenuItems = useMemo(
-    () =>
-      markerMenuItems.map((item) => ({
-        ...item,
-        action: () => {
-          item.action();
-          closeMenu();
-        },
-      })),
+    () => wrapMarkerMenuItemsWithClose(markerMenuItems, closeMenu),
     [markerMenuItems, closeMenu],
   );
 

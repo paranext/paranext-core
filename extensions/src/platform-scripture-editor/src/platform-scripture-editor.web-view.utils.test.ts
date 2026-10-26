@@ -25,6 +25,7 @@ import {
   nextEditingNoteOps,
   noteKindForCtrlTChord,
   NOTE_INSERT_CONFIG,
+  forgetCaretSnapshotIfParaMarkerSelected,
   parseCallerSequenceSetting,
   resolveEditingSessionActivity,
   restoreSelectionIfLost,
@@ -295,17 +296,19 @@ describe('getChapterKey', () => {
   });
 });
 
+/** The caret position a focus-out captured, for the selection-restoring helpers below. */
+const snapshot: SelectionRange = { start: { jsonPath: '$.content[0].content[1]', offset: 4 } };
+
+/** Editor stub exposing only the selection methods the selection-restoring helpers use. */
+function makeEditor(liveSelection: SelectionRange | undefined, selectedParaMarker?: string) {
+  return {
+    getSelection: vi.fn((): SelectionRange | undefined => liveSelection),
+    setSelection: vi.fn(),
+    getSelectedParaMarker: vi.fn((): string | undefined => selectedParaMarker),
+  };
+}
+
 describe('restoreSelectionIfLost', () => {
-  const snapshot: SelectionRange = { start: { jsonPath: '$.content[0].content[1]', offset: 4 } };
-
-  /** Editor stub exposing only the two selection methods the helper consults. */
-  function makeEditor(liveSelection: SelectionRange | undefined) {
-    return {
-      getSelection: vi.fn((): SelectionRange | undefined => liveSelection),
-      setSelection: vi.fn(),
-    };
-  }
-
   it('restores the snapshot when the live selection is gone', () => {
     const editor = makeEditor(undefined);
 
@@ -326,6 +329,17 @@ describe('restoreSelectionIfLost', () => {
     expect(editor.setSelection).not.toHaveBeenCalled();
   });
 
+  it('leaves a selected paragraph marker alone, so the dropdown retags that paragraph', () => {
+    // `getSelection()` reports undefined for a marker selection — a USJ selection is a text range
+    // and cannot represent a selected node — yet the selection is live. Restoring the snapshot over
+    // it would move the retag to whichever paragraph last held the caret.
+    const editor = makeEditor(undefined, 'li2');
+
+    restoreSelectionIfLost(editor, snapshot);
+
+    expect(editor.setSelection).not.toHaveBeenCalled();
+  });
+
   it('does nothing when the selection is gone but no snapshot was captured', () => {
     const editor = makeEditor(undefined);
 
@@ -338,6 +352,48 @@ describe('restoreSelectionIfLost', () => {
     // `editorRef.current` is genuinely `null` before the editor mounts — the exact value under test
     // eslint-disable-next-line no-null/no-null
     expect(() => restoreSelectionIfLost(null, snapshot)).not.toThrow();
+  });
+});
+
+describe('forgetCaretSnapshotIfParaMarkerSelected', () => {
+  it('forgets the snapshot while a paragraph marker is the selection', () => {
+    const snapshotRef: MutableRefObject<SelectionRange | undefined> = { current: snapshot };
+
+    forgetCaretSnapshotIfParaMarkerSelected(makeEditor(undefined, 'p'), snapshotRef);
+
+    expect(snapshotRef.current).toBeUndefined();
+  });
+
+  it('keeps the snapshot when no paragraph marker is selected', () => {
+    // The paragraph menu opened over a caret: the snapshot is that caret, and a pick needs it back.
+    const snapshotRef: MutableRefObject<SelectionRange | undefined> = { current: snapshot };
+
+    forgetCaretSnapshotIfParaMarkerSelected(makeEditor(undefined), snapshotRef);
+
+    expect(snapshotRef.current).toBe(snapshot);
+  });
+
+  it('leaves nothing for a pick to restore once the document is replaced under an open menu', () => {
+    // The caret was last in paragraph C, then B's marker was selected and the menu opened. A reload
+    // (a Replace in Find, an automatic Send/Receive) drops B's marker selection while the menu is
+    // open; restoring the old snapshot then would retag C, which may be off-screen.
+    const snapshotRef: MutableRefObject<SelectionRange | undefined> = { current: snapshot };
+    forgetCaretSnapshotIfParaMarkerSelected(makeEditor(undefined, 'q1'), snapshotRef);
+    const reloadedEditor = makeEditor(undefined);
+
+    restoreSelectionIfLost(reloadedEditor, snapshotRef.current);
+
+    expect(reloadedEditor.setSelection).not.toHaveBeenCalled();
+  });
+
+  it('tolerates a null editor handle (ref not mounted)', () => {
+    const snapshotRef: MutableRefObject<SelectionRange | undefined> = { current: snapshot };
+
+    // `editorRef.current` is genuinely `null` before the editor mounts — the exact value under test
+    // eslint-disable-next-line no-null/no-null
+    forgetCaretSnapshotIfParaMarkerSelected(null, snapshotRef);
+
+    expect(snapshotRef.current).toBe(snapshot);
   });
 });
 
@@ -563,14 +619,14 @@ describe('parseCallerSequenceSetting', () => {
 });
 
 describe('returnFocusToScriptureTextIfDocumentFocused', () => {
-  function makeEditor() {
+  function makeNoteFocusEditor() {
     return { selectAfterNote: vi.fn(), focus: vi.fn() };
   }
 
   // A popover closed from another view must not pull focus into this editor: the user's typing
   // would then be saved into this text instead of the one they are typing in.
   it('does nothing while the document does not have focus', () => {
-    const editor = makeEditor();
+    const editor = makeNoteFocusEditor();
     const restoreSelection = vi.fn();
 
     returnFocusToScriptureTextIfDocumentFocused(editor, restoreSelection, 2, {
@@ -586,7 +642,7 @@ describe('returnFocusToScriptureTextIfDocumentFocused', () => {
   });
 
   it('restores the caret, then focuses, when no note is given', () => {
-    const editor = makeEditor();
+    const editor = makeNoteFocusEditor();
     const calls: string[] = [];
     const restoreSelection = vi.fn(() => calls.push('restore'));
     editor.focus.mockImplementation(() => calls.push('focus'));
@@ -600,7 +656,7 @@ describe('returnFocusToScriptureTextIfDocumentFocused', () => {
   });
 
   it('puts the caret just past the given note, then focuses', () => {
-    const editor = makeEditor();
+    const editor = makeNoteFocusEditor();
     const calls: string[] = [];
     editor.selectAfterNote.mockImplementation(() => calls.push('selectAfterNote'));
     editor.focus.mockImplementation(() => calls.push('focus'));

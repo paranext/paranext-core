@@ -152,17 +152,45 @@ export function getChapterKey(
  * A still-live selection is left completely alone, and with no snapshot there is nothing to restore
  * (`focus()` keeps its default behavior).
  *
+ * A selected paragraph marker counts as a live selection too. `getSelection()` reports `undefined`
+ * for it, because a USJ selection is a text range and cannot represent a selected node, so without
+ * asking `getSelectedParaMarker()` this would restore the last caret over it and the paragraph
+ * dropdown would retag whichever paragraph that caret was in.
+ *
  * @param editor The live editor handle (e.g. `editorRef.current`); no-op when not mounted
  * @param lastFocusOutSelection The selection captured when focus last left the editor (a focusout
  *   listener reads it synchronously, ahead of the blur-path nulling), or `undefined` when none has
  *   been captured
  */
 export function restoreSelectionIfLost(
-  editor: Pick<EditorRef, 'getSelection' | 'setSelection'> | null,
+  editor: Pick<EditorRef, 'getSelection' | 'setSelection' | 'getSelectedParaMarker'> | null,
   lastFocusOutSelection: SelectionRange | undefined,
 ): void {
-  if (!editor || editor.getSelection()) return;
+  // TODO(PT-4905): Other selection consumers (insert comment among them) still read a selected
+  // paragraph marker as no selection; this is the only check that accounts for it.
+  if (!editor || editor.getSelection() || editor.getSelectedParaMarker()) return;
   if (lastFocusOutSelection) editor.setSelection(lastFocusOutSelection);
+}
+
+/**
+ * Forgets the caret captured at focus-out while a paragraph marker is the selection, so nothing can
+ * later restore that caret over it.
+ *
+ * The focus-out capture keeps its previous snapshot when there is no readable selection, and a
+ * selected marker reads as none (see {@link restoreSelectionIfLost}), so the snapshot is an older
+ * caret, possibly in another paragraph. Call this as the paragraph menu opens. If the marker
+ * selection is then lost under the open menu (the document is replaced, or the editor becomes
+ * read-only), a pick finds nothing to restore and `formatPara` refuses with a logged warning,
+ * instead of retagging the paragraph that older caret was in.
+ *
+ * @param editor The live editor handle (e.g. `editorRef.current`); no-op when not mounted
+ * @param lastFocusOutSelectionRef The focus-out snapshot, cleared when a marker is selected
+ */
+export function forgetCaretSnapshotIfParaMarkerSelected(
+  editor: Pick<EditorRef, 'getSelectedParaMarker'> | null,
+  lastFocusOutSelectionRef: MutableRefObject<SelectionRange | undefined>,
+): void {
+  if (editor?.getSelectedParaMarker()) lastFocusOutSelectionRef.current = undefined;
 }
 
 /**

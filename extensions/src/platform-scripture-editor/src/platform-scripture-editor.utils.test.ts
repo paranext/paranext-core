@@ -4,7 +4,7 @@ import type PapiBackend from '@papi/backend';
 import { newPlatformError, normalizeProjectId, UsjTextContentLocation } from 'platform-bible-utils';
 import type { SavedWebViewDefinition } from '@papi/core';
 import { MutableRefObject } from 'react';
-import type { EditorRef, ViewOptions } from '@eten-tech-foundation/platform-editor';
+import type { EditorRef, SelectionRange, ViewOptions } from '@eten-tech-foundation/platform-editor';
 import {
   USJ_TYPE,
   USJ_VERSION,
@@ -72,17 +72,19 @@ import {
   PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
   showCommentThreadForInterfaceMode,
 } from './platform-scripture-editor.utils';
+import { restoreSelectionIfLost } from './platform-scripture-editor.web-view.utils';
 
 /** Build a mock editor ref exposing spies for the methods the generators call. */
 function makeMockEditorRef() {
   const formatPara = vi.fn();
   const insertMarker = vi.fn();
+  const getSelectedParaMarker = vi.fn<() => string | undefined>();
   // Mock literal cannot satisfy the full EditorRef interface — cast for test isolation.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const ref = {
-    current: { formatPara, insertMarker },
+    current: { formatPara, insertMarker, getSelectedParaMarker },
   } as unknown as MutableRefObject<EditorRef | null>;
-  return { ref, formatPara, insertMarker };
+  return { ref, formatPara, insertMarker, getSelectedParaMarker };
 }
 
 // Sample USJ chapter data for Genesis chapter 1 with multiple verses
@@ -4112,6 +4114,20 @@ describe('generateParagraphMenuListItems', () => {
     expect(notify).not.toHaveBeenCalled();
   });
 
+  it("skips formatPara when the pick is the selected paragraph marker's own marker", () => {
+    const { ref, formatPara, getSelectedParaMarker } = makeMockEditorRef();
+    getSelectedParaMarker.mockReturnValue('q1');
+    const restoreSelection = vi.fn();
+    const items = generateParagraphMenuListItems(ref, {}, false, vi.fn(), restoreSelection);
+
+    items.find((item) => item.marker === 'q1')?.action?.();
+    expect(formatPara).not.toHaveBeenCalled();
+    expect(restoreSelection).not.toHaveBeenCalled();
+
+    items.find((item) => item.marker === 'p')?.action?.();
+    expect(formatPara).toHaveBeenCalledWith('p');
+  });
+
   it('while a chapter is loading: action does not call formatPara or restore the selection', () => {
     const { ref, formatPara } = makeMockEditorRef();
     const restoreSelection = vi.fn();
@@ -4222,6 +4238,57 @@ describe('generateParagraphMenuListItems', () => {
 
     expect(restoreSelection).not.toHaveBeenCalled();
     expect(formatPara).not.toHaveBeenCalled();
+  });
+
+  // One position language (host Standard-View-Invariants §6): a selected paragraph marker is a
+  // node selection with no offsets, so a retag from it must reach the editor as `formatPara` alone.
+  // The host never turns the selection into a position by restoring a caret over it. Wires the real
+  // restore the web view passes in, rather than a spy, so a restore that stops honoring the marker
+  // selection fails here.
+  describe('with a paragraph marker selected', () => {
+    const lastFocusOutSelection: SelectionRange = {
+      start: { jsonPath: '$.content[2].content[0]', offset: 7 },
+    };
+
+    function makeEditorWithSelectionState(selectedParaMarker: string | undefined) {
+      const formatPara = vi.fn();
+      const setSelection = vi.fn();
+      const editor = {
+        formatPara,
+        setSelection,
+        // A USJ selection is a text range, so it reports nothing while a marker is selected — and
+        // nothing after a popover blur nulled the caret.
+        getSelection: vi.fn((): SelectionRange | undefined => undefined),
+        getSelectedParaMarker: vi.fn((): string | undefined => selectedParaMarker),
+      };
+      // Mock literal cannot satisfy the full EditorRef interface — cast for test isolation.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const ref = { current: editor } as unknown as MutableRefObject<EditorRef | null>;
+      const items = generateParagraphMenuListItems(ref, {}, false, vi.fn(), () =>
+        restoreSelectionIfLost(ref.current, lastFocusOutSelection),
+      );
+      return { items, formatPara, setSelection };
+    }
+
+    it('restores the lost caret when no marker is selected (control)', () => {
+      const { items, formatPara, setSelection } = makeEditorWithSelectionState(undefined);
+
+      items[0].action?.();
+
+      expect(setSelection).toHaveBeenCalledWith(lastFocusOutSelection);
+      expect(formatPara).toHaveBeenCalledWith(items[0].marker);
+    });
+
+    it('retags through formatPara without ever setting a selection position', () => {
+      const { items, formatPara, setSelection } = makeEditorWithSelectionState('li2');
+      const item = items.find((menuItem) => menuItem.marker === 'q1');
+
+      item?.action?.();
+
+      expect(formatPara).toHaveBeenCalledTimes(1);
+      expect(formatPara).toHaveBeenCalledWith('q1');
+      expect(setSelection).not.toHaveBeenCalled();
+    });
   });
 });
 

@@ -4727,6 +4727,44 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** windowbox spike record and patch (PRD folder, `2026-08-11-pt-4281-windowbox-spike.patch`,
   design doc § spike); multi-window epic architecture discussion.
 
+## adr-marker-menu-close-focus-follows-the-opener: A pick from the paragraph menu returns focus to the text; a dismissal returns it to whatever opened the menu
+
+- **Date:** 2026-10-23
+- **Status:** Accepted. The dismissal rule is a product call that UX may still change.
+- **Context:** The editor toolbar's paragraph-style menu (`ParagraphStyleTrigger`,
+  `extensions/src/platform-scripture-editor/src/paragraph-style-trigger.component.tsx`) opens two
+  ways: from its button, or from the editor, with Enter or Alt+Down on a selected paragraph marker
+  (`onParaMarkerMenuRequest`, through `useParagraphMenuOpenState`). The dismissal guideline
+  (`dismissal-patterns.mdx`, "Restore focus on close") says to return focus to the opener, which is
+  Radix's default. But a menu the editor opened has no button behind it, and after a pick the next
+  keystroke belongs in the text, where the selected marker is live again for the next key. The
+  character-marker control beside it (`CharacterMarkerControl`) opens only from its button and
+  returns focus to the editor on every close, pick and Escape alike. The footnote type dropdown
+  keeps Radix's return to its trigger (Standard-View-Invariants §4).
+- **Decision:** For the paragraph menu:
+  - A pick returns focus to the editor, through `returnFocusToScriptureText`. That restores the
+    caret first and does nothing when this web view's document does not have focus.
+  - A dismissal (Escape, or clicking the button again) returns focus to whatever opened the menu:
+    the editor if the editor opened it, the button if the button did. If the button cannot take
+    focus any more, because structure protection disabled it or the trigger unmounted, focus goes
+    to the editor.
+  - A close caused by an outside interaction leaves focus where the user put it.
+
+  The character-marker control is unchanged and returns focus to the editor on every close.
+- **Alternatives:**
+  - Always the editor, as the character-marker control does. Rejected for the paragraph menu
+    because Escape from a menu the button opened then puts focus somewhere the user did not start,
+    against the guideline.
+  - Always the opener (Radix's default). Rejected because after a pick the user would have to get
+    back into the text before typing on. Radix also skips its own return after a pointer-down on
+    the trigger, which it counts as an outside interaction, so the trigger refocuses itself
+    explicitly.
+- **Consequences:** The two toolbar marker controls now differ on Escape from a menu their button
+  opened: the paragraph menu returns to its button, the character-marker menu to the editor.
+  Whether the character-marker control should follow the opener rule too is open for UX; revisit
+  this entry when UX settles one rule for both. `dismissal-patterns.mdx` notes the exception. The
+  behavior is pinned by `paragraph-style-trigger.component.test.tsx`.
+
 ## adr-marker-palettes-take-real-focus: Standard-view marker palettes hold real keyboard focus in the overlay; the editor stays editable
 
 - **Date:** 2026-10-01
