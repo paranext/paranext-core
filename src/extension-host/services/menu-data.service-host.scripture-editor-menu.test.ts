@@ -385,7 +385,7 @@ describe("The scripture editor's Project menu, per mode", () => {
     expect(simple.has('platform.webViewContentZoomIn')).toBe(true);
   });
 
-  test("Power's Switch scripture view submenu is labeled and absent from Simple", async () => {
+  test("Power's Switch Scripture view submenu is labeled and absent from Simple", async () => {
     const isViewSubmenu = (item: Item) =>
       'id' in item && item.id === 'platformScriptureEditor.viewSubmenu';
     const root = (await getEditorTopMenuInMode('power')).items.find(isViewSubmenu);
