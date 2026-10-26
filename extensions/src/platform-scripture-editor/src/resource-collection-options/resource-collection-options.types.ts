@@ -53,6 +53,8 @@ export const RESOURCE_COLLECTION_OPTIONS_KEYS = {
   // between it and the disabled Chapter item.
   chapterNotYetAvailable: '%webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%',
   textsHeader: '%webView_scriptureTextGrid_viewOptions_textsHeader%',
+  teamResourcesHeader: '%webView_scriptureTextGrid_viewOptions_teamResourcesHeader%',
+  userResourcesHeader: '%webView_scriptureTextGrid_viewOptions_userResourcesHeader%',
   emptyTexts: '%webView_scriptureTextGrid_viewOptions_emptyState_prompt%',
   getResources: '%webView_scriptureTextGrid_viewOptions_getResources%',
   adminSharedLock: '%webView_scriptureTextGrid_viewOptions_adminSharedLock%',
@@ -68,6 +70,8 @@ export const RESOURCE_COLLECTION_OPTIONS_STRING_KEYS = Object.freeze([
   RESOURCE_COLLECTION_OPTIONS_KEYS.grid,
   RESOURCE_COLLECTION_OPTIONS_KEYS.chapterNotYetAvailable,
   RESOURCE_COLLECTION_OPTIONS_KEYS.textsHeader,
+  RESOURCE_COLLECTION_OPTIONS_KEYS.teamResourcesHeader,
+  RESOURCE_COLLECTION_OPTIONS_KEYS.userResourcesHeader,
   RESOURCE_COLLECTION_OPTIONS_KEYS.emptyTexts,
   RESOURCE_COLLECTION_OPTIONS_KEYS.getResources,
   RESOURCE_COLLECTION_OPTIONS_KEYS.adminSharedLock,

@@ -7,6 +7,7 @@ import {
   ToggleGroupItem,
 } from 'platform-bible-react';
 import { Lock, X } from 'lucide-react';
+import { useId } from 'react';
 import { formatReplacementString } from 'platform-bible-utils';
 import {
   RESOURCE_COLLECTION_OPTIONS_KEYS,
@@ -62,6 +63,14 @@ export function ResourceCollectionOptions({
   disabledMessage,
   localizedStrings = {},
 }: ResourceCollectionOptionsProps) {
+  const headingIdPrefix = useId();
+  const teamHeadingId = `${headingIdPrefix}-team`;
+  const userHeadingId = `${headingIdPrefix}-user`;
+  // A group's heading shows only over rows. Installing rows belong with the user's own, so they
+  // alone are enough for its heading.
+  const hasTeamRows = top.length > 0;
+  const hasUserRows = bottom.length > 0 || installingResourceNames.length > 0;
+
   // Shown only when interactive (`!disabled`): while disabled we show `disabledMessage` (no
   // project) or nothing (brief load), so this never double-messages or fires prematurely.
   const isTextsListEmpty =
@@ -159,6 +168,25 @@ export function ResourceCollectionOptions({
     );
   };
 
+  // `bottom` is not only what the user picked: it also holds admin rows the user opted out of and
+  // downloaded resources nobody listed, hence "User resources" rather than a word claiming a choice.
+  const userRows = (
+    <>
+      {bottom.map(renderRow)}
+      {installingResourceNames.map((name) => (
+        <div
+          key={`installing-${name}`}
+          className="tw:flex tw:items-center tw:py-1 tw:text-sm tw:text-muted-foreground tw:italic"
+        >
+          {formatReplacementString(
+            localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.installing),
+            { resourceName: name },
+          )}
+        </div>
+      ))}
+    </>
+  );
+
   return (
     <div className="tw:flex tw:w-64 tw:flex-col tw:gap-4">
       <section className="tw:flex tw:flex-col tw:gap-2">
@@ -208,19 +236,41 @@ export function ResourceCollectionOptions({
             )}
           />
         )}
-        {top.map(renderRow)}
-        {bottom.map(renderRow)}
-        {installingResourceNames.map((name) => (
-          <div
-            key={`installing-${name}`}
-            className="tw:flex tw:items-center tw:py-1 tw:text-sm tw:text-muted-foreground tw:italic"
-          >
-            {formatReplacementString(
-              localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.installing),
-              { resourceName: name },
+        {/* With no team rows the list is one unlabeled run, as when no team layout exists. */}
+        {hasTeamRows ? (
+          <>
+            <div
+              role="group"
+              aria-labelledby={teamHeadingId}
+              className="tw:flex tw:flex-col tw:gap-1"
+            >
+              <Label
+                id={teamHeadingId}
+                className="tw:text-xs tw:font-semibold tw:text-muted-foreground"
+              >
+                {localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.teamResourcesHeader)}
+              </Label>
+              {top.map(renderRow)}
+            </div>
+            {hasUserRows && (
+              <div
+                role="group"
+                aria-labelledby={userHeadingId}
+                className="tw:mt-2 tw:flex tw:flex-col tw:gap-1"
+              >
+                <Label
+                  id={userHeadingId}
+                  className="tw:text-xs tw:font-semibold tw:text-muted-foreground"
+                >
+                  {localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.userResourcesHeader)}
+                </Label>
+                {userRows}
+              </div>
             )}
-          </div>
-        ))}
+          </>
+        ) : (
+          userRows
+        )}
       </section>
 
       {/* Deliberately not gated on `disabled` — see the prop's docs. */}

@@ -124,9 +124,17 @@ function Harness({
   );
 }
 
-/** Regular user (Saroj): admin-shared texts on top (no ✕), the user's own additions below (hover ✕). */
+/**
+ * Regular user (Saroj): admin-shared texts on top under "Team resources" (no ✕), the user's own
+ * additions below under "User resources" (hover ✕).
+ */
 export const UserView: Story = {
   render: () => <Harness initialTop={ADMIN_ROWS} initialBottom={USER_ROWS} />,
+};
+
+/** A project with no team layout: the user's own texts as one list, with no group headings. */
+export const NoTeamLayout: Story = {
+  render: () => <Harness initialTop={[]} initialBottom={USER_ROWS} />,
 };
 
 /** No personal additions yet — the bottom section is empty (blank, per UX). */

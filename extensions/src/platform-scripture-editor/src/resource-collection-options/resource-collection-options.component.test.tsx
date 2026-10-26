@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { DblResourceReference } from 'platform-scripture';
 import {
@@ -49,6 +49,8 @@ STRINGS['%webView_scriptureTextGrid_viewOptions_removeFromList%'] =
 STRINGS['%webView_scriptureTextGrid_viewOptions_installing%'] = 'Installing {resourceName}…';
 STRINGS['%webView_scriptureTextGrid_viewOptions_emptyState_prompt%'] =
   'No texts added yet. Use {getResourcesLabel} to add them.';
+STRINGS['%webView_scriptureTextGrid_viewOptions_teamResourcesHeader%'] = 'Team resources';
+STRINGS['%webView_scriptureTextGrid_viewOptions_userResourcesHeader%'] = 'User resources';
 
 const ref = (id: string, name: string): DblResourceReference => ({
   type: 'dblResource',
@@ -189,6 +191,65 @@ describe('ResourceCollectionOptions — TEXTS list', () => {
   it('shows an "Installing {name}…" row for pending installs', () => {
     renderComponent({ installingResourceNames: ['New Resource'] });
     expect(screen.getByText('Installing New Resource…')).toBeInTheDocument();
+  });
+});
+
+describe("ResourceCollectionOptions — team resources and the user's own", () => {
+  const TEAM_ROW = row('a1', 'Admin Text', { isAdminLocked: true });
+  const USER_ROW = row('u1', 'My Text', { isUserRemovable: true });
+
+  it("groups the team's resources above the user's own", () => {
+    renderComponent({ top: [TEAM_ROW], bottom: [USER_ROW] });
+
+    const teamGroup = screen.getByRole('group', { name: 'Team resources' });
+    const userGroup = screen.getByRole('group', { name: 'User resources' });
+    expect(within(teamGroup).getByRole('checkbox', { name: 'Admin Text' })).toBeInTheDocument();
+    expect(within(teamGroup).queryByRole('checkbox', { name: 'My Text' })).toBeNull();
+    expect(within(userGroup).getByRole('checkbox', { name: 'My Text' })).toBeInTheDocument();
+    expect(
+      // compareDocumentPosition reports its answer as bit flags
+      // eslint-disable-next-line no-bitwise
+      teamGroup.compareDocumentPosition(userGroup) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('keeps a single unlabeled list when the team shared nothing', () => {
+    renderComponent({ bottom: [USER_ROW], installingResourceNames: ['New Resource'] });
+
+    // Positive control: the rows themselves are on screen, so the absent headings are a real answer.
+    expect(screen.getByRole('checkbox', { name: 'My Text' })).toBeInTheDocument();
+    // By name: the VIEW toggle is itself a `group`.
+    expect(screen.queryByRole('group', { name: 'Team resources' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'User resources' })).toBeNull();
+    expect(screen.queryByText('Team resources')).toBeNull();
+    expect(screen.queryByText('User resources')).toBeNull();
+  });
+
+  it("labels only the team group when every row is the team's", () => {
+    renderComponent({ top: [TEAM_ROW] });
+
+    expect(screen.getByRole('group', { name: 'Team resources' })).toBeInTheDocument();
+    expect(screen.queryByText('User resources')).toBeNull();
+  });
+
+  it("files a resource being installed under the user's own, even when it is the only one", () => {
+    renderComponent({ top: [TEAM_ROW], installingResourceNames: ['New Resource'] });
+
+    expect(
+      within(screen.getByRole('group', { name: 'User resources' })).getByText(
+        'Installing New Resource…',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps the lock on team rows inside the group', () => {
+    renderComponent({ top: [TEAM_ROW], bottom: [USER_ROW] });
+
+    expect(
+      within(screen.getByRole('group', { name: 'Team resources' })).getByRole('img', {
+        name: 'Shared by administrator',
+      }),
+    ).toBeInTheDocument();
   });
 });
 
