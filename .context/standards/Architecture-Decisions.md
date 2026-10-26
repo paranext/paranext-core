@@ -3793,6 +3793,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `'protected'` claims Enter as a paragraph insert before the note's `\fp` handling can run. The main
   text keeps the project's protection mode.
 - **Source:** PT-4846.
+- **Amended 2026-10-26 (PT-4777):** Partly superseded by `adr-power-preview-read-only-formatted`.
+  Power's Formatted view is now the read-only Preview and uses the pane note model too: a caller
+  click there navigates to the note in the footnotes pane instead of opening a popover. The
+  Markers view is shown nowhere. So every view the editor shows uses the pane note model, and
+  `usesPaneNoteModel` answers by the view type alone (`isPowerMode` no longer changes the answer);
+  while `platform.interfaceMode` is still loading only Standard view counts, as before.
 
 ## adr-footnote-unclosed-note-edited-in-place: In Standard view an unclosed note is edited in place in the text, and in the footnotes pane too
 
@@ -7157,7 +7163,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Decision:** Power's Preview is the formatted view made read-only. The saved value stays
   `'formatted'`; its editability depends on `platform.interfaceMode`, so one saved value is the
   editable Simple view in Simple mode and the read-only Preview in Power mode. A saved `'markers'` is
-  mapped to Standard view when it is read. `showsReadOnlyPreview` and `usesPaneNoteModel` in
+  mapped to Standard view when it is read. Every view the editor shows (Standard view, Preview and
+  Simple's formatted view) uses the footnotes-pane note model; in the read-only Preview a caller
+  click navigates to its note in the pane. `showsReadOnlyPreview` (is the text read-only) and
+  `usesPaneNoteModel` (does the view use the pane note model, the one predicate
+  `adr-footnote-pane-editing-in-simple-mode` introduced) in
   `extensions/src/platform-scripture-editor/src/platform-scripture-editor.utils.ts` are the single
   sources for those two questions; callers ask them instead of comparing view types or interface
   modes themselves.

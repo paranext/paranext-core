@@ -88,9 +88,9 @@ const PDP_FACTORY_OBJECT_TYPE = 'pdpFactory';
  * Simple mode's editor offers one view, the Formatted "Preview", and has no menu or shortcut to
  * leave another view. So a view type persisted during a power-mode session must not be shown in
  * simple mode: outside Power, 'standard' and 'markers' resolve to 'formatted' (the editable Simple
- * view). In Power, a saved 'markers' is a value from earlier versions and is shown as Standard view;
- * 'standard' and 'formatted' pass through unchanged. The result is for display only: callers must
- * not write it back to the persisted view type, so returning to power mode restores the user's
+ * view). In Power, a saved 'markers' is a value from earlier versions and is shown as Standard
+ * view; 'standard' and 'formatted' pass through unchanged. The result is for display only: callers
+ * must not write it back to the persisted view type, so returning to power mode restores the user's
  * choice.
  *
  * @param viewType The current (requested or persisted) view type
@@ -523,7 +523,8 @@ export function validateCommentSelection(
  * unresolved saved one, so only Standard view counts then.
  *
  * @param options.viewType The scripture editor's current (displayed) view type
- * @param options.isPowerMode Whether `platform.interfaceMode` is 'power'; does not affect the answer
+ * @param options.isPowerMode Whether `platform.interfaceMode` is 'power'; does not affect the
+ *   answer
  * @param options.isInterfaceModeLoading Whether `platform.interfaceMode` is still loading
  * @returns Whether the view uses the footnotes-pane note model
  */

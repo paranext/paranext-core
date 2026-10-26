@@ -1459,7 +1459,8 @@ function PlatformScriptureEditor({
   }, [isReadOnlyEffective, dismissPaletteSessionIfOpen, webViewId]);
 
   /**
-   * Whether this view uses the footnotes-pane note model (Standard view, or Simple's Formatted
+   * Whether this view uses the footnotes-pane note model (every view the editor shows once
+   * `platform.interfaceMode` has loaded: Standard view, Power's Preview and Simple's Formatted
    * view): notes are edited in the pane, picking one moves the text to it, and its caller is
    * highlighted. See `usesPaneNoteModel`.
    */

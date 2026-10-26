@@ -61,7 +61,8 @@ repo's half for the facts each side holds alone.
 forwarding table for all three consumers: the scripture editor web view, the footnote editor
 component (any host that runs it in editable marker mode), and the footnotes pane's inline row
 editor (a pane-model view — Standard view, or Simple's Formatted view, which gives the pane
-Standard's view options; see `usesPaneNoteModel` and `resolveNoteEditingSurface` in
+Standard's view options; Power's Preview is a pane-model view too, but read-only, so it opens no row
+editor; see `usesPaneNoteModel` and `resolveNoteEditingSurface` in
 `extensions/src/platform-scripture-editor/src/platform-scripture-editor.utils.ts`). The
 per-consumer copies drifted once already; there is one table now.
 
