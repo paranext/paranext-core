@@ -1269,9 +1269,6 @@
         "message": "Superseded by %platformScriptureEditor_previewView_readonly_message_format%."
       }
     },
-    "%platformScriptureEditor_previewView_readonly_message_format%": {
-      "fallbackKey": "%platformScriptureEditor_markersView_readonly_message_format%"
-    },
     "%webView_footnoteList_header%": {
       "fallbackKey": "%Paratext.ProjectMenu.ProjectPropertiesForm.showInFootnotes.HeaderText%"
     },

@@ -250,6 +250,30 @@ describe('retired book-not-found-in-project string', () => {
   });
 });
 
+// The read-only Preview notice replaced the Markers-view notice, whose wording describes a different
+// view. A locale that has the old translation but not the new one must show the English message
+// rather than the Markers sentence, so the message key has no fallback. The dismiss label means the
+// same thing in both views, so it keeps its fallback.
+describe('read-only Preview notice strings', () => {
+  it('the message key has no fallback: the Markers wording would be wrong for Preview', () => {
+    expect(
+      metadata?.['%platformScriptureEditor_previewView_readonly_message_format%']?.fallbackKey,
+    ).toBeUndefined();
+  });
+
+  it('the dismiss key falls back to the identical Markers-era string', () => {
+    expect(metadata?.['%platformScriptureEditor_previewView_readonly_dismiss%']?.fallbackKey).toBe(
+      '%platformScriptureEditor_markersView_readonly_dismiss%',
+    );
+  });
+
+  it.each(['en', 'es'])('the message key has its own value in %s', (locale) => {
+    expect(
+      localizedStrings[locale]['%platformScriptureEditor_previewView_readonly_message_format%'],
+    ).toBeTruthy();
+  });
+});
+
 // The resource panels' strings come in matched `bibleTexts_` / `commentaries_` pairs plus a set
 // shared by both tabs, and the model text panel's in a single set. Driven off the exported key
 // lists — `RESOURCE_PANEL_STRING_KEYS` folds the typed pairs in, so every key either panel renders
