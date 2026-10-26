@@ -2,10 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { spyOn, restoreAllMocks } from 'storybook/test';
 import { newPlatformError } from 'platform-bible-utils';
 import * as papiHooks from '@renderer/hooks/papi-hooks';
-import {
-  markInternetUseChoiceSaved,
-  resetInternetUseChoiceForTesting,
-} from '@renderer/services/internet-use-choice-store';
+import * as commandService from '@shared/services/command.service';
 import { InternetSettingsStep } from './internet-settings-step.component';
 
 const MOCK_SETTINGS = {
@@ -19,11 +16,20 @@ const MOCK_SETTINGS = {
 const PROVIDER = { __brand: 'internetSettingsDataProvider' };
 
 /**
- * Point useDataProvider/useData at a chosen state, mirroring how the component consumes them.
+ * Point useDataProvider/useData at a chosen state, mirroring how the component consumes them, and
+ * answer the step's commands without the network Storybook does not have: the Paratext 9 lookup
+ * with `paratext9InternetUse`, and "Close Paratext 10" with nothing, so it does not quit anything.
  * `provider: undefined` simulates the provider not yet registered (the outer spinner); otherwise
  * useData yields `[value, setData, isLoading]`. Returns a cleanup that restores the spies.
  */
-function mockHooks(config: { provider?: unknown; value?: unknown; isLoading?: boolean } = {}) {
+function mockHooks(
+  config: {
+    provider?: unknown;
+    value?: unknown;
+    isLoading?: boolean;
+    paratext9InternetUse?: string;
+  } = {},
+) {
   // `'provider' in config` so a story can force provider === undefined (not-yet-registered).
   const provider = 'provider' in config ? config.provider : PROVIDER;
   const value = config.value ?? MOCK_SETTINGS;
@@ -37,6 +43,13 @@ function mockHooks(config: { provider?: unknown; value?: unknown; isLoading?: bo
   spyOn(papiHooks, 'useData').mockReturnValue({
     InternetSettings: () => [value, async () => undefined, isLoading],
   } as never);
+  // The command's generic signature is keyed by command name; the stand-in answers only the two
+  // this step sends.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion -- Storybook mock stand-in
+  spyOn(commandService, 'sendCommand').mockImplementation((async (command: string) =>
+    command === 'paratextRegistration.getParatext9InternetUse'
+      ? config.paratext9InternetUse
+      : undefined) as never);
   return () => restoreAllMocks();
 }
 
@@ -49,9 +62,7 @@ const meta: Meta<typeof InternetSettingsStep> = {
     setCanProceed: () => {},
   },
   beforeEach() {
-    // Each story starts before the user has chosen, whatever was clicked in the story before it.
-    resetInternetUseChoiceForTesting();
-    // Default: provider available, settings loaded ("Disable access…").
+    // Default: provider available, settings loaded, no Paratext 9.
     return mockHooks();
   },
 };
@@ -61,8 +72,8 @@ type Story = StoryObj<typeof InternetSettingsStep>;
 
 /**
  * The data provider hasn't registered yet (`useDataProvider` returns `undefined`) — the natural
- * availability signal. The spinner shows and Next is disabled; after a short delay the "Getting
- * things ready…" message appears below it.
+ * availability signal. The spinner shows; after a short delay the "Getting things ready…" message
+ * appears below it.
  */
 export const ProviderRegistering: Story = {
   beforeEach() {
@@ -70,7 +81,7 @@ export const ProviderRegistering: Story = {
   },
 };
 
-/** Provider registered but the first read is still in flight (`isLoading`): spinner, Next disabled. */
+/** Provider registered but the first read is still in flight (`isLoading`): spinner. */
 export const Loading: Story = {
   beforeEach() {
     return mockHooks({ isLoading: true });
@@ -78,42 +89,32 @@ export const Loading: Story = {
 };
 
 /**
- * Settings loaded with `Disabled` stored, as on a first startup. In Paratext 9 that value is
- * "Disable all Internet access", which this app cannot honor yet, so that row shows selected under
- * the not-supported banner, and Next stays disabled until the user picks an option.
+ * A new user, or a Paratext 9 user whose setting is "Allow unrestricted Internet use": the
+ * sensitive-countries warning and the two choices.
  */
 export const Default: Story = {};
 
 /**
- * Settings loaded with "Unrestricted" stored. No option is selected and Next stays disabled until
- * the user picks one, so a stored value nobody chose is not presented as their choice.
+ * A Paratext 9 user whose setting is "Disable all Internet use". The step names it as not supported
+ * yet before the two choices.
  */
-export const StoredUnrestricted: Story = {
+export const Paratext9DisablesAllInternetUse: Story = {
   beforeEach() {
-    return mockHooks({ value: { ...MOCK_SETTINGS, permittedInternetUse: 'Enabled' } });
+    return mockHooks({ paratext9InternetUse: 'Disabled' });
   },
 };
 
-/**
- * The user already chose "Unrestricted" this session and came back to the step: their choice shows
- * selected and Next is enabled.
- */
-export const ChoiceAlreadyMade: Story = {
+/** A Paratext 9 user whose setting is "Disable Internet use in sensitive locations". */
+export const Paratext9DisablesInSensitiveLocations: Story = {
   beforeEach() {
-    markInternetUseChoiceSaved();
-    return mockHooks({ value: { ...MOCK_SETTINGS, permittedInternetUse: 'Enabled' } });
+    return mockHooks({ paratext9InternetUse: 'VpnRequired' });
   },
 };
 
-/**
- * The stored setting names an option this app does not implement yet. `InternetSettings.xml` is
- * seeded once from a co-installed Paratext 9 on first launch, so the wizard can meet this on a
- * first run. The row stays selected under a banner, and the step holds Next shut until the user
- * picks an option that will actually take effect.
- */
-export const UnsupportedStoredValue: Story = {
+/** A Paratext 9 user whose setting is "Use a proxy". */
+export const Paratext9UsesAProxy: Story = {
   beforeEach() {
-    return mockHooks({ value: { ...MOCK_SETTINGS, permittedInternetUse: 'ProxyOnly' } });
+    return mockHooks({ paratext9InternetUse: 'ProxyOnly' });
   },
 };
 

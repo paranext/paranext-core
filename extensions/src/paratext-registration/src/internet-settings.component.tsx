@@ -54,19 +54,6 @@ export type InternetSettingsFormProps = {
    * `computeCanEditServer`).
    */
   canEditServer: boolean;
-  /**
-   * Whether the staged internet use is the user's choice of "Disable access to some Bible
-   * translation services". A `Disabled` without it shows as "Disable all Internet access", which
-   * the app does not support yet.
-   */
-  hasChosenDisableSomeServices: boolean;
-  /**
-   * The saved counterpart of `hasChosenDisableSomeServices`
-   * (`platform.internetUseDisableSomeServicesChosen`).
-   */
-  savedHasChosenDisableSomeServices: boolean;
-  /** Called whenever the staged `hasChosenDisableSomeServices` changes. */
-  onHasChosenDisableSomeServicesChange: (hasChosen: boolean) => void;
 };
 
 /**
@@ -84,16 +71,9 @@ export function InternetSettingsForm({
   saveError,
   onSaveAndRestart,
   canEditServer,
-  hasChosenDisableSomeServices,
-  savedHasChosenDisableSomeServices,
-  onHasChosenDisableSomeServicesChange,
 }: InternetSettingsFormProps) {
-  // Choosing "Disable access…" over a saved "Disable all" leaves the saved value Disabled, so the
-  // choice counts as a change of its own.
   const hasUnsavedChanges =
-    savedInternetSettings !== undefined &&
-    (!deepEqual(internetSettings, savedInternetSettings) ||
-      hasChosenDisableSomeServices !== savedHasChosenDisableSomeServices);
+    savedInternetSettings !== undefined && !deepEqual(internetSettings, savedInternetSettings);
 
   const areButtonsDisabled = !hasUnsavedChanges || isFormDisabled;
 
@@ -156,12 +136,9 @@ export function InternetSettingsForm({
         <InternetAccessOptionList
           localizedStrings={localizedStrings}
           value={internetSettings.permittedInternetUse}
-          hasChosenDisableSomeServices={hasChosenDisableSomeServices}
-          onChange={(v) => {
-            onInternetSettingsChange({ ...internetSettings, permittedInternetUse: v });
-            // Any Disabled picked here is "Disable access…": "Disable all" cannot be picked.
-            onHasChosenDisableSomeServicesChange(v === 'Disabled');
-          }}
+          onChange={(v) =>
+            onInternetSettingsChange({ ...internetSettings, permittedInternetUse: v })
+          }
           disabled={isFormDisabled}
         />
       </div>
@@ -224,7 +201,6 @@ export function InternetSettingsForm({
           disabled={areButtonsDisabled}
           onClick={() => {
             if (savedInternetSettings) onInternetSettingsChange(savedInternetSettings);
-            onHasChosenDisableSomeServicesChange(savedHasChosenDisableSomeServices);
           }}
         >
           {localizedStrings['%paratextRegistration_button_reset%']}
