@@ -26,8 +26,10 @@ function isLastTabOfPanel(tab: TabData, panel: PanelData): boolean {
  *   (`node_modules/rc-dock/src/DockDropLayer.tsx`) for a whole-panel drag (including a re-docked
  *   float — a single-tab float panel drags as a `panel`, not a `tab`; see `TabCache.onDragStart`'s
  *   single-tab-float branch): reject `panelLock`ed panels, reject a different group, and reject the
- *   panel dropping onto itself (rc-dock issue ticlo/rc-dock#226 — accepting that duplicates the
- *   panel).
+ *   panel dropping onto itself. Unpatched rc-dock duplicates the panel on that drop
+ *   (ticlo/rc-dock#226), and the patched `DockLayout.dockMove` ignores it (see `README.md` in this
+ *   folder). Rejecting it here as well keeps the zone from showing a drop indicator for a drop that
+ *   does nothing.
  *
  * A locked group's tab (`TabGroup.tabLocked`) is rejected here the same way `DockPanel.render`
  * gates whether any drop squares render at all for a locked source group

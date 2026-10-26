@@ -133,6 +133,31 @@ describe('rc-dock patch: DockLayout.dockMove acts on the current layout, not the
     expect(describeTabGroups(dock)).toEqual({ left: ['U'], top: ['V'], bottom: ['W', 'X', 'T'] });
   });
 
+  it('moves a tab replaced during the drag to the end of its own group', () => {
+    const dock = renderDock();
+    const dragged = startDrag(dock, 'T');
+    replaceTab(dock, 'T');
+
+    drop(dock, dragged, findPanel(dock, 'left'), 'middle');
+
+    expect(countTab(dock, 'T')).toBe(1);
+    expect(describeTabGroups(dock).left).toEqual(['U', 'T']);
+  });
+
+  it('moves a tab to the end of its own group when the drop target holds the group from before the drag changed it', () => {
+    const dock = renderDock();
+    const dragged = startDrag(dock, 'T');
+    // `TabBarDropZone` hands over the tab group it last rendered with
+    const dropTargetPanel = findPanel(dock, 'left');
+    replaceTab(dock, 'T');
+
+    drop(dock, dragged, dropTargetPanel, 'middle');
+
+    expect(countTab(dock, 'T')).toBe(1);
+    expect(describeTabGroups(dock).left).toEqual(['U', 'T']);
+    expect(findTab(dock, 'T').title).toBe('T (updated)');
+  });
+
   it('leaves a tab replaced during the drag in place when it is dropped on its own header', () => {
     const dock = renderDock();
     const dragged = startDrag(dock, 'T');
@@ -149,6 +174,26 @@ describe('rc-dock patch: DockLayout.dockMove acts on the current layout, not the
     replaceTab(dock, 'T');
 
     drop(dock, dragged, findTab(dock, 'U'), 'after-tab');
+
+    expect(describeTabGroups(dock)).toEqual({ left: ['T', 'U'], top: ['V'], bottom: ['W', 'X'] });
+  });
+
+  it('leaves a tab in place when it is dropped on its own header given by id', () => {
+    const dock = renderDock();
+    const dragged = startDrag(dock, 'T');
+    replaceTab(dock, 'T');
+
+    drop(dock, dragged, 'T', 'after-tab');
+
+    expect(describeTabGroups(dock)).toEqual({ left: ['T', 'U'], top: ['V'], bottom: ['W', 'X'] });
+  });
+
+  it('leaves a tab group in place when it is dropped next to one of its own tabs given by id', () => {
+    const dock = renderDock();
+    const dragged = startGroupDrag(dock, 'left');
+    replaceTab(dock, 'T');
+
+    drop(dock, dragged, 'U', 'after-tab');
 
     expect(describeTabGroups(dock)).toEqual({ left: ['T', 'U'], top: ['V'], bottom: ['W', 'X'] });
   });
