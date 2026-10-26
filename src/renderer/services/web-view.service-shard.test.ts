@@ -9,7 +9,10 @@ import type {
   SavedTabInfo,
   WebViewTabProps,
 } from '@shared/models/docking-framework.model';
-import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
+import {
+  SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+  type SavedWebViewDefinition,
+} from '@shared/models/web-view.model';
 import {
   EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
   EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
@@ -3837,7 +3840,7 @@ describe('React web view bootstrap teardown', () => {
 });
 
 describe('mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent icon opt-in', () => {
-  const definition = {
+  const definition: SavedWebViewDefinition = {
     id: 'icon-web-view',
     webViewType: 'test.iconWebView',
     iconUrl: 'a.svg',
@@ -3867,6 +3870,20 @@ describe('mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent icon 
       isIconMonochrome: true,
     });
 
+    expect(merged?.isIconMonochrome).toBe(true);
+  });
+
+  it('keeps isIconMonochrome when iconUrl is restated unchanged', async () => {
+    const { mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent } = await import(
+      '@renderer/services/web-view.service-shard'
+    );
+
+    const merged = mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent(definition, {
+      iconUrl: 'a.svg',
+      title: 'x',
+    });
+
+    expect(merged?.title).toBe('x');
     expect(merged?.isIconMonochrome).toBe(true);
   });
 

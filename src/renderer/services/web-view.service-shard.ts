@@ -2272,9 +2272,11 @@ export function mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent
     }
   });
   // An icon opt-in must never outlive the icon it was set for: a new icon that doesn't restate it
-  // may be full-colour, and drawing that as a single-colour shape would erase it
+  // may be full-colour, and drawing that as a single-colour shape would erase it. Restating the
+  // same icon is not a new icon, so it keeps the opt-in.
   if (
     'iconUrl' in updateInfo &&
+    updateInfo.iconUrl !== webViewDefinition.iconUrl &&
     !('isIconMonochrome' in updateInfo) &&
     updatedWebViewDefinition.isIconMonochrome !== undefined
   ) {

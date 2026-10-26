@@ -73,7 +73,8 @@
 }
 
 // Forced colours repaint `background-color` to the system background, which would make a
-// mask-filled icon invisible
+// mask-filled icon invisible. `CanvasText` is the colour forced colours give the tab text, so the
+// icon still matches it, but it no longer changes with selection state in this mode.
 @media (forced-colors: active) {
   .tab-menu-icon-monochrome {
     forced-color-adjust: none;

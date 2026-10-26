@@ -340,22 +340,6 @@
             "command": "platformScriptureEditor.showCommentariesPanel"
           },
           {
-            "label": "%webView_platformScriptureEditor_showDictionaryPanel%",
-            "hiddenInterfaceModes": ["power"],
-            "localizeNotes": "Scripture editor top menu (Simple) > Tools > Dictionary — brings the Dictionary tab in the third column to the front",
-            "group": "platformScriptureEditor.simpleToolsPanels",
-            "order": 4,
-            "command": "platformLexicalTools.openDictionary"
-          },
-          {
-            "label": "%webView_platformScriptureEditor_showCommentsPanel%",
-            "hiddenInterfaceModes": ["power"],
-            "localizeNotes": "Scripture editor top menu (Simple) > Tools > Comments — brings the project's Comments tab in the third column to the front",
-            "group": "platformScriptureEditor.simpleToolsPanels",
-            "order": 6,
-            "command": "legacyCommentManager.showCommentListPanel"
-          },
-          {
             "label": "%webView_platformScriptureEditor_showTextCollectionPanel%",
             "hiddenInterfaceModes": ["power"],
             "localizeNotes": "Scripture editor top menu (Simple) > Tools > Text collection — brings the Text collection tab in the third column to the front",
@@ -364,12 +348,28 @@
             "command": "platformScriptureEditor.showTextCollectionPanel"
           },
           {
+            "label": "%webView_platformScriptureEditor_showDictionaryPanel%",
+            "hiddenInterfaceModes": ["power"],
+            "localizeNotes": "Scripture editor top menu (Simple) > Tools > Dictionary — brings the Dictionary tab in the third column to the front",
+            "group": "platformScriptureEditor.simpleToolsPanels",
+            "order": 4,
+            "command": "platformLexicalTools.openDictionary"
+          },
+          {
             "label": "%webView_platformScriptureEditor_openFind%",
             "hiddenInterfaceModes": ["power"],
             "localizeNotes": "Scripture editor top menu (Simple) > Tools > Find — brings the Find tab in the third column to the front",
             "group": "platformScriptureEditor.simpleToolsPanels",
             "order": 5,
             "command": "platformScripture.openFind"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_showCommentsPanel%",
+            "hiddenInterfaceModes": ["power"],
+            "localizeNotes": "Scripture editor top menu (Simple) > Tools > Comments — brings the project's Comments tab in the third column to the front",
+            "group": "platformScriptureEditor.simpleToolsPanels",
+            "order": 6,
+            "command": "legacyCommentManager.showCommentListPanel"
           },
           {
             "label": "%webView_platformScriptureEditor_openChecks%",

@@ -673,7 +673,7 @@ describe('PlatformTabTitle icon rendering', () => {
     const icon = renderIcon('a.svg', true);
 
     expect(icon).toHaveClass('tab-menu-icon-monochrome');
-    expect(icon.style.getPropertyValue('--tab-icon-mask')).toBe('url(a.svg)');
+    expect(icon.style.getPropertyValue('--tab-icon-mask')).toBe('url("a.svg")');
     expect(icon.style.backgroundImage).toBe('none');
   });
 
@@ -683,6 +683,16 @@ describe('PlatformTabTitle icon rendering', () => {
     expect(icon).not.toHaveClass('tab-menu-icon-monochrome');
     expect(icon.style.backgroundImage).toBe('url(a.png)');
     expect(icon.style.getPropertyValue('--tab-icon-mask')).toBe('');
+  });
+
+  // Asserted through the custom property because jsdom's CSS parser drops a `background-image` url
+  // containing spaces even when quoted, though browsers accept it
+  it('quotes an icon url that contains spaces or parentheses', () => {
+    const iconUrl = 'icons/my icon (1).svg';
+
+    expect(renderIcon(iconUrl, true).style.getPropertyValue('--tab-icon-mask')).toBe(
+      `url("${iconUrl}")`,
+    );
   });
 
   it('does not mask the default logo when there is no icon url', () => {

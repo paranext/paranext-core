@@ -9374,8 +9374,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   colour, with no icon-specific colour anywhere. That makes icons correct before a tab is opened and
   through theme switches, with no per-tab code. Providers set the opt-in, so it is present from the
   first render. Opt-in rules: the mask applies only when both `iconUrl` and the flag are set (no
-  icon still means the default logo, unmasked), and an `updateWebViewDefinition` that sets `iconUrl`
-  without restating the flag clears it (`mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent`),
+  icon still means the default logo, unmasked), and an `updateWebViewDefinition` that changes `iconUrl`
+  to a different url without restating the flag clears it (`mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent`),
   so a later full-colour icon is never drawn as a silhouette. Under forced colours the mask is
   filled with `CanvasText`, since forced colours would otherwise repaint it invisible.
 - **Alternatives:**

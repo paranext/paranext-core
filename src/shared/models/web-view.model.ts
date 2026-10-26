@@ -109,9 +109,9 @@ type WebViewDefinitionBase = {
    * theme and the tab's selection state without the WebView having to swap images. Leave unset for
    * a full-colour icon.
    *
-   * Ignored when there is no `iconUrl`. Setting `iconUrl` through `updateWebViewDefinition` without
-   * also setting this clears it, so a later full-colour icon is never drawn as a single-colour
-   * shape.
+   * Ignored when there is no `iconUrl`. Changing `iconUrl` to a different url through
+   * `updateWebViewDefinition` without also setting this clears it, so a later full-colour icon is
+   * never drawn as a single-colour shape.
    */
   isIconMonochrome?: boolean;
   /**
