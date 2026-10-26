@@ -217,8 +217,13 @@ function createMockPdps(): ScriptureFinderOverlayPDPs {
 /**
  * Creates mock PDPs that serve the given USX for every book and chapter read. For tests that need
  * verse text containing specific characters rather than the shared {@link TEST_BOOK_USX} fixture.
+ *
+ * @param projectSettings Read on every `getSetting` call, so a test can change a setting mid-test
  */
-function createSingleUsxMockPdps(usx: string): ScriptureFinderOverlayPDPs {
+function createSingleUsxMockPdps(
+  usx: string,
+  projectSettings: { allowInvisibleCharacters: boolean } = { allowInvisibleCharacters: false },
+): ScriptureFinderOverlayPDPs {
   // We only need this much of the PDPs for these tests
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   return {
@@ -229,7 +234,8 @@ function createSingleUsxMockPdps(usx: string): ScriptureFinderOverlayPDPs {
         if (key === 'platformScripture.diacriticCharacterClassRegex')
           return Promise.resolve('\\p{Mn}\\p{Mc}\\p{Lm}');
         if (key === 'platformScripture.wordMedialCharacterRegex') return Promise.resolve('');
-        if (key === 'platformScripture.allowInvisibleCharacters') return Promise.resolve(false);
+        if (key === 'platformScripture.allowInvisibleCharacters')
+          return Promise.resolve(projectSettings.allowInvisibleCharacters);
         if (key === 'platformScripture.wordBreakRegex') return Promise.resolve('\\s+');
         return Promise.resolve(undefined);
       }),
@@ -2066,6 +2072,7 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       vi.mocked(mockPdps['platform.base'].getSetting).mockImplementation((key: string) => {
         if (key === 'platformScripture.structureProtected')
           return Promise.reject(new Error('boom'));
+        if (key === 'platformScripture.allowInvisibleCharacters') return Promise.resolve(false);
         return Promise.resolve(undefined);
       });
       // offsets 5-8 = "The"; replacement adds \v 9 marker → would be rejected if setting read fails
@@ -2648,5 +2655,93 @@ describe('ScriptureFinderProjectDataProviderEngine replaces only the matched tex
         expect(after).toMatch(/Then Abraham was the father of (Jacob|Isaac)\./);
       },
     );
+  });
+
+  // Replace writes the whole chapter back as USFM, so every no-break space and tilde in it is
+  // rewritten, not just the matched text. How USFM spells them depends on the project's
+  // "Allow invisible characters" setting.
+  describe('the rest of the chapter keeps its no-break spaces and tildes', () => {
+    const NBSP = '\u00A0';
+    const verse = (text: string) => `<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.0">
+  <book code="MAT" style="id">Matthew</book>
+  <chapter number="1" style="c" sid="MAT 1"/>
+  <para style="p"><verse number="1" style="v" sid="MAT 1:1"/>${text}<verse eid="MAT 1:1"/></para>
+  <chapter eid="MAT 1"/>
+</usx>`;
+
+    beforeEach(() => {
+      vi.mocked(papi.settings.get).mockResolvedValue('power');
+    });
+
+    async function replaceIsaacWithJacob(
+      engine: ScriptureFinderProjectDataProviderEngine,
+    ): Promise<void> {
+      const results = await findInMat1(engine, 'Isaac');
+      expect(results.map((result) => result.text)).toEqual(['Isaac']);
+      await engine.replace(
+        results.map(({ start, end }) => ({ start, end })),
+        'Jacob',
+      );
+    }
+
+    it('setting off: a no-break space is written as ~, which Paratext reads back as a no-break space', async () => {
+      const pdps = createSingleUsxMockPdps(verse(`Mr.${NBSP}Abraham fathered Isaac.`));
+      await replaceIsaacWithJacob(new ScriptureFinderProjectDataProviderEngine(pdps));
+
+      expect(writtenChapterUsfm(pdps)).toContain('Mr.~Abraham fathered Jacob.');
+    });
+
+    it('setting on: a no-break space and a tilde are both written as themselves', async () => {
+      const pdps = createSingleUsxMockPdps(verse(`Mr.${NBSP}Abraham~1 fathered Isaac.`), {
+        allowInvisibleCharacters: true,
+      });
+      await replaceIsaacWithJacob(new ScriptureFinderProjectDataProviderEngine(pdps));
+
+      expect(writtenChapterUsfm(pdps)).toContain(`Mr.${NBSP}Abraham~1 fathered Jacob.`);
+    });
+
+    it('turning the setting on after a find is honored by the next replace', async () => {
+      const projectSettings = { allowInvisibleCharacters: false };
+      const pdps = createSingleUsxMockPdps(
+        verse(`Mr.${NBSP}Abraham fathered Isaac.`),
+        projectSettings,
+      );
+      const engine = new ScriptureFinderProjectDataProviderEngine(pdps);
+      // Reads the chapter while the setting is still off
+      await findInMat1(engine, 'Isaac');
+
+      projectSettings.allowInvisibleCharacters = true;
+      const settingSubscription = vi
+        .mocked(pdps['platform.base'].subscribeSetting)
+        .mock.calls.find(([key]) => key === 'platformScripture.allowInvisibleCharacters');
+      if (!settingSubscription) throw new Error('The engine never subscribed to the setting');
+      // The mock records the engine's change callback untyped; it is the second argument.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      (settingSubscription[1] as () => void)();
+
+      await replaceIsaacWithJacob(engine);
+
+      expect(writtenChapterUsfm(pdps)).toContain(`Mr.${NBSP}Abraham fathered Jacob.`);
+    });
+
+    it('refuses to replace rather than guess when the setting cannot be read', async () => {
+      const pdps = createSingleUsxMockPdps(verse(`Mr.${NBSP}Abraham fathered Isaac.`));
+      const engine = new ScriptureFinderProjectDataProviderEngine(pdps);
+      const range = {
+        start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 0 },
+        end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 3 },
+      };
+      const { getSetting } = pdps['platform.base'];
+      const readSetting = vi.mocked(getSetting).getMockImplementation();
+      vi.mocked(getSetting).mockImplementation((key: string) =>
+        key === 'platformScripture.allowInvisibleCharacters'
+          ? Promise.reject(new Error('setting unavailable'))
+          : readSetting?.(key),
+      );
+
+      await expect(engine.replace([range], 'Mrs.')).rejects.toThrow('setting unavailable');
+      expect(writtenChapterUsfm(pdps)).toBeUndefined();
+    });
   });
 });
