@@ -128,9 +128,10 @@ async function openSelector({ canvasElement }: { canvasElement: HTMLElement }) {
 }
 
 /**
- * The selector when the team shared resources: theirs first, each with a lock saying the user can't
- * remove it, then the user's own, including a resource downloaded but never added. The Arabic full
- * name shows the lock staying on the panel's side of a right-to-left name.
+ * The selector when the team shared resources: theirs first, with a lock on each and a caption
+ * saying only a project administrator can remove them, then the user's own, including a resource
+ * downloaded but never added. The Arabic full name shows the lock staying on the panel's side of a
+ * right-to-left name.
  */
 export const TeamAndUserResources: Story = {
   tags: ['!autodocs'],

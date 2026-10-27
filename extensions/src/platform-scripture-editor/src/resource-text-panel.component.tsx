@@ -13,10 +13,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   Spinner,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
   useExtraValidMarkers,
   useViewVisibility,
 } from 'platform-bible-react';
@@ -37,7 +33,7 @@ import {
   waitForLayoutToSettle,
 } from './editor-dom.util';
 import { getRefLabel, getResourceReferenceRowId } from './resource-reference.utils';
-import { splitPickerResourcesBySource } from './resource-selection.utils';
+import { isTeamPickerResource, splitPickerResourcesBySource } from './resource-selection.utils';
 import type { PickerResource } from './downloaded-resources.utils';
 import type { ResourcePanelReadiness } from './resource-panel-readiness.utils';
 import { PanelReadinessView } from './panel-readiness-view.component';
@@ -98,14 +94,17 @@ type ResourceSelectorDropdownProps = {
   teamResourcesLabel: string;
   /** Heading over the user's own resources */
   userResourcesLabel: string;
-  /** Tells the user a team resource is not theirs to remove */
+  /** Says, once under the team heading, that only a project administrator can remove those rows */
+  teamResourcesCaption: string;
+  /** Names the lock on each team row */
   teamResourceLockLabel: string;
 };
 
 /**
  * The panel's resource selector. When the team shared any resources for this tab, they are listed
- * first under their own heading, each with a lock saying the user can't remove it, and the user's
- * own follow under a second heading. With none, the rows are one unlabeled list.
+ * first under their own heading, with a caption saying only a project administrator can remove them
+ * and a lock on each, and the user's own follow under a second heading. With none, the rows are one
+ * unlabeled list.
  */
 function ResourceSelectorDropdown({
   filteredResources,
@@ -116,18 +115,21 @@ function ResourceSelectorDropdown({
   downloadResourcesLabel,
   teamResourcesLabel,
   userResourcesLabel,
+  teamResourcesCaption,
   teamResourceLockLabel,
 }: ResourceSelectorDropdownProps) {
   const headingIdPrefix = useId();
   const teamHeadingId = `${headingIdPrefix}-team`;
+  const teamCaptionId = `${headingIdPrefix}-team-caption`;
   const userHeadingId = `${headingIdPrefix}-user`;
   const selectedRowId = selectedRef ? getResourceReferenceRowId(selectedRef.reference) : undefined;
   // TODO(PT-4063): order the team's rows the way the administrator pins them.
   const { team, user } = splitPickerResourcesBySource(filteredResources);
 
-  const renderRow = (row: PickerResource, isTeamRow: boolean) => {
+  const renderRow = (row: PickerResource) => {
     const rowId = getResourceReferenceRowId(row.reference);
-    const item = (
+    const label = getRefLabel(row.reference, dblResources);
+    return (
       <DropdownMenuCheckboxItem
         key={rowId}
         checked={rowId === selectedRowId}
@@ -137,12 +139,12 @@ function ResourceSelectorDropdown({
       >
         {/* `dir="auto"` on the name rather than the item: `getRefLabel` returns the joined
             short/full name as one text node, so the name needs its own direction, while the check
-            and the lock keep to the panel's side. */}
-        <span className="tw:min-w-0" dir="auto">
-          {getRefLabel(row.reference, dblResources)}
+            and the lock keep to the panel's side. A long name ellipsizes rather than wrapping, and
+            `title` shows it whole. */}
+        <span className="tw:min-w-0 tw:truncate" dir="auto" title={label}>
+          {label}
         </span>
-        {/* Screen readers get the lock's meaning from this label, as part of the row's name. */}
-        {isTeamRow && (
+        {isTeamPickerResource(row) && (
           <span
             role="img"
             aria-label={teamResourceLockLabel}
@@ -152,18 +154,6 @@ function ResourceSelectorDropdown({
           </span>
         )}
       </DropdownMenuCheckboxItem>
-    );
-    if (!isTeamRow) return item;
-    // The same text for sighted users. It wraps the whole row so keyboard focus opens it, and sits
-    // beside the menu because hovering a row focuses it, which opens the tooltip at once. Clearing
-    // `aria-describedby` keeps screen readers from reading the label a second time.
-    return (
-      <Tooltip key={rowId}>
-        <TooltipTrigger asChild aria-describedby={undefined}>
-          {item}
-        </TooltipTrigger>
-        <TooltipContent side="left">{teamResourceLockLabel}</TooltipContent>
-      </Tooltip>
     );
   };
 
@@ -185,23 +175,30 @@ function ResourceSelectorDropdown({
         </DropdownMenuTrigger>
         <DropdownMenuContent className="tw:w-72">
           {team.length === 0 ? (
-            filteredResources.map((row) => renderRow(row, false))
+            user.map(renderRow)
           ) : (
-            <TooltipProvider>
-              <DropdownMenuGroup aria-labelledby={teamHeadingId}>
+            <>
+              {/* The caption says once what the locks mean, rather than repeating it on every row. */}
+              <DropdownMenuGroup aria-labelledby={teamHeadingId} aria-describedby={teamCaptionId}>
                 <DropdownMenuLabel id={teamHeadingId}>{teamResourcesLabel}</DropdownMenuLabel>
-                {team.map((row) => renderRow(row, true))}
+                <p
+                  id={teamCaptionId}
+                  className="tw:px-1.5 tw:pb-1 tw:text-xs tw:text-muted-foreground"
+                >
+                  {teamResourcesCaption}
+                </p>
+                {team.map(renderRow)}
               </DropdownMenuGroup>
               {user.length > 0 && (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuGroup aria-labelledby={userHeadingId}>
                     <DropdownMenuLabel id={userHeadingId}>{userResourcesLabel}</DropdownMenuLabel>
-                    {user.map((row) => renderRow(row, false))}
+                    {user.map(renderRow)}
                   </DropdownMenuGroup>
                 </>
               )}
-            </TooltipProvider>
+            </>
           )}
           {onShowResourcePicker && (
             <>
@@ -820,6 +817,10 @@ export function ResourceTextPanel({
         )}
         teamResourcesLabel={localize(localizedStrings, '%webView_resourcePanel_teamResources%')}
         userResourcesLabel={localize(localizedStrings, '%webView_resourcePanel_userResources%')}
+        teamResourcesCaption={localize(
+          localizedStrings,
+          '%webView_resourcePanel_teamResourcesCaption%',
+        )}
         teamResourceLockLabel={localize(
           localizedStrings,
           '%webView_resourcePanel_teamResourceLock%',
