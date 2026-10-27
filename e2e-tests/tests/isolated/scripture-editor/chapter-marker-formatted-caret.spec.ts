@@ -148,8 +148,9 @@ test.describe('scripture editor chapter-marker repair in the Formatted view', ()
     await test.step('deleting a selection from the chapter number into verse 1 removes the marker', async () => {
       // The click puts the focus in the editor, so the keys below reach it.
       await editorInput.getByText('Naomi had a relative').first().click();
-      // From the chapter number to three characters into verse 1, as a mouse drag would select it.
-      const selected = await editorEvalFrame.evaluate(() => {
+      // Set programmatically, as the selection a mouse drag from the chapter number to three
+      // characters into verse 1 leaves; the Delete presses below go through real key input.
+      const selectedText = await editorEvalFrame.evaluate(() => {
         const chapter = document.querySelector('.editor-input [data-marker="c"]');
         const verse1Text = Array.from(document.querySelectorAll('.editor-input *'))
           .flatMap((element) => Array.from(element.childNodes))
@@ -158,7 +159,7 @@ test.describe('scripture editor chapter-marker repair in the Formatted view', ()
               node.nodeType === Node.TEXT_NODE &&
               (node.textContent ?? '').startsWith('Naomi had a relative'),
           );
-        if (!chapter?.parentElement || !verse1Text) return false;
+        if (!chapter?.parentElement || !verse1Text) return undefined;
         const range = document.createRange();
         range.setStart(
           chapter.parentElement,
@@ -168,9 +169,12 @@ test.describe('scripture editor chapter-marker repair in the Formatted view', ()
         const selection = document.getSelection();
         selection?.removeAllRanges();
         selection?.addRange(range);
-        return true;
+        return range.toString();
       });
-      expect(selected, 'the chapter number and verse 1 are in the DOM').toBe(true);
+      // The chapter number first, then verse 1's marker and its first characters.
+      expect(selectedText, 'the selection runs from the chapter number into verse 1').toMatch(
+        /^2.*Nao$/s,
+      );
       // The structure guard's two-step delete: the first Delete arms, the second removes.
       await mainPage.keyboard.press('Delete');
       await expect(editorInput).toHaveClass(/\bverse-delete-armed\b/, { timeout: 10_000 });
