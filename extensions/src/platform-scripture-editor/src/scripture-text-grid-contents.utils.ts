@@ -81,8 +81,9 @@ function getBibleTextId(reference: unknown): string | undefined {
  * Only the admin `referencedProjectsAndResources` list is read — model texts are decoupled from the
  * text-collection feature. A resource merely present in the referenced list with no flag (e.g.
  * downloaded for another feature) is NOT owned — the user can add it to their own list like any
- * other resource. An overlay slot whose id is no longer in the referenced list is ignored: there is
- * no reference left to render.
+ * other resource. View Options still lists it as the team's (see {@link getViewOptionsTexts}), and
+ * checking it there writes an overlay slot, which makes it owned from then on. An overlay slot
+ * whose id is no longer in the referenced list is ignored: there is no reference left to render.
  *
  * `adminFlagged` is `true` when the resource is currently text-collection in the referenced list.
  */
@@ -306,8 +307,8 @@ export function setUserDisplay(
 
 /**
  * Removes a resource from the user's per-user list entirely (the hover-X remove affordance). No-op
- * when the id is not in the user list — including admin entries, which never live there
- * (defense-in-depth).
+ * when the id is not in the user list. View Options offers no remove for the team's rows, even when
+ * the user listed one too.
  *
  * Only Bible-text references (project / DBL resource) can be removed: matching is by
  * {@link getBibleTextId}, which returns `undefined` for non-Bible-text references (e.g.
