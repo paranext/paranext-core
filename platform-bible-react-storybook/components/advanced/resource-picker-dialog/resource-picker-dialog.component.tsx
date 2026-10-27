@@ -1,4 +1,5 @@
 import { Alert, AlertDescription } from '@/components/shadcn-ui/alert';
+import { Button } from '@/components/shadcn-ui/button';
 import { EmptyState } from '@/components/basics/empty-state.component';
 import { RetryableErrorView } from '@/components/basics/retryable-error-view.component';
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/shadcn-ui/dialog';
@@ -16,7 +17,7 @@ import {
 } from '@/components/advanced/multi-select-combo-box.component';
 import { SearchBar } from '@/components/basics/search-bar.component';
 import { DblResourceData, ResourceType, formatReplacementString } from 'platform-bible-utils';
-import { Check, CloudOff, Lock, SearchX } from 'lucide-react';
+import { Check, CloudOff, Lock, SearchX, X } from 'lucide-react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type RefObject } from 'react';
 import { Spinner } from '@/components/basics/spinner.component';
 import {
@@ -33,7 +34,14 @@ import {
 export const RESOURCE_PICKER_DIALOG_STRING_KEYS = Object.freeze([
   '%resourcePicker_title%',
   '%resourcePicker_description%',
+  '%resourcePicker_description_withRemove%',
   '%resourcePicker_section_already_selected%',
+  '%resourcePicker_section_team%',
+  '%resourcePicker_section_team_caption%',
+  '%resourcePicker_section_user%',
+  '%resourcePicker_section_user_caption%',
+  '%resourcePicker_teamLock%',
+  '%resourcePicker_removeFromList%',
   '%resourcePicker_section_installed%',
   '%resourcePicker_section_available_to_download%',
   '%resourcePicker_no_results%',
@@ -114,12 +122,26 @@ export interface ResourcePickerDialogProps {
   allowSelectingInstalled?: boolean;
   /** IDs of resources already selected in the calling panel */
   selectedResourceIds?: string[];
+  /**
+   * IDs among `selectedResourceIds` that belong to the team: the resources a project administrator
+   * shared, which the user cannot deselect. An ID that is not also in `selectedResourceIds` is
+   * ignored.
+   *
+   * When provided, the selected rows are listed in two sections instead of one "Included" section:
+   * "Team resources", each marked with a lock and never selectable, and "User resources", which
+   * `onRemove` gives a remove button. When omitted, every selected row is listed under "Included".
+   * IDs are compared exactly, as `selectedResourceIds` are.
+   */
+  teamResourceIds?: string[];
   /** Localized strings — use RESOURCE_PICKER_DIALOG_STRING_KEYS with useLocalizedStrings */
   localizedStrings: ResourcePickerDialogLocalizedStrings;
   /**
    * When true, clicking an "Already Selected" row calls `onSelect` just like any other row, letting
    * the caller treat it as a deselect. Defaults to false (Already Selected rows stay
    * non-interactive, showing only a checkmark) to preserve existing consumers' behavior.
+   *
+   * Applies only to the single "Included" section, so it has no effect when `teamResourceIds` is
+   * provided; use `onRemove` there.
    */
   allowDeselect?: boolean;
   /**
@@ -133,6 +155,12 @@ export interface ResourcePickerDialogProps {
   getDisabledReason?: (resource: DblResourceData) => string | undefined;
   /** Called when the user clicks a resource row to select it */
   onSelect: (resource: DblResourceData) => void;
+  /**
+   * Called when the user presses the remove button on a row under "User resources". Those rows get
+   * the button only when this is provided and `teamResourceIds` is too; the rest of the row is
+   * never clickable, so a click meant to select a resource cannot remove it.
+   */
+  onRemove?: (resource: DblResourceData) => void;
   /**
    * Ref to the search input, for a host that decides where focus lands when the dialog opens.
    *
@@ -222,21 +250,37 @@ function DisabledResourceRow({ resource, reason }: { resource: DblResourceData; 
  * Component to list filtered resources entries for one of the resource picker sections. Optionally
  * allows clicking and selecting when `onSelect` is not undefined for the cases that the resource
  * can be picked and is not already picked.
+ *
+ * `indicator` fills the fixed-width slot at the start of each row, and `indicatorLabel` is what a
+ * screen reader hears for it — the section label when omitted. With `onRemove`, a remove button
+ * labelled by `getRemoveLabel` takes that slot instead, and the row itself is not clickable. A
+ * `caption` under the heading also describes each selectable row or remove button, so it can say
+ * what using one does.
  */
 function ResourceSection({
   label,
+  caption,
   resources,
   onSelect,
-  showCheckmark,
+  onRemove,
+  getRemoveLabel,
+  indicator,
+  indicatorLabel,
   getDisabledReason,
 }: {
   label: string;
+  caption?: string;
   resources: DblResourceData[];
   onSelect?: (resource: DblResourceData) => void;
-  showCheckmark?: boolean;
+  onRemove?: (resource: DblResourceData) => void;
+  getRemoveLabel?: (resource: DblResourceData) => string;
+  indicator?: 'check' | 'lock';
+  indicatorLabel?: string;
   getDisabledReason?: (resource: DblResourceData) => string | undefined;
 }) {
+  const captionId = useId();
   if (resources.length === 0) return undefined;
+  const IndicatorIcon = indicator === 'lock' ? Lock : Check;
   return (
     <>
       <TableRow className="tw:border-0 tw:hover:bg-transparent">
@@ -246,6 +290,17 @@ function ResourceSection({
           </Label>
         </TableCell>
       </TableRow>
+      {caption && (
+        <TableRow className="tw:border-0 tw:hover:bg-transparent">
+          <TableCell
+            id={captionId}
+            colSpan={4}
+            className="tw:border-0 tw:pt-0 tw:pb-1 tw:text-xs tw:whitespace-normal tw:text-muted-foreground"
+          >
+            {caption}
+          </TableCell>
+        </TableRow>
+      )}
       {resources.map((r) => {
         const disabledReason = getDisabledReason?.(r);
         if (disabledReason)
@@ -253,12 +308,20 @@ function ResourceSection({
         return (
           <TableRow
             key={r.dblEntryUid}
+            // A row that cannot be picked still takes the pointer, so the hover label on a
+            // truncated name stays reachable (see `.claude/rules/ux/picker-row-layout.md`).
             className={
-              onSelect ? 'tw:cursor-pointer tw:border-0' : 'tw:pointer-events-none tw:border-0'
+              onSelect
+                ? 'tw:cursor-pointer tw:border-0'
+                : 'tw:cursor-default tw:border-0 tw:hover:bg-transparent'
             }
             role={onSelect ? 'button' : undefined}
             aria-label={onSelect ? r.displayName : undefined}
+            aria-describedby={onSelect && caption ? captionId : undefined}
             onClick={onSelect ? () => onSelect(r) : undefined}
+            // `TableRow` draws its ring on `:focus`, so a click that focused a row it cannot pick
+            // would read as a selection. Arrow keys still focus it, and the ✕ still gets its click.
+            onMouseDown={onSelect ? undefined : (e) => e.preventDefault()}
             onKeyDown={
               onSelect
                 ? (e) => {
@@ -274,11 +337,31 @@ function ResourceSection({
                 is a hard width the column cannot grow past, and the base 8px start padding leaves the
                 14px glyph too little room to sit in. The two have to be read together. */}
             <TableCell className="tw:border-0 tw:px-1 tw:py-1">
-              {showCheckmark && (
-                <>
-                  <Check className="tw:h-3.5 tw:w-3.5" aria-hidden />
-                  <span className="tw:sr-only">{label}</span>
-                </>
+              {onRemove ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    {/* `size-5` fills the slot's 20px content width; the stock icon sizes are
+                        wider than the column. */}
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="tw:size-5"
+                      aria-label={getRemoveLabel?.(r) ?? r.displayName}
+                      aria-describedby={caption ? captionId : undefined}
+                      onClick={() => onRemove(r)}
+                    >
+                      <X className="tw:h-3.5 tw:w-3.5" aria-hidden />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{getRemoveLabel?.(r) ?? r.displayName}</TooltipContent>
+                </Tooltip>
+              ) : (
+                indicator && (
+                  <>
+                    <IndicatorIcon className="tw:h-3.5 tw:w-3.5" aria-hidden />
+                    <span className="tw:sr-only">{indicatorLabel ?? label}</span>
+                  </>
+                )
               )}
             </TableCell>
             <ResourceRowCells resource={r} />
@@ -374,12 +457,14 @@ export default function ResourcePickerDialog({
   areDownloadsUnavailable,
   resourceType,
   selectedResourceIds,
+  teamResourceIds,
   notice,
   allowSelectingInstalled = true,
   localizedStrings,
   allowDeselect,
   getDisabledReason,
   onSelect,
+  onRemove,
   searchInputRef: externalSearchInputRef,
 }: ResourcePickerDialogProps) {
   const [searchText, setSearchText] = useState('');
@@ -458,6 +543,18 @@ export default function ResourcePickerDialog({
     [filteredResources, selectedResourceIds],
   );
 
+  // Split only when the caller says which selected rows are the team's; otherwise every selected row
+  // stays under the one "Included" section.
+  const isSelectionSplit = teamResourceIds !== undefined;
+  const teamSelected = useMemo(
+    () => alreadySelected.filter((r) => teamResourceIds?.includes(r.dblEntryUid)),
+    [alreadySelected, teamResourceIds],
+  );
+  const userSelected = useMemo(
+    () => alreadySelected.filter((r) => !teamResourceIds?.includes(r.dblEntryUid)),
+    [alreadySelected, teamResourceIds],
+  );
+
   const installed = useMemo(
     () =>
       filteredResources.filter((r) => r.installed && !selectedResourceIds?.includes(r.dblEntryUid)),
@@ -478,7 +575,20 @@ export default function ResourcePickerDialog({
     alreadySelected.length === 0 && installed.length === 0 && toDownload.length === 0;
 
   const titleText = localizeString(localizedStrings, '%resourcePicker_title%');
-  const descriptionText = localizeString(localizedStrings, '%resourcePicker_description%');
+  // Only a split list names removing: there, the user's own selected rows are the ones they can
+  // remove, and the description tells them so.
+  // Counted before the user's filters, so the description does not change as they search.
+  const canRemoveOwn =
+    isSelectionSplit &&
+    !!onRemove &&
+    typeScopedResources.some(
+      (r) =>
+        selectedResourceIds?.includes(r.dblEntryUid) && !teamResourceIds?.includes(r.dblEntryUid),
+    );
+  const descriptionText = localizeString(
+    localizedStrings,
+    canRemoveOwn ? '%resourcePicker_description_withRemove%' : '%resourcePicker_description%',
+  );
   const searchPlaceholder = localizeString(localizedStrings, '%resourcePicker_search_placeholder%');
   const anyLanguageText = localizeString(localizedStrings, '%resourcePicker_language_filter_any%');
   const languageSearchPlaceholder = localizeString(
@@ -493,6 +603,17 @@ export default function ResourcePickerDialog({
     localizedStrings,
     '%resourcePicker_section_already_selected%',
   );
+  const teamLabel = localizeString(localizedStrings, '%resourcePicker_section_team%');
+  const teamCaption = localizeString(localizedStrings, '%resourcePicker_section_team_caption%');
+  const teamLockLabel = localizeString(localizedStrings, '%resourcePicker_teamLock%');
+  const userLabel = localizeString(localizedStrings, '%resourcePicker_section_user%');
+  const userCaption = localizeString(localizedStrings, '%resourcePicker_section_user_caption%');
+  const removeFromListTemplate = localizeString(
+    localizedStrings,
+    '%resourcePicker_removeFromList%',
+  );
+  const getRemoveLabel = (resource: DblResourceData) =>
+    formatReplacementString(removeFromListTemplate, { resourceName: resource.displayName });
   const installedLabel = localizeString(localizedStrings, '%resourcePicker_section_installed%');
   const toDownloadLabel = localizeString(
     localizedStrings,
@@ -711,12 +832,34 @@ export default function ResourcePickerDialog({
                 <col className="tw:w-1/6" />
               </colgroup>
               <TableBody>
-                <ResourceSection
-                  label={alreadySelectedLabel}
-                  resources={alreadySelected}
-                  onSelect={allowDeselect ? onSelect : undefined}
-                  showCheckmark
-                />
+                {isSelectionSplit ? (
+                  <>
+                    {/* The lock takes the check mark's place rather than sitting beside it: the
+                        indicator column holds one glyph. */}
+                    <ResourceSection
+                      label={teamLabel}
+                      caption={teamCaption}
+                      resources={teamSelected}
+                      indicator="lock"
+                      indicatorLabel={teamLockLabel}
+                    />
+                    <ResourceSection
+                      label={userLabel}
+                      caption={canRemoveOwn ? userCaption : undefined}
+                      resources={userSelected}
+                      onRemove={onRemove}
+                      getRemoveLabel={getRemoveLabel}
+                      indicator="check"
+                    />
+                  </>
+                ) : (
+                  <ResourceSection
+                    label={alreadySelectedLabel}
+                    resources={alreadySelected}
+                    onSelect={allowDeselect ? onSelect : undefined}
+                    indicator="check"
+                  />
+                )}
                 <ResourceSection
                   label={installedLabel}
                   resources={installed}
