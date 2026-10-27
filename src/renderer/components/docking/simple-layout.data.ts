@@ -152,22 +152,22 @@ export const simpleLayout: LayoutBase = {
                 },
               },
               {
-                id: 'c7e4a8b2-3d91-4f06-8e5a-1b2c9d0e7f83',
+                id: 'f1e2d3c4-b5a6-4789-9c0d-1e2f3a4b5c6d',
                 tabType: TAB_TYPE_WEBVIEW,
                 data: {
-                  webViewType: 'legacyCommentManager.commentListPanel',
-                  id: 'c7e4a8b2-3d91-4f06-8e5a-1b2c9d0e7f83',
+                  webViewType: FIND_WEBVIEW_TYPE,
+                  id: 'f1e2d3c4-b5a6-4789-9c0d-1e2f3a4b5c6d',
                   contentType: 'react',
                   isClosable: false,
                   state: {},
                 },
               },
               {
-                id: 'f1e2d3c4-b5a6-4789-9c0d-1e2f3a4b5c6d',
+                id: 'c7e4a8b2-3d91-4f06-8e5a-1b2c9d0e7f83',
                 tabType: TAB_TYPE_WEBVIEW,
                 data: {
-                  webViewType: FIND_WEBVIEW_TYPE,
-                  id: 'f1e2d3c4-b5a6-4789-9c0d-1e2f3a4b5c6d',
+                  webViewType: 'legacyCommentManager.commentListPanel',
+                  id: 'c7e4a8b2-3d91-4f06-8e5a-1b2c9d0e7f83',
                   contentType: 'react',
                   isClosable: false,
                   state: {},

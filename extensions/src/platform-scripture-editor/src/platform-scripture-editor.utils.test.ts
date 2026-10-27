@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+import { LUCIDE_ICON_NAMES } from 'platform-bible-react/experimental';
 import { ScriptureRange } from 'platform-scripture-editor';
 import type PapiBackend from '@papi/backend';
 import { newPlatformError, normalizeProjectId, UsjTextContentLocation } from 'platform-bible-utils';
@@ -6264,6 +6265,23 @@ function savedGrid(
 }
 
 describe('buildScriptureTextGridWebView', () => {
+  it.each(['simple', 'power'] as const)(
+    'opts its icon in to theme colouring in %s mode',
+    async (interfaceMode) => {
+      const papi = createGridProviderMockPapi(interfaceMode);
+
+      const definition = await buildScriptureTextGridWebView(
+        papi,
+        savedGrid('p1'),
+        {},
+        GRID_ASSETS,
+      );
+
+      expect(definition.iconName).toBe('library');
+      expect(LUCIDE_ICON_NAMES).toContain(definition.iconName);
+    },
+  );
+
   it('binds the project a switch supplied rather than the one the tab already had', async () => {
     // The provider half of the re-point. Inverting this precedence leaves the panel on the
     // outgoing project, which is the bug this whole mechanism exists to prevent — and it is only

@@ -339,22 +339,22 @@
             "command": "platformScriptureEditor.showCommentariesPanel"
           },
           {
-            "label": "%webView_platformScriptureEditor_showDictionaryPanel%",
-            "hiddenInterfaceModes": ["power"],
-            "localizeNotes": "Scripture editor top menu (Simple) > Tools and resources > Dictionary — brings the Dictionary tab in the third column to the front",
-            "iconNameBefore": "book-a",
-            "group": "platformScriptureEditor.simpleToolsPanels",
-            "order": 3,
-            "command": "platformLexicalTools.openDictionary"
-          },
-          {
             "label": "%webView_platformScriptureEditor_showTextCollectionPanel%",
             "hiddenInterfaceModes": ["power"],
             "localizeNotes": "Scripture editor top menu (Simple) > Tools and resources > Text collection — brings the Text collection tab in the third column to the front",
             "iconNameBefore": "library",
             "group": "platformScriptureEditor.simpleToolsPanels",
-            "order": 4,
+            "order": 3,
             "command": "platformScriptureEditor.showTextCollectionPanel"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_showDictionaryPanel%",
+            "hiddenInterfaceModes": ["power"],
+            "localizeNotes": "Scripture editor top menu (Simple) > Tools and resources > Dictionary — brings the Dictionary tab in the third column to the front",
+            "iconNameBefore": "book-a",
+            "group": "platformScriptureEditor.simpleToolsPanels",
+            "order": 4,
+            "command": "platformLexicalTools.openDictionary"
           },
           {
             "label": "%webView_platformScriptureEditor_openFind%",

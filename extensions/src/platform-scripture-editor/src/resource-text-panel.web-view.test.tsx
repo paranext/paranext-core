@@ -52,12 +52,9 @@ const {
   interfaceMode: { current: 'simple', isLoading: false },
 }));
 
-// @papi/frontend — papi default export used for themes subscription and commands
+// @papi/frontend — papi default export used for commands and project lookup
 vi.mock('@papi/frontend', () => ({
   default: {
-    themes: {
-      subscribeCurrentTheme: vi.fn(() => Promise.resolve(vi.fn())),
-    },
     commands: {
       sendCommand: vi.fn(() => Promise.resolve([])),
     },
@@ -127,7 +124,6 @@ vi.mock('platform-bible-react', async (importOriginal) => {
   return {
     ...original,
     useExtraValidMarkers: () => [],
-    useTabIconSelection: () => 'papi-extension://platformScriptureEditor/assets/book-open.svg',
     // The real hook builds an IntersectionObserver, which jsdom does not implement. These
     // renders stand in for a visible panel; visibility gates only the reveal-scroll effect,
     // never which empty state — or disclosure — is rendered.

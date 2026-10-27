@@ -4,7 +4,6 @@ import { useDataProvider, useDialogCallback, useLocalizedStrings } from '@papi/f
 import {
   Button,
   EmptyState,
-  pickTabIconUrl,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -15,14 +14,12 @@ import {
   RetryableErrorView,
   useRetryablePromise,
   useViewVisibility,
-  type TabIconUrls,
 } from 'platform-bible-react';
 import { CloudOff, Settings2 } from 'lucide-react';
 import {
   DblResourceData,
   formatReplacementString,
   getErrorMessage,
-  isPlatformError,
   LocalizeKey,
 } from 'platform-bible-utils';
 import type {
@@ -143,17 +140,6 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   REORDER_HINT_KEY,
   ...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
 ];
-
-// Theme-adaptive tab icon: the platform paints the tab icon as a static CSS background-image, so a
-// `currentColor` SVG can't follow the theme. We swap the `iconUrl` based on both the current theme
-// and the tab's selected state (light theme: white when selected, near-black when unselected,
-// mid-slate fallback when selection state is unknown; dark theme: always light).
-const TAB_ICON_URLS: TabIconUrls = {
-  lightDefault: 'papi-extension://platformScriptureEditor/assets/library.svg',
-  dark: 'papi-extension://platformScriptureEditor/assets/library-dark.svg',
-  lightSelected: 'papi-extension://platformScriptureEditor/assets/library-selected.svg',
-  lightUnselected: 'papi-extension://platformScriptureEditor/assets/library-unselected.svg',
-};
 
 /** Props {@link ScriptureTextGridProjectView} takes from the web view that hosts it. */
 type ScriptureTextGridProjectViewProps = {
@@ -663,7 +649,6 @@ function ScriptureTextGridProjectView({
 globalThis.webViewComponent = function ScriptureTextGridWebView({
   id: webViewId,
   projectId,
-  updateWebViewDefinition,
   useWebViewScrollGroupScrRef,
   useWebViewState,
 }: WebViewProps) {
@@ -689,8 +674,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 
   // Owned here for the same reason `scrRef` is: it is one fact about this web view, and the grid
   // renders a cell per resource. Subscribing per cell would build an `IntersectionObserver` each,
-  // all watching the same document for the same answer. The tab icon reads this answer too (via
-  // `pickTabIconUrl` rather than `useTabIconSelection`), so the web view holds exactly one.
+  // all watching the same document for the same answer, so the web view holds exactly one.
   const isViewVisible = useViewVisibility();
 
   // The project whose text collection the grid shows. Opened from the default layout the tab carries
@@ -840,35 +824,6 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // blank until the tab was activated once, even though updateWebViewDefinition had already pushed
   // the correct value. Setting it in the provider means the tab shows the right title/tooltip from
   // its very first render, independent of this web view's own mount timing.
-
-  // Pick the tab icon variant to match the current theme and selected state. The tab icon is
-  // painted by the platform as a static background-image, so a `currentColor` SVG can't follow the
-  // theme — subscribe to the theme here (PAPI-specific) and let the shared hook handle selection
-  // detection and variant picking.
-  const [isDarkTheme, setIsDarkTheme] = useState(false);
-  useEffect(() => {
-    let disposed = false;
-    let unsubscribe: (() => void) | undefined;
-    papi.themes
-      .subscribeCurrentTheme(undefined, (theme) => {
-        if (!isPlatformError(theme)) setIsDarkTheme(theme.type === 'dark');
-      })
-      .then((unsub) => {
-        if (disposed) unsub();
-        else unsubscribe = unsub;
-        return undefined;
-      })
-      .catch((e) => logger.warn(`Failed to subscribe to the current theme: ${getErrorMessage(e)}`));
-    return () => {
-      disposed = true;
-      unsubscribe?.();
-    };
-  }, []);
-
-  const gridIconUrl = pickTabIconUrl(isDarkTheme, isViewVisible, TAB_ICON_URLS);
-  useEffect(() => {
-    updateWebViewDefinition({ iconUrl: gridIconUrl });
-  }, [gridIconUrl, updateWebViewDefinition]);
 
   const installingResourceNames = useMemo(() => installing.map((info) => info.name), [installing]);
 

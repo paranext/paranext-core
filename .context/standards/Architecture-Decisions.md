@@ -5052,7 +5052,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   and order, and checks that a command served in both modes carries the same label in each, so a
   missed, reordered or relabelled copy fails there. Every third-column tab must have a Simple Tools
   item (`shipped-simple-layout-order.test.ts`; the menu's own order is the design's, not the
-  column's), so adding a third-column tab fails that test until a Tools item exists. Hiding a
+  column's), so adding a third-column tab fails that test until a Tools item exists. *(Amended
+  2026-10-27: the Tools items must now list the third-column tabs in the column's order, which
+  PT-4864's design sets as resources first, then tools. The same test fails if either one is
+  reordered without the other.)* Hiding a
   Power-only item without re-adding
   it to a Simple column removes its only entry point: Simple now has no menu route at all to the
   four Inventories, Markers Checklist, or Open Checks. That follows the v0 Simple design, which has
