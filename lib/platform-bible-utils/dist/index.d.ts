@@ -3594,13 +3594,16 @@ export type UsjReaderWriterOptions = {
 	 * Paratext project, or when nothing reads USFM text from this instance.
 	 *
 	 * It decides how a no-break space (U+00A0) in the USJ text is spelled in the USFM this class
-	 * writes ({@link IUsjReaderWriter.toUsfm}; attribute values are written the same way), matching
-	 * what Paratext reads and writes for that project:
+	 * writes ({@link IUsjReaderWriter.toUsfm}), matching what Paratext reads and writes for that
+	 * project. It covers text content and the values of attribute markers such as `\ca`, `\va` and
+	 * `\cat`; a value in a marker's `|` attribute list (`lemma`, a milestone's `who`, a figure's
+	 * `src`) is written exactly as the USJ holds it, as ParatextData writes one:
 	 *
-	 * - `false`: the project's USFM spells a no-break space `~`, so U+00A0 is written as `~`. The USJ
-	 *   Platform.Bible gets for such a project never contains `~`; a `~` that is in the USJ anyway is
-	 *   written as `~` too, so Paratext saves it as a no-break space. A literal tilde cannot be
-	 *   represented.
+	 * - `false`: the project's USFM spells a no-break space `~`, so U+00A0 in text is written as `~`.
+	 *   The USJ text Platform.Bible gets for such a project never contains `~` (an attribute value
+	 *   can: ParatextData keeps a `~` in most attribute values as written); a `~` that is in the text
+	 *   anyway is written as `~` too, so Paratext saves it as a no-break space. A literal tilde cannot
+	 *   be represented in text.
 	 * - `true`: `~` is an ordinary character (a literal tilde) and U+00A0 is written as itself, so the
 	 *   two stay distinct. Writing this project's USJ with `false` would turn every no-break space
 	 *   into a literal tilde when the USFM is saved.

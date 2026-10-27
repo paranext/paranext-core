@@ -3235,9 +3235,13 @@ function PlatformScriptureEditor({
         isPowerMode,
         isInterfaceModeLoading,
         mainViewOptions: options.view,
-        standardViewOptions: getViewOptionsForType('standard', isPowerMode),
+        standardViewOptions: getEditorViewOptions(
+          'standard',
+          isPowerMode,
+          allowInvisibleCharacters,
+        ),
       }),
-    [isPowerMode, isInterfaceModeLoading, options.view],
+    [isPowerMode, isInterfaceModeLoading, options.view, allowInvisibleCharacters],
   );
   /**
    * {@link footnotesPaneViewOptions}, held while a row-editor session ends. When the pane stops

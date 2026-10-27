@@ -29,6 +29,8 @@ Still waiting on TJ:
 
 - **Ratifying the ADR** `adr-editor-nbsp-spelling-follows-project-setting` (Proposed): U+001A, which
   Paratext text can never hold, drawn as a blank the width of a space (row AI-1).
+- **O-12**: whether an author's literal `~` in an attribute value must survive a Standard-view
+  settle (`needs-decision`; candidate fix and alternative in the row).
 - **UV-2** carries an `accept` ("no loss; the version is deliberately not derived from `\usfm`") with
   no TJ ruling or date recorded.
 
@@ -136,6 +138,7 @@ leave this section when the PR merges; the rest need a ruling recorded above.
 | O-9 | L1 | `packages/scribe`'s editor→USJ adaptor still has the byte-comparison caller drop the platform adaptor replaced — the two adaptors disagree about a data-loss rule | **out of scope** (TJ, 2026-10-27): Scribe is being removed |
 | O-10 | L1 | Transient divergences while an edit is pending: a chapter rebuild beside an unclosed `\ca` leaves fresh text pended until the next departure; an optbreak emptied while the caret is elsewhere isn't recorded pending | **closed — no longer reproduces** (TJ, 2026-10-27) — probed on HEAD and the PR #11 merge: the screen, `getUsj()` and every `onUsjChange` payload agree at every step for both cases |
 | O-11 | L1 | Standard view: a range that covers a char span's opener whole and ends inside its closer (`\ft*` bytes 1..3), typed over or deleted, removes the closer's remaining bytes (`ft*`) along with the unwrapped span. `markerEditDeletion.utils.ts` says a PARTIALLY covered glyph keeps its surviving bytes; that holds for a partial opener (`xft note text` plus an unmatched `\ft*`) but a partial closer goes with its opener. Found in the O-8 investigation, real keys. | **accept** (TJ, 2026-10-26): for now — possibly a usability defect, not worth the time yet; same family as EV-2 |
+| O-12 | L1 | Standard view, `AllowInvisibleChars` off: an author's literal `~` in an attribute value (a milestone's `who`, a figure's `src`, a `\periph` value, a char span's `\|lemma`, `\cat`, `\ca`/`\cp`, `\va`) is saved as U+00A0 once its paragraph re-settles. ParatextData keeps a `~` in those values as written (measured: only body text and `\vp` read `~` as a no-break space), but Standard view also shows a value's U+00A0 as `~`, so the settle cannot tell the two apart. Char spans and the attribute markers did this before scripture-editors#29; milestones, figures and `\periph` joined them with the attribute-value fix in `c48eda31`. A `~` in an attribute value is rare in real data. | **needs-decision** (2026-10-27) — pinned by `it.fails` in scripture-editors `attributeValueNbsp.test.tsx` (milestone case). Candidate fix: show every attribute value's U+00A0 as the U+001A stand-in, whatever the setting, and read only the stand-in back as U+00A0 inside values, so a literal `~` stays `~` (touches the adaptor, the display-run syncs and the tokenizer; AI-1's stand-in design applies). Alternative: accept, since the loss needs a `~` an author typed into an attribute value. |
 
 ## Typing-fidelity findings (non-Standard editable views, 2026-10-23)
 
@@ -158,7 +161,7 @@ behavior; it is not a ruling by TJ.
 | T-8 | formatted, paragraph-structure | A space typed as an empty verse's whole content is dropped (`TextSpacingPlugin`; the round trip to disk drops it, keeping it makes core reload the editor) | **accept** (TJ, 2026-10-26) (by design) |
 | T-9 | formatted, paragraph-structure | Text directly before a verse gains a trailing space (`TextSpacingPlugin`'s one structural space; ParatextData writes a verse that way) | **accept** (TJ, 2026-10-26) (by design) |
 | T-10 | formatted | Backspace at the start of a chapter's first paragraph (or Delete at the end of the block before a chapter, or a range across one) deletes `\c N`; paragraph-structure guards it | **FIXED** (TJ, 2026-10-26: Simple only) — scripture-editors#29: in guarded mode Backspace/Delete beside a chapter arms it on the first press and deletes it on the second, like the other structural deletions; protected mode still refuses; Standard and formatted (Power, guard off) unchanged |
-| T-11 | formatted, paragraph-structure | Undo/Redo around an empty verse: Redo is lost (formatted); two Undo steps (paragraph-structure, guarded). The document can always be brought back; root cause unconfirmed | **PINNED** — testUSFM-2SA-2/2SA-3 rows in both views' expected-failures JSON Tracked as **PT-4924**. |
+| T-11 | formatted, paragraph-structure | Undo/Redo around an empty verse: Redo is lost (formatted); two Undo steps (paragraph-structure, guarded). The document can always be brought back; root cause unconfirmed | **FIXED** — scripture-editors#29: the invisible caret host an Undo can create beside an empty verse is kept out of the undo history (it cleared the redo stack), and a guarded removal of an empty paragraph is its own undo step (Lexical folded it into the step before); the testUSFM-2SA-2/2SA-3 expected-failure rows are gone |
 | T-12 | formatted | Undo after Enter at a paragraph's start in front of a char span (WEB Matthew 5 block 3) leaves two paragraphs; probably the T-3 mechanism | **PINNED** Tracked as **PT-4924**. |
 | T-13 | formatted, paragraph-structure | Enter at a word break drops the space at the break (`In\| the` becomes `In` / `the`) | **accept** (TJ, 2026-10-26); Simple now matches Standard and formatted (scripture-editors#29: the leading-space trim looks past the gutter glyph) |
 | T-14 | load | testUSFM-1SA-1 is authored `version: "3.0"` and the editor wrote its own version | superseded by F-5 (the version is now preserved) |
@@ -168,7 +171,7 @@ behavior; it is not a ruling by TJ.
 | PJ-1 | formatted, paragraph-structure | Joining two paragraphs with Backspace/Delete keeps the FIRST paragraph's marker (`\p a` + `\q1 b` → `\p ab`); Paratext 9 keeps the SECOND (`\q1 ab`), because its editor engine (Gecko) keeps the second block on every join. | **out of scope** (TJ, 2026-10-26): an editor usability question with no clear guidance yet, not a data issue; the `\b` case that mattered is fixed (T-2 follow-up) |
 
 Ruled 2026-10-26: T-6, T-8, T-9, T-13, T-15 accepted; T-7 and T-10 (Simple) fixed; T-11, T-12, T-16
-pinned under PT-4924. Still not covered: the range paths T-5 does not (paste, cut and Enter over a
+pinned under PT-4924 (T-11 since fixed in scripture-editors#29). Still not covered: the range paths T-5 does not (paste, cut and Enter over a
 range; Standard and visible views).
 
 ## Clipboard findings (copy, cut, paste across views, 2026-10-23)
