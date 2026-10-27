@@ -109,9 +109,7 @@ const mockState: MockState = {
   shouldMatchSystem: false,
   setShouldMatchSystem: mockSetter(),
   internetSettingsProviderAvailable: true,
-  // Not 'Production': the badge never renders for that server (see "UserProfilePopover server
-  // badge"), and several unrelated tests below (recovery/remount) assert the badge DOES render
-  // using this default.
+  // See beforeEach for why this is not 'Production'.
   internetSettings: { selectedServer: 'Development' },
 };
 
@@ -183,7 +181,13 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       // (PT-4417) is actually worked around, and the regression tests would pass unconditionally.
       const isProviderAvailable = dataProviderSource !== undefined;
       return [
-        isProviderAvailable ? (mockState.internetSettings ?? defaultValue) : defaultValue,
+        // Not gated on `isProviderAvailable`: the real `useData` hook keeps the last value it
+        // delivered while a resubscribe is in flight (`isLoading` goes back to `true`, but the
+        // value does not reset) — see create-use-data-hook.util.ts. Mirroring that here, instead of
+        // forcing `defaultValue` whenever the provider isn't available, is what lets a test prove
+        // the component's own `isLoadingInternetSettings ||` guard is doing the suppressing, rather
+        // than the mock accidentally returning a value that would be suppressed anyway.
+        mockState.internetSettings ?? defaultValue,
         mockSetter(),
         // Mirrors the real hook: with no data provider, the subscription never resolves and
         // `isLoading` stays `true` forever — not just until the mock state supplies a value.
@@ -253,6 +257,9 @@ beforeEach(() => {
   setMockSetting('shouldMatchSystem', false);
   setMockSetting('setShouldMatchSystem', mockSetter());
   setMockSetting('internetSettingsProviderAvailable', true);
+  // Not 'Production', which never shows a badge (see "UserProfilePopover server badge"): the
+  // provider-registration recovery tests below ("recovers once…", "only remounts the row…") rely on
+  // a non-Production default to prove the badge actually reappears once recovery completes.
   setMockSetting('internetSettings', { selectedServer: 'Development' });
   vi.mocked(sendCommand).mockClear();
   vi.mocked(logger.warn).mockClear();
