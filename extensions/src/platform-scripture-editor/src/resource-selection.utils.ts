@@ -90,8 +90,8 @@ export function resolveResourceSelection(
   const isSupersededFallback =
     matchedRow?.source === 'downloaded' && !isUserPick && firstUsableConfigured !== undefined;
   const selectedRow = isSupersededFallback ? undefined : matchedRow;
-  const isUnpickedDownload = (row: PickerResource | undefined) =>
-    row?.source === 'downloaded' && !isUserPick;
+  // `isUserPick` describes the persisted selection only; any other row shown is not the user's pick.
+  const isSelectionUnpickedDownload = selectedRow?.source === 'downloaded' && !isUserPick;
 
   if (pendingResourceId !== undefined) {
     const pendingRow = rows.find(
@@ -105,13 +105,15 @@ export function resolveResourceSelection(
         selectedRow: pendingRow,
         isDownloadedFallback: false,
       };
-    const heldRow = selectedRow ?? firstUsableConfigured ?? rows[0];
+    const heldRow = selectedRow ?? firstUsableConfigured ?? firstUsable ?? rows[0];
     return {
       nextSelectedResourceId: undefined,
       nextIsUserPick: undefined,
       shouldClearPending: false,
       selectedRow: heldRow,
-      isDownloadedFallback: isUnpickedDownload(heldRow),
+      isDownloadedFallback: selectedRow
+        ? isSelectionUnpickedDownload
+        : heldRow?.source === 'downloaded',
     };
   }
 
@@ -131,7 +133,7 @@ export function resolveResourceSelection(
       nextIsUserPick: undefined,
       shouldClearPending: false,
       selectedRow,
-      isDownloadedFallback: isUnpickedDownload(selectedRow),
+      isDownloadedFallback: isSelectionUnpickedDownload,
     };
   }
 
@@ -144,7 +146,8 @@ export function resolveResourceSelection(
       isDownloadedFallback: false,
     };
   // Nothing configured is displayable and the selection has left the list (or was never set), so
-  // whatever is shown here is a fallback the user did not pick.
+  // whatever is shown here is a fallback the user did not pick. The stale id stays persisted on
+  // purpose: if its resource comes back, the user's choice takes effect again.
   const fallbackRow = firstUsable ?? rows[0];
   return {
     nextSelectedResourceId: undefined,

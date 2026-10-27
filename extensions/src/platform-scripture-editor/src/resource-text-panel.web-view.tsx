@@ -240,9 +240,11 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   // the resource they abandoned, with nothing indicating their own earlier pick won.
   const [pendingResourceId, setPendingResourceId] = useState<string | undefined>(undefined);
 
-  // Committing a pick, holding still while one is in flight, migrating a legacy bare id and
-  // falling back when the selection leaves the list are one decision, not four effects that can
-  // disagree across renders. `resolveResourceSelection` makes it, and is tested directly.
+  // Committing a pick, holding still while one is in flight, migrating a legacy bare id, falling
+  // back when the selection leaves the list, replacing a downloaded fallback once something
+  // configured is displayable, and telling whether the shown row is such a fallback are one
+  // decision, not separate effects that can disagree across renders. `resolveResourceSelection`
+  // makes it, and is tested directly.
   //
   // Resolved HERE and handed to the panel as `selectedRef`, rather than resolved by the panel and
   // reported back up: `resourceProjectId` below keys the `ChapterUSJ` subscription that produces
@@ -271,7 +273,9 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
     setIsSelectedResourceUserPick,
   ]);
 
-  // The mark is written before the id so no render sees the user's pick marked as a fallback.
+  // The mark is written before the id so no render sees the user's pick marked as a fallback. Each
+  // web view state key comes back as its own web view update, in the order it was written, so the
+  // two setters are not applied together; keep the mark first.
   const handleSelectResourceFromList = useCallback(
     (resourceId: string) => {
       setIsSelectedResourceUserPick(true);

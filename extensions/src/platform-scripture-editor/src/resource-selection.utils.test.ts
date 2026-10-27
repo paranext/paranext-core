@@ -155,6 +155,53 @@ describe('resolveResourceSelection', () => {
     expect(result.nextSelectedResourceId).toBeUndefined();
   });
 
+  it('holds on a displayable downloaded row while a pick is in flight and nothing configured is displayable', () => {
+    const rows = [notInstalledRow('uninstalled'), downloadedRow('WEB')];
+    const result = resolveResourceSelection(rows, 'project:gone', 'dbl:not-here-yet', true);
+    expect(result.selectedRow?.projectId).toBe('WEB');
+    expect(result.nextSelectedResourceId).toBeUndefined();
+  });
+
+  describe('a legacy bare id that names a downloaded resource', () => {
+    it('gives way to a configured resource when the user did not pick it', () => {
+      const rows = [projectRow('configured'), downloadedRow('WEB')];
+      const result = resolveResourceSelection(rows, 'WEB', undefined);
+      expect(result.selectedRow?.projectId).toBe('configured');
+      expect(result.nextSelectedResourceId).toBe('project:configured');
+      expect(result.nextIsUserPick).toBe(false);
+    });
+
+    it('is rewritten to its namespaced form, keeping the mark, when the user picked it', () => {
+      const rows = [projectRow('configured'), downloadedRow('WEB')];
+      const result = resolveResourceSelection(rows, 'WEB', undefined, true);
+      expect(result.selectedRow?.projectId).toBe('WEB');
+      expect(result.nextSelectedResourceId).toBe('project:WEB');
+      expect(result.nextIsUserPick).toBeUndefined();
+      expect(result.isDownloadedFallback).toBe(false);
+    });
+  });
+
+  describe('a downloaded selection saved without a user-pick mark', () => {
+    // Saved layouts can hold a downloaded selection with no mark at all, and nothing distinguishes
+    // the user's own pick from a fallback there, so both are treated as a fallback.
+    it('gives way to a configured resource and records that the user did not pick it', () => {
+      const rows = [projectRow('configured'), downloadedRow('WEB')];
+      const result = resolveResourceSelection(rows, 'project:WEB', undefined);
+      expect(result.selectedRow?.projectId).toBe('configured');
+      expect(result.nextSelectedResourceId).toBe('project:configured');
+      expect(result.nextIsUserPick).toBe(false);
+      expect(result.isDownloadedFallback).toBe(false);
+    });
+
+    it('stays on screen but is not offered to navigation while nothing configured is displayable', () => {
+      const result = resolveResourceSelection([downloadedRow('WEB')], 'project:WEB', undefined);
+      expect(result.selectedRow?.projectId).toBe('WEB');
+      expect(result.nextSelectedResourceId).toBeUndefined();
+      expect(result.nextIsUserPick).toBeUndefined();
+      expect(result.isDownloadedFallback).toBe(true);
+    });
+  });
+
   it('keeps a downloaded resource the user picked even when a configured resource is listed', () => {
     const rows = [projectRow('configured'), downloadedRow('WEB')];
     const result = resolveResourceSelection(rows, 'project:WEB', undefined, true);
@@ -197,6 +244,20 @@ describe('resolveResourceSelection — isDownloadedFallback', () => {
 
   it('does not flag a pick of a downloaded resource as it commits', () => {
     const result = resolveResourceSelection([downloadedRow('WEB')], undefined, 'project:WEB');
+    expect(result.isDownloadedFallback).toBe(false);
+  });
+
+  it('flags a downloaded row held while a pick is in flight when the user’s pick has left the list', () => {
+    const rows = [notInstalledRow('uninstalled'), downloadedRow('WEB')];
+    const result = resolveResourceSelection(rows, 'project:gone', 'dbl:not-here-yet', true);
+    expect(result.selectedRow?.projectId).toBe('WEB');
+    expect(result.isDownloadedFallback).toBe(true);
+  });
+
+  it('does not flag the user’s downloaded pick held while another pick is in flight', () => {
+    const rows = [projectRow('configured'), downloadedRow('WEB')];
+    const result = resolveResourceSelection(rows, 'project:WEB', 'dbl:not-here-yet', true);
+    expect(result.selectedRow?.projectId).toBe('WEB');
     expect(result.isDownloadedFallback).toBe(false);
   });
 

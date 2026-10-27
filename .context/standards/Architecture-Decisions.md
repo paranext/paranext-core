@@ -6712,12 +6712,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   pull-driven and re-read on every conversion; the hook's is push-driven and consulted on join or
   by its retry timer), so a shared cache would have to carry the retry policy of the push-driven
   consumer. Worth doing when a third consumer appears; as of 2026-10-27 tracked on PT-4935.
-  (e) **Heal from network events instead of a timer** — `use-project-picker-data.hook.ts` already does this for the same failure mode,
-  refetching on `platform.onDidChangeProjects` and on `object:onDidCreateNetworkObject` filtered
-  to PDP factories, debounced. It costs nothing while idle and heals in about 200 ms. Not chosen
-  for the hook: three more network subscriptions against one timer, and the events miss a C#
-  factory that starts serving an id without a new factory registering. Remains the right shape
-  for a consumer that must heal fast.
+  (e) **Heal from network events instead of a timer** — `use-project-picker-data.hook.ts` already
+  does this for the same failure mode, refetching on `platform.onDidChangeProjects` and on
+  `object:onDidCreateNetworkObject` filtered to PDP factories, debounced. It costs nothing while
+  idle and heals in about 200 ms. Not chosen for the hook: three more network subscriptions against
+  one timer, and the events miss a C# factory that starts serving an id without a new factory
+  registering. Remains the right shape for a consumer that must heal fast.
 - **Consequences:** Reviewers should flag `projectDataProviders.get`, `getMetadataForProject`, or
   `getMetadataForAllProjects` inside a React effect, a subscription callback, or any loop whose
   trigger can fire repeatedly, and ask how the caller bounds it. A project whose lookup,
