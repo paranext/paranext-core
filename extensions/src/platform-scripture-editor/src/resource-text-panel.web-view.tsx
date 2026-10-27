@@ -548,6 +548,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
       readiness={readiness}
       dblResources={dblResources}
       isCatalogUnavailable={hasCatalogError}
+      isGrouped={!isPowerMode}
       onRetryCatalog={refetchCatalog}
       scrRef={scrRef}
       onScrRefChange={setScrRef}

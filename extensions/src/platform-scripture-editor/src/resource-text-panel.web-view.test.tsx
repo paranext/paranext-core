@@ -30,6 +30,7 @@ const {
   realUsePromise,
   mockUseScrollGroupScrRef,
   copyrightNoticesByProject,
+  interfaceMode,
 } = vi.hoisted(() => ({
   mockUseEffectiveResourceReferenceList: vi.fn(),
   mockUseDblResourceAutoInstall: vi.fn(),
@@ -45,6 +46,8 @@ const {
   realUsePromise: { current: undefined as unknown },
   mockUseScrollGroupScrRef: vi.fn(),
   copyrightNoticesByProject: new Map<string, unknown>(),
+  /** What `platform.interfaceMode` reads as. */
+  interfaceMode: { current: 'simple' },
 }));
 
 // @papi/frontend — papi default export used for themes subscription and commands
@@ -109,7 +112,7 @@ vi.mock('@papi/frontend/react', () => ({
       ];
     return ['ltr', false];
   }),
-  useSetting: vi.fn(() => ['simple', false]),
+  useSetting: vi.fn(() => [interfaceMode.current, false]),
   useDialogCallback: vi.fn(() => vi.fn()),
   usePromise: vi.fn(() => [undefined, false]),
   useScrollGroupScrRef: (...args: unknown[]) => mockUseScrollGroupScrRef(...args),
@@ -376,6 +379,7 @@ beforeEach(() => {
   vi.stubGlobal('ResizeObserver', NoopResizeObserver);
   resetPanelHooks();
   copyrightNoticesByProject.clear();
+  interfaceMode.current = 'simple';
 });
 
 afterEach(() => {
@@ -1094,5 +1098,20 @@ describe('ResourceTextPanel — catalog failure keeps resolved rows visible', ()
     ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Local Project/ })).toBeInTheDocument();
     expect(setters.get('selectedResourceId')).not.toHaveBeenCalled();
+  });
+});
+
+// Power mode has no notion of team resources, so its selector lists every row together.
+describe('ResourceTextPanel — interface mode', () => {
+  it.each([
+    ['simple', true],
+    ['power', false],
+  ] as const)('in %s mode, groups the selector: %s', (mode, isGrouped) => {
+    interfaceMode.current = mode;
+    renderWithRows([DOWNLOADED_ROW]);
+
+    expect(capturedResourceTextPanelProps.mock.lastCall?.[0]).toEqual(
+      expect.objectContaining({ isGrouped }),
+    );
   });
 });

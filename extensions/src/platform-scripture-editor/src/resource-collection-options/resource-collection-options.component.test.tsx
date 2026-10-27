@@ -225,6 +225,25 @@ describe("ResourceCollectionOptions — team resources and the user's own", () =
     expect(screen.queryByText('User resources')).toBeNull();
   });
 
+  it('lists every row as one plain list when ungrouped, with no headings or locks', () => {
+    renderComponent({ top: [TEAM_ROW], bottom: [USER_ROW], isGrouped: false });
+
+    // Positive control: both rows are on screen, team row first, so the absences are real answers.
+    const teamBox = screen.getByRole('checkbox', { name: 'Admin Text' });
+    const userBox = screen.getByRole('checkbox', { name: 'My Text' });
+    expect(
+      // compareDocumentPosition reports its answer as bit flags
+      // eslint-disable-next-line no-bitwise
+      teamBox.compareDocumentPosition(userBox) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.queryByText('Team resources')).toBeNull();
+    expect(screen.queryByText('User resources')).toBeNull();
+    expect(screen.queryByLabelText('Shared by your team')).toBeNull();
+    // Still the team's: unchecking is the only control, with no ✕ to remove it.
+    expect(screen.queryByLabelText('Remove Admin Text from list')).toBeNull();
+    expect(screen.getByLabelText('Remove My Text from list')).toBeInTheDocument();
+  });
+
   it("labels only the team group when every row is the team's", () => {
     renderComponent({ top: [TEAM_ROW] });
 

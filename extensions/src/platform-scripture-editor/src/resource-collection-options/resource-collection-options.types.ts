@@ -107,6 +107,12 @@ export interface ResourceCollectionOptionsProps {
   top: ViewOptionsTextEntry[];
   /** The user's own and downloaded rows (bottom section): hover-✕ only where `isUserRemovable`. */
   bottom: ViewOptionsTextEntry[];
+  /**
+   * When `false`, `top` and `bottom` render as one list with no Team/User headings and no locks;
+   * the team's rows still have no ✕. Pass `false` in Power mode, which has no notion of team
+   * resources. Defaults to `true`.
+   */
+  isGrouped?: boolean;
   /** Display names of resources currently installing (shown as "Installing {name}…" rows). */
   installingResourceNames?: string[];
   /** Called when a row's checkbox toggles, with the resource id and the next checked state. */

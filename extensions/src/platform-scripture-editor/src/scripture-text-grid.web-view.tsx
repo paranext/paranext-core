@@ -53,6 +53,7 @@ import {
   persistUserRemoval,
 } from './scripture-text-grid-persistence.utils';
 import { useTextCollectionSources } from './use-text-collection-sources.hook';
+import { useIsPowerMode } from './use-is-power-mode.hook';
 import { useFocusedResourceProjectId } from './use-focused-resource-project-id.hook';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
@@ -292,6 +293,10 @@ function ScriptureTextGridProjectView({
     hasCatalogSettled,
     refetchCatalog,
   );
+
+  // Only Simple mode has team resources. Undefined (still loading) lists them plainly too, so a
+  // Power session never shows the team grouping, even for a frame.
+  const isViewOptionsGrouped = useIsPowerMode() === false;
 
   const { top, bottom } = useMemo(
     () =>
@@ -542,6 +547,7 @@ function ScriptureTextGridProjectView({
               isChapterEnabled
               top={top}
               bottom={bottom}
+              isGrouped={isViewOptionsGrouped}
               installingResourceNames={installingResourceNames}
               onCheckedChange={handleCheckedChange}
               onRemoveFromList={handleRemoveFromList}

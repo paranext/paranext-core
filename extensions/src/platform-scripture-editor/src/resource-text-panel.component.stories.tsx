@@ -77,6 +77,7 @@ const meta: Meta<typeof ResourceTextPanel> = {
     readiness: 'configured',
     dblResources: [WEB],
     isCatalogUnavailable: false,
+    isGrouped: true,
     scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
     isUsjLoading: false,
     textDirection: 'ltr',
@@ -179,6 +180,23 @@ export const UserAndOtherResources: Story = {
   args: {
     filteredResources: [WEB_ROW, row(KJV, 'user'), row(ASV, 'downloaded')],
     dblResources: [WEB, KJV, ASV],
+  },
+  play: openSelector,
+};
+
+/** Power mode: every row in one list, with no headings, caption or locks. */
+export const PowerMode: Story = {
+  tags: ['!autodocs'],
+  args: {
+    filteredResources: [
+      row(WEB, 'admin'),
+      row(SVD, 'admin'),
+      row(KJV, 'user'),
+      row(ASV, 'downloaded'),
+    ],
+    selectedRef: row(WEB, 'admin'),
+    dblResources: [WEB, SVD, KJV, ASV],
+    isGrouped: false,
   },
   play: openSelector,
 };

@@ -98,6 +98,8 @@ type ResourceSelectorDropdownProps = {
   dblResources: DblResourceData[];
   /** Whether the DBL catalog failed to load. See `splitPickerResourcesBySource`. */
   isCatalogUnavailable: boolean;
+  /** When `false`, the rows are one list with no headings, caption or locks */
+  isGrouped: boolean;
   onSelectResource: (id: string) => void;
   /** Undefined hides the option: downloading adds to the project's list, so needs a project */
   onShowResourcePicker: (() => void) | undefined;
@@ -119,13 +121,15 @@ type ResourceSelectorDropdownProps = {
  * resources (see `splitPickerResourcesBySource`), each under its heading, and a group with no rows
  * gets none. The team's come first, with a caption saying only a project administrator can remove
  * them and a lock on each; they always get their heading, since the caption is what explains the
- * locks. With no team rows and only one other group, the rows are one unlabeled list.
+ * locks. With no team rows and only one other group, the rows are one unlabeled list. Ungrouped,
+ * every row is in one unlabeled list, in the order given, with no caption or locks.
  */
 function ResourceSelectorDropdown({
   filteredResources,
   selectedRef,
   dblResources,
   isCatalogUnavailable,
+  isGrouped,
   onSelectResource,
   onShowResourcePicker,
   downloadResourcesLabel,
@@ -168,7 +172,7 @@ function ResourceSelectorDropdown({
         <span className="tw:min-w-0 tw:truncate" dir="auto" title={label}>
           {label}
         </span>
-        {isTeamPickerResource(row) && (
+        {isGrouped && isTeamPickerResource(row) && (
           <span
             role="img"
             aria-label={teamResourceLockLabel}
@@ -198,9 +202,9 @@ function ResourceSelectorDropdown({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="tw:w-72">
-          {isUnlabeled ? (
-            nonTeamGroups[0]?.rows.map(renderRow)
-          ) : (
+          {!isGrouped && filteredResources.map(renderRow)}
+          {isGrouped && isUnlabeled && nonTeamGroups[0]?.rows.map(renderRow)}
+          {isGrouped && !isUnlabeled && (
             <>
               {team.length > 0 && (
                 // The caption says once what the locks mean, rather than repeating it on every row.
@@ -282,6 +286,11 @@ export type ResourceTextPanelProps = {
    * plain downloads.
    */
   isCatalogUnavailable: boolean;
+  /**
+   * Whether the selector groups its rows as the team's, the user's own and other installed ones,
+   * with the team caption and locks. `false` in Power mode, which has no notion of team resources.
+   */
+  isGrouped: boolean;
   /** Re-runs the DBL resource catalog fetch. */
   onRetryCatalog: () => void;
   /** The reference the panel is displaying. */
@@ -368,6 +377,7 @@ export function ResourceTextPanel({
   readiness,
   dblResources,
   isCatalogUnavailable,
+  isGrouped,
   onRetryCatalog,
   scrRef,
   onScrRefChange,
@@ -843,6 +853,7 @@ export function ResourceTextPanel({
         selectedRef={selectedRef}
         dblResources={dblResources}
         isCatalogUnavailable={isCatalogUnavailable}
+        isGrouped={isGrouped}
         onSelectResource={onSelectResource}
         onShowResourcePicker={hasProject ? onShowResourcePicker : undefined}
         downloadResourcesLabel={localize(

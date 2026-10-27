@@ -39,9 +39,10 @@ const localize = (
 /**
  * Reusable, presentational View Options inner component: a VIEW toggle (Verse / Chapter), a TEXTS
  * list (admin-shared top section + user bottom section, headed "Team resources" and "User
- * resources" when there are admin-shared rows), and a Get Resources button. It holds no
- * PAPI/popover/persistence state — callers pass the computed rows and callbacks — so the same
- * component renders inside the Scripture Text Grid popover and inside a resource-sharing dialog.
+ * resources" when there are admin-shared rows and `isGrouped` is on), and a Get Resources button.
+ * It holds no PAPI/popover/persistence state — callers pass the computed rows and callbacks — so
+ * the same component renders inside the Scripture Text Grid popover and inside a resource-sharing
+ * dialog.
  *
  * Chapter is disabled with a "not yet available" hint unless `isChapterEnabled` is set. The hover-✕
  * renders only on rows with `isUserRemovable === true`.
@@ -57,6 +58,7 @@ export function ResourceCollectionOptions({
   isChapterEnabled = false,
   top,
   bottom,
+  isGrouped = true,
   installingResourceNames = [],
   onCheckedChange,
   onRemoveFromList,
@@ -154,7 +156,7 @@ export function ResourceCollectionOptions({
             Gated on isAdminLocked, NOT !isUserRemovable: downloaded rows in the bottom section
             are also non-removable but are not the team's, so they get no lock. `role="img"`
             makes the label reliably announced even while the icon is visually hover-revealed. */}
-        {row.isAdminLocked && (
+        {isGrouped && row.isAdminLocked && (
           <span
             role="img"
             aria-label={localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.teamSharedLock)}
@@ -256,8 +258,8 @@ export function ResourceCollectionOptions({
             )}
           />
         )}
-        {/* With no team rows the list is one unlabeled run, as when no team layout exists. */}
-        {hasTeamRows ? (
+        {/* Ungrouped, or with no team rows, the list is one unlabeled run. */}
+        {isGrouped && hasTeamRows ? (
           <>
             {renderGroup(
               teamHeadingId,
@@ -274,7 +276,10 @@ export function ResourceCollectionOptions({
               )}
           </>
         ) : (
-          userRows
+          <>
+            {top.map(renderRow)}
+            {userRows}
+          </>
         )}
       </section>
 
