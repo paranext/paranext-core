@@ -5692,6 +5692,7 @@ function PlatformScriptureEditor({
                 isLoading={!liveEditorUsj && usjFromPdp === defaultUsj}
                 zoomAreaLabel={localizedStrings[FOOTNOTES_ZOOM_AREA_LABEL_KEY]}
                 copyLimit={editorOptionsWithCopyLimit.copyLimit}
+                rowEditorViewOptions={rowEditorViewOptions}
               >
                 {/* Render the editor inside the container decorations without re-mounting on re-parent */}
                 <OutPortal node={editorPortalNode} />

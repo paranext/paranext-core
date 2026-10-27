@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { toUsfmNbspSpelling, ViewOptions } from '@eten-tech-foundation/platform-editor';
 import { MarkerObject, Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
   Button,
@@ -172,6 +173,13 @@ export type FootnotesLayoutProps = PropsWithChildren<{
    * loading included. Required so a caller states it.
    */
   copyLimit: number | undefined;
+  /**
+   * The view options the pane's row editor renders with, or `undefined` when the pane has no row
+   * editor. A copy from the pane that reaches into the row editor carries the editor's display, so
+   * the pane respells each no-break space the editor holds as its internal stand-in the way the
+   * project spells it (see `toUsfmNbspSpelling`). Required so a caller states it.
+   */
+  rowEditorViewOptions: ViewOptions | undefined;
 }>;
 
 /** Panel id of the Scripture text in the layout group. Stable, so its panel never remounts. */
@@ -211,6 +219,7 @@ function FootnotesPane({
   zoomAreaLabel,
   listLayout,
   copyLimit,
+  rowEditorViewOptions,
 }: FootnotesPaneProps) {
   const [footnotes, setFootnotes] = useState<MarkerObject[]>([]);
 
@@ -521,22 +530,26 @@ function FootnotesPane({
   }, [selectedFootnote, onSelectedFootnoteChange]);
 
   // The pane is outside the editor, whose own copy guard handles only selections that reach into
-  // the editor, so the pane shortens its own copies. A copy within the limit is left to the
-  // browser, with all its usual clipboard formats; only one that needs shortening is written, as
-  // plain text. A copy inside a row editor has already been handled by that editor's own copy
-  // guard, so it is left as the editor wrote it.
+  // the editor, so the pane shortens its own copies and respells the no-break spaces a selection
+  // takes from the row editor's display. A copy that needs neither is left to the browser, with all
+  // its usual clipboard formats; only one that needs either is written, as plain text. A copy
+  // inside a row editor has already been handled by that editor's own copy guard, so it is left as
+  // the editor wrote it.
   const handleFootnotesCopy = useCallback(
     (event: ClipboardEvent<HTMLDivElement>) => {
-      if (copyLimit === undefined || event.defaultPrevented) return;
+      if (event.defaultPrevented) return;
       const selectedText = window.getSelection()?.toString() ?? '';
-      const text = truncateToCopyLimit(selectedText, copyLimit);
+      const text = truncateToCopyLimit(
+        toUsfmNbspSpelling(selectedText, rowEditorViewOptions),
+        copyLimit,
+      );
       if (text === selectedText) return;
       event.preventDefault();
       // React types `clipboardData` as always present, but some copy events carry none; the copy
       // stays blocked rather than letting the browser copy the whole selection.
       if (text && event.clipboardData) event.clipboardData.setData('text/plain', text);
     },
-    [copyLimit],
+    [copyLimit, rowEditorViewOptions],
   );
 
   return (
