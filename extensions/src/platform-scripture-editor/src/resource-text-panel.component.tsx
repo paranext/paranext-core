@@ -28,16 +28,7 @@ import {
   ResourceType,
 } from 'platform-bible-utils';
 import { ChevronDown, Lock } from 'lucide-react';
-import {
-  ComponentProps,
-  Fragment,
-  ReactNode,
-  useCallback,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-} from 'react';
+import { ComponentProps, ReactNode, useCallback, useEffect, useId, useMemo, useRef } from 'react';
 import {
   hasNewScrollTarget,
   isEchoOfPublishedScrRef,
@@ -138,6 +129,7 @@ function ResourceSelectorDropdown({
     const rowId = getResourceReferenceRowId(row.reference);
     const item = (
       <DropdownMenuCheckboxItem
+        key={rowId}
         checked={rowId === selectedRowId}
         onCheckedChange={() => {
           onSelectResource(rowId);
@@ -149,9 +141,7 @@ function ResourceSelectorDropdown({
         <span className="tw:min-w-0" dir="auto">
           {getRefLabel(row.reference, dblResources)}
         </span>
-        {/* `role="img"` puts the label in the item's accessible name for screen readers; the
-            tooltip, which Radix describes the item with only while it is open, is for everyone
-            else. */}
+        {/* Screen readers get the lock's meaning from this label, as part of the row's name. */}
         {isTeamRow && (
           <span
             role="img"
@@ -163,13 +153,16 @@ function ResourceSelectorDropdown({
         )}
       </DropdownMenuCheckboxItem>
     );
-    if (!isTeamRow) return <Fragment key={rowId}>{item}</Fragment>;
-    // On the whole item rather than the icon, so the hint also opens when keyboard focus reaches
-    // the row; the icon alone is never focused.
+    if (!isTeamRow) return item;
+    // The same text for sighted users. It wraps the whole row so keyboard focus opens it, and sits
+    // beside the menu because hovering a row focuses it, which opens the tooltip at once. Clearing
+    // `aria-describedby` keeps screen readers from reading the label a second time.
     return (
       <Tooltip key={rowId}>
-        <TooltipTrigger asChild>{item}</TooltipTrigger>
-        <TooltipContent>{teamResourceLockLabel}</TooltipContent>
+        <TooltipTrigger asChild aria-describedby={undefined}>
+          {item}
+        </TooltipTrigger>
+        <TooltipContent side="left">{teamResourceLockLabel}</TooltipContent>
       </Tooltip>
     );
   };

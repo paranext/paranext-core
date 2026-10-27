@@ -147,6 +147,17 @@ export const TeamAndUserResources: Story = {
   play: openSelector,
 };
 
+/** The selector when every resource is the team's: their heading only, with no empty user group. */
+export const TeamResourcesOnly: Story = {
+  tags: ['!autodocs'],
+  args: {
+    filteredResources: [row(WEB, 'admin'), row(SVD, 'admin')],
+    selectedRef: row(WEB, 'admin'),
+    dblResources: [WEB, SVD],
+  },
+  play: openSelector,
+};
+
 /** The selector when the team shared nothing for this tab: one list, with no headings. */
 export const UserResourcesOnly: Story = {
   tags: ['!autodocs'],

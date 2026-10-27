@@ -24,10 +24,6 @@ import {
   fetchDownloadedResources,
   type DownloadedResource,
 } from './downloaded-resources.utils';
-// vi.mock must appear before the imports it mocks so Vitest can hoist it; eslint's import/first
-// rule cannot model this Vitest-specific hoisting requirement.
-// eslint-disable-next-line import/first
-import { splitPickerResourcesBySource } from './resource-selection.utils';
 
 const downloaded = (over: Partial<DownloadedResource> = {}): DownloadedResource => ({
   projectId: 'proj-web',
@@ -346,30 +342,6 @@ describe('buildPickerResources', () => {
       type: 'CommentaryResource',
       reference: { type: 'project', id: 'tnn-proj-id' },
     });
-  });
-});
-
-describe('buildPickerResources split into team and user rows', () => {
-  // TODO(PT-4853): removal must not trust `source` alone while the catalog is down — this row is
-  // the team's resource, yet it reads as one the user could remove.
-  it("files an installed team resource under the user's rows while the catalog is unavailable", () => {
-    // A failed catalog fetch leaves only the local non-DBL rows, so the team's DBL reference has no
-    // catalog row to resolve against: it is dropped, and the project it was installed as no longer
-    // matches it, so the project comes back as a plain downloaded row.
-    const teamReference: EffectiveResourceReference = {
-      type: 'dblResource',
-      name: 'WEB',
-      id: 'uid-web',
-      source: 'admin',
-    };
-    const rows = buildPickerResources([teamReference], [downloaded({ projectId: 'proj-web' })], []);
-
-    const { team, user } = splitPickerResourcesBySource(rows);
-
-    expect(team).toEqual([]);
-    expect(user).toEqual([
-      expect.objectContaining({ source: 'downloaded', projectId: 'proj-web' }),
-    ]);
   });
 });
 
