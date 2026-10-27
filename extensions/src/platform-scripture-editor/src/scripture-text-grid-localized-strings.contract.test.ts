@@ -21,8 +21,9 @@ function source(fileName: string): string {
 describe('Text Collection grid localized strings', () => {
   it('reads every localized string through resolveLocalizedString', () => {
     const grid = source('scripture-text-grid.web-view.tsx');
-    const reads = grid.match(/localizedStrings\[/g) ?? [];
-    const resolvedReads = grid.match(/resolveLocalizedString\( ?localizedStrings\[/g) ?? [];
+    // `(\?\.)?` so an optional-chained read (`localizedStrings?.[KEY]`) is counted too.
+    const reads = grid.match(/localizedStrings(\?\.)?\[/g) ?? [];
+    const resolvedReads = grid.match(/resolveLocalizedString\( ?localizedStrings(\?\.)?\[/g) ?? [];
 
     // Guards the sweep against matching nothing, which would make the equality below vacuous.
     expect(reads.length).toBeGreaterThan(0);
