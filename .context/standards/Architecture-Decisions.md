@@ -6711,8 +6711,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   project both consumers hold costs two fan-outs. They differ in shape (the scroll-group cache is
   pull-driven and re-read on every conversion; the hook's is push-driven and consulted on join or
   by its retry timer), so a shared cache would have to carry the retry policy of the push-driven
-  consumer. Worth doing when a third consumer appears. (e) **Heal from network events instead of a
-  timer** — `use-project-picker-data.hook.ts` already does this for the same failure mode,
+  consumer. Worth doing when a third consumer appears; as of 2026-10-27 tracked on PT-4935.
+  (e) **Heal from network events instead of a timer** — `use-project-picker-data.hook.ts` already does this for the same failure mode,
   refetching on `platform.onDidChangeProjects` and on `object:onDidCreateNetworkObject` filtered
   to PDP factories, debounced. It costs nothing while idle and heals in about 200 ms. Not chosen
   for the hook: three more network subscriptions against one timer, and the events miss a C#
@@ -6730,10 +6730,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   open loses its books from the list mid-interaction, accepted over showing books that cannot be
   navigated to. A subscription that dies without reporting a failure (a provider whose network
   object is disposed by an extension host restart while the subscription stays registered
-  locally) is not covered by the timer; as of 2026-09-24 it is tracked on PT-4592.
-  The flap sources that exposed this are tracked as PT-4592 (a panel republishing its navigable
-  project ids while its reference list resolves transiently empty) and PT-4743 (one installed
-  resource yielding two picker rows under two project id spellings). Revisit rule (2) if a
+  locally) is not covered by the timer; as of 2026-10-27 it is tracked on PT-4934, not yet
+  confirmed in a running app. The flap sources that exposed this were PT-4592 (a panel
+  republishing its navigable project ids while its reference list resolves transiently empty;
+  fixed by #2928) and PT-4743 (one installed resource yielding two picker rows under two project
+  id spellings; open as of 2026-10-27). Revisit rule (2) if a
   platform-level in-flight de-duplication lands. Rule (1) is restated for agents in
   `.claude/rules/architecture/provider-lookups-fan-out.md`.
 
