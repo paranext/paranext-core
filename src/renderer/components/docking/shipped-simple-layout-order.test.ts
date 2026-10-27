@@ -275,16 +275,16 @@ describe('shipped Simple-mode Column 3 order', () => {
     ]);
   });
 
-  it('lists a TOOLS item for every third-column tab', () => {
+  it('lists a TOOLS item for every third-column tab, in the column order', () => {
     const merged = mergeDefaultLayoutSupplement(simpleLayout, supplementEntries, 'simple');
     const mappedTabs = simpleToolsCommands().map((command) => TAB_FOR_COMMAND[command]);
     // TAB_FOR_COMMAND[command] is undefined for an unmapped command, and a missing layout slot is
     // also undefined, so the two could compare equal below for the wrong reason. Guard each mapped
     // entry first so an unmapped command fails here instead.
     mappedTabs.forEach((tab) => expect(tab).toBeDefined());
-    // The menu's own order is the design's (Text collection before Comments), not the column's;
-    // what must hold is that every tab a user can bring forward has an item.
-    expect([...mappedTabs].sort()).toEqual(columnWebViewTypes(merged, 2).sort());
+    // Order-sensitive on purpose: the menu lists the tools in the order the user sees their tabs, so
+    // reordering either the column or the menu must reorder the other.
+    expect(mappedTabs).toEqual(columnWebViewTypes(merged, 2));
   });
 
   it('the real supplement leaves nothing Simple-mode-only behind in a power-mode merge', () => {
