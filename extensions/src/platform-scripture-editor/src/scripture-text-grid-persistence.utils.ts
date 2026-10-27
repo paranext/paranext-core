@@ -1,4 +1,10 @@
+import papi, { logger } from '@papi/frontend';
 import type { ResourceReferenceList, TextCollectionOverlay } from 'platform-scripture';
+import {
+  type DblResourceData,
+  formatReplacementString,
+  getErrorMessage,
+} from 'platform-bible-utils';
 import {
   addToUserResources,
   removeFromUserResources,
@@ -33,21 +39,6 @@ export function persistUserDisplay(
     writes.push(writer.setUserReferencedProjectsAndResources(next.userReferenced));
   if (next.overlay !== sources.overlay) writes.push(writer.setTextCollectionOverlay(next.overlay));
   return writes;
-}
-
-/**
- * Removes a resource from the per-user list, persisting only when the list actually changed (a
- * no-op on admin-owned or absent ids). Returns the fired write, or `undefined` when nothing
- * changed.
- */
-export function persistUserRemoval(
-  writer: UserResourceWriter,
-  resourceId: string,
-  userReferenced: ResourceReferenceList,
-): Promise<unknown> | undefined {
-  const next = removeFromUserResources(resourceId, userReferenced);
-  if (next === userReferenced) return undefined;
-  return writer.setUserReferencedProjectsAndResources(next);
 }
 
 /**
@@ -103,4 +94,65 @@ export async function removeFromUserTextConnections(
   if (nextList === userList) return 'alreadyGone';
   await setUserTextConnections(nextList);
   return 'removed';
+}
+
+/** Sent when a removal from the resource picker fails, as a notification, which localizes it. */
+export const REMOVE_FROM_USER_LIST_FAILED_KEY = '%webView_resourcePanel_removeFailed%';
+/**
+ * Sent when a removal from the resource picker succeeds. It is formatted with the resource's name
+ * before it is sent, so a caller fetches it with its other strings and passes it to
+ * {@link removeFromUserListAndNotify}.
+ */
+export const RESOURCE_REMOVED_FROM_USER_LIST_KEY = '%webView_resourcePanel_resourceRemoved%';
+
+/**
+ * Removes a resource the user chose to remove in the resource picker, through
+ * {@link removeFromUserTextConnections}, and tells them how it went: the dialog has closed, and a
+ * resource still installed stays on screen, so the change would otherwise go unannounced. A
+ * resource already off the list counts as removed. With no `listIds` there is nothing to remove,
+ * which is reported as a failure rather than as success.
+ *
+ * @param resource The resource the picker returned
+ * @param listIds The ids the user's list stores it under, as in
+ *   `PickerDialogSelection.listIdsByRemovableId` when the picker opened
+ * @param getUserTextConnections Function to retrieve the local user's text connections
+ * @param setUserTextConnections Function to set the local user's text connections
+ * @param removedMessageTemplate The localized {@link RESOURCE_REMOVED_FROM_USER_LIST_KEY}; no
+ *   success notification is sent without it
+ * @returns Resolves once the notification is sent. Rejects only if sending it fails.
+ */
+export async function removeFromUserListAndNotify(
+  resource: DblResourceData,
+  listIds: string[],
+  getUserTextConnections: () => Promise<ResourceReferenceList | undefined>,
+  setUserTextConnections: (list: ResourceReferenceList) => Promise<unknown>,
+  removedMessageTemplate: string | undefined,
+): Promise<void> {
+  let result: UserListRemovalResult | undefined;
+  if (listIds.length === 0)
+    logger.warn(`Could not remove ${resource.dblEntryUid}: no entry of the user's list matches it`);
+  else
+    try {
+      result = await removeFromUserTextConnections(
+        listIds,
+        getUserTextConnections,
+        setUserTextConnections,
+      );
+    } catch (e) {
+      logger.warn(`Failed to remove ${resource.dblEntryUid}: ${getErrorMessage(e)}`);
+    }
+
+  if (result === 'removed' || result === 'alreadyGone') {
+    if (removedMessageTemplate)
+      await papi.notifications.send({
+        message: formatReplacementString(removedMessageTemplate, {
+          resourceName: resource.displayName,
+        }),
+        severity: 'info',
+      });
+    return;
+  }
+  if (result === 'listUnavailable')
+    logger.warn(`Could not remove ${resource.dblEntryUid}: the user's list is not loaded`);
+  await papi.notifications.send({ message: REMOVE_FROM_USER_LIST_FAILED_KEY, severity: 'error' });
 }

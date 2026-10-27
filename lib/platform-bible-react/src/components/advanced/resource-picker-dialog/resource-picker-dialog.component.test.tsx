@@ -59,12 +59,13 @@ const STRINGS: ResourcePickerDialogLocalizedStrings = {
   '%resourcePicker_description%':
     "Choose a resource to add. Picking one downloads it if it isn't already installed.",
   '%resourcePicker_description_withRemove%':
-    'Choose a resource to add, or one of your own resources to remove it from your list.',
+    'Choose a resource to add, or remove one of your own from your list.',
   '%resourcePicker_section_team%': 'Team resources',
   '%resourcePicker_section_team_caption%': 'Only a project administrator can remove these.',
   '%resourcePicker_section_user%': 'User resources',
-  '%resourcePicker_section_user_caption%': 'Select one to remove it from your list.',
+  '%resourcePicker_section_user_caption%': 'Removing one takes it off your list.',
   '%resourcePicker_teamLock%': 'Shared by your team',
+  '%resourcePicker_removeFromList%': 'Remove {resourceName} from your list',
 };
 
 function renderDialog(overrides: Partial<Parameters<typeof ResourcePickerDialog>[0]> = {}) {
@@ -824,7 +825,7 @@ describe('ResourcePickerDialog team and user sections', () => {
   });
 
   it('splits the selected rows into team and user sections when team ids are given', () => {
-    renderDialog({ teamResourceIds: TEAM_IDS, allowDeselect: true });
+    renderDialog({ teamResourceIds: TEAM_IDS, onRemove: vi.fn() });
     expect(screen.queryByText('Already selected')).not.toBeInTheDocument();
     // Every `tr`, not `getAllByRole('row')`: a selectable row's role is `button`.
     const rows = Array.from(document.querySelectorAll('tr')).map((row) => row.textContent ?? '');
@@ -840,27 +841,41 @@ describe('ResourcePickerDialog team and user sections', () => {
     expect(screen.getByText('Shared by your team')).toBeInTheDocument();
   });
 
-  it('never lets a team row be picked, even with allowDeselect', async () => {
-    const { onSelect } = renderDialog({ teamResourceIds: TEAM_IDS, allowDeselect: true });
+  it('never lets a team row be picked or removed', async () => {
+    const onRemove = vi.fn();
+    const { onSelect } = renderDialog({ teamResourceIds: TEAM_IDS, onRemove });
     const nivRow = getRow('NIV');
     expect(nivRow).not.toHaveAttribute('role', 'button');
+    // Positive control: the user's row in the same dialog does get a remove button.
+    expect(screen.getByRole('button', { name: 'Remove RVR60 from your list' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove NIV from your list' })).toBeNull();
     fireEvent.click(nivRow);
     fireEvent.keyDown(nivRow, { key: 'Enter' });
     expect(onSelect).not.toHaveBeenCalled();
+    expect(onRemove).not.toHaveBeenCalled();
   });
 
   // `pointer-events: none` would also block the native hover label a truncated name relies on.
   it('leaves a team row hoverable, so a truncated name can still be read', () => {
-    renderDialog({ teamResourceIds: TEAM_IDS, allowDeselect: true });
+    renderDialog({ teamResourceIds: TEAM_IDS, onRemove: vi.fn() });
     expect(getRow('NIV').className).not.toContain('pointer-events-none');
   });
 
-  it('lets a user row be picked, described by what picking it does', () => {
-    const { onSelect } = renderDialog({ teamResourceIds: TEAM_IDS, allowDeselect: true });
-    const rvrRow = screen.getByRole('button', { name: 'RVR60' });
-    expect(rvrRow).toHaveAccessibleDescription('Select one to remove it from your list.');
+  it('removes a user row only from its remove button, described by what removing does', () => {
+    const onRemove = vi.fn();
+    const { onSelect } = renderDialog({ teamResourceIds: TEAM_IDS, onRemove });
+    const removeButton = screen.getByRole('button', { name: 'Remove RVR60 from your list' });
+    expect(removeButton).toHaveAccessibleDescription('Removing one takes it off your list.');
+
+    const rvrRow = getRow('RVR60');
+    expect(rvrRow).not.toHaveAttribute('role', 'button');
+    fireEvent.click(rvrRow);
     fireEvent.keyDown(rvrRow, { key: 'Enter' });
-    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ dblEntryUid: 'selected-2' }));
+    expect(onRemove).not.toHaveBeenCalled();
+
+    fireEvent.click(removeButton);
+    expect(onRemove).toHaveBeenCalledWith(expect.objectContaining({ dblEntryUid: 'selected-2' }));
+    expect(onSelect).not.toHaveBeenCalled();
   });
 
   it('describes removing only when the user can remove their own rows', () => {
@@ -875,35 +890,39 @@ describe('ResourcePickerDialog team and user sections', () => {
         />
       </Dialog>,
     );
-    expect(screen.queryByText('Select one to remove it from your list.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Removing one takes it off your list.')).not.toBeInTheDocument();
     expect(screen.getByText(/^Choose a resource to add\. Picking one/)).toBeInTheDocument();
     unmount();
 
-    renderDialog({ teamResourceIds: TEAM_IDS, allowDeselect: true });
-    expect(screen.getByText(/or one of your own resources to remove it/)).toBeInTheDocument();
+    renderDialog({ teamResourceIds: TEAM_IDS, onRemove: vi.fn() });
+    expect(screen.getByText(/or remove one of your own from your list/)).toBeInTheDocument();
   });
 
   it("does not offer removing when every selected resource is the team's", () => {
-    renderDialog({ teamResourceIds: SAMPLE_SELECTED_IDS, allowDeselect: true });
+    renderDialog({ teamResourceIds: SAMPLE_SELECTED_IDS, onRemove: vi.fn() });
     // Positive control: the split is on, so the add-only text is a real answer.
     expect(screen.getAllByText('Team resources').length).toBeGreaterThan(0);
     expect(screen.getByText(/^Choose a resource to add\. Picking one/)).toBeInTheDocument();
   });
 
-  it('keeps user rows inert without allowDeselect', () => {
-    const { onSelect } = renderDialog({ teamResourceIds: TEAM_IDS });
+  // `allowDeselect` belongs to the single "Included" section, so it must not make a user row
+  // removable.
+  it('keeps user rows inert without onRemove, even with allowDeselect', () => {
+    const { onSelect } = renderDialog({ teamResourceIds: TEAM_IDS, allowDeselect: true });
+    expect(screen.queryByRole('button', { name: /from your list/ })).toBeNull();
     fireEvent.click(getRow('RVR60'));
+    fireEvent.keyDown(getRow('RVR60'), { key: 'Enter' });
     expect(onSelect).not.toHaveBeenCalled();
   });
 
   it('renders no heading for a group with no rows', () => {
-    renderDialog({ teamResourceIds: [], allowDeselect: true });
+    renderDialog({ teamResourceIds: [], onRemove: vi.fn() });
     expect(screen.queryByText('Team resources')).not.toBeInTheDocument();
     expect(screen.getAllByText('User resources').length).toBeGreaterThan(0);
   });
 
   it('ignores a team id that is not selected', () => {
-    renderDialog({ teamResourceIds: ['installed-1'], allowDeselect: true });
+    renderDialog({ teamResourceIds: ['installed-1'], onRemove: vi.fn() });
     expect(screen.queryByText('Team resources')).not.toBeInTheDocument();
     // ESV stays where an unselected installed resource belongs.
     expect(screen.getByRole('button', { name: 'ESV' })).toBeInTheDocument();

@@ -24,27 +24,6 @@ export function toResourceReference(
 }
 
 /**
- * Whether a resource the resource picker dialog returned is one the user chose to remove. The
- * dialog returns a selected resource only from its removable rows, and it decides "selected" by an
- * exact match on `dblEntryUid`, so this applies the same rule to the options the dialog was opened
- * with. Deciding from the list as it is now instead would turn an add into a removal whenever the
- * resource reached the list while the dialog was open.
- *
- * @param resource The resource the dialog returned
- * @param options The options the dialog was opened with
- * @returns `true` if picking `resource` removes it
- */
-export function isRemovalPick(
-  resource: DblResourceData,
-  options: { selectedResourceIds?: string[]; teamResourceIds?: string[] },
-): boolean {
-  return (
-    !!options.selectedResourceIds?.includes(resource.dblEntryUid) &&
-    !options.teamResourceIds?.includes(resource.dblEntryUid)
-  );
-}
-
-/**
  * Puts a reference first in the current user's personal text connections, replacing any earlier
  * copy of it however its DBL entry UID is cased (see `isSameResource`). The copy's other fields —
  * whether it is in the user's Text collection, data the list round-trips — carry over, so moving a

@@ -44,14 +44,13 @@ import {
   VIEW_OPTIONS_NOTICE_STRING_KEYS,
 } from './scripture-text-grid/view-options-notice.utils';
 import { planResourcePick } from './scripture-text-grid/resource-pick.utils';
-import { isRemovalPick } from './select-dbl-resource';
 import {
   persistCellOrder,
   persistUserAddition,
   persistUserDisplay,
-  persistUserRemoval,
+  removeFromUserListAndNotify,
   removeFromUserTextConnections,
-  type UserListRemovalResult,
+  RESOURCE_REMOVED_FROM_USER_LIST_KEY,
 } from './scripture-text-grid-persistence.utils';
 import { useTextCollectionSources } from './use-text-collection-sources.hook';
 import { useIsPowerMode } from './use-is-power-mode.hook';
@@ -106,10 +105,6 @@ const VIEW_OPTIONS_BUTTON_KEY = '%webView_scriptureTextGrid_viewOptions_openPane
 // `useLocalizedStrings`; only keys rendered directly in JSX go in `ALL_STRING_KEYS` below.
 const INSTALL_FAILED_KEY = '%webView_selectDblResource_installFailed%';
 const PERSIST_FAILED_KEY = '%webView_scriptureTextGrid_viewOptions_persistFailed%';
-// The Bible texts and Commentaries tabs say the same when a removal from the picker fails.
-const REMOVE_FAILED_KEY = '%webView_resourcePanel_removeFailed%';
-// Formatted here with the resource's name before it is sent, so it IS fetched below.
-const RESOURCE_REMOVED_KEY = '%webView_resourcePanel_resourceRemoved%';
 const NO_PROJECT_KEY = '%webView_resourcePanel_noProject%';
 const LOADING_KEY = '%general_loading%';
 const NOT_SUPPORTED_KEY = '%webView_scriptureTextGrid_viewOptions_notSupported%';
@@ -146,7 +141,8 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   REORDER_ANNOUNCEMENT_KEY,
   REORDER_HANDLE_KEY,
   REORDER_HINT_KEY,
-  RESOURCE_REMOVED_KEY,
+  // Formatted with the resource's name before it is sent, so it IS fetched here.
+  RESOURCE_REMOVED_FROM_USER_LIST_KEY,
   ...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
 ];
 
@@ -399,7 +395,11 @@ function ScriptureTextGridProjectView({
     (resourceId: string) => {
       const { current } = sourcesRef;
       if (!current || !textConnectionPdp) return;
-      persistUserRemoval(textConnectionPdp, resourceId, current.userReferenced)?.catch((e) => {
+      removeFromUserTextConnections(
+        [resourceId],
+        async () => current.userReferenced,
+        (list) => textConnectionPdp.setUserReferencedProjectsAndResources(list),
+      ).catch((e) => {
         papi.notifications.send({ message: PERSIST_FAILED_KEY, severity: 'error' });
         logger.warn(`Failed to persist removal: ${getErrorMessage(e)}`);
       });
@@ -481,40 +481,24 @@ function ScriptureTextGridProjectView({
     [sources, top, bottom, cachedResources],
   );
 
-  // Removes exactly what the ✕ in View options would, through the helper the Bible texts and
-  // Commentaries tabs use. The resource stays installed, and leaves those tabs too, since they read
-  // the same list.
+  // What the user's list stores each removable resource under, as the picker showed it when it
+  // opened, since the rows can change while it is open.
+  const listIdsAtPickerOpenRef = useRef<ReadonlyMap<string, string[]>>(new Map());
+
+  // Removes exactly what the ✕ in View options would, as the Bible texts and Commentaries tabs do.
+  // The resource stays installed, and leaves those tabs too, since they read the same list.
   const handleResourceRemove = useCallback(
-    async (resource: DblResourceData) => {
-      const listIds = pickerSelection.listIdsByRemovableId.get(resource.dblEntryUid) ?? [];
+    (resource: DblResourceData) => {
       const pdp = textConnectionPdp;
-      let result: UserListRemovalResult | undefined;
-      try {
-        result = pdp
-          ? await removeFromUserTextConnections(
-              listIds,
-              async () => sourcesRef.current?.userReferenced,
-              (list) => pdp.setUserReferencedProjectsAndResources(list),
-            )
-          : 'listUnavailable';
-      } catch (e) {
-        logger.warn(`Failed to remove ${resource.dblEntryUid}: ${getErrorMessage(e)}`);
-      }
-      if (result === 'removed' || result === 'alreadyGone') {
-        // The picker has closed, so say what changed.
-        const template = resolveLocalizedString(localizedStrings, RESOURCE_REMOVED_KEY);
-        if (template)
-          papi.notifications.send({
-            message: formatReplacementString(template, { resourceName: resource.displayName }),
-            severity: 'info',
-          });
-        return;
-      }
-      if (result === 'listUnavailable')
-        logger.warn(`Could not remove ${resource.dblEntryUid}: the user's list is not loaded`);
-      papi.notifications.send({ message: REMOVE_FAILED_KEY, severity: 'error' });
+      return removeFromUserListAndNotify(
+        resource,
+        listIdsAtPickerOpenRef.current.get(resource.dblEntryUid) ?? [],
+        async () => (pdp ? sourcesRef.current?.userReferenced : undefined),
+        async (list) => pdp?.setUserReferencedProjectsAndResources(list),
+        resolveLocalizedString(localizedStrings, RESOURCE_REMOVED_FROM_USER_LIST_KEY),
+      );
     },
-    [pickerSelection, textConnectionPdp, localizedStrings],
+    [textConnectionPdp, localizedStrings],
   );
 
   // Reconcile the saved order: drop ids that have left the user's world (X-removed, or an admin
@@ -542,7 +526,7 @@ function ScriptureTextGridProjectView({
         selectedResourceIds: pickerSelection.selectedResourceIds,
         // Team resources exist only in Simple, so Power keeps the single "Included" section.
         teamResourceIds: isViewOptionsGrouped ? pickerSelection.teamResourceIds : undefined,
-        allowDeselect: isViewOptionsGrouped && !!textConnectionPdp,
+        allowRemove: isViewOptionsGrouped && !!textConnectionPdp,
         isModal: true,
         notice: resolvePickerNotice(localizedStrings, !!textConnectionPdp),
         // With no text collection to add to, installing is all a pick can accomplish — so an
@@ -552,23 +536,27 @@ function ScriptureTextGridProjectView({
       [pickerSelection, isViewOptionsGrouped, textConnectionPdp, localizedStrings],
     ),
     useCallback(
-      (
-        resource: DblResourceData | undefined,
-        _dialogType: string,
-        options: DialogTypes['platform.resourcePicker']['options'],
-      ) => {
-        if (!resource) return;
-        if (isRemovalPick(resource, options)) {
-          handleResourceRemove(resource);
+      (result: DialogTypes['platform.resourcePicker']['responseType'] | undefined) => {
+        if (!result) return;
+        if (result.action === 'remove') {
+          handleResourceRemove(result.resource).catch((e) =>
+            logger.warn(`Could not report the resource removal: ${getErrorMessage(e)}`),
+          );
           return;
         }
-        handleResourceSelect(resource).catch((e) =>
+        handleResourceSelect(result.resource).catch((e) =>
           logger.error(`Resource selection failed: ${getErrorMessage(e)}`),
         );
       },
       [handleResourceSelect, handleResourceRemove],
     ),
   );
+
+  // The picker is modal, so it cannot be opened again while open and replace the ids it is using.
+  const openResourcePicker = useCallback(() => {
+    listIdsAtPickerOpenRef.current = pickerSelection.listIdsByRemovableId;
+    return showResourcePicker();
+  }, [pickerSelection, showResourcePicker]);
 
   return (
     <>
@@ -605,7 +593,7 @@ function ScriptureTextGridProjectView({
               installingResourceNames={installingResourceNames}
               onCheckedChange={handleCheckedChange}
               onRemoveFromList={handleRemoveFromList}
-              onGetResources={showResourcePicker}
+              onGetResources={openResourcePicker}
               // Disabled whenever `getViewOptionsAvailability` is not `ready` — no project, settings
               // still arriving, no settings provider, or settings that could not be read — since
               // every action would otherwise silently no-op.

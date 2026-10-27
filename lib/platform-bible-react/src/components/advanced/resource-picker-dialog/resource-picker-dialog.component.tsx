@@ -1,4 +1,5 @@
 import { Alert, AlertDescription } from '@/components/shadcn-ui/alert';
+import { Button } from '@/components/shadcn-ui/button';
 import { EmptyState } from '@/components/basics/empty-state.component';
 import { RetryableErrorView } from '@/components/basics/retryable-error-view.component';
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/shadcn-ui/dialog';
@@ -16,7 +17,7 @@ import {
 } from '@/components/advanced/multi-select-combo-box.component';
 import { SearchBar } from '@/components/basics/search-bar.component';
 import { DblResourceData, ResourceType, formatReplacementString } from 'platform-bible-utils';
-import { Check, CloudOff, Lock, SearchX } from 'lucide-react';
+import { Check, CloudOff, Lock, SearchX, X } from 'lucide-react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type RefObject } from 'react';
 import { Spinner } from '@/components/basics/spinner.component';
 import {
@@ -40,6 +41,7 @@ export const RESOURCE_PICKER_DIALOG_STRING_KEYS = Object.freeze([
   '%resourcePicker_section_user%',
   '%resourcePicker_section_user_caption%',
   '%resourcePicker_teamLock%',
+  '%resourcePicker_removeFromList%',
   '%resourcePicker_section_installed%',
   '%resourcePicker_section_available_to_download%',
   '%resourcePicker_no_results%',
@@ -127,7 +129,7 @@ export interface ResourcePickerDialogProps {
    *
    * When provided, the selected rows are listed in two sections instead of one "Included" section:
    * "Team resources", each marked with a lock and never selectable, and "User resources", which
-   * `allowDeselect` makes selectable. When omitted, every selected row is listed under "Included".
+   * `onRemove` gives a remove button. When omitted, every selected row is listed under "Included".
    * IDs are compared exactly, as `selectedResourceIds` are.
    */
   teamResourceIds?: string[];
@@ -138,9 +140,8 @@ export interface ResourcePickerDialogProps {
    * the caller treat it as a deselect. Defaults to false (Already Selected rows stay
    * non-interactive, showing only a checkmark) to preserve existing consumers' behavior.
    *
-   * A pick is a deselect exactly when `selectedResourceIds` contains its `dblEntryUid`, compared
-   * exactly, as the sections are built. A caller that compares any other way can read an add as a
-   * removal.
+   * Applies only to the single "Included" section, so it has no effect when `teamResourceIds` is
+   * provided; use `onRemove` there.
    */
   allowDeselect?: boolean;
   /**
@@ -154,6 +155,12 @@ export interface ResourcePickerDialogProps {
   getDisabledReason?: (resource: DblResourceData) => string | undefined;
   /** Called when the user clicks a resource row to select it */
   onSelect: (resource: DblResourceData) => void;
+  /**
+   * Called when the user presses the remove button on a row under "User resources". Those rows get
+   * the button only when this is provided and `teamResourceIds` is too; the rest of the row is
+   * never clickable, so a click meant to select a resource cannot remove it.
+   */
+  onRemove?: (resource: DblResourceData) => void;
   /**
    * Ref to the search input, for a host that decides where focus lands when the dialog opens.
    *
@@ -245,14 +252,18 @@ function DisabledResourceRow({ resource, reason }: { resource: DblResourceData; 
  * can be picked and is not already picked.
  *
  * `indicator` fills the fixed-width slot at the start of each row, and `indicatorLabel` is what a
- * screen reader hears for it — the section label when omitted. A `caption` under the heading also
- * describes each selectable row, so it can say what picking one does.
+ * screen reader hears for it — the section label when omitted. With `onRemove`, a remove button
+ * labelled by `getRemoveLabel` takes that slot instead, and the row itself is not clickable. A
+ * `caption` under the heading also describes each selectable row or remove button, so it can say
+ * what using one does.
  */
 function ResourceSection({
   label,
   caption,
   resources,
   onSelect,
+  onRemove,
+  getRemoveLabel,
   indicator,
   indicatorLabel,
   getDisabledReason,
@@ -261,6 +272,8 @@ function ResourceSection({
   caption?: string;
   resources: DblResourceData[];
   onSelect?: (resource: DblResourceData) => void;
+  onRemove?: (resource: DblResourceData) => void;
+  getRemoveLabel?: (resource: DblResourceData) => string;
   indicator?: 'check' | 'lock';
   indicatorLabel?: string;
   getDisabledReason?: (resource: DblResourceData) => string | undefined;
@@ -321,11 +334,31 @@ function ResourceSection({
                 is a hard width the column cannot grow past, and the base 8px start padding leaves the
                 14px glyph too little room to sit in. The two have to be read together. */}
             <TableCell className="tw:border-0 tw:px-1 tw:py-1">
-              {indicator && (
-                <>
-                  <IndicatorIcon className="tw:h-3.5 tw:w-3.5" aria-hidden />
-                  <span className="tw:sr-only">{indicatorLabel ?? label}</span>
-                </>
+              {onRemove ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    {/* `size-5` fills the slot's 20px content width; the stock icon sizes are
+                        wider than the column. */}
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="tw:size-5"
+                      aria-label={getRemoveLabel?.(r) ?? r.displayName}
+                      aria-describedby={caption ? captionId : undefined}
+                      onClick={() => onRemove(r)}
+                    >
+                      <X className="tw:h-3.5 tw:w-3.5" aria-hidden />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{getRemoveLabel?.(r) ?? r.displayName}</TooltipContent>
+                </Tooltip>
+              ) : (
+                indicator && (
+                  <>
+                    <IndicatorIcon className="tw:h-3.5 tw:w-3.5" aria-hidden />
+                    <span className="tw:sr-only">{indicatorLabel ?? label}</span>
+                  </>
+                )
               )}
             </TableCell>
             <ResourceRowCells resource={r} />
@@ -428,6 +461,7 @@ export default function ResourcePickerDialog({
   allowDeselect,
   getDisabledReason,
   onSelect,
+  onRemove,
   searchInputRef: externalSearchInputRef,
 }: ResourcePickerDialogProps) {
   const [searchText, setSearchText] = useState('');
@@ -543,7 +577,7 @@ export default function ResourcePickerDialog({
   // Counted before the user's filters, so the description does not change as they search.
   const canRemoveOwn =
     isSelectionSplit &&
-    !!allowDeselect &&
+    !!onRemove &&
     typeScopedResources.some(
       (r) =>
         selectedResourceIds?.includes(r.dblEntryUid) && !teamResourceIds?.includes(r.dblEntryUid),
@@ -571,6 +605,12 @@ export default function ResourcePickerDialog({
   const teamLockLabel = localizeString(localizedStrings, '%resourcePicker_teamLock%');
   const userLabel = localizeString(localizedStrings, '%resourcePicker_section_user%');
   const userCaption = localizeString(localizedStrings, '%resourcePicker_section_user_caption%');
+  const removeFromListTemplate = localizeString(
+    localizedStrings,
+    '%resourcePicker_removeFromList%',
+  );
+  const getRemoveLabel = (resource: DblResourceData) =>
+    formatReplacementString(removeFromListTemplate, { resourceName: resource.displayName });
   const installedLabel = localizeString(localizedStrings, '%resourcePicker_section_installed%');
   const toDownloadLabel = localizeString(
     localizedStrings,
@@ -804,7 +844,8 @@ export default function ResourcePickerDialog({
                       label={userLabel}
                       caption={canRemoveOwn ? userCaption : undefined}
                       resources={userSelected}
-                      onSelect={allowDeselect ? onSelect : undefined}
+                      onRemove={onRemove}
+                      getRemoveLabel={getRemoveLabel}
                       indicator="check"
                     />
                   </>

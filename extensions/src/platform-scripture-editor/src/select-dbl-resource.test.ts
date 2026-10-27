@@ -7,7 +7,7 @@ import {
   removeFromUserResources,
   type TextCollectionSources,
 } from './scripture-text-grid-contents.utils';
-import { isRemovalPick, selectTextConnection } from './select-dbl-resource';
+import { selectTextConnection } from './select-dbl-resource';
 
 const RESOURCE_A = {
   dblEntryUid: 'uid-a',
@@ -293,28 +293,6 @@ describe('selectDblResource', () => {
       expect(setUserList).toHaveBeenCalled();
       expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'uid-b' }));
     });
-  });
-});
-
-describe('isRemovalPick', () => {
-  const OPTIONS = { selectedResourceIds: ['uid-a', 'uid-b'], teamResourceIds: ['uid-b'] };
-
-  it('reads a selected, unlocked resource as a removal', () => {
-    expect(isRemovalPick(RESOURCE_A, OPTIONS)).toBe(true);
-  });
-
-  it('reads a resource the dialog did not list as selected as an add', () => {
-    expect(isRemovalPick(RESOURCE_LOCAL, OPTIONS)).toBe(false);
-  });
-
-  it('never reads a locked resource as a removal', () => {
-    expect(isRemovalPick(RESOURCE_B, OPTIONS)).toBe(false);
-  });
-
-  // The dialog lists a resource as selected only on an exact match, so a differently cased id put
-  // it under "Installed", and picking it there is an add.
-  it('matches ids exactly, as the dialog does', () => {
-    expect(isRemovalPick({ ...RESOURCE_A, dblEntryUid: 'UID-A' }, OPTIONS)).toBe(false);
   });
 });
 

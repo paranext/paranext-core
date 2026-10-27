@@ -63,15 +63,10 @@ type GridStandInProps = {
 let hookResultsByProjectId = new Map<string | undefined, TextCollectionSourcesResult>();
 /** Result for any project id not in the map above. */
 let fallbackHookResult: TextCollectionSourcesResult;
-/** The resource the Get Resources dialog "returns" when the picker is opened. */
-let pickerResult: DblResourceData | undefined;
+/** What the Get Resources dialog "returns" when the picker is opened. */
+let pickerResult: DialogTypes['platform.resourcePicker']['responseType'] | undefined;
 /** The options the web view last opened the Get Resources dialog with. */
 let lastPickerOptions: DialogTypes['platform.resourcePicker']['options'] | undefined;
-/**
- * Options to resolve the dialog with in place of the ones it was opened with — standing in for a
- * dialog opened before the list changed.
- */
-let pickerOptionsOverride: DialogTypes['platform.resourcePicker']['options'] | undefined;
 /** Stands in for the `platformGetResources.dblResourcesProvider` data provider. */
 let dblResourcesProvider: { installDblResource: (dblEntryUid: string) => Promise<unknown> };
 
@@ -158,22 +153,20 @@ vi.mock('@papi/frontend/react', () => ({
   useData: () => ({
     ActiveEditorProjectId: () => [activeEditorProjectId, () => undefined, false],
   }),
-  // The real hook opens a modal dialog and invokes `callback` with what the user picked and the
-  // options the dialog was opened with. The returned opener stands in for that whole round trip, so
-  // a click on Get Resources lands the queued `pickerResult` in the web view's own handler.
+  // The real hook opens a modal dialog and invokes `callback` with what the user picked. The
+  // returned opener stands in for that whole round trip, so a click on Get Resources lands the
+  // queued `pickerResult` in the web view's own handler.
   useDialogCallback:
     (
-      dialogType: string,
+      _dialogType: string,
       options: DialogTypes['platform.resourcePicker']['options'],
       callback: (
-        result: DblResourceData | undefined,
-        dialogType: string,
-        options: DialogTypes['platform.resourcePicker']['options'],
+        result: DialogTypes['platform.resourcePicker']['responseType'] | undefined,
       ) => void,
     ) =>
     () => {
       lastPickerOptions = options;
-      callback(pickerResult, dialogType, pickerOptionsOverride ?? options);
+      callback(pickerResult);
     },
 }));
 
@@ -401,7 +394,6 @@ beforeEach(() => {
   isPowerMode = false;
   pickerResult = undefined;
   lastPickerOptions = undefined;
-  pickerOptionsOverride = undefined;
   dblResourcesProvider = { installDblResource: () => Promise.resolve(true) };
   sendCommand.mockResolvedValue([]);
 });
@@ -521,7 +513,7 @@ describe('chapter-context split across a project change', () => {
     const pdp = createFakeTextConnectionPdp();
     hookResultsByProjectId.set('projectOne', readyResult(twoResourceSources([]), pdp));
     hookResultsByProjectId.set('projectTwo', readyResult(twoResourceSources([]), pdp));
-    pickerResult = UNINSTALLED_RESOURCE;
+    pickerResult = { resource: UNINSTALLED_RESOURCE, action: 'add' };
     // Never settles: the install is still in flight for the whole test.
     dblResourcesProvider = {
       installDblResource: () =>
@@ -739,7 +731,7 @@ describe('removing a resource in the Get Resources picker', () => {
     const teamIds = [TEAM_SHOWN.id, TEAM_HIDDEN.id, TEAM_UNSET.id];
     expect(lastPickerOptions?.selectedResourceIds).toEqual([...teamIds, ALPHA.id, BETA.id]);
     expect(lastPickerOptions?.teamResourceIds).toEqual(teamIds);
-    expect(lastPickerOptions?.allowDeselect).toBe(true);
+    expect(lastPickerOptions?.allowRemove).toBe(true);
   });
 
   // Team resources exist only in Simple.
@@ -754,7 +746,7 @@ describe('removing a resource in the Get Resources picker', () => {
     // Positive control: the selected ids are still sent, so the missing split is a real answer.
     expect(lastPickerOptions?.selectedResourceIds).toContain(ALPHA.id);
     expect(lastPickerOptions?.teamResourceIds).toBeUndefined();
-    expect(lastPickerOptions?.allowDeselect).toBe(false);
+    expect(lastPickerOptions?.allowRemove).toBe(false);
   });
 
   it("removes a picked resource of the user's own from their list without installing anything", async () => {
@@ -762,7 +754,7 @@ describe('removing a resource in the Get Resources picker', () => {
     hookResultsByProjectId.set('projectOne', readyResult(teamAndUserSources(), pdp));
     const installDblResource = vi.fn(() => Promise.resolve(true));
     dblResourcesProvider = { installDblResource };
-    pickerResult = localResource(ALPHA);
+    pickerResult = { resource: localResource(ALPHA), action: 'remove' };
 
     await renderWebView({ projectId: 'projectOne' });
     await pickInGetResources();
@@ -783,7 +775,7 @@ describe('removing a resource in the Get Resources picker', () => {
     const pdp = createFakeTextConnectionPdp();
     pdp.setUserReferencedProjectsAndResources.mockRejectedValue(new Error('could not write'));
     hookResultsByProjectId.set('projectOne', readyResult(teamAndUserSources(), pdp));
-    pickerResult = localResource(ALPHA);
+    pickerResult = { resource: localResource(ALPHA), action: 'remove' };
 
     await renderWebView({ projectId: 'projectOne' });
     await pickInGetResources();
@@ -796,33 +788,46 @@ describe('removing a resource in the Get Resources picker', () => {
     );
   });
 
-  // Another tab removed it while the dialog was open: what the user asked for already holds.
-  it('treats a resource already off the list as removed', async () => {
+  // Saying it was removed would tell the user something left their list that was never on it.
+  it('reports a failure for a removal of a resource the picker did not list as theirs', async () => {
     const pdp = createFakeTextConnectionPdp();
     hookResultsByProjectId.set('projectOne', readyResult(teamAndUserSources(), pdp));
-    // Listed as the user's when the dialog opened, and gone from their list since.
-    const GONE = { id: 'projectGone', name: 'Gone' };
-    pickerResult = localResource(GONE);
-    pickerOptionsOverride = { selectedResourceIds: [GONE.id] };
+    pickerResult = {
+      resource: localResource({ id: 'projectGone', name: 'Gone' }),
+      action: 'remove',
+    };
 
     await renderWebView({ projectId: 'projectOne' });
     await pickInGetResources();
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith({
-        message: 'Gone was removed from your list.',
-        severity: 'info',
+        message: '%webView_resourcePanel_removeFailed%',
+        severity: 'error',
       }),
     );
     expect(pdp.setUserReferencedProjectsAndResources).not.toHaveBeenCalled();
-    expect(notify).not.toHaveBeenCalledWith(expect.objectContaining({ severity: 'error' }));
+    expect(notify).not.toHaveBeenCalledWith(expect.objectContaining({ severity: 'info' }));
+  });
+
+  it("removes a resource from the user's list with View options' remove button", async () => {
+    const pdp = createFakeTextConnectionPdp();
+    hookResultsByProjectId.set('projectOne', readyResult(teamAndUserSources(), pdp));
+
+    await renderWebView({ projectId: 'projectOne' });
+    await openViewOptions();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Alpha from list' }));
+
+    await waitFor(() =>
+      expect(pdp.setUserReferencedProjectsAndResources).toHaveBeenCalledWith(userList(BETA)),
+    );
   });
 
   it('still adds a picked resource the user does not have', async () => {
     const pdp = createFakeTextConnectionPdp();
     hookResultsByProjectId.set('projectOne', readyResult(teamAndUserSources(), pdp));
     const GAMMA = { id: 'projectGamma', name: 'Gamma' };
-    pickerResult = localResource(GAMMA);
+    pickerResult = { resource: localResource(GAMMA), action: 'add' };
 
     await renderWebView({ projectId: 'projectOne' });
     await pickInGetResources();

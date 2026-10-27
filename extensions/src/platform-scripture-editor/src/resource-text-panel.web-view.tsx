@@ -1,5 +1,5 @@
 import type { DialogTypes, WebViewProps } from '@papi/core';
-import papi, { logger } from '@papi/frontend';
+import { logger } from '@papi/frontend';
 import {
   useDataProvider,
   useDialogCallback,
@@ -16,7 +16,7 @@ import {
   LocalizeKey,
   ResourceType,
 } from 'platform-bible-utils';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ResourceReferenceList } from 'platform-scripture';
 import { useChapterUsjWithCopyLimit } from './copy-limit/use-chapter-usj-with-copy-limit.hook';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
@@ -49,10 +49,10 @@ import {
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { resolveLocalizedString } from './scripture-text-grid/view-options-notice.utils';
 import { resolveResourcePanelStringKeys } from './resource-panel-strings.utils';
-import { isRemovalPick, selectTextConnection } from './select-dbl-resource';
+import { selectTextConnection } from './select-dbl-resource';
 import {
-  removeFromUserTextConnections,
-  type UserListRemovalResult,
+  removeFromUserListAndNotify,
+  RESOURCE_REMOVED_FROM_USER_LIST_KEY,
 } from './scripture-text-grid-persistence.utils';
 import { ResourceTextPanel } from './resource-text-panel.component';
 import { RESOURCE_PANEL_STRING_KEYS } from './resource-text-panel.const';
@@ -62,11 +62,6 @@ import { ProjectCopyrightNotice } from './copyright-notice/project-copyright-not
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
-// Sent as a notification, which localizes it, rather than rendered here.
-const REMOVE_FAILED_KEY = '%webView_resourcePanel_removeFailed%';
-// Formatted here with the resource's name before it is sent, so it is fetched with the others.
-const RESOURCE_REMOVED_KEY = '%webView_resourcePanel_resourceRemoved%';
-
 // Built once at module scope, not inline in the `useLocalizedStrings` call. The hook's key array
 // must keep a stable identity across renders — a fresh array every render re-runs its lookup — and
 // `RESOURCE_PANEL_STRING_KEYS` is a frozen readonly tuple, so it is spread into a mutable
@@ -74,7 +69,7 @@ const RESOURCE_REMOVED_KEY = '%webView_resourcePanel_resourceRemoved%';
 const ALL_STRING_KEYS: LocalizeKey[] = [
   ...RESOURCE_PANEL_STRING_KEYS,
   ...COPYRIGHT_NOTICE_STRING_KEYS,
-  RESOURCE_REMOVED_KEY,
+  RESOURCE_REMOVED_FROM_USER_LIST_KEY,
 ];
 
 // This panel offers locally-downloaded resources alongside the ones already in the text
@@ -140,7 +135,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   );
 
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
-  const { dblResources, isCatalogReady, hasCatalogError, hasDblCatalog, refetchCatalog } =
+  const { dblResources, isCatalogReady, hasCatalogError, isAwaitingDblCatalog, refetchCatalog } =
     useDblResourceCatalog();
   const [pickerResources, arePickerResourcesLoading] = useResourcePickerResources(
     projectId,
@@ -479,44 +474,24 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
     );
   }, [pickerResources, dblResources]);
 
-  // The dialog has closed, and a resource still installed stays on screen, so say what changed.
-  const notifyResourceRemoved = useCallback(
-    (resource: DblResourceData) => {
-      const template = resolveLocalizedString(localizedStrings, RESOURCE_REMOVED_KEY);
-      if (!template) return;
-      papi.notifications.send({
-        message: formatReplacementString(template, { resourceName: resource.displayName }),
-        severity: 'info',
-      });
-    },
-    [localizedStrings],
-  );
+  // What the user's list stores each removable resource under, as the picker showed it when it
+  // opened. The rows can change while it is open (a catalog refetch empties them until it
+  // reloads), and a removal must take off what the user saw.
+  const listIdsAtPickerOpenRef = useRef<ReadonlyMap<string, string[]>>(new Map());
 
   // Leaves the resource installed; only the user's own list for this project changes, which the
   // Text Collection reads too. When it was the one on screen, the selection logic above keeps it
   // there while it is installed and falls back to the next resource once it leaves the list.
   const handleResourceRemove = useCallback(
-    async (resource: DblResourceData) => {
-      const listIds = pickerSelection.listIdsByRemovableId.get(resource.dblEntryUid) ?? [];
-      let result: UserListRemovalResult | undefined;
-      try {
-        result = await removeFromUserTextConnections(
-          listIds,
-          getUserResourceTexts,
-          setUserResourceTexts,
-        );
-      } catch (e) {
-        logger.warn(`Failed to remove ${resource.dblEntryUid}: ${getErrorMessage(e)}`);
-      }
-      if (result === 'removed' || result === 'alreadyGone') {
-        notifyResourceRemoved(resource);
-        return;
-      }
-      if (result === 'listUnavailable')
-        logger.warn(`Could not remove ${resource.dblEntryUid}: the user's list is not loaded`);
-      papi.notifications.send({ message: REMOVE_FAILED_KEY, severity: 'error' });
-    },
-    [pickerSelection, getUserResourceTexts, setUserResourceTexts, notifyResourceRemoved],
+    (resource: DblResourceData) =>
+      removeFromUserListAndNotify(
+        resource,
+        listIdsAtPickerOpenRef.current.get(resource.dblEntryUid) ?? [],
+        getUserResourceTexts,
+        setUserResourceTexts,
+        resolveLocalizedString(localizedStrings, RESOURCE_REMOVED_FROM_USER_LIST_KEY),
+      ),
+    [getUserResourceTexts, setUserResourceTexts, localizedStrings],
   );
 
   const handleResourceSelect = useCallback(
@@ -574,29 +549,33 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
         // section. With no project there is no list of the user's to remove anything from, and
         // until its settings provider arrives there is no way to write one.
         teamResourceIds: projectId && isSimpleMode ? pickerSelection.teamResourceIds : undefined,
-        allowDeselect: !!projectId && isSimpleMode && !!textConnectionsProvider,
+        allowRemove: !!projectId && isSimpleMode && !!textConnectionsProvider,
         isModal: true,
       }),
       [resourceType, pickerSelection, projectId, isSimpleMode, textConnectionsProvider],
     ),
     useCallback(
-      (
-        resource: DblResourceData | undefined,
-        _dialogType: string,
-        options: DialogTypes['platform.resourcePicker']['options'],
-      ) => {
-        if (!resource) return;
-        if (isRemovalPick(resource, options)) {
-          handleResourceRemove(resource);
+      (result: DialogTypes['platform.resourcePicker']['responseType'] | undefined) => {
+        if (!result) return;
+        if (result.action === 'remove') {
+          handleResourceRemove(result.resource).catch((e) =>
+            logger.warn(`Could not report the resource removal: ${getErrorMessage(e)}`),
+          );
           return;
         }
-        handleResourceSelect(resource).catch((e) =>
+        handleResourceSelect(result.resource).catch((e) =>
           logger.error(`Resource selection failed: ${getErrorMessage(e)}`),
         );
       },
       [handleResourceSelect, handleResourceRemove],
     ),
   );
+
+  // The picker is modal, so it cannot be opened again while open and replace the ids it is using.
+  const openResourcePicker = useCallback(() => {
+    listIdsAtPickerOpenRef.current = pickerSelection.listIdsByRemovableId;
+    return showResourcePicker();
+  }, [pickerSelection, showResourcePicker]);
 
   // #endregion
 
@@ -609,7 +588,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
       selectedRef={selectedRef}
       readiness={readiness}
       dblResources={dblResources}
-      isCatalogUnavailable={!hasDblCatalog}
+      isCatalogUnavailable={isAwaitingDblCatalog}
       // Only Simple mode has team resources, so Power lists every row together. Undefined (still
       // loading) lists them together too, so a Power session never shows the grouping, even for a
       // frame.
@@ -628,7 +607,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
       installFailureReason={installFailureReason}
       retryInstall={retryInstall}
       isOnline={isOnline}
-      onShowResourcePicker={showResourcePicker}
+      onShowResourcePicker={openResourcePicker}
       logger={logger}
       copyrightNotice={
         <ProjectCopyrightNotice

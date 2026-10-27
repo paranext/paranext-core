@@ -97,7 +97,7 @@ type ResourceSelectorDropdownProps = {
   selectedRef: PickerResource | undefined;
   dblResources: DblResourceData[];
   /**
-   * Whether there is no DBL catalog: still loading, failed, or no DBL credentials. See
+   * Whether a DBL catalog is expected but not here: still loading, or failed. See
    * `splitPickerResourcesBySource`.
    */
   isCatalogUnavailable: boolean;
@@ -284,9 +284,11 @@ export type ResourceTextPanelProps = {
   /** All DBL resources — used to label the selector rows. */
   dblResources: DblResourceData[];
   /**
-   * Whether there is no DBL catalog: still loading, failed, or no DBL credentials. The selector
-   * then lists the user's own and other installed resources together, since without the catalog the
-   * user's DBL references resolve as plain downloads.
+   * Whether a DBL catalog is expected but not here: still loading, or failed. The selector then
+   * lists the user's own and other installed resources together, since without the catalog the
+   * user's DBL references resolve as plain downloads. An installation with no DBL credentials keeps
+   * the groups: it will never have a catalog, and merging them would leave a resource the user
+   * removed listed as one of theirs.
    */
   isCatalogUnavailable: boolean;
   /**

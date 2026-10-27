@@ -213,30 +213,45 @@ describe('useDblResourceCatalog', () => {
     expect(result.current.isCatalogReady).toBe(false);
   });
 
-  describe('hasDblCatalog', () => {
-    it('reports a DBL catalog once one is delivered', async () => {
-      fetchDblCatalog = () => Promise.resolve({ status: 'available', resources: [RESOURCE] });
+  describe('isAwaitingDblCatalog', () => {
+    it('awaits a DBL catalog until one is delivered', async () => {
+      let deliver: ((value: DblResourceCatalog) => void) | undefined;
+      const pending = new Promise<DblResourceCatalog>((resolve) => {
+        deliver = resolve;
+      });
+      fetchDblCatalog = () => pending;
+
+      const { result } = renderHook(() => useDblResourceCatalog());
+      expect(result.current.isAwaitingDblCatalog).toBe(true);
+
+      await act(async () => deliver?.({ status: 'available', resources: [RESOURCE] }));
+      await waitFor(() => expect(result.current.isAwaitingDblCatalog).toBe(false));
+    });
+
+    it('keeps awaiting a DBL catalog the backend is not ready to serve', async () => {
+      fetchDblCatalog = () => Promise.resolve({ status: 'unavailable', reason: 'notReady' });
 
       const { result } = renderHook(() => useDblResourceCatalog());
 
-      await waitFor(() => expect(result.current.hasDblCatalog).toBe(true));
+      await waitFor(() => expect(result.current.hasCatalogError).toBe(true));
+      expect(result.current.isAwaitingDblCatalog).toBe(true);
     });
 
-    // Not an error, but DBL references still cannot be resolved, so a panel grouping rows by
-    // where they came from must treat it like one.
-    it('reports no DBL catalog for an installation with no DBL credentials', async () => {
+    // There will never be a catalog, so a panel grouping rows by where they came from keeps its
+    // groups rather than merging them as it does while one is still coming.
+    it('stops awaiting for an installation with no DBL credentials', async () => {
       fetchDblCatalog = () => Promise.resolve({ status: 'unavailable', reason: 'notConfigured' });
 
       const { result } = renderHook(() => useDblResourceCatalog());
 
       await waitFor(() => expect(result.current.isCatalogReady).toBe(true));
       expect(result.current.hasCatalogError).toBe(false);
-      expect(result.current.hasDblCatalog).toBe(false);
+      expect(result.current.isAwaitingDblCatalog).toBe(false);
     });
 
     // The rows a failed fetch delivered stay in `dblResources` until the retry answers, so the
     // flag describing them must not change any sooner than they do.
-    it('keeps reporting no DBL catalog through a retry until the retry delivers one', async () => {
+    it('keeps awaiting through a retry until the retry delivers a catalog', async () => {
       fetchDblCatalog = () => Promise.reject(new Error('offline'));
       const { result } = renderHook(() => useDblResourceCatalog());
       await waitFor(() => expect(result.current.hasCatalogError).toBe(true));
@@ -252,10 +267,10 @@ describe('useDblResourceCatalog', () => {
 
       await waitFor(() => expect(result.current.isLoadingResources).toBe(true));
       expect(result.current.hasCatalogError).toBe(false);
-      expect(result.current.hasDblCatalog).toBe(false);
+      expect(result.current.isAwaitingDblCatalog).toBe(true);
 
       await act(async () => deliver?.({ status: 'available', resources: [RESOURCE] }));
-      await waitFor(() => expect(result.current.hasDblCatalog).toBe(true));
+      await waitFor(() => expect(result.current.isAwaitingDblCatalog).toBe(false));
     });
   });
 });

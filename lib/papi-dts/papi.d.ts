@@ -9760,14 +9760,11 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
      */
     teamResourceIds?: string[];
     /**
-     * When true, picking a selected resource that is not the team's returns it like any other pick,
-     * so the caller can treat it as removing that resource. Defaults to false: selected resources
-     * cannot be picked.
-     *
-     * A returned resource is a removal exactly when `selectedResourceIds` contains its `dblEntryUid`,
-     * compared exactly, as the dialog does. Compare any other way and an add can read as a removal.
+     * When true, and `teamResourceIds` is provided, each row under "User resources" gets a remove
+     * button, and pressing it returns that resource with the action `'remove'`. Defaults to false:
+     * selected resources cannot be picked or removed.
      */
-    allowDeselect?: boolean;
+    allowRemove?: boolean;
     /**
      * Already-localized sentence shown above the resource list explaining something the caller knows
      * that limits what picking a resource will do. Shown ahead of any explanation the dialog itself
@@ -9786,6 +9783,17 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
      * model text, not a reference text. Defaults to false.
      */
     disableRestrictedModelTexts?: boolean;
+  };
+  /**
+   * What the Resource Picker dialog returns: the resource the user chose, and whether they chose to
+   * add it or to remove it from their list (see `allowRemove`)
+   *
+   * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
+   *   It is not yet a stable contract.
+   */
+  export type ResourcePickerDialogResult = {
+    resource: DblResourceData;
+    action: 'add' | 'remove';
   };
   /**
    * Options to provide when showing the Project Picker dialog (no extra options needed). The dialog
@@ -9835,7 +9843,10 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
      * @experimental This dialog was recently added, and its shape may change as we learn how it is
      *   used. It is not yet a stable contract.
      */
-    [RESOURCE_PICKER_DIALOG_TYPE]: DialogDataTypes<ResourcePickerDialogOptions, DblResourceData>;
+    [RESOURCE_PICKER_DIALOG_TYPE]: DialogDataTypes<
+      ResourcePickerDialogOptions,
+      ResourcePickerDialogResult
+    >;
     /**
      * @experimental This dialog was recently added, and its shape may change as we learn how it is
      *   used. It is not yet a stable contract.

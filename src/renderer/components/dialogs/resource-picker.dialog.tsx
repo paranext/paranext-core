@@ -47,7 +47,7 @@ function ResourcePickerDialogWrapper({
   resourceType,
   selectedResourceIds,
   teamResourceIds,
-  allowDeselect,
+  allowRemove,
   notice,
   allowSelectingInstalled,
   disableRestrictedModelTexts,
@@ -163,12 +163,14 @@ function ResourcePickerDialogWrapper({
       resourceType={resourceType}
       selectedResourceIds={selectedResourceIds}
       teamResourceIds={teamResourceIds}
-      allowDeselect={allowDeselect}
       localizedStrings={localizedStrings}
       notice={combinedNotice}
       allowSelectingInstalled={allowSelectingInstalled}
       getDisabledReason={getDisabledReason}
-      onSelect={submitDialog}
+      onSelect={(resource) => submitDialog({ resource, action: 'add' })}
+      onRemove={
+        allowRemove ? (resource) => submitDialog({ resource, action: 'remove' }) : undefined
+      }
     />
   );
 }
