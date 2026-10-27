@@ -840,39 +840,78 @@ export function Home({
     return project.isLocallyAvailable ? syncText : getText;
   };
 
-  const syncOrGetButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
-    if (isMenuItem)
-      return (
-        <DropdownMenuItem onClick={() => handleSendReceiveProject(project.projectId)}>
-          <span>{getSendReceiveButtonContent(project)}</span>
-        </DropdownMenuItem>
-      );
-    return (
-      <Button
-        disabled={isSendReceiveInProgress && activeSendReceiveProjects.includes(project.projectId)}
-        onClick={() => handleSendReceiveProject(project.projectId)}
-      >
-        {getSendReceiveButtonContent(project)}
-      </Button>
-    );
-  };
-
-  const openButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
-    const isOpening = openingProjectIds.includes(project.projectId);
-    const isOpenBlocked = !!project.unsupportedReason;
+  /**
+   * The text explaining why a project's Open, Sync, and Get are blocked, or `undefined` when the
+   * project is supported.
+   */
+  const getUnsupportedReasonText = (project: MergedProjectInfo): string | undefined => {
+    if (!project.unsupportedReason) return undefined;
     // A key with no translation can resolve to itself (the loading seed, and possibly the
     // fallback chain's last resort), so a value that is still a localize key is treated as
     // missing rather than shown verbatim as tooltip text. A reason that is missing that way, or
     // is not a key at all, falls back to the generic reason.
     const toShowableText = (text: string | undefined) =>
       text && !isLocalizeKey(text) ? text : undefined;
-    const unsupportedReasonText = isOpenBlocked
-      ? (toShowableText(
-          project.unsupportedReason && isLocalizeKey(project.unsupportedReason)
-            ? localizedUnsupportedReasons[project.unsupportedReason]
-            : undefined,
-        ) ?? toShowableText(localizedUnsupportedReasons[PROJECT_OPEN_BLOCKED_FALLBACK_KEY]))
-      : undefined;
+    return (
+      toShowableText(
+        isLocalizeKey(project.unsupportedReason)
+          ? localizedUnsupportedReasons[project.unsupportedReason]
+          : undefined,
+      ) ?? toShowableText(localizedUnsupportedReasons[PROJECT_OPEN_BLOCKED_FALLBACK_KEY])
+    );
+  };
+
+  const syncOrGetButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
+    const isBlocked = !!project.unsupportedReason;
+    const unsupportedReasonText = getUnsupportedReasonText(project);
+    // Blocked like Open: the reason is written inside the item (a menu item cannot show a hover
+    // tooltip), and the item stays `aria-disabled` rather than Radix-`disabled` so keyboard
+    // navigation still reaches it.
+    if (isMenuItem)
+      return (
+        <DropdownMenuItem
+          aria-disabled={isBlocked || undefined}
+          className={cn({ 'tw:opacity-50': isBlocked })}
+          onSelect={(event) => {
+            if (isBlocked) {
+              event.preventDefault();
+              return;
+            }
+            handleSendReceiveProject(project.projectId);
+          }}
+        >
+          <div className="tw:flex tw:min-w-0 tw:flex-col">
+            <span>{getSendReceiveButtonContent(project)}</span>
+            {unsupportedReasonText && (
+              <span className="tw:text-xs tw:italic tw:whitespace-normal tw:text-foreground">
+                {unsupportedReasonText}
+              </span>
+            )}
+          </div>
+        </DropdownMenuItem>
+      );
+    return (
+      <DisabledActionTooltip
+        disabled={isBlocked && !!unsupportedReasonText}
+        tooltipText={unsupportedReasonText ?? ''}
+      >
+        <Button
+          disabled={
+            isBlocked ||
+            (isSendReceiveInProgress && activeSendReceiveProjects.includes(project.projectId))
+          }
+          onClick={() => handleSendReceiveProject(project.projectId)}
+        >
+          {getSendReceiveButtonContent(project)}
+        </Button>
+      </DisabledActionTooltip>
+    );
+  };
+
+  const openButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
+    const isOpening = openingProjectIds.includes(project.projectId);
+    const isOpenBlocked = !!project.unsupportedReason;
+    const unsupportedReasonText = getUnsupportedReasonText(project);
     // The reason is written inside the item, since a menu item cannot show a hover tooltip. The
     // item is `aria-disabled` rather than Radix-`disabled` so keyboard navigation still reaches
     // it and the reason is read as part of its accessible name; selecting it does nothing.
@@ -1089,9 +1128,9 @@ export function Home({
                             }}
                             onDoubleClick={(e) => {
                               if (!isEventInside(e)) return;
+                              // Open, Sync, and Get are all blocked for an unsupported project.
+                              if (project.unsupportedReason) return;
                               if (project.isLocallyAvailable) {
-                                // Only Open is blocked for an unsupported project, not Get.
-                                if (project.unsupportedReason) return;
                                 handleOpenProject(project);
                               } else if (!isSendReceiveInProgress) {
                                 handleSendReceiveProject(project.projectId);
