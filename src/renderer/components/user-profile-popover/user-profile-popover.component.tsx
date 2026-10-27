@@ -122,7 +122,7 @@ const SERVER_BADGE_KEYS: Record<
 /**
  * The network object id `paratextRegistration.internetSettingsDataProvider` registers under.
  * Compared against `onDidCreateNetworkObject` events to catch the moment it first registers — see
- * `NetworkSettingsRow`.
+ * `NetworkSettingsRow` and `NonProductionServerDot`.
  */
 const INTERNET_SETTINGS_DATA_PROVIDER_OBJECT_ID = getDataProviderObjectId(
   INTERNET_SETTINGS_DATA_PROVIDER,
@@ -157,8 +157,13 @@ function sortLanguageEntries<T>(entries: [string, T][]): [string, T][] {
 }
 
 /**
- * Small primary dot marking something that needs attention. Decorative on purpose — every caller
- * pairs it with text carrying the same meaning, so assistive tech is never told twice.
+ * Small dot marking something that needs attention. Decorative on purpose — every caller pairs it
+ * with text carrying the same meaning, so assistive tech is never told twice.
+ *
+ * `color` distinguishes two conditions that can both be true at once (an invalid registration and a
+ * non-Production server): UX decided they need visually distinct colors rather than one ambiguous
+ * dot (PT-4647, Jira comment 28455) — `warning` deliberately avoids red, which this app reserves
+ * for destructive/error states, not "you're pointed at a dev/QA/test server."
  *
  * Local rather than from `platform-bible-react` because neither existing option fits: `Badge`'s
  * `blueIndicator`/`mutedIndicator` variants hardcode `bg-blue-400`/`bg-zinc-400` and so ignore the
@@ -170,7 +175,15 @@ function sortLanguageEntries<T>(entries: [string, T][]): [string, T][] {
  * TODO(PT-4493): promote a themed, exported indicator into `platform-bible-react` and fix the
  * `Badge` `blueIndicator`/`mutedIndicator` variants, then delete this local copy.
  */
-function ReminderDot({ testId, className }: { testId: string; className?: string }) {
+function ReminderDot({
+  testId,
+  className,
+  color = 'primary',
+}: {
+  testId: string;
+  className?: string;
+  color?: 'primary' | 'warning';
+}) {
   return (
     <span
       data-testid={testId}
@@ -179,13 +192,47 @@ function ReminderDot({ testId, className }: { testId: string; className?: string
         // `shrink-0` is in the base because callers place the dot in a flex row beside text (e.g.
         // the toolbar trigger, the "Registration information" row), where a fixed 8px circle must
         // never be the item that gives.
-        'tw:size-2 tw:shrink-0 tw:rounded-full tw:bg-primary',
+        'tw:size-2 tw:shrink-0 tw:rounded-full',
+        color === 'warning' ? 'tw:bg-warning' : 'tw:bg-primary',
         // Raw class, not a `tw:forced-colors:` utility — that variant emits no CSS in this build
         // (verified against the built stylesheet). See the rule in the companion .css file.
         'user-profile-popover-reminder-dot',
         className,
       )}
     />
+  );
+}
+
+/**
+ * Toolbar-trigger dot marking that the selected server is anything other than Production — its own
+ * always-visible indicator, distinct in color from the registration reminder dot, per UX decisions
+ * on PT-4647 (Jira comments 28444/28455): a "warning"-colored dot (never red) shown only for a
+ * non-Production server, so a normal user on Production never sees it.
+ *
+ * Isolated into its own component for the same PT-4417 reason `NetworkSettingsRow` is: it owns its
+ * own `useDataProvider`/`useData` call so the parent's retry key can force a remount if
+ * `paratextRegistration.internetSettingsDataProvider` registers after this component's first mount.
+ * Unlike `NetworkSettingsRow` — which exists only while the popover's content is mounted — this dot
+ * must be visible on the toolbar _before_ the user ever opens the popover, so it keeps its own,
+ * independent subscription rather than sharing that row's.
+ *
+ * Decorative, like `ReminderDot` itself: the same information is available as text from the
+ * "Internet & connectivity" row's badge and tooltip once the popover is open.
+ */
+function NonProductionServerDot({ className }: { className?: string }) {
+  const internetSettingsProvider = useDataProvider(INTERNET_SETTINGS_DATA_PROVIDER);
+  const [internetSettings, , isLoadingInternetSettings] = useData(
+    internetSettingsProvider,
+  ).InternetSettings(undefined, DEFAULT_INTERNET_SETTINGS);
+  const selectedServer: ServerType | undefined =
+    isLoadingInternetSettings || isPlatformError(internetSettings)
+      ? undefined
+      : internetSettings.selectedServer;
+
+  if (selectedServer === undefined || selectedServer === 'Production') return undefined;
+
+  return (
+    <ReminderDot testId="user-profile-non-production-dot" color="warning" className={className} />
   );
 }
 
@@ -300,6 +347,12 @@ function NetworkSettingsRow({
  * on the toolbar trigger and on the "Registration information" row. The dot is never the only
  * signal: the trigger's accessible label and tooltip change to match, and the popover row carries
  * screen-reader-only text.
+ *
+ * A second, differently-colored dot (see `NonProductionServerDot`) appears on the same trigger,
+ * independently of the registration one, whenever the selected server is not Production. Unlike the
+ * registration dot it is purely decorative — the equivalent text lives on the "Internet &
+ * connectivity" row's badge and tooltip instead of on the trigger itself, since this is passive
+ * dev/support information rather than something needing the user's immediate attention.
  */
 export function UserProfilePopover() {
   const [isOpen, setIsOpen] = useState(false);
@@ -361,9 +414,9 @@ export function UserProfilePopover() {
     }
   };
 
-  // Bumped to force a fresh mount of NetworkSettingsRow — see its doc comment for why that is the
-  // recovery path when the internet settings data provider registers after this popover's first
-  // render of that row.
+  // Bumped to force a fresh mount of NetworkSettingsRow and NonProductionServerDot — see their doc
+  // comments for why that is the recovery path when the internet settings data provider registers
+  // after either one's first mount.
   const [internetSettingsRetryKey, setInternetSettingsRetryKey] = useState(0);
   useEvent(
     onDidCreateNetworkObject,
@@ -537,6 +590,12 @@ export function UserProfilePopover() {
                     className="tw:absolute tw:end-1 tw:top-1 tw:ring-2 tw:ring-background tw:group-hover/button:ring-muted tw:group-aria-expanded/button:ring-muted"
                   />
                 )}
+                {/* Opposite corner from the registration dot above so the two stay visually
+                    distinct if both are ever true at once. */}
+                <NonProductionServerDot
+                  key={internetSettingsRetryKey}
+                  className="tw:absolute tw:end-1 tw:bottom-1 tw:ring-2 tw:ring-background tw:group-hover/button:ring-muted tw:group-aria-expanded/button:ring-muted"
+                />
               </Button>
             </PopoverTrigger>
           </TooltipTrigger>
