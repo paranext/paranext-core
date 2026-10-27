@@ -1406,6 +1406,34 @@ describe('Find USJ details for text searches', () => {
     ).toBe(1);
   });
 
+  test('search still records a boundary when the filtered-out note opens the next paragraph 3.0', () => {
+    // The dropped note belongs to the paragraph the match runs into, not the one it leaves. It is
+    // part of that paragraph rather than a block of its own, so the line break still stands where
+    // the editor shows it and a phrase copied across it must match.
+    const noteOpensParaUsj: Usj = {
+      type: 'USJ',
+      // testing 3.0. Usj can be any version, but the `Usj` type says only 3.1
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      version: '3.0' as typeof USJ_VERSION,
+      content: [
+        { type: 'para', marker: 'p', content: ['of Abraham.'] },
+        {
+          type: 'para',
+          marker: 'p',
+          content: [{ type: 'note', marker: 'f', content: ['NOTE'] }, 'Abraham became'],
+        },
+      ],
+    };
+    const noteDoc = new UsjReaderWriter(noteOpensParaUsj);
+    const acrossTheBreak = /(of Abraham\.(?<ws0>(?: )?)Abraham became)/dg;
+    expect(
+      noteDoc.search(acrossTheBreak, {
+        markerStylesToInclude: new Set(['p']),
+        flexibleWhitespaceAtBlockBoundaries: true,
+      }).length,
+    ).toBe(1);
+  });
+
   test('search does not record a boundary for a filtered-out note inside one paragraph 3.0', () => {
     // A note dropped from the middle of a single paragraph leaves a zero-character gap with no
     // change of block ancestor, so it is not a boundary and a phrase cannot match across it.
@@ -1605,6 +1633,28 @@ describe('Find USJ details for text searches', () => {
         flexibleWhitespaceAtBlockBoundaries: true,
       }).length,
     ).toBe(1);
+
+    // An empty paragraph after the chapter contributes no text, so it must not stand in for the
+    // first text pushed after the chapter and clear the record that a chapter was crossed.
+    const emptyParagraphAfterChapterUsj: Usj = {
+      type: 'USJ',
+      // testing 3.0. Usj can be any version, but the `Usj` type says only 3.1
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      version: '3.0' as typeof USJ_VERSION,
+      content: [
+        { type: 'chapter', marker: 'c', number: '1' },
+        { type: 'para', marker: 'p', content: ['of Abraham.'] },
+        { type: 'chapter', marker: 'c', number: '2' },
+        { type: 'para', marker: 'p', content: [''] },
+        { type: 'para', marker: 'p', content: ['Abraham became'] },
+      ],
+    };
+    acrossChapters.lastIndex = 0;
+    expect(
+      new UsjReaderWriter(emptyParagraphAfterChapterUsj).search(acrossChapters, {
+        flexibleWhitespaceAtBlockBoundaries: true,
+      }).length,
+    ).toBe(0);
   });
 
   test('search adds the `d` flag itself for a whitespace-group pattern that lacks it 3.0', () => {

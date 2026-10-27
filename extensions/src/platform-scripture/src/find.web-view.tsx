@@ -2254,20 +2254,23 @@ global.webViewComponent = function FindWebView({
         // back would overwrite whatever someone else changed in it since the snapshot was taken,
         // and the likeliest non-sentinel rejection is the PDP exhausting its cache-invalidation
         // retries, which is precisely the case where someone else was editing.
-        const writtenBookSnapshots = selectWrittenBookSnapshots(
+        const { writtenBookSnapshots, writtenBookIdsWithoutSnapshot } = selectWrittenBookSnapshots(
           bookSnapshots,
           [...bookGroupMap.keys()],
           replaceOutcomes,
         );
-        if (writtenBookSnapshots.size === 0) {
-          // Nothing was committed, so there is nothing to undo and the project is untouched.
-        } else if (usfmBookPdp) {
-          didLeaveBooksModified = !(await revertBookSnapshots(writtenBookSnapshots, usfmBookPdp));
-          if (didLeaveBooksModified)
-            logger.error('Replace all partially failed and the rollback did not succeed');
-        } else {
+        if (writtenBookIdsWithoutSnapshot.length > 0) {
           didLeaveBooksModified = true;
-          logger.error('Replace all partially failed and book snapshots were unavailable');
+          logger.error(
+            `Replace all partially failed and no snapshot was available to roll back ${writtenBookIdsWithoutSnapshot.join(', ')}`,
+          );
+        }
+        if (
+          writtenBookSnapshots.size > 0 &&
+          !(usfmBookPdp && (await revertBookSnapshots(writtenBookSnapshots, usfmBookPdp)))
+        ) {
+          didLeaveBooksModified = true;
+          logger.error('Replace all partially failed and the rollback did not succeed');
         }
         throw firstReplaceRejection.reason;
       }

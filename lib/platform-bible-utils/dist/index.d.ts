@@ -3568,6 +3568,12 @@ export type UsjSearchOptions = {
 	 * renders as a break, and a match spanning one would put a `\c` marker inside a replacement's
 	 * removed span.
 	 *
+	 * When `markerStylesToInclude` drops text, what was dropped decides whether a boundary survives
+	 * it. Dropped text that belongs to one of the two adjacent blocks — a note at the end of the
+	 * first paragraph or the start of the next — leaves the boundary in place. Dropped text that is a
+	 * block of its own — a section heading, a list, a table standing between the two — removes it,
+	 * because that block is on screen between them and the two are not adjacent lines.
+	 *
 	 * The filter needs capture-group offsets, so when the pattern carries such a group and lacks the
 	 * `d` flag, `search` runs a **rebuilt copy** of it. Either way the caller's own `RegExp` object
 	 * is left as they compiled it, `lastIndex` included — note that this means a search never

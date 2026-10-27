@@ -156,18 +156,25 @@ export function buildReplacedAllMessage(
  * call rejected still holds exactly what it held before — rolling it back would write a snapshot
  * over whatever changed in it since, and the likeliest non-sentinel rejection is the PDP exhausting
  * its cache-invalidation retries, which is precisely the case where someone else was editing.
+ *
+ * The written books come from the outcomes, not from the snapshots, so a book that wrote but whose
+ * snapshot could not be read is reported in `writtenBookIdsWithoutSnapshot` rather than dropped:
+ * nothing can roll it back, and the caller has to tell the user it still holds its replacements.
  */
 export function selectWrittenBookSnapshots(
   bookSnapshots: Map<string, string>,
   bookIdsInReplaceOrder: string[],
   replaceOutcomes: PromiseSettledResult<unknown>[],
-): Map<string, string> {
-  return new Map(
-    [...bookSnapshots].filter(([bookId]) => {
-      const outcomeIndex = bookIdsInReplaceOrder.indexOf(bookId);
-      return outcomeIndex >= 0 && replaceOutcomes[outcomeIndex]?.status === 'fulfilled';
-    }),
-  );
+): { writtenBookSnapshots: Map<string, string>; writtenBookIdsWithoutSnapshot: string[] } {
+  const writtenBookSnapshots = new Map<string, string>();
+  const writtenBookIdsWithoutSnapshot: string[] = [];
+  bookIdsInReplaceOrder.forEach((bookId, outcomeIndex) => {
+    if (replaceOutcomes[outcomeIndex]?.status !== 'fulfilled') return;
+    const snapshot = bookSnapshots.get(bookId);
+    if (snapshot === undefined) writtenBookIdsWithoutSnapshot.push(bookId);
+    else writtenBookSnapshots.set(bookId, snapshot);
+  });
+  return { writtenBookSnapshots, writtenBookIdsWithoutSnapshot };
 }
 
 /**

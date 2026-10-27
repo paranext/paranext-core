@@ -1518,23 +1518,24 @@ describe('selectWrittenBookSnapshots', () => {
   it('drops the book whose replace was refused, since it never wrote', () => {
     // Restoring a refused book's snapshot would overwrite whatever changed in it since the
     // snapshot was taken — and a cache-invalidation rejection means something did.
-    const written = selectWrittenBookSnapshots(
+    const { writtenBookSnapshots } = selectWrittenBookSnapshots(
       SNAPSHOTS,
       BOOK_ORDER,
       outcomes('fulfilled', 'rejected', 'fulfilled'),
     );
 
-    expect([...written.keys()]).toEqual(['GEN', 'LEV']);
+    expect([...writtenBookSnapshots.keys()]).toEqual(['GEN', 'LEV']);
   });
 
   it('returns nothing to roll back when the first book is the one that failed', () => {
-    expect(
-      selectWrittenBookSnapshots(
-        SNAPSHOTS,
-        BOOK_ORDER,
-        outcomes('rejected', 'rejected', 'rejected'),
-      ).size,
-    ).toBe(0);
+    const selection = selectWrittenBookSnapshots(
+      SNAPSHOTS,
+      BOOK_ORDER,
+      outcomes('rejected', 'rejected', 'rejected'),
+    );
+
+    expect(selection.writtenBookSnapshots.size).toBe(0);
+    expect(selection.writtenBookIdsWithoutSnapshot).toEqual([]);
   });
 
   it('keeps every book when all of them wrote', () => {
@@ -1543,7 +1544,7 @@ describe('selectWrittenBookSnapshots', () => {
         SNAPSHOTS,
         BOOK_ORDER,
         outcomes('fulfilled', 'fulfilled', 'fulfilled'),
-      ).keys(),
+      ).writtenBookSnapshots.keys(),
     ]).toEqual(BOOK_ORDER);
   });
 
@@ -1551,18 +1552,35 @@ describe('selectWrittenBookSnapshots', () => {
     // The snapshots are gathered per unique book id and the replace calls are issued per book
     // group; nothing guarantees the two iterate in the same order, so the book id is what has to
     // carry the pairing.
-    const written = selectWrittenBookSnapshots(
+    const { writtenBookSnapshots } = selectWrittenBookSnapshots(
       SNAPSHOTS,
       ['LEV', 'GEN', 'EXO'],
       outcomes('rejected', 'fulfilled', 'fulfilled'),
     );
 
-    expect([...written.keys()]).toEqual(['GEN', 'EXO']);
+    expect([...writtenBookSnapshots.keys()]).toEqual(['GEN', 'EXO']);
   });
 
   it('drops a book that has no outcome at all rather than restoring it blindly', () => {
     expect([
-      ...selectWrittenBookSnapshots(SNAPSHOTS, ['GEN'], outcomes('fulfilled')).keys(),
+      ...selectWrittenBookSnapshots(
+        SNAPSHOTS,
+        ['GEN'],
+        outcomes('fulfilled'),
+      ).writtenBookSnapshots.keys(),
     ]).toEqual(['GEN']);
+  });
+
+  it('reports a book that wrote but has no snapshot, since nothing can roll it back', () => {
+    // A book whose snapshot could not be read still holds its replacements after a partial
+    // failure. Dropping it silently would tell the user the project was left unchanged.
+    const selection = selectWrittenBookSnapshots(
+      new Map([['GEN', 'gen usfm']]),
+      BOOK_ORDER,
+      outcomes('fulfilled', 'fulfilled', 'rejected'),
+    );
+
+    expect([...selection.writtenBookSnapshots.keys()]).toEqual(['GEN']);
+    expect(selection.writtenBookIdsWithoutSnapshot).toEqual(['EXO']);
   });
 });

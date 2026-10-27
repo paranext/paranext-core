@@ -1963,8 +1963,10 @@ export class UsjReaderWriter implements IUsjReaderWriter {
           }
 
           // Block-boundary bookkeeping is pure overhead for a caller that never asked for the
-          // filter, or whose pattern carries no whitespace group to relax, so skip it then.
-          if (shouldRecordBoundaries) {
+          // filter, or whose pattern carries no whitespace group to relax, so skip it then. An empty
+          // text node puts no text between its neighbours, so it must not reset what was walked
+          // past since the last push — a chapter crossing would otherwise be forgotten.
+          if (shouldRecordBoundaries && node.length > 0) {
             const blockAncestor = UsjReaderWriter.findNearestBlockAncestor(workingStack);
             // A filtered-out block of its own sits between these two chunks — a section heading, a
             // list, a table. Its text is on screen between them, so the two are not the adjacent

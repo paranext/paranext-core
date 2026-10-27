@@ -3253,8 +3253,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     suppressed.
 
   That second condition is deliberately narrow, because a join made adjacent only by
-  `markerStylesToInclude` is otherwise **still** a boundary — which an earlier round of this work had
-  wrong in the other direction. Under *Verse text only* the notes ending a paragraph are dropped from
+  `markerStylesToInclude` is otherwise **still** a boundary. Under *Verse text only* the notes ending a paragraph are dropped from
   the concatenated text, but a note shares its paragraph's block ancestor, so it fails the
   differs-from-both test and the join survives: the editor renders a line break between those two
   paragraphs whether or not the notes were searched, and refusing it made Find miss a real break for
@@ -3325,11 +3324,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
   Those helpers read the **shared markers map** (`USFM_MARKERS_MAP_3_0`) by *node type* rather than by
   a hand-written list of names: a marker is structural when its type is `para`, `row`, `cell`,
-  `table:row` or `sidebar`, and a note when its type is `note`. Three rounds of review each found a
-  different missing spelling in a hand-written list — first `tc#`, then the centred and right-aligned
-  `thc#`/`tcc#` that the repo's own canonical 3.1 fixture contains, then `\ph#`/`\p#`/`\k#` and the
-  `\efe` note — which is what settled it: the lists are gone, and the map that already has the
-  authoritative answer is asked directly. The note-marker names the note-span scanner needs are
+  `table:row` or `sidebar`, and a note when its type is `note`. A hand-written list cannot keep up
+  with the spellings the map already knows — the centred and right-aligned `thc#`/`tcc#` that the
+  repo's own canonical 3.1 fixture contains, `\ph#`/`\p#`/`\k#`, the `\efe` note — so the map that
+  has the authoritative answer is asked directly. The note-marker names the note-span scanner needs are
   derived from the same map rather than re-listed. `isBlockMarker` itself is left alone: it is driven
   by `usfmMarkers`, and its only other consumer (the editor's marker menu) iterates `usfmMarkers`
   children, so its gaps cannot be reached from there.
@@ -3353,12 +3351,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `replace()` is all-or-nothing within a book, so writing its snapshot back would overwrite whatever
   changed in it since the snapshot was taken; the likeliest non-sentinel rejection is the PDP
   exhausting its cache-invalidation retries, which is exactly the case where someone else was editing
-  that book. If the rollback itself fails, the two sentinel toasts are not the right answer — nothing
+  that book. A book that wrote but whose snapshot could not be read cannot be rolled back at all, so
+  it is treated as a failed rollback rather than dropped. If the rollback itself fails, the two sentinel toasts are not the right answer — nothing
   was refused on policy grounds, books are still modified, and the result list's offsets no longer
   describe the project — so that path raises its own error notification and re-runs the search.
 
-  Remaining, documented and not fixed: a boundary **ending in a footnote or cross-reference** is not
-  bridged, because the gap is note content rather than zero characters. **Whole-word Find** is still
+  Remaining, documented and not fixed: when the search includes note text, a boundary **ending in a
+  footnote or cross-reference** is not bridged, because the gap is note content rather than zero
+  characters. (Under *Verse text only* the note is dropped and the boundary is bridged, as above.) **Whole-word Find** is still
   broken at these boundaries — the concatenated text makes `Abraham.Abraham` one word-run — which is
   the same root cause and out of scope here.
 - **Excepts:** `adr-find-tolerance-as-engine-options`
