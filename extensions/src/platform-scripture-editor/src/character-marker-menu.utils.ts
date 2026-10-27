@@ -44,6 +44,11 @@ export const CHARACTER_MARKER_MENU_STRING_KEYS = Object.freeze([
   REMOVE_CHARACTER_MARKERS_KEY,
 ] as const);
 
+/** Every USFM marker's description key, so marker-menu rows can show each marker's description. */
+export const ALL_USFM_MARKER_DESCRIPTION_KEYS = Object.values(usfmMarkers)
+  .map((marker) => marker.description)
+  .filter((description) => !!description);
+
 /**
  * Whether a marker row's action would do nothing, so the row must render unavailable rather than
  * silently swallowing the click.

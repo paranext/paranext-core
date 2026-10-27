@@ -8,7 +8,10 @@ import {
   Unsubscriber,
   UnsubscriberAsync,
 } from 'platform-bible-utils';
-import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './platform-scripture-editor.utils';
+import {
+  resolveViewTypeForInterfaceMode,
+  SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+} from './platform-scripture-editor.utils';
 
 /**
  * Time in milliseconds to wait before sending another notification informing the user that the
@@ -120,6 +123,13 @@ export class MarkersViewNotifier {
 
       // Only need to send a notification if this is the markers view which is currently readonly
       if (viewType !== 'markers') return;
+
+      // The editor decides with `resolveViewTypeForInterfaceMode` which view it shows for a saved
+      // one; outside Power that is the editable formatted view, so there is nothing read-only to
+      // announce
+      const isPowerMode =
+        (await this.papiInstance.settings.get('platform.interfaceMode')) === 'power';
+      if (resolveViewTypeForInterfaceMode(viewType, isPowerMode) !== 'markers') return;
 
       const { projectId, state } = webViewDefinition;
       // If no projectId, can't proceed. Just warn and be done

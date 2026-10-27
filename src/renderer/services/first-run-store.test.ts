@@ -886,7 +886,7 @@ describe('OS-language default on fresh first-run', () => {
 describe('internet settings changed this run', () => {
   const START = {
     selectedServer: 'Production',
-    permittedInternetUse: 'VpnRequired',
+    permittedInternetUse: 'Disabled',
     proxyPort: 0,
   } as const;
   const CHANGED = { ...START, permittedInternetUse: 'Enabled' } as const;

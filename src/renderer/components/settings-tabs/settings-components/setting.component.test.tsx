@@ -6,6 +6,7 @@ import { newPlatformError, type PlatformError } from 'platform-bible-utils';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { logger } from '@shared/services/logger.service';
 import { offerRestartAfterInterfaceLanguageChange } from '@renderer/services/interface-language-restart-prompt';
+import userEvent from '@testing-library/user-event';
 import { Setting } from './setting.component';
 
 vi.mock('@renderer/services/interface-language-restart-prompt', () => ({
@@ -17,6 +18,7 @@ type UiLanguageSelectorStubProps = {
   knownUiLanguages: LanguagesStub;
   primaryLanguage: string;
   onLanguagesChange?: (newUiLanguages: string[]) => void;
+  disabled?: boolean;
 };
 
 // Lets a test stand in for the loaded offered languages; unset means "still loading", which hands
@@ -113,9 +115,30 @@ const baseProps = {
 // there.
 const userSettingProps = { setSetting: baseProps.setSetting, isLoading: baseProps.isLoading };
 
+beforeAll(() => {
+  // Radix Tooltip uses ResizeObserver; jsdom doesn't provide it.
+  global.ResizeObserver = class {
+    // jsdom stub: empty no-op intentionally has no `this` usage
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+    observe() {}
+    // jsdom stub: empty no-op intentionally has no `this` usage
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+    unobserve() {}
+    // jsdom stub: empty no-op intentionally has no `this` usage
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+    disconnect() {}
+  };
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
   availableLanguages.loaded = undefined;
+  // Several describes below pin the strings to a fixed map and leave it in place afterwards; start
+  // each test from the real hook's shape instead, where every key resolves to at least itself.
+  vi.mocked(useLocalizedStrings).mockImplementation((keys) => [
+    Object.fromEntries(keys.map((key) => [key, key])),
+    false,
+  ]);
 });
 
 describe('Setting disabled forwarding', () => {
@@ -189,6 +212,94 @@ describe('Setting disabled forwarding', () => {
       />,
     );
     expect(screen.getByRole('textbox')).not.toBeDisabled();
+  });
+});
+
+describe('Setting read-only', () => {
+  // A read-only text field stays enabled so its whole value can still be focused, selected and
+  // scrolled; only controls with no read-only state are disabled.
+  it('makes a string setting read-only without disabling it', () => {
+    render(
+      <Setting
+        {...baseProps}
+        settingKey="platformScripture.validCharacters"
+        setting="a b c"
+        label="Valid characters"
+        readOnly
+      />,
+    );
+    const field = screen.getByRole('textbox');
+    expect(field).toHaveAttribute('readonly');
+    expect(field).not.toBeDisabled();
+    // The muted fill is the only visual cue that the field cannot be edited.
+    expect(field).toHaveClass('tw:bg-muted');
+  });
+
+  it('leaves a string setting editable when readOnly is not passed', () => {
+    render(
+      <Setting
+        {...baseProps}
+        settingKey="platformScripture.validCharacters"
+        setting="a b c"
+        label="Valid characters"
+      />,
+    );
+    const field = screen.getByRole('textbox');
+    expect(field).not.toHaveAttribute('readonly');
+    expect(field).not.toHaveClass('tw:bg-muted');
+  });
+
+  it('makes an object setting read-only without disabling it', () => {
+    render(
+      <Setting
+        {...baseProps}
+        settingKey="platformScripture.modelTexts"
+        setting={{ dataVersion: '1.1.0', items: [] }}
+        label="Model texts"
+        readOnly
+      />,
+    );
+    const field = screen.getByRole('textbox');
+    expect(field).toHaveAttribute('readonly');
+    expect(field).not.toBeDisabled();
+  });
+
+  it('disables a boolean setting, since a switch has no read-only state', () => {
+    render(
+      <Setting {...baseProps} settingKey="platform.isEditable" setting label="Editable" readOnly />,
+    );
+    expect(screen.getByRole('switch')).toBeDisabled();
+  });
+
+  it('disables the zoom stepper buttons', () => {
+    render(
+      <Setting
+        {...userSettingProps}
+        validateOtherSetting={vi.fn()}
+        settingKey="platform.webViewContentZoom"
+        setting={1}
+        label="Tab content default zoom"
+        readOnly
+      />,
+    );
+    // The stepper marks its buttons `aria-disabled` so they stay focusable.
+    expect(
+      screen.getByRole('button', { name: '%settings_platform_webViewContentZoom_increase%' }),
+    ).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('disables the interface language selector', () => {
+    render(
+      <Setting
+        {...userSettingProps}
+        validateOtherSetting={vi.fn()}
+        settingKey="platform.interfaceLanguage"
+        setting={['en']}
+        label="Interface language"
+        readOnly
+      />,
+    );
+    expect(lastSelectorProps()?.disabled).toBe(true);
   });
 });
 
@@ -519,21 +630,6 @@ const INTERFACE_SCALING_STRINGS = {
 };
 
 describe('platform.zoomFactor stepper', () => {
-  beforeAll(() => {
-    // Radix Tooltip uses ResizeObserver; jsdom doesn't provide it.
-    global.ResizeObserver = class {
-      // jsdom stub: empty no-op intentionally has no `this` usage
-      // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-      observe() {}
-      // jsdom stub: empty no-op intentionally has no `this` usage
-      // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-      unobserve() {}
-      // jsdom stub: empty no-op intentionally has no `this` usage
-      // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-      disconnect() {}
-    };
-  });
-
   beforeEach(() => {
     // Both label families are available, so a stepper that borrowed the content-zoom wording
     // would find it and the per-key assertions below would catch that.
@@ -869,6 +965,79 @@ describe('Setting description', () => {
     expect(screen.getByRole('group', { name: 'Interface language' })).toHaveAccessibleDescription(
       'The languages the interface is shown in',
     );
+  });
+});
+
+describe('Setting info button', () => {
+  afterEach(() => {
+    vi.mocked(useLocalizedStrings).mockReturnValue([{}, false]);
+  });
+
+  it('offers a keyboard-reachable info button, named for its setting, when there is a description', async () => {
+    vi.mocked(useLocalizedStrings).mockReturnValue([
+      { '%settings_infoButton_ariaLabel%': 'About {settingLabel}' },
+      false,
+    ]);
+    const user = userEvent.setup();
+    render(
+      <Setting
+        {...baseProps}
+        settingKey="platform.language"
+        setting="English"
+        label="Language"
+        description="The language of the project"
+      />,
+    );
+
+    // The info button sits beside the label, ahead of the control, so it is the first tab stop.
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'About Language' })).toHaveFocus();
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('The language of the project');
+    // The button sits beside the label, not inside it, so the control's name stays the label.
+    expect(screen.getByRole('textbox')).toHaveAccessibleName('Language');
+  });
+
+  it('offers no info button when there is no description', () => {
+    render(
+      <Setting {...baseProps} settingKey="platform.language" setting="English" label="Language" />,
+    );
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+});
+
+describe('Setting lock reason', () => {
+  it('shows the reason under a locked control and describes the control with it', () => {
+    render(
+      <Setting
+        {...baseProps}
+        settingKey="platform.isEditable"
+        setting={false}
+        label="Editable"
+        description="Whether the project can be edited"
+        readOnly
+        lockReason="Only a project administrator can change this."
+      />,
+    );
+    expect(screen.getByText('Only a project administrator can change this.')).toBeVisible();
+    expect(screen.getByRole('switch')).toHaveAccessibleDescription(
+      'Whether the project can be edited Only a project administrator can change this.',
+    );
+  });
+
+  it('shows no reason under an editable control, even when one is passed', () => {
+    render(
+      <Setting
+        {...baseProps}
+        settingKey="platform.language"
+        setting="English"
+        label="Language"
+        lockReason="Only a project administrator can change this."
+      />,
+    );
+    expect(
+      screen.queryByText('Only a project administrator can change this.'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox')).not.toHaveAccessibleDescription();
   });
 });
 

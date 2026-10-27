@@ -104,8 +104,8 @@ function getSectionLabels(
         label: t('%manageBooks_progressTracking_label%', 'Progress tracking'),
         subtitle: t('%manageBooks_progressTracking_subtitle%', 'Start, stop, and review tracking'),
         tooltip: t(
-          '%manageBooks_progressTracking_notYetAvailable%',
-          'Progress tracking is not yet available — coming soon.',
+          '%manageBooks_progressTracking_notYetAvailable_2%',
+          'Progress tracking is not yet available.',
         ),
       };
     case 'book-names':
@@ -113,8 +113,8 @@ function getSectionLabels(
         label: t('%manageBooks_bookNames_label%', 'Book names'),
         subtitle: t('%manageBooks_bookNames_subtitle%', 'Edit short and long book names (TOC1–3)'),
         tooltip: t(
-          '%manageBooks_bookNames_notYetAvailable%',
-          'Book names editing is not yet available — coming soon.',
+          '%manageBooks_bookNames_notYetAvailable_2%',
+          'Book names editing is not yet available.',
         ),
       };
     default: {

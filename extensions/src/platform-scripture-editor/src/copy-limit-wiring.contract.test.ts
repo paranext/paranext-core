@@ -1,8 +1,10 @@
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
+import {
+  objectLiteralShape,
+  parseWebViewSource,
+  propExpressions,
+  variableInitializer,
+} from './web-view-source.test-utils';
 
 /*
  * Guards that every copy surface in `platform-scripture-editor.web-view.tsx` gets the editor's copy
@@ -13,41 +15,8 @@ import { describe, expect, it } from 'vitest';
  * is given.
  */
 
-const SRC_DIR = path.dirname(fileURLToPath(import.meta.url));
-const WEB_VIEW_FILE = path.join(SRC_DIR, 'platform-scripture-editor.web-view.tsx');
-
-/** The source text of the `propName` expression on every `<tagName>` element in the file. */
-function propExpressions(sourceFile: ts.SourceFile, tagName: string, propName: string): string[] {
-  const found: string[] = [];
-  const visit = (node: ts.Node) => {
-    if (
-      (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
-      node.tagName.getText(sourceFile) === tagName
-    )
-      node.attributes.properties.forEach((attribute) => {
-        if (
-          ts.isJsxAttribute(attribute) &&
-          attribute.name.getText(sourceFile) === propName &&
-          attribute.initializer &&
-          ts.isJsxExpression(attribute.initializer) &&
-          attribute.initializer.expression
-        )
-          found.push(attribute.initializer.expression.getText(sourceFile));
-      });
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
-  return found;
-}
-
 describe('copy-limit wiring (platform-scripture-editor.web-view.tsx)', () => {
-  const sourceFile = ts.createSourceFile(
-    WEB_VIEW_FILE,
-    readFileSync(WEB_VIEW_FILE, 'utf-8'),
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
+  const sourceFile = parseWebViewSource();
 
   it('resolves the copy limit with the chapter-text loading block', () => {
     expect(sourceFile.getText()).toMatch(
@@ -71,10 +40,20 @@ describe('copy-limit wiring (platform-scripture-editor.web-view.tsx)', () => {
     ]);
   });
 
-  it('gives every footnote editor (the popover and the pane row editor) the copy-limited options', () => {
+  it('gives every footnote editor (the pane row editor and the popover) the copy-limited options', () => {
     expect(propExpressions(sourceFile, 'FootnoteEditor', 'editorOptions')).toEqual([
-      'editorOptionsWithCopyLimit',
+      'paneFootnoteEditorOptions',
       'editorOptionsWithCopyLimit',
     ]);
+  });
+
+  it('builds the pane row editor’s options from the copy-limited options', () => {
+    const { spreads, properties } = objectLiteralShape(
+      sourceFile,
+      variableInitializer(sourceFile, 'paneFootnoteEditorOptions'),
+    );
+    expect(spreads).toEqual(['editorOptionsWithCopyLimit']);
+    // Overriding `copyLimit` after the spread would undo it.
+    expect(properties).not.toHaveProperty('copyLimit');
   });
 });

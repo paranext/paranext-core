@@ -7,7 +7,7 @@
 
 // Semi-transparent amber for the Find current-result highlight, shared by the base rule and the
 // ::selection re-apply below. Deliberately a fixed amber rather than a theme token: it must read on
-// top of the ::selection primary/secondary colors and stay distinct from them in both light and
+// top of the focused and unfocused ::selection colors and stay distinct from them in both light and
 // dark mode (see the find-result-highlight rules).
 $find-current-result-highlight-bg: rgb(255 213 0 / 40%);
 
@@ -43,9 +43,12 @@ $find-current-result-highlight-bg: rgb(255 213 0 / 40%);
   background-color: var(--primary);
 }
 
+// Unfocused: primary at 30%, not `--secondary`, which equals or nearly equals the `--muted` that
+// Simple tints character markers with (`_simple-mode.scss`), so a selection there would disappear.
+// Selected text takes `--foreground`, which reads over the 30% tint in every theme.
 ::selection {
-  color: var(--secondary-foreground);
-  background-color: var(--secondary);
+  color: var(--foreground);
+  background-color: color-mix(in oklab, var(--primary) 30%, transparent);
 }
 
 // Find/Replace current-result highlight.
@@ -53,16 +56,16 @@ $find-current-result-highlight-bg: rgb(255 213 0 / 40%);
 // 'find-current-result') from the Find web view (platform-scripture/src/find.web-view.tsx), which
 // wraps the match in a TypedMarkNode carrying this class. Semi-transparent amber so it reads on top
 // of the ::selection color above (selectRange selects the same match) and stays distinct from the
-// primary/secondary selection in both light and dark mode.
+// focused and unfocused selection in both light and dark mode.
 .editor-typed-mark-external-find-result-highlight {
   background-color: $find-current-result-highlight-bg;
   border-radius: 2px;
 }
 
 // The Find web view also calls selectRange on the current match, so the native ::selection color
-// (--primary when focused, --secondary when not) paints on top of the semi-transparent amber above
-// and hides it — the inactive --secondary reads as grayish-blue. Re-apply the amber to the selected
-// glyphs inside the find-result mark so the current result stays amber regardless of pane focus.
+// (--primary when focused, primary at 30% when not) paints on top of the semi-transparent amber
+// above and hides or tints it. Re-apply the amber to the selected glyphs inside the find-result mark
+// so the current result stays amber regardless of pane focus.
 .editor-typed-mark-external-find-result-highlight::selection,
 .editor-typed-mark-external-find-result-highlight ::selection {
   background-color: $find-current-result-highlight-bg;
@@ -383,4 +386,72 @@ button {
   transform: translate(-50%, -50%);
   opacity: 0.8;
   animation: highlight 2s;
+}
+
+// Paragraph-marker selection (paragraph-structure view). The editor puts `psc-para-marker-selected`
+// on the paragraph whose gutter marker is the selection. Here rather than in the vendored
+// _usj-nodes.scss: the editor library styles this class in its own editor.css, which this repo does
+// not load, and keeps app overrides out of usj-nodes.css.
+//
+// Selection gets a channel of its own, as in adr-list-selection-on-a-dedicated-visual-channel (a 4px
+// leading bar, never the active-text focus box, which owns this element's ::after, and no
+// pseudo-element), but diverges from that ADR in two ways. It adds a row fill, which the ADR rejects
+// for comment cards: those backgrounds carry status, whereas a paragraph row's background carries
+// none. And the bar is a box-shadow rather than a logical border-inline-start, because the gutter
+// lies outside the paragraph's box (the glyph is absolutely positioned into .editor-input's
+// padding), where no border can reach; box-shadow has no logical form, hence the explicit RTL rule
+// below. Both layers are outer box-shadows offset toward inline-start by the gutter width plus the
+// paragraph's own indent compensation; the fill layer stops 4px short, which is the bar.
+// `--foreground` is the bar token by measured contrast (>= 3:1 against --background and --accent in
+// every built-in theme), pinned by paragraph-marker-selection-contrast.test.ts.
+//
+// The gutter width is a registered length so it computes once, on `.psc-gutter-markers`. The
+// gutter's own `--psc-gutter-width` is an unregistered `4em`, which would otherwise resolve in each
+// paragraph's own font size: on a `\mt1` (166%) the bar would overshoot the editor's edge and be
+// clipped, and on an `\s1` (0.8rem) it would stop short inside the gutter. `--para-indent` stays per
+// paragraph, since it is that paragraph's own indent compensation.
+@property --psc-para-marker-gutter-width {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0;
+}
+
+.psc-gutter-markers {
+  --psc-para-marker-gutter-width: var(--psc-gutter-width, 4em);
+}
+
+.psc-gutter-markers .para.psc-para-marker-selected {
+  --psc-para-marker-selection-reach: calc(
+    var(--psc-para-marker-gutter-width) + var(--para-indent, 0px)
+  );
+  // Muted text in the row (the `\s1`-`\s3` headings and the empty-verse placeholder) drops below
+  // 4.5:1 on the fill in the light theme, so while selected it takes the fill's own foreground.
+  --muted-foreground: var(--accent-foreground);
+
+  background-color: var(--accent);
+  box-shadow:
+    calc(4px - var(--psc-para-marker-selection-reach)) 0 0 0 var(--accent),
+    calc(-1 * var(--psc-para-marker-selection-reach)) 0 0 0 var(--foreground);
+}
+
+.psc-gutter-markers[dir='rtl'] .para.psc-para-marker-selected {
+  box-shadow:
+    calc(var(--psc-para-marker-selection-reach) - 4px) 0 0 0 var(--accent),
+    var(--psc-para-marker-selection-reach) 0 0 0 var(--foreground);
+}
+
+// 0,7,0, one class more specific than the base gutter glyph rule in _usj-nodes.scss.
+.psc-gutter-markers .para.psc-para-marker-selected > .marker:not(.verse):not(.chapter):first-child {
+  color: var(--accent-foreground);
+  font-weight: 700;
+}
+
+// Forced colors (e.g. Windows high contrast) drop box-shadow and replace the --accent fill with the
+// system background, which would leave only the bold glyph to mark the selection. An outline in the
+// system Highlight colour survives there and, drawn around the whole paragraph box, needs no
+// direction-specific rule.
+@media (forced-colors: active) {
+  .psc-gutter-markers .para.psc-para-marker-selected {
+    outline: 2px solid Highlight;
+  }
 }

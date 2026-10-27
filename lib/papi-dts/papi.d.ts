@@ -442,6 +442,16 @@ declare module 'shared/models/web-view.model' {
      */
     iconUrl?: string;
     /**
+     * Name of a lucide icon (kebab-case, e.g. `refresh-cw`) to show on the title bar of the tab. The
+     * icon follows the tab's text colour, so it suits every theme and tab state. Takes precedence
+     * over {@link WebViewDefinitionBase.iconUrl}. The icons the platform can show are listed in
+     * `LUCIDE_ICON_NAMES` (exported from `platform-bible-react/experimental`). If the name is not one
+     * of them, `iconUrl` is used instead (and then the software's standard logo).
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    iconName?: string;
+    /**
      * Name of the tab (or a localizeKey for the name that will automatically be localized) for the
      * WebView
      */
@@ -776,6 +786,7 @@ declare module 'shared/models/web-view.model' {
    */
   export const WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS: readonly [
     'iconUrl',
+    'iconName',
     'title',
     'tooltip',
     'projectId',
@@ -4797,6 +4808,15 @@ declare module 'shared/models/docking-framework.model' {
      */
     tabIconUrl?: string;
     /**
+     * Name of a lucide icon (kebab-case, e.g. `refresh-cw`) to show on the title bar of the tab
+     * instead of {@link tabIconUrl}. The icons the platform can show are listed in `LUCIDE_ICON_NAMES`
+     * (exported from `platform-bible-react/experimental`). An unknown name is ignored, so
+     * {@link tabIconUrl} (and then the standard logo) is shown instead.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    tabIconName?: string;
+    /**
      * Text to show (or a localizeKey that will automatically be localized) on the title bar of the
      * tab
      */
@@ -5704,9 +5724,10 @@ declare module 'shared/models/network-object-status.service-model' {
      * @param timeoutInMS Max duration to wait for the network object. If not provided, it will wait
      *   indefinitely
      * @returns Promise that either resolves to the {@link NetworkObjectDetails} for a network object
-     *   once the network object is registered, or rejects if a timeout is provided and the timeout is
-     *   reached before the network object is registered, or if the current set of network objects
-     *   could not be read. Rejections carry a reason string, not an `Error`
+     *   once the network object is registered, or rejects with a {@link PlatformError} (not an
+     *   `Error`) if a timeout is provided and the timeout is reached before the network object is
+     *   registered (`code` is {@link DEADLINE_EXCEEDED}), or if the current set of network objects
+     *   could not be read (`code` is {@link UNKNOWN})
      */
     waitForNetworkObject: (
       objectDetailsToMatch: Partial<NetworkObjectDetails>,
@@ -6044,9 +6065,17 @@ declare module 'shared/services/web-view-provider.service' {
    * Get a web view provider that has previously been set up
    *
    * @param webViewType Type of webview provider to get
+   * @param shouldWaitPatiently Whether to keep re-arming the wait, allowing much longer overall for
+   *   the provider's extension to finish activating, instead of failing after the default timeout.
+   *   Set this for `retrieveWebViewContent`'s callers — a tab-restore request and the
+   *   extension-reload re-fetch; leave it `false` (the default) for a fresh `openWebView()` request.
+   *   Defaults to `false`
    * @returns Web view provider with the given name if one exists, undefined otherwise
    */
-  function getWebViewProvider(webViewType: string): Promise<IRegisteredWebViewProvider | undefined>;
+  function getWebViewProvider(
+    webViewType: string,
+    shouldWaitPatiently?: boolean,
+  ): Promise<IRegisteredWebViewProvider | undefined>;
   /**
    * Register a web view controller to represent a web view. It is expected that a web view provider
    * calls this to register a web view controller for a web view that is being created. If a web view
@@ -6374,14 +6403,16 @@ declare module 'papi-shared-types' {
     'platform.isFullScreen': () => Promise<boolean>;
     /**
      * Whether the first-run sync consent gate allows an automatic Simple-mode Send/Receive to start
-     * now: `granted`; `unconfirmed` when the first-run wizard has not been answered or its
-     * completion flag could not be read; or `deferred` when the user chose "Don't sync yet" earlier
-     * in this app session. Only meaningful in Simple mode: the completion flag is never written in
-     * Power mode, so a Power-mode sync must not consult this.
+     * now: `granted`; `unconfirmed` when the first-run wizard has not been answered; `unreadable`
+     * when its completion flag could not be read; or `deferred` when the user chose "Don't sync
+     * yet" earlier in this app session. Only meaningful in Simple mode: the completion flag is
+     * never written in Power mode, so a Power-mode sync must not consult this.
      *
      * @experimental This command is unstable and may change or disappear without notice
      */
-    'platform.getAutomaticSyncConsent': () => Promise<'granted' | 'unconfirmed' | 'deferred'>;
+    'platform.getAutomaticSyncConsent': () => Promise<
+      'granted' | 'unconfirmed' | 'unreadable' | 'deferred'
+    >;
     /**
      * Withhold automatic Simple-mode Send/Receive for the rest of this app session. Called when the
      * user chooses "Don't sync yet" in the first-run wizard; the next launch syncs as usual.
@@ -6499,6 +6530,16 @@ declare module 'papi-shared-types' {
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openUserSettings': () => Promise<void>;
     'platform.openSettings': (webViewId?: WebViewId) => Promise<void>;
+    /**
+     * Open a Settings tab limited to the project shown in the given web view — the same as
+     * `platform.openSettings`, under a name of its own so a web view's Project settings menu item
+     * can show its keyboard shortcut without the main menu's Settings item, which runs
+     * `platform.openSettings`, showing it too.
+     *
+     * @param webViewId Web view whose project the Settings tab should be limited to, if any
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.openProjectSettingsForWebView': (webViewId?: WebViewId) => Promise<void>;
     /**
      * Move a web view to a window created for it.
      *
@@ -6950,6 +6991,27 @@ declare module 'papi-shared-types' {
      * Defaults to `false`.
      */
     'platform.isPublished': boolean;
+    /**
+     * Whether this project is registered with the Paratext Registry. A registered project's
+     * {@link ProjectSettingTypes['platform.name'] | `platform.name`} and
+     * {@link ProjectSettingTypes['platform.fullName'] | `platform.fullName`} can be changed only
+     * through the registry. A project can be shared through Send/Receive without being registered.
+     *
+     * Computed by the project data provider; it cannot be set.
+     *
+     * Defaults to `false`.
+     */
+    'platform.isRegistered': boolean;
+    /**
+     * Whether the current user has the administrator role on this project. Unlike most project
+     * settings, the answer depends on who is asking. A project with no notion of roles counts its
+     * user as its administrator.
+     *
+     * Computed by the project data provider; it cannot be set.
+     *
+     * Defaults to `true`.
+     */
+    'platform.isCurrentUserAdministrator': boolean;
     /**
      * Which way the project's text flows. 'ltr' = left-to-right; 'rtl' = right-to-left. '' or
      * undefined = left-to-right (may be changed in the future to detect). Defaults to ''. This is
@@ -9440,6 +9502,15 @@ declare module 'shared/models/dialog-options.model' {
     /** Url of dialog icon to display in the header. Default is Platform.Bible logo */
     iconUrl?: string;
     /**
+     * Name of a lucide icon (kebab-case, e.g. `refresh-cw`) to display in the header. Takes
+     * precedence over {@link DialogOptions.iconUrl}. The icons the platform can show are listed in
+     * `LUCIDE_ICON_NAMES` (exported from `platform-bible-react/experimental`). An unknown name is
+     * ignored and {@link DialogOptions.iconUrl} is used instead.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    iconName?: string;
+    /**
      * The message to show the user in the dialog. If you provide a {@link LocalizeKey}, it will be
      * localized before displaying.
      *
@@ -9619,7 +9690,8 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
    */
   export const RESOURCE_PICKER_DIALOG_TYPE = 'platform.resourcePicker';
   /**
-   * The tabType for the project picker dialog in `project-picker.dialog.tsx`
+   * The tabType for the project picker dialog in `project-picker.dialog.tsx`. Lists the user's
+   * projects only — editable and read-only — never published resources.
    *
    * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
    *   It is not yet a stable contract.
@@ -9700,7 +9772,8 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
     disableRestrictedModelTexts?: boolean;
   };
   /**
-   * Options to provide when showing the Project Picker dialog (no extra options needed)
+   * Options to provide when showing the Project Picker dialog (no extra options needed). The dialog
+   * lists the user's projects only — editable and read-only — never published resources.
    *
    * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
    *   It is not yet a stable contract.
@@ -10373,9 +10446,8 @@ declare module 'shared/models/request-registry-tokens-privilege.model' {
      * - `INVALID_ARGUMENT`: a scope is not allowed, or the Registry rejected the request (for example,
      *   the resource is not registered with this Registry)
      * - `UNAUTHENTICATED`: the user has no valid registration, or the Registry did not accept it
-     * - `FAILED_PRECONDITION`: the user's Internet & connectivity settings block it: internet access is
-     *   off, or "Disable access to some Bible translation services" is selected and this computer's
-     *   location is restricted or could not be determined
+     * - `FAILED_PRECONDITION`: the user's Internet & connectivity settings block it: "Disable access to
+     *   some Bible translation services" or "Block internet when in sensitive locations" is selected
      * - `UNAVAILABLE`: there is no internet connection, reading the registration or the Internet &
      *   connectivity settings failed or took too long, or the Registry could not be reached or did
      *   not return a usable token; retrying later may help

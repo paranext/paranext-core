@@ -20,8 +20,8 @@ import { scrollToRef, SaveState } from './utils';
 export const INTERNET_SETTINGS_STRING_KEYS: LocalizeKey[] = [
   '%general_error_title%',
   '%internetSettings_webView_subtitle_2%',
-  '%internetSettings_webView_title_2%',
-  '%paratextRegistration_alert_updatedInternetSettings_2%',
+  '%internetSettings_webView_title_3%',
+  '%paratextRegistration_alert_updatedInternetSettings_3%',
   '%paratextRegistration_alert_updatedRegistration_description%',
   '%paratextRegistration_alert_updatedRegistration_description_hasRestarted%',
   '%paratextRegistration_button_reset%',
@@ -48,6 +48,12 @@ export type InternetSettingsFormProps = {
   saveError: string;
   /** Called when "Save and restart" is clicked. */
   onSaveAndRestart: () => void;
+  /**
+   * Whether the hidden server-selection control should be shown — computed by the caller from
+   * whether Shift was held and whether the server is already non-Production (see
+   * `computeCanEditServer`).
+   */
+  canEditServer: boolean;
 };
 
 /**
@@ -64,6 +70,7 @@ export function InternetSettingsForm({
   saveState,
   saveError,
   onSaveAndRestart,
+  canEditServer,
 }: InternetSettingsFormProps) {
   const hasUnsavedChanges =
     savedInternetSettings !== undefined && !deepEqual(internetSettings, savedInternetSettings);
@@ -114,7 +121,7 @@ export function InternetSettingsForm({
     <div className="tw:flex tw:h-screen tw:flex-col tw:gap-4 tw:overflow-y-auto tw:p-4">
       <div>
         <h2 className="tw:text-lg tw:font-semibold">
-          {localizedStrings['%internetSettings_webView_title_2%']}
+          {localizedStrings['%internetSettings_webView_title_3%']}
         </h2>
         <p className="tw:text-sm tw:text-muted-foreground">
           {localizedStrings['%internetSettings_webView_subtitle_2%']}
@@ -136,12 +143,16 @@ export function InternetSettingsForm({
         />
       </div>
 
-      <DeveloperSection
-        localizedStrings={localizedStrings}
-        selectedServer={internetSettings.selectedServer}
-        onServerChange={(s) => onInternetSettingsChange({ ...internetSettings, selectedServer: s })}
-        disabled={isFormDisabled}
-      />
+      {canEditServer && (
+        <DeveloperSection
+          localizedStrings={localizedStrings}
+          selectedServer={internetSettings.selectedServer}
+          onServerChange={(s) =>
+            onInternetSettingsChange({ ...internetSettings, selectedServer: s })
+          }
+          disabled={isFormDisabled}
+        />
+      )}
 
       {saveError && (
         <Alert
@@ -172,7 +183,7 @@ export function InternetSettingsForm({
         >
           <CircleCheck className="tw:h-4 tw:w-4" />
           <AlertTitle>
-            {localizedStrings['%paratextRegistration_alert_updatedInternetSettings_2%']}
+            {localizedStrings['%paratextRegistration_alert_updatedInternetSettings_3%']}
           </AlertTitle>
           <AlertDescription>
             {saveState === SaveState.IsRestarting

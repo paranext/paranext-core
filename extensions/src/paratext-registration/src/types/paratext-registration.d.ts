@@ -84,6 +84,7 @@ declare module 'papi-shared-types' {
   import type {
     RegistrationData,
     InternetSettings,
+    InternetUse,
     IInternetSettingsDataProvider,
   } from 'paratext-registration';
   import type { ResetFirstRunRegistration } from 'papi-shared-types';
@@ -100,9 +101,28 @@ declare module 'papi-shared-types' {
      * Show the Paratext Registration Internet Settings window with which the user defines internet
      * settings for connecting to the Paratext Registration
      *
+     * Always opens with the (otherwise hidden) server-selection control locked — the dialog may
+     * still show it live if the persisted server is already something other than Production. This
+     * is also the `clickCommand` target of two notifications, which invoke it with the
+     * notification's own id as an argument; taking no parameters means that argument can never be
+     * mistaken for a request to unlock the control. See `showInternetSettingsWithServerSelection`
+     * for the one-shot unlock.
+     *
      * @returns Id of the internet settings web view
      */
     'paratextRegistration.showInternetSettings': () => Promise<string | undefined>;
+    /**
+     * Show the Paratext Registration Internet Settings window with the (otherwise hidden)
+     * server-selection control unlocked for this one open — the counterpart to
+     * `showInternetSettings` for the deliberate Shift-click/Shift-Entered "Internet & connectivity"
+     * gesture. The other input to the dialog's decision about whether to show the control — whether
+     * the server is already something other than Production — is read live by the dialog itself.
+     *
+     * @returns Id of the internet settings web view
+     */
+    'paratextRegistration.showInternetSettingsWithServerSelection': () => Promise<
+      string | undefined
+    >;
     /**
      * Gets information about user's current Paratext Registry user information in
      * `ParatextData.dll`
@@ -144,6 +164,18 @@ declare module 'papi-shared-types' {
      * @experimental This command is unstable and may change or disappear without notice
      */
     'paratextRegistration.isRegistrationCopiedFromParatext9': () => Promise<boolean>;
+    /**
+     * The internet use Paratext 9 has saved now, read from the newest Paratext 8 or 9 install on
+     * this computer. Read-only: Paratext 9's settings are never changed. Differs from
+     * Platform.Bible's own setting, which is copied from Paratext 9 only once and which startup
+     * changes from `VpnRequired` to `Disabled`.
+     *
+     * @returns The saved value, or nothing when Paratext 9 is not installed or its setting cannot
+     *   be read. Nothing arrives as `null` over the network, so compare against the values rather
+     *   than checking for `undefined`.
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextRegistration.getParatext9InternetUse': () => Promise<InternetUse | undefined>;
     /**
      * Registration half of `platform.resetFirstRun`, which is the command to call: it also resets
      * first-run progress and restarts the app, which this needs afterwards. Developer and tester

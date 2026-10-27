@@ -44,7 +44,7 @@ export async function restoreSavedInternetSettings(settings: SavedInternetSettin
 }
 
 /**
- * Open the user-profile popover and return its "Internet & connectivity" action.
+ * Open the user-profile popover and return its "Internet connectivity" action.
  *
  * The trigger toggles, so the click is only issued while the popover itself is closed and then
  * retried: a click that lands before the toolbar button is interactive (or while a dock rebuild is
@@ -69,17 +69,31 @@ export async function openUserProfilePopover(mainPage: Page): Promise<Locator> {
 }
 
 /**
- * Opens the Internet & Connectivity settings panel from the profile popover.
+ * Opens the Internet connectivity settings panel from the profile popover.
  *
  * Retries the whole open-and-click, with the panel's own heading as the success condition: a dock
  * rebuild after startup re-renders the toolbar and takes the open popover down with it, so an
  * action button that was there a moment ago can be detached by the time the click lands. Reopening
  * is the recovery — the click cannot be retried against a popover that no longer exists.
+ *
+ * `shiftKey` reproduces holding Shift while activating the row, which the web view reads as a
+ * one-shot request to unlock the (otherwise hidden) server-selection control. `activation:
+ * 'keyboard'` activates the focused row with Enter (Shift+Enter when `shiftKey` is set) instead of
+ * clicking it.
  */
-export async function openInternetSettings(mainPage: Page): Promise<void> {
+export async function openInternetSettings(
+  mainPage: Page,
+  {
+    shiftKey = false,
+    activation = 'click',
+  }: { shiftKey?: boolean; activation?: 'click' | 'keyboard' } = {},
+): Promise<void> {
   await expect(async () => {
     const action = await openUserProfilePopover(mainPage);
-    await action.click({ timeout: 5_000 });
+    if (activation === 'keyboard')
+      // `Locator.press` focuses the row first and holds Shift for the whole chord.
+      await action.press(shiftKey ? 'Shift+Enter' : 'Enter', { timeout: 5_000 });
+    else await action.click({ timeout: 5_000, modifiers: shiftKey ? ['Shift'] : [] });
     await expect(internetSettingsFrame(mainPage).locator('h2')).toBeVisible({ timeout: 15_000 });
   }).toPass({ timeout: 90_000 });
 }
@@ -87,10 +101,9 @@ export async function openInternetSettings(mainPage: Page): Promise<void> {
 /**
  * Returns a FrameLocator scoped to the internet settings web view iframe.
  *
- * Matched on the iframe's title attribute, case-insensitively and on the stable word alone: the web
- * view provider still names itself with the deprecated `%internetSettings_webView_title%`
- * ("Internet Settings") while its replacement key reads "Internet & connectivity", so anything
- * matching the full phrase or its capitalization breaks on whichever key wins.
+ * Matched on the iframe's title attribute, case-insensitively and on the stable word alone, so a
+ * change to the rest of the title ("Internet connectivity") or its capitalization does not break
+ * it.
  *
  * Does not wait for the panel to finish loading — callers should await a stable element (e.g.,
  * `frame.locator('h2').toBeVisible()`) before interacting with the frame.
@@ -99,7 +112,7 @@ export function internetSettingsFrame(mainPage: Page): FrameLocator {
   return mainPage.frameLocator('iframe[title*="Internet" i]');
 }
 
-/** The two connectivity options that are actually selectable (the rest are "Coming soon"). */
+/** The two connectivity options that are actually selectable (the rest are "Not yet available"). */
 export function selectableConnectivityOptions(frame: FrameLocator): {
   unrestricted: Locator;
   someServicesDisabled: Locator;
@@ -107,7 +120,7 @@ export function selectableConnectivityOptions(frame: FrameLocator): {
   return {
     // %paratextRegistration_description_internetUse_option_Enabled_2%
     unrestricted: frame.getByRole('radio', { name: 'Unrestricted' }),
-    // %paratextRegistration_description_internetUse_option_VpnRequired_2%
+    // %paratextRegistration_description_internetUse_option_VpnRequired_2%, the label of `Disabled`
     someServicesDisabled: frame.getByRole('radio', {
       name: 'Disable access to some Bible translation services',
     }),
@@ -120,18 +133,24 @@ export function selectableConnectivityOptions(frame: FrameLocator): {
  *
  * Which one that is depends on the machine: these settings live in ParatextData's own storage,
  * which is seeded once from a co-installed Paratext 9, so a developer box can legitimately start on
- * either. Clicking a fixed option would be a no-op wherever that option was already selected.
- * Nothing here is persisted — only "Save and restart" writes.
+ * either — or on a not-yet-available option, such as a proxy carried over from Paratext 9. Clicking
+ * a fixed option would be a no-op wherever that option was already selected. Nothing here is
+ * persisted — only "Save and restart" writes.
  *
- * @returns The radio that was selected before the click, so a test can assert a reset restores it
+ * @returns The radio that was selected before the click, whichever row it is on, so a test can
+ *   assert a reset restores it
  */
 export async function selectTheOtherConnectivityOption(frame: FrameLocator): Promise<Locator> {
   const { unrestricted, someServicesDisabled } = selectableConnectivityOptions(frame);
   await expect(unrestricted).toBeEnabled({ timeout: 10_000 });
-  const startedUnrestricted = await unrestricted.isChecked();
-  const original = startedUnrestricted ? unrestricted : someServicesDisabled;
-  const target = startedUnrestricted ? someServicesDisabled : unrestricted;
-  await target.click();
+  // Pinned by id, since a `checked: true` locator would follow the selection to the clicked row.
+  const originalId = await internetUseRadios(frame)
+    .and(frame.getByRole('radio', { checked: true }))
+    .getAttribute('id');
+  const original = frame.locator(`[id="${originalId}"]`);
+  const target = (await unrestricted.isChecked()) ? someServicesDisabled : unrestricted;
+  // The label, not the radio button: the label's click target covers the whole row, radio included.
+  await frame.locator(`label[for="${await target.getAttribute('id')}"]`).click();
   await expect(target).toBeChecked();
   return original;
 }
@@ -150,6 +169,17 @@ export async function openInternetSettingsPanel(mainPage: Page): Promise<FrameLo
 /** A radio button in the internet-access option list, by its visible label. */
 export function internetUseRadio(frame: FrameLocator, label: string | RegExp): Locator {
   return frame.getByRole('radio', { name: label });
+}
+
+/**
+ * Every radio button in the internet-access option list. Scoped to that list, since the developer
+ * section's server radios share the frame.
+ */
+export function internetUseRadios(frame: FrameLocator): Locator {
+  return frame
+    .getByRole('radiogroup')
+    .filter({ has: frame.getByRole('radio', { name: 'Unrestricted' }) })
+    .getByRole('radio');
 }
 
 /**
@@ -206,4 +236,69 @@ export function serverTypeRadio(
   server: 'production' | 'quality-assurance' | 'development' | 'test',
 ): Locator {
   return frame.getByTestId(`server-type-${server}`);
+}
+
+/** The server badge shown next to "Internet & connectivity" in the profile popover row. */
+export function serverBadge(mainPage: Page): Locator {
+  return mainPage.getByTestId('user-profile-server-badge');
+}
+
+/**
+ * The tooltip revealed by hovering the server badge. Targets the visible content rather than
+ * `getByRole('tooltip')`, for the reason {@link descriptionTooltip} gives.
+ */
+export function serverBadgeTooltip(mainPage: Page): Locator {
+  return mainPage.locator('[data-slot="tooltip-content"]');
+}
+
+/** The persisted ParatextData internet settings, as far as these helpers need to know them. */
+type PersistedInternetSettings = { selectedServer: string } & Record<string, unknown>;
+
+/** The renderer exposes `papi` on `globalThis`, untyped in the Playwright context. */
+type RendererPapi = {
+  papi: {
+    dataProviders: {
+      get: (providerName: string) => Promise<
+        | {
+            getInternetSettings: (selector: undefined) => Promise<PersistedInternetSettings>;
+            setInternetSettings: (
+              selector: undefined,
+              settings: PersistedInternetSettings,
+            ) => Promise<unknown>;
+          }
+        | undefined
+      >;
+    };
+  };
+};
+
+/**
+ * Reads the persisted ParatextData internet settings and rewrites only `selectedServer`, through
+ * the `paratextRegistration.internetSettingsDataProvider` data provider's `setInternetSettings` —
+ * the same write the dialog's "Save and restart" makes — but without the restart that button then
+ * queues, which this suite's tests deliberately never trigger (see the spec's file header). That
+ * restart is for other settings (e.g. proxy) to take effect in the already-running ParatextData
+ * connection; the dialog reads `selectedServer` live from this same data provider, and its update
+ * event refreshes the profile popover's server badge, so neither needs a restart to see the
+ * change.
+ *
+ * Writes machine-wide ParatextData state that the fixture's settings backup does not cover: a
+ * caller must restore the returned value in a `finally`. A run killed before that leaves the
+ * machine on whatever server was set here.
+ *
+ * @returns The server that was persisted beforehand, so a test can restore it once it is done.
+ */
+export async function setPersistedServer(mainPage: Page, server: string): Promise<string> {
+  return mainPage.evaluate(async (nextServer) => {
+    // The renderer exposes `papi` on `globalThis`, untyped in the Playwright context.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const win = window as unknown as RendererPapi;
+    const provider = await win.papi.dataProviders.get(
+      'paratextRegistration.internetSettingsDataProvider',
+    );
+    if (!provider) throw new Error('Internet settings data provider is not registered');
+    const current = await provider.getInternetSettings(undefined);
+    await provider.setInternetSettings(undefined, { ...current, selectedServer: nextServer });
+    return current.selectedServer;
+  }, server);
 }

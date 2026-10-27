@@ -6,13 +6,13 @@ import { findScrollContainer } from '../editor-dom.util';
 import {
   AnchorRect,
   ArmedHint,
-  computeAnchorRect,
   CONFIRMING_KEY_LOCALIZED_STRING_KEYS,
   confirmingKey,
   getConfirmingKeyDisplayLabel,
+  hintMessageKey,
   readArmedHint,
+  resolveArmedAnchorRect,
   TWO_STEP_DELETE_MESSAGE_STRING_KEYS,
-  twoStepDeleteMessageKey,
 } from './two-step-delete-tooltip.utils';
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
@@ -27,16 +27,26 @@ type ArmedData = AnchorRect & ArmedHint;
 type Props = { children: React.ReactNode };
 
 /**
- * Renders the destructive "press again to delete" hint while a verse marker, a chapter marker, or a
- * selection containing verse markers is armed for the two-step delete. This lives in core — not the
- * editor repo — so the user-facing copy is localized. Rendering itself is delegated to
- * `platform-bible-react`'s `DestructiveKeyConfirmation`; this component owns only detecting the
- * armed state and where to anchor it.
+ * Renders the destructive "press again to delete" hint while a verse marker, a chapter marker, a
+ * selection containing verse markers, or a paragraph merge is armed for the two-step delete. This
+ * lives in core — not the editor repo — so the user-facing copy is localized. Rendering itself is
+ * delegated to `platform-bible-react`'s `DestructiveKeyConfirmation`; this component owns only
+ * detecting the armed state and where to anchor it.
  *
- * The editor (shared-react's StructureKeyboardPlugin) publishes the armed state to its root as
- * `data-verse-delete-intent`/`data-verse-delete-kind` and marks the armed marker with
- * `verse-selected`; this overlay observes those DOM signals and anchors the hint to the marker.
- * Mirrors {@link ../paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component}.
+ * The DOM contract with the editor (shared-react's StructureKeyboardPlugin), which this overlay
+ * observes:
+ *
+ * - The editor root carries `data-verse-delete-intent` and `data-verse-delete-kind` while a delete is
+ *   armed.
+ * - An armed verse marker or chapter number carries `verse-selected`.
+ * - An armed paragraph's gutter marker carries `para-merge-armed` — or, when the paragraph shows no
+ *   marker, the paragraph itself does. The gutter marker is told apart by its
+ *   `data-text-type="marker"` attribute, and carries `--para-merge-armed-text-left` and
+ *   `--para-merge-armed-text-width`: where its text sits within its box.
+ *
+ * The hint anchors to the marked element, narrowed to a gutter marker's text, or, for a paragraph
+ * that shows no marker, to the caret (see `resolveArmedAnchorRect`). Mirrors
+ * {@link ../paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component}.
  */
 export function TwoStepDeleteTooltipOverlay({ children }: Props) {
   const [armed, setArmed] = useState<ArmedData | undefined>(undefined);
@@ -52,9 +62,9 @@ export function TwoStepDeleteTooltipOverlay({ children }: Props) {
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
 
   // Cross-view sync (see .claude/rules/cross-view-sync-hidden-views.md):
-  // - Live: the MutationObserver/scroll listener below react to the editor's
-  //   data-verse-delete-*/verse-selected DOM signals in real time to arm, disarm, and re-anchor the
-  //   hint while this tab is visible.
+  // - Live: the MutationObserver/scroll listener below react to the editor's data-verse-delete-*
+  //   attributes and the verse-selected / para-merge-armed classes in real time to arm, disarm, and
+  //   re-anchor the hint while this tab is visible.
   // - Hidden: intentionally not handled, because arming can't happen while hidden — the editor only
   //   publishes an armed state in response to a Backspace/Delete keypress while it holds keyboard
   //   focus, and rc-dock hides an inactive tab's pane via display:none, which force-blurs whatever
@@ -74,18 +84,16 @@ export function TwoStepDeleteTooltipOverlay({ children }: Props) {
     scrollContainerRef.current = scrollContainer;
 
     const sync = () => {
-      const root = positionAnchor.querySelector('[data-verse-delete-kind]');
-      const hint = readArmedHint(root);
-      const marker = positionAnchor.querySelector<HTMLElement>('.verse-selected');
-      if (!hint || !marker) {
-        setArmed(undefined);
-        return;
-      }
-      setArmed({ ...hint, ...computeAnchorRect(marker, positionAnchor) });
+      const hint = readArmedHint(positionAnchor.querySelector('[data-verse-delete-kind]'));
+      const anchorRect = hint
+        ? resolveArmedAnchorRect(hint, positionAnchor, window.getSelection())
+        : undefined;
+      setArmed(hint && anchorRect ? { ...hint, ...anchorRect } : undefined);
     };
 
-    // The editor toggles the root's data-verse-delete-* attributes and the marker's verse-selected
-    // class; observe both so the tooltip arms/disarms and re-anchors in lockstep with the editor.
+    // The editor toggles the root's data-verse-delete-* attributes, and verse-selected on an armed
+    // verse marker or para-merge-armed on an armed paragraph's marker; observe both so the tooltip
+    // arms/disarms and re-anchors in lockstep with the editor.
     const observer = new MutationObserver(sync);
     observer.observe(positionAnchor, {
       subtree: true,
@@ -115,7 +123,7 @@ export function TwoStepDeleteTooltipOverlay({ children }: Props) {
       <DestructiveKeyConfirmation
         open={!!armed}
         anchorRect={armed ?? EMPTY_ANCHOR_RECT}
-        message={armed ? localizedStrings[twoStepDeleteMessageKey(armed.kind)] : ''}
+        message={armed ? localizedStrings[hintMessageKey(armed)] : ''}
         confirmingKeyLabel={
           armed
             ? getConfirmingKeyDisplayLabel(

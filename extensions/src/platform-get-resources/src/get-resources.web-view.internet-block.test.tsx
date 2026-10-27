@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useState, type ComponentType } from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { WebViewProps } from '@papi/core';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { INTERNET_BLOCKED_NOTIFICATION_ID } from './internet-block-notification.utils';
+import {
+  renderGetResourcesWebView,
+  serveCatalogHoldingFlagRefresh,
+} from './get-resources.web-view.test-utils';
 
 /*
  * The classification itself is unit-tested; what only a render can show is that the web view
@@ -37,16 +39,12 @@ vi.mock('@papi/frontend/react', () => ({
   }),
 }));
 
-// Must follow the vi.mock calls; the file assigns globalThis.webViewComponent as a side effect.
-// eslint-disable-next-line import/first
-import './get-resources.web-view';
-
 // The two blocks' texts, as they arrive across the process boundary: ParatextData's own, and the
 // data provider's gate on the "Disable access to some Bible translation services" setting.
-const ALL_ACCESS_DISABLED_ERROR =
+const PARATEXT_DATA_BLOCK_ERROR =
   'JSON-RPC Request error (-32000): Bug in Paratext caused attempted access to Internet. Request has been blocked.';
 const SERVICES_BLOCKED_ERROR =
-  'JSON-RPC Request error (-32000): Internet access is disabled in “Internet & connectivity”. Please enable it and try again. (INTERNET_SERVICES_BLOCKED)';
+  'JSON-RPC Request error (-32000): Internet access is disabled in “Internet connectivity”. Please enable it and try again. (INTERNET_SERVICES_BLOCKED)';
 
 const RESOURCE = {
   dblEntryUid: 'uid-1',
@@ -62,50 +60,13 @@ const RESOURCE = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // Radix uses ResizeObserver, which jsdom does not implement.
-  global.ResizeObserver = class {
-    // jsdom stub: intentionally no `this` usage
-    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-    observe() {}
-
-    // jsdom stub: intentionally no `this` usage
-    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-    unobserve() {}
-
-    // jsdom stub: intentionally no `this` usage
-    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-    disconnect() {}
-  };
 });
 
-/**
- * Routes the web view's commands: `getCachedResources` answers from `serveCatalog`, and the flag
- * refresh the dialog runs once per mount is held in flight. That refresh refetches the list when it
- * settles, which re-renders the table under a click and retries a failed fetch before the test can
- * — and none of these cases is about it.
- */
 function serveCommands(serveCatalog: () => Promise<unknown>) {
-  mockSendCommand.mockImplementation(async (command: string) => {
-    if (command === 'platformGetResources.getCachedResources') return serveCatalog();
-    if (command === 'platformGetResources.refreshResourceFlags') return new Promise(() => {});
-    return undefined;
-  });
+  mockSendCommand.mockImplementation(serveCatalogHoldingFlagRefresh(serveCatalog));
 }
 
 const serveAvailableCatalog = async () => ({ status: 'available', resources: [RESOURCE] });
-
-function renderWebView() {
-  // globalThis is a special interface; cast to read the property the web view file added at runtime.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const GetResourcesWebView = (globalThis as Record<string, unknown>)
-    .webViewComponent as ComponentType<WebViewProps>;
-  // Only the props this web view reads; the double cast avoids restating every optional field.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const props = {
-    useWebViewState: (_key: string, defaultValue: unknown) => useState(defaultValue),
-  } as unknown as WebViewProps;
-  return render(<GetResourcesWebView {...props} />);
-}
 
 describe('Get Resources web view', () => {
   it('reports a blocked catalog fetch with the notification that opens the setting', async () => {
@@ -113,12 +74,12 @@ describe('Get Resources web view', () => {
       throw new Error(SERVICES_BLOCKED_ERROR);
     });
 
-    renderWebView();
+    renderGetResourcesWebView();
 
     await waitFor(() =>
       expect(mockSendNotification).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: '%data_loading_error_internetAccess_disabled_2%',
+          message: '%data_loading_error_internetAccess_disabled_3%',
           clickCommand: 'paratextRegistration.showInternetSettings',
           notificationId: INTERNET_BLOCKED_NOTIFICATION_ID,
         }),
@@ -128,16 +89,16 @@ describe('Get Resources web view', () => {
 
   it('reports a blocked install with the notification that opens the setting', async () => {
     serveCommands(serveAvailableCatalog);
-    mockInstallDblResource.mockRejectedValue(new Error(ALL_ACCESS_DISABLED_ERROR));
+    mockInstallDblResource.mockRejectedValue(new Error(PARATEXT_DATA_BLOCK_ERROR));
 
-    renderWebView();
+    renderGetResourcesWebView();
 
     fireEvent.click(await screen.findByRole('button', { name: 'Get' }));
 
     await waitFor(() =>
       expect(mockSendNotification).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: '%data_loading_error_internetAccess_disabled_2%',
+          message: '%data_loading_error_internetAccess_disabled_3%',
           notificationId: INTERNET_BLOCKED_NOTIFICATION_ID,
         }),
       ),
@@ -155,7 +116,7 @@ describe('Get Resources web view', () => {
         .mockImplementation(serveAvailableCatalog),
     );
 
-    renderWebView();
+    renderGetResourcesWebView();
 
     await waitFor(() => expect(mockSendNotification).toHaveBeenCalledTimes(1));
 
@@ -171,7 +132,7 @@ describe('Get Resources web view', () => {
       new Error('JSON-RPC Request error (-32000): This resource is no longer available'),
     );
 
-    renderWebView();
+    renderGetResourcesWebView();
 
     fireEvent.click(await screen.findByRole('button', { name: 'Get' }));
 

@@ -311,7 +311,7 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_grid_selectAll%',
   // View-mode shared stub label
   '%manageBooks_view_compareVersions_label%',
-  '%manageBooks_view_disabledStub_notYetAvailable%',
+  '%manageBooks_view_disabledStub_notYetAvailable_2%',
   // Import flow
   '%manageBooks_import_choose%',
   '%manageBooks_import_addMore%',
@@ -417,10 +417,10 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   // Disabled future sections (DEF-UI-011/012/013)
   '%manageBooks_progressTracking_label%',
   '%manageBooks_progressTracking_subtitle%',
-  '%manageBooks_progressTracking_notYetAvailable%',
+  '%manageBooks_progressTracking_notYetAvailable_2%',
   '%manageBooks_bookNames_label%',
   '%manageBooks_bookNames_subtitle%',
-  '%manageBooks_bookNames_notYetAvailable%',
+  '%manageBooks_bookNames_notYetAvailable_2%',
 ] as const);
 
 /** Localized strings consumed by `ManageBooksDialog`. */

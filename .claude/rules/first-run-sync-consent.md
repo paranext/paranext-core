@@ -8,7 +8,8 @@ declined.
 ## The rule
 
 Every code path that starts a Send/Receive **without the user asking for it right then** must first
-get `granted` from the one consent gate, and skip the sync on any other answer:
+get `granted` from the one consent gate, and skip the sync on any other answer (one exception: the
+switch from Simple to Power, below):
 
 - **Main process** — `getAutomaticSyncConsent()` in `src/main/first-run-consent.util.ts`.
 - **Extension host** — the `platform.getAutomaticSyncConsent` command, which calls that same
@@ -29,6 +30,12 @@ the Simple-mode wizard, so in Power mode it stays `false` forever. Gating a Powe
 would permanently disable that path with no UI to recover — `startup-tasks.test.ts` carries a
 regression test naming this trap. An interface mode that cannot be read must not become a way past
 the gate: skip the sync, or treat the mode as Simple.
+
+**The switch from Simple to Power is the one exception.** Its sync (`syncOnSwitchToPower` in
+`platform-scripture-editor`) runs in Power mode and lets `unconfirmed` through, because a user who
+started in Power mode reads `unconfirmed` for the whole session — see
+`adr-switch-to-power-sends-unsent-changes`. It still skips on `deferred`, on `unreadable`, and on a
+rejected request.
 
 ## What is NOT gated
 

@@ -29,6 +29,38 @@ const EXPECTED_MENU_HINTS: Record<
     hints: { darwin: '⌥⌘M', win32: 'Ctrl+Shift+N', linux: 'Ctrl+Shift+N' },
     menus: ['platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu'],
   },
+  'platformScriptureEditor.undo': {
+    hints: { darwin: '⌘Z', win32: 'Ctrl+Z', linux: 'Ctrl+Z' },
+    menus: ['platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu'],
+  },
+  'platformScriptureEditor.redo': {
+    hints: { darwin: '⇧⌘Z', win32: 'Ctrl+Y', linux: 'Ctrl+Y' },
+    menus: ['platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu'],
+  },
+  'platformScriptureEditor.toggleFootnotes': {
+    hints: { darwin: 'F7', win32: 'F7', linux: 'F7' },
+    menus: ['platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu'],
+  },
+  'platformScripture.openChecksSidePanel': {
+    hints: { darwin: '⌃⇧R', win32: 'Ctrl+Shift+R', linux: 'Ctrl+Shift+R' },
+    menus: ['platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu'],
+  },
+  'platformScriptureEditor.insertFootnoteAtSelection': {
+    hints: { darwin: '⌃T', win32: 'Ctrl+T', linux: 'Ctrl+T' },
+    menus: ['platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu'],
+  },
+  'platformScriptureEditor.insertCrossReferenceAtSelection': {
+    hints: { darwin: '⌃⇧T', win32: 'Ctrl+Shift+T', linux: 'Ctrl+Shift+T' },
+    menus: ['platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu'],
+  },
+  'platformGetResources.openHome': {
+    hints: { darwin: '⌘O', win32: 'Ctrl+O', linux: 'Ctrl+O' },
+    menus: ['platform-get-resources: mainMenu'],
+  },
+  'platform.openProjectSettingsForWebView': {
+    hints: { darwin: '⌘J', win32: 'Ctrl+J', linux: 'Ctrl+J' },
+    menus: ['platform: defaultWebViewTopMenu'],
+  },
   'platform.webViewContentZoomIn': {
     hints: { darwin: '⌘=', win32: 'Ctrl++', linux: 'Ctrl++' },
     menus: [
@@ -71,7 +103,9 @@ function getOsTaggedChords(entry: KeyboardShortcutEntry): string[] {
  * `platform-macos-menubar.data.ts` binds the macOS View menu's accelerators to that command, so the
  * menu hint names the command the chord runs (though not necessarily in the same tab: the View menu
  * zooms the focused window's last focused tab). `web-view.service-router.ts` implements the
- * command; it is not a key handler.
+ * command; it is not a key handler. `main.ts` and `app-chords.util.ts` claim the Open and Project
+ * settings chords in every window and send the command the menu item sends, Project settings with
+ * the web view whose tab has focus.
  */
 type SameCommandMainProcessHandler = { command: string; locations: string[] };
 
@@ -79,6 +113,8 @@ const CONTENT_ZOOM_MAIN_PROCESS_LOCATIONS = [
   'src/main/platform-macos-menubar.data.ts',
   'src/main/services/web-view.service-router.ts',
 ];
+
+const APP_CHORD_MAIN_PROCESS_LOCATIONS = ['src/main/main.ts', 'src/main/app-chords.util.ts'];
 
 const SAME_COMMAND_MAIN_PROCESS_LOCATIONS: Record<string, SameCommandMainProcessHandler> = {
   'content-zoom-in': {
@@ -92,6 +128,14 @@ const SAME_COMMAND_MAIN_PROCESS_LOCATIONS: Record<string, SameCommandMainProcess
   'content-zoom-reset': {
     command: 'platform.webViewContentZoomReset',
     locations: CONTENT_ZOOM_MAIN_PROCESS_LOCATIONS,
+  },
+  'open-home': {
+    command: 'platformGetResources.openHome',
+    locations: APP_CHORD_MAIN_PROCESS_LOCATIONS,
+  },
+  'open-project-settings': {
+    command: 'platform.openProjectSettingsForWebView',
+    locations: APP_CHORD_MAIN_PROCESS_LOCATIONS,
   },
 };
 
@@ -171,7 +215,21 @@ function getMenuLocationsByCommand(): Map<string, Set<string>> {
   return locationsByCommand;
 }
 
+/** Every (entry id, location) pair in the catalog, for a per-pair existence check. */
+const entryLocationPairs = rootKeyboardShortcuts.flatMap((entry) =>
+  entry.locations.map((location): [entryId: string, location: string] => [entry.id, location]),
+);
+
 describe('keyboard shortcuts catalog', () => {
+  it('has locations to check', () => {
+    // Guards the sweep below: an empty list would pass it by running nothing.
+    expect(entryLocationPairs.length).toBeGreaterThan(0);
+  });
+
+  it.each(entryLocationPairs)('%s location "%s" resolves to a real file', (_id, location) => {
+    expect(existsSync(path.join(process.cwd(), location))).toBe(true);
+  });
+
   it('commands match the expected menu hints', () => {
     // Sorted arrays rather than sets, so a `command` on two entries also fails
     const commands = entriesWithCommand.map((entry) => entry.command ?? '');
@@ -319,13 +377,6 @@ function zoomEntries() {
   return rootKeyboardShortcuts.filter((entry) => entry.category === 'Zoom');
 }
 
-/** All (entry id, location) pairs across the Zoom category, for a per-pair existence check. */
-function zoomEntryLocationPairs(): [entryId: string, location: string][] {
-  return zoomEntries().flatMap((entry) =>
-    entry.locations.map((location): [string, string] => [entry.id, location]),
-  );
-}
-
 describe('keyboard-shortcuts.data Zoom category', () => {
   it('has no leftover app-wide zoom entries for the removed main-process chords', () => {
     const ids = zoomEntries().map((entry) => entry.id);
@@ -341,8 +392,15 @@ describe('keyboard-shortcuts.data Zoom category', () => {
       expect(entry?.locations).toEqual(expect.arrayContaining(CONTENT_ZOOM_CHORD_LOCATIONS));
     },
   );
+});
 
-  it.each(zoomEntryLocationPairs())('%s location "%s" resolves to a real file', (_id, location) => {
-    expect(existsSync(path.join(process.cwd(), location))).toBe(true);
+describe('paragraph marker menu chord', () => {
+  const entry = rootKeyboardShortcuts.find(
+    (shortcut) => shortcut.id === 'scripture-open-paragraph-menu-from-marker',
+  );
+
+  it('shows no menu hint, since the chord works only on a selected paragraph marker', () => {
+    expect(entry).toBeDefined();
+    expect(entry?.command).toBeUndefined();
   });
 });

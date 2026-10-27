@@ -194,6 +194,7 @@ function renderFootnoteEditor(
     applyUpdate: vi.fn(),
     replaceEmbedUpdate: vi.fn(),
     getSelection: vi.fn(),
+    getSelectedParaMarker: vi.fn(),
     setSelection: vi.fn(),
     setAnnotation: vi.fn(),
     removeAnnotation: vi.fn(),
@@ -777,6 +778,22 @@ describe('FootnoteEditor marker palette wiring', () => {
       // probe — even though a focusout captured a snapshot earlier.
       mocks.getSelection.mockReturnValue(sampleSelection);
       editorInput.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+
+      await commit('fq');
+
+      expect(mocks.setSelection).not.toHaveBeenCalled();
+      expect(mocks.selectNote).not.toHaveBeenCalled();
+      expect(mocks.apply).toHaveBeenCalledOnce();
+    });
+
+    it('leaves a selected paragraph marker alone on commit', async () => {
+      const { editorInput, editorRef, mocks, commit } = setUpCommitScenario();
+
+      // A caret captured earlier, then a paragraph marker selected: it has no text range, so
+      // `getSelection` reports nothing, yet restoring the older caret would move the selection off it.
+      mocks.getSelection.mockReturnValueOnce(sampleSelection);
+      editorInput.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+      vi.mocked(editorRef.getSelectedParaMarker).mockReturnValue('q1');
 
       await commit('fq');
 

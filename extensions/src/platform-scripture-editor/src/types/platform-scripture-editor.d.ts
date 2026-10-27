@@ -43,11 +43,41 @@ declare module 'platform-scripture-editor' {
   };
 
   /**
-   * Tell the editor to cycle between the Scripture view types (currently just a toggle between
-   * formatted and Marker view)
+   * Tell the editor to cycle between the Scripture view types. In Power mode the cycle is formatted
+   * (Preview), then Standard, then Marker view, then back to formatted. Outside Power mode only the
+   * formatted view is available, so the cycle stays on it.
    */
   export type EditorMessageChangeScriptureView = {
     method: 'changeScriptureView';
+  };
+
+  /**
+   * Tell the editor to show a specific Scripture view type. A `'standard'` or `'markers'` request
+   * resolves to the formatted view when the interface mode is not Power.
+   *
+   * @experimental This message is unstable and may change or disappear without notice
+   */
+  export type EditorMessageSetScriptureView = {
+    method: 'setScriptureView';
+    viewType: ScriptureEditorViewType;
+  };
+
+  /**
+   * Tell the editor to undo its last edit, unless the editor is read-only
+   *
+   * @experimental This message is unstable and may change or disappear without notice
+   */
+  export type EditorMessageUndo = {
+    method: 'undo';
+  };
+
+  /**
+   * Tell the editor to redo its last undone edit, unless the editor is read-only
+   *
+   * @experimental This message is unstable and may change or disappear without notice
+   */
+  export type EditorMessageRedo = {
+    method: 'redo';
   };
 
   /** Tell the editor to toggle footnotes pane visibility */
@@ -165,6 +195,9 @@ declare module 'platform-scripture-editor' {
     | EditorMessageSelectRange
     | EditorMessageUpdateDecorations
     | EditorMessageChangeScriptureView
+    | EditorMessageSetScriptureView
+    | EditorMessageUndo
+    | EditorMessageRedo
     | EditorMessageToggleFootnotesPaneVisibility
     | EditorMessageChangeFootnotesPaneLocation
     | EditorMessageInsertTextualNoteAtSelection
@@ -391,10 +424,32 @@ declare module 'platform-scripture-editor' {
      */
     selectRange(range: ScriptureRange): Promise<void>;
     /**
-     * Cycle through the Scripture view types in the editor (currently just a toggle between
-     * formatted and Marker view)
+     * Cycle through the Scripture view types in the editor. In Power mode the cycle is formatted
+     * (Preview), then Standard, then Marker view, then back to formatted. Outside Power mode only
+     * the formatted view is available, so the cycle stays on it.
      */
     changeScriptureView(): Promise<void>;
+    /**
+     * Show a specific Scripture view type in the editor (`'standard'` and `'markers'` resolve to
+     * the formatted view outside Power mode)
+     *
+     * @experimental This method is unstable and may change or disappear without notice
+     */
+    setScriptureView(viewType: ScriptureEditorViewType): Promise<void>;
+    /**
+     * Undo the last edit in the editor. Does nothing but tell the user while the editor is
+     * read-only
+     *
+     * @experimental This method is unstable and may change or disappear without notice
+     */
+    undo(): Promise<void>;
+    /**
+     * Redo the last undone edit in the editor. Does nothing but tell the user while the editor is
+     * read-only
+     *
+     * @experimental This method is unstable and may change or disappear without notice
+     */
+    redo(): Promise<void>;
     /** Toggle the visibility of the footnotes pane in the editor */
     toggleFootnotesPaneVisibility(): Promise<void>;
     /** Toggle the visibility of the footnotes pane in the editor */
@@ -838,12 +893,48 @@ declare module 'papi-shared-types' {
     ) => Promise<string | undefined>;
 
     /**
-     * Cycles through the Scripture view types in the editor (currently just a toggle between
-     * formatted and Marker view) for the given the WebView ID
+     * Cycles through the Scripture view types in the editor for the given WebView ID. In Power mode
+     * the cycle is formatted (Preview), then Standard, then Marker view, then back to formatted.
+     * Outside Power mode only the formatted view is available, so the cycle stays on it.
      *
      * @param webViewId The WebView ID of the scripture editor or resource viewer.
      */
     'platformScriptureEditor.changeView': (webViewId: string | undefined) => Promise<void>;
+
+    /**
+     * Shows Standard view in the editor for the given WebView ID. Outside Power mode the editor
+     * shows the Preview (formatted) view instead.
+     *
+     * @param webViewId The WebView ID of the scripture editor or resource viewer.
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platformScriptureEditor.setViewStandard': (webViewId: string | undefined) => Promise<void>;
+
+    /**
+     * Shows Preview (the formatted view) in the editor for the given WebView ID.
+     *
+     * @param webViewId The WebView ID of the scripture editor or resource viewer.
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platformScriptureEditor.setViewPreview': (webViewId: string | undefined) => Promise<void>;
+
+    /**
+     * Undoes the last edit in the editor for the given WebView ID. Does nothing but tell the user
+     * while the editor is read-only.
+     *
+     * @param webViewId The WebView ID of the scripture editor or resource viewer.
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platformScriptureEditor.undo': (webViewId: string | undefined) => Promise<void>;
+
+    /**
+     * Redoes the last undone edit in the editor for the given WebView ID. Does nothing but tell the
+     * user while the editor is read-only.
+     *
+     * @param webViewId The WebView ID of the scripture editor or resource viewer.
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platformScriptureEditor.redo': (webViewId: string | undefined) => Promise<void>;
 
     /**
      * Toggles the visibility of the footnotes pane for the given the WebView ID
@@ -936,6 +1027,18 @@ declare module 'papi-shared-types' {
      * @experimental This command is unstable and may change or disappear without notice
      */
     'platformScriptureEditor.finalizeProjectSwitch': (projectId: string) => Promise<void>;
+    /**
+     * After a switch from Simple to Power mode, send/receives the project if it holds local changes
+     * to send. Resolves as soon as that work has started, not when it ends; the sync reports its
+     * own progress and failures, so this never rejects for them. Syncs nothing if the user chose
+     * "Don't sync yet" this session.
+     *
+     * Intended for Platform.Bible core's Simple -> Power mode switch.
+     *
+     * @param projectId The project the Simple-mode Scripture Editor was showing.
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platformScriptureEditor.syncOnSwitchToPower': (projectId: string) => Promise<void>;
     /**
      * Opens the model text panel WebView for a translation project
      *

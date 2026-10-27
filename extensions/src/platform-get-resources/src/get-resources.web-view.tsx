@@ -12,6 +12,7 @@ import {
   newResourceActionDidNotTakeEffectError,
   newResourceActionProviderNotReadyError,
   ResourceAction,
+  RESOURCE_TYPES,
 } from './get-resources.component';
 import { getInternetBlockedNotification } from './internet-block-notification.utils';
 import { openResourceFrom } from './open-home-item';
@@ -31,7 +32,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const uninstallResource = dblResourcesProvider?.uninstallDblResource;
 
   // The dialog reports the failure itself; this notification is what carries the action that opens
-  // the Internet & connectivity setting responsible for it.
+  // the Internet connectivity setting responsible for it.
   const notifyIfInternetBlocked = useCallback((error: unknown) => {
     const notification = getInternetBlockedNotification(error);
     if (notification) papi.notifications.send(notification);
@@ -94,11 +95,12 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
     resolvedResources.length > 0,
   );
 
-  const [isInitialized, setIsInitialized] = useState<boolean>(false);
-
-  const [selectedTypes, setSelectedTypes] = useWebViewState<string[]>('typeFilter', [
-    'ScriptureResource',
-  ]);
+  // A dialog restored with a saved layout keeps any selection saved in its state, which can differ
+  // from the defaults below. A saved language selection may have been filled in automatically from
+  // the installed resources rather than chosen; it cannot be told apart from a choice, so it is
+  // kept. Reopening the dialog starts from the defaults, since it gets a new web view id and so
+  // empty state.
+  const [selectedTypes, setSelectedTypes] = useWebViewState<string[]>('typeFilter', RESOURCE_TYPES);
 
   const [selectedLanguages, setSelectedLanguages] = useWebViewState<string[]>('languageFilter', []);
 
@@ -115,34 +117,6 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
       openingResourceIdsRef.current.delete(projectId);
     }
   }, []);
-
-  // When no languages are selected on the first render of this component, set default selection to
-  // languages that have resources installed
-  useEffect(() => {
-    if (isInitialized) return;
-    if (selectedLanguages.length > 0) {
-      setIsInitialized(true);
-      return;
-    }
-    if (resolvedResources.length > 0 && selectedLanguages.length === 0) {
-      setSelectedLanguages(
-        Array.from(
-          new Set(
-            resolvedResources
-              .filter((resource) => resource.installed === true)
-              .map((resource) => resource.bestLanguageName),
-          ),
-        ),
-      );
-      setIsInitialized(true);
-    }
-  }, [
-    selectedLanguages.length,
-    setSelectedLanguages,
-    isInitialized,
-    setIsInitialized,
-    resolvedResources,
-  ]);
 
   const [installInfo, setInstallInfo] = useState<InstallInfo[]>([]);
 

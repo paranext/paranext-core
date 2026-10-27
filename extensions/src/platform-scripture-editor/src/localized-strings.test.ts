@@ -293,6 +293,16 @@ describe.each([...MODEL_TEXT_PANEL_STRING_KEYS])('model text panel label %s', (k
   });
 });
 
+// The header's accessible name is the text's own name plus what the button does, so every locale
+// must keep the slot. Losing it would announce "– change model text" with no hint of which text.
+describe.each(['en', 'es'])('model text header change-text name in %s', (locale) => {
+  it('keeps the {textName} slot', () => {
+    const value = localizedStrings[locale]['%webView_modelTextPanel_changeText_ariaLabel%'];
+    expect(value).toBeTruthy();
+    expect(value).toContain('{textName}');
+  });
+});
+
 // These shipped keys explain the model text alone, a narrower meaning than the empty state's Base
 // and Model explanation, so they keep their values and are retired rather than reworded
 // (Localization-Guide.md, "Existing Strings Are Immutable").
@@ -398,6 +408,38 @@ describe.each([...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS])('View Options label 
 
   it('Spanish label differs from English', () => {
     expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+// The hint under a disabled Chapter toggle falls back to the "coming soon" key it replaces, so a
+// dropped value would silently bring back a promised delivery date nobody has set. The View Options
+// label tests above catch a dropped value; this checks that the value itself makes no such promise.
+describe('View Options chapter hint', () => {
+  const key = '%webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%';
+
+  it.each(['en', 'es'])('has a %s string that does not promise a delivery date', (locale) => {
+    expect(localizedStrings[locale][key]).not.toMatch(/coming soon|próximamente|pronto/i);
+  });
+});
+
+describe('retired "coming soon" View Options strings', () => {
+  it('no longer requests the "coming soon" chapter hint', () => {
+    expect(RESOURCE_COLLECTION_OPTIONS_STRING_KEYS).not.toContain(
+      '%webView_scriptureTextGrid_viewOptions_chapterComingSoon%',
+    );
+  });
+
+  it('marks the chapter hint key as replaced by the not-yet-available hint', () => {
+    expect(
+      metadata?.['%webView_scriptureTextGrid_viewOptions_chapterComingSoon%']?.deprecationInfo
+        ?.message,
+    ).toContain('%webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%');
+  });
+
+  it('marks the unused "coming soon" key as having no replacement', () => {
+    expect(
+      metadata?.['%webView_scriptureTextGrid_viewOptions_comingSoon%']?.deprecationInfo?.message,
+    ).toContain('No replacement key');
   });
 });
 
@@ -534,6 +576,21 @@ describe.each(['en', 'es'])('save failed notification in %s', (locale) => {
     expect(
       localizedStrings[locale]['%webView_platformScriptureEditor_error_saveFailed_format%'],
     ).toContain('{projectName}');
+  });
+});
+
+// The "press again to delete" hint shown on the first press of a two-step delete, one per armed kind.
+describe.each([...TWO_STEP_DELETE_MESSAGE_STRING_KEYS])('two-step delete hint %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
   });
 });
 

@@ -2561,12 +2561,13 @@
    with an equal negative margin so neighbors don't shift when it arms. An armed chapter number
    carries it on the chapter element itself, which is a block, so it is shrunk to its number below
    rather than tinting the whole line. */
+$armed-marker-padding: 3px;
 .verse-selected {
   background-color: color-mix(in srgb, var(--destructive) 15%, transparent);
   color: var(--destructive);
   border-radius: 4px;
-  padding: 0 3px;
-  margin: 0 -3px;
+  padding: 0 $armed-marker-padding;
+  margin: 0 (-$armed-marker-padding);
 }
 
 .dark .verse-selected {
@@ -2594,6 +2595,42 @@
   .verse-delete-armed .verse-selected {
     animation: none;
     box-shadow: 0 2px 0 -1px var(--destructive); /* static glow underline — still signals "armed" */
+  }
+}
+
+/* Gutter marker of a paragraph armed for the two-step merge: the same destructive colour, tint and
+   blink as an armed verse marker. Only the marker goes, so the paragraph's text is left untinted.
+   The marker's text does not sit inside its box (the paragraph's first-line indent carries over to
+   it), so the tint is a box drawn behind the text from the bounds StructureKeyboardPlugin measures
+   and publishes; without them it covers the marker's whole box. Either way it gets the armed verse
+   marker's padding. Unlike that blink, this one needs no `verse-delete-armed` gate: the editor puts
+   `para-merge-armed` on the marker only while the merge is armed. The selector out-ranks the gutter
+   marker's own rule. */
+.psc-gutter-markers .para > .marker.para-merge-armed:not(.verse):not(.chapter):first-child {
+  color: var(--destructive);
+  isolation: isolate;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(var(--para-merge-armed-text-left, 0px) - #{$armed-marker-padding});
+    width: calc(var(--para-merge-armed-text-width, 100%) + #{2 * $armed-marker-padding});
+    z-index: -1;
+    pointer-events: none;
+    background-color: color-mix(in srgb, var(--destructive) 15%, transparent);
+    border-radius: 4px;
+    animation: verse-armed-glow 1.06s steps(1) infinite;
+
+    .dark & {
+      background-color: color-mix(in oklab, var(--destructive) 20%, transparent);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+      box-shadow: 0 2px 0 -1px var(--destructive);
+    }
   }
 }
 
@@ -2754,7 +2791,7 @@ span.read img {
 /* An armed chapter number keeps its place: the block's padding above replaces the pill's inline
    padding, which the pill's negative inline margin is there to offset, so it is put back. */
 .psc-gutter-markers .usfm_c.verse-selected {
-  padding-inline: 3px;
+  padding-inline: $armed-marker-padding;
 }
 
 .psc-gutter-markers .usfm_c::after {

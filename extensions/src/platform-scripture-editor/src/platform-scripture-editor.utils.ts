@@ -35,6 +35,7 @@ import {
   LanguageStrings,
   LocalizeKey,
   normalizeProjectId,
+  retryUntil,
   serialize,
   Unsubscriber,
   USFM_MARKERS_MAP_PARATEXT_3_0,
@@ -46,12 +47,14 @@ import {
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { ScriptureEditorViewType, ScriptureRange } from 'platform-scripture-editor';
 import type { SharedProjectsInfo } from 'platform-scripture';
+import type { UnsyncedChangesSnapshot } from 'paratext-bible-send-receive';
+import type { InternetUse } from 'paratext-registration';
 import type { SettingTypes } from 'papi-shared-types';
 import type { MutableRefObject } from 'react';
 // import type ONLY: this module is reachable from main.ts (the extension host), and any RUNTIME
 // import from the editor package drags its React-bundling dist into the main bundle, breaking
 // extension activation. See platform-scripture-editor.web-view.utils.ts's header.
-import type { DeltaOp, EditorRef } from '@eten-tech-foundation/platform-editor';
+import type { DeltaOp, EditorRef, ViewOptions } from '@eten-tech-foundation/platform-editor';
 import type { MarkerMenuItem } from 'platform-bible-react';
 
 // Note: src/main/shutdown-tasks.ts has a copy of this value — keep them in sync.
@@ -75,12 +78,14 @@ const PDP_FACTORY_OBJECT_TYPE = 'pdpFactory';
 
 /**
  * Resolves the view type the editor is allowed to show under the current `platform.interfaceMode`.
- * Standard view is a power-mode-only surface: its PT9-parity editing affordances (the `\`/Enter
- * marker palettes, paragraph-marker editing) assume paragraph markers can be edited, but simple
- * mode pairs with structure protection, which intentionally blocks paragraph-marker edits — so a
- * simple-mode user must never land in standard view (e.g. via a `viewType` persisted during a
- * power-mode session). Coerces 'standard' to 'formatted' (the simple-mode default view) when not in
- * power mode; every other combination passes through unchanged.
+ * Standard and markers views are power-mode-only surfaces.
+ *
+ * Simple mode's editor offers one view, the Formatted "Preview", and has no menu or shortcut to
+ * leave another view. So a view type persisted during a power-mode session must not be shown in
+ * simple mode. Coerces 'standard' and 'markers' to 'formatted' (the simple-mode view) when not in
+ * power mode; every other combination passes through unchanged. The result is for display only:
+ * callers must not write it back to the persisted view type, so returning to power mode restores
+ * the user's choice.
  *
  * @param viewType The current (requested or persisted) view type
  * @param isPowerMode Whether `platform.interfaceMode` is 'power'
@@ -90,31 +95,84 @@ export function resolveViewTypeForInterfaceMode(
   viewType: ScriptureEditorViewType,
   isPowerMode: boolean,
 ): ScriptureEditorViewType {
-  if (viewType === 'standard' && !isPowerMode) return 'formatted';
+  if ((viewType === 'standard' || viewType === 'markers') && !isPowerMode) return 'formatted';
   return viewType;
 }
 
 /**
+ * The Simple-mode marker classes for the Scripture editor's root element (see `_simple-mode.scss`).
+ * `character-marker-indicators` turns on the tint and hover line for character markers with no
+ * visible style.
+ *
+ * The character-marker indicator warns against typing inside a marker, so it is on only where the
+ * text can be typed into, and stays off until that is known: `isPowerMode` reads `false` while the
+ * interface mode loads, and the edit-permission reads default to editable while they load.
+ *
+ * Pass the durable read-only state, not `isReadOnlyEffective`: that also covers the brief freeze
+ * during an automatic Send/Receive, and would flicker the tint on every scheduled sync.
+ *
+ * @param options.isDurablyReadOnly `undefined` while edit permissions are still resolving
+ */
+export function getSimpleModeRootClassNames({
+  isPowerMode,
+  isInterfaceModeLoading,
+  isDurablyReadOnly,
+}: {
+  isPowerMode: boolean;
+  isInterfaceModeLoading: boolean;
+  isDurablyReadOnly: boolean | undefined;
+}): string[] {
+  if (isPowerMode) return [];
+  if (isInterfaceModeLoading || isDurablyReadOnly !== false) return ['editor-container-simple'];
+  return ['editor-container-simple', 'character-marker-indicators'];
+}
+
+/**
+ * Whether a saved view type makes the editor show the read-only markers view in the current mode.
+ * Outside Power a saved markers view is shown as the editable formatted view (see
+ * {@link resolveViewTypeForInterfaceMode}), so it is not read-only there.
+ *
+ * @param viewType The view type saved in the web view's state (untyped there)
+ * @param isPowerMode Whether `platform.interfaceMode` is 'power'
+ */
+export function showsReadOnlyMarkersView(viewType: unknown, isPowerMode: boolean): boolean {
+  return (
+    viewType === 'markers' && resolveViewTypeForInterfaceMode(viewType, isPowerMode) === 'markers'
+  );
+}
+
+/**
+ * The view type each direct view-setting command shows. "Preview" is the user-facing name of the
+ * `'formatted'` view type.
+ */
+export const VIEW_TYPE_FOR_SET_VIEW_COMMAND = {
+  'platformScriptureEditor.setViewStandard': 'standard',
+  'platformScriptureEditor.setViewPreview': 'formatted',
+} as const satisfies Record<string, ScriptureEditorViewType>;
+
+/**
  * Computes the next view type for the view-cycling affordance (the `changeScriptureView` command).
- * Power mode cycles formatted -> standard -> markers -> formatted; simple mode skips 'standard'
- * entirely (see {@link resolveViewTypeForInterfaceMode}), cycling formatted <-> markers.
+ * Power mode cycles formatted -> standard -> markers -> formatted. Simple mode only shows the
+ * formatted view (see {@link resolveViewTypeForInterfaceMode}), so there is nothing to cycle to, and
+ * returning nothing keeps a view type saved in Power from being overwritten.
  *
  * Cycles on the view type rather than `ViewOptions.markerMode`: in non-power mode both 'formatted'
  * and 'markers' resolve to markerMode 'hidden' (the non-power markers view overrides only
  * noteMode), so a markerMode-based cycle would orphan 'formatted'.
  *
- * @param viewType The current view type (resolved for mode first, so a lingering 'standard' in
- *   simple mode advances as if it were already coerced)
+ * @param viewType The current view type (resolved for mode first, so a lingering 'standard' or
+ *   'markers' in simple mode advances as if it were already coerced)
  * @param isPowerMode Whether `platform.interfaceMode` is 'power'
- * @returns The next view type in the mode-appropriate cycle
+ * @returns The next view type in the Power cycle, or `undefined` in simple mode, where the caller
+ *   must leave the saved view type alone
  */
 export function getNextViewTypeInCycle(
   viewType: ScriptureEditorViewType,
   isPowerMode: boolean,
-): ScriptureEditorViewType {
-  const current = resolveViewTypeForInterfaceMode(viewType, isPowerMode);
-  if (current === 'formatted') return isPowerMode ? 'standard' : 'markers';
-  if (current === 'standard') return 'markers';
+): ScriptureEditorViewType | undefined {
+  if (!isPowerMode) return undefined;
+  if (viewType === 'formatted') return 'standard';
+  if (viewType === 'standard') return 'markers';
   return 'formatted';
 }
 
@@ -362,29 +420,89 @@ export function validateCommentSelection(
   };
 }
 
-/** Where a note is edited: the footnotes pane (Standard view), the popover, or nowhere. */
+/**
+ * Decides whether a view uses the footnotes-pane note model, PT9's: notes are edited in place in
+ * the footnotes pane, picking a note moves the text to it, and the picked note's caller is
+ * highlighted. Standard view uses it, and so does Simple mode's Formatted view, which edits notes
+ * exactly as Standard view does while its own text keeps hiding markers. Power mode's Formatted and
+ * Markers views keep the popover model, and so does Simple's Markers view, which is read-only and
+ * shows its notes expanded in the text.
+ *
+ * While `platform.interfaceMode` is still loading, `isPowerMode` reads `false` whatever the mode
+ * really is, so only Standard view counts then: a Power user never briefly gets Simple's answer.
+ *
+ * @param options.viewType The scripture editor's current view type
+ * @param options.isPowerMode Whether `platform.interfaceMode` is 'power'
+ * @param options.isInterfaceModeLoading Whether `platform.interfaceMode` is still loading
+ * @returns Whether the view uses the footnotes-pane note model
+ */
+export function usesPaneNoteModel({
+  viewType,
+  isPowerMode,
+  isInterfaceModeLoading,
+}: {
+  viewType: ScriptureEditorViewType;
+  isPowerMode: boolean;
+  isInterfaceModeLoading: boolean;
+}): boolean {
+  if (viewType === 'standard') return true;
+  return !isInterfaceModeLoading && !isPowerMode && viewType === 'formatted';
+}
+
+/**
+ * Where a note is edited: the footnotes pane (a view using the pane note model — see
+ * {@link usesPaneNoteModel}), the popover, or nowhere.
+ */
 export type NoteEditingSurface = 'pane' | 'popover' | 'none';
 
 /**
- * Decides the note-editing surface for a click on a note caller. Standard view edits notes in the
- * footnotes pane, in place, matching PT9's model; every other view keeps the popover. A read-only
- * text has no editing surface at all — a caller click in Standard view still navigates (see
- * {@link decideNoteCallerClickAction}) but never opens an editor; outside Standard view the caller
- * is inert.
+ * Decides the note-editing surface for a click on a note caller. A view using the pane note model
+ * (see {@link usesPaneNoteModel}) edits notes in the footnotes pane, in place, matching PT9's model;
+ * every other view keeps the popover. A read-only text has no editing surface at all — a caller
+ * click in a pane-model view still navigates (see {@link decideNoteCallerClickAction}) but never
+ * opens an editor; in any other view the caller is inert.
  *
- * @param viewType The scripture editor's current view type
+ * @param usesPaneModel Whether the view uses the pane note model ({@link usesPaneNoteModel})
  * @param isReadOnly Whether the text is read-only (editing is disabled)
  * @returns Where a click on a collapsed note caller should open its editor
  */
 export function resolveNoteEditingSurface({
-  viewType,
+  usesPaneModel,
   isReadOnly,
 }: {
-  viewType: ScriptureEditorViewType;
+  usesPaneModel: boolean;
   isReadOnly: boolean;
 }): NoteEditingSurface {
   if (isReadOnly) return 'none';
-  return viewType === 'standard' ? 'pane' : 'popover';
+  return usesPaneModel ? 'pane' : 'popover';
+}
+
+/**
+ * Decides the view options the footnotes pane and its row editor render with. Power mode's pane
+ * follows the main editor's view (in Standard view they are Standard's already). Simple mode's pane
+ * shows markers as Standard view's does, while the main text keeps Simple's own view options and
+ * goes on hiding them. While `platform.interfaceMode` is still loading, `isPowerMode` reads `false`
+ * whatever the mode really is, so the pane follows the main editor then: a Power user's pane never
+ * briefly takes Simple's answer.
+ *
+ * @param options.isPowerMode Whether `platform.interfaceMode` is 'power'
+ * @param options.isInterfaceModeLoading Whether `platform.interfaceMode` is still loading
+ * @param options.mainViewOptions The main editor's view options
+ * @param options.standardViewOptions Standard view's view options
+ * @returns The view options for the footnotes pane and its row editor
+ */
+export function resolveFootnotesPaneViewOptions({
+  isPowerMode,
+  isInterfaceModeLoading,
+  mainViewOptions,
+  standardViewOptions,
+}: {
+  isPowerMode: boolean;
+  isInterfaceModeLoading: boolean;
+  mainViewOptions: ViewOptions | undefined;
+  standardViewOptions: ViewOptions;
+}): ViewOptions | undefined {
+  return isPowerMode || isInterfaceModeLoading ? mainViewOptions : standardViewOptions;
 }
 
 /**
@@ -392,13 +510,14 @@ export function resolveNoteEditingSurface({
  * `CallerHighlightSynchronizer`: the border marks where the focused pane's caret is, so it shows
  * only while the footnotes pane owns DOM focus. Clicking back into the Scripture text leaves the
  * row selected but takes the border off the caller; clicking the row (or its editor) again puts it
- * back. Standard view is the only view that highlights callers at all.
+ * back. Only a view using the pane note model (see {@link usesPaneNoteModel}) highlights callers at
+ * all.
  *
  * PT9's pane has one caret, so the note it is in is the one marked. Here keyboard focus on a row
  * (Tab or the arrow keys) is that caret whenever a row has it, and the selected row otherwise (the
  * row editor, or the pane's chrome, holds focus).
  *
- * @param options.isStandardView Whether the editor is showing Standard view
+ * @param options.usesPaneModel Whether the view uses the pane note model
  * @param options.paneHasFocus Whether DOM focus is inside the footnotes pane (its row list or its
  *   inline row editor)
  * @param options.focusedRowIndex The footnotes pane row holding DOM focus, or `undefined` when no
@@ -408,17 +527,17 @@ export function resolveNoteEditingSurface({
  * @returns The note index to highlight, or `undefined` to clear the highlight
  */
 export function resolveCallerHighlight({
-  isStandardView,
+  usesPaneModel,
   paneHasFocus,
   focusedRowIndex,
   selectedIndex,
 }: {
-  isStandardView: boolean;
+  usesPaneModel: boolean;
   paneHasFocus: boolean;
   focusedRowIndex?: number;
   selectedIndex: number | undefined;
 }): number | undefined {
-  if (!isStandardView || !paneHasFocus) return undefined;
+  if (!usesPaneModel || !paneHasFocus) return undefined;
   return focusedRowIndex ?? selectedIndex;
 }
 
@@ -463,17 +582,18 @@ export type NoteCallerClickState = {
   /** Whether the footnotes pane is actually rendered (visible toggle AND data loaded). */
   paneRendered: boolean;
   /**
-   * Whether the interface is in Power mode. A caller click reveals a hidden pane only in Power
-   * mode; Simple mode keeps PT9's manual pane visibility.
+   * Whether the interface is in Power mode. In Power mode a caller click reveals a hidden pane in
+   * every view; otherwise only a view using the pane note model reveals it.
    */
   isPowerMode: boolean;
   /** Where the clicked note would be edited; see {@link resolveNoteEditingSurface}. */
   surface: NoteEditingSurface;
   /**
-   * Whether the text is shown in Standard view. Only Standard view gives a read-only text the
-   * navigation half of the pane model; every other view keeps a read-only caller inert.
+   * Whether the view uses the pane note model (see {@link usesPaneNoteModel}). Only such a view
+   * gives a read-only text the navigation half of the pane model; every other view keeps a
+   * read-only caller inert.
    */
-  isStandardView: boolean;
+  usesPaneModel: boolean;
 };
 
 /** What a collapsed-note caller click resolves to — see {@link decideNoteCallerClickAction}. */
@@ -499,14 +619,16 @@ export type NoteCallerClickDecision = {
    * What the caller click resolves to:
    *
    * - `ignore-expanded` — the note is expanded (edited in place), so the click does nothing.
-   * - `ignore-popover-open` — a footnote-editor popover is already shown, so the click is ignored.
-   * - `ignore-read-only` — the text is read-only and not in Standard view, so the caller is inert:
-   *   the pane's navigation model belongs to Standard view alone.
-   * - `open-popover` — open the footnote-editor popover for the clicked note (every view but
-   *   Standard).
-   * - `open-pane-editor` — open the clicked note's row editor in the footnotes pane (Standard view).
-   * - `navigate-only` — the text is read-only in Standard view, so there is no editing surface; the
-   *   click still navigates (reveals/scrolls the pane) without opening an editor.
+   * - `ignore-popover-open` — a footnote-editor popover is already shown, so the click is ignored,
+   *   including in a pane-model view the popover outlived a view or interface-mode switch into.
+   * - `ignore-read-only` — the text is read-only in a view that does not use the pane note model, so
+   *   the caller is inert: the pane's navigation model belongs to pane-model views alone.
+   * - `open-popover` — open the footnote-editor popover for the clicked note (every view that does
+   *   not use the pane note model).
+   * - `open-pane-editor` — open the clicked note's row editor in the footnotes pane (a pane-model
+   *   view).
+   * - `navigate-only` — the text is read-only in a pane-model view, so there is no editing surface;
+   *   the click still navigates (reveals/scrolls the pane) without opening an editor.
    */
   action: NoteCallerClickAction;
   /**
@@ -515,7 +637,10 @@ export type NoteCallerClickDecision = {
    * pane's focus-request machinery retries a request that arrives before its data mounts.
    */
   sendPaneFocusRequest: boolean;
-  /** Also show the footnotes pane: it is currently toggled off and the interface is in Power mode. */
+  /**
+   * Also show the footnotes pane: it is currently toggled off, and either the interface is in Power
+   * mode or the view uses the pane note model.
+   */
   showPane: boolean;
 };
 
@@ -524,20 +649,21 @@ export type NoteCallerClickDecision = {
  * `noteCallerOnClick` in the web view so the dead-click branches stay pinned by unit tests.
  *
  * The editing surface ({@link NoteCallerClickState.surface}, from {@link resolveNoteEditingSurface})
- * decides where a routed click opens an editor: the footnotes pane in Standard view, the popover
- * everywhere else, and nowhere in a read-only text, where the click still navigates without opening
- * an editor. In every case:
+ * decides where a routed click opens an editor: the footnotes pane in a view using the pane note
+ * model, the popover everywhere else, and nowhere in a read-only text, where the click still
+ * navigates without opening an editor. In every case:
  *
  * - An expanded note's caller does nothing (the note is edited in place).
- * - A read-only text outside Standard view does nothing either: the pane's navigate-to-note model is
- *   Standard view's, and every other view keeps the caller inert.
+ * - A read-only text outside a pane-model view does nothing either: the pane's navigate-to-note model
+ *   belongs to pane-model views, and every other view keeps the caller inert.
  * - While a popover is really shown, a popover-surface click is ignored (one session at a time). A
  *   pane-editor session has no such limit — its row stays open across clicks.
  * - A popover session's key left behind without a shown popover is STALE and must not block the
  *   click; a pane-editor session's key is never stale, since the pane keeps it by design.
  *
  * Alongside whichever action is chosen, the pane highlights the clicked note when it is rendered,
- * and a click also SHOWS the pane when it is toggled off and the interface is in Power mode.
+ * and a click also SHOWS the pane when it is toggled off and either the interface is in Power mode
+ * or the view uses the pane note model.
  *
  * {@link NoteCallerClickDecision.clearStaleEditingSession} is decided independently of the action
  * and is reported on EVERY branch, the dead-click ones included: orphaned popover bookkeeping has
@@ -547,7 +673,7 @@ export type NoteCallerClickDecision = {
 export function decideNoteCallerClickAction(state: NoteCallerClickState): NoteCallerClickDecision {
   const clearStaleEditingSession =
     state.editingNoteKey !== undefined && !state.popoverShown && state.surface !== 'pane';
-  const showPane = state.isPowerMode && !state.paneVisible;
+  const showPane = !state.paneVisible && (state.isPowerMode || state.usesPaneModel);
   const sendPaneFocusRequest = state.paneRendered || showPane;
 
   if (!state.isCollapsed)
@@ -557,14 +683,17 @@ export function decideNoteCallerClickAction(state: NoteCallerClickState): NoteCa
       sendPaneFocusRequest: false,
       showPane: false,
     };
-  if (state.surface === 'none' && !state.isStandardView)
+  if (state.surface === 'none' && !state.usesPaneModel)
     return {
       clearStaleEditingSession,
       action: 'ignore-read-only',
       sendPaneFocusRequest: false,
       showPane: false,
     };
-  if (state.surface === 'popover' && state.popoverShown)
+  // On every editable surface, not just the popover's: a popover opened before the view switched to
+  // the pane model applies its text only on Save, so handing the session to the row editor would
+  // discard what was typed.
+  if (state.surface !== 'none' && state.popoverShown)
     return {
       clearStaleEditingSession,
       action: 'ignore-popover-open',
@@ -1156,7 +1285,9 @@ export function getParagraphMarkerTitle(
  *   focus-out selection capture, both of which live in web-view-only code this
  *   extension-host-reachable module may not import (see the note at the bottom of this file).
  *   Omitting it leaves the retag exposed to the lost-caret failure, so callers that can lose focus
- *   to the menu should always pass it.
+ *   to the menu should always pass it. It must leave a selected paragraph marker alone:
+ *   `formatPara` retags that paragraph directly, and a caret restored over it would send the retag
+ *   to the caret's paragraph instead.
  * @param isChapterLoading Reports whether another chapter is loading, during which the editor still
  *   shows the chapter being left and an edit would be dropped. A pick does nothing while it returns
  *   `true`. Omitting it never blocks.
@@ -1190,10 +1321,15 @@ export function generateParagraphMenuListItems(
           notifyStructureProtected();
           return;
         }
+        // Re-picking a selected marker's own marker (a second Enter on the menu the editor opened,
+        // which highlights that row) must change nothing. `formatPara` would still rewrite the
+        // marker and leave an undo step that does nothing, so skip it. Only for a selected marker:
+        // with a range selection, the same pick retags the other paragraphs the range covers.
+        if (editorRef.current?.getSelectedParaMarker() === marker) return;
         // Restore the caret BEFORE applying, exactly as the `\` and Enter marker palettes do
         // before their applies: this menu opens in a popover that takes focus off the editor
         // input, so by the time an item is picked the live selection may already be gone, and
-        // `formatPara` refuses when there is no selection.
+        // `formatPara` refuses when there is neither a selection nor a selected paragraph marker.
         restoreSelection?.();
         editorRef.current?.formatPara(marker);
       },
@@ -1893,6 +2029,310 @@ export async function syncOnProjectSwitch(
         `Project-switch sync: outgoing sync for ${outgoingProjectId} failed: ${getErrorMessage(e)}`,
       );
     }
+  }
+}
+
+/**
+ * How long {@link waitForUnsentChanges} keeps listening, once no sync is running, for a project to
+ * be reported as holding changes to send. Well past the backend's debounce after a project's last
+ * write plus its repository check, so an edit whose save was still on its way when the wait began
+ * is still seen.
+ */
+export const UNSENT_CHANGES_GRACE_MS = 10_000;
+
+/**
+ * Upper bound on how long {@link waitForUnsentChanges} waits for a running sync, and the recheck
+ * after it, to finish before giving up without an answer. Long, because a sync can take minutes.
+ */
+export const UNSENT_CHANGES_SYNC_WAIT_MS = 10 * 60_000;
+
+/** Attempts to read the unsynced-changes snapshot. A cold-start rejection must be retried. */
+const UNSYNCED_CHANGES_SEED_ATTEMPTS = 5;
+const UNSYNCED_CHANGES_SEED_RETRY_MS = 1_000;
+
+/**
+ * Checks only the fields {@link waitForUnsentChanges} reads. The renderer and Home keep guards of
+ * their own, which this extension cannot import.
+ */
+function isUnsyncedChangesSnapshot(value: unknown): value is UnsyncedChangesSnapshot {
+  if (typeof value !== 'object' || !value) return false;
+  if (!('toSend' in value) || !Array.isArray(value.toSend)) return false;
+  return value.toSend.every(isString);
+}
+
+/**
+ * Whether a project holds local changes this user's next Send/Receive would send, read from the
+ * backend's `paratextBibleSendReceive.onUnsyncedChangesChanged` signal.
+ *
+ * One read is not enough: the backend checks a project a short while after its last write, and
+ * while a sync is running (`isRechecking`) the list may predate it, still naming projects that sync
+ * is sending. So this ignores the list while a sync is running; once none is, it answers `true` as
+ * soon as a snapshot lists the project, or `false` after {@link UNSENT_CHANGES_GRACE_MS} without
+ * one. Callers should not block on it.
+ *
+ * @param papi Backend PAPI instance.
+ * @param projectId The project to ask about.
+ * @returns `true` if the project has changes to send, `false` if it has none, or `undefined` if no
+ *   snapshot could be read or a running sync did not finish within
+ *   {@link UNSENT_CHANGES_SYNC_WAIT_MS}.
+ */
+export async function waitForUnsentChanges(
+  papi: typeof PapiBackend,
+  projectId: string,
+): Promise<boolean | undefined> {
+  const normalizedProjectId = normalizeProjectId(projectId);
+  return new Promise((resolve) => {
+    let isAnswered = false;
+    let hasReceivedEvent = false;
+    let graceTimer: ReturnType<typeof setTimeout> | undefined;
+    let settleTimer: ReturnType<typeof setTimeout> | undefined;
+    let unsubscribe: Unsubscriber | undefined;
+
+    const answer = (hasUnsentChanges: boolean | undefined) => {
+      if (isAnswered) return;
+      isAnswered = true;
+      clearTimeout(graceTimer);
+      clearTimeout(settleTimer);
+      unsubscribe?.();
+      resolve(hasUnsentChanges);
+    };
+
+    settleTimer = setTimeout(() => {
+      papi.logger.warn(
+        `Could not tell whether ${projectId} has changes to send: a sync was still running after ${UNSENT_CHANGES_SYNC_WAIT_MS}ms`,
+      );
+      answer(undefined);
+    }, UNSENT_CHANGES_SYNC_WAIT_MS);
+
+    const consider = (snapshot: unknown) => {
+      if (!isUnsyncedChangesSnapshot(snapshot)) {
+        papi.logger.warn('The unsynced-changes snapshot had an unexpected shape; ignoring it');
+        return;
+      }
+      if (snapshot.isRechecking === true) {
+        clearTimeout(graceTimer);
+        graceTimer = undefined;
+        return;
+      }
+      if (snapshot.toSend.some((id) => normalizeProjectId(id) === normalizedProjectId)) {
+        answer(true);
+        return;
+      }
+      graceTimer ??= setTimeout(() => answer(false), UNSENT_CHANGES_GRACE_MS);
+    };
+
+    // Subscribed before the seed is read, so no change can land between the two unseen
+    try {
+      unsubscribe = papi.network.getNetworkEvent(
+        'paratextBibleSendReceive.onUnsyncedChangesChanged',
+      )((snapshot) => {
+        if (isUnsyncedChangesSnapshot(snapshot)) hasReceivedEvent = true;
+        consider(snapshot);
+      });
+    } catch (e) {
+      papi.logger.warn(
+        `Could not tell whether ${projectId} has changes to send: could not subscribe to the unsynced-changes signal: ${getErrorMessage(e)}`,
+      );
+      answer(undefined);
+      return;
+    }
+
+    let lastSeedError: unknown;
+    const readSeed = async (): Promise<UnsyncedChangesSnapshot | undefined> => {
+      try {
+        const snapshot = await papi.commands.sendCommand(
+          'paratextBibleSendReceive.getUnsyncedChanges',
+        );
+        if (isUnsyncedChangesSnapshot(snapshot)) return snapshot;
+        lastSeedError = new Error('the unsynced-changes snapshot had an unexpected shape');
+      } catch (e) {
+        lastSeedError = e;
+      }
+      return undefined;
+    };
+
+    (async () => {
+      const seed = await retryUntil(
+        readSeed,
+        (snapshot) => snapshot !== undefined || isAnswered || hasReceivedEvent,
+        { maxAttempts: UNSYNCED_CHANGES_SEED_ATTEMPTS, delayMs: UNSYNCED_CHANGES_SEED_RETRY_MS },
+      );
+      // An event that arrived meanwhile is newer than the seed
+      if (isAnswered || hasReceivedEvent) return;
+      if (seed) {
+        consider(seed);
+        return;
+      }
+      papi.logger.warn(
+        `Could not tell whether ${projectId} has changes to send: ${getErrorMessage(lastSeedError)}`,
+      );
+      answer(undefined);
+    })();
+  });
+}
+
+/**
+ * Projects whose switch-to-Power sync is still deciding whether to send, by normalized id. A second
+ * switch for the same project joins the first instead of deciding separately: both would see the
+ * same snapshot and start two overlapping syncs, which the backend refuses.
+ */
+const projectIdsDecidingSyncOnSwitchToPower = new Set<string>();
+
+/**
+ * After a switch from Simple to Power mode, sends what was typed in Simple. Send/receives the
+ * project only when {@link waitForUnsentChanges} answers `true`, since a sync with nothing to send
+ * would show notifications for no reason. No `suppressNotification`, so Power mode's progress and
+ * failure toasts show. Never rejects.
+ *
+ * Skipped when:
+ *
+ * - The user chose "Don't sync yet" this session (`deferred`), the first-run flag cannot be read
+ *   (`unreadable`), or the consent request rejects. Asked before and after the wait for unsent
+ *   changes, so a decline during the wait still counts. An `unconfirmed` answer does NOT skip it: a
+ *   user who started in Power mode never sees the wizard that records consent. See
+ *   `adr-switch-to-power-sends-unsent-changes`.
+ * - The mode no longer reads `'power'` when the sync would start: the switch back to Simple makes its
+ *   own (consent-gated) sync decision, and anything still unsent goes on the next switch to Power.
+ * - The saved internet setting turns Send/Receive off (`VpnRequired` or `Disabled`). Whether the
+ *   machine is actually online cannot be known without trying, so offline is left to the sync's own
+ *   failure notification.
+ * - An earlier switch-to-Power sync of the same project is still deciding; it covers this one.
+ *
+ * @param papi Backend PAPI instance.
+ * @param projectId The project the Simple-mode Scripture Editor was showing.
+ */
+export async function syncOnSwitchToPower(
+  papi: typeof PapiBackend,
+  projectId: string,
+): Promise<void> {
+  // Any PAPI client can send the command, so the argument is checked rather than trusted
+  if (!isString(projectId)) {
+    papi.logger.warn('Switch-to-Power sync: ignoring a project id that is not a string');
+    return;
+  }
+  const normalizedProjectId = normalizeProjectId(projectId);
+  if (projectIdsDecidingSyncOnSwitchToPower.has(normalizedProjectId)) {
+    papi.logger.info(
+      `Switch-to-Power sync of ${projectId} is already deciding; not starting another`,
+    );
+    return;
+  }
+
+  projectIdsDecidingSyncOnSwitchToPower.add(normalizedProjectId);
+  let shouldSync: boolean;
+  try {
+    shouldSync = await shouldSyncOnSwitchToPower(papi, projectId);
+  } finally {
+    projectIdsDecidingSyncOnSwitchToPower.delete(normalizedProjectId);
+  }
+  if (!shouldSync) return;
+
+  try {
+    await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [projectId]);
+  } catch (e) {
+    papi.logger.warn(`Switch-to-Power sync of ${projectId} failed: ${getErrorMessage(e)}`);
+  }
+}
+
+/**
+ * The first-run sync consent gate's answer when it lets the switch-to-Power sync run, or
+ * `undefined` (logged) when it does not. Only `granted` and `unconfirmed` let it run, so an answer
+ * this does not know fails closed.
+ */
+async function getSwitchToPowerSyncConsent(
+  papi: typeof PapiBackend,
+): Promise<'granted' | 'unconfirmed' | undefined> {
+  let consent;
+  try {
+    consent = await papi.commands.sendCommand('platform.getAutomaticSyncConsent');
+  } catch (e) {
+    papi.logger.warn(
+      `Switch-to-Power sync: could not check first-run sync consent (${getErrorMessage(e)}); skipping sync`,
+    );
+    return undefined;
+  }
+  if (consent === 'granted' || consent === 'unconfirmed') return consent;
+  papi.logger.info(`Switch-to-Power sync skipped: first-run sync consent is ${consent}`);
+  return undefined;
+}
+
+/**
+ * The checks {@link syncOnSwitchToPower} makes before it syncs: consent, unsent changes, the mode,
+ * the internet setting, and consent again. Logs why it answers `false`.
+ */
+async function shouldSyncOnSwitchToPower(
+  papi: typeof PapiBackend,
+  projectId: string,
+): Promise<boolean> {
+  if (!(await getSwitchToPowerSyncConsent(papi))) return false;
+
+  const hasUnsentChanges = await waitForUnsentChanges(papi, projectId);
+  if (hasUnsentChanges !== true) {
+    // Logged, not shown, even when it could not tell: the switch itself succeeded, the edits stay
+    // on disk for the next sync, and like every other automatic sync's skip there is nothing the
+    // user could act on. A sync that runs and fails does show its failure notification.
+    papi.logger.info(
+      `Switch-to-Power sync skipped: ${hasUnsentChanges === false ? 'no' : 'could not tell whether there are'} changes to send in ${projectId}`,
+    );
+    return false;
+  }
+
+  let interfaceMode: SettingTypes['platform.interfaceMode'] | undefined;
+  try {
+    interfaceMode = await papi.settings.get('platform.interfaceMode');
+  } catch (e) {
+    papi.logger.warn(
+      `Switch-to-Power sync: could not read platform.interfaceMode (${getErrorMessage(e)}); skipping sync of ${projectId}`,
+    );
+    return false;
+  }
+  if (interfaceMode !== 'power') {
+    papi.logger.info(
+      `Switch-to-Power sync of ${projectId} skipped: the interface mode is ${interfaceMode} now, and that switch decides its own sync`,
+    );
+    return false;
+  }
+
+  const internetUse = await readPermittedInternetUse(papi);
+  if (internetUse === 'VpnRequired' || internetUse === 'Disabled') {
+    papi.logger.info(
+      `Switch-to-Power sync of ${projectId} skipped: the internet setting is ${internetUse}, which turns Send/Receive off`,
+    );
+    return false;
+  }
+
+  // Asked again because the wait above can last minutes, and "Don't sync yet" chosen meanwhile
+  // must still stop this sync
+  const consent = await getSwitchToPowerSyncConsent(papi);
+  if (!consent) return false;
+  // Logged at info because every other automatic sync would skip here, so a support log must show
+  // why this one ran
+  if (consent !== 'granted')
+    papi.logger.info(
+      `Switch-to-Power sync of ${projectId}: first-run sync consent is ${consent}, which does not stop this sync`,
+    );
+  return true;
+}
+
+/**
+ * The saved internet setting, or `undefined` when it cannot be read. Blocked values mirror the
+ * backend's `InternetServicesGate.IsBlocked`, which enforces them on every Send/Receive; this check
+ * only spares a sync that gate would refuse. So an unreadable setting lets the sync go ahead.
+ */
+async function readPermittedInternetUse(
+  papi: typeof PapiBackend,
+): Promise<InternetUse | undefined> {
+  try {
+    const provider = await papi.dataProviders.get(
+      'paratextRegistration.internetSettingsDataProvider',
+    );
+    if (!provider) throw new Error('the internet settings data provider is not available');
+    return (await provider.getInternetSettings(undefined)).permittedInternetUse;
+  } catch (e) {
+    papi.logger.warn(
+      `Switch-to-Power sync: could not read the internet setting (${getErrorMessage(e)}); leaving it to Send/Receive`,
+    );
+    return undefined;
   }
 }
 

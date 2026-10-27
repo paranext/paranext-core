@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 type LocalizedStringsFile = {
   localizedStrings: Record<string, Record<string, string>>;
+  metadata: Record<string, { fallbackKey?: string; deprecationInfo?: { message: string } }>;
 };
 
 function readLocalizedStringsFile(): LocalizedStringsFile {
@@ -14,25 +15,54 @@ function readLocalizedStringsFile(): LocalizedStringsFile {
   return stringsFile;
 }
 
-const { localizedStrings } = readLocalizedStringsFile();
+const { localizedStrings, metadata } = readLocalizedStringsFile();
 
 /**
- * The internet-access option descriptions that name sync.
+ * Internet-access strings that replaced an earlier wording.
  *
- * Each key falls back to its superseded Send/Receive predecessor, so a dropped `es` value would
- * silently show the old wording instead of failing anywhere. This test is what notices.
+ * Each key falls back to its superseded predecessor, so a dropped `es` value would silently show
+ * the old wording instead of failing anywhere. This test is what notices.
  */
-const INTERNET_ACCESS_DETAIL_STRING_KEYS = [
+const INTERNET_ACCESS_REWORDED_STRING_KEYS = [
   '%paratextRegistration_description_internetUse_option_Enabled_details_2%',
   '%paratextRegistration_description_internetUse_option_VpnRequired_details_2%',
+  '%paratextRegistration_description_internetUse_option_DisableSomeServices_details%',
+  '%paratextRegistration_internetUse_unsupportedSelection_title_2%',
+  '%paratextRegistration_internetUse_unsupportedSelection_description_2%',
 ];
 
-describe.each(INTERNET_ACCESS_DETAIL_STRING_KEYS)('internet access detail %s', (key) => {
+describe.each(INTERNET_ACCESS_REWORDED_STRING_KEYS)('internet access string %s', (key) => {
   it('has an English string', () => {
     expect(localizedStrings.en[key]).toBeTruthy();
   });
 
   it('has a Spanish string', () => {
     expect(localizedStrings.es[key]).toBeTruthy();
+  });
+});
+
+/**
+ * The badge on internet-access options that are listed but cannot be chosen yet.
+ *
+ * Its `fallbackKey` points at the superseded "Coming soon" key, so a dropped `es` value would
+ * silently bring back the "coming soon" wording this key exists to replace.
+ */
+describe('not-yet-available badge', () => {
+  const key = '%paratextRegistration_internetUse_notYetAvailable%';
+
+  it.each(['en', 'es'])('has a %s string that does not promise a delivery date', (locale) => {
+    const value = localizedStrings[locale][key];
+    expect(value).toBeTruthy();
+    expect(value).not.toMatch(/coming soon|próximamente|pronto/i);
+  });
+
+  it('Spanish string differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+
+  it('marks the "Coming soon" key it replaces as deprecated', () => {
+    expect(
+      metadata['%paratextRegistration_internetUse_comingSoon%']?.deprecationInfo?.message,
+    ).toContain(key);
   });
 });

@@ -2,24 +2,27 @@ import React, { useRef } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { Button } from 'platform-bible-react';
 import { TwoStepDeleteTooltipOverlay } from './two-step-delete-tooltip-overlay.component';
-import type { ArmedHint } from './two-step-delete-tooltip.utils';
+import { ArmedHintKind } from './two-step-delete-tooltip.utils';
 
 /**
- * Renders the destructive "press again to delete" hint while a verse marker, a chapter number, or a
- * selection containing verse markers is armed. The real editor (shared-react's
+ * Renders the destructive "press again to delete" hint while a verse marker, a chapter number, a
+ * selection containing verse markers, or a paragraph merge is armed. The real editor (shared-react's
  * `StructureKeyboardPlugin`) arms/disarms this purely by toggling DOM signals —
- * `data-verse-delete-intent`/ `data-verse-delete-kind` on its root, and a `verse-selected` class on
- * the armed marker or chapter number — which this overlay picks up via a `MutationObserver`. The
- * buttons below simulate the editor by toggling those same DOM signals directly (bypassing React),
- * the same way the real editor does, so this story exercises the overlay's actual
- * observe/arm/disarm/re-anchor machinery rather than a fake standing in for it.
+ * `data-verse-delete-intent`/`data-verse-delete-kind` on its root, and a `verse-selected` class on
+ * the armed verse marker or chapter number, or `para-merge-armed` on the armed paragraph's marker —
+ * which this overlay picks up via a `MutationObserver`. The buttons below simulate the editor by
+ * toggling those same DOM signals directly (bypassing React), the same way the real editor does, so
+ * this story exercises the overlay's actual observe/arm/disarm/re-anchor machinery rather than a
+ * fake standing in for it.
  *
  * **Try it**: click an "Arm" button to show the hint anchored to the verse-5 marker below, then
  * scroll the box — the hint follows the marker (the scroll-triggered re-anchor path). "Arm:
  * Backspace on selection" also highlights a range of text spanning the marker, standing in for a
  * real editor selection that happens to contain a verse marker. "Arm: Backspace on chapter" anchors
- * the hint to the chapter number at the top instead, with the chapter's own message. Click Disarm
- * to hide it again (simulates either confirming or cancelling the delete in the real editor).
+ * the hint to the chapter number at the top instead, with the chapter's own message. The three
+ * paragraph buttons anchor it to the `\p` marker before verse 6, one per paragraph-merge message.
+ * Click Disarm to hide it again (simulates either confirming or cancelling the delete in the real
+ * editor).
  */
 const meta: Meta<typeof TwoStepDeleteTooltipOverlay> = {
   title: 'Bundled Extensions/platform-scripture-editor/TwoStepDeleteTooltipOverlay',
@@ -73,8 +76,9 @@ const CHAPTER_STYLE: React.CSSProperties = {
 /**
  * Mock editor content plus the buttons that simulate the real `StructureKeyboardPlugin`: they set
  * `data-verse-delete-intent`/`data-verse-delete-kind` on `rootRef` and toggle `verse-selected` on
- * `markerRef` (or `chapterRef` for the chapter kind) by calling DOM methods directly (not via React
- * state), the same non-React mutation the overlay's `MutationObserver` is built to observe.
+ * `markerRef` (or `chapterRef` for the chapter kind), or `para-merge-armed` on `paraMarkerRef` for a
+ * paragraph merge, by calling DOM methods directly (not via React state), the same non-React
+ * mutation the overlay's `MutationObserver` is built to observe.
  */
 function TwoStepDeleteDemo() {
   // The ref needs to start out with null for it to work as an element ref
@@ -92,25 +96,33 @@ function TwoStepDeleteDemo() {
   // The ref needs to start out with null for it to work as an element ref
   // eslint-disable-next-line no-null/no-null
   const chapterRef = useRef<HTMLSpanElement>(null);
-
-  const arm = (intent: ArmedHint['intent'], kind: ArmedHint['kind']) => {
-    rootRef.current?.setAttribute('data-verse-delete-intent', intent);
-    rootRef.current?.setAttribute('data-verse-delete-kind', kind);
-    (kind === 'chapter' ? chapterRef : markerRef).current?.classList.add('verse-selected');
-    // 'transparent', not '', so clearing this doesn't wipe out the base SELECTION_STYLE background
-    // entirely and fall through to <mark>'s default yellow UA background.
-    if (selectionRef.current) {
-      selectionRef.current.style.backgroundColor =
-        kind === 'selection' ? SELECTION_HIGHLIGHT_COLOR : 'transparent';
-    }
-  };
+  // The ref needs to start out with null for it to work as an element ref
+  // eslint-disable-next-line no-null/no-null
+  const paraMarkerRef = useRef<HTMLSpanElement>(null);
 
   const disarm = () => {
     rootRef.current?.removeAttribute('data-verse-delete-intent');
     rootRef.current?.removeAttribute('data-verse-delete-kind');
     markerRef.current?.classList.remove('verse-selected');
     chapterRef.current?.classList.remove('verse-selected');
+    paraMarkerRef.current?.classList.remove('para-merge-armed');
     if (selectionRef.current) selectionRef.current.style.backgroundColor = 'transparent';
+  };
+
+  const arm = (intent: 'deleteBackward' | 'deleteForward', kind: ArmedHintKind) => {
+    disarm();
+    rootRef.current?.setAttribute('data-verse-delete-intent', intent);
+    rootRef.current?.setAttribute('data-verse-delete-kind', kind);
+    if (kind === 'verse' || kind === 'selection')
+      markerRef.current?.classList.add('verse-selected');
+    else if (kind === 'chapter') chapterRef.current?.classList.add('verse-selected');
+    else paraMarkerRef.current?.classList.add('para-merge-armed');
+    // 'transparent', not '', so clearing this doesn't wipe out the base SELECTION_STYLE background
+    // entirely and fall through to <mark>'s default yellow UA background.
+    if (selectionRef.current) {
+      selectionRef.current.style.backgroundColor =
+        kind === 'selection' ? SELECTION_HIGHLIGHT_COLOR : 'transparent';
+    }
   };
 
   return (
@@ -127,6 +139,15 @@ function TwoStepDeleteDemo() {
         </Button>
         <Button variant="outline" onClick={() => arm('deleteBackward', 'chapter')}>
           Arm: Backspace on chapter
+        </Button>
+        <Button variant="outline" onClick={() => arm('deleteBackward', 'joinPreviousPara')}>
+          Arm: join paragraph to previous
+        </Button>
+        <Button variant="outline" onClick={() => arm('deleteForward', 'joinNextPara')}>
+          Arm: join next paragraph
+        </Button>
+        <Button variant="outline" onClick={() => arm('deleteBackward', 'removeEmptyPara')}>
+          Arm: remove empty paragraph
         </Button>
         <Button variant="outline" onClick={disarm}>
           Disarm
@@ -165,6 +186,9 @@ function TwoStepDeleteDemo() {
               : thou anointest my head with oil; my cup runneth over.
             </p>
             <p style={PARA_STYLE}>
+              <span ref={paraMarkerRef} style={MARKER_STYLE} data-text-type="marker">
+                \p
+              </span>
               <span style={MARKER_STYLE}>6</span>
               Surely goodness and mercy shall follow me all the days of my life: and I will dwell in
               the house of the LORD for ever.

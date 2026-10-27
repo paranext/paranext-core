@@ -66,7 +66,7 @@ import { getInternetBlockedMessageKey } from './internet-block-notification.util
  * component.
  */
 export const GET_RESOURCES_STRING_KEYS = Object.freeze([
-  '%data_loading_error_internetAccess_disabled_2%',
+  '%data_loading_error_internetAccess_disabled_3%',
   '%general_error_title%',
   '%resources_action%',
   '%resources_actionDidNotTakeEffect%',
@@ -99,9 +99,6 @@ export const GET_RESOURCES_STRING_KEYS = Object.freeze([
   '%resources_types_searchPlaceholder%',
   '%resources_type_Scripture%',
   '%resources_type_Commentary%',
-  '%resources_type_ER%',
-  '%resources_type_SLR%',
-  '%resources_type_XR%',
   '%resources_type_unknown%',
   '%resources_update%',
 ] as const);
@@ -112,28 +109,40 @@ type GetResourcesLocalizedStrings = {
 };
 
 /**
- * The resource types this build offers, each with the key of its type filter label. Typed as a
- * `Record` over `ResourceType` so a type added to that union does not compile until it is listed
- * here — otherwise it would be missing from the type filter and quietly dropped from saved
- * selections.
+ * The resource types Get Resources offers; it neither lists nor offers any other type. It does not
+ * support Enhanced or XML resources. Source language resources are never in the DBL catalog it
+ * lists (the C# `DblResourcesDataProvider` serves only allow-listed DBL entries, typed Scripture or
+ * Commentary), so their option could only ever show 0.
+ *
+ * TODO(PT-3940): Offer source language resources again once they can be downloaded. Their label
+ * key, `%resources_type_SLR%`, is kept in `localizedStrings.json` for that.
  */
-const RESOURCE_TYPE_LABEL_KEYS: Record<ResourceType, GetResourcesLocalizedStringKey> = {
+type OfferedResourceType = Exclude<
+  ResourceType,
+  'EnhancedResource' | 'SourceLanguageResource' | 'XmlResource'
+>;
+
+/**
+ * The resource types this build offers, each with the key of its type filter label. Typed as a
+ * `Record` over `OfferedResourceType` so a type added to the `ResourceType` union does not compile
+ * until it is either listed here or excluded above — otherwise it would be missing from the type
+ * filter and quietly dropped from saved selections without anyone deciding that.
+ */
+const RESOURCE_TYPE_LABEL_KEYS: Record<OfferedResourceType, GetResourcesLocalizedStringKey> = {
   ScriptureResource: '%resources_type_Scripture%',
   CommentaryResource: '%resources_type_Commentary%',
-  EnhancedResource: '%resources_type_ER%',
-  SourceLanguageResource: '%resources_type_SLR%',
-  XmlResource: '%resources_type_XR%',
 };
 
-function isOfferedResourceType(value: string): value is ResourceType {
+function isOfferedResourceType(value: string): value is OfferedResourceType {
   return Object.keys(RESOURCE_TYPE_LABEL_KEYS).includes(value);
 }
 
 /**
  * The resource types this build offers: the type filter's options, in the order they are listed
- * there, and the set a persisted type selection is narrowed against.
+ * there, and the set a persisted type selection is narrowed against. The Get Resources dialog opens
+ * with all of them selected.
  */
-const RESOURCE_TYPES: ResourceType[] =
+export const RESOURCE_TYPES: OfferedResourceType[] =
   Object.keys(RESOURCE_TYPE_LABEL_KEYS).filter(isOfferedResourceType);
 
 export type ResourceAction = 'install' | 'remove';
@@ -462,12 +471,23 @@ export function GetResources({
   );
 
   /**
+   * The catalogue without the types this build does not offer. Everything below derives from this
+   * list, so an unsupported type cannot come back through "Any type" (an empty selection matches
+   * every type) or reach the Type column, whose labels cover only the offered types.
+   */
+  const offeredResources = useMemo(
+    () => resources.filter((resource) => isOfferedResourceType(resource.type)),
+    [resources],
+  );
+
+  /**
    * The catalogue narrowed to the chosen types. The language options and the grid are both derived
    * from this one list, so a language the filter offers always has rows behind it.
    */
   const typeScopedResources = useMemo(
-    () => resources.filter((resource) => matchesResourceType(resource, selectedResourceTypes)),
-    [resources, selectedResourceTypes],
+    () =>
+      offeredResources.filter((resource) => matchesResourceType(resource, selectedResourceTypes)),
+    [offeredResources, selectedResourceTypes],
   );
 
   // `sortSelected` on the language Filter re-sorts these (starred first, then selected, then
@@ -480,12 +500,12 @@ export function GetResources({
   /**
    * The language selection split into the languages the filter offers and the ones it is holding.
    *
-   * This selection is persisted across sessions and seeded from installed resources, so narrowing
-   * the type filter can leave a language selected that no longer has a row. Filtering on the raw
-   * selection would empty the grid, and the badge for a language absent from the options renders
-   * with no label — an X the user has to guess at. So only `effectiveLanguages` filters rows or
-   * reaches the language filter; held languages are written back on every change and apply again
-   * once the type filter offers them.
+   * This selection persists in web view state for as long as the dialog stays in the layout, so
+   * narrowing the type filter can leave a language selected that no longer has a row. Filtering on
+   * the raw selection would empty the grid, and the badge for a language absent from the options
+   * renders with no label — an X the user has to guess at. So only `effectiveLanguages` filters
+   * rows or reaches the language filter; held languages are written back on every change and apply
+   * again once the type filter offers them.
    */
   const { offered: effectiveLanguages, held: heldLanguages } = useMemo(
     () => partitionFilterSelection(selectedLanguages, languageOptions),
@@ -494,15 +514,17 @@ export function GetResources({
 
   const localizedStrings = localizedStringsWithLoadingState[0];
   const typeOptions: MultiSelectComboBoxEntry[] = useMemo(() => {
-    // Counted over the whole catalogue, not the type-scoped list the language counts use: a type's
+    // Counted over every offered resource, not the type-scoped list the language counts use: a type's
     // own count must not depend on which types are selected, or picking one would zero out the
     // others and there would be no way to see what selecting them would bring back.
     return RESOURCE_TYPES.map((type) => ({
       value: type,
       label: localizedStrings[RESOURCE_TYPE_LABEL_KEYS[type]] ?? RESOURCE_TYPE_LABEL_KEYS[type],
-      secondaryLabel: resources.filter((resource) => resource.type === type).length.toString(),
+      secondaryLabel: offeredResources
+        .filter((resource) => resource.type === type)
+        .length.toString(),
     }));
-  }, [localizedStrings, resources]);
+  }, [localizedStrings, offeredResources]);
 
   const textFilteredResources = useMemo(() => {
     return typeScopedResources.filter((resource) => {
@@ -604,8 +626,8 @@ export function GetResources({
             </div>
             <div className="tw:flex tw:flex-col tw:gap-1">
               <Label className="tw:mb-2 tw:text-muted-foreground">{filterByText}</Label>
-              {/* The type list is five entries long, so it needs neither the scroll cue nor the
-                  sort that floats a just-picked entry to the top. */}
+              {/* The type list is only a few entries long, so it needs neither the scroll cue nor
+                  the sort that floats a just-picked entry to the top. */}
               <Filter
                 entries={typeOptions}
                 selected={selectedResourceTypes}

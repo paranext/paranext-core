@@ -665,10 +665,12 @@ export default function FootnoteEditor({
    *
    * A nulled selection sends `focus` to the document END — here the note's closing marker, outside
    * the character runs, where anything typed joins no text. {@link lastFocusOutSelectionRef} is
-   * exactly where the user last saw the caret; the note's own text is the last resort.
+   * exactly where the user last saw the caret; the note's own text is the last resort. A selected
+   * paragraph marker counts as a live selection: it has no text range, and restoring a caret over
+   * it would send the apply to whichever paragraph that caret was in.
    */
   const restoreSelectionIfLost = useCallback(() => {
-    if (editorRef.current?.getSelection()) return;
+    if (editorRef.current?.getSelection() || editorRef.current?.getSelectedParaMarker()) return;
     const lastFocusOutSelection = lastFocusOutSelectionRef.current;
     if (lastFocusOutSelection) editorRef.current?.setSelection(lastFocusOutSelection);
     else editorRef.current?.selectNote(0);

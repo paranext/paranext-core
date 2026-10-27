@@ -1,11 +1,10 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import * as React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { WebViewProps } from '@papi/core';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { getErrorMessage } from 'platform-bible-utils';
 import type { ResourceAction } from './get-resources.component';
+import { renderGetResourcesWebView } from './get-resources.web-view.test-utils';
 
 const mocks = vi.hoisted(() => {
   /** Rejection messages the table saw, which is how the dialog reports a failure to the user. */
@@ -77,19 +76,6 @@ vi.mock('./get-resources.component', async (importOriginal) => {
   };
 });
 
-// The file assigns to globalThis.webViewComponent as its side effect, so it must be imported after
-// the mocks above; vitest hoists those regardless of position.
-// eslint-disable-next-line import/first
-import './get-resources.web-view';
-
-/** Reads the component set by the web view file's side effect. */
-function getResourcesDialog(): React.ComponentType<WebViewProps> {
-  // globalThis is a special interface; cast to access a property added at runtime.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return (globalThis as Record<string, unknown>)
-    .webViewComponent as React.ComponentType<WebViewProps>;
-}
-
 /** Every `refreshResourceFlags` call this dialog has made. */
 function refreshCalls(): unknown[][] {
   return mocks.sendCommand.mock.calls.filter(
@@ -103,11 +89,7 @@ function refreshCalls(): unknown[][] {
  * refresh read the mount's instead.
  */
 async function renderDialogAndSettle() {
-  // `useWebViewState` backs the type and language filters; the stub table reads neither.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const props = { useWebViewState: () => [[], vi.fn()] } as unknown as WebViewProps;
-  const GetResourcesDialog = getResourcesDialog();
-  const rendered = render(<GetResourcesDialog {...props} />);
+  const rendered = renderGetResourcesWebView();
   await waitFor(() => expect(refreshCalls()).toHaveLength(1));
   return rendered;
 }
@@ -218,11 +200,7 @@ describe('GetResourcesDialog opening a resource', () => {
           finishOpen = resolve;
         }),
     );
-    // `useWebViewState` backs the type and language filters; the stub table reads neither.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const props = { useWebViewState: () => [[], vi.fn()] } as unknown as WebViewProps;
-    const GetResourcesDialog = getResourcesDialog();
-    render(<GetResourcesDialog {...props} />);
+    renderGetResourcesWebView();
 
     fireEvent.click(screen.getByRole('button', { name: 'open' }));
     fireEvent.click(screen.getByRole('button', { name: 'open' }));

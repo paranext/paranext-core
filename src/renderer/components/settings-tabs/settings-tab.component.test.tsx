@@ -1,7 +1,8 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeAll, beforeEach } from 'vitest';
 import { useIsProjectAutoSyncBlocked } from '@renderer/hooks/use-is-project-auto-sync-blocked.hook';
+import { useProjectSettingLocks } from '@renderer/hooks/use-project-setting-locks.hook';
 import userEvent from '@testing-library/user-event';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { projectDataProviders } from '@renderer/services/papi-frontend.service';
@@ -18,10 +19,24 @@ const PROJECTS_GROUP_LABEL = 'Ajustes del proyecto';
 const PICKER_SEARCH_PLACEHOLDER = 'Buscar proyectos y recursos';
 const PICKER_NO_RESULTS = 'No se encontraron proyectos';
 const PROJECT_NAME = 'World English Bible';
+const NO_SETTINGS_FOUND = 'No settings found';
+const PUBLISHED_NOTICE_TEXT = 'This project is published';
 
 // The hook under wiring test — controlled per test to simulate a blocked / unblocked project.
 vi.mock('@renderer/hooks/use-is-project-auto-sync-blocked.hook', () => ({
   useIsProjectAutoSyncBlocked: vi.fn(),
+}));
+
+// A published project, so a group that received the tab's locks is recognisable in the DOM.
+const PROJECT_SETTING_LOCKS = vi.hoisted(() => ({
+  isPublished: true,
+  isRegistered: false,
+  isCurrentUserAdministrator: true,
+}));
+vi.mock('@renderer/hooks/use-project-setting-locks.hook', () => ({
+  useProjectSettingLocks: vi.fn((projectId?: string) =>
+    projectId ? PROJECT_SETTING_LOCKS : undefined,
+  ),
 }));
 
 vi.mock('@renderer/hooks/papi-hooks', () => ({
@@ -31,6 +46,9 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%settings_sidebar_projectSettingsLabel%': PROJECTS_GROUP_LABEL,
       [PROJECT_SELECTOR_SEARCH_PLACEHOLDER_KEY]: PICKER_SEARCH_PLACEHOLDER,
       [PROJECT_SELECTOR_NO_RESULTS_KEY]: PICKER_NO_RESULTS,
+      '%settings_defaultMessage_noSettingsFound%': NO_SETTINGS_FOUND,
+      '%settings_defaultMessage_noSettingsFoundDetails%': 'Nothing matches {query}',
+      '%settings_lockReason_projectPublished%': PUBLISHED_NOTICE_TEXT,
     },
   ]),
 }));
@@ -44,11 +62,17 @@ vi.mock('./settings-components/project-or-other-settings-list.component', () => 
   ProjectOrOtherSettingsList: ({
     groupLabel,
     projectId,
+    projectSettingLocks,
   }: {
     groupLabel: string;
     projectId?: string;
+    projectSettingLocks?: { isPublished: boolean };
   }) => (
-    <div data-testid="settings-group" data-project-id={projectId}>
+    <div
+      data-testid="settings-group"
+      data-project-id={projectId}
+      data-published={String(projectSettingLocks?.isPublished)}
+    >
       {groupLabel}
     </div>
   ),
@@ -67,9 +91,21 @@ const PROJECT_SETTINGS_GROUPS = {
   ],
 };
 
+const PROJECT_SETTINGS_GROUPS_WITH_HIDDEN = {
+  ...PROJECT_SETTINGS_GROUPS,
+  ext3: [
+    {
+      label: 'Hidden Project Group',
+      properties: { 'ext3.hidden': { label: 'Hidden', default: 'x', isHidden: true } },
+    },
+  ],
+};
+
+let projectSettingsGroups: Record<string, unknown> = PROJECT_SETTINGS_GROUPS;
+
 vi.mock('@shared/services/project-settings.service', () => ({
   projectSettingsService: {
-    getLocalizedContributionInfo: vi.fn(async () => ({ contributions: PROJECT_SETTINGS_GROUPS })),
+    getLocalizedContributionInfo: vi.fn(async () => ({ contributions: projectSettingsGroups })),
   },
   // Interface filtering is exercised elsewhere; pass every group through unchanged here.
   filterProjectSettingsContributionsByProjectInterfaces: vi.fn((contributions) => contributions),
@@ -85,10 +121,30 @@ const GENERAL_SETTINGS_GROUPS = {
   ],
 };
 
+// Hidden contributors come FIRST so that, if they were not dropped, the sidebar would select one by
+// default and render its group.
+const GENERAL_SETTINGS_GROUPS_WITH_HIDDEN = {
+  hiddenExt: [
+    {
+      label: 'Hidden Extension Group',
+      properties: { 'hiddenExt.setting': { label: 'Hidden', default: 'y', isHidden: true } },
+    },
+  ],
+  generalExt: [
+    {
+      label: 'All Hidden Group',
+      properties: { 'generalExt.hidden': { label: 'Hidden', default: 'y', isHidden: true } },
+    },
+    ...GENERAL_SETTINGS_GROUPS.generalExt,
+  ],
+};
+
+let generalSettingsGroups: Record<string, unknown> = GENERAL_SETTINGS_GROUPS;
+
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: {
     getLocalizedSettingsContributionInfo: vi.fn(async () => ({
-      contributions: GENERAL_SETTINGS_GROUPS,
+      contributions: generalSettingsGroups,
     })),
   },
 }));
@@ -176,6 +232,88 @@ describe('SettingsTab sync-blocked notice dedup', () => {
     await waitFor(() => expect(screen.getAllByTestId('settings-group')).toHaveLength(1));
     expect(useIsProjectAutoSyncBlocked).toHaveBeenCalledWith(undefined);
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+});
+
+describe('SettingsTab project setting locks', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useIsProjectAutoSyncBlocked).mockReturnValue(false);
+  });
+
+  afterEach(() => {
+    vi.mocked(useProjectSettingLocks).mockImplementation((projectId) =>
+      projectId ? PROJECT_SETTING_LOCKS : undefined,
+    );
+  });
+
+  it("reads the project's locks once for the tab and hands them to every group", async () => {
+    render(<SettingsTab projectIdToLimitSettings="projA" />);
+
+    await waitFor(() => expect(screen.getAllByTestId('settings-group')).toHaveLength(3));
+
+    expect(useProjectSettingLocks).toHaveBeenCalledWith('projA');
+    screen
+      .getAllByTestId('settings-group')
+      .forEach((group) => expect(group).toHaveAttribute('data-published', 'true'));
+  });
+
+  it("says once, above all of a published project's groups, why none of its settings can change", async () => {
+    render(<SettingsTab projectIdToLimitSettings="projA" />);
+
+    await waitFor(() => expect(screen.getAllByTestId('settings-group')).toHaveLength(3));
+    expect(screen.getAllByText(PUBLISHED_NOTICE_TEXT)).toHaveLength(1);
+  });
+
+  it('shows no published notice for a project that is not published', async () => {
+    vi.mocked(useProjectSettingLocks).mockReturnValue({
+      ...PROJECT_SETTING_LOCKS,
+      isPublished: false,
+    });
+    render(<SettingsTab projectIdToLimitSettings="projA" />);
+
+    await waitFor(() => expect(screen.getAllByTestId('settings-group')).toHaveLength(3));
+    expect(screen.queryByText(PUBLISHED_NOTICE_TEXT)).not.toBeInTheDocument();
+  });
+});
+
+describe('SettingsTab hidden settings', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useIsProjectAutoSyncBlocked).mockReturnValue(false);
+    generalSettingsGroups = GENERAL_SETTINGS_GROUPS_WITH_HIDDEN;
+  });
+
+  afterEach(() => {
+    generalSettingsGroups = GENERAL_SETTINGS_GROUPS;
+    projectSettingsGroups = PROJECT_SETTINGS_GROUPS;
+  });
+
+  it("omits a project's settings group whose settings are all hidden", async () => {
+    projectSettingsGroups = PROJECT_SETTINGS_GROUPS_WITH_HIDDEN;
+    render(<SettingsTab projectIdToLimitSettings="projA" />);
+
+    await waitFor(() => expect(screen.getAllByTestId('settings-group')).toHaveLength(3));
+    expect(screen.queryByText('Hidden Project Group')).not.toBeInTheDocument();
+  });
+
+  it('omits the groups and sidebar entries whose settings are all hidden', async () => {
+    render(<SettingsTab />);
+
+    await waitFor(() => expect(screen.getAllByTestId('settings-group')).toHaveLength(1));
+    expect(screen.getByTestId('settings-group')).toHaveTextContent('General Group');
+    expect(screen.queryByText('Hidden Extension Group')).not.toBeInTheDocument();
+    expect(screen.queryByText('All Hidden Group')).not.toBeInTheDocument();
+  });
+
+  it('finds nothing when the search matches only hidden settings', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(<SettingsTab />);
+    await waitFor(() => expect(screen.getAllByTestId('settings-group')).toHaveLength(1));
+
+    await user.type(screen.getByPlaceholderText(/Search app settings/), 'Hidden');
+
+    expect(await screen.findByText(NO_SETTINGS_FOUND)).toBeInTheDocument();
   });
 });
 

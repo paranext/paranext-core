@@ -1,5 +1,12 @@
-import { EmptyState } from 'platform-bible-react';
+import { Button, EmptyState } from 'platform-bible-react';
 import { useFocusReplacedContent } from './use-focus-replaced-content.hook';
+
+/** A button shown under the message, for a caller that can offer the user a way out. */
+export type ResourceMessageAction = {
+  /** The already-localized button text. */
+  label: string;
+  onClick: () => void;
+};
 
 export type ResourceMessageViewProps = {
   /**
@@ -21,6 +28,11 @@ export type ResourceMessageViewProps = {
    * screen-reader user gets no confirmation that their navigation applied at all.
    */
   announcementKey?: string;
+  /**
+   * An optional button under the sentence. It sits outside the `role="status"` region, so only the
+   * sentence is announced. Leave it out when the message has no remedy.
+   */
+  action?: ResourceMessageAction;
 };
 
 /**
@@ -29,7 +41,10 @@ export type ResourceMessageViewProps = {
  *
  * `EmptyState` is the message-only zero-state primitive `adr-empty-is-zero-state-primitive`
  * reserves for a bare sentence with no title, media, or action; going through it keeps these
- * reading like every other empty state in the app and supplies the `role="status"` live region.
+ * reading like every other empty state in the app and supplies the `role="status"` live region. The
+ * optional `action` button is a deliberate exception to that rule's "action means `Empty`": it sits
+ * beside `EmptyState` so the sentence looks the same with or without it, as the panels that pass no
+ * action (Bible texts, the main editor) need. See `adr-resource-missing-book-message`.
  *
  * Accessibility: this REPLACES the editor subtree, so its arrival is a content swap a screen-reader
  * user gets no other notice of, and the focused element inside the editor is destroyed along with
@@ -51,6 +66,7 @@ export function ResourceMessageView({
   message,
   testId,
   announcementKey,
+  action,
 }: ResourceMessageViewProps) {
   const regionRef = useFocusReplacedContent<HTMLDivElement>(announcementKey);
 
@@ -66,9 +82,10 @@ export function ResourceMessageView({
       data-testid={testId}
       tabIndex={-1}
       aria-label={message}
-      className="tw:flex tw:h-full tw:items-center tw:justify-center tw:px-4 tw:outline-none"
+      className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center-safe tw:gap-4 tw:overflow-y-auto tw:px-4 tw:outline-none"
     >
       <EmptyState message={message} className="tw:text-center" />
+      {action && <Button onClick={action.onClick}>{action.label}</Button>}
     </div>
   );
 }
