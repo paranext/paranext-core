@@ -502,7 +502,7 @@ function openLanguageFilter() {
 }
 
 describe('GetResources type filter', () => {
-  it('offers Scripture, commentary and source language types, but not Enhanced or XML', () => {
+  it('offers Scripture and commentary types, but not source language, Enhanced or XML', () => {
     renderGetResources();
 
     // No localized strings are served, so each option renders its label key.
@@ -510,16 +510,17 @@ describe('GetResources type filter', () => {
 
     expect(offered.some((label) => label.includes('%resources_type_Scripture%'))).toBe(true);
     expect(offered.some((label) => label.includes('%resources_type_Commentary%'))).toBe(true);
-    expect(offered.some((label) => label.includes('%resources_type_SLR%'))).toBe(true);
+    expect(offered.some((label) => label.includes('%resources_type_SLR%'))).toBe(false);
     expect(offered.some((label) => label.includes('%resources_type_ER%'))).toBe(false);
     expect(offered.some((label) => label.includes('%resources_type_XR%'))).toBe(false);
   });
 
-  it('lists no Enhanced or XML resource, or a language only they have, when no type is selected', () => {
+  it('lists no source language, Enhanced or XML resource, or a language only they have, when no type is selected', () => {
     renderGetResources({
       selectedTypes: [],
       resources: [
         ...RESOURCES,
+        resource({ bestLanguageName: 'Greek', type: 'SourceLanguageResource' }),
         resource({ bestLanguageName: 'Hebrew', type: 'EnhancedResource' }),
         resource({ bestLanguageName: 'Syriac', type: 'XmlResource' }),
       ],
@@ -527,11 +528,13 @@ describe('GetResources type filter', () => {
 
     // Positive control: "Any type" does widen past Scripture.
     expect(screen.getByText('Resource Coptic CommentaryResource')).toBeInTheDocument();
+    expect(screen.queryByText('Resource Greek SourceLanguageResource')).not.toBeInTheDocument();
     expect(screen.queryByText('Resource Hebrew EnhancedResource')).not.toBeInTheDocument();
     expect(screen.queryByText('Resource Syriac XmlResource')).not.toBeInTheDocument();
 
     const offered = openLanguageFilter();
     expect(offered.some((label) => label.includes('Coptic'))).toBe(true);
+    expect(offered.some((label) => label.includes('Greek'))).toBe(false);
     expect(offered.some((label) => label.includes('Hebrew'))).toBe(false);
     expect(offered.some((label) => label.includes('Syriac'))).toBe(false);
   });

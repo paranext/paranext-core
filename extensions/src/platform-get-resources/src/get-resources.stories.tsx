@@ -59,17 +59,6 @@ const staticResources: DblResourceData[] = [
     updateAvailable: false,
     projectId: 'project-tsk',
   },
-  {
-    dblEntryUid: 'uid-5',
-    displayName: 'SBLGNT',
-    fullName: 'SBL Greek New Testament',
-    bestLanguageName: 'Greek',
-    type: 'SourceLanguageResource',
-    size: 800,
-    installed: false,
-    updateAvailable: false,
-    projectId: 'project-sblgnt',
-  },
 ];
 
 /** A large set of resources spread across 100 distinct languages, to exercise the language filter. */
