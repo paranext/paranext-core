@@ -3,6 +3,7 @@ import type { EffectiveResourceReference } from 'platform-scripture';
 import { buildPickerResources, type PickerResource } from './downloaded-resources.utils';
 import {
   findSelectedRow,
+  isTeamPickerResource,
   matchesSelectedResourceId,
   resolveResourceSelection,
   splitPickerResourcesBySource,
@@ -152,6 +153,16 @@ describe('resolveResourceSelection', () => {
   });
 });
 
+describe('isTeamPickerResource', () => {
+  it.each([
+    ['admin', true],
+    ['user', false],
+    ['downloaded', false],
+  ] as const)("a %s row is the team's: %s", (source, expected) => {
+    expect(isTeamPickerResource({ ...dblRow('a'), source })).toBe(expected);
+  });
+});
+
 describe('splitPickerResourcesBySource', () => {
   const row = (id: string, source: PickerResource['source']): PickerResource => ({
     ...dblRow(id),
@@ -182,8 +193,8 @@ describe('splitPickerResourcesBySource', () => {
     expect(user).toHaveLength(2);
   });
 
-  // TODO(PT-4853): removal must not trust `source` alone while the catalog is down — this row is
-  // the team's resource, yet it reads as one the user could remove.
+  // TODO(PT-4853): decide removability from `source === 'user'`, never from "not the team's": while
+  // the catalog is down, this team resource reads as a downloaded one.
   it("files an installed team resource under the user's rows while the catalog is unavailable", () => {
     // Without the catalog the team's DBL reference cannot be resolved, so it is dropped and the
     // project installed from it comes back as a plain downloaded row.

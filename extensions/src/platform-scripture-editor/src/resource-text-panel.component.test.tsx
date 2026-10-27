@@ -41,11 +41,6 @@ beforeAll(() => {
       takeRecords: vi.fn(() => []),
     })),
   );
-  // Nor `ResizeObserver`, which the team rows' tooltip reaches through Radix's positioning.
-  vi.stubGlobal(
-    'ResizeObserver',
-    vi.fn(() => ({ observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() })),
-  );
 });
 
 vi.mock('@eten-tech-foundation/platform-editor', () => ({
@@ -63,7 +58,8 @@ const PICK_BIBLE_TEXTS = 'Pick Bible texts…';
 const SELECTING = 'Selecting resource…';
 const TEAM_RESOURCES = 'Team resources';
 const USER_RESOURCES = 'User resources';
-const TEAM_RESOURCE_LOCK = 'Shared by your team. Only a project administrator can remove it.';
+const TEAM_RESOURCE_LOCK = 'Shared by your team';
+const TEAM_RESOURCES_CAPTION = 'Only a project administrator can remove these.';
 
 const STRINGS = {
   '%webView_platformScriptureEditor_emptyChapter_messageResource%': BLANK_CHAPTER,
@@ -89,6 +85,7 @@ const STRINGS = {
   '%webView_resourcePanel_teamResources%': TEAM_RESOURCES,
   '%webView_resourcePanel_userResources%': USER_RESOURCES,
   '%webView_resourcePanel_teamResourceLock%': TEAM_RESOURCE_LOCK,
+  '%webView_resourcePanel_teamResourcesCaption%': TEAM_RESOURCES_CAPTION,
 };
 
 const RESOURCE_PROJECT_ID = 'project-web';
@@ -544,6 +541,7 @@ describe("ResourceTextPanel team resources and the user's own", () => {
     expect(screen.queryByText(TEAM_RESOURCES)).toBeNull();
     expect(screen.queryByText(USER_RESOURCES)).toBeNull();
     expect(screen.queryByRole('img', { name: TEAM_RESOURCE_LOCK })).toBeNull();
+    expect(screen.queryByText(TEAM_RESOURCES_CAPTION)).toBeNull();
   });
 
   it("labels only the team group when every row is the team's", async () => {
@@ -573,35 +571,34 @@ describe("ResourceTextPanel team resources and the user's own", () => {
       .forEach((item) => expect(within(item).queryByRole('img')).toBeNull());
   });
 
-  it('explains why when keyboard focus reaches a team resource', async () => {
+  it('says once, under the team heading, that only an administrator can remove those rows', async () => {
     renderPanel({
-      filteredResources: [TEAM_WEB, USER_KJV],
-      selectedRef: USER_KJV,
+      filteredResources: [TEAM_WEB, dblRow(KJV, 'admin'), DOWNLOADED_ASV],
+      selectedRef: TEAM_WEB,
       dblResources: ALL_TEXTS,
     });
-    const user = await openSelector(/KJV/);
+    await openSelector(/WEB/);
 
-    // Nothing is focused inside the menu yet, so the hint is not showing before the keypress.
-    expect(screen.queryByRole('tooltip')).toBeNull();
-    await user.keyboard('{ArrowDown}');
-
-    expect(await screen.findByRole('tooltip')).toHaveTextContent(TEAM_RESOURCE_LOCK);
+    const teamGroup = screen.getByRole('group', { name: TEAM_RESOURCES });
+    // Once for the group, not once per row: two team rows here, one caption.
+    expect(screen.getAllByText(TEAM_RESOURCES_CAPTION)).toHaveLength(1);
+    expect(within(teamGroup).getByText(TEAM_RESOURCES_CAPTION)).toBeInTheDocument();
+    expect(teamGroup).toHaveAccessibleDescription(TEAM_RESOURCES_CAPTION);
   });
 
-  it('does not have screen readers read the lock label twice while the tooltip is open', async () => {
+  it('keeps a long name whole in its hover title, since the menu ellipsizes it', async () => {
     renderPanel({
       filteredResources: [TEAM_WEB, USER_KJV],
       selectedRef: USER_KJV,
       dblResources: ALL_TEXTS,
     });
-    const user = await openSelector(/KJV/);
-    await user.keyboard('{ArrowDown}');
-    // Positive control: the tooltip is open, which is when Radix would describe the row with it.
-    await screen.findByRole('tooltip');
+    await openSelector(/KJV/);
 
-    const teamItem = screen.getByRole('menuitemcheckbox', { name: /WEB/ });
-    expect(teamItem).toHaveAccessibleName(expect.stringContaining(TEAM_RESOURCE_LOCK));
-    expect(teamItem).not.toHaveAttribute('aria-describedby');
+    const name = within(screen.getByRole('menuitemcheckbox', { name: /WEB/ })).getByText(
+      'WEB - World English Bible',
+    );
+    expect(name).toHaveAttribute('title', 'WEB - World English Bible');
+    expect(name).toHaveClass('tw:truncate');
   });
 
   it('reports a team resource the user chose', async () => {

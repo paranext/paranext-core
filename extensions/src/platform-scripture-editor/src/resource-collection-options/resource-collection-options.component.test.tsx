@@ -43,7 +43,7 @@ STRINGS['%webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%'] =
   'Chapter view is not yet available.';
 STRINGS['%webView_scriptureTextGrid_viewOptions_textsHeader%'] = 'Texts';
 STRINGS['%webView_scriptureTextGrid_viewOptions_getResources%'] = 'Get resources…';
-STRINGS['%webView_scriptureTextGrid_viewOptions_adminSharedLock%'] = 'Shared by administrator';
+STRINGS['%webView_scriptureTextGrid_viewOptions_teamSharedLock%'] = 'Shared by your team';
 STRINGS['%webView_scriptureTextGrid_viewOptions_removeFromList%'] =
   'Remove {resourceName} from list';
 STRINGS['%webView_scriptureTextGrid_viewOptions_installing%'] = 'Installing {resourceName}…';
@@ -247,7 +247,7 @@ describe("ResourceCollectionOptions — team resources and the user's own", () =
 
     expect(
       within(screen.getByRole('group', { name: 'Team resources' })).getByRole('img', {
-        name: 'Shared by administrator',
+        name: 'Shared by your team',
       }),
     ).toBeInTheDocument();
   });
@@ -386,7 +386,7 @@ describe('ResourceCollectionOptions locked-admin indicator', () => {
       top: [row('a', 'Admin ESV', { isAdminLocked: true, isUserRemovable: false })],
       bottom: [row('b', 'My NIV', { isUserRemovable: true })],
     });
-    expect(screen.getByLabelText('Shared by administrator')).toBeInTheDocument();
+    expect(screen.getByLabelText('Shared by your team')).toBeInTheDocument();
     // Admin row has no "Remove ... from list" control.
     expect(screen.queryByLabelText('Remove Admin ESV from list')).not.toBeInTheDocument();
   });
@@ -405,7 +405,7 @@ describe('ResourceCollectionOptions locked-admin indicator', () => {
     renderComponent({
       bottom: [row('a2', 'Opted-out Admin', { isAdminLocked: false, isUserRemovable: false })],
     });
-    expect(screen.queryByLabelText('Shared by administrator')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Shared by your team')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Remove Opted-out Admin from list')).not.toBeInTheDocument();
   });
 
@@ -414,7 +414,7 @@ describe('ResourceCollectionOptions locked-admin indicator', () => {
       top: [row('a', 'Admin ESV', { isAdminLocked: true, isUserRemovable: false })],
       bottom: [],
     });
-    const lock = screen.getByLabelText('Shared by administrator');
+    const lock = screen.getByLabelText('Shared by your team');
     expect(lock.tagName).not.toBe('BUTTON');
   });
 });

@@ -37,9 +37,11 @@ export const RESOURCE_PANEL_STRING_KEYS = Object.freeze([
   '%webView_resourcePanel_catalogUnavailable%',
   '%webView_resourcePanel_downloadResources%',
   '%webView_resourcePanel_textUnavailable%',
-  // The selector's group headings and the team-row lock, which read the same on both tabs.
+  // The selector's group headings, the team caption and the team-row lock, which read the same on
+  // both tabs.
   '%webView_resourcePanel_teamResources%',
   '%webView_resourcePanel_userResources%',
+  '%webView_resourcePanel_teamResourcesCaption%',
   '%webView_resourcePanel_teamResourceLock%',
   // The Bible-texts empty state's "More info" disclosure. Not part of
   // RESOURCE_PANEL_TYPED_STRING_KEYS: that set pairs one key per field for BOTH resource types,

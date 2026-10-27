@@ -140,13 +140,23 @@ export function resolveResourceSelection(
 }
 
 /**
+ * Whether a picker row is one the project administrator put in the team layout.
+ *
+ * Decided by `source === 'admin'` alone. While the DBL catalog is unavailable a team `dblResource`
+ * reference cannot be resolved (see `buildPickerResources`), so an installed team resource comes
+ * back as a `downloaded` row and does not count.
+ *
+ * @param row The row to test
+ * @returns Whether the row is the team's
+ */
+export function isTeamPickerResource(row: PickerResource): boolean {
+  return row.source === 'admin';
+}
+
+/**
  * Split picker rows into the team's — those the project administrator put in the team layout — and
  * the user's own, which includes downloaded resources nobody referenced. Each half keeps the order
- * it had in `rows`.
- *
- * A team row is identified by `source === 'admin'` alone. While the DBL catalog is unavailable a
- * team `dblResource` reference cannot be resolved (see `buildPickerResources`), so an installed
- * team resource comes back as a `downloaded` row and lands in `user`.
+ * it had in `rows`. A team row is one {@link isTeamPickerResource} accepts.
  *
  * @param rows The rows to split
  * @returns The team's rows and the user's rows
@@ -156,7 +166,7 @@ export function splitPickerResourcesBySource(rows: PickerResource[]): {
   user: PickerResource[];
 } {
   return {
-    team: rows.filter((row) => row.source === 'admin'),
-    user: rows.filter((row) => row.source !== 'admin'),
+    team: rows.filter(isTeamPickerResource),
+    user: rows.filter((row) => !isTeamPickerResource(row)),
   };
 }

@@ -103,7 +103,7 @@ const STRINGS: Record<string, string> = {
   '%webView_scriptureTextGrid_viewOptions_emptyState_prompt%':
     'No texts added yet. Use {getResourcesLabel} to add them.',
   '%webView_scriptureTextGrid_viewOptions_getResources%': 'Get resources…',
-  '%webView_scriptureTextGrid_viewOptions_adminSharedLock%': 'Shared by administrator',
+  '%webView_scriptureTextGrid_viewOptions_teamSharedLock%': 'Shared by your team',
   '%webView_scriptureTextGrid_viewOptions_removeFromList%': 'Remove {resourceName} from list',
   '%webView_scriptureTextGrid_viewOptions_installing%': 'Installing {resourceName}…',
 };
