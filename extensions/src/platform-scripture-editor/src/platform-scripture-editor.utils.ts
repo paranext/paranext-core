@@ -3067,6 +3067,26 @@ export function canAddChapterNumber(lastVerse: number): boolean {
   return lastVerse > 0;
 }
 
+/**
+ * Whether structure protection keeps the "Add Chapter Number" button from adding a blank chapter.
+ *
+ * Chapter 1 is exempt. A blank chapter 1 has no chapter marker, which is how a book with no
+ * chapters looks (a new book holds only its `\id` line), and without the exemption a Simple-mode
+ * user, whose structure is locked by default, could not start the book at all. The chapter document
+ * cannot tell whether later chapters exist, so a book that has them but lacks `\c 1` is exempt
+ * too.
+ *
+ * @param isStructureProtected Whether the project's structure is currently locked.
+ * @param chapterNum The blank chapter the button would add.
+ * @returns `true` if the button must stay disabled.
+ */
+export function isAddChapterNumberProtected(
+  isStructureProtected: boolean,
+  chapterNum: number,
+): boolean {
+  return isStructureProtected && chapterNum !== 1;
+}
+
 /** Outcome of {@link resolveAddChapterNumberClick} — what a click on the button should do. */
 export type AddChapterNumberClickOutcome = 'insert' | 'already-in-flight' | 'no-versification';
 

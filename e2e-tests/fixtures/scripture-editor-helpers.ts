@@ -301,12 +301,7 @@ export async function rewriteSampleProjectChapterUsfm(
 ): Promise<void> {
   requireIsolatedProjectRoot();
   const pdpId = await getSampleProjectDataProviderId();
-  const usfm = await sendPapiRequestOnce<string | undefined>(
-    `object:${pdpId}.getChapterUSFM`,
-    [chapter],
-    WEBSOCKET_PORT,
-    COMMAND_TIMEOUT_MS,
-  );
+  const usfm = await getSampleProjectChapterUsfm(chapter);
   if (!usfm)
     throw new Error(`Sample project has no USFM for ${chapter.book} ${chapter.chapterNum}`);
   await sendPapiRequestOnce(
@@ -315,6 +310,43 @@ export async function rewriteSampleProjectChapterUsfm(
     WEBSOCKET_PORT,
     COMMAND_TIMEOUT_MS,
   );
+}
+
+/** One chapter of the sample WEB project as saved, read through its data provider. */
+export async function getSampleProjectChapterUsfm(
+  chapter: SampleChapterRef,
+): Promise<string | undefined> {
+  const pdpId = await getSampleProjectDataProviderId();
+  return sendPapiRequestOnce<string | undefined>(
+    `object:${pdpId}.getChapterUSFM`,
+    [chapter],
+    WEBSOCKET_PORT,
+    COMMAND_TIMEOUT_MS,
+  );
+}
+
+/**
+ * Replaces a whole book of the sample WEB project through its data provider. A book write skips the
+ * chapter-marker correction a chapter write gets, so this can set up a book with no chapters at
+ * all. Writes project data, so it refuses to run unless the app was launched with
+ * `isolatedProjectRoot: true`, for the same reason as {@link rewriteSampleProjectChapterUsfm}.
+ *
+ * @param book Any reference in the book; only `book` is read.
+ * @param usfm The book's complete new USFM.
+ */
+export async function setSampleProjectBookUsfm(
+  book: SampleChapterRef,
+  usfm: string,
+): Promise<void> {
+  requireIsolatedProjectRoot();
+  const pdpId = await getSampleProjectDataProviderId();
+  const isWritten = await sendPapiRequestOnce<boolean>(
+    `object:${pdpId}.setBookUSFM`,
+    [book, usfm],
+    WEBSOCKET_PORT,
+    COMMAND_TIMEOUT_MS,
+  );
+  if (!isWritten) throw new Error(`Sample project did not accept USFM for ${book.book}`);
 }
 
 /**

@@ -218,6 +218,7 @@ import {
   getSimpleModeRootClassNames,
   getViewTypeToSave,
   hasDisplayableParagraphMarkerTitle,
+  isAddChapterNumberProtected,
   isChapterBlank,
   isMissingBookError,
   isMissingBookInfoOnScreen,
@@ -3419,6 +3420,11 @@ function PlatformScriptureEditor({
     [scrRef.book, scrRef.chapterNum, getEndVerse],
   );
 
+  const isAddChapterProtected = isAddChapterNumberProtected(
+    isStructureProtected,
+    scrRef.chapterNum,
+  );
+
   // Tracks a scaffold insert this component triggered that hasn't yet been observed to land
   // (`isBlankChapter` flipping to `false`) or been superseded by navigating away. Serves two roles
   // that are always set and reset together: (1) re-entrancy guard for the whole applyUpdate -> save
@@ -3446,7 +3452,7 @@ function PlatformScriptureEditor({
     // and inline marker menus in this file — a structural insert like this one should never fire
     // solely because a disabled-state prop drifted out of sync with the action in some future
     // refactor.
-    if (isStructureProtected) {
+    if (isAddChapterProtected) {
       notifyStructureProtected();
       return;
     }
@@ -3470,8 +3476,23 @@ function PlatformScriptureEditor({
     // not. The editor is staged from the revision `dev-packages.json` pins, so it can change with
     // no version diff here at all, and no test here or upstream covers undo for this path —
     // re-check it by hand whenever that revision moves.
-    editorRef.current?.applyUpdate(buildChapterScaffoldOps(scrRef.chapterNum, lastVerse), 'local');
-  }, [scrRef.book, scrRef.chapterNum, lastVerse, isStructureProtected, notifyStructureProtected]);
+    //
+    // A later chapter's scaffold starts its document. Chapter 1's goes after the book's `\id` line
+    // and any headings or introduction, which only the editor can place.
+    if (scrRef.chapterNum !== 1) {
+      editorRef.current?.applyUpdate(
+        buildChapterScaffoldOps(scrRef.chapterNum, lastVerse),
+        'local',
+      );
+      return;
+    }
+    if (!editorRef.current?.insertFirstChapter(lastVerse)) {
+      pendingScaffoldInsertRef.current = false;
+      logger.warn(
+        `handleAddChapterNumber: the editor added no chapter to ${scrRef.book} 1; ignoring click`,
+      );
+    }
+  }, [scrRef.book, scrRef.chapterNum, lastVerse, isAddChapterProtected, notifyStructureProtected]);
 
   // `Editorial` stays mounted but visually hidden while the chapter is blank, so any focus/cursor
   // or scroll effect Lexical/the "scroll the selected verse" effect above would normally run for
@@ -5348,7 +5369,7 @@ function PlatformScriptureEditor({
         {showEmptyChapterView && (
           <EmptyChapterView
             localizedStrings={localizedStrings}
-            isStructureProtected={isStructureProtected}
+            isStructureProtected={isAddChapterProtected}
             isResource={isResource}
             showButton={
               !isReadOnlyEffective &&

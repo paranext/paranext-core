@@ -57,6 +57,7 @@ import {
   isChapterBlank,
   buildChapterScaffoldOps,
   canAddChapterNumber,
+  isAddChapterNumberProtected,
   resolveAddChapterNumberClick,
   isMissingBookError,
   isMissingBookOnScreen,
@@ -4497,6 +4498,21 @@ describe('buildChapterScaffoldOps', () => {
       { insert: { chapter: { number: '1', style: 'c' } } },
       { insert: { verse: { number: '1', style: 'v' } } },
     ]);
+  });
+});
+
+describe('isAddChapterNumberProtected', () => {
+  it('keeps a later chapter from being added while structure is locked', () => {
+    expect(isAddChapterNumberProtected(true, 2)).toBe(true);
+  });
+
+  it('lets chapter 1 be added while structure is locked, so an empty book can be started', () => {
+    expect(isAddChapterNumberProtected(true, 1)).toBe(false);
+  });
+
+  it('never protects while structure is unlocked', () => {
+    expect(isAddChapterNumberProtected(false, 1)).toBe(false);
+    expect(isAddChapterNumberProtected(false, 2)).toBe(false);
   });
 });
 
