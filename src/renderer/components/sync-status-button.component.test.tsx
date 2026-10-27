@@ -54,6 +54,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%toolbar_sync_open_status%': 'Test Sync status',
       '%toolbar_sync_popover_cancelled%': 'Test The last sync was cancelled.',
       '%toolbar_sync_popover_last_sync_unfinished%': 'Test last sync did not finish',
+      '%toolbar_sync_popover_no_details%': 'Test details are not available for this sync',
       '%toolbar_sync_popover_idle%': 'Test no sync running',
       '%toolbar_sync_popover_synced%': 'Test last sync finished',
       '%toolbar_sync_popover_unknown%': 'Test status unavailable',
@@ -642,6 +643,151 @@ describe('SyncStatusButton — failed and cancelled syncs', () => {
     expect(screen.getByTestId('toolbar-sync-popover-status')).toHaveTextContent(
       'Test The last sync was cancelled.',
     );
+  });
+
+  // The same on the activity-only path — a Simple-mode startup sync, which raises no claim and
+  // settles from the backend's own outcome. A cancel is the user's request there too.
+  it('reports a cancelled activity-only sync as cancelled rather than failed', async () => {
+    // The claim carries a verdict from an EARLIER sync, which is what the status would fall back to
+    // if this sync's own verdict arrived a commit after it ended. The cancel is recorded as that
+    // fallback settles, so the late verdict is what turns the user's own request into a failure.
+    const fireSyncActivityChanged = captureSyncActivityEvent();
+    mockSyncStateAndActivity(completedState({ a: 'succeeded' }), {
+      isSyncing: true,
+      projectIds: [],
+    });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
+    fireEvent.click(await screen.findByTestId('toolbar-sync-cancel-button'));
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent('Test Cancelling');
+    });
+
+    // The cancel takes effect: the backend reports the run it did not finish as `failed`.
+    fireSyncActivityChanged({ isSyncing: false, projectIds: [], outcome: 'failed' });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Test Sync cancelled' })).toBeInTheDocument();
+    });
+    // And it STILL says so once every effect has settled. A verdict arriving a commit after the sync
+    // ended recomputes the cancel from state that commit already cleared, flipping the label to a
+    // failure a moment later — which `waitFor` alone accepts on its way past, so this waits out the
+    // effects that would flip it rather than asserting on the first matching frame.
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 50);
+      });
+    });
+    expect(screen.getByRole('button', { name: 'Test Sync cancelled' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Test Sync failed' })).not.toBeInTheDocument();
+  });
+
+  it('never announces the claim’s earlier verdict as an activity-only sync’s outcome', async () => {
+    // The status must not pass through the claim's unrelated verdict on its way to this sync's. A
+    // live region speaks whatever it holds, so even one commit of it is announced.
+    const fireSyncActivityChanged = captureSyncActivityEvent();
+    mockSyncStateAndActivity(completedState({ a: 'failed' }), { isSyncing: false, projectIds: [] });
+    render(<SyncStatusButton />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Test Sync failed' })).toBeInTheDocument();
+    });
+
+    fireSyncActivityChanged({ isSyncing: true, projectIds: [] });
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Test Syncing');
+    });
+
+    // Every value the region held on the way to its final one, which reading it at the end misses.
+    const announced: string[] = [];
+    const observer = new MutationObserver((records) => {
+      records.forEach((record) => {
+        if (record.type === 'characterData') announced.push(record.oldValue ?? '');
+      });
+    });
+    observer.observe(screen.getByRole('status'), {
+      characterData: true,
+      characterDataOldValue: true,
+      subtree: true,
+    });
+
+    fireSyncActivityChanged({ isSyncing: false, projectIds: [], outcome: 'succeeded' });
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Test Synced');
+    });
+    observer.disconnect();
+
+    // "Test Syncing" proves the recording worked, so the absence below is evidence of something.
+    expect(announced).toContain('Test Syncing');
+    expect(announced).not.toContain('Test Sync failed');
+  });
+
+  it('announces that the status is unavailable when an activity-only sync ends with no outcome', async () => {
+    // A sync the user was watching ending in "we cannot tell" is worth saying, and it is only
+    // announced when the status moves straight from `syncing` to `unknown`.
+    const fireSyncActivityChanged = captureSyncActivityEvent();
+    mockSyncStateAndActivity(IDLE_STATE, { isSyncing: true, projectIds: [] });
+    render(<SyncStatusButton />);
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Test Syncing');
+    });
+
+    fireSyncActivityChanged({ isSyncing: false, projectIds: [] });
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Test Sync status unavailable');
+    });
+  });
+
+  it('leaves the sync details link inert for a verdict only the backend reported', async () => {
+    // That view shows send/receive's own last results, which describe a DIFFERENT sync, so
+    // following the link would answer "what happened?" with an unrelated sync's detail. It stays
+    // MOUNTED, though: this popover updates live, and removing a control under a user who is in it
+    // drops focus to `<body>`.
+    const fireSyncActivityChanged = captureSyncActivityEvent();
+    mockSyncStateAndActivity(IDLE_STATE, { isSyncing: true, projectIds: [] });
+    render(<SyncStatusButton />);
+
+    fireSyncActivityChanged({ isSyncing: false, projectIds: [], outcome: 'failed' });
+    fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-popover-status')).toHaveTextContent(
+        'Test last sync did not finish',
+      );
+    });
+    const viewDetails = screen.getByTestId('toolbar-sync-view-details-button');
+    expect(viewDetails).toBeInTheDocument();
+    expect(viewDetails).toHaveAttribute('aria-disabled', 'true');
+    // And the popover says why, rather than leaving the user to discover that the one control on
+    // offer does nothing.
+    expect(screen.getByTestId('toolbar-sync-popover-no-details')).toBeInTheDocument();
+
+    fireEvent.click(viewDetails);
+
+    expect(vi.mocked(sendCommand)).not.toHaveBeenCalledWith(
+      'paratextBibleSendReceive.openSyncStatus',
+    );
+  });
+
+  it('offers sync details for a verdict send/receive reported itself', async () => {
+    // The other half: where the results behind the verdict exist, the link is live.
+    mockSyncState(completedState({ a: 'failed' }));
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
+
+    const viewDetails = await screen.findByTestId('toolbar-sync-view-details-button');
+    expect(viewDetails).not.toHaveAttribute('aria-disabled', 'true');
+    expect(screen.queryByTestId('toolbar-sync-popover-no-details')).not.toBeInTheDocument();
+
+    fireEvent.click(viewDetails);
+
+    await waitFor(() => {
+      expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
+        'paratextBibleSendReceive.openSyncStatus',
+      );
+    });
   });
 
   // The other half: a failure nobody asked for is still reported as a failure.
@@ -2535,6 +2681,7 @@ describe('SyncStatusButton — unsynced changes', () => {
       syncingProjects: [],
       unsyncedProjects: [],
       unsyncedDirection: undefined,
+      isVerdictFromBackendOnly: false,
     });
     render(<SyncStatusButton />);
 
@@ -2638,6 +2785,7 @@ describe('SyncStatusButton — unsynced changes', () => {
       syncingProjects: [],
       unsyncedProjects: [],
       unsyncedDirection: undefined,
+      isVerdictFromBackendOnly: false,
     });
     render(<SyncStatusButton />);
 

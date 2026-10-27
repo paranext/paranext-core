@@ -213,6 +213,117 @@ describe('initSyncActivityService', () => {
     });
   });
 
+  describe('outcome', () => {
+    beforeEach(() => {
+      mockGetSyncActivity(new Error('not registered'));
+    });
+
+    it('carries a recognized outcome through to the store', async () => {
+      dispose = initSyncActivityService();
+      await flushSeeding();
+
+      emit?.({ isSyncing: false, projectIds: [], outcome: 'succeeded' });
+
+      expect(getSyncActivityState().outcome).toBe('succeeded');
+    });
+
+    it('seeds the outcome of a run that completed before the renderer started', async () => {
+      mockGetSyncActivity({ isSyncing: false, projectIds: [], outcome: 'failed' });
+
+      dispose = initSyncActivityService();
+      await flushSeeding();
+
+      expect(getSyncActivityState().outcome).toBe('failed');
+    });
+
+    it('reads a snapshot without an outcome as one that cannot say', async () => {
+      // A build predating the field, a backend that has completed no run yet, and a run still in
+      // flight all answer without it. None of them is a verdict.
+      dispose = initSyncActivityService();
+      await flushSeeding();
+
+      emit?.({ isSyncing: false, projectIds: [] });
+
+      expect(getSyncActivityState().isSyncing).toBe(false);
+      expect(getSyncActivityState().outcome).toBeUndefined();
+    });
+
+    it('reads a null outcome as absent', async () => {
+      // Parsed from JSON because that is how a serializer that writes omitted optionals as `null`
+      // really delivers it, and `SyncActivitySnapshot` cannot express one.
+      dispose = initSyncActivityService();
+      await flushSeeding();
+
+      emit?.(JSON.parse('{"isSyncing":false,"projectIds":[],"outcome":null}'));
+
+      expect(getSyncActivityState().isSyncing).toBe(false);
+      expect(getSyncActivityState().outcome).toBeUndefined();
+      // Absent, not unrecognized — which the store cannot tell apart, since both leave `outcome`
+      // undefined. The warning is what separates them.
+      expect(vi.mocked(logger.warn)).not.toHaveBeenCalledWith(expect.stringContaining('outcome'));
+    });
+
+    it.each([
+      // The plausible next value upstream, and exactly the one this build must not guess at.
+      ['an unrecognized', 'cancelled'],
+      ['a non-string', 42],
+    ])('drops %s outcome but still applies the rest of the event', async (_label, outcome) => {
+      // Rejecting the whole snapshot over its outcome would discard a well-formed `isSyncing` along
+      // with it — blinding the indicator to a sync over a field that only answers how the last one
+      // went. The event must also still count as applied, or the seed answering later would
+      // overwrite it with an older moment.
+      mockGetSyncActivity(new Error('not registered'), { isSyncing: true, projectIds: ['STALE'] });
+
+      dispose = initSyncActivityService();
+      await flushSeeding();
+
+      emit?.({ isSyncing: false, projectIds: [], outcome });
+      await vi.advanceTimersByTimeAsync(SYNC_SEED_RETRY_INTERVAL_MS);
+
+      expect(getSyncActivityState().isSyncing).toBe(false);
+      expect(getSyncActivityState().outcome).toBeUndefined();
+      expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(expect.stringContaining('outcome'));
+    });
+
+    it('carries the time the outcome describes through to the store', async () => {
+      dispose = initSyncActivityService();
+      await flushSeeding();
+
+      emit?.({
+        isSyncing: false,
+        projectIds: [],
+        outcome: 'failed',
+        completedAt: '2026-09-18T10:00:00Z',
+      });
+
+      expect(getSyncActivityState().completedAt).toBe('2026-09-18T10:00:00Z');
+    });
+
+    it('drops an outcome time that is not a readable date, keeping the outcome', async () => {
+      // The time exists to order this verdict against the one send/receive reports itself. An
+      // unreadable one would order them by a value that means nothing, which is worse than leaving
+      // them unordered.
+      dispose = initSyncActivityService();
+      await flushSeeding();
+
+      emit?.({ isSyncing: false, projectIds: [], outcome: 'failed', completedAt: 'whenever' });
+
+      expect(getSyncActivityState().outcome).toBe('failed');
+      expect(getSyncActivityState().completedAt).toBeUndefined();
+      expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(expect.stringContaining('outcome time'));
+    });
+
+    it('drops a malformed outcome from the seed but still applies the rest of it', async () => {
+      mockGetSyncActivity({ isSyncing: true, projectIds: ['PROJ1'], outcome: 42 });
+
+      dispose = initSyncActivityService();
+      await flushSeeding();
+
+      expect(getSyncActivityState()).toMatchObject({ isSyncing: true, projectIds: ['PROJ1'] });
+      expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(expect.stringContaining('outcome'));
+    });
+  });
+
   describe('watchdog re-query', () => {
     it('corrects a stranded syncing state when the closing snapshot was lost', async () => {
       // The dotnet forward is fire-and-forget, so one lost closing snapshot would otherwise strand
