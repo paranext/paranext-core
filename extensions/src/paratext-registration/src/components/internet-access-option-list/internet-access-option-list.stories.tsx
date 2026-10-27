@@ -42,7 +42,7 @@ export const Unrestricted: Story = {
 
 /** Option 2 selected — "Disable access to some Bible translation services". */
 export const DisabledAccess: Story = {
-  decorators: [createDecorator('VpnRequired')],
+  decorators: [createDecorator('Disabled')],
 };
 
 /**
@@ -51,11 +51,11 @@ export const DisabledAccess: Story = {
  * yet. The row renders selected-but-disabled and a banner says why nothing acts on it.
  */
 export const UnavailableOptionSelected: Story = {
-  decorators: [createDecorator('Disabled')],
+  decorators: [createDecorator('ProxyOnly')],
 };
 
 /** All rows non-interactive — simulates the loading or saving state. */
 export const FormDisabled: Story = {
-  decorators: [createDecorator('VpnRequired')],
+  decorators: [createDecorator('Disabled')],
   args: { disabled: true },
 };

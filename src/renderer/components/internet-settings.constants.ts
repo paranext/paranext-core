@@ -14,7 +14,7 @@ export const INTERNET_SETTINGS_DATA_PROVIDER = 'paratextRegistration.internetSet
  * skeleton until a real value replaces it.
  */
 export const DEFAULT_INTERNET_SETTINGS: InternetSettings = {
-  permittedInternetUse: 'VpnRequired',
+  permittedInternetUse: 'Disabled',
   selectedServer: 'Production',
   proxyPort: 0,
 };

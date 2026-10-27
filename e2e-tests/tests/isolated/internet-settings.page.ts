@@ -121,7 +121,7 @@ export function selectableConnectivityOptions(frame: FrameLocator): {
   return {
     // %paratextRegistration_description_internetUse_option_Enabled_2%
     unrestricted: frame.getByRole('radio', { name: 'Unrestricted' }),
-    // %paratextRegistration_description_internetUse_option_VpnRequired_2%
+    // %paratextRegistration_description_internetUse_option_VpnRequired_2%, the label of `Disabled`
     someServicesDisabled: frame.getByRole('radio', {
       name: 'Disable access to some Bible translation services',
     }),
@@ -134,18 +134,24 @@ export function selectableConnectivityOptions(frame: FrameLocator): {
  *
  * Which one that is depends on the machine: these settings live in ParatextData's own storage,
  * which is seeded once from a co-installed Paratext 9, so a developer box can legitimately start on
- * either. Clicking a fixed option would be a no-op wherever that option was already selected.
- * Nothing here is persisted — only "Save and restart" writes.
+ * either — or on a not-yet-available option, such as a proxy carried over from Paratext 9. Clicking
+ * a fixed option would be a no-op wherever that option was already selected. Nothing here is
+ * persisted — only "Save and restart" writes.
  *
- * @returns The radio that was selected before the click, so a test can assert a reset restores it
+ * @returns The radio that was selected before the click, whichever row it is on, so a test can
+ *   assert a reset restores it
  */
 export async function selectTheOtherConnectivityOption(frame: FrameLocator): Promise<Locator> {
   const { unrestricted, someServicesDisabled } = selectableConnectivityOptions(frame);
   await expect(unrestricted).toBeEnabled({ timeout: 10_000 });
-  const startedUnrestricted = await unrestricted.isChecked();
-  const original = startedUnrestricted ? unrestricted : someServicesDisabled;
-  const target = startedUnrestricted ? someServicesDisabled : unrestricted;
-  await target.click();
+  // Pinned by id, since a `checked: true` locator would follow the selection to the clicked row.
+  const originalId = await internetUseRadios(frame)
+    .and(frame.getByRole('radio', { checked: true }))
+    .getAttribute('id');
+  const original = frame.locator(`[id="${originalId}"]`);
+  const target = (await unrestricted.isChecked()) ? someServicesDisabled : unrestricted;
+  // The label, not the radio button: the label's click target covers the whole row, radio included.
+  await frame.locator(`label[for="${await target.getAttribute('id')}"]`).click();
   await expect(target).toBeChecked();
   return original;
 }
@@ -164,6 +170,17 @@ export async function openInternetSettingsPanel(mainPage: Page): Promise<FrameLo
 /** A radio button in the internet-access option list, by its visible label. */
 export function internetUseRadio(frame: FrameLocator, label: string | RegExp): Locator {
   return frame.getByRole('radio', { name: label });
+}
+
+/**
+ * Every radio button in the internet-access option list. Scoped to that list, since the developer
+ * section's server radios share the frame.
+ */
+export function internetUseRadios(frame: FrameLocator): Locator {
+  return frame
+    .getByRole('radiogroup')
+    .filter({ has: frame.getByRole('radio', { name: 'Unrestricted' }) })
+    .getByRole('radio');
 }
 
 /**
