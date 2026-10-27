@@ -8579,6 +8579,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - Keep SBA selectable and syncable everywhere (the previous decision) — rejected by UX.
   - Block SBA in the C# sync entry points too — not chosen: it would also stop existing schedules,
     which the decision deliberately leaves running.
+  - Block SBA in the manual-only commands instead of in each UI — the extension's `runManualSync`,
+    or the C# `sendReceiveProjects` handler that Home calls directly. Scheduled syncs reach
+    `SendReceiveProjectsCore` through `SyncProjectsCore`, not through that handler, so this would
+    leave schedules running. A check in the extension sees only projects already on disk, so it
+    cannot cover Get; the C# handler can tell an SBA project from its project type without a local
+    copy (`ScrTextExtensions.GetOpenBlockedReason(Enum<ProjectType>)`), so a gate there could cover
+    every manual caller. Not done: the Send/Receive service is patched in from the
+    paratext-10-studio repo, and these checks are temporary — they go once Platform.Bible can open
+    SBA projects — so a gate would protect only surfaces added before then.
 - **Consequences:**
   - Every new surface that offers to sync a project from a list or from Home must treat a project
     with an `unsupportedReason` as not syncable. Scheduled, automatic and server-side paths are not
