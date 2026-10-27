@@ -1681,7 +1681,7 @@ function PlatformScriptureEditor({
   // Effective structure-protection state for this project/user, used to gate keyboard edits to
   // paragraph/verse markers in the editor (fed into EditorOptions.structureProtectionMode below). The
   // toolbar StructureProtectionButton subscribes to the same state independently.
-  const { isStructureProtected, isProtectionActive, isProtectedByAdmin, canAdminToggle } =
+  const { isStructureProtected, isProtectionActive, isTeamLockBinding } =
     useStructureProtectionState(projectId);
 
   // Locked (by admin, personal preference, or both) always yields "protected" (hard block); Power
@@ -3422,10 +3422,9 @@ function PlatformScriptureEditor({
     [scrRef.book, scrRef.chapterNum, getEndVerse],
   );
 
-  // An administrator who can toggle the team lock is not bound by it.
   const isAddChapterNumberProtected = shouldProtectAddChapterNumber(
     isStructureProtected,
-    isProtectedByAdmin && !canAdminToggle,
+    isTeamLockBinding,
     scrRef.chapterNum,
   );
 

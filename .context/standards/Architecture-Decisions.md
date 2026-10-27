@@ -1084,7 +1084,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Decision:** `shouldProtectAddChapterNumber` (`platform-scripture-editor.utils.ts`) exempts
   chapter 1 from the user's own lock only. The team lock disables the button on every chapter,
   chapter 1 included, so a non-administrator under it waits for an administrator to lift it, even
-  to start a book. The exemption also covers chapter 1 of a book that starts at a later chapter,
+  to start a book. Whether the team lock binds comes from the hook's `isTeamLockBinding`, which
+  counts an admin setting still loading or failed to load as locked: the exemption fails closed,
+  and the toolbar's personal toggle reads the same field. The exemption also covers chapter 1 of a book that starts at a later chapter,
   such as a partial translation: a chapter document cannot see whether later chapters exist, and
   adding `\c 1` there is still valid USFM.
 - **Alternatives:** **Exempt chapter 1 from both locks** — the team lock is a rule an administrator
