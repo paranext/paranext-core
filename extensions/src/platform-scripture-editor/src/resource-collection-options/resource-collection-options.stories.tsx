@@ -81,6 +81,7 @@ const LONG_NAME_ROWS: ViewOptionsTextEntry[] = [
 function Harness({
   initialTop,
   initialBottom,
+  isGrouped,
   isChapterEnabled = false,
   installingResourceNames,
   disabled,
@@ -88,6 +89,7 @@ function Harness({
 }: {
   initialTop: ViewOptionsTextEntry[];
   initialBottom: ViewOptionsTextEntry[];
+  isGrouped?: boolean;
   isChapterEnabled?: boolean;
   installingResourceNames?: string[];
   disabled?: boolean;
@@ -112,6 +114,7 @@ function Harness({
         isChapterEnabled={isChapterEnabled}
         top={top}
         bottom={bottom}
+        isGrouped={isGrouped}
         installingResourceNames={installingResourceNames}
         disabled={disabled}
         disabledMessage={disabledMessage}
@@ -121,7 +124,16 @@ function Harness({
         localizedStrings={localizedStrings}
       />
     ),
-    [viewMode, top, bottom, isChapterEnabled, installingResourceNames, disabled, disabledMessage],
+    [
+      viewMode,
+      top,
+      bottom,
+      isGrouped,
+      isChapterEnabled,
+      installingResourceNames,
+      disabled,
+      disabledMessage,
+    ],
   );
 }
 
@@ -131,6 +143,11 @@ function Harness({
  */
 export const UserView: Story = {
   render: () => <Harness initialTop={ADMIN_ROWS} initialBottom={USER_ROWS} />,
+};
+
+/** Power mode: the same texts as one list, with no headings and no locks. Team rows still have no ✕. */
+export const PowerMode: Story = {
+  render: () => <Harness initialTop={ADMIN_ROWS} initialBottom={USER_ROWS} isGrouped={false} />,
 };
 
 /** A project with no team layout: the user's own texts as one list, with no group headings. */

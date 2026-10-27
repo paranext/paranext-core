@@ -178,6 +178,7 @@ function makeProps(overrides: Partial<ResourceTextPanelProps> = {}): ResourceTex
     readiness: 'configured',
     dblResources: [INSTALLED_RESOURCE],
     isCatalogUnavailable: false,
+    isGrouped: true,
     onRetryCatalog: vi.fn(),
     scrRef: MAT_1_1,
     onScrRefChange: vi.fn(),
@@ -530,6 +531,29 @@ describe("ResourceTextPanel team resources and the user's own", () => {
     expect(rowNames(otherGroup)).toEqual([expect.stringMatching(/^ASV/)]);
     expect(comesAfter(teamGroup, userGroup)).toBe(true);
     expect(comesAfter(userGroup, otherGroup)).toBe(true);
+  });
+
+  it('lists every row as one plain list when ungrouped, with no headings, caption or locks', async () => {
+    renderPanel({
+      filteredResources: [TEAM_WEB, USER_KJV, DOWNLOADED_ASV],
+      selectedRef: USER_KJV,
+      dblResources: ALL_TEXTS,
+      isGrouped: false,
+    });
+    await openSelector(/KJV/);
+
+    // Positive control: every row is on screen, in order, so the absences are real answers.
+    expect(rowNames(screen.getByRole('menu'))).toEqual([
+      expect.stringMatching(/^WEB/),
+      expect.stringMatching(/^KJV/),
+      expect.stringMatching(/^ASV/),
+    ]);
+    expect(screen.queryByRole('group')).toBeNull();
+    expect(screen.queryByText(TEAM_RESOURCES)).toBeNull();
+    expect(screen.queryByText(USER_RESOURCES)).toBeNull();
+    expect(screen.queryByText(OTHER_RESOURCES)).toBeNull();
+    expect(screen.queryByText(TEAM_RESOURCES_CAPTION)).toBeNull();
+    expect(screen.queryByRole('img', { name: TEAM_RESOURCE_LOCK })).toBeNull();
   });
 
   it.each([
