@@ -24,7 +24,16 @@ import {
   ResourceType,
 } from 'platform-bible-utils';
 import { ChevronDown, Lock } from 'lucide-react';
-import { ComponentProps, ReactNode, useCallback, useEffect, useId, useMemo, useRef } from 'react';
+import {
+  ComponentProps,
+  Fragment,
+  ReactNode,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+} from 'react';
 import {
   hasNewScrollTarget,
   isEchoOfPublishedScrRef,
@@ -57,6 +66,7 @@ import type {
 } from './resource-text-panel.const';
 import type { DblResourceInstallFailureReason } from './use-dbl-resource-auto-install.hook';
 import { RESOURCE_PANEL_INSTALL_FAILURE_KEYS } from './resource-text-panel.const';
+import { RESOURCE_COLLECTION_OPTIONS_KEYS } from './resource-collection-options/resource-collection-options.types';
 import { getInstallFailureMessageKey } from './install-failure-message.utils';
 
 /**
@@ -86,6 +96,8 @@ type ResourceSelectorDropdownProps = {
   filteredResources: PickerResource[];
   selectedRef: PickerResource | undefined;
   dblResources: DblResourceData[];
+  /** Whether the DBL catalog failed to load. See `splitPickerResourcesBySource`. */
+  isCatalogUnavailable: boolean;
   onSelectResource: (id: string) => void;
   /** Undefined hides the option: downloading adds to the project's list, so needs a project */
   onShowResourcePicker: (() => void) | undefined;
@@ -94,6 +106,8 @@ type ResourceSelectorDropdownProps = {
   teamResourcesLabel: string;
   /** Heading over the user's own resources */
   userResourcesLabel: string;
+  /** Heading over resources installed on this computer that neither list names */
+  otherResourcesLabel: string;
   /** Says, once under the team heading, that only a project administrator can remove those rows */
   teamResourcesCaption: string;
   /** Names the lock on each team row */
@@ -101,30 +115,40 @@ type ResourceSelectorDropdownProps = {
 };
 
 /**
- * The panel's resource selector. When the team shared any resources for this tab, they are listed
- * first under their own heading, with a caption saying only a project administrator can remove them
- * and a lock on each, and the user's own follow under a second heading. With none, the rows are one
- * unlabeled list.
+ * The panel's resource selector. Rows are grouped as the team's, the user's own and other installed
+ * resources (see `splitPickerResourcesBySource`), each under its heading, and a group with no rows
+ * gets none. The team's come first, with a caption saying only a project administrator can remove
+ * them and a lock on each; they always get their heading, since the caption is what explains the
+ * locks. With no team rows and only one other group, the rows are one unlabeled list.
  */
 function ResourceSelectorDropdown({
   filteredResources,
   selectedRef,
   dblResources,
+  isCatalogUnavailable,
   onSelectResource,
   onShowResourcePicker,
   downloadResourcesLabel,
   teamResourcesLabel,
   userResourcesLabel,
+  otherResourcesLabel,
   teamResourcesCaption,
   teamResourceLockLabel,
 }: ResourceSelectorDropdownProps) {
   const headingIdPrefix = useId();
   const teamHeadingId = `${headingIdPrefix}-team`;
   const teamCaptionId = `${headingIdPrefix}-team-caption`;
-  const userHeadingId = `${headingIdPrefix}-user`;
   const selectedRowId = selectedRef ? getResourceReferenceRowId(selectedRef.reference) : undefined;
   // TODO(PT-4063): order the team's rows the way the administrator pins them.
-  const { team, user } = splitPickerResourcesBySource(filteredResources);
+  const { team, user, other } = splitPickerResourcesBySource(filteredResources, {
+    isCatalogUnavailable,
+  });
+  // The groups below the team's, leaving out any with no rows.
+  const nonTeamGroups = [
+    { headingId: `${headingIdPrefix}-user`, label: userResourcesLabel, rows: user },
+    { headingId: `${headingIdPrefix}-other`, label: otherResourcesLabel, rows: other },
+  ].filter((group) => group.rows.length > 0);
+  const isUnlabeled = team.length === 0 && nonTeamGroups.length <= 1;
 
   const renderRow = (row: PickerResource) => {
     const rowId = getResourceReferenceRowId(row.reference);
@@ -174,30 +198,32 @@ function ResourceSelectorDropdown({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="tw:w-72">
-          {team.length === 0 ? (
-            user.map(renderRow)
+          {isUnlabeled ? (
+            nonTeamGroups[0]?.rows.map(renderRow)
           ) : (
             <>
-              {/* The caption says once what the locks mean, rather than repeating it on every row. */}
-              <DropdownMenuGroup aria-labelledby={teamHeadingId} aria-describedby={teamCaptionId}>
-                <DropdownMenuLabel id={teamHeadingId}>{teamResourcesLabel}</DropdownMenuLabel>
-                <p
-                  id={teamCaptionId}
-                  className="tw:px-1.5 tw:pb-1 tw:text-xs tw:text-muted-foreground"
-                >
-                  {teamResourcesCaption}
-                </p>
-                {team.map(renderRow)}
-              </DropdownMenuGroup>
-              {user.length > 0 && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuGroup aria-labelledby={userHeadingId}>
-                    <DropdownMenuLabel id={userHeadingId}>{userResourcesLabel}</DropdownMenuLabel>
-                    {user.map(renderRow)}
-                  </DropdownMenuGroup>
-                </>
+              {team.length > 0 && (
+                // The caption says once what the locks mean, rather than repeating it on every row.
+                <DropdownMenuGroup aria-labelledby={teamHeadingId} aria-describedby={teamCaptionId}>
+                  <DropdownMenuLabel id={teamHeadingId}>{teamResourcesLabel}</DropdownMenuLabel>
+                  <p
+                    id={teamCaptionId}
+                    className="tw:px-1.5 tw:pb-1 tw:text-xs tw:text-muted-foreground"
+                  >
+                    {teamResourcesCaption}
+                  </p>
+                  {team.map(renderRow)}
+                </DropdownMenuGroup>
               )}
+              {nonTeamGroups.map((group, index) => (
+                <Fragment key={group.headingId}>
+                  {(team.length > 0 || index > 0) && <DropdownMenuSeparator />}
+                  <DropdownMenuGroup aria-labelledby={group.headingId}>
+                    <DropdownMenuLabel id={group.headingId}>{group.label}</DropdownMenuLabel>
+                    {group.rows.map(renderRow)}
+                  </DropdownMenuGroup>
+                </Fragment>
+              ))}
             </>
           )}
           {onShowResourcePicker && (
@@ -250,6 +276,12 @@ export type ResourceTextPanelProps = {
   readiness: ResourcePanelReadiness;
   /** All DBL resources — used to label the selector rows. */
   dblResources: DblResourceData[];
+  /**
+   * Whether the DBL catalog failed to load. The selector then lists the user's own and other
+   * installed resources together, since without the catalog the user's DBL references resolve as
+   * plain downloads.
+   */
+  isCatalogUnavailable: boolean;
   /** Re-runs the DBL resource catalog fetch. */
   onRetryCatalog: () => void;
   /** The reference the panel is displaying. */
@@ -335,6 +367,7 @@ export function ResourceTextPanel({
   selectedRef,
   readiness,
   dblResources,
+  isCatalogUnavailable,
   onRetryCatalog,
   scrRef,
   onScrRefChange,
@@ -809,21 +842,29 @@ export function ResourceTextPanel({
         filteredResources={filteredResources}
         selectedRef={selectedRef}
         dblResources={dblResources}
+        isCatalogUnavailable={isCatalogUnavailable}
         onSelectResource={onSelectResource}
         onShowResourcePicker={hasProject ? onShowResourcePicker : undefined}
         downloadResourcesLabel={localize(
           localizedStrings,
           '%webView_resourcePanel_downloadResources%',
         )}
-        teamResourcesLabel={localize(localizedStrings, '%webView_resourcePanel_teamResources%')}
-        userResourcesLabel={localize(localizedStrings, '%webView_resourcePanel_userResources%')}
+        teamResourcesLabel={localize(
+          localizedStrings,
+          RESOURCE_COLLECTION_OPTIONS_KEYS.teamResourcesHeader,
+        )}
+        userResourcesLabel={localize(
+          localizedStrings,
+          RESOURCE_COLLECTION_OPTIONS_KEYS.userResourcesHeader,
+        )}
+        otherResourcesLabel={localize(localizedStrings, '%webView_resourcePanel_otherResources%')}
         teamResourcesCaption={localize(
           localizedStrings,
           '%webView_resourcePanel_teamResourcesCaption%',
         )}
         teamResourceLockLabel={localize(
           localizedStrings,
-          '%webView_resourcePanel_teamResourceLock%',
+          RESOURCE_COLLECTION_OPTIONS_KEYS.teamSharedLock,
         )}
       />
 

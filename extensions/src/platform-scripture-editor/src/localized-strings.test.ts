@@ -255,13 +255,18 @@ describe('retired book-not-found-in-project string', () => {
 // is covered — so that an en-only addition, or a dropped `es` value, fails here without anyone
 // remembering to edit this file.
 //
-// A couple of keys legitimately appear in both frozen lists, because both panels render them. Each
-// list is right to declare what its own surface uses, so the de-duplication belongs here: without
-// it a failure on a shared key reports twice, under two different owners, and the file's
-// one-block-per-surface structure stops meaning anything. The model text block below owns them.
-const MODEL_TEXT_PANEL_KEY_SET = new Set<string>(MODEL_TEXT_PANEL_STRING_KEYS);
+// A few keys legitimately appear in more than one frozen list, because more than one surface
+// renders them: some are shared with the model text panel, and the team/user group headings and
+// team lock with View Options. Each list is right to declare what its own surface uses, so the
+// de-duplication belongs here: without it a failure on a shared key reports twice, under two
+// different owners, and the file's one-block-per-surface structure stops meaning anything. The
+// model text and View Options blocks below own them.
+const KEYS_OWNED_ELSEWHERE = new Set<string>([
+  ...MODEL_TEXT_PANEL_STRING_KEYS,
+  ...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
+]);
 const RESOURCE_PANEL_ONLY_STRING_KEYS = RESOURCE_PANEL_STRING_KEYS.filter(
-  (key) => !MODEL_TEXT_PANEL_KEY_SET.has(key),
+  (key) => !KEYS_OWNED_ELSEWHERE.has(key),
 );
 
 describe.each([...RESOURCE_PANEL_ONLY_STRING_KEYS])('resource panel label %s', (key) => {

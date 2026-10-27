@@ -943,6 +943,11 @@ describe('ResourceTextPanel — catalog failure keeps resolved rows visible', ()
     expect(setters.get(NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY)).toHaveBeenCalledWith([
       DOWNLOADED_ROW.projectId,
     ]);
+    // Without the catalog the user's own DBL resources resolve as downloads, so the selector must
+    // know not to split them off as other resources.
+    expect(capturedResourceTextPanelProps.mock.lastCall?.[0]).toEqual(
+      expect.objectContaining({ isCatalogUnavailable: true }),
+    );
   });
 
   it('still shows the catalog-error view when the catalog failed and nothing resolved locally', () => {

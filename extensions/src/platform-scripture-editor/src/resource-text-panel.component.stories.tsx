@@ -76,6 +76,7 @@ const meta: Meta<typeof ResourceTextPanel> = {
     selectedRef: WEB_ROW,
     readiness: 'configured',
     dblResources: [WEB],
+    isCatalogUnavailable: false,
     scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
     isUsjLoading: false,
     textDirection: 'ltr',
@@ -129,11 +130,11 @@ async function openSelector({ canvasElement }: { canvasElement: HTMLElement }) {
 
 /**
  * The selector when the team shared resources: theirs first, with a lock on each and a caption
- * saying only a project administrator can remove them, then the user's own, including a resource
- * downloaded but never added. The Arabic full name shows the lock staying on the panel's side of a
- * right-to-left name.
+ * saying only a project administrator can remove them, then the user's own, then a resource
+ * installed on this computer that neither list names. The Arabic full name shows the lock staying
+ * on the panel's side of a right-to-left name.
  */
-export const TeamAndUserResources: Story = {
+export const TeamUserAndOtherResources: Story = {
   tags: ['!autodocs'],
   args: {
     filteredResources: [
@@ -159,12 +160,39 @@ export const TeamResourcesOnly: Story = {
   play: openSelector,
 };
 
-/** The selector when the team shared nothing for this tab: one list, with no headings. */
+/** The selector when every resource is the user's own: one list, with no headings. */
 export const UserResourcesOnly: Story = {
+  tags: ['!autodocs'],
+  args: {
+    filteredResources: [WEB_ROW, row(KJV, 'user')],
+    dblResources: [WEB, KJV],
+  },
+  play: openSelector,
+};
+
+/**
+ * The selector when the team shared nothing for this tab but other resources are installed: the
+ * user's own and the others under their own headings, with no team heading or caption.
+ */
+export const UserAndOtherResources: Story = {
   tags: ['!autodocs'],
   args: {
     filteredResources: [WEB_ROW, row(KJV, 'user'), row(ASV, 'downloaded')],
     dblResources: [WEB, KJV, ASV],
+  },
+  play: openSelector,
+};
+
+/**
+ * The selector while the catalog is unavailable: the user's own and other installed resources are
+ * one list, since without the catalog the user's own resolve as plain downloads.
+ */
+export const CatalogUnavailable: Story = {
+  tags: ['!autodocs'],
+  args: {
+    filteredResources: [WEB_ROW, row(ASV, 'downloaded')],
+    dblResources: [WEB, ASV],
+    isCatalogUnavailable: true,
   },
   play: openSelector,
 };
