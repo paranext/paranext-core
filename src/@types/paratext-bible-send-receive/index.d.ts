@@ -263,7 +263,10 @@ declare module 'paratext-bible-send-receive' {
    * event
    */
   export type ProjectSelectionRequestEvent = {
-    /** Projects just ticked in the sync projects dialog's saved selection */
+    /**
+     * The projects `openSendReceive` ensured are ticked in the sync projects dialog's saved
+     * selection, whether newly ticked or already ticked
+     */
     projectIds: string[];
   };
 
@@ -324,9 +327,10 @@ declare module 'paratext-bible-send-receive' {
     /**
      * The latest completed result for each project synced through this extension's wrappers this
      * session. Syncs core runs directly (startup, project switch) are not included. Keyed by
-     * `normalizeProjectId(projectId)`; a fresh object is built on every `getSyncState` call.
+     * `normalizeProjectId(projectId)`; a fresh object is built on every `getSyncState` call. Absent
+     * from older Send/Receive extension builds.
      */
-    lastResultByProjectId: Record<string, ResultInfo>;
+    lastResultByProjectId?: Record<string, ResultInfo>;
     /**
      * Project ids of the sync(s) running RIGHT NOW. Empty exactly when `isSyncing` is `false`.
      * Overlapping syncs are unioned.
@@ -532,12 +536,12 @@ declare module 'papi-shared-types' {
     'paratextBibleSendReceive.openSyncStatus': () => Promise<string | undefined>;
 
     /**
-     * Opens the Send/Receive web view (or fronts the open one) with the active project ticked in
-     * the sync projects dialog
+     * Opens the Send/Receive web view (or brings the open one to the front) with the active project
+     * ticked in the sync projects dialog
      *
      * @param projectIdsToSelect Projects to tick instead of the active project. Unsupported
      *   projects are skipped
-     * @returns WebView id for the S/R WebView or `undefined` if not created
+     * @returns WebView id for the Send/Receive WebView or `undefined` if not created
      * @experimental This command is unstable and may change or disappear without notice
      */
     'paratextBibleSendReceive.openSendReceive': (
@@ -779,8 +783,8 @@ declare module 'papi-shared-types' {
 
   export interface NetworkEvents {
     /**
-     * Fired after `openSendReceive` ticks a project in the saved selection, so an open dialog can
-     * sort it to the top
+     * Fired after `openSendReceive` ensures projects are ticked in the saved selection (newly or
+     * already), so an open dialog can sort them to the top
      */
     'paratextBibleSendReceive.onDidRequestProjectSelection': ProjectSelectionRequestEvent;
     /** Emitted whenever a sync starts or ends */

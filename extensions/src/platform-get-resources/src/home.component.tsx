@@ -861,35 +861,60 @@ export function Home({
     );
   };
 
+  /**
+   * A menu item for an action a project's `unsupportedReason` can block. The reason is written
+   * inside the item, since a menu item cannot show a hover tooltip. The item is `aria-disabled`
+   * rather than Radix-`disabled` so keyboard navigation still reaches it and the reason is read as
+   * part of its accessible name; selecting it does nothing.
+   */
+  const blockableMenuItem = ({
+    label,
+    isBlocked,
+    reasonText,
+    isDisabled,
+    onActivate,
+  }: {
+    label: ReactNode;
+    isBlocked: boolean;
+    reasonText: string | undefined;
+    isDisabled?: boolean;
+    onActivate: () => void;
+  }) => (
+    <DropdownMenuItem
+      disabled={isDisabled}
+      aria-disabled={isBlocked || undefined}
+      className={cn({ 'tw:opacity-50': isBlocked })}
+      onSelect={(event) => {
+        if (isBlocked) {
+          event.preventDefault();
+          return;
+        }
+        onActivate();
+      }}
+    >
+      {/* Not muted: the blocked item is already drawn at half opacity, and muted text under that
+          is unreadable. `min-w-0` lets a long reason wrap instead of widening the menu. */}
+      <div className="tw:flex tw:min-w-0 tw:flex-col">
+        <span>{label}</span>
+        {reasonText && (
+          <span className="tw:text-xs tw:italic tw:whitespace-normal tw:text-foreground">
+            {reasonText}
+          </span>
+        )}
+      </div>
+    </DropdownMenuItem>
+  );
+
   const syncOrGetButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
     const isBlocked = !!project.unsupportedReason;
     const unsupportedReasonText = getUnsupportedReasonText(project);
-    // Blocked like Open: the reason is written inside the item (a menu item cannot show a hover
-    // tooltip), and the item stays `aria-disabled` rather than Radix-`disabled` so keyboard
-    // navigation still reaches it.
     if (isMenuItem)
-      return (
-        <DropdownMenuItem
-          aria-disabled={isBlocked || undefined}
-          className={cn({ 'tw:opacity-50': isBlocked })}
-          onSelect={(event) => {
-            if (isBlocked) {
-              event.preventDefault();
-              return;
-            }
-            handleSendReceiveProject(project.projectId);
-          }}
-        >
-          <div className="tw:flex tw:min-w-0 tw:flex-col">
-            <span>{getSendReceiveButtonContent(project)}</span>
-            {unsupportedReasonText && (
-              <span className="tw:text-xs tw:italic tw:whitespace-normal tw:text-foreground">
-                {unsupportedReasonText}
-              </span>
-            )}
-          </div>
-        </DropdownMenuItem>
-      );
+      return blockableMenuItem({
+        label: getSendReceiveButtonContent(project),
+        isBlocked,
+        reasonText: unsupportedReasonText,
+        onActivate: () => handleSendReceiveProject(project.projectId),
+      });
     return (
       <DisabledActionTooltip
         disabled={isBlocked && !!unsupportedReasonText}
@@ -912,35 +937,14 @@ export function Home({
     const isOpening = openingProjectIds.includes(project.projectId);
     const isOpenBlocked = !!project.unsupportedReason;
     const unsupportedReasonText = getUnsupportedReasonText(project);
-    // The reason is written inside the item, since a menu item cannot show a hover tooltip. The
-    // item is `aria-disabled` rather than Radix-`disabled` so keyboard navigation still reaches
-    // it and the reason is read as part of its accessible name; selecting it does nothing.
     if (isMenuItem)
-      return (
-        <DropdownMenuItem
-          disabled={isOpening}
-          aria-disabled={isOpenBlocked || undefined}
-          className={cn({ 'tw:opacity-50': isOpenBlocked })}
-          onSelect={(event) => {
-            if (isOpenBlocked) {
-              event.preventDefault();
-              return;
-            }
-            handleOpenProject(project);
-          }}
-        >
-          {/* Not muted: the blocked item is already drawn at half opacity, and muted text under
-              that is unreadable. `min-w-0` lets a long reason wrap instead of widening the menu. */}
-          <div className="tw:flex tw:min-w-0 tw:flex-col">
-            <span>{openText}</span>
-            {unsupportedReasonText && (
-              <span className="tw:text-xs tw:italic tw:whitespace-normal tw:text-foreground">
-                {unsupportedReasonText}
-              </span>
-            )}
-          </div>
-        </DropdownMenuItem>
-      );
+      return blockableMenuItem({
+        label: openText,
+        isBlocked: isOpenBlocked,
+        reasonText: unsupportedReasonText,
+        isDisabled: isOpening,
+        onActivate: () => handleOpenProject(project),
+      });
     // Without reason text the wrapper would be a nameless tab stop with an empty bubble; the button
     // stays disabled either way.
     return (

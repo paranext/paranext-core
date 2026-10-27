@@ -1490,15 +1490,34 @@ describe('Home unsupported projects', () => {
     await waitFor(() => expect(onSendReceiveProject).toHaveBeenCalledWith('openable1'));
   });
 
-  it('never shows a raw, unresolved localize key as tooltip text', () => {
+  it.each<[string, Parameters<typeof renderHomeList>[0]]>([
+    ['Open', { localProjectsInfo: [UNSUPPORTED_LOCAL_PROJECT] }],
+    [
+      'Sync',
+      {
+        localProjectsInfo: [UNSUPPORTED_LOCAL_PROJECT],
+        sharedProjectsInfo: {
+          [UNSUPPORTED_LOCAL_PROJECT.projectId]: {
+            id: UNSUPPORTED_LOCAL_PROJECT.projectId,
+            name: UNSUPPORTED_LOCAL_PROJECT.name,
+            fullName: UNSUPPORTED_LOCAL_PROJECT.fullName,
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-09-01T00:00:00.000Z',
+          },
+        },
+      },
+    ],
+    ['Get', { localProjectsInfo: [], sharedProjectsInfo: UNSUPPORTED_SERVER_ONLY_PROJECTS }],
+  ])('never shows a raw, unresolved localize key as tooltip text on %s', (buttonName, props) => {
     renderHomeList({
-      localProjectsInfo: [UNSUPPORTED_LOCAL_PROJECT],
+      ...props,
       // Simulates a key that has not resolved to a translation (or the loading seed): the map
       // still echoes the key back as its own "translation".
       localizedUnsupportedReasons: { [UNSUPPORTED_REASON_KEY]: UNSUPPORTED_REASON_KEY },
     });
 
-    expect(screen.getByRole('button', { name: 'Open' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: buttonName })).toBeDisabled();
     // With no text to show, there is no tooltip wrapper either: it would be a tab stop with no
     // name and an empty bubble.
     expect(screen.queryByRole('group')).toBeNull();
