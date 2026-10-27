@@ -1,18 +1,18 @@
 /**
  * End-to-end cover for the caret after a chapter-marker repair in a view that hides markers.
  *
- * In Simple mode's Formatted view, deleting a selection that runs from a later chapter's number
- * into its first verse removes the chapter marker; the save-boundary repair puts it back and sends
- * the caret to just past its number. That view cannot show a caret on a chapter number, so the
- * editor puts the caret at the start of the next paragraph instead and reports it there. The caret
- * restore must take that as placed: placing it again every 50 ms for its whole two-second retry
- * window would drag a caret the user had moved in the meantime back to the start of the paragraph,
- * and what they typed with it.
+ * In Simple mode's Formatted view, deleting a selected chapter number removes the chapter marker;
+ * the save-boundary repair puts it back and sends the caret to just past its number. That view
+ * cannot show a caret on a chapter number, so the editor puts the caret at the start of the next
+ * paragraph instead and reports it there. The caret restore must take that as placed: placing it
+ * again every 50 ms for its whole two-second retry window would drag a caret the user had moved in
+ * the meantime back to the start of the paragraph, and what they typed with it.
  *
  * A keyboard Backspace at the start of the chapter's first paragraph cannot do this here: in
  * Simple's view the structure guard arms the verse marker instead and never reaches the chapter
- * number. The selection is the one gesture that reaches it, and the guard still asks for a second
- * Delete.
+ * number. A selection of the number alone is the gesture that reaches it, and it leaves verse 1
+ * intact, which is what makes the repaired caret cross a line break rather than land where it was
+ * placed.
  *
  * ONE test() per spec file on purpose (see chapter-marker-repair.spec.ts).
  *
@@ -145,39 +145,22 @@ test.describe('scripture editor chapter-marker repair in the Formatted view', ()
         }),
     );
 
-    await test.step('deleting a selection from the chapter number into verse 1 removes the marker', async () => {
-      // The click puts the focus in the editor, so the keys below reach it.
+    await test.step('deleting the selected chapter number removes its marker', async () => {
+      // The click puts the focus in the editor, so the key below reaches it.
       await editorInput.getByText('Naomi had a relative').first().click();
-      // Set programmatically, as the selection a mouse drag from the chapter number to three
-      // characters into verse 1 leaves; the Delete presses below go through real key input.
+      // Set programmatically, as the selection a mouse drag over the chapter number leaves; the
+      // Delete goes through real key input.
       const selectedText = await editorEvalFrame.evaluate(() => {
         const chapter = document.querySelector('.editor-input [data-marker="c"]');
-        const verse1Text = Array.from(document.querySelectorAll('.editor-input *'))
-          .flatMap((element) => Array.from(element.childNodes))
-          .find(
-            (node) =>
-              node.nodeType === Node.TEXT_NODE &&
-              (node.textContent ?? '').startsWith('Naomi had a relative'),
-          );
-        if (!chapter?.parentElement || !verse1Text) return undefined;
+        if (!chapter) return undefined;
         const range = document.createRange();
-        range.setStart(
-          chapter.parentElement,
-          Array.from(chapter.parentElement.childNodes).indexOf(chapter),
-        );
-        range.setEnd(verse1Text, 3);
+        range.selectNode(chapter);
         const selection = document.getSelection();
         selection?.removeAllRanges();
         selection?.addRange(range);
         return range.toString();
       });
-      // The chapter number first, then verse 1's marker and its first characters.
-      expect(selectedText, 'the selection runs from the chapter number into verse 1').toMatch(
-        /^2.*Nao$/s,
-      );
-      // The structure guard's two-step delete: the first Delete arms, the second removes.
-      await mainPage.keyboard.press('Delete');
-      await expect(editorInput).toHaveClass(/\bverse-delete-armed\b/, { timeout: 10_000 });
+      expect(selectedText, 'the chapter number alone is selected').toBe('2');
       await mainPage.keyboard.press('Delete');
       await expect
         .poll(() => recordedToasts(mainPage), { timeout: 20_000 })
