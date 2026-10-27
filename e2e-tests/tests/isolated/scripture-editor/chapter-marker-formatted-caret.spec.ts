@@ -1,12 +1,18 @@
 /**
  * End-to-end cover for the caret after a chapter-marker repair in a view that hides markers.
  *
- * In the Formatted view, Backspace at the very start of a later chapter's first paragraph removes
- * the chapter marker; the save-boundary repair puts it back and sends the caret to just past its
- * number. That view cannot show a caret on a chapter number, so the editor puts the caret at the
- * start of the next paragraph instead and reports it there. The caret restore must take that as
- * placed: placing it again every 50 ms for its whole two-second retry window would drag a caret the
- * user had moved in the meantime back to the start of the paragraph, and what they typed with it.
+ * In Simple mode's Formatted view, deleting a selection that runs from a later chapter's number
+ * into its first verse removes the chapter marker; the save-boundary repair puts it back and sends
+ * the caret to just past its number. That view cannot show a caret on a chapter number, so the
+ * editor puts the caret at the start of the next paragraph instead and reports it there. The caret
+ * restore must take that as placed: placing it again every 50 ms for its whole two-second retry
+ * window would drag a caret the user had moved in the meantime back to the start of the paragraph,
+ * and what they typed with it.
+ *
+ * A keyboard Backspace at the start of the chapter's first paragraph cannot do this here: in
+ * Simple's view the structure guard arms the verse marker instead and never reaches the chapter
+ * number. The selection is the one gesture that reaches it, and the guard still asks for a second
+ * Delete.
  *
  * ONE test() per spec file on purpose (see chapter-marker-repair.spec.ts).
  *
@@ -14,27 +20,28 @@
  * `npm run test:e2e:isolated scripture-editor/chapter-marker-formatted-caret.spec.ts`.
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
-import { sendPapiRequestOnce, LAUNCH_PHASE_TIMEOUT_MS } from '../../../fixtures/helpers';
+import {
+  sendPapiRequestOnce,
+  LAUNCH_PHASE_TIMEOUT_MS,
+  waitForAppReady,
+} from '../../../fixtures/helpers';
 import {
   findScriptureEditorFrame,
   makeSampleProjectEditable,
   navigateToolbarBcv,
   openEditableScriptureEditorForProject,
   SAMPLE_WEB_PROJECT_ID,
-  waitForHomeTab,
+  unlockSampleProjectStructure,
 } from '../../../fixtures/scripture-editor-helpers';
-import {
-  findVersePath,
-  getChapterUsj,
-  sendToEditorController,
-  waitForEditorControllerMethod,
-} from '../../../fixtures/settled-positions-helpers';
 import { installToastProbe, recordedToasts } from '../../../fixtures/toast-recorder';
 
-// Power mode, where the view cycle reaches the editable Formatted view. DEV_NOISY=false keeps the
-// normal Home layout (see standard-default-power-mode.spec.ts).
+// Simple mode: its one view is the editable Formatted view. Power mode's formatted view is the
+// read-only Preview, where the edit below could not happen. DEV_NOISY=false: the noisy dev test
+// layout replaces the normal layouts (see scroll-group-sync.spec.ts).
 test.use({
-  interfaceMode: 'power',
+  interfaceMode: 'simple',
+  // Past first run, so Simple mode starts in the app rather than the setup wizard.
+  seedSettings: { 'platform.firstRunComplete': true },
   electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
 });
 
@@ -54,8 +61,13 @@ test.describe('scripture editor chapter-marker repair in the Formatted view', ()
     // budget.
     test.slow();
 
-    await waitForHomeTab(mainPage);
+    await waitForAppReady(mainPage);
+    // No `waitForHomeTab` here: simple mode loads the static simpleLayout, which has NO Home tab
+    // (simple-layout.data.ts). The open helper below carries its own app-readiness gates.
     await makeSampleProjectEditable();
+    // Simple mode locks paragraph structure by default and then refuses the delete below outright;
+    // unlocked, the structure guard still asks for a second press.
+    await unlockSampleProjectStructure();
 
     const pdpId = await sendPapiRequestOnce<string>(
       'object:platform.Paratext-pdpf.getProjectDataProviderId',
@@ -76,17 +88,7 @@ test.describe('scripture editor chapter-marker repair in the Formatted view', ()
     await editorFrame.locator('.editor-container').waitFor({ timeout: 60_000 });
     const editorInput = editorFrame.locator('.editor-input').first();
 
-    // Power mode opens in Standard; the cycle goes Standard -> Markers -> Formatted.
-    for (let step = 0; step < 2; step += 1) {
-      // Sequential on purpose: each step advances the view the previous one left.
-      // eslint-disable-next-line no-await-in-loop
-      await sendPapiRequestOnce(
-        'command:platformScriptureEditor.changeView',
-        [editorId],
-        WEBSOCKET_PORT,
-        PDP_REQUEST_TIMEOUT_MS,
-      );
-    }
+    // The view every step below depends on: Simple mode's formatted view (`marker-hidden`).
     await expect(editorFrame.locator('.editor-input.marker-hidden').first()).toBeVisible({
       timeout: 30_000,
     });
@@ -96,10 +98,6 @@ test.describe('scripture editor chapter-marker repair in the Formatted view', ()
     await expect(editorInput).toContainText('Naomi had a relative of her husband', {
       timeout: 60_000,
     });
-
-    const versePath = findVersePath((await getChapterUsj(RUTH_2)).content ?? [], '1');
-    if (!versePath) throw new Error("Ruth 2's USJ has no verse 1");
-    await waitForEditorControllerMethod(editorId, 'selectRange');
 
     const editorEvalFrame = await findScriptureEditorFrame(mainPage);
     // Measured in the page, where the timing is exact: a Playwright click can take longer than the
@@ -147,19 +145,36 @@ test.describe('scripture editor chapter-marker repair in the Formatted view', ()
         }),
     );
 
-    await test.step('Backspace at the start of the chapter removes its marker', async () => {
+    await test.step('deleting a selection from the chapter number into verse 1 removes the marker', async () => {
       // The click puts the focus in the editor, so the keys below reach it.
       await editorInput.getByText('Naomi had a relative').first().click();
-      // In front of verse 1: the start of the chapter's first paragraph in this view.
-      const inFrontOfVerse1 = {
-        verseRef: RUTH_2,
-        granularity: 'chapter',
-        documentLocation: { jsonPath: versePath },
-      };
-      await sendToEditorController(editorId, 'selectRange', [
-        { start: inFrontOfVerse1, end: inFrontOfVerse1 },
-      ]);
-      await mainPage.keyboard.press('Backspace');
+      // From the chapter number to three characters into verse 1, as a mouse drag would select it.
+      const selected = await editorEvalFrame.evaluate(() => {
+        const chapter = document.querySelector('.editor-input [data-marker="c"]');
+        const verse1Text = Array.from(document.querySelectorAll('.editor-input *'))
+          .flatMap((element) => Array.from(element.childNodes))
+          .find(
+            (node) =>
+              node.nodeType === Node.TEXT_NODE &&
+              (node.textContent ?? '').startsWith('Naomi had a relative'),
+          );
+        if (!chapter?.parentElement || !verse1Text) return false;
+        const range = document.createRange();
+        range.setStart(
+          chapter.parentElement,
+          Array.from(chapter.parentElement.childNodes).indexOf(chapter),
+        );
+        range.setEnd(verse1Text, 3);
+        const selection = document.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        return true;
+      });
+      expect(selected, 'the chapter number and verse 1 are in the DOM').toBe(true);
+      // The structure guard's two-step delete: the first Delete arms, the second removes.
+      await mainPage.keyboard.press('Delete');
+      await expect(editorInput).toHaveClass(/\bverse-delete-armed\b/, { timeout: 10_000 });
+      await mainPage.keyboard.press('Delete');
       await expect
         .poll(() => recordedToasts(mainPage), { timeout: 20_000 })
         .toEqual(expect.arrayContaining([expect.stringContaining(CORRECTION_MESSAGE)]));
