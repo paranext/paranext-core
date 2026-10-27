@@ -57,7 +57,7 @@ import {
   isChapterBlank,
   buildChapterScaffoldOps,
   canAddChapterNumber,
-  isAddChapterNumberProtected,
+  shouldProtectAddChapterNumber,
   insertChapterScaffold,
   resolveAddChapterNumberClick,
   isMissingBookError,
@@ -4508,42 +4508,66 @@ describe('insertChapterScaffold', () => {
   }
 
   it('inserts nothing while the editor is not mounted', () => {
-    expect(insertChapterScaffold(undefined, 2, 10)).toBe(false);
+    expect(insertChapterScaffold(undefined, 2, 10)).toEqual({ status: 'no-editor' });
   });
 
   it('has the editor place chapter 1, with its verses, after the front matter', () => {
     const editor = makeEditor();
 
-    expect(insertChapterScaffold(editor, 1, 17)).toBe(true);
+    expect(insertChapterScaffold(editor, 1, 17)).toEqual({ status: 'inserted' });
     expect(editor.insertFirstChapter).toHaveBeenCalledWith(17);
     expect(editor.applyUpdate).not.toHaveBeenCalled();
   });
 
-  it('reports chapter 1 as not inserted when the editor refuses it', () => {
-    expect(insertChapterScaffold(makeEditor(false), 1, 17)).toBe(false);
+  it('reports chapter 1 as refused when the editor refuses it', () => {
+    expect(insertChapterScaffold(makeEditor(false), 1, 17)).toEqual({ status: 'refused' });
+  });
+
+  it('reports what a throwing editor threw instead of letting it escape', () => {
+    const editor = makeEditor();
+    editor.insertFirstChapter.mockImplementation(() => {
+      throw new Error('Cannot insert a chapter in readonly mode');
+    });
+
+    expect(insertChapterScaffold(editor, 1, 17)).toEqual({
+      status: 'failed',
+      error: 'Cannot insert a chapter in readonly mode',
+    });
   });
 
   it('inserts a later chapter as a local scaffold update at the start of its document', () => {
     const editor = makeEditor();
 
-    expect(insertChapterScaffold(editor, 2, 10)).toBe(true);
+    expect(insertChapterScaffold(editor, 2, 10)).toEqual({ status: 'inserted' });
     expect(editor.applyUpdate).toHaveBeenCalledWith(buildChapterScaffoldOps(2, 10), 'local');
     expect(editor.insertFirstChapter).not.toHaveBeenCalled();
   });
+
+  it('reports a later chapter as failed when the scaffold update throws', () => {
+    const editor = makeEditor();
+    editor.applyUpdate.mockImplementation(() => {
+      throw new Error('apply failed');
+    });
+
+    expect(insertChapterScaffold(editor, 2, 10)).toEqual({
+      status: 'failed',
+      error: 'apply failed',
+    });
+  });
 });
 
-describe('isAddChapterNumberProtected', () => {
+describe('shouldProtectAddChapterNumber', () => {
   it('keeps a later chapter from being added while structure is locked', () => {
-    expect(isAddChapterNumberProtected(true, 2)).toBe(true);
+    expect(shouldProtectAddChapterNumber(true, 2)).toBe(true);
   });
 
   it('lets chapter 1 be added while structure is locked, so an empty book can be started', () => {
-    expect(isAddChapterNumberProtected(true, 1)).toBe(false);
+    expect(shouldProtectAddChapterNumber(true, 1)).toBe(false);
   });
 
   it('never protects while structure is unlocked', () => {
-    expect(isAddChapterNumberProtected(false, 1)).toBe(false);
-    expect(isAddChapterNumberProtected(false, 2)).toBe(false);
+    expect(shouldProtectAddChapterNumber(false, 1)).toBe(false);
+    expect(shouldProtectAddChapterNumber(false, 2)).toBe(false);
   });
 });
 

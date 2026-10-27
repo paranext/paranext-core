@@ -3082,7 +3082,7 @@ export function canAddChapterNumber(lastVerse: number): boolean {
  * @param chapterNum The blank chapter the button would add.
  * @returns `true` if the button must stay disabled.
  */
-export function isAddChapterNumberProtected(
+export function shouldProtectAddChapterNumber(
   isStructureProtected: boolean,
   chapterNum: number,
 ): boolean {
@@ -3119,26 +3119,41 @@ export function resolveAddChapterNumberClick(
 }
 
 /**
+ * Outcome of {@link insertChapterScaffold}. Anything but `'inserted'` changed nothing: there was no
+ * editor, the editor refused chapter 1 because its document already has a chapter, or the insert
+ * threw, and `error` says why.
+ */
+export type ChapterScaffoldInsertOutcome =
+  | { status: 'inserted' | 'no-editor' | 'refused' }
+  | { status: 'failed'; error: string };
+
+/**
  * Inserts a blank chapter's `\c` marker and its empty verses. Chapter 1's document also holds the
  * book's `\id` line and front matter, so only the editor can place `\c 1` after them; a later
  * chapter's scaffold goes at the start of its document.
  *
+ * Catches what the editor throws (`insertFirstChapter` does for a read-only editor or one with no
+ * scripture reference) and reports it as `'failed'`: an error thrown in a web view's click handler
+ * never reaches the app's log.
+ *
  * @param editor The editor to insert into, or nothing while it is not mounted.
  * @param chapterNum The blank chapter to add.
  * @param lastVerse The chapter's last verse number, from `getEndVerse(book, chapterNum)`.
- * @returns `false` if nothing was inserted: there is no editor, or the editor refused chapter 1
- *   because its document already has a chapter.
- * @throws When `insertFirstChapter` does: the editor is read-only or has no scripture reference.
  */
 export function insertChapterScaffold(
   editor: Pick<EditorRef, 'applyUpdate' | 'insertFirstChapter'> | null | undefined,
   chapterNum: number,
   lastVerse: number,
-): boolean {
-  if (!editor) return false;
-  if (chapterNum === 1) return editor.insertFirstChapter(lastVerse);
-  editor.applyUpdate(buildChapterScaffoldOps(chapterNum, lastVerse), 'local');
-  return true;
+): ChapterScaffoldInsertOutcome {
+  if (!editor) return { status: 'no-editor' };
+  try {
+    if (chapterNum === 1)
+      return { status: editor.insertFirstChapter(lastVerse) ? 'inserted' : 'refused' };
+    editor.applyUpdate(buildChapterScaffoldOps(chapterNum, lastVerse), 'local');
+    return { status: 'inserted' };
+  } catch (error) {
+    return { status: 'failed', error: getErrorMessage(error) };
+  }
 }
 
 // #endregion Chapter Scaffold Helpers

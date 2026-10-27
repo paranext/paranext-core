@@ -9,7 +9,7 @@ import { expect, type Locator, type Page } from '@playwright/test';
  */
 
 /** The open marker palette. */
-export function markerPalette(mainPage: Page): Locator {
+export function getMarkerPalette(mainPage: Page): Locator {
   return mainPage.locator('[data-overlay-command-palette]').first();
 }
 
@@ -19,7 +19,7 @@ export function markerPalette(mainPage: Page): Locator {
  * @returns The open palette.
  */
 export async function openMarkerPalette(mainPage: Page): Promise<Locator> {
-  const palette = markerPalette(mainPage);
+  const palette = getMarkerPalette(mainPage);
   await mainPage.keyboard.press('\\');
   await expect(palette).toBeAttached({ timeout: 15_000 });
   return palette;
@@ -32,5 +32,5 @@ export async function openMarkerPalette(mainPage: Page): Promise<Locator> {
 export async function pickFromMarkerPalette(mainPage: Page, marker: string): Promise<void> {
   await mainPage.keyboard.type(marker);
   await mainPage.keyboard.press('Enter');
-  await expect(markerPalette(mainPage)).not.toBeAttached({ timeout: 10_000 });
+  await expect(getMarkerPalette(mainPage)).not.toBeAttached({ timeout: 10_000 });
 }

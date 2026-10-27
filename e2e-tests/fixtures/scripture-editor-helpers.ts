@@ -285,6 +285,19 @@ export interface SampleChapterRef {
   verseNum: number;
 }
 
+/** Reads one chapter's USFM from a data provider whose id the caller already resolved. */
+function requestSampleChapterUsfm(
+  pdpId: string,
+  chapter: SampleChapterRef,
+): Promise<string | undefined> {
+  return sendPapiRequestOnce<string | undefined>(
+    `object:${pdpId}.getChapterUSFM`,
+    [chapter],
+    WEBSOCKET_PORT,
+    COMMAND_TIMEOUT_MS,
+  );
+}
+
 /**
  * Rewrites one chapter of the sample WEB project through its data provider — read the chapter's
  * USFM, pass it through `transform`, write the result back — so a spec can put markers the sample
@@ -301,7 +314,7 @@ export async function rewriteSampleProjectChapterUsfm(
 ): Promise<void> {
   requireIsolatedProjectRoot();
   const pdpId = await getSampleProjectDataProviderId();
-  const usfm = await getSampleProjectChapterUsfm(chapter);
+  const usfm = await requestSampleChapterUsfm(pdpId, chapter);
   if (!usfm)
     throw new Error(`Sample project has no USFM for ${chapter.book} ${chapter.chapterNum}`);
   await sendPapiRequestOnce(
@@ -316,13 +329,7 @@ export async function rewriteSampleProjectChapterUsfm(
 export async function getSampleProjectChapterUsfm(
   chapter: SampleChapterRef,
 ): Promise<string | undefined> {
-  const pdpId = await getSampleProjectDataProviderId();
-  return sendPapiRequestOnce<string | undefined>(
-    `object:${pdpId}.getChapterUSFM`,
-    [chapter],
-    WEBSOCKET_PORT,
-    COMMAND_TIMEOUT_MS,
-  );
+  return requestSampleChapterUsfm(await getSampleProjectDataProviderId(), chapter);
 }
 
 /**

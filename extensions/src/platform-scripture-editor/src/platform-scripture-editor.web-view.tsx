@@ -218,7 +218,6 @@ import {
   getViewTypeToSave,
   hasDisplayableParagraphMarkerTitle,
   insertChapterScaffold,
-  isAddChapterNumberProtected,
   isChapterBlank,
   isMissingBookError,
   isMissingBookInfoOnScreen,
@@ -242,6 +241,7 @@ import {
   readCommentRangeText,
   hasPendingCommentTextChanged,
   shouldEndPaneNoteEditOnRowSelect,
+  shouldProtectAddChapterNumber,
   shouldPublishPaneDocument,
   showCommentThreadForInterfaceMode,
   UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY,
@@ -289,7 +289,7 @@ import {
 import {
   commitVersionHistorySnapshot,
   EDIT_ACTION_BLOCKED_KEY,
-  notifyEditMenuActionBlocked,
+  notifyEditActionBlocked,
   notifyStructureProtected as sendStructureProtectedNotification,
   notifySyncEditBlocked as sendSyncEditBlockedNotification,
   SYNC_EDIT_BLOCKED_KEY,
@@ -2153,7 +2153,7 @@ function PlatformScriptureEditor({
           isSyncBlocked,
         },
         {
-          notifyActionBlocked: () => notifyEditMenuActionBlocked(localizedStrings),
+          notifyActionBlocked: () => notifyEditActionBlocked(localizedStrings),
           notifySyncEditBlocked,
           restoreSelectionIfLost: (editor) =>
             restoreSelectionIfLost(editor, lastFocusOutSelectionRef.current),
@@ -3420,7 +3420,7 @@ function PlatformScriptureEditor({
     [scrRef.book, scrRef.chapterNum, getEndVerse],
   );
 
-  const isAddChapterProtected = isAddChapterNumberProtected(
+  const isAddChapterNumberProtected = shouldProtectAddChapterNumber(
     isStructureProtected,
     scrRef.chapterNum,
   );
@@ -3447,12 +3447,12 @@ function PlatformScriptureEditor({
   }, [scrRef.book, scrRef.chapterNum]);
 
   const handleAddChapterNumber = useCallback(() => {
-    // Defense-in-depth: unreachable while the button is disabled (`disabled={isStructureProtected}`
-    // in `EmptyChapterView`), mirroring the same second-layer check already used for the paragraph
-    // and inline marker menus in this file — a structural insert like this one should never fire
-    // solely because a disabled-state prop drifted out of sync with the action in some future
-    // refactor.
-    if (isAddChapterProtected) {
+    // Defense-in-depth: unreachable while the button is disabled (`EmptyChapterView` disables it
+    // from the same `isAddChapterNumberProtected`), mirroring the same second-layer check already
+    // used for the paragraph and inline marker menus in this file — a structural insert like this
+    // one should never fire solely because a disabled-state prop drifted out of sync with the
+    // action in some future refactor.
+    if (isAddChapterNumberProtected) {
       notifyStructureProtected();
       return;
     }
@@ -3475,15 +3475,24 @@ function PlatformScriptureEditor({
     // not. The editor is staged from the revision `dev-packages.json` pins, so it can change with
     // no version diff here at all, and no test here or upstream covers undo for this path —
     // re-check it by hand whenever that revision moves.
-    if (!insertChapterScaffold(editorRef.current, scrRef.chapterNum, lastVerse)) {
+    const insert = insertChapterScaffold(editorRef.current, scrRef.chapterNum, lastVerse);
+    if (insert.status !== 'inserted') {
       logger.warn(
-        `handleAddChapterNumber: no chapter added to ${scrRef.book} ${scrRef.chapterNum}; the editor is not mounted or refused the insert`,
+        `handleAddChapterNumber: no chapter added to ${scrRef.book} ${scrRef.chapterNum} (${insert.status === 'failed' ? insert.error : insert.status})`,
       );
+      notifyEditActionBlocked(localizedStrings);
       return;
     }
-    // Set only after the insert, so a refused or throwing insert never leaves the button stuck.
+    // Set only after the insert, so a refused or failed insert never leaves the button stuck.
     pendingScaffoldInsertRef.current = true;
-  }, [scrRef.book, scrRef.chapterNum, lastVerse, isAddChapterProtected, notifyStructureProtected]);
+  }, [
+    scrRef.book,
+    scrRef.chapterNum,
+    lastVerse,
+    isAddChapterNumberProtected,
+    notifyStructureProtected,
+    localizedStrings,
+  ]);
 
   // `Editorial` stays mounted but visually hidden while the chapter is blank, so any focus/cursor
   // or scroll effect Lexical/the "scroll the selected verse" effect above would normally run for
@@ -5360,7 +5369,7 @@ function PlatformScriptureEditor({
         {showEmptyChapterView && (
           <EmptyChapterView
             localizedStrings={localizedStrings}
-            isStructureProtected={isAddChapterProtected}
+            isAddChapterNumberProtected={isAddChapterNumberProtected}
             isResource={isResource}
             showButton={
               !isReadOnlyEffective &&
