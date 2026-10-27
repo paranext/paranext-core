@@ -110,6 +110,13 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
     'selectedResourceId',
     undefined,
   );
+  // The resource the user last chose themselves, so a selection the panel fell back to can be told
+  // apart from one the user picked. See `resolveResourceSelection` for why a fallback must not
+  // outlive a configured resource arriving. Written also by `buildResourceTextPanelState`.
+  const [userPickedResourceId, setUserPickedResourceId] = useWebViewState<string | undefined>(
+    'userPickedResourceId',
+    undefined,
+  );
 
   // #endregion
 
@@ -252,9 +259,14 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   // the resource they abandoned, with nothing indicating their own earlier pick won.
   const [pendingResourceId, setPendingResourceId] = useState<string | undefined>(undefined);
 
-  // Committing a pick, holding still while one is in flight, migrating a legacy bare id and
-  // falling back when the selection leaves the list are one decision, not four effects that can
-  // disagree across renders. `resolveResourceSelection` makes it, and is tested directly.
+  // The downloaded fallback shown last. Kept in React state rather than web view state because a
+  // fallback is never persisted; holding it keeps a newly installed resource from taking its place.
+  const [heldFallbackRowId, setHeldFallbackRowId] = useState<string | undefined>(undefined);
+
+  // Committing a pick, holding still while one is in flight, migrating a legacy bare id, falling
+  // back when the selection leaves the list, and replacing a downloaded fallback once something
+  // configured is displayable are one decision, not separate effects that can disagree across
+  // renders. `resolveResourceSelection` makes it, and is tested directly.
   //
   // Resolved HERE and handed to the panel as `selectedRef`, rather than resolved by the panel and
   // reported back up: `resourceProjectId` below keys the `ChapterUSJ` subscription that produces
@@ -266,11 +278,20 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   // and never picks one by itself: there is no list of the user's texts to pick from, so a fallback
   // would put an arbitrary download on screen instead of "open a project".
   const selection: ResourceSelectionResolution = projectId
-    ? resolveResourceSelection(filteredResources, selectedResourceId, pendingResourceId)
+    ? resolveResourceSelection(filteredResources, {
+        selectedResourceId,
+        userPickedResourceId,
+        pendingResourceId,
+        heldFallbackRowId,
+        isListComplete:
+          effectiveResourcesState.status === 'ready' && !effectiveResourcesState.isUserLayerMissing,
+      })
     : {
         nextSelectedResourceId: undefined,
+        nextUserPickedResourceId: undefined,
         shouldClearPending: false,
         selectedRow: findSelectedRow(filteredResources, selectedResourceId),
+        shownFallbackRowId: undefined,
       };
   // Behind the catalog-error view nothing is on screen, so the first-row fallback must not keep a
   // chapter subscription open or become what Ctrl+F searches.
@@ -284,11 +305,36 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   const nextSelectedResourceId = isFallbackWhileCatalogFailed
     ? undefined
     : selection.nextSelectedResourceId;
+  const { nextUserPickedResourceId, shownFallbackRowId } = selection;
 
+  // The user's pick is written before the selection, so no render sees the new selection without
+  // it and takes it for a fallback (see `handleSelectResourceFromList`).
   useEffect(() => {
+    if (nextUserPickedResourceId !== undefined) setUserPickedResourceId(nextUserPickedResourceId);
     if (nextSelectedResourceId !== undefined) setSelectedResourceId(nextSelectedResourceId);
     if (selection.shouldClearPending) setPendingResourceId(undefined);
-  }, [nextSelectedResourceId, selection.shouldClearPending, setSelectedResourceId]);
+  }, [
+    nextSelectedResourceId,
+    nextUserPickedResourceId,
+    selection.shouldClearPending,
+    setSelectedResourceId,
+    setUserPickedResourceId,
+  ]);
+
+  useEffect(() => {
+    if (shownFallbackRowId !== undefined) setHeldFallbackRowId(shownFallbackRowId);
+  }, [shownFallbackRowId]);
+
+  // The pick is written before the selection so no render sees the user's pick taken for a
+  // fallback. Each web view state key comes back as its own web view update, in the order it was
+  // written, so the two setters are not applied together; keep the pick first.
+  const handleSelectResourceFromList = useCallback(
+    (resourceId: string) => {
+      setUserPickedResourceId(resourceId);
+      setSelectedResourceId(resourceId);
+    },
+    [setUserPickedResourceId, setSelectedResourceId],
+  );
 
   const [isSelecting, setIsSelecting] = useState(false);
 
@@ -549,7 +595,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
       onRetryCatalog={refetchCatalog}
       scrRef={scrRef}
       onScrRefChange={setScrRef}
-      onSelectResource={setSelectedResourceId}
+      onSelectResource={handleSelectResourceFromList}
       usjPossiblyError={usjPossiblyError}
       isUsjLoading={isUsjLoading}
       textDirection={textDirection}
