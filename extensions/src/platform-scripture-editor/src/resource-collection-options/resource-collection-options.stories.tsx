@@ -49,7 +49,8 @@ const USER_ROWS: ViewOptionsTextEntry[] = [
     isAdminLocked: false,
     isUserRemovable: true,
   },
-  // An admin-owned resource the user opted out of — sits in the bottom section but is NOT removable.
+  // A resource downloaded on this computer that neither list names — in the bottom section but NOT
+  // removable.
   {
     reference: dblRef('kjv', 'KJV'),
     checked: false,
@@ -80,6 +81,7 @@ const LONG_NAME_ROWS: ViewOptionsTextEntry[] = [
 function Harness({
   initialTop,
   initialBottom,
+  isGrouped,
   isChapterEnabled = false,
   installingResourceNames,
   disabled,
@@ -87,6 +89,7 @@ function Harness({
 }: {
   initialTop: ViewOptionsTextEntry[];
   initialBottom: ViewOptionsTextEntry[];
+  isGrouped?: boolean;
   isChapterEnabled?: boolean;
   installingResourceNames?: string[];
   disabled?: boolean;
@@ -111,6 +114,7 @@ function Harness({
         isChapterEnabled={isChapterEnabled}
         top={top}
         bottom={bottom}
+        isGrouped={isGrouped}
         installingResourceNames={installingResourceNames}
         disabled={disabled}
         disabledMessage={disabledMessage}
@@ -120,13 +124,35 @@ function Harness({
         localizedStrings={localizedStrings}
       />
     ),
-    [viewMode, top, bottom, isChapterEnabled, installingResourceNames, disabled, disabledMessage],
+    [
+      viewMode,
+      top,
+      bottom,
+      isGrouped,
+      isChapterEnabled,
+      installingResourceNames,
+      disabled,
+      disabledMessage,
+    ],
   );
 }
 
-/** Regular user (Saroj): admin-shared texts on top (no ✕), the user's own additions below (hover ✕). */
+/**
+ * Regular user (Saroj): admin-shared texts on top under "Team resources" (no ✕), the user's own
+ * additions below under "User resources" (hover ✕).
+ */
 export const UserView: Story = {
   render: () => <Harness initialTop={ADMIN_ROWS} initialBottom={USER_ROWS} />,
+};
+
+/** Power mode: the same texts as one list, with no headings and no locks. Team rows still have no ✕. */
+export const PowerMode: Story = {
+  render: () => <Harness initialTop={ADMIN_ROWS} initialBottom={USER_ROWS} isGrouped={false} />,
+};
+
+/** A project with no team layout: the user's own texts as one list, with no group headings. */
+export const NoTeamLayout: Story = {
+  render: () => <Harness initialTop={[]} initialBottom={USER_ROWS} />,
 };
 
 /** No personal additions yet — the bottom section is empty (blank, per UX). */

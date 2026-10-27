@@ -247,3 +247,50 @@ export function resolveResourceSelection(
     shownFallbackRowId: shownFallbackRowIdOf(fallbackRow),
   };
 }
+
+/**
+ * Whether a picker row is one the project administrator put in the team layout.
+ *
+ * Decided by `source === 'admin'` alone. While the DBL catalog is unavailable a team `dblResource`
+ * reference cannot be resolved (see `buildPickerResources`), so an installed team resource comes
+ * back as a `downloaded` row and does not count.
+ *
+ * @param row The row to test
+ * @returns Whether the row is the team's
+ */
+export function isTeamPickerResource(row: PickerResource): boolean {
+  return row.source === 'admin';
+}
+
+/**
+ * Split picker rows into the team's (`source === 'admin'`), the user's own (`'user'`), and other
+ * resources installed on this computer that neither list names (`'downloaded'`), often downloaded
+ * for another project. Each group keeps the order its rows had in `rows`.
+ *
+ * While the catalog is unavailable, `other` is empty and its rows go in `user`, in their original
+ * order: without the catalog every DBL reference resolves as a plain download (see
+ * `buildPickerResources`), so a separate group would make the user's own resources look removed. So
+ * `user` can then hold `downloaded` rows; anything deciding what the user may remove must check
+ * each row's `source`, not its group.
+ *
+ * @param rows The rows to split
+ * @param options.isCatalogUnavailable Whether the DBL catalog failed to load
+ * @returns The team's rows, the user's rows and the other rows
+ */
+export function splitPickerResourcesBySource(
+  rows: PickerResource[],
+  { isCatalogUnavailable }: { isCatalogUnavailable: boolean },
+): {
+  team: PickerResource[];
+  user: PickerResource[];
+  other: PickerResource[];
+} {
+  const team = rows.filter(isTeamPickerResource);
+  if (isCatalogUnavailable)
+    return { team, user: rows.filter((row) => !isTeamPickerResource(row)), other: [] };
+  return {
+    team,
+    user: rows.filter((row) => row.source === 'user'),
+    other: rows.filter((row) => row.source === 'downloaded'),
+  };
+}

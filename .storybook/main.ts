@@ -170,8 +170,11 @@ const config: StorybookConfig = {
     // Storybook, rejecting unhandled after ~10s ("Timeout reached when waiting for websocket
     // connected to settle") and crashing every startup-wizard story.
     //
-    // The mock re-exports all real hooks and overrides only the three the first-run language step
-    // needs; stories opt in to drive data via `setFirstRunLanguageMock(...)`.
+    // The mock re-exports all real hooks and overrides only the four the first-run steps need;
+    // stories opt in to drive data with a decorator per step (`withFirstRunLanguage(...)`, and
+    // `InternetSettingsMockContext` for the internet-settings provider). Overriding here rather
+    // than spying per story is not a preference: the barrel is an ES module, so `spyOn` on one of
+    // its exports throws and the story renders Storybook's error overlay instead.
     //
     // This MUST use NormalModuleReplacementPlugin, not `resolve.alias`: the base renderer webpack
     // config resolves `@renderer/*` via `TsconfigPathsPlugin` (webpack.config.base.ts), which wins

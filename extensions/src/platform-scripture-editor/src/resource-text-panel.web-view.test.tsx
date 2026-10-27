@@ -32,6 +32,7 @@ const {
   realUsePromise,
   mockUseScrollGroupScrRef,
   copyrightNoticesByProject,
+  interfaceMode,
 } = vi.hoisted(() => ({
   mockUseEffectiveResourceReferenceList: vi.fn(),
   mockUseDblResourceAutoInstall: vi.fn(),
@@ -47,6 +48,8 @@ const {
   realUsePromise: { current: undefined as unknown },
   mockUseScrollGroupScrRef: vi.fn(),
   copyrightNoticesByProject: new Map<string, unknown>(),
+  /** What `platform.interfaceMode` reads as, and whether that read is still in flight. */
+  interfaceMode: { current: 'simple', isLoading: false },
 }));
 
 // @papi/frontend — papi default export used for themes subscription and commands
@@ -111,7 +114,7 @@ vi.mock('@papi/frontend/react', () => ({
       ];
     return ['ltr', false];
   }),
-  useSetting: vi.fn(() => ['simple', false]),
+  useSetting: vi.fn(() => [interfaceMode.current, vi.fn(), vi.fn(), interfaceMode.isLoading]),
   useDialogCallback: vi.fn(() => vi.fn()),
   usePromise: vi.fn(() => [undefined, false]),
   useScrollGroupScrRef: (...args: unknown[]) => mockUseScrollGroupScrRef(...args),
@@ -378,6 +381,8 @@ beforeEach(() => {
   vi.stubGlobal('ResizeObserver', NoopResizeObserver);
   resetPanelHooks();
   copyrightNoticesByProject.clear();
+  interfaceMode.current = 'simple';
+  interfaceMode.isLoading = false;
 });
 
 afterEach(() => {
@@ -1155,6 +1160,11 @@ describe('ResourceTextPanel — catalog failure keeps resolved rows visible', ()
     expect(setters.get(NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY)).toHaveBeenCalledWith([
       DOWNLOADED_ROW.projectId,
     ]);
+    // Without the catalog the user's own DBL resources resolve as downloads, so the selector must
+    // know not to split them off as other resources.
+    expect(capturedResourceTextPanelProps.mock.lastCall?.[0]).toEqual(
+      expect.objectContaining({ isCatalogUnavailable: true }),
+    );
   });
 
   it('still shows the catalog-error view when the catalog failed and nothing resolved locally', () => {
@@ -1301,5 +1311,33 @@ describe('ResourceTextPanel — catalog failure keeps resolved rows visible', ()
     ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Local Project/ })).toBeInTheDocument();
     expect(setters.get('selectedResourceId')).not.toHaveBeenCalled();
+  });
+});
+
+// Power mode has no notion of team resources, so its selector lists every row together.
+describe('ResourceTextPanel — interface mode', () => {
+  it.each([
+    ['simple', true],
+    ['power', false],
+  ] as const)('in %s mode, groups the selector: %s', (mode, isGrouped) => {
+    interfaceMode.current = mode;
+    renderWithRows([DOWNLOADED_ROW]);
+
+    expect(capturedResourceTextPanelProps.mock.lastCall?.[0]).toEqual(
+      expect.objectContaining({ isGrouped }),
+    );
+  });
+
+  // The setting reads as its 'simple' default while it loads, so a Power session must not take
+  // that as Simple, even for a frame.
+  it('does not group the selector while the interface mode is still loading', () => {
+    interfaceMode.isLoading = true;
+    renderWithRows([DOWNLOADED_ROW]);
+
+    expect(capturedResourceTextPanelProps).toHaveBeenCalled();
+    const groupedPerRender = capturedResourceTextPanelProps.mock.calls.map(
+      ([props]) => props.isGrouped,
+    );
+    expect(groupedPerRender.every((isGrouped) => isGrouped === false)).toBe(true);
   });
 });
