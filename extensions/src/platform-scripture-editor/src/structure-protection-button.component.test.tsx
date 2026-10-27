@@ -140,6 +140,13 @@ describe('StructureProtectionButton — personal button', () => {
     expect(mockState.setUserProtection).not.toHaveBeenCalled();
   });
 
+  // The hook reports the team lock as binding while its setting loads, for every user.
+  it('stays enabled while the state is loading, rather than claiming an admin lock', () => {
+    setState({ isLoading: true, isTeamLockBinding: true, isProtectedByAdmin: false });
+    render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
+    expect(screen.getByRole('button', { name: PERSONAL })).toBeEnabled();
+  });
+
   it('Ctrl+Shift+L toggles the personal user setting when enabled', () => {
     setState({ canAdminToggle: false, isProtectedByAdmin: false, isStructureProtected: true });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);

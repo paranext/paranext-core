@@ -16,7 +16,11 @@ export type StructureProtectionState = {
    * power mode, where the feature is fully inactive (no enforcement, no toggles).
    */
   isProtectionActive: boolean;
-  /** Raw project setting — `true` means the admin has set a structure lock */
+  /**
+   * Raw project setting — `true` means the admin has set a structure lock. `false` while the
+   * setting is loading or failed to load, so to decide whether the lock binds this user read
+   * {@link StructureProtectionState.isTeamLockBinding}, not this.
+   */
   isProtectedByAdmin: boolean;
   /**
    * Set when the admin (project-level) `structureProtected` setting failed to load (e.g. a

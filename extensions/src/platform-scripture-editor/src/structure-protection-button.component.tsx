@@ -270,7 +270,10 @@ export function StructureProtectionButton({
   // locked, so the toggle is disabled; the tooltip names the error rather than the team lock.
   const hasAdminError = adminSettingError !== undefined;
 
-  const personalDisabled = isTeamLockBinding;
+  // Not while loading, when `isTeamLockBinding` is `true` for every user: the toggle only writes the
+  // user's own preference, which cannot get past the team lock, so it need not wait, and a disabled
+  // button would say "locked by admin" on a project with no team lock.
+  const personalDisabled = !isStateLoading && isTeamLockBinding;
   const personalDisabledTooltipKey = hasAdminError ? ERROR_LOADING_KEY : LOCKED_BY_ADMIN_KEY;
 
   const handlePersonalToggle = useCallback(() => {

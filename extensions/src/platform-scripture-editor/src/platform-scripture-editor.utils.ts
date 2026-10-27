@@ -3098,16 +3098,17 @@ export function bookHoldsChapters(bookId: string): boolean {
  * it binds waits for an administrator to lift it, even to start a book.
  *
  * @param isStructureProtected Whether the project's structure is currently locked, by either lock.
- * @param isTeamLocked Whether the administrator's team lock binds this user.
+ * @param isTeamLockBinding Whether the administrator's team lock binds this user, as
+ *   `useStructureProtectionState` reports it: `true` while that lock's setting is unknown too.
  * @param chapterNum The blank chapter the button would add.
  * @returns `true` if the button must stay disabled.
  */
 export function shouldProtectAddChapterNumber(
   isStructureProtected: boolean,
-  isTeamLocked: boolean,
+  isTeamLockBinding: boolean,
   chapterNum: number,
 ): boolean {
-  return isTeamLocked || (isStructureProtected && chapterNum !== 1);
+  return isTeamLockBinding || (isStructureProtected && chapterNum !== 1);
 }
 
 /** Outcome of {@link resolveAddChapterNumberClick} — what a click on the button should do. */
