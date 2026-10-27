@@ -760,14 +760,43 @@ describe('SyncStatusButton — failed and cancelled syncs', () => {
     expect(viewDetails).toBeInTheDocument();
     expect(viewDetails).toHaveAttribute('aria-disabled', 'true');
     // And the popover says why, rather than leaving the user to discover that the one control on
-    // offer does nothing.
-    expect(screen.getByTestId('toolbar-sync-popover-no-details')).toBeInTheDocument();
+    // offer does nothing — to a screen reader too, which reaches the reason through the link.
+    const noDetails = screen.getByTestId('toolbar-sync-popover-no-details');
+    expect(noDetails.id).not.toBe('');
+    expect(viewDetails).toHaveAttribute('aria-describedby', noDetails.id);
 
     fireEvent.click(viewDetails);
 
     expect(vi.mocked(sendCommand)).not.toHaveBeenCalledWith(
       'paratextBibleSendReceive.openSyncStatus',
     );
+  });
+
+  it('leaves the sync details link inert when an activity-only sync ends with no outcome', async () => {
+    // The status is unavailable, and the details view describes some earlier sync.
+    const fireSyncActivityChanged = captureSyncActivityEvent();
+    mockSyncStateAndActivity(completedState({ a: 'succeeded' }), {
+      isSyncing: true,
+      projectIds: [],
+    });
+    render(<SyncStatusButton />);
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Test Syncing');
+    });
+
+    fireSyncActivityChanged({ isSyncing: false, projectIds: [] });
+    fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-popover-status')).toHaveTextContent(
+        'Test status unavailable',
+      );
+    });
+    expect(screen.getByTestId('toolbar-sync-view-details-button')).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByTestId('toolbar-sync-popover-no-details')).toBeInTheDocument();
   });
 
   it('offers sync details for a verdict send/receive reported itself', async () => {
@@ -779,6 +808,7 @@ describe('SyncStatusButton — failed and cancelled syncs', () => {
 
     const viewDetails = await screen.findByTestId('toolbar-sync-view-details-button');
     expect(viewDetails).not.toHaveAttribute('aria-disabled', 'true');
+    expect(viewDetails).not.toHaveAttribute('aria-describedby');
     expect(screen.queryByTestId('toolbar-sync-popover-no-details')).not.toBeInTheDocument();
 
     fireEvent.click(viewDetails);

@@ -32,7 +32,7 @@ import {
   isolateBidi,
   LocalizeKey,
 } from 'platform-bible-utils';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 /**
  * Message shown when Cancel is clicked but send/receive can't answer. Declared here rather than
@@ -162,6 +162,7 @@ export function SyncStatusButton() {
     isVerdictFromBackendOnly,
   } = useSyncStatus();
   const [isOpen, setIsOpen] = useState(false);
+  const noDetailsHintId = useId();
   const [isCancelEnabled, setIsCancelEnabled] = useState(true);
   const [isCancelling, setIsCancelling] = useState(false);
   /**
@@ -902,6 +903,7 @@ export function SyncStatusButton() {
                  */}
                 {isVerdictFromBackendOnly && (
                   <p
+                    id={noDetailsHintId}
                     data-testid="toolbar-sync-popover-no-details"
                     className="tw:text-xs tw:text-muted-foreground"
                   >
@@ -931,6 +933,8 @@ export function SyncStatusButton() {
               size="sm"
               className="tw:h-6 tw:self-start tw:px-0 tw:aria-disabled:pointer-events-none tw:aria-disabled:opacity-50"
               aria-disabled={isVerdictFromBackendOnly}
+              // A screen reader announces the link as disabled; this tells it why.
+              aria-describedby={isVerdictFromBackendOnly ? noDetailsHintId : undefined}
               onClick={isVerdictFromBackendOnly ? undefined : handleViewDetails}
             >
               {localizedStrings['%toolbar_sync_view_details%']}

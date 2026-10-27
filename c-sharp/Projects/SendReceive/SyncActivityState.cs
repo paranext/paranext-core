@@ -84,8 +84,9 @@ public readonly record struct SyncActivityState(
     /// </para>
     /// <para>
     /// Not necessarily the moment the run finished. What it guarantees is the ordering: a later run
-    /// always has a later date, and for a run the extension's results also describe it is never
-    /// later than their date, so ordering by date keeps their richer per-project verdict.
+    /// always has a later date, later too than the date of any earlier run's results from the
+    /// extension, and for a run the extension's results also describe it is never later than their
+    /// date, so ordering by date keeps their richer per-project verdict.
     /// </para>
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

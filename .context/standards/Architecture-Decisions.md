@@ -9660,22 +9660,25 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   as `SyncState.syncingProjectIds` was, so core merges ahead of the Studio build that populates it.
   In the renderer, `readSyncActivitySnapshot` (`sync-activity-service.ts`) reads it field by field —
   an unrecognized value is logged and dropped while `isSyncing` and `projectIds` still apply — the
-  store drops it whenever `isSyncing` is true, and `useSyncStatus` consults it in two cases: when a
-  sync the claim never saw ends (`isClaimVerdictStale`), where `succeeded`/`failed` replace the
-  `unknown` that branch reported; and when the claim has reached no verdict of its own
-  (`idle`/`unknown`), where nothing else can answer. Where the claim saw the sync, its per-project
-  verdict stands and the outcome is ignored, so one run never gets two verdicts. A run ending is
-  detected during render rather than in an effect, so the ending and its verdict land in one commit —
-  the commit between them would otherwise render and announce the claim's earlier verdict, and report
-  a cancelled sync as a failure. Where both signals carry a verdict, the two are ORDERED rather than
-  guessed between: the snapshot carries `completedAt` (C# `DateTimeOffset?`) beside the outcome, and
-  `useSyncStatus` compares it against the claim's own `lastResults.sendReceiveDate`, showing whichever
-  is dated later. The backend never dates a run later than the claim's results for it, so a tie keeps
-  the claim's verdict; that is what still recognizes the claim's own run when the indicator mounts
-  after it ended. A build that dates neither leaves them unordered, and the claim's richer
-  per-project verdict stands. A verdict that came from the backend has no per-project
-  detail behind it — the details web view describes the last CLAIMED sync — so the popover withholds
-  its "View sync details" link for one. And the picker syncs the project being switched TO last
+  store drops it whenever `isSyncing` is true. Where both signals carry a verdict, `useSyncStatus`
+  ORDERS them rather than guessing between them: the snapshot carries `completedAt` (C#
+  `DateTimeOffset?`) beside the outcome, compared against the claim's own
+  `lastResults.sendReceiveDate`, and whichever is dated later is shown. The backend dates a run later
+  than any earlier run's results, and never later than the claim's results for that same run, so a
+  tie keeps the claim's verdict; that recognizes the
+  claim's own run when the indicator mounts after it ended, and keeps one run from getting two
+  verdicts. Dates are consulted before whether the hook saw the claim join the run, because that
+  record can be wrong: a claimless run opening while the claim's end-of-sync read is still in flight
+  is recorded as seen. Where the two are not both dated, the outcome answers when a sync the claim
+  never saw ends (`isClaimVerdictStale`), replacing the `unknown` that branch reported, and when the
+  claim has reached no verdict of its own (`idle`/`unknown`); otherwise the claim's richer
+  per-project verdict stands. A run ending is detected during render rather than in an effect, so
+  the ending and its verdict land in one commit — the commit between them would otherwise render and
+  announce the claim's earlier verdict, and report a cancelled sync as a failure. A verdict about a
+  sync the claim's results do not describe has no per-project detail behind it — the details web
+  view describes the last CLAIMED sync — so the popover withholds its "View sync details" link for
+  one, including the `unknown` a sync the claim never saw ends in on a build reporting no outcome.
+  And the picker syncs the project being switched TO last
   (`syncOnProjectSwitch`), because these are two backend runs and the indicator reports the most
   recent, so the verdict the user is shown describes the project now on screen.
 - **Alternatives:** **A per-project result map** — rejected: the detail already has a home in
@@ -9709,6 +9712,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   1. *A watchdog re-query in flight when the closing snapshot arrives* re-applies the older "still
      syncing" answer and drops the outcome until the next tick. Pre-existing, and `completedAt` does
      not help: the stale answer is a live read of whether a sync is running, not a verdict to order.
+     It does keep the verdict right once the run closes again: the replayed run looks like one the
+     claim never saw, but its outcome ties the claim's results, so the claim's verdict and details
+     link stand.
   2. *A project switch still runs two backend runs*, so the indicator reports the incoming project's
      sync only; a failure flushing the project being left reaches the user through its own failure
      toast. Reporting both needs one run covering both projects, which an optional flush-first

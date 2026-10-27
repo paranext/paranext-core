@@ -76,9 +76,14 @@ function isKnownSyncOutcome(outcome: unknown): outcome is SyncOutcome {
  * `isSyncing` along with it, blinding the indicator to a running sync over a field that only
  * describes how the last one went. It is checked for membership rather than for being a string,
  * because reading an unrecognized value as either verdict is exactly the guess this field must
- * never make.
+ * never make. Each unrecognized value is logged only the first time it is seen: the backend repeats
+ * the outcome on every closing snapshot and every later read, so a build mismatch would otherwise
+ * log the same line at the end of every sync.
  */
-function readSyncActivitySnapshot(payload: unknown): SyncActivitySnapshot | undefined {
+function readSyncActivitySnapshot(
+  payload: unknown,
+  reportedUnknownOutcomes: Set<string>,
+): SyncActivitySnapshot | undefined {
   if (typeof payload !== 'object' || !payload) return undefined;
   if (!('isSyncing' in payload) || typeof payload.isSyncing !== 'boolean') return undefined;
   const snapshot: SyncActivitySnapshot = { isSyncing: payload.isSyncing };
@@ -94,9 +99,13 @@ function readSyncActivitySnapshot(payload: unknown): SyncActivitySnapshot | unde
   // eslint-disable-next-line eqeqeq
   if (outcome == undefined) return snapshot;
   if (!isKnownSyncOutcome(outcome)) {
-    logger.warn(
-      `Ignoring an unrecognized send/receive sync outcome ${JSON.stringify(outcome)}; reading it as unknown`,
-    );
+    const reported = JSON.stringify(outcome);
+    if (!reportedUnknownOutcomes.has(reported)) {
+      reportedUnknownOutcomes.add(reported);
+      logger.warn(
+        `Ignoring an unrecognized send/receive sync outcome ${reported}; reading it as unknown`,
+      );
+    }
     return snapshot;
   }
   snapshot.outcome = outcome;
@@ -133,10 +142,15 @@ export function initSyncActivityService(): () => void {
   let isDisposed = false;
   const runRef = { current: 0 };
   let watchdogTimeout: ReturnType<typeof setTimeout> | undefined;
+  /** Unrecognized outcomes already logged, so each is reported once rather than on every sync. */
+  const reportedUnknownOutcomes = new Set<string>();
 
   const readSyncActivity = async (): Promise<SyncActivitySnapshot | undefined> => {
     try {
-      const snapshot = readSyncActivitySnapshot(await sendCommand(GET_SYNC_ACTIVITY_COMMAND));
+      const snapshot = readSyncActivitySnapshot(
+        await sendCommand(GET_SYNC_ACTIVITY_COMMAND),
+        reportedUnknownOutcomes,
+      );
       if (!snapshot) {
         logger.warn(
           'Send/receive returned a sync activity snapshot in an unexpected shape; ignoring it',
@@ -157,7 +171,7 @@ export function initSyncActivityService(): () => void {
     // seed — the one path that could still produce a good snapshot — on the strength of a payload
     // that turned out to be unusable. A payload whose only fault is an unrecognized outcome is still
     // usable, so it does count.
-    const snapshot = readSyncActivitySnapshot(payload);
+    const snapshot = readSyncActivitySnapshot(payload, reportedUnknownOutcomes);
     if (!snapshot) {
       logger.warn(`Ignoring a malformed ${SYNC_ACTIVITY_CHANGED_EVENT} payload`);
       return;

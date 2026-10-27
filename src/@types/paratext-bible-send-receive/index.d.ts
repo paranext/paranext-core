@@ -399,6 +399,8 @@ declare module 'paratext-bible-send-receive' {
      *
      * Optional for the same reason as {@link SyncActivitySnapshot.projectIds}; see the DELIBERATE
      * DIVERGENCE note at the top of this file.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
      */
     outcome?: SyncOutcome;
     /**
@@ -412,8 +414,11 @@ declare module 'paratext-bible-send-receive' {
      * fall back on something other than a guess.
      *
      * Not necessarily when the run finished. What it guarantees is the ordering: a later run always
-     * has a later date, and for a run `lastResults` also describes it is never later than
-     * `sendReceiveDate` — so on a tie, keep `lastResults`, the richer of the two.
+     * has a later date, later too than the `sendReceiveDate` of any earlier run's `lastResults`,
+     * and for a run `lastResults` also describes it is never later than `sendReceiveDate` — so on a
+     * tie, keep `lastResults`, the richer of the two.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
      */
     completedAt?: string;
   };

@@ -73,8 +73,8 @@ internal class SyncActivityNotifierService(
                     + "extension-side claim. projectIds is empty while isSyncing is true and the "
                     + "scheduled path has not yet resolved its merge set. The optional outcome "
                     + "('succeeded' or 'failed') describes the most recently completed run, and "
-                    + "completedAt says when that run finished so a consumer can tell it apart from "
-                    + "a verdict it holds for an earlier sync; both are absent while a run is in "
+                    + "completedAt dates that run so a consumer can order it against a verdict it "
+                    + "holds for another sync; both are absent while a run is in "
                     + "progress, before any run has completed, and from builds that cannot report "
                     + "them, and their absence is never a verdict.",
                 Params =

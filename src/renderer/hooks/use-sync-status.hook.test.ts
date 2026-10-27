@@ -636,6 +636,8 @@ describe('useSyncStatus', () => {
     });
 
     expect(result.current.status).toBe('unknown');
+    // The claim's detail describes that earlier sync, so a caller must not offer it for this one.
+    expect(result.current.isVerdictFromBackendOnly).toBe(true);
   });
 
   it.each([
@@ -700,14 +702,14 @@ describe('useSyncStatus', () => {
     expect(result.current.status).toBe('synced');
   });
 
-  it('keeps the claim’s verdict for a run it saw, even when the outcome is dated later', async () => {
-    // Both verdicts describe the SAME run here, and the backend's closing snapshot is dated after
-    // the claim's results — which is the ordinary ordering, since the run bracket closes last.
-    // Ordering them by time would hand an ordinary sync to the coarse verdict and take the detail
-    // view's entry point with it, so the claim having seen the run has to settle it first.
+  it('reports a failed claimless run that opened while the claim’s end-of-sync read was in flight', async () => {
+    // A claimed run ends; its end event arrives but the follow-up read is still in flight, so the
+    // claim still says `syncing`. A claimless run (picker, startup) opens in that window, then
+    // fails, dated after the claim's results. The verdict shown must be this run's failure, not the
+    // earlier claimed run's success.
     commands.mockGetSyncState(
       { isSyncing: true, syncingProjectIds: ['PROJ1'], lastRequestedProjectIds: [] },
-      completedStateFor({ PROJ1: 'succeeded' }, '2026-09-18T10:00:00Z'),
+      delayedAnswer(completedStateFor({ PROJ1: 'succeeded' }, '2026-09-18T10:00:00Z'), 1000),
     );
     seedActivity({ isSyncing: true, projectIds: ['PROJ1'] });
     const { emitSyncStateChanged } = captureEventCallbacks();
@@ -718,7 +720,21 @@ describe('useSyncStatus', () => {
     });
     expect(result.current.status).toBe('syncing');
 
+    // The claimed run's backend bracket closes and the claim's end event arrives; its read is in
+    // flight for the next second.
+    pushActivity({
+      isSyncing: false,
+      projectIds: [],
+      outcome: 'succeeded',
+      completedAt: '2026-09-18T10:00:00Z',
+    });
     emitSyncStateChanged({ isSyncing: false });
+    // A claimless run opens before that read answers.
+    pushActivity({ isSyncing: true, projectIds: ['PROJ2'] });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    // The claimless run fails, dated after the claim's results.
     pushActivity({
       isSyncing: false,
       projectIds: [],
@@ -729,9 +745,106 @@ describe('useSyncStatus', () => {
       await vi.advanceTimersByTimeAsync(0);
     });
 
+    expect(result.current.status).toBe('failed');
+    expect(result.current.isVerdictFromBackendOnly).toBe(true);
+  });
+
+  it('does not let a claimless run inherit the previous run’s sighting by the claim', async () => {
+    // The claim saw the run before this one, not this one. Undated, so only the per-run record of
+    // what the claim saw can tell the claim's verdict apart from this run's.
+    commands.mockGetSyncState(
+      { isSyncing: true, syncingProjectIds: ['PROJ1'], lastRequestedProjectIds: [] },
+      completedStateFor({ PROJ1: 'succeeded' }),
+    );
+    seedActivity({ isSyncing: true, projectIds: ['PROJ1'] });
+    const { emitSyncStateChanged } = captureEventCallbacks();
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    emitSyncStateChanged({ isSyncing: false });
+    pushActivity({ isSyncing: false, projectIds: [], outcome: 'succeeded' });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
     expect(result.current.status).toBe('synced');
-    // And the verdict is the claim's, so the caller can still offer the detail behind it.
+
+    pushActivity({ isSyncing: true, projectIds: ['PROJ2'] });
+    pushActivity({ isSyncing: false, projectIds: [], outcome: 'failed' });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('failed');
+    expect(result.current.isVerdictFromBackendOnly).toBe(true);
+  });
+
+  it('keeps the claim’s verdict for a run it did not see open when both are dated alike', async () => {
+    // A watchdog re-query in flight when a run closes can replay "still syncing" after the claim's
+    // results have landed, so the run looks like one the claim never saw. The tie says the claim's
+    // results are this run's, so its verdict, and the detail behind it, still stand.
+    commands.mockGetSyncState(completedStateFor({ PROJ1: 'succeeded' }, '2026-09-18T10:00:00Z'));
+    seedActivity({ isSyncing: false, projectIds: [] });
+    captureEventCallbacks();
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    pushActivity({ isSyncing: true, projectIds: ['PROJ1'] });
+    pushActivity({
+      isSyncing: false,
+      projectIds: [],
+      outcome: 'failed',
+      completedAt: '2026-09-18T10:00:00Z',
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('synced');
     expect(result.current.isVerdictFromBackendOnly).toBe(false);
+  });
+
+  it('offers the claim’s detail when it cannot classify results dated alike with the outcome', async () => {
+    // The claim's results describe this run but carry a status this build does not recognize. The
+    // backend's outcome supplies the verdict; the detail view still describes this sync.
+    commands.mockGetSyncState(completedStateFor({ PROJ1: 'cancelled' }, '2026-09-18T10:00:00Z'));
+    seedActivity({
+      isSyncing: false,
+      projectIds: [],
+      outcome: 'failed',
+      completedAt: '2026-09-18T10:00:00Z',
+    });
+    captureEventCallbacks();
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('failed');
+    expect(result.current.isVerdictFromBackendOnly).toBe(false);
+  });
+
+  it('withholds the claim’s detail when it cannot classify results older than the outcome', async () => {
+    commands.mockGetSyncState(completedStateFor({ PROJ1: 'cancelled' }, '2026-09-18T10:00:00Z'));
+    seedActivity({
+      isSyncing: false,
+      projectIds: [],
+      outcome: 'failed',
+      completedAt: '2026-09-18T10:05:00Z',
+    });
+    captureEventCallbacks();
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('failed');
+    expect(result.current.isVerdictFromBackendOnly).toBe(true);
   });
 
   it('reports the backend outcome when it describes a later run than the claim’s verdict', async () => {

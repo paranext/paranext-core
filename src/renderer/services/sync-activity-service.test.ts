@@ -285,6 +285,22 @@ describe('initSyncActivityService', () => {
       expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(expect.stringContaining('outcome'));
     });
 
+    it('warns about each unrecognized outcome once, not on every sync that reports it', async () => {
+      dispose = initSyncActivityService();
+      await flushSeeding();
+
+      emit?.({ isSyncing: false, projectIds: [], outcome: 'cancelled' });
+      emit?.({ isSyncing: false, projectIds: [], outcome: 'cancelled' });
+      emit?.({ isSyncing: false, projectIds: [], outcome: 'partial' });
+
+      const outcomeWarnings = vi
+        .mocked(logger.warn)
+        .mock.calls.filter(([message]) => String(message).includes('sync outcome "'));
+      expect(outcomeWarnings).toHaveLength(2);
+      expect(outcomeWarnings[0][0]).toContain('"cancelled"');
+      expect(outcomeWarnings[1][0]).toContain('"partial"');
+    });
+
     it('carries the time the outcome describes through to the store', async () => {
       dispose = initSyncActivityService();
       await flushSeeding();
