@@ -179,7 +179,9 @@ function completedStateWithResults(
 
 /**
  * A completed sync in which each project reported the given `resultStatus`. `sendReceiveDate` dates
- * the verdict, which is what orders it against the backend's own outcome time.
+ * the verdict, which is what orders it against the backend's own outcome time. Omitted, it is a
+ * fixed date earlier than any outcome time these tests use, not an absent one; see
+ * {@link undatedCompletedStateFor} for results that carry no date.
  */
 function completedStateFor(
   statusByProjectId: Record<string, string>,
@@ -194,6 +196,17 @@ function completedStateFor(
     ),
     sendReceiveDate,
   );
+}
+
+/** As {@link completedStateFor}, but from a build whose results carry no date at all. */
+function undatedCompletedStateFor(statusByProjectId: Record<string, string>): Partial<SyncState> {
+  const state = completedStateFor(statusByProjectId);
+  return {
+    ...state,
+    // The declared shape requires `sendReceiveDate`; this covers wire data that omits it.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    lastResults: { resultsInfo: state.lastResults?.resultsInfo } as SyncState['lastResults'],
+  };
 }
 
 /**
@@ -901,6 +914,61 @@ describe('useSyncStatus', () => {
     });
 
     expect(result.current.status).toBe('synced');
+  });
+
+  it('keeps the claim’s verdict for a run it saw when only the outcome is dated', async () => {
+    // A claim build whose results carry no date leaves the two unorderable, so the record of the
+    // claim seeing this run is what keeps its verdict.
+    commands.mockGetSyncState(
+      { isSyncing: true, syncingProjectIds: ['PROJ1'], lastRequestedProjectIds: [] },
+      undatedCompletedStateFor({ PROJ1: 'succeeded' }),
+    );
+    seedActivity({ isSyncing: true, projectIds: ['PROJ1'] });
+    const { emitSyncStateChanged } = captureEventCallbacks();
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    emitSyncStateChanged({ isSyncing: false });
+    pushActivity({
+      isSyncing: false,
+      projectIds: [],
+      outcome: 'failed',
+      completedAt: '2026-09-18T10:00:00Z',
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('synced');
+    expect(result.current.isVerdictFromBackendOnly).toBe(false);
+  });
+
+  it('reports the outcome for a run the claim never saw when only the outcome is dated', async () => {
+    commands.mockGetSyncState(undatedCompletedStateFor({ PROJ1: 'succeeded' }));
+    seedActivity({ isSyncing: false, projectIds: [] });
+    captureEventCallbacks();
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('synced');
+
+    pushActivity({ isSyncing: true, projectIds: ['PROJ2'] });
+    pushActivity({
+      isSyncing: false,
+      projectIds: [],
+      outcome: 'failed',
+      completedAt: '2026-09-18T10:00:00Z',
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('failed');
+    expect(result.current.isVerdictFromBackendOnly).toBe(true);
   });
 
   it('keeps the claim’s verdict for its own run when both are dated alike', async () => {

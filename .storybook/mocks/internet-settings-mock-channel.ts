@@ -37,9 +37,9 @@ export const InternetSettingsMockContext = createContext<InternetSettingsMock | 
   undefined,
 );
 
-/** The settings a story gets unless it names others: VPN required, production server. */
+/** The settings a story gets unless it names others: internet use disabled, production server. */
 export const DEFAULT_INTERNET_SETTINGS = {
-  permittedInternetUse: 'VpnRequired' as const,
+  permittedInternetUse: 'Disabled' as const,
   selectedServer: 'Production' as const,
   proxyPort: 0,
 };

@@ -811,8 +811,10 @@ export function useSyncStatus(): SyncStatusInfo {
    * The run the activity signal is reporting — or the last one it reported — whether the claim saw
    * that same run, and, while it runs, every project it has announced. The claim seeing it has to
    * be recorded while the run is still going, because afterwards `claimStatus` no longer separates
-   * the two cases. Once it ends, `didClaimSee` still describes that run, which is what tells a
-   * verdict about THIS sync apart from one an unrelated earlier sync left behind.
+   * the two cases. When the run ends, `didClaimSee` decides whether the claim's verdict is marked
+   * stale and whether the run's announced projects are held out of the unsynced count. It does not
+   * pick the verdict when both verdicts are dated: the dates decide that (see the ordering in
+   * `settleFinishedVerdict` below). The stale mark only decides it when a date is missing.
    *
    * Tracked DURING RENDER rather than in an effect, which would settle the flag one commit late —
    * and that commit renders, and announces, the claim's earlier verdict as this run's. The toolbar
