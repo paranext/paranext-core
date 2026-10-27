@@ -6,6 +6,7 @@ import { newPlatformError, type PlatformError } from 'platform-bible-utils';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { logger } from '@shared/services/logger.service';
 import { offerRestartAfterInterfaceLanguageChange } from '@renderer/services/interface-language-restart-prompt';
+import userEvent from '@testing-library/user-event';
 import { Setting } from './setting.component';
 
 vi.mock('@renderer/services/interface-language-restart-prompt', () => ({
@@ -114,9 +115,30 @@ const baseProps = {
 // there.
 const userSettingProps = { setSetting: baseProps.setSetting, isLoading: baseProps.isLoading };
 
+beforeAll(() => {
+  // Radix Tooltip uses ResizeObserver; jsdom doesn't provide it.
+  global.ResizeObserver = class {
+    // jsdom stub: empty no-op intentionally has no `this` usage
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+    observe() {}
+    // jsdom stub: empty no-op intentionally has no `this` usage
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+    unobserve() {}
+    // jsdom stub: empty no-op intentionally has no `this` usage
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+    disconnect() {}
+  };
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
   availableLanguages.loaded = undefined;
+  // Several describes below pin the strings to a fixed map and leave it in place afterwards; start
+  // each test from the real hook's shape instead, where every key resolves to at least itself.
+  vi.mocked(useLocalizedStrings).mockImplementation((keys) => [
+    Object.fromEntries(keys.map((key) => [key, key])),
+    false,
+  ]);
 });
 
 describe('Setting disabled forwarding', () => {
@@ -608,21 +630,6 @@ const INTERFACE_SCALING_STRINGS = {
 };
 
 describe('platform.zoomFactor stepper', () => {
-  beforeAll(() => {
-    // Radix Tooltip uses ResizeObserver; jsdom doesn't provide it.
-    global.ResizeObserver = class {
-      // jsdom stub: empty no-op intentionally has no `this` usage
-      // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-      observe() {}
-      // jsdom stub: empty no-op intentionally has no `this` usage
-      // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-      unobserve() {}
-      // jsdom stub: empty no-op intentionally has no `this` usage
-      // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-      disconnect() {}
-    };
-  });
-
   beforeEach(() => {
     // Both label families are available, so a stepper that borrowed the content-zoom wording
     // would find it and the per-key assertions below would catch that.
@@ -958,6 +965,79 @@ describe('Setting description', () => {
     expect(screen.getByRole('group', { name: 'Interface language' })).toHaveAccessibleDescription(
       'The languages the interface is shown in',
     );
+  });
+});
+
+describe('Setting info button', () => {
+  afterEach(() => {
+    vi.mocked(useLocalizedStrings).mockReturnValue([{}, false]);
+  });
+
+  it('offers a keyboard-reachable info button, named for its setting, when there is a description', async () => {
+    vi.mocked(useLocalizedStrings).mockReturnValue([
+      { '%settings_infoButton_ariaLabel%': 'About {settingLabel}' },
+      false,
+    ]);
+    const user = userEvent.setup();
+    render(
+      <Setting
+        {...baseProps}
+        settingKey="platform.language"
+        setting="English"
+        label="Language"
+        description="The language of the project"
+      />,
+    );
+
+    // The info button sits beside the label, ahead of the control, so it is the first tab stop.
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'About Language' })).toHaveFocus();
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('The language of the project');
+    // The button sits beside the label, not inside it, so the control's name stays the label.
+    expect(screen.getByRole('textbox')).toHaveAccessibleName('Language');
+  });
+
+  it('offers no info button when there is no description', () => {
+    render(
+      <Setting {...baseProps} settingKey="platform.language" setting="English" label="Language" />,
+    );
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+});
+
+describe('Setting lock reason', () => {
+  it('shows the reason under a locked control and describes the control with it', () => {
+    render(
+      <Setting
+        {...baseProps}
+        settingKey="platform.isEditable"
+        setting={false}
+        label="Editable"
+        description="Whether the project can be edited"
+        readOnly
+        lockReason="Only a project administrator can change this."
+      />,
+    );
+    expect(screen.getByText('Only a project administrator can change this.')).toBeVisible();
+    expect(screen.getByRole('switch')).toHaveAccessibleDescription(
+      'Whether the project can be edited Only a project administrator can change this.',
+    );
+  });
+
+  it('shows no reason under an editable control, even when one is passed', () => {
+    render(
+      <Setting
+        {...baseProps}
+        settingKey="platform.language"
+        setting="English"
+        label="Language"
+        lockReason="Only a project administrator can change this."
+      />,
+    );
+    expect(
+      screen.queryByText('Only a project administrator can change this.'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox')).not.toHaveAccessibleDescription();
   });
 });
 

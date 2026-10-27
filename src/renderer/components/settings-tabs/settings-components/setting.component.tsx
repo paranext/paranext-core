@@ -17,6 +17,7 @@ import {
   SettingTypes,
 } from 'papi-shared-types';
 import {
+  Button,
   ERROR_POPOVER_STRING_KEYS,
   ErrorPopover,
   Input,
@@ -28,9 +29,11 @@ import {
   TooltipTrigger,
   UiLanguageSelector,
 } from 'platform-bible-react';
+import { Info } from 'lucide-react';
 import {
   debounce,
   DebouncedFunction,
+  formatReplacementString,
   getErrorMessage,
   isPlatformError,
   LocalizeKey,
@@ -67,9 +70,12 @@ type BaseSettingProps<TSettingKey, TSettingValue> = {
   /**
    * When true, the user can read but not change the setting: text stays focusable, selectable and
    * scrollable, and controls with no read-only state (switches, steppers, selects) are disabled.
-   * Used for settings contributed with `isReadOnly`. Defaults to `false`.
+   * Used for settings contributed with `isReadOnly` and for project settings the project's locks
+   * forbid changing (see `getSettingLock`). Defaults to `false`.
    */
   readOnly?: boolean;
+  /** Localized line shown under the control, saying why it is locked, while `readOnly` is true */
+  lockReason?: string;
 };
 
 /**
@@ -209,6 +215,7 @@ class SettingWriterUnavailableError extends Error {}
 const SYNC_EDIT_BLOCKED_REGEX = /\(SR_EDIT_BLOCKED\)/;
 
 const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
+  '%settings_infoButton_ariaLabel%',
   '%settings_defaultMessage_loadingOneSetting%',
   '%settings_defaultMessage_noSettingComponent%',
   '%settings_platform_webViewContentZoom_atDefault%',
@@ -251,6 +258,7 @@ export function Setting({
   description,
   disabled = false,
   readOnly = false,
+  lockReason,
 }: CombinedSettingProps) {
   const validateSetting = validateOtherSetting || validateProjectSetting;
 
@@ -278,6 +286,7 @@ export function Setting({
   const controlId = useId();
   const labelId = useId();
   const descriptionId = useId();
+  const lockReasonId = useId();
   const isUiLanguageSelector =
     Array.isArray(setting) && settingKey === 'platform.interfaceLanguage';
 
@@ -421,7 +430,10 @@ export function Setting({
   const debouncedHandleChange = debouncedHandleChangeRef.current;
   const debouncedHandleStepperChange = debouncedHandleStepperChangeRef.current;
 
-  const ariaDescribedBy = description ? descriptionId : undefined;
+  const shownLockReason = readOnly ? lockReason : undefined;
+  const ariaDescribedBy =
+    [description && descriptionId, shownLockReason && lockReasonId].filter(Boolean).join(' ') ||
+    undefined;
   const ariaInvalid = errorMessage ? true : undefined;
 
   // The control and the id the label points at are derived together so `htmlFor` cannot drift from
@@ -569,17 +581,32 @@ export function Setting({
         </Label>
       ) : (
         <div className="setting-label-container">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Label id={labelId} htmlFor={labelFor} className="setting-label">
-                  {label}
-                </Label>
-              </TooltipTrigger>
-              {description && <TooltipContent>{description}</TooltipContent>}
-            </Tooltip>
-          </TooltipProvider>
-          {/* The tooltip is hover-only; this copy is what the control's `aria-describedby` reads. */}
+          <div className="setting-label-wrapper">
+            <Label id={labelId} htmlFor={labelFor} className="setting-label">
+              {label}
+            </Label>
+            {description && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label={formatReplacementString(
+                        localizedStrings['%settings_infoButton_ariaLabel%'],
+                        { settingLabel: label },
+                      )}
+                    >
+                      <Info />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent align="start">{description}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
+          {/* The tooltip opens only from the info button; this copy is what the control's
+              `aria-describedby` reads. */}
           {description && (
             <span id={descriptionId} className="tw:sr-only">
               {description}
@@ -587,6 +614,11 @@ export function Setting({
           )}
           <div className="setting-container">
             {control}
+            {shownLockReason && (
+              <p id={lockReasonId} className="tw:text-xs tw:text-muted-foreground">
+                {shownLockReason}
+              </p>
+            )}
             {errorMessage && (
               // Mounted only while there is an error, so the alert announces when one appears. The
               // flex column repeats `.setting-container`'s so the error rows keep their spacing.

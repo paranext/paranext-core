@@ -575,20 +575,34 @@ describe('the iframe asks for its tab to be focused when it loads', () => {
   });
 });
 
-describe('updateWebViewTab', () => {
-  test('carries isIconMonochrome onto the tab as isTabIconMonochrome', async () => {
+describe('the tab icon of a web view', () => {
+  const ICON_TEST_DEFINITION = {
+    id: SAVED_WEB_VIEW_ID,
+    webViewType: SAVED_WEB_VIEW_TYPE,
+    contentType: WEB_VIEW_CONTENT_TYPE.HTML,
+    content: '',
+  } as const;
+
+  test('takes the lucide icon name from the web view definition', async () => {
     const { updateWebViewTab } = await import('./web-view.component');
 
-    const tab = updateWebViewTab(RESTORED_TAB, {
-      id: SAVED_WEB_VIEW_ID,
-      webViewType: SAVED_WEB_VIEW_TYPE,
-      contentType: WEB_VIEW_CONTENT_TYPE.REACT,
-      content: '',
-      iconUrl: 'a.svg',
-      isIconMonochrome: true,
+    const tabInfo = updateWebViewTab(RESTORED_TAB, {
+      ...ICON_TEST_DEFINITION,
+      iconName: 'refresh-cw',
     });
 
-    expect(tab.tabIconUrl).toBe('a.svg');
-    expect(tab.isTabIconMonochrome).toBe(true);
+    expect(tabInfo.tabIconName).toBe('refresh-cw');
+  });
+
+  test('restores a definition saved with only iconUrl with tabIconUrl and no tabIconName', async () => {
+    const { updateWebViewTab } = await import('./web-view.component');
+
+    const tabInfo = updateWebViewTab(RESTORED_TAB, {
+      ...ICON_TEST_DEFINITION,
+      iconUrl: 'saved-icon.svg',
+    });
+
+    expect(tabInfo.tabIconUrl).toBe('saved-icon.svg');
+    expect(tabInfo.tabIconName).toBeUndefined();
   });
 });

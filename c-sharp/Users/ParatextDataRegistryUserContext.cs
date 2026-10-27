@@ -26,8 +26,8 @@ internal sealed class ParatextDataRegistryUserContext(Func<RegistryUserSnapshot>
         await s_readGate.WaitAsync();
         try
         {
-            // Off the calling thread: when the internet setting is VpnRequired, InternetAccess.Status
-            // looks up the user's country over the network before answering.
+            // Off the calling thread, since ParatextData's reads may block (see ReadStatusFor for the
+            // network location lookup it avoids).
             return await Task.Run(readSnapshot);
         }
         finally
@@ -36,18 +36,33 @@ internal sealed class ParatextDataRegistryUserContext(Func<RegistryUserSnapshot>
         }
     }
 
-    private static RegistryUserSnapshot ReadSnapshot() =>
-        CreateSnapshot(
+    private static RegistryUserSnapshot ReadSnapshot()
+    {
+        var rawStatus = InternetAccess.RawStatus;
+        return CreateSnapshot(
             RegistrationInfo.DefaultUser,
             InternetAccess.RegistryServer,
-            InternetAccess.Status,
-            InternetAccess.RawStatus,
+            ReadStatusFor(rawStatus, () => InternetAccess.Status),
+            rawStatus,
             InternetConnection.InternetConnectionActive()
         );
+    }
+
+    /// <summary>
+    /// <see cref="InternetAccess.Status"/>, read through <paramref name="readStatus"/>, except for a
+    /// saved <see cref="InternetUse.VpnRequired"/>: tokens are refused for that whatever the
+    /// location (<see cref="RegistryAccessTokenService"/>), so the network location lookup reading
+    /// Status would start is skipped, and a value that is not Disabled stands in for it.
+    /// </summary>
+    internal static InternetUse ReadStatusFor(
+        InternetUse rawStatus,
+        Func<InternetUse> readStatus
+    ) => rawStatus == InternetUse.VpnRequired ? InternetUse.Enabled : readStatus();
 
     /// <param name="status">
     /// <see cref="InternetAccess.Status"/>: a VpnRequired setting reads as Disabled in a restricted
-    /// location without a VPN, and as Enabled anywhere else.
+    /// location without a VPN, and as Enabled anywhere else. Not read for a saved VpnRequired (see
+    /// <see cref="ReadStatusFor"/>), so in that case it does not reflect the location.
     /// </param>
     /// <param name="rawStatus"><see cref="InternetAccess.RawStatus"/>: the user's own choice.</param>
     internal static RegistryUserSnapshot CreateSnapshot(

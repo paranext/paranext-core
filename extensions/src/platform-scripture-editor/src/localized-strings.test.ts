@@ -17,6 +17,7 @@ import { VIEW_OPTIONS_NOTICE_STRING_KEYS } from './scripture-text-grid/view-opti
 import { TEAM_LAYOUT_BUTTON_STRING_KEYS } from './team-layout-button.component';
 import { STRUCTURE_PROTECTION_BUTTON_STRING_KEYS } from './structure-protection-button.component';
 import { HIDDEN_CONTENT_DELETE_STRING_KEYS } from './hidden-content-delete-confirm.utils';
+import { TWO_STEP_DELETE_MESSAGE_STRING_KEYS } from './two-step-delete-tooltip/two-step-delete-tooltip.utils';
 import {
   paragraphMarkerNameKey,
   PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
@@ -246,6 +247,30 @@ describe('retired book-not-found-in-project string', () => {
     expect(metadata?.[retiredKey]?.fallbackKey).toBe(
       '%webView_platformScriptureEditor_bookNotAvailable_simpleMessage%',
     );
+  });
+});
+
+// The read-only Preview notice replaced the Markers-view notice, whose wording describes a different
+// view. A locale that has the old translation but not the new one must show the English message
+// rather than the Markers sentence, so the message key has no fallback. The dismiss label means the
+// same thing in both views, so it keeps its fallback.
+describe('read-only Preview notice strings', () => {
+  it('the message key has no fallback: the Markers wording would be wrong for Preview', () => {
+    expect(
+      metadata?.['%platformScriptureEditor_previewView_readonly_message_format%']?.fallbackKey,
+    ).toBeUndefined();
+  });
+
+  it('the dismiss key falls back to the identical Markers-era string', () => {
+    expect(metadata?.['%platformScriptureEditor_previewView_readonly_dismiss%']?.fallbackKey).toBe(
+      '%platformScriptureEditor_markersView_readonly_dismiss%',
+    );
+  });
+
+  it.each(['en', 'es'])('the message key has its own value in %s', (locale) => {
+    expect(
+      localizedStrings[locale]['%platformScriptureEditor_previewView_readonly_message_format%'],
+    ).toBeTruthy();
   });
 });
 
@@ -575,6 +600,21 @@ describe.each(['en', 'es'])('save failed notification in %s', (locale) => {
     expect(
       localizedStrings[locale]['%webView_platformScriptureEditor_error_saveFailed_format%'],
     ).toContain('{projectName}');
+  });
+});
+
+// The "press again to delete" hint shown on the first press of a two-step delete, one per armed kind.
+describe.each([...TWO_STEP_DELETE_MESSAGE_STRING_KEYS])('two-step delete hint %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
   });
 });
 

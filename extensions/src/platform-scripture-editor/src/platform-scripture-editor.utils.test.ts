@@ -4,7 +4,7 @@ import type PapiBackend from '@papi/backend';
 import { newPlatformError, normalizeProjectId, UsjTextContentLocation } from 'platform-bible-utils';
 import type { SavedWebViewDefinition } from '@papi/core';
 import { MutableRefObject } from 'react';
-import type { EditorRef, ViewOptions } from '@eten-tech-foundation/platform-editor';
+import type { EditorRef, SelectionRange, ViewOptions } from '@eten-tech-foundation/platform-editor';
 import {
   USJ_TYPE,
   USJ_VERSION,
@@ -22,14 +22,20 @@ import {
   getTabTitleProjectName,
   generateParagraphMenuListItems,
   getNextViewTypeInCycle,
+  getSimpleModeRootClassNames,
   createUnsupportedProjectIdsCache,
   getProjectUnsupportedReason,
   buildScriptureEditorWebViewState,
   UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY,
   UNSUPPORTED_PROJECT_IDS_RETRY_DELAY_MS,
+  getViewTypeToSave,
+  showsReadOnlyPreview,
   openDefaultActiveProjectIfApplicable,
   resolveOpenEditorDispatch,
   resolveViewTypeForInterfaceMode,
+  getDisplayedViewType,
+  VIEW_TYPE_UNSET,
+  VIEW_TYPE_FOR_SET_VIEW_COMMAND,
   syncOnProjectSwitch,
   syncOnSwitchToPower,
   UNSENT_CHANGES_SYNC_WAIT_MS,
@@ -72,17 +78,29 @@ import {
   PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
   showCommentThreadForInterfaceMode,
 } from './platform-scripture-editor.utils';
+import { restoreSelectionIfLost } from './platform-scripture-editor.web-view.utils';
 
-/** Build a mock editor ref exposing spies for the methods the generators call. */
-function makeMockEditorRef() {
+/**
+ * Build a mock editor ref exposing spies for the methods the generators call. It has no text
+ * selection; pass `selectedParaMarker` to have a paragraph's gutter marker selected instead.
+ */
+function makeMockEditorRef(selectedParaMarker?: string) {
   const formatPara = vi.fn();
   const insertMarker = vi.fn();
+  const getSelectedParaMarker = vi.fn<() => string | undefined>(() => selectedParaMarker);
+  const setSelection = vi.fn();
   // Mock literal cannot satisfy the full EditorRef interface — cast for test isolation.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const ref = {
-    current: { formatPara, insertMarker },
+    current: {
+      formatPara,
+      insertMarker,
+      getSelection: () => undefined,
+      getSelectedParaMarker,
+      setSelection,
+    },
   } as unknown as MutableRefObject<EditorRef | null>;
-  return { ref, formatPara, insertMarker };
+  return { ref, formatPara, insertMarker, getSelectedParaMarker, setSelection };
 }
 
 // Sample USJ chapter data for Genesis chapter 1 with multiple verses
@@ -4112,6 +4130,20 @@ describe('generateParagraphMenuListItems', () => {
     expect(notify).not.toHaveBeenCalled();
   });
 
+  it("skips formatPara when the pick is the selected paragraph marker's own marker", () => {
+    const { ref, formatPara, getSelectedParaMarker } = makeMockEditorRef();
+    getSelectedParaMarker.mockReturnValue('q1');
+    const restoreSelection = vi.fn();
+    const items = generateParagraphMenuListItems(ref, {}, false, vi.fn(), restoreSelection);
+
+    items.find((item) => item.marker === 'q1')?.action?.();
+    expect(formatPara).not.toHaveBeenCalled();
+    expect(restoreSelection).not.toHaveBeenCalled();
+
+    items.find((item) => item.marker === 'p')?.action?.();
+    expect(formatPara).toHaveBeenCalledWith('p');
+  });
+
   it('while a chapter is loading: action does not call formatPara or restore the selection', () => {
     const { ref, formatPara } = makeMockEditorRef();
     const restoreSelection = vi.fn();
@@ -4213,6 +4245,25 @@ describe('generateParagraphMenuListItems', () => {
     );
   });
 
+  it('does not restore an older caret, and still calls formatPara, while a paragraph marker is selected', () => {
+    // Wired as the web view wires it: the real restore, over an editor whose gutter marker is
+    // selected. A selected marker has no text range, and the caret captured before it was selected
+    // is in another paragraph — restoring it would make `formatPara` retag that paragraph instead.
+    const olderCaret: SelectionRange = {
+      start: { jsonPath: '$.content[2].content[1]', offset: 5 },
+    };
+    const { ref, formatPara, setSelection } = makeMockEditorRef('q1');
+    const items = generateParagraphMenuListItems(ref, {}, false, vi.fn(), () =>
+      restoreSelectionIfLost(ref.current, olderCaret),
+    );
+
+    const item = items[0];
+    item.action?.();
+
+    expect(setSelection).not.toHaveBeenCalled();
+    expect(formatPara).toHaveBeenCalledWith(item.marker);
+  });
+
   it('when protected: does not restore the caret either (nothing is applied)', () => {
     const { ref, formatPara } = makeMockEditorRef();
     const restoreSelection = vi.fn();
@@ -4222,6 +4273,57 @@ describe('generateParagraphMenuListItems', () => {
 
     expect(restoreSelection).not.toHaveBeenCalled();
     expect(formatPara).not.toHaveBeenCalled();
+  });
+
+  // One position language (host Standard-View-Invariants §6): a selected paragraph marker is a
+  // node selection with no offsets, so a retag from it must reach the editor as `formatPara` alone.
+  // The host never turns the selection into a position by restoring a caret over it. Wires the real
+  // restore the web view passes in, rather than a spy, so a restore that stops honoring the marker
+  // selection fails here.
+  describe('with a paragraph marker selected', () => {
+    const lastFocusOutSelection: SelectionRange = {
+      start: { jsonPath: '$.content[2].content[0]', offset: 7 },
+    };
+
+    function makeEditorWithSelectionState(selectedParaMarker: string | undefined) {
+      const formatPara = vi.fn();
+      const setSelection = vi.fn();
+      const editor = {
+        formatPara,
+        setSelection,
+        // A USJ selection is a text range, so it reports nothing while a marker is selected — and
+        // nothing after a popover blur nulled the caret.
+        getSelection: vi.fn((): SelectionRange | undefined => undefined),
+        getSelectedParaMarker: vi.fn((): string | undefined => selectedParaMarker),
+      };
+      // Mock literal cannot satisfy the full EditorRef interface — cast for test isolation.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const ref = { current: editor } as unknown as MutableRefObject<EditorRef | null>;
+      const items = generateParagraphMenuListItems(ref, {}, false, vi.fn(), () =>
+        restoreSelectionIfLost(ref.current, lastFocusOutSelection),
+      );
+      return { items, formatPara, setSelection };
+    }
+
+    it('restores the lost caret when no marker is selected (control)', () => {
+      const { items, formatPara, setSelection } = makeEditorWithSelectionState(undefined);
+
+      items[0].action?.();
+
+      expect(setSelection).toHaveBeenCalledWith(lastFocusOutSelection);
+      expect(formatPara).toHaveBeenCalledWith(items[0].marker);
+    });
+
+    it('retags through formatPara without ever setting a selection position', () => {
+      const { items, formatPara, setSelection } = makeEditorWithSelectionState('li2');
+      const item = items.find((menuItem) => menuItem.marker === 'q1');
+
+      item?.action?.();
+
+      expect(formatPara).toHaveBeenCalledTimes(1);
+      expect(formatPara).toHaveBeenCalledWith('q1');
+      expect(setSelection).not.toHaveBeenCalled();
+    });
   });
 });
 
@@ -4438,6 +4540,31 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     surface: 'popover' as const,
     usesPaneModel: false,
   };
+
+  it('navigates a read-only Preview caller to the pane and shows a hidden pane in Power', () => {
+    const d = decideNoteCallerClickAction({
+      ...base,
+      isCollapsed: true,
+      surface: 'none',
+      usesPaneModel: true,
+      isPowerMode: true,
+      paneVisible: false,
+      paneRendered: false,
+    });
+    expect(d.action).toBe('navigate-only');
+    expect(d.showPane).toBe(true);
+    expect(d.sendPaneFocusRequest).toBe(true);
+  });
+
+  it('keeps a read-only caller inert without the pane model', () => {
+    const d = decideNoteCallerClickAction({
+      ...base,
+      isCollapsed: true,
+      surface: 'none',
+      usesPaneModel: false,
+    });
+    expect(d.action).toBe('ignore-read-only');
+  });
 
   it('opens the popover for a plain collapsed-caller click (pane hidden, no session)', () => {
     expect(decideNoteCallerClickAction({ ...base, isPowerMode: false })).toEqual({
@@ -4748,8 +4875,9 @@ describe('decideNoteSessionUpdate (a row edit must not reload the row editor)', 
 describe('usesPaneNoteModel', () => {
   it.each([
     ['standard', true, true],
-    ['formatted', true, false],
+    ['formatted', true, true],
     ['markers', true, false],
+    ['standard', false, true],
     ['formatted', false, true],
     ['markers', false, false],
   ] as const)('%s view, isPowerMode=%s → %s', (viewType, isPowerMode, expected) => {
@@ -4758,18 +4886,31 @@ describe('usesPaneNoteModel', () => {
     );
   });
 
-  it('does not apply the Simple answer while the interface mode is still loading', () => {
-    expect(
-      usesPaneNoteModel({
-        viewType: 'formatted',
-        isPowerMode: false,
-        isInterfaceModeLoading: true,
-      }),
-    ).toBe(false);
-    expect(
-      usesPaneNoteModel({ viewType: 'standard', isPowerMode: false, isInterfaceModeLoading: true }),
-    ).toBe(true);
-  });
+  it.each([[true], [false]])(
+    'counts only Standard view while the interface mode is still loading (isPowerMode=%s)',
+    (isPowerMode) => {
+      expect(
+        usesPaneNoteModel({ viewType: 'formatted', isPowerMode, isInterfaceModeLoading: true }),
+      ).toBe(false);
+      expect(
+        usesPaneNoteModel({ viewType: 'markers', isPowerMode, isInterfaceModeLoading: true }),
+      ).toBe(false);
+      expect(
+        usesPaneNoteModel({ viewType: 'standard', isPowerMode, isInterfaceModeLoading: true }),
+      ).toBe(true);
+    },
+  );
+
+  it.each([[true], [false]])(
+    'uses the pane for a saved markers view once the interface mode has loaded (isPowerMode=%s), since the editor never displays markers',
+    (isPowerMode) => {
+      const displayed = resolveViewTypeForInterfaceMode('markers', isPowerMode);
+      expect(displayed).not.toBe('markers');
+      expect(
+        usesPaneNoteModel({ viewType: displayed, isPowerMode, isInterfaceModeLoading: false }),
+      ).toBe(true);
+    },
+  );
 });
 
 describe('resolveNoteEditingSurface', () => {
@@ -4970,52 +5111,246 @@ describe('shouldPublishPaneDocument (the pane repaints only when its notes chang
   });
 });
 
-describe('resolveViewTypeForInterfaceMode (standard view is power-mode-only)', () => {
+describe('resolveViewTypeForInterfaceMode (Standard is Power-only; Markers is shown nowhere)', () => {
   it('coerces standard to formatted in simple mode', () => {
     expect(resolveViewTypeForInterfaceMode('standard', false)).toBe('formatted');
-  });
-
-  it('keeps standard in power mode', () => {
-    expect(resolveViewTypeForInterfaceMode('standard', true)).toBe('standard');
   });
 
   it('leaves formatted unchanged in simple mode', () => {
     expect(resolveViewTypeForInterfaceMode('formatted', false)).toBe('formatted');
   });
 
-  it('leaves markers unchanged in simple mode', () => {
-    expect(resolveViewTypeForInterfaceMode('markers', false)).toBe('markers');
+  it('coerces a saved markers view to formatted in simple mode', () => {
+    expect(resolveViewTypeForInterfaceMode('markers', false)).toBe('formatted');
   });
 
-  it('leaves formatted and markers unchanged in power mode', () => {
+  it('shows a saved markers view as Standard view in Power', () => {
+    expect(resolveViewTypeForInterfaceMode('markers', true)).toBe('standard');
+  });
+
+  it('leaves standard and formatted unchanged in Power', () => {
+    expect(resolveViewTypeForInterfaceMode('standard', true)).toBe('standard');
     expect(resolveViewTypeForInterfaceMode('formatted', true)).toBe('formatted');
-    expect(resolveViewTypeForInterfaceMode('markers', true)).toBe('markers');
+  });
+});
+
+describe('getSimpleModeRootClassNames', () => {
+  it('turns the character-marker indicator on for text a Simple user can type into', () => {
+    expect(
+      getSimpleModeRootClassNames({
+        isPowerMode: false,
+        isInterfaceModeLoading: false,
+        isDurablyReadOnly: false,
+      }),
+    ).toEqual(['editor-container-simple', 'character-marker-indicators']);
+  });
+
+  it('leaves the indicator off when the text cannot be typed into', () => {
+    // It warns against typing inside a marker, so read-only text has nothing to warn about.
+    expect(
+      getSimpleModeRootClassNames({
+        isPowerMode: false,
+        isInterfaceModeLoading: false,
+        isDurablyReadOnly: true,
+      }),
+    ).toEqual(['editor-container-simple']);
+  });
+
+  it('leaves the indicator off until the interface mode is known', () => {
+    // `isPowerMode` reads `false` while the setting loads, so a Power session would otherwise be
+    // tinted for a frame.
+    expect(
+      getSimpleModeRootClassNames({
+        isPowerMode: false,
+        isInterfaceModeLoading: true,
+        isDurablyReadOnly: false,
+      }),
+    ).toEqual(['editor-container-simple']);
+  });
+
+  it('leaves the indicator off until edit permissions are known', () => {
+    // The permission reads default to "editable" while they load, so a read-only project would
+    // otherwise be tinted until they resolve.
+    expect(
+      getSimpleModeRootClassNames({
+        isPowerMode: false,
+        isInterfaceModeLoading: false,
+        isDurablyReadOnly: undefined,
+      }),
+    ).toEqual(['editor-container-simple']);
+  });
+
+  it('adds no Simple-mode classes in Power mode', () => {
+    expect(
+      getSimpleModeRootClassNames({
+        isPowerMode: true,
+        isInterfaceModeLoading: false,
+        isDurablyReadOnly: false,
+      }),
+    ).toEqual([]);
+  });
+});
+
+describe('getDisplayedViewType', () => {
+  it('shows formatted while the mode loads and nothing is saved', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: VIEW_TYPE_UNSET,
+        isPowerMode: false,
+        isInterfaceModeLoading: true,
+      }),
+    ).toBe('formatted');
+  });
+
+  it('shows formatted while the mode loads and nothing is saved, even when Power is reported', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: VIEW_TYPE_UNSET,
+        isPowerMode: true,
+        isInterfaceModeLoading: true,
+      }),
+    ).toBe('formatted');
+  });
+
+  it('shows the persisted value as is while the mode loads', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: 'standard',
+        isPowerMode: false,
+        isInterfaceModeLoading: true,
+      }),
+    ).toBe('standard');
+  });
+
+  it('shows Standard view for a never-saved Power tab', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: VIEW_TYPE_UNSET,
+        isPowerMode: true,
+        isInterfaceModeLoading: false,
+      }),
+    ).toBe('standard');
+  });
+
+  it('shows a saved markers view as Standard view in Power', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: 'markers',
+        isPowerMode: true,
+        isInterfaceModeLoading: false,
+      }),
+    ).toBe('standard');
+  });
+
+  it('keeps a saved formatted view in Power', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: 'formatted',
+        isPowerMode: true,
+        isInterfaceModeLoading: false,
+      }),
+    ).toBe('formatted');
+  });
+
+  it('shows formatted in Simple when nothing is saved', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: VIEW_TYPE_UNSET,
+        isPowerMode: false,
+        isInterfaceModeLoading: false,
+      }),
+    ).toBe('formatted');
+  });
+
+  it('shows formatted in Simple for a saved standard view', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: 'standard',
+        isPowerMode: false,
+        isInterfaceModeLoading: false,
+      }),
+    ).toBe('formatted');
+  });
+});
+
+describe('direct view-setting commands', () => {
+  it('maps setViewStandard to standard and setViewPreview to formatted', () => {
+    expect(VIEW_TYPE_FOR_SET_VIEW_COMMAND['platformScriptureEditor.setViewStandard']).toBe(
+      'standard',
+    );
+    expect(VIEW_TYPE_FOR_SET_VIEW_COMMAND['platformScriptureEditor.setViewPreview']).toBe(
+      'formatted',
+    );
   });
 });
 
 describe('getNextViewTypeInCycle', () => {
-  it('cycles formatted -> standard -> markers -> formatted in power mode', () => {
+  it('toggles Standard view and Preview in Power', () => {
+    expect(getNextViewTypeInCycle('standard', true)).toBe('formatted');
     expect(getNextViewTypeInCycle('formatted', true)).toBe('standard');
-    expect(getNextViewTypeInCycle('standard', true)).toBe('markers');
-    expect(getNextViewTypeInCycle('markers', true)).toBe('formatted');
   });
 
-  it('skips standard in simple mode: formatted -> markers -> formatted', () => {
-    expect(getNextViewTypeInCycle('formatted', false)).toBe('markers');
-    expect(getNextViewTypeInCycle('markers', false)).toBe('formatted');
+  it('goes to Standard view from a markers value in Power', () => {
+    expect(getNextViewTypeInCycle('markers', true)).toBe('standard');
   });
 
-  it('moves a lingering standard view forward to markers in simple mode', () => {
-    // A persisted 'standard' can still be the current state for a moment before the web view's
-    // coercion effect runs; cycling from it must behave as if it were already coerced.
-    expect(getNextViewTypeInCycle('standard', false)).toBe('markers');
-  });
-
-  it('never yields standard in simple mode for any current view type', () => {
+  it('has nothing to change in simple mode, so a saved Power view type is never overwritten', () => {
     const allViewTypes = ['formatted', 'markers', 'standard'] as const;
     allViewTypes.forEach((current) => {
-      expect(getNextViewTypeInCycle(current, false)).not.toBe('standard');
+      expect(getNextViewTypeInCycle(current, false)).toBeUndefined();
     });
+  });
+});
+
+describe('getViewTypeToSave', () => {
+  const change = { method: 'changeScriptureView' } as const;
+
+  it('toggles Standard view and Preview for changeScriptureView in Power', () => {
+    expect(getViewTypeToSave(change, { viewType: 'standard', isPowerMode: true })).toBe(
+      'formatted',
+    );
+    expect(getViewTypeToSave(change, { viewType: 'formatted', isPowerMode: true })).toBe(
+      'standard',
+    );
+    expect(getViewTypeToSave(change, { viewType: 'markers', isPowerMode: true })).toBe('standard');
+  });
+
+  it('saves nothing for changeScriptureView in Simple, whatever the current view', () => {
+    const allViewTypes = ['formatted', 'markers', 'standard'] as const;
+    allViewTypes.forEach((viewType) => {
+      expect(getViewTypeToSave(change, { viewType, isPowerMode: false })).toBeUndefined();
+    });
+  });
+
+  it('saves the requested view type as is for setScriptureView', () => {
+    // `isPowerMode: false` is also what a still-loading interface mode reads as, so this row covers
+    // both Simple and the loading case.
+    expect(
+      getViewTypeToSave(
+        { method: 'setScriptureView', viewType: 'standard' },
+        { viewType: 'formatted', isPowerMode: false },
+      ),
+    ).toBe('standard');
+    expect(
+      getViewTypeToSave(
+        { method: 'setScriptureView', viewType: 'formatted' },
+        { viewType: 'standard', isPowerMode: true },
+      ),
+    ).toBe('formatted');
+  });
+});
+
+describe('showsReadOnlyPreview', () => {
+  it('is true for a saved formatted view in Power', () => {
+    expect(showsReadOnlyPreview('formatted', true)).toBe(true);
+  });
+
+  it.each([['standard'], ['markers'], [undefined], [42]])('is false for %s in Power', (v) => {
+    expect(showsReadOnlyPreview(v, true)).toBe(false);
+  });
+
+  it.each([['formatted'], ['standard'], ['markers']])('is false for %s outside Power', (v) => {
+    expect(showsReadOnlyPreview(v, false)).toBe(false);
   });
 });
 
@@ -5364,6 +5699,26 @@ describe('formatEditorTitle', () => {
       mockGetLocalizedStrings,
     );
     expect(title).toBe('My Project (Read-only)');
+  });
+
+  it.each([
+    ['formatted', true, 'Project (Read-only)'],
+    ['markers', true, 'Project (Editable)'],
+    ['formatted', false, 'Project (Editable)'],
+  ])('titles a saved %s view (Power: %s) as "%s"', async (viewType, isPowerMode, expected) => {
+    const stub = vi.fn().mockResolvedValue({
+      '%webView_platformScriptureEditor_title_format%': '{projectId} {editable}',
+      '%webView_platformScriptureEditor_title_readonly_indicator%': '(Read-only)',
+      '%webView_platformScriptureEditor_title_editable_indicator%': '(Editable)',
+    });
+    const title = await formatEditorTitle(
+      undefined,
+      'p1',
+      showsReadOnlyPreview(viewType, isPowerMode),
+      async () => 'Project',
+      stub,
+    );
+    expect(title).toBe(expected);
   });
 });
 

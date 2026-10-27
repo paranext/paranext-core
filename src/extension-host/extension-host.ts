@@ -34,6 +34,7 @@ import {
   announceExtensionHostStarted,
   registerExtensionHostStartedEvent,
 } from '@extension-host/announce-extension-host-started';
+import { distrustLeakedCertificateRootsInNode } from '@node/utils/leaked-certificates.util';
 import { markStartup } from '@shared/utils/startup-timing.util';
 import { STARTUP_MARK_PROCESS_START } from '@shared/data/platform.data';
 
@@ -42,6 +43,11 @@ logger.info(
 );
 logger.info(`Extension host process.env.NODE_ENV = ${process.env.NODE_ENV}`);
 markStartup(STARTUP_MARK_PROCESS_START);
+
+// Before any extension or service opens a TLS connection. The modules imported above open none when
+// they load.
+// TODO(PT-3111): Remove once Electron blocks the leaked eMudhra certificates itself
+distrustLeakedCertificateRootsInNode();
 
 // Make a graceful way to tear down the process since Windows and POSIX operating systems handle it differently
 process.on('message', (message) => {

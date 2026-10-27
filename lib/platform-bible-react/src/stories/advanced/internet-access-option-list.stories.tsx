@@ -13,11 +13,8 @@ const localizedStrings = {
     'Allows Paratext to use the internet for all services: Registry, sync, and resource downloads.',
   '%paratextRegistration_description_internetUse_option_VpnRequired_2%':
     'Disable access to some Bible translation services',
-  '%paratextRegistration_description_internetUse_option_VpnRequired_details_2%':
-    'Disables access to Registry, sync, and the Digital Bible Library within the Paratext app. Other internet features and other applications are not affected.',
-  '%paratextRegistration_description_internetUse_option_Disabled_2%': 'Disable ALL internet access',
-  '%paratextRegistration_description_internetUse_option_Disabled_details%':
-    'Blocks all internet access within the Paratext app. Other applications on your computer are not affected.',
+  '%paratextRegistration_description_internetUse_option_DisableSomeServices_details%':
+    'Disables access to Registry, Send-Receive (sync), and the Digital Bible Library within Paratext 10. Paratext may connect to other internet services! This option will automatically change to “Disable all Internet access” once available.',
   '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%':
     'Block internet when in sensitive locations',
   '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%':
@@ -26,10 +23,10 @@ const localizedStrings = {
   '%paratextRegistration_description_internetUse_option_ProxyOnly_details%':
     'Routes Paratext internet traffic through a configured proxy server.',
   '%paratextRegistration_internetUse_notYetAvailable%': 'Not yet available',
-  '%paratextRegistration_internetUse_unsupportedSelection_title%':
-    'This internet setting is not supported yet',
-  '%paratextRegistration_internetUse_unsupportedSelection_description%':
-    'Your Paratext internet settings have “{selectedOption}” selected. This version of Paratext does not support that option yet, so choose one of the available options to continue.',
+  '%paratextRegistration_internetUse_unsupportedSelection_title_2%':
+    '“{selectedOption}” is not supported yet',
+  '%paratextRegistration_internetUse_unsupportedSelection_description_2%':
+    'Choose one of the available options to continue or stop using Paratext 10 until it is supported.',
 };
 
 const ENABLED_DESCRIPTION =
@@ -48,7 +45,7 @@ function Controlled(
 /**
  * Each option's description sits behind an info icon button beside its label, revealed as a tooltip
  * on hover or keyboard focus, rather than under the label as body copy — which kept the list from
- * becoming five stacked paragraphs of small grey text. The button carries the description as its
+ * becoming stacked paragraphs of small grey text. The button carries the description as its
  * accessible name and is its own tab stop, so the description is reachable on every row, including
  * the "Not yet available" rows whose radios are disabled. A visually-hidden copy of the same
  * description is also wired to each radio via `aria-describedby`, so a screen reader moving through
@@ -109,11 +106,14 @@ export const DescriptionTooltipOnKeyboardFocus: Story = {
   render: (args) => <Controlled {...args} initialValue="Enabled" />,
   play: async ({ canvasElement, userEvent }) => {
     const unavailableOptionDescription =
-      localizedStrings['%paratextRegistration_description_internetUse_option_Disabled_details%'];
+      localizedStrings[
+        '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%'
+      ];
     await userEvent.tab(); // the checked radio
     await userEvent.tab(); // Unrestricted's info button
     await userEvent.tab(); // "Disable access to some Bible translation services" info button
-    await userEvent.tab(); // "Disable ALL internet access" info button, on an unavailable row
+    // "Block internet when in sensitive locations" info button, on an unavailable row
+    await userEvent.tab();
     await expect(
       within(canvasElement).getByRole('button', { name: unavailableOptionDescription }),
     ).toHaveFocus();
@@ -157,9 +157,9 @@ export const RowClickTargets: Story = {
 };
 
 /**
- * Roughly the width the first-run wizard gives this list, where the longer labels wrap onto a
- * second line. The info button stays with its label's last word instead of drifting out to the
- * row's edge next to the "Not yet available" badge, which reads as if it belonged to the badge.
+ * A narrow column, where the longer labels wrap onto a second line. The info button stays with its
+ * label's last word instead of drifting out to the row's edge next to the "Not yet available"
+ * badge, which reads as if it belonged to the badge.
  */
 export const NarrowColumn: Story = {
   render: (args) => (
@@ -169,28 +169,27 @@ export const NarrowColumn: Story = {
   ),
 };
 
-/** Option 2 selected — "Disable access to some Bible translation services". */
+/** Option 2 selected — "Disable access to some Bible translation services", which saves `Disabled`. */
 export const DisabledAccess: Story = {
-  render: (args) => <Controlled {...args} initialValue="VpnRequired" />,
+  render: (args) => <Controlled {...args} initialValue="Disabled" />,
 };
 
 /**
- * No option selected — how the first-run wizard shows the list until the user picks one, so a
- * stored value they never chose is not presented as their choice. No banner: nothing unsupported is
- * selected.
+ * No option selected — for a caller that needs the user to choose rather than accept a stored value
+ * they never chose. No banner: nothing unsupported is selected.
  */
 export const NothingSelected: Story = {
   render: (args) => <Controlled {...args} initialValue={undefined} />,
 };
 
 /**
- * A not-yet-available value is the current setting — `InternetSettings.xml` is seeded once from a
- * co-installed Paratext 9 on first launch, so it can name an option this app does not implement
- * yet. The row renders selected-but-disabled so the carried-over setting is visible rather than
- * silently swapped, and a banner says why nothing acts on it.
+ * A not-yet-available value is the current setting. The row renders selected-but-disabled so the
+ * stored setting is visible rather than silently swapped, and a banner says why nothing acts on it.
+ * The app replaces a stored `VpnRequired` at startup, so this shows only if that fails; see
+ * `UnavailableProxySelected` for the value a Paratext 9 settings file usually carries.
  */
 export const UnavailableOptionSelected: Story = {
-  render: (args) => <Controlled {...args} initialValue="Disabled" />,
+  render: (args) => <Controlled {...args} initialValue="VpnRequired" />,
 };
 
 /** The other unsupported value a settings file can carry: "Configure proxy". */
@@ -203,6 +202,6 @@ export const UnavailableProxySelected: Story = {
  * since the descriptions explain the options rather than being part of the setting.
  */
 export const FormDisabled: Story = {
-  render: (args) => <Controlled {...args} initialValue="VpnRequired" />,
+  render: (args) => <Controlled {...args} initialValue="Enabled" />,
   args: { disabled: true },
 };

@@ -11,7 +11,6 @@ import type {
 } from '@shared/models/docking-framework.model';
 import {
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-  type SavedWebViewDefinition,
   type WebViewDefinition,
 } from '@shared/models/web-view.model';
 import {
@@ -4066,79 +4065,38 @@ describe('React web view bootstrap teardown', () => {
   });
 });
 
-describe('mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent icon opt-in', () => {
-  const definition: SavedWebViewDefinition = {
+describe('web view tab icon names', () => {
+  const BASE_DEFINITION = {
     id: 'icon-web-view',
-    webViewType: 'test.iconWebView',
-    iconUrl: 'a.svg',
-    isIconMonochrome: true,
-  };
+    webViewType: 'test.iconView',
+    contentType: 'react',
+    content: '',
+  } as const;
 
-  it('clears isIconMonochrome when iconUrl is updated without it', async () => {
-    const { mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent } = await import(
-      '@renderer/services/web-view.service-shard'
+  test('updating a definition with iconName merges it in', async () => {
+    const { mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent } = await importHost();
+
+    const merged = mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent(
+      { ...BASE_DEFINITION, iconUrl: 'icon.svg' },
+      { iconName: 'refresh-cw' },
     );
 
-    const merged = mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent(definition, {
-      iconUrl: 'b.png',
-    });
-
-    expect(merged?.iconUrl).toBe('b.png');
-    expect(merged?.isIconMonochrome).toBeUndefined();
+    expect(merged).toEqual({ ...BASE_DEFINITION, iconUrl: 'icon.svg', iconName: 'refresh-cw' });
   });
 
-  it('keeps isIconMonochrome when the update restates it', async () => {
-    const { mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent } = await import(
-      '@renderer/services/web-view.service-shard'
-    );
-
-    const merged = mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent(definition, {
-      iconUrl: 'b.svg',
-      isIconMonochrome: true,
-    });
-
-    expect(merged?.isIconMonochrome).toBe(true);
-  });
-
-  it('keeps isIconMonochrome when iconUrl is restated unchanged', async () => {
-    const { mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent } = await import(
-      '@renderer/services/web-view.service-shard'
-    );
-
-    const merged = mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent(definition, {
-      iconUrl: 'a.svg',
-      title: 'x',
-    });
-
-    expect(merged?.title).toBe('x');
-    expect(merged?.isIconMonochrome).toBe(true);
-  });
-
-  it('leaves isIconMonochrome alone when iconUrl is not in the update', async () => {
-    const { mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent } = await import(
-      '@renderer/services/web-view.service-shard'
-    );
-
-    const merged = mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent(definition, {
-      title: 'x',
-    });
-
-    expect(merged?.isIconMonochrome).toBe(true);
-  });
-});
-
-describe('saveTabInfoBase', () => {
-  it('strips isTabIconMonochrome', async () => {
-    const { saveTabInfoBase } = await import('@renderer/services/web-view.service-shard');
+  test('saveTabInfoBase strips tabIconName like tabIconUrl', async () => {
+    const { saveTabInfoBase } = await importHost();
 
     const saved = saveTabInfoBase({
-      id: 'icon-tab',
+      id: 'icon-web-view',
       tabType: TAB_TYPE_WEBVIEW,
-      tabTitle: 'Icon tab',
+      tabTitle: 'Title',
+      tabIconUrl: 'icon.svg',
+      tabIconName: 'refresh-cw',
       content: undefined,
-      isTabIconMonochrome: true,
     });
 
-    expect('isTabIconMonochrome' in saved).toBe(false);
+    expect(saved).not.toHaveProperty('tabIconUrl');
+    expect(saved).not.toHaveProperty('tabIconName');
   });
 });

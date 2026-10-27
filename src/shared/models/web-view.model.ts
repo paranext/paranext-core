@@ -104,17 +104,15 @@ type WebViewDefinitionBase = {
    */
   iconUrl?: string;
   /**
-   * Whether the image at {@link WebViewDefinitionBase.iconUrl} is a single-colour shape. When
-   * `true`, the platform draws the icon's shape in the tab's current text colour, so it follows the
-   * theme and the tab's selection state without the WebView having to swap images. Leave unset for
-   * a full-colour icon.
+   * Name of a lucide icon (kebab-case, e.g. `refresh-cw`) to show on the title bar of the tab. The
+   * icon follows the tab's text colour, so it suits every theme and tab state. Takes precedence
+   * over {@link WebViewDefinitionBase.iconUrl}. The icons the platform can show are listed in
+   * `LUCIDE_ICON_NAMES` (exported from `platform-bible-react/experimental`). If the name is not one
+   * of them, `iconUrl` is used instead (and then the software's standard logo).
    *
-   * Ignored when there is no `iconUrl`. Set this whenever you set `iconUrl`. Changing or removing
-   * `iconUrl` through `updateWebViewDefinition` without also setting this clears it, so a later
-   * full-colour icon set that way isn't drawn as a single-colour shape. Nothing clears it on other
-   * paths, such as a provider returning a saved definition with a new `iconUrl`.
+   * @experimental This field is unstable and may change or disappear without notice
    */
-  isIconMonochrome?: boolean;
+  iconName?: string;
   /**
    * Name of the tab (or a localizeKey for the name that will automatically be localized) for the
    * WebView
@@ -486,7 +484,7 @@ export function findFirstEditorWebViewDefinition(
 // `web-view.service.ts` -> `mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent`
 export const WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS = [
   'iconUrl',
-  'isIconMonochrome',
+  'iconName',
   'title',
   'tooltip',
   'projectId',
@@ -503,8 +501,7 @@ export type WebViewDefinitionUpdatableProperties = Pick<
 
 /**
  * WebViewDefinition properties for updating a WebView that is already displayed. Any unspecified
- * properties will stay the same, except that changing `iconUrl` clears
- * {@link WebViewDefinitionBase.isIconMonochrome} unless this also sets it
+ * properties will stay the same
  */
 // To allow more properties to be updated, add them in
 // `web-view.service.ts` -> `getUpdatablePropertiesFromWebViewDefinition`
@@ -633,8 +630,7 @@ export type GetSavedWebViewDefinition = () => SavedWebViewDefinition | undefined
  * Updates this WebView with the specified properties
  *
  * _＠param_ `updateInfo` properties to update on the WebView. Any unspecified properties will stay
- * the same, except that changing `iconUrl` clears `isIconMonochrome` unless `updateInfo` also sets
- * it
+ * the same
  *
  * _＠param_ `shouldBringToFront` If true, the tab will be brought to the front and unobscured by
  * other tabs. Defaults to `false`

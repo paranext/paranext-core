@@ -37,7 +37,8 @@ export const DockLayoutWrapper = forwardRef(function DockLayoutWrapper(
         (defaultLayout as LayoutData) || { dockbox: { mode: 'horizontal', children: [] } }
       }
       style={style}
-      // Simple mode: omit dropMode so tabs can't be dropped onto panel edges to split panels.
+      // Simple mode leaves rc-dock's default drop mode, whose drop squares its groups'
+      // `disableDock` turns off (see `getGroups`): nothing docks in Simple mode.
       dropMode={isPowerMode ? 'edge' : undefined}
       loadTab={loadTab}
       // Type assert `saveTab` as not returning `undefined` because rc-dock's types are wrong

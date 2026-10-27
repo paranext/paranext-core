@@ -35,7 +35,8 @@ renderers (`ShortcutKeys` from `platform-bible-react/experimental`) render it as
   same command (the macOS View menu's content-zoom accelerators); leave it unset, too, for a chord
   that works only in some editor views.
 - `src/shared/data/keyboard-shortcuts.data.test.ts` pins each `command`'s hint text and the menus
-  that show it, so adding or reusing one needs a deliberate update. It rejects a chord shared with
+  that show it, so adding or reusing one needs a deliberate update: every entry with a `command`
+  needs its own `EXPECTED_MENU_HINTS` row. It rejects a chord shared with
   a different main-process entry, and any main-process location of the entry's own except those
   `SAME_COMMAND_MAIN_PROCESS_LOCATIONS` lists for that entry id and its current `command` — a
   handler that runs the same command the menu item does. Adding an entry there is a deliberate

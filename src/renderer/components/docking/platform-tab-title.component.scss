@@ -63,25 +63,18 @@
   vertical-align: middle;
 }
 
-// A single-colour icon is drawn as its shape filled with the tab's text colour, so it follows the
-// theme and selection state. `--tab-icon-mask` is set inline by `PlatformTabTitle`. Comes after
-// `.tab-menu-icon` so its `background-image` replaces the default logo.
-.tab-menu-icon-monochrome {
-  background-image: none;
-  background-color: currentColor;
-  mask-image: var(--tab-icon-mask);
-  mask-size: 100%;
-  mask-repeat: no-repeat;
-}
-
-// Forced colours repaint `background-color` to the system background, which would make a
-// mask-filled icon invisible. `CanvasText` is the colour forced colours give the tab text, so the
-// icon still matches it, but it no longer changes with selection state in this mode.
-@media (forced-colors: active) {
-  .tab-menu-icon-monochrome {
-    forced-color-adjust: none;
-    background-color: CanvasText;
-  }
+// A lucide icon in the same box as `.tab-menu-icon`. The svg strokes with currentColor, so it
+// follows the tab's text colour in every theme and state.
+.tab-lucide-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  margin-top: -1px;
+  padding: 0;
+  width: vars.$space--md;
+  height: vars.$space--md;
+  vertical-align: middle;
 }
 
 .platform-tab-tooltip {

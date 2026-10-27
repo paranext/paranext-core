@@ -61,7 +61,8 @@ repo's half for the facts each side holds alone.
 forwarding table for all three consumers: the scripture editor web view, the footnote editor
 component (any host that runs it in editable marker mode), and the footnotes pane's inline row
 editor (a pane-model view — Standard view, or Simple's Formatted view, which gives the pane
-Standard's view options; see `usesPaneNoteModel` and `resolveNoteEditingSurface` in
+Standard's view options; Power's Preview is a pane-model view too, but read-only, so it opens no row
+editor; see `usesPaneNoteModel` and `resolveNoteEditingSurface` in
 `extensions/src/platform-scripture-editor/src/platform-scripture-editor.utils.ts`). The
 per-consumer copies drifted once already; there is one table now.
 
@@ -258,6 +259,18 @@ A mouse click on the palette blurs the editor (the overlay renders outside its d
 Lexical's blur processing can NULL the editor-state selection; `focus()` then falls back to
 selecting the document END. So dismissals restore the caret from the focus-out capture exactly as
 commits do, before focusing. It is a no-op when the selection survived.
+
+A selected paragraph marker counts as a surviving selection. It has no text range, so
+`getSelection()` reports nothing, but the capture is a caret the user has since left: restoring it
+would send a paragraph retag (or any other apply) to whichever paragraph that caret was in. So:
+
+- `useMarkerPaletteFocusOutCapture` (`lib/platform-bible-react`) clears the capture when focus
+  leaves while a marker is selected, instead of keeping the older caret;
+- every restore — `restoreSelectionIfLost` in the editor web view's utils, and the footnote
+  editor's own copy — returns early when `getSelectedParaMarker()` reports a marker.
+
+The editor's `getSelectedParaMarker()` reports nothing while the editor is read-only, so neither
+check sees a marker selected then.
 
 ## 4. The footnote editor
 

@@ -118,6 +118,26 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     locations: ['src/main/main.ts', 'src/main/verse-navigation-shortcuts.util.ts'],
   },
   {
+    id: 'open-home',
+    purpose: 'Open Home, which lists your projects and resources (Power mode)',
+    category: 'Navigation',
+    context: 'Main process (global)',
+    keys: { macOS: '⌘O', windows: 'Ctrl+O', linux: 'Ctrl+O' },
+    locations: ['src/main/main.ts', 'src/main/app-chords.util.ts'],
+    command: 'platformGetResources.openHome',
+  },
+  {
+    id: 'open-project-settings',
+    purpose:
+      'Open the Settings of the project shown in the focused tab. Does nothing when no tab with a web view has focus',
+    category: 'Navigation',
+    // Per window: the focused tab is read from the window that received the keypress
+    context: 'Main process (per window)',
+    keys: { macOS: '⌘J', windows: 'Ctrl+J', linux: 'Ctrl+J' },
+    locations: ['src/main/main.ts', 'src/main/app-chords.util.ts'],
+    command: 'platform.openProjectSettingsForWebView',
+  },
+  {
     id: 'book-chapter-control-move-grid-highlight',
     purpose:
       'Move the highlighted chapter or verse in the Book Chapter Control grid (mirrored horizontally in right-to-left layouts). While the search box is on screen the horizontal arrows move the text caret first, and reach the preview grid either once the caret has nowhere left to go or once a vertical arrow has stepped into the grid; editing the query hands them back to the caret',
@@ -526,38 +546,76 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     ],
     command: 'platformScriptureEditor.insertCommentAtSelection',
   },
-  // TODO(PT-4735): Show hints on the rest of Simple's Project menu. ⌃T and ⌃⇧T below need a
-  // `command` that works in every view; the design's ⌃J, ⌃E and F7 have no editor handler or entry
-  // here yet. A new `command` also needs its row in `EXPECTED_MENU_HINTS`.
+  {
+    id: 'scripture-toggle-view',
+    purpose:
+      'Switch between Standard view and Preview (Power mode). Does nothing in Simple mode or while a comment draft is open',
+    category: 'View',
+    context: 'Scripture editor web view',
+    // Control on every platform, like ⌃F and ⌃T. No `command`: the Switch scripture view items
+    // deliberately show no hint.
+    keys: { macOS: '⌃E', windows: 'Ctrl+E', linux: 'Ctrl+E' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/editor-chords.util.ts',
+    ],
+  },
   {
     id: 'scripture-insert-footnote',
     purpose:
-      'Insert a footnote at the selection (Standard view, editable). Does nothing while the editor’s right-click menu is open',
+      'Insert a footnote at the selection (editable text, every view). Does nothing while the editor’s right-click menu is open',
     category: 'Editing',
     context: 'Scripture editor web view',
     // macOS intentionally uses ⌃T (not ⌘T) to match the handler in
     // platform-scripture-editor.web-view.tsx (`event.ctrlKey`), like the find dialog's ⌃F.
-    // No `command`: the chord works only in Standard view, but the menu item works in every view
     keys: { macOS: '⌃T', windows: 'Ctrl+T', linux: 'Ctrl+T' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
-      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
+      'extensions/src/platform-scripture-editor/src/editor-chords.util.ts',
     ],
+    command: 'platformScriptureEditor.insertFootnoteAtSelection',
   },
   {
     id: 'scripture-insert-cross-reference',
     purpose:
-      'Insert a cross-reference at the selection (Standard view, editable). Does nothing while the editor’s right-click menu is open',
+      'Insert a cross-reference at the selection (editable text, every view). Does nothing while the editor’s right-click menu is open',
     category: 'Editing',
     context: 'Scripture editor web view',
     // macOS intentionally uses ⌃⇧T (not ⌘⇧T) to match the handler in
     // platform-scripture-editor.web-view.tsx (`event.ctrlKey`), like the find dialog's ⌃F.
-    // No `command`: the chord works only in Standard view, but the menu item works in every view
     keys: { macOS: '⌃⇧T', windows: 'Ctrl+Shift+T', linux: 'Ctrl+Shift+T' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
-      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
+      'extensions/src/platform-scripture-editor/src/editor-chords.util.ts',
     ],
+    command: 'platformScriptureEditor.insertCrossReferenceAtSelection',
+  },
+  {
+    id: 'scripture-toggle-footnotes',
+    purpose: 'Show or hide the footnotes pane',
+    category: 'View',
+    context: 'Scripture editor web view',
+    keys: { macOS: 'F7', windows: 'F7', linux: 'F7' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/editor-chords.util.ts',
+    ],
+    command: 'platformScriptureEditor.toggleFootnotes',
+  },
+  {
+    id: 'scripture-open-basic-checks',
+    // Kept while Basic checks are hidden in both modes, so the chord stays reserved and its menu
+    // hint returns with the menu item
+    purpose: 'Open Basic checks for the project (Power mode; off while Basic checks are hidden)',
+    category: 'Navigation',
+    context: 'Scripture editor web view',
+    // macOS uses ⌃⇧R (not ⌘⇧R) because ⌘⇧R is the macOS menu bar's force reload
+    keys: { macOS: '⌃⇧R', windows: 'Ctrl+Shift+R', linux: 'Ctrl+Shift+R' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/editor-chords.util.ts',
+    ],
+    command: 'platformScripture.openChecksSidePanel',
   },
   {
     id: 'scripture-remove-character-formatting',
@@ -639,6 +697,25 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
     ],
   },
+  {
+    id: 'scripture-open-paragraph-menu-from-marker',
+    purpose: 'Open the paragraph style menu to change the selected paragraph marker',
+    category: 'Editing',
+    // Handled inside the editor library that ships as the `@eten-tech-foundation/platform-editor`
+    // package: its `ParaMarkerSelectionPlugin` claims Enter and Alt+Down from a `KEY_DOWN_COMMAND`
+    // handler only while a paragraph marker is selected (by clicking its gutter glyph in the
+    // paragraph-structure view), and asks the web view to open its toolbar paragraph menu through
+    // `onParaMarkerMenuRequest`. `locations` names the in-repo code that answers that request.
+    // No `command`: the chord does nothing unless a paragraph marker is selected.
+    context:
+      'Scripture editor web view (handled by the @eten-tech-foundation/platform-editor package)',
+    keys: { macOS: '⏎ / ⌥↓', windows: 'Enter / Alt+↓', linux: 'Enter / Alt+↓' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/use-paragraph-menu-open-state.hook.ts',
+      'extensions/src/platform-scripture-editor/src/paragraph-style-trigger.component.tsx',
+    ],
+  },
   // The editor's arrow-key caret movement (verse hops, note boundaries, the two caret stops
   // around an \fp span's rendered line break — all in the scripture-editors repo's
   // ArrowNavigationPlugin) is deliberately NOT cataloged: arrow keys moving the caret in a
@@ -708,9 +785,11 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Undo the last edit in the editor',
     category: 'Editing',
     context: 'Editor (text editing)',
+    command: 'platformScriptureEditor.undo',
     keys: { macOS: '⌘Z', windows: 'Ctrl+Z', linux: 'Ctrl+Z' },
     locations: [
       'lib/platform-bible-react/src/components/basics/editor-keyboard-shortcuts.component.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
     ],
   },
   {
@@ -718,9 +797,11 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Redo the last undone edit',
     category: 'Editing',
     context: 'Editor (text editing)',
+    command: 'platformScriptureEditor.redo',
     keys: { macOS: '⇧⌘Z', windows: 'Ctrl+Y / Ctrl+Shift+Z', linux: 'Ctrl+Y / Ctrl+Shift+Z' },
     locations: [
       'lib/platform-bible-react/src/components/basics/editor-keyboard-shortcuts.component.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
     ],
   },
   {

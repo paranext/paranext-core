@@ -1,5 +1,41 @@
 {
   "metadata": {
+    "%internetSettings_webView_title_2%": {
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "Renamed to \"Internet connectivity\". The new key is %internetSettings_webView_title_3%."
+      }
+    },
+    "%internetSettings_webView_title_3%": {
+      "fallbackKey": "%internetSettings_webView_title_2%"
+    },
+    "%mainMenu_openParatextRegistration%": {
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "Relabeled to \"Registration information\". The new key is %mainMenu_openParatextRegistration_2%."
+      }
+    },
+    "%mainMenu_openParatextRegistration_2%": {
+      "fallbackKey": "%Paratext.RegistrationForm.RegistrationForm.Text%"
+    },
+    "%paratextRegistrationProfile_webView_title%": {
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "Renamed to \"Registration information\". The new key is %paratextRegistrationProfile_webView_title_2%."
+      }
+    },
+    "%paratextRegistrationProfile_webView_title_2%": {
+      "fallbackKey": "%Paratext.RegistrationForm.RegistrationForm.Text%"
+    },
+    "%paratextRegistration_alert_updatedInternetSettings_2%": {
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "Renamed to \"Internet connectivity settings updated\". The new key is %paratextRegistration_alert_updatedInternetSettings_3%."
+      }
+    },
+    "%paratextRegistration_alert_updatedInternetSettings_3%": {
+      "fallbackKey": "%paratextRegistration_alert_updatedInternetSettings_2%"
+    },
     "%paratextRegistration_commit_comment_changing_user%": {
       "fallbackKey": "%Paratext.&quot;Before changing registered user&quot;%"
     },
@@ -16,6 +52,21 @@
         "message": "Changed label to \"Disable ALL internet access\". The new key is %paratextRegistration_description_internetUse_option_Disabled_2%.",
         "date": "2026-07-26"
       }
+    },
+    "%paratextRegistration_description_internetUse_option_Disabled_2%": {
+      "deprecationInfo": {
+        "message": "Removed the \"Disable all Internet access\" option. Disabled is now labeled with %paratextRegistration_description_internetUse_option_VpnRequired_2%.",
+        "date": "2026-10-22"
+      }
+    },
+    "%paratextRegistration_description_internetUse_option_Disabled_details%": {
+      "deprecationInfo": {
+        "message": "Removed the \"Disable all Internet access\" option. Disabled is now described by %paratextRegistration_description_internetUse_option_DisableSomeServices_details%.",
+        "date": "2026-10-22"
+      }
+    },
+    "%paratextRegistration_description_internetUse_option_DisableSomeServices_details%": {
+      "fallbackKey": "%paratextRegistration_description_internetUse_option_VpnRequired_details_2%"
     },
     "%paratextRegistration_description_internetUse_option_Enabled_details%": {
       "deprecationInfo": {
@@ -40,7 +91,11 @@
       }
     },
     "%paratextRegistration_description_internetUse_option_VpnRequired_details_2%": {
-      "fallbackKey": "%paratextRegistration_description_internetUse_option_VpnRequired_details%"
+      "fallbackKey": "%paratextRegistration_description_internetUse_option_VpnRequired_details%",
+      "deprecationInfo": {
+        "message": "Now says Paratext may still connect to other internet services, and that this option will change to \"Disable all Internet access\" once that is available. The new key is %paratextRegistration_description_internetUse_option_DisableSomeServices_details%.",
+        "date": "2026-10-23"
+      }
     },
     "%paratextRegistration_label_proxyHost%": {
       "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.label2.Text%"
@@ -178,6 +233,24 @@
     "%paratextRegistration_internetUse_notYetAvailable%": {
       "fallbackKey": "%paratextRegistration_internetUse_comingSoon%",
       "notes": "Short badge on an internet-access option that is shown in the list but does not work yet. The user cannot turn it on. \"Available\" means \"can be used\", not \"in stock\" or \"not busy\". Keep it short: it sits beside the option's label."
+    },
+    "%paratextRegistration_internetUse_unsupportedSelection_title%": {
+      "deprecationInfo": {
+        "message": "The title now names the unsupported option. The new key is %paratextRegistration_internetUse_unsupportedSelection_title_2%.",
+        "date": "2026-10-23"
+      }
+    },
+    "%paratextRegistration_internetUse_unsupportedSelection_title_2%": {
+      "fallbackKey": "%paratextRegistration_internetUse_unsupportedSelection_title%"
+    },
+    "%paratextRegistration_internetUse_unsupportedSelection_description%": {
+      "deprecationInfo": {
+        "message": "Now also suggests that users stop using Paratext 10 until the option is supported. The new key is %paratextRegistration_internetUse_unsupportedSelection_description_2%.",
+        "date": "2026-10-23"
+      }
+    },
+    "%paratextRegistration_internetUse_unsupportedSelection_description_2%": {
+      "fallbackKey": "%paratextRegistration_internetUse_unsupportedSelection_description%"
     }
   },
   "localizedStrings": {
@@ -187,16 +260,20 @@
       "%internetSettings_webView_subtitle_2%": "Manage how Paratext accesses the internet. These settings apply only to Paratext 10 — not to all internet traffic on your computer, and not to a co-installed Paratext 9.",
       "%internetSettings_webView_title%": "Internet Settings",
       "%internetSettings_webView_title_2%": "Internet & connectivity",
+      "%internetSettings_webView_title_3%": "Internet connectivity",
       "%internetSettings_webView_tooltip%": "Enter your Paratext Registration Internet Settings into this form.",
       "%mainMenu_openInternetSettings%": "Internet Settings...",
       "%mainMenu_openInternetSettings_2%": "Internet & connectivity",
       "%mainMenu_openParatextRegistration%": "Paratext Registration Information...",
+      "%mainMenu_openParatextRegistration_2%": "Registration information",
+      "%paratextRegistrationProfile_webView_title_2%": "Registration information",
       "%paratextRegistration_alert_invalidRegistration%": "Registration information not found",
       "%paratextRegistration_alert_invalidRegistration_description%": "Check to make sure that the registration name and code you received are accurately entered here.",
       "%paratextRegistration_alert_unchangedRegistration%": "Unchanged registration information",
       "%paratextRegistration_alert_unchangedRegistration_description%": "Registration name and code have not been changed.",
       "%paratextRegistration_alert_updatedInternetSettings%": "Internet settings updated",
       "%paratextRegistration_alert_updatedInternetSettings_2%": "Internet & connectivity settings updated",
+      "%paratextRegistration_alert_updatedInternetSettings_3%": "Internet connectivity settings updated",
       "%paratextRegistration_alert_updatedRegistration%": "Registration information updated",
       "%paratextRegistration_alert_updatedRegistration_description%": "Changes applied! The application will restart in a few seconds.",
       "%paratextRegistration_alert_updatedRegistration_description_hasRestarted%": "The application successfully restarted! Your changes are now in effect.",
@@ -211,6 +288,7 @@
       "%paratextRegistration_description_internetUse_disclaimer%": "These Internet settings only affect connection to Paratext services like the Registry, send/receive, and download resources.",
       "%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%": "Block internet when in sensitive locations",
       "%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%": "Automatically blocks Paratext internet access in configured sensitive areas.",
+      "%paratextRegistration_description_internetUse_option_DisableSomeServices_details%": "Disables access to Registry, Send-Receive (sync), and the Digital Bible Library within Paratext 10. Paratext may connect to other internet services! This option will automatically change to “Disable all Internet access” once available.",
       "%paratextRegistration_description_internetUse_option_Disabled%": "Disable all Internet use",
       "%paratextRegistration_description_internetUse_option_Disabled_2%": "Disable all Internet access",
       "%paratextRegistration_description_internetUse_option_Disabled_details%": "Blocks all internet access within the Paratext app. Other applications on your computer are not affected.",
@@ -233,7 +311,9 @@
       "%paratextRegistration_internetUse_footer%": "Disabled options are planned for future updates.",
       "%paratextRegistration_internetUse_notYetAvailable%": "Not yet available",
       "%paratextRegistration_internetUse_unsupportedSelection_description%": "Your Paratext internet settings have “{selectedOption}” selected. This version of Paratext does not support that option yet, so choose one of the available options to continue.",
+      "%paratextRegistration_internetUse_unsupportedSelection_description_2%": "Choose one of the available options to continue or stop using Paratext 10 until it is supported.",
       "%paratextRegistration_internetUse_unsupportedSelection_title%": "This internet setting is not supported yet",
+      "%paratextRegistration_internetUse_unsupportedSelection_title_2%": "“{selectedOption}” is not supported yet",
       "%paratextRegistration_label_emailAddress%": "Email address",
       "%paratextRegistration_label_proxyHost%": "Host",
       "%paratextRegistration_label_proxyMode%": "Mode",
@@ -277,16 +357,20 @@
       "%internetSettings_webView_subtitle_2%": "Gestiona cómo Paratext accede a internet. Esta configuración se aplica únicamente a Paratext 10: no afecta a todo el tráfico de internet de su computadora ni a un Paratext 9 instalado en paralelo.",
       "%internetSettings_webView_title%": "Configuración de Internet",
       "%internetSettings_webView_title_2%": "Internet y conectividad",
+      "%internetSettings_webView_title_3%": "Conectividad a Internet",
       "%internetSettings_webView_tooltip%": "Ingrese su configuración de Internet de Registro de Paratext en este formulario.",
       "%mainMenu_openInternetSettings%": "Configuración de Internet...",
       "%mainMenu_openInternetSettings_2%": "Internet y conectividad",
       "%mainMenu_openParatextRegistration%": "Información de Registro Paratext...",
+      "%mainMenu_openParatextRegistration_2%": "Información de registro",
+      "%paratextRegistrationProfile_webView_title_2%": "Información de registro",
       "%paratextRegistration_alert_invalidRegistration%": "Información de registro no encontrada",
       "%paratextRegistration_alert_invalidRegistration_description%": "Verifique que el nombre y el código de registro que recibió estén ingresados correctamente aquí.",
       "%paratextRegistration_alert_unchangedRegistration%": "Información de registro sin cambios",
       "%paratextRegistration_alert_unchangedRegistration_description%": "El nombre y el código de registro no han sido modificados.",
       "%paratextRegistration_alert_updatedInternetSettings%": "Configuración de internet actualizada",
       "%paratextRegistration_alert_updatedInternetSettings_2%": "Configuración de Internet y conectividad actualizada",
+      "%paratextRegistration_alert_updatedInternetSettings_3%": "Configuración de conectividad a Internet actualizada",
       "%paratextRegistration_alert_updatedRegistration%": "Información de registro actualizada",
       "%paratextRegistration_alert_updatedRegistration_description%": "Cambios aplicados. La aplicación se reiniciará en unos segundos.",
       "%paratextRegistration_alert_updatedRegistration_description_hasRestarted%": "¡La aplicación se reinició correctamente! Sus cambios ahora están activos.",
@@ -300,6 +384,7 @@
       "%paratextRegistration_description_internetUse_disclaimer%": "Estas configuraciones de Internet solo afectan la conexión a los servicios de Paratext, como el Registro, Enviar/Recibir y la descarga de recursos.",
       "%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%": "Bloquear internet en lugares sensibles",
       "%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%": "Bloquea automáticamente el acceso a internet de Paratext en áreas sensibles configuradas.",
+      "%paratextRegistration_description_internetUse_option_DisableSomeServices_details%": "Deshabilita el acceso al Registro, Enviar/Recibir (sincronización) y la Biblioteca Bíblica Digital dentro de Paratext 10. ¡Paratext puede conectarse a otros servicios de internet! Esta opción cambiará automáticamente a “Deshabilitar todo el acceso a Internet” cuando esté disponible.",
       "%paratextRegistration_description_internetUse_option_Disabled%": "Deshabilitar todo uso de Internet",
       "%paratextRegistration_description_internetUse_option_Disabled_2%": "Deshabilitar todo el acceso a Internet",
       "%paratextRegistration_description_internetUse_option_Disabled_details%": "Bloquea todo el acceso a internet dentro de la aplicación Paratext. Otras aplicaciones en tu computadora no se ven afectadas.",
@@ -321,7 +406,9 @@
       "%paratextRegistration_internetUse_footer%": "Las opciones deshabilitadas están previstas para futuras actualizaciones.",
       "%paratextRegistration_internetUse_notYetAvailable%": "Aún no disponible",
       "%paratextRegistration_internetUse_unsupportedSelection_description%": "Su configuración de internet de Paratext tiene seleccionada la opción “{selectedOption}”. Esta versión de Paratext aún no admite esa opción, así que elija una de las opciones disponibles para continuar.",
+      "%paratextRegistration_internetUse_unsupportedSelection_description_2%": "Elija una de las opciones disponibles para continuar, o deje de usar Paratext 10 hasta que sea compatible.",
       "%paratextRegistration_internetUse_unsupportedSelection_title%": "Esta configuración de internet aún no es compatible",
+      "%paratextRegistration_internetUse_unsupportedSelection_title_2%": "“{selectedOption}” aún no es compatible",
       "%paratextRegistration_label_emailAddress%": "Dirección de correo electrónico",
       "%paratextRegistration_label_proxyHost%": "Servidor",
       "%paratextRegistration_label_proxyMode%": "Modo",

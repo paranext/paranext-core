@@ -442,17 +442,15 @@ declare module 'shared/models/web-view.model' {
      */
     iconUrl?: string;
     /**
-     * Whether the image at {@link WebViewDefinitionBase.iconUrl} is a single-colour shape. When
-     * `true`, the platform draws the icon's shape in the tab's current text colour, so it follows the
-     * theme and the tab's selection state without the WebView having to swap images. Leave unset for
-     * a full-colour icon.
+     * Name of a lucide icon (kebab-case, e.g. `refresh-cw`) to show on the title bar of the tab. The
+     * icon follows the tab's text colour, so it suits every theme and tab state. Takes precedence
+     * over {@link WebViewDefinitionBase.iconUrl}. The icons the platform can show are listed in
+     * `LUCIDE_ICON_NAMES` (exported from `platform-bible-react/experimental`). If the name is not one
+     * of them, `iconUrl` is used instead (and then the software's standard logo).
      *
-     * Ignored when there is no `iconUrl`. Set this whenever you set `iconUrl`. Changing or removing
-     * `iconUrl` through `updateWebViewDefinition` without also setting this clears it, so a later
-     * full-colour icon set that way isn't drawn as a single-colour shape. Nothing clears it on other
-     * paths, such as a provider returning a saved definition with a new `iconUrl`.
+     * @experimental This field is unstable and may change or disappear without notice
      */
-    isIconMonochrome?: boolean;
+    iconName?: string;
     /**
      * Name of the tab (or a localizeKey for the name that will automatically be localized) for the
      * WebView
@@ -788,7 +786,7 @@ declare module 'shared/models/web-view.model' {
    */
   export const WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS: readonly [
     'iconUrl',
-    'isIconMonochrome',
+    'iconName',
     'title',
     'tooltip',
     'projectId',
@@ -803,8 +801,7 @@ declare module 'shared/models/web-view.model' {
   >;
   /**
    * WebViewDefinition properties for updating a WebView that is already displayed. Any unspecified
-   * properties will stay the same, except that changing `iconUrl` clears
-   * {@link WebViewDefinitionBase.isIconMonochrome} unless this also sets it
+   * properties will stay the same
    */
   export type WebViewDefinitionUpdateInfo = Partial<WebViewDefinitionUpdatableProperties>;
   /**
@@ -905,8 +902,7 @@ declare module 'shared/models/web-view.model' {
    * Updates this WebView with the specified properties
    *
    * _＠param_ `updateInfo` properties to update on the WebView. Any unspecified properties will stay
-   * the same, except that changing `iconUrl` clears `isIconMonochrome` unless `updateInfo` also sets
-   * it
+   * the same
    *
    * _＠param_ `shouldBringToFront` If true, the tab will be brought to the front and unobscured by
    * other tabs. Defaults to `false`
@@ -1003,8 +999,7 @@ declare module 'shared/models/web-view.model' {
      * Updates this WebView with the specified properties
      *
      * _＠param_ `updateInfo` properties to update on the WebView. Any unspecified properties will stay
-     * the same, except that changing `iconUrl` clears `isIconMonochrome` unless `updateInfo` also sets
-     * it
+     * the same
      *
      * _＠param_ `shouldBringToFront` If true, the tab will be brought to the front and unobscured by
      * other tabs. Defaults to `false`
@@ -1236,8 +1231,7 @@ declare module 'shared/global-this.model' {
      * Updates this WebView with the specified properties
      *
      * _＠param_ `updateInfo` properties to update on the WebView. Any unspecified properties will stay
-     * the same, except that changing `iconUrl` clears `isIconMonochrome` unless `updateInfo` also sets
-     * it
+     * the same
      *
      * _＠param_ `shouldBringToFront` If true, the tab will be brought to the front and unobscured by
      * other tabs. Defaults to `false`
@@ -4814,10 +4808,14 @@ declare module 'shared/models/docking-framework.model' {
      */
     tabIconUrl?: string;
     /**
-     * Whether the image at {@link TabInfo.tabIconUrl} is a single-colour shape that should be drawn in
-     * the tab's current text colour. Ignored when there is no `tabIconUrl`.
+     * Name of a lucide icon (kebab-case, e.g. `refresh-cw`) to show on the title bar of the tab
+     * instead of {@link tabIconUrl}. The icons the platform can show are listed in `LUCIDE_ICON_NAMES`
+     * (exported from `platform-bible-react/experimental`). An unknown name is ignored, so
+     * {@link tabIconUrl} (and then the standard logo) is shown instead.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
      */
-    isTabIconMonochrome?: boolean;
+    tabIconName?: string;
     /**
      * Text to show (or a localizeKey that will automatically be localized) on the title bar of the
      * tab
@@ -6533,6 +6531,16 @@ declare module 'papi-shared-types' {
     'platform.openUserSettings': () => Promise<void>;
     'platform.openSettings': (webViewId?: WebViewId) => Promise<void>;
     /**
+     * Open a Settings tab limited to the project shown in the given web view — the same as
+     * `platform.openSettings`, under a name of its own so a web view's Project settings menu item
+     * can show its keyboard shortcut without the main menu's Settings item, which runs
+     * `platform.openSettings`, showing it too.
+     *
+     * @param webViewId Web view whose project the Settings tab should be limited to, if any
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.openProjectSettingsForWebView': (webViewId?: WebViewId) => Promise<void>;
+    /**
      * Move a web view to a window created for it.
      *
      * A move closes the web view in the window that holds it and reopens it — same
@@ -6983,6 +6991,27 @@ declare module 'papi-shared-types' {
      * Defaults to `false`.
      */
     'platform.isPublished': boolean;
+    /**
+     * Whether this project is registered with the Paratext Registry. A registered project's
+     * {@link ProjectSettingTypes['platform.name'] | `platform.name`} and
+     * {@link ProjectSettingTypes['platform.fullName'] | `platform.fullName`} can be changed only
+     * through the registry. A project can be shared through Send/Receive without being registered.
+     *
+     * Computed by the project data provider; it cannot be set.
+     *
+     * Defaults to `false`.
+     */
+    'platform.isRegistered': boolean;
+    /**
+     * Whether the current user has the administrator role on this project. Unlike most project
+     * settings, the answer depends on who is asking. A project with no notion of roles counts its
+     * user as its administrator.
+     *
+     * Computed by the project data provider; it cannot be set.
+     *
+     * Defaults to `true`.
+     */
+    'platform.isCurrentUserAdministrator': boolean;
     /**
      * Which way the project's text flows. 'ltr' = left-to-right; 'rtl' = right-to-left. '' or
      * undefined = left-to-right (may be changed in the future to detect). Defaults to ''. This is
@@ -9473,6 +9502,15 @@ declare module 'shared/models/dialog-options.model' {
     /** Url of dialog icon to display in the header. Default is Platform.Bible logo */
     iconUrl?: string;
     /**
+     * Name of a lucide icon (kebab-case, e.g. `refresh-cw`) to display in the header. Takes
+     * precedence over {@link DialogOptions.iconUrl}. The icons the platform can show are listed in
+     * `LUCIDE_ICON_NAMES` (exported from `platform-bible-react/experimental`). An unknown name is
+     * ignored and {@link DialogOptions.iconUrl} is used instead.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    iconName?: string;
+    /**
      * The message to show the user in the dialog. If you provide a {@link LocalizeKey}, it will be
      * localized before displaying.
      *
@@ -10408,9 +10446,8 @@ declare module 'shared/models/request-registry-tokens-privilege.model' {
      * - `INVALID_ARGUMENT`: a scope is not allowed, or the Registry rejected the request (for example,
      *   the resource is not registered with this Registry)
      * - `UNAUTHENTICATED`: the user has no valid registration, or the Registry did not accept it
-     * - `FAILED_PRECONDITION`: the user's Internet & connectivity settings block it: internet access is
-     *   off, or "Disable access to some Bible translation services" is selected and this computer's
-     *   location is restricted or could not be determined
+     * - `FAILED_PRECONDITION`: the user's Internet & connectivity settings block it: "Disable access to
+     *   some Bible translation services" or "Block internet when in sensitive locations" is selected
      * - `UNAVAILABLE`: there is no internet connection, reading the registration or the Internet &
      *   connectivity settings failed or took too long, or the Registry could not be reached or did
      *   not return a usable token; retrying later may help

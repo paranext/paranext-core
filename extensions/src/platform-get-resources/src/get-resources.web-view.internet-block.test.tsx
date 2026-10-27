@@ -41,10 +41,10 @@ vi.mock('@papi/frontend/react', () => ({
 
 // The two blocks' texts, as they arrive across the process boundary: ParatextData's own, and the
 // data provider's gate on the "Disable access to some Bible translation services" setting.
-const ALL_ACCESS_DISABLED_ERROR =
+const PARATEXT_DATA_BLOCK_ERROR =
   'JSON-RPC Request error (-32000): Bug in Paratext caused attempted access to Internet. Request has been blocked.';
 const SERVICES_BLOCKED_ERROR =
-  'JSON-RPC Request error (-32000): Internet access is disabled in “Internet & connectivity”. Please enable it and try again. (INTERNET_SERVICES_BLOCKED)';
+  'JSON-RPC Request error (-32000): Internet access is disabled in “Internet connectivity”. Please enable it and try again. (INTERNET_SERVICES_BLOCKED)';
 
 const RESOURCE = {
   dblEntryUid: 'uid-1',
@@ -79,7 +79,7 @@ describe('Get Resources web view', () => {
     await waitFor(() =>
       expect(mockSendNotification).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: '%data_loading_error_internetAccess_disabled_2%',
+          message: '%data_loading_error_internetAccess_disabled_3%',
           clickCommand: 'paratextRegistration.showInternetSettings',
           notificationId: INTERNET_BLOCKED_NOTIFICATION_ID,
         }),
@@ -89,7 +89,7 @@ describe('Get Resources web view', () => {
 
   it('reports a blocked install with the notification that opens the setting', async () => {
     serveCommands(serveAvailableCatalog);
-    mockInstallDblResource.mockRejectedValue(new Error(ALL_ACCESS_DISABLED_ERROR));
+    mockInstallDblResource.mockRejectedValue(new Error(PARATEXT_DATA_BLOCK_ERROR));
 
     renderGetResourcesWebView();
 
@@ -98,7 +98,7 @@ describe('Get Resources web view', () => {
     await waitFor(() =>
       expect(mockSendNotification).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: '%data_loading_error_internetAccess_disabled_2%',
+          message: '%data_loading_error_internetAccess_disabled_3%',
           notificationId: INTERNET_BLOCKED_NOTIFICATION_ID,
         }),
       ),

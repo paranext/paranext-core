@@ -52,7 +52,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { ShortcutKeys } from 'platform-bible-react/experimental';
+import { LUCIDE_ICON_NAMES, LucideIcon, ShortcutKeys } from 'platform-bible-react/experimental';
 import {
   getErrorMessage,
   isLocalizeKey,
@@ -61,7 +61,7 @@ import {
   type Localized,
   type SingleColumnMenu,
 } from 'platform-bible-utils';
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import './platform-tab-title.component.scss';
 
@@ -82,10 +82,11 @@ type PlatformTabTitleProps = {
   /** Url to image to show on the tab. Defaults to the software's standard logo. */
   iconUrl?: string;
   /**
-   * Whether `iconUrl` is a single-colour shape to draw in the tab's text colour, so it follows the
-   * theme. Ignored when there is no `iconUrl`.
+   * Name of a lucide icon to show on the tab instead of `iconUrl`. An unknown name is ignored.
+   *
+   * @experimental This field is unstable and may change or disappear without notice
    */
-  isIconMonochrome?: boolean;
+  iconName?: string;
   /** Text to show on the tab */
   text: string | LocalizeKey;
   /** Text to show when hovering over the tab. Defaults to empty string */
@@ -379,29 +380,11 @@ const handleMoveTabToNewWindow = async (webViewIdToMove: WebViewId) => {
 };
 
 /**
- * Builds the inline style that paints a tab's icon. A monochrome icon is drawn as a mask filled
- * with the text colour (see `.tab-menu-icon-monochrome`), so it follows the theme; its url goes
- * through a custom property so the stylesheet owns every other mask property. The url is quoted so
- * one containing spaces or parentheses still parses.
- *
- * @returns `undefined` when there is no icon, so the stylesheet's default logo shows
- */
-function getTabIconStyle(
-  iconUrl: string | undefined,
-  isIconMasked: boolean,
-): (CSSProperties & Record<`--${string}`, string>) | undefined {
-  if (!iconUrl) return undefined;
-  const cssIconUrl = `url("${iconUrl}")`;
-  if (!isIconMasked) return { backgroundImage: cssIconUrl };
-  return { '--tab-icon-mask': cssIconUrl };
-}
-
-/**
  * Custom tab title for all tabs in Platform
  *
  * @param iconUrl Url to image to show on the tab. Defaults to the software's standard logo.
- * @param isIconMonochrome Whether `iconUrl` is a single-colour shape to draw in the tab's text
- *   colour
+ * @param iconName Name of a lucide icon to show on the tab instead of `iconUrl`. An unknown name is
+ *   ignored.
  * @param text The text to show on the tab title
  * @param tooltip Text to show when hovering over the tab. Defaults to empty string
  * @param flashTriggerTime Trigger to make the tab flash. Each time this value changes to a truthy
@@ -411,7 +394,7 @@ function getTabIconStyle(
  */
 export function PlatformTabTitle({
   iconUrl,
-  isIconMonochrome,
+  iconName,
   text,
   tooltip,
   flashTriggerTime,
@@ -958,13 +941,29 @@ export function PlatformTabTitle({
 
   const iconOnlyClass = isIconOnly ? ' icon-only' : '';
 
-  const isIconMasked = !!iconUrl && !!isIconMonochrome;
-  const iconStyle = getTabIconStyle(iconUrl, isIconMasked);
-  const monochromeIconClass = isIconMasked ? ' tab-menu-icon-monochrome' : '';
-
-  const icon = (
-    <div className={`tab-menu-icon${monochromeIconClass}${dragIgnoreClass}`} style={iconStyle} />
-  );
+  // A lucide icon name wins over an icon url. An unknown name falls through to the url and then to
+  // the default logo, since `LucideIcon` renders nothing for a name it does not know
+  const icon =
+    iconName && LUCIDE_ICON_NAMES.includes(iconName) ? (
+      // The wrapper keeps the icon box that `.tab-menu-icon` gets from
+      // `platform-tab-title.component.scss`, without its default-logo background.
+      // The svg ignores the pointer so the wrapper, which carries the drag-ignore marker, is the
+      // element under the pointer.
+      <span className={`tab-lucide-icon${dragIgnoreClass}`}>
+        <LucideIcon name={iconName} className="tw:pointer-events-none" />
+      </span>
+    ) : (
+      <div
+        className={`tab-menu-icon${dragIgnoreClass}`}
+        style={
+          iconUrl
+            ? {
+                backgroundImage: `url(${iconUrl})`,
+              }
+            : undefined
+        }
+      />
+    );
 
   const titleWithTooltip = (
     <TooltipProvider>

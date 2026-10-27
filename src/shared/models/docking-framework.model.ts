@@ -65,10 +65,14 @@ export type TabInfo = SavedTabInfo & {
    */
   tabIconUrl?: string;
   /**
-   * Whether the image at {@link TabInfo.tabIconUrl} is a single-colour shape that should be drawn in
-   * the tab's current text colour. Ignored when there is no `tabIconUrl`.
+   * Name of a lucide icon (kebab-case, e.g. `refresh-cw`) to show on the title bar of the tab
+   * instead of {@link tabIconUrl}. The icons the platform can show are listed in `LUCIDE_ICON_NAMES`
+   * (exported from `platform-bible-react/experimental`). An unknown name is ignored, so
+   * {@link tabIconUrl} (and then the standard logo) is shown instead.
+   *
+   * @experimental This field is unstable and may change or disappear without notice
    */
-  isTabIconMonochrome?: boolean;
+  tabIconName?: string;
   /**
    * Text to show (or a localizeKey that will automatically be localized) on the title bar of the
    * tab

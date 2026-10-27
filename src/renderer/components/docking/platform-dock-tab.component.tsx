@@ -39,7 +39,7 @@ export function createRCDockTabFromTabInfo(
     title: (
       <PlatformTabTitle
         iconUrl={tabInfo.tabIconUrl}
-        isIconMonochrome={tabInfo.isTabIconMonochrome}
+        iconName={tabInfo.tabIconName}
         text={tabInfo.tabTitle}
         tooltip={tabInfo.tabTooltip}
         flashTriggerTime={flashTriggerTime}
