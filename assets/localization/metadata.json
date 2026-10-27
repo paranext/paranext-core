@@ -35,6 +35,15 @@
       "message": "Updated error text to include a link to the internet settings panel. The new key is %data_loading_error_internetAccess_disabled_2%."
     }
   },
+  "%data_loading_error_internetAccess_disabled_2%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "The panel it names is now called \"Internet connectivity\". The new key is %data_loading_error_internetAccess_disabled_3%."
+    }
+  },
+  "%data_loading_error_internetAccess_disabled_3%": {
+    "fallbackKey": "%data_loading_error_internetAccess_disabled_2%"
+  },
   "%data_loading_error_paratextData_internet_disabled%": {
     "deprecationInfo": {
       "date": "2025-09-24",
@@ -74,6 +83,21 @@
       "date": "2026-10-20",
       "message": "The wizard now asks the user to choose an option before Next is enabled, so the lead-in asks them to choose rather than to manage the setting. The new key is %firstRun_step_internetSettings_body_2%."
     }
+  },
+  "%firstRun_step_internetSettings_heading%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Renamed to \"Internet connectivity\" to match the internet settings panel. The new key is %firstRun_step_internetSettings_heading_2%."
+    }
+  },
+  "%firstRun_step_internetSettings_heading_2%": {
+    "fallbackKey": "%firstRun_step_internetSettings_heading%"
+  },
+  "%firstRun_step_internetSettings_paratext9Setting_Disabled%": {
+    "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.cmbxInternetUse.Items[2]%"
+  },
+  "%firstRun_step_internetSettings_paratext9Setting_VpnRequired%": {
+    "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.cmbxInternetUse.Items[1]%"
   },
   "%firstRun_step_language_placeholder%": {
     "deprecationInfo": {
@@ -125,6 +149,24 @@
       "message": "Retired with no replacement key; the Feature roadmap item was removed from the Help menu because the roadmap page it opened is no longer published."
     }
   },
+  "%mainMenu_helpInfo_visitGettingStartedPage%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Relabeled to \"Browse help\". The new key is %mainMenu_helpInfo_visitGettingStartedPage_2%."
+    }
+  },
+  "%mainMenu_helpInfo_visitGettingStartedPage_2%": {
+    "fallbackKey": "%mainMenu_helpInfo_visitGettingStartedPage%"
+  },
+  "%mainMenu_openNewWindow%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Relabeled to \"New window\". The new key is %mainMenu_openNewWindow_2%."
+    }
+  },
+  "%mainMenu_openNewWindow_2%": {
+    "fallbackKey": "%mainMenu_openNewWindow%"
+  },
   "%mainMenu_visitSupportBible%": {
     "fallbackKey": "%mainMenu_helpInfo_visitCommunitySupportPage%"
   },
@@ -139,6 +181,15 @@
       "date": "2026-09-30",
       "message": "The tour's left-column stop now names both Base and Model texts rather than the model text alone. The new key is %onboardingTour_step_baseOrModelText_title%."
     }
+  },
+  "%onboardingTour_step_profile_description%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "The tour's profile stop now also names the Simple / Power switch in the User menu. The new key is %onboardingTour_step_profile_description_2%."
+    }
+  },
+  "%onboardingTour_step_profile_description_2%": {
+    "fallbackKey": "%onboardingTour_step_profile_description%"
   },
   "%onboardingTour_step_sendReceive_description%": {
     "deprecationInfo": {
@@ -215,6 +266,15 @@
   },
   "%settings_platform_group1_label_alternative%": {
     "fallbackKey": "%settings_platform_group1_label%"
+  },
+  "%settings_platform_showRegistrationReminderOnStartup_label%": {
+    "deprecationInfo": {
+      "date": "2026-10-23",
+      "message": "UX renamed this setting to say what it reminds the user about. The new key is %settings_platform_showRegistrationReminderOnStartup_label_2%."
+    }
+  },
+  "%settings_platform_showRegistrationReminderOnStartup_label_2%": {
+    "fallbackKey": "%settings_platform_showRegistrationReminderOnStartup_label%"
   },
   "%settings_platform_webViewContentZoom_description%": {
     "deprecationInfo": {
@@ -371,15 +431,87 @@
       "message": "The toolbar's standalone theme toggle button was replaced by the appearance toggle in the User Profile popover, which does not surface a separate theme-loading error tooltip."
     }
   },
+  "%toolbar_userProfile_label%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Renamed to \"User menu\". The new key is %toolbar_userProfile_label_2%."
+    }
+  },
+  "%toolbar_userProfile_label_2%": {
+    "fallbackKey": "%toolbar_userProfile_label%"
+  },
+  "%toolbar_userProfile_label_registrationNeeded%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Renamed to \"User menu — registration needed\". The new key is %toolbar_userProfile_label_registrationNeeded_2%."
+    }
+  },
+  "%toolbar_userProfile_label_registrationNeeded_2%": {
+    "fallbackKey": "%toolbar_userProfile_label_registrationNeeded%"
+  },
   "%undoButton_tooltip%": {
     "notes": "The tooltip text for the undo button in the common undo/redo control used in various editors.",
     "fallbackKey": "%Paratext.Base.ProjectComments.CommentEditorForm.uiUndo.ToolTipText%"
+  },
+  "%userProfile_interfaceMode_power_description%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Power mode is now described as a configurable interface to use alongside Paratext 9 rather than the full Paratext interface. The new key is %userProfile_interfaceMode_power_description_2%."
+    }
+  },
+  "%userProfile_interfaceMode_power_description_2%": {
+    "fallbackKey": "%userProfile_interfaceMode_power_description%"
+  },
+  "%userProfile_interfaceMode_simple_description%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Simple mode is now described by what it supports (basic exegesis, drafting and AI checks) rather than as focused translation work. The new key is %userProfile_interfaceMode_simple_description_2%."
+    }
+  },
+  "%userProfile_interfaceMode_simple_description_2%": {
+    "fallbackKey": "%userProfile_interfaceMode_simple_description%"
   },
   "%userProfile_networkSettings%": {
     "deprecationInfo": {
       "date": "2026-07-26",
       "message": "Renamed to \"Internet & connectivity\" to match the internet settings panel. The new key is %userProfile_networkSettings_2%."
     }
+  },
+  "%userProfile_server_badge_development%": {
+    "notes": "Usually left untranslated (falling back to the English \"Development\") since this badge targets a dev/support audience who will likely recognize the terse English environment name regardless of interface language. Translate it if that reasoning doesn't hold in your language or script — it is not required to match the English string. The tooltip, %userProfile_server_tooltip_development%, should still be translated: it carries the full explanation for anyone who ends up on this server."
+  },
+  "%userProfile_server_badge_qualityAssurance%": {
+    "notes": "Usually left untranslated (falling back to the English \"QA\") since this badge targets a dev/support audience who will likely recognize the terse English environment abbreviation regardless of interface language. Translate it if that reasoning doesn't hold in your language or script — it is not required to match the English string. The tooltip, %userProfile_server_tooltip_qualityAssurance%, should still be translated: it carries the full explanation for anyone who ends up on this server."
+  },
+  "%userProfile_server_badge_test%": {
+    "notes": "Usually left untranslated (falling back to the English \"Test\") since this badge targets a dev/support audience who will likely recognize the terse English environment name regardless of interface language. Translate it if that reasoning doesn't hold in your language or script — it is not required to match the English string. The tooltip, %userProfile_server_tooltip_test%, should still be translated: it carries the full explanation for anyone who ends up on this server."
+  },
+  "%userProfile_networkSettings_2%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Renamed to \"Internet connectivity\". The new key is %userProfile_networkSettings_3%."
+    }
+  },
+  "%userProfile_networkSettings_3%": {
+    "fallbackKey": "%userProfile_networkSettings_2%"
+  },
+  "%userProfile_profileAndRegistration%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Renamed to \"Registration information\". The new key is %userProfile_profileAndRegistration_2%."
+    }
+  },
+  "%userProfile_profileAndRegistration_2%": {
+    "fallbackKey": "%userProfile_profileAndRegistration%"
+  },
+  "%webView_openProjectSettings%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Relabeled to \"Project settings\" for every mode and web view. The new key is %webView_openProjectSettings_2%."
+    }
+  },
+  "%webView_openProjectSettings_2%": {
+    "fallbackKey": "%webView_openProjectSettings%"
   },
   "%yes%": {
     "notes": "A confirmation word used in many places. For example, this may be used as the label on a button on a dialog.",

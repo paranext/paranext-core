@@ -12,6 +12,7 @@ using Paranext.DataProvider.Services;
 using Paratext.Data;
 using Paratext.Data.ProjectComments;
 using Paratext.Data.ProjectSettingsAccess;
+using Paratext.Data.Users;
 using PtxUtils;
 using SIL.Scripture;
 
@@ -772,10 +773,14 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <returns>The auto-generated comment ID (format: "threadId/userName/date")</returns>
     /// <exception cref="InvalidOperationException">If the selected text is invalid or the comment's
     /// assigned (<see cref="PlatformCommentWrapper.AssignedUser"/>) cannot be assigned to threads
-    /// in this project.
+    /// in this project.</exception>
+    /// <exception cref="ProjectOpenBlockedException">If Platform.Bible can't open this project
+    /// (see <see cref="ScrTextExtensions.ThrowIfOpenBlocked"/>).</exception>
     public string CreateComment(PlatformCommentWrapper comment)
     {
         using var _ = EnterSyncWriteScope();
+        // A comment is anchored to verse text, which a project that can't be opened doesn't serve
+        ThrowIfProjectOpenBlocked();
         VerifyUserCanCreateComments();
 
         // Never let the "content could not be displayed" placeholder become a note's real content.
@@ -1024,6 +1029,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // Named (not `_`) because this method later uses `out _` discards, which would bind to a
         // using variable named `_` and fail to compile.
         using var syncWriteScope = EnterSyncWriteScope();
+        ThrowIfProjectOpenBlocked();
         if (resolution != "accept" && resolution != "reject" && resolution != "merge")
             throw new InvalidDataException(
                 $"Invalid resolution '{resolution}' for ResolveConflict; expected 'accept', 'reject', or 'merge'."
@@ -1183,6 +1189,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             // PT9 reads verse-only USFM via Parser.GetVerseUsfmText (CommentHtmlBuilder
             // .GetResolutionOptions); ScrText.GetText returns the whole chapter, which never
             // matches the verse-only text recorded on Comment.Verse. A missing verse -> stale.
+            // open-block: exempt — reached only via ResolveConflict and GetConflictResolutionOptions, which refuse
             string? currentRaw = scrText.Parser.GetVerseUsfmText(vref, true, true);
             if (currentRaw == null)
                 return true;
@@ -1217,15 +1224,18 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// This resolvability policy mirrors a slice of PT9's <c>CommentHtmlBuilder.GetResolutionOptions</c>
     /// (the canonical version lives in ParatextInternalShared and is not referenceable here).
     /// Intentional divergences to keep in mind if that upstream method changes: (1) a Team-assigned
-    /// conflict is resolvable by any team member (see <see cref="IsThreadAssignedToUser"/>); (2) there
-    /// is no study-bible-additions gate; (3) staleness regularizes and trims whitespace before
-    /// comparing (see <see cref="IsConflictVerseStale"/>), so a pure leading/trailing whitespace
-    /// change is not treated as stale.
+    /// conflict is resolvable by any team member (see <see cref="IsThreadAssignedToUser"/>); (2)
+    /// staleness regularizes and trims whitespace before comparing (see
+    /// <see cref="IsConflictVerseStale"/>), so a pure leading/trailing whitespace change is not
+    /// treated as stale.
     /// </remarks>
     public string GetConflictResolutionOptions(string threadId)
     {
         try
         {
+            // A project that can't be opened offers no resolution. Its refusal is an
+            // InvalidOperationException, caught below as "none" before any verse text is read.
+            ThrowIfProjectOpenBlocked();
             // Verify proves the thread exists (throws otherwise) and returns it, so no re-find here.
             CommentThread thread = VerifyUserCanResolveConflict(threadId);
             if (IsConflictVerseStale(thread))
@@ -1437,14 +1447,17 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     }
 
     /// <summary>
-    /// Determines if the current user can create new comment threads in this project.
+    /// Determines if the current user can create new comment threads in this project. False for a
+    /// project Platform.Bible can't open, because <see cref="CreateComment"/> refuses it.
     /// </summary>
-    /// <param name="allowInSba">Allow creating comments in Study Bible Additions projects (default: false)</param>
+    /// <param name="allowInSba">Allow creating comments in Study Bible Additions projects (default:
+    /// false). Has no effect while such projects can't be opened.</param>
     /// <returns>True if the user can create comments, false otherwise</returns>
     public bool CanUserCreateComments(bool allowInSba = false)
     {
         try
         {
+            ThrowIfProjectOpenBlocked();
             VerifyUserCanCreateComments(allowInSba);
             return true;
         }
@@ -1872,6 +1885,16 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (settingName == ProjectSettingsNames.PB_IS_PUBLISHED)
             return scrText.IsResourceProject;
 
+        if (settingName == ProjectSettingsNames.PB_IS_REGISTERED)
+            return IsRegistered(scrText);
+
+        if (settingName == ProjectSettingsNames.PB_IS_CURRENT_USER_ADMINISTRATOR)
+            return IsUserProjectAdministrator();
+
+        // The copyright notice is computed from several settings; no Settings.xml key holds it
+        if (settingName == ProjectSettingsNames.PB_COPYRIGHT_NOTICE)
+            return CopyrightNotice.FromScrText(scrText);
+
         // Text direction comes from the project's ldml file, not from Settings.xml
         if (paratextSettingName == ProjectSettingsNames.PT_TEXT_DIRECTION)
             return scrText.RightToLeft ? "rtl" : "ltr";
@@ -1988,12 +2011,15 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (scrText.IsResourceProject)
             throw new Exception("Cannot change settings on resources");
 
-        // platform.isPublished is read-only — it reflects ScrText.IsResourceProject and is not
-        // backed by any writable Paratext setting.
-        if (settingName == ProjectSettingsNames.PB_IS_PUBLISHED)
-            throw new InvalidOperationException(
-                $"{ProjectSettingsNames.PB_IS_PUBLISHED} is a read-only computed setting."
-            );
+        // Computed settings reflect the project or the user and are not backed by any writable
+        // Paratext setting.
+        if (
+            settingName == ProjectSettingsNames.PB_IS_PUBLISHED
+            || settingName == ProjectSettingsNames.PB_COPYRIGHT_NOTICE
+            || settingName == ProjectSettingsNames.PB_IS_REGISTERED
+            || settingName == ProjectSettingsNames.PB_IS_CURRENT_USER_ADMINISTRATOR
+        )
+            throw new InvalidOperationException($"{settingName} is a read-only computed setting.");
 
         // Figure out which setting name to use (resolved early so the admin gate below can use it
         // before the IsValid network round-trip — unauthorized writes are rejected immediately).
@@ -2001,18 +2027,31 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(settingName)
             ?? settingName;
 
-        // The referenced-projects-and-resources list carries the admin-only isInTextCollection
-        // flag (the shared text-collection default for the Scripture Text Grid), so its writes are
-        // gated to project administrators server-side (the UI-facing query is
-        // canUserWriteProjectTextConnectionSettings()). Model texts do NOT participate in
+        // Only project administrators may change the project's language, or the
+        // referenced-projects-and-resources list: it carries the admin-only isInTextCollection
+        // flag (the shared text-collection default for the Scripture Text Grid; the UI-facing query
+        // is canUserWriteProjectTextConnectionSettings()). Model texts do NOT participate in
         // text-collection and keep their pre-existing ungated behavior. USER-scope writes (user
         // lists, overlay, init) are intentionally UNGATED.
         if (
-            paratextSettingName == ProjectSettingsNames.PT_REFERENCED_PROJECTS_AND_RESOURCES
-            && !IsUserProjectAdministrator()
+            (
+                paratextSettingName == ProjectSettingsNames.PT_REFERENCED_PROJECTS_AND_RESOURCES
+                || paratextSettingName == ProjectSettingsNames.PT_LANGUAGE
+            ) && !IsUserProjectAdministrator()
         )
             throw new UnauthorizedAccessException(
                 $"Only project administrators may write '{settingName}'."
+            );
+
+        // Paratext changes a registered project's names only through the registry, never locally.
+        if (
+            (
+                paratextSettingName == ProjectSettingsNames.PT_NAME
+                || paratextSettingName == ProjectSettingsNames.PT_FULL_NAME
+            ) && IsRegistered(scrText)
+        )
+            throw new InvalidOperationException(
+                $"'{settingName}' of a registered project can only be changed through the registry."
             );
 
         // If there is no Paratext setting for the name given, we'll create one lower down
@@ -2220,6 +2259,14 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <remarks>At this time, the only check for this is whether the user is an administrator on
     /// the project.</remarks>
     public bool CanUserWriteProjectTextConnectionSettings() => IsUserProjectAdministrator();
+
+    /// <summary>
+    /// Whether the project is registered with the Paratext Registry, by the same test as
+    /// ParatextData's <c>ProjectWrapper.IsRegistered</c>: a registered project has a Normal or
+    /// Publishable license. An unregistered project's license is Limited, even when it is shared.
+    /// </summary>
+    private static bool IsRegistered(ScrText scrText) =>
+        scrText.Permissions.LicenseType.IsValidRegisteredProject();
 
     /// <summary>
     /// Determines if the current user is a project administrator
@@ -2696,6 +2743,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     public bool SetBookUsfm(VerseRef verseRef, string data)
     {
         using var _ = EnterSyncWriteScope();
+        ThrowIfProjectOpenBlocked();
         return SetBookUsfmInScope(verseRef, data);
     }
 
@@ -2721,6 +2769,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 BookSet localBooksPresentSet = scrText.Settings.LocalBooksPresentSet;
                 isNewBook = !localBooksPresentSet.IsSelected(verseRef.BookNum);
                 // Set with chapter 0 sets the whole book
+                // open-block: exempt — un-gated core; reached only via SetBookUsfm/SetBookUsx, which refuse
                 // SR-write-gate: exempt — un-gated core; the whole mutation runs inside SetBookUsfm/SetBookUsx's write scope (nesting a 2nd gate is unsafe; see SendReceiveWriteLock).
                 scrText.PutText(verseRef.BookNum, 0, false, data, writeLock);
             }
@@ -2736,9 +2785,22 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return true;
     }
 
+    /// <summary>
+    /// Writes <paramref name="data"/> as the USFM of the chapter <paramref name="verseRef"/> names.
+    /// </summary>
+    /// <remarks>
+    /// The chapter markers in <paramref name="data"/> are made to agree with that chapter before
+    /// the write (see <see cref="ChapterMarkerCorrection"/>), so what is stored is not always
+    /// byte-for-byte what was passed in — a wrong number, an extra marker, or a missing one is
+    /// corrected rather than refused. Paratext rejects all three outright, and the rejection leaves
+    /// whatever produced them in place, so every later write of the chapter fails too; correcting
+    /// here is what keeps a single bad marker from stopping the chapter from being written at all.
+    /// A caller that needs the stored form should read it back.
+    /// </remarks>
     public bool SetChapterUsfm(VerseRef verseRef, string data)
     {
         using var _ = EnterSyncWriteScope();
+        ThrowIfProjectOpenBlocked();
         try
         {
             var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
@@ -2746,7 +2808,20 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 WriteScope.EntireProject(scrText),
                 writeLock =>
                 {
-                    scrText.PutText(verseRef.BookNum, verseRef.ChapterNum, false, data, writeLock);
+                    var correctedData = ChapterMarkerCorrection.FixChapterMarkers(
+                        data,
+                        verseRef.ChapterNum,
+                        out var wasCorrected
+                    );
+                    if (wasCorrected)
+                        Console.WriteLine(GetChapterMarkersCorrectedMessage(verseRef));
+                    scrText.PutText(
+                        verseRef.BookNum,
+                        verseRef.ChapterNum,
+                        false,
+                        correctedData,
+                        writeLock
+                    );
                 }
             );
         }
@@ -3073,6 +3148,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // SetBookUsfmInScope (NOT the public SetBookUsfm) so the whole mutation sits under a single
         // scope — nesting is unsafe under an arm race; see SetBookUsfmInScope. Inert in public core.
         using var _ = EnterSyncWriteScope();
+        ThrowIfProjectOpenBlocked();
         // The ParatextData project write lock (RunWithinLock) is taken inside SetBookUsfmInScope —
         // unrelated to the S/R gate scope above, despite the similar name.
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
@@ -3080,9 +3156,17 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return SetBookUsfmInScope(verseRef, usfm);
     }
 
+    /// <summary>
+    /// Writes <paramref name="data"/> as the USX of the chapter <paramref name="verseRef"/> names.
+    /// </summary>
+    /// <remarks>
+    /// Corrects the chapter markers before writing, on the same terms as
+    /// <see cref="SetChapterUsfm"/>.
+    /// </remarks>
     public bool SetChapterUsx(VerseRef verseRef, string data)
     {
         using var _ = EnterSyncWriteScope();
+        ThrowIfProjectOpenBlocked();
         string? failedMessage = null;
         bool didChange = true;
         try
@@ -3092,7 +3176,15 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 WriteScope.EntireProject(scrText),
                 writeLock =>
                 {
-                    var usfm = ConvertUsxToUsfm(scrText, verseRef, data);
+                    var convertedUsfm = ConvertUsxToUsfm(scrText, verseRef, data);
+                    // Correct the chapter markers before the comparison below so it sees what would
+                    // actually be written: content that differs from disk only by a bad marker must
+                    // still be written, and content that matches disk once corrected need not be.
+                    var usfm = ChapterMarkerCorrection.FixChapterMarkers(
+                        convertedUsfm,
+                        verseRef.ChapterNum,
+                        out var wasCorrected
+                    );
 
                     // Compare the current USFM to the normalized input USFM to see if anything changed
                     // This may happen if someone makes a whitespace change that gets normalized
@@ -3104,6 +3196,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                         return;
                     }
 
+                    if (wasCorrected)
+                        Console.WriteLine(GetChapterMarkersCorrectedMessage(verseRef));
                     scrText.PutText(verseRef.BookNum, verseRef.ChapterNum, true, usfm, writeLock);
                 }
             );
@@ -3144,6 +3238,16 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     #region Private helper methods
 
+    /// <summary>
+    /// What a chapter write logs when its chapter markers had to be corrected to match the chapter
+    /// being written. See <see cref="ChapterMarkerCorrection"/> for why they are corrected rather
+    /// than left for Paratext to reject. Written immediately before the write it describes, so a
+    /// correction that turns out to match what is already stored logs nothing.
+    /// </summary>
+    private static string GetChapterMarkersCorrectedMessage(VerseRef verseRef) =>
+        $"Chapter markers in {verseRef.Book} {verseRef.ChapterNum} did not match the chapter "
+        + "being written; they were corrected before saving.";
+
     private string GetFromScrText(
         VerseRef verseRef,
         Func<ScrText, VerseRef, string> getTextFromScrText
@@ -3152,6 +3256,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         try
         {
             var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+            // Before the book check, so a refused project isn't reported as missing a book
+            scrText.ThrowIfOpenBlocked();
             if (verseRef.Versification == null)
                 verseRef.Versification = scrText.Settings.Versification;
             if (!scrText.BookPresent(verseRef.BookNum))
@@ -3177,6 +3283,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     private static VerseRef FindMatchingVerseRefInScrText(VerseRef verseRef, ScrText scrText)
     {
         // Limit the search scope to the chapter of the provided VerseRef
+        // open-block: exempt — reached only via GetFromScrText, which refuses
         var allVerses = scrText.Parser.GetVersesInText(verseRef, true);
         foreach (var v in allVerses)
         {
@@ -3200,6 +3307,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     private static string ConvertUsfmToUsx(ScrText scrText, VerseRef verseRef, bool chapterOnly)
     {
+        // open-block: exempt — reached only via GetFromScrText, which refuses
         string usfmData = scrText.GetText(verseRef, chapterOnly, true) ?? string.Empty;
         XmlDocument xmlDoc = UsfmToUsx.ConvertToXmlDocument(
             scrText,
@@ -3290,6 +3398,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // It's more likely that a successful approach would require walking the XmlDocument DOM
 
         vRef = FindMatchingVerseRefInScrText(vRef, scrText);
+        // open-block: exempt — reached only via GetFromScrText, which refuses
         string usfmData = scrText.GetText(vRef, true, true) ?? string.Empty;
         XmlDocument usxData = UsfmToUsx.ConvertToXmlDocument(scrText, vRef.BookNum, usfmData);
         var chapterNode = usxData.SelectSingleNode(VerseXPath(vRef.ChapterNum, 1));
@@ -3357,6 +3466,27 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     private IDisposable EnterSyncWriteScope()
     {
         return SendReceiveWriteLock.EnterWrite(ProjectDetails.Metadata.Id);
+    }
+
+    /// <summary>
+    /// Refuses this project's text when Platform.Bible can't open the project (see
+    /// <see cref="ScrTextExtensions.ThrowIfOpenBlocked"/>). Methods that write text call it right
+    /// after <see cref="EnterSyncWriteScope"/>, which stays their first statement; the scope's
+    /// <c>using</c> releases it when the refusal throws. A project that can't be found passes, so
+    /// each method's own lookup reports it.
+    /// </summary>
+    private void ThrowIfProjectOpenBlocked()
+    {
+        ScrText scrText;
+        try
+        {
+            scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        }
+        catch (Exception e) when (e is ArgumentException or ProjectNotFoundException)
+        {
+            return;
+        }
+        scrText.ThrowIfOpenBlocked();
     }
 
     #endregion

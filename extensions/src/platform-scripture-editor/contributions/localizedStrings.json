@@ -135,6 +135,8 @@
       "%platformScriptureEditor_dialog_openScriptureEditor_title%": "Open Scripture Editor",
       "%platformScriptureEditor_markersView_readonly_dismiss%": "Don't show again today",
       "%platformScriptureEditor_markersView_readonly_message_format%": "The markers view for {projectName} is read-only.",
+      "%platformScriptureEditor_previewView_readonly_dismiss%": "Don't show again today",
+      "%platformScriptureEditor_previewView_readonly_message_format%": "Preview of {projectName} is read-only. To edit, switch to Standard view.",
       "%platformScriptureEditor_sharedLayout_applyNow%": "Apply now",
       "%platformScriptureEditor_sharedLayout_newLayoutAvailable%": "An admin shared a new layout for this project",
       "%settings_platformScriptureEditor_enableScriptureTextGrid_description%": "Show the scripture text grid view for viewing multiple resources side by side.",
@@ -152,7 +154,9 @@
       "%webView_footnoteList_empty%": "This chapter has no footnotes.",
       "%webView_footnoteList_header%": "Footnotes",
       "%webView_modelTextPanel_bookNotAvailable%": "This book does not exist in this model text. Choose a different model text or go to a book it contains.",
+      "%webView_modelTextPanel_bookNotAvailable_adminChoice%": "This book does not exist in this model text. Go to a book it contains. A project admin can choose a different model text in the team layout.",
       "%webView_modelTextPanel_catalogUnavailable%": "Couldn't load the list of available resources.",
+      "%webView_modelTextPanel_changeText_ariaLabel%": "{textName} – change model text",
       "%webView_modelTextPanel_emptyState_baseOrModel_admin%": "If you are not the project admin, you can choose a text to display as a Base or Model temporarily. When your admin makes a choice, your selection will be replaced. If you will be the only person on this project, you will need to make a selection.",
       "%webView_modelTextPanel_emptyState_baseOrModel_baseDefinition%": "A literal translation which expresses the wording of the Hebrew or Greek text (a word-for-word \"formal equivalent,\" like RSV).",
       "%webView_modelTextPanel_emptyState_baseOrModel_baseTerm%": "Base:",
@@ -181,6 +185,7 @@
       "%webView_modelTextPanel_title%": "Model text",
       "%webView_modelTextPanel_title_withResource%": "Model text: {textName}",
       "%webView_modelTextPanel_unknownResource%": "The selected model text could not be found.",
+      "%webView_modelTextPanel_unknownResource_adminChoice%": "The selected model text could not be found. A project admin can choose a different model text in the team layout.",
       "%webView_platformScriptureEditor_backgroundColor%": "Background Color",
       "%webView_platformScriptureEditor_bookNotAvailable_description%": "This book is not part of this project yet. You can add it with {buttonLabel}.",
       "%webView_platformScriptureEditor_bookNotAvailable_manageBooksButton%": "Manage books",
@@ -208,17 +213,28 @@
       "%webView_platformScriptureEditor_emptyChapter_messageResource%": "This chapter is empty in this resource.",
       "%webView_platformScriptureEditor_emptyChapter_protectedTooltip%": "Structure is locked. Chapter and verse markers cannot be added.",
       "%webView_platformScriptureEditor_emptyState_noProject%": "No project selected",
+      "%webView_platformScriptureEditor_emptyState_noProjects_description%": "To get a project, set up your Paratext registration in your user profile, or ask your project administrator to add you to a project.",
+      "%webView_platformScriptureEditor_emptyState_noProjects_description_registered%": "It is not yet possible to create a project in {%product_name%}. Either someone needs to share a project with you, or you need to create a project in Paratext 9. Then use Sync to get it.",
+      "%webView_platformScriptureEditor_emptyState_noProjects_title%": "You don't have any projects of your own yet",
       "%webView_platformScriptureEditor_error_bookNotFoundResource%": "This book does not exist in this resource.",
+      "%webView_platformScriptureEditor_error_chapterMarkerCorrected_format%": "Project {projectName}: The chapter marker in {book} {chapter} did not match the chapter, so it was corrected.",
       "%webView_platformScriptureEditor_error_editActionBlocked%": "Editing isn't available right now, so nothing changed.",
       "%webView_platformScriptureEditor_error_noTextSelected%": "Please select a range of text before inserting a comment.",
       "%webView_platformScriptureEditor_error_permissions_format%": "Project {projectName}: You do not have permission to edit this chapter.",
       "%webView_platformScriptureEditor_error_removeCharacterMarkerFailed%": "The character marker could not be removed. Your text was not changed.",
+      "%webView_platformScriptureEditor_error_saveFailed_format%": "Project {projectName}: Your changes could not be saved.",
       "%webView_platformScriptureEditor_warning_pendingCommentTextChanged%": "The text you were commenting on changed, so the new comment was discarded. Select the text again to add your comment.",
       "%webView_platformScriptureEditor_error_selectionContainsMarkers%": "Invalid selection. Selected text must be a simple word or phrase with no markers.",
       "%webView_platformScriptureEditor_error_selectionNotResolved%": "Could not insert a comment at this position. Please move the cursor and try again.",
       "%webView_platformScriptureEditor_error_structureProtected%": "Structure is locked. Paragraph and verse markers cannot be changed.",
       "%webView_platformScriptureEditor_error_syncEditBlocked%": "Editing is paused while an automatic Send/Receive is in progress. Your change was not saved.",
       "%webView_platformScriptureEditor_error_syncEditBlocked_2%": "Editing is paused while an automatic sync is in progress. Your change was not saved.",
+      "%webView_platformScriptureEditor_hiddenContentDelete_cancelEdit%": "Cancel edit",
+      "%webView_platformScriptureEditor_hiddenContentDelete_delete%": "Delete",
+      "%webView_platformScriptureEditor_hiddenContentDelete_keep%": "Don't delete",
+      "%webView_platformScriptureEditor_hiddenContentDelete_prompt%": "Your edit would delete content that this view cannot display ({markers}). It is hidden here, but it is part of your text.",
+      "%webView_platformScriptureEditor_hiddenContentDelete_skip%": "Skip over",
+      "%webView_platformScriptureEditor_hiddenContentDelete_title%": "Delete hidden content?",
       "%webView_platformScriptureEditor_info%": "Info",
       "%webView_platformScriptureEditor_insert%": "Insert",
       "%webView_platformScriptureEditor_insertCommentAtSelection%": "Insert comment",
@@ -227,18 +243,21 @@
       "%webView_platformScriptureEditor_insertFootnoteAtSelection%": "Insert footnote",
       "%webView_platformScriptureEditor_markersInventory%": "Inventory: Markers...",
       "%webView_platformScriptureEditor_openChecks%": "Open Checks...",
+      "%webView_platformScriptureEditor_openChecks_2%": "Basic checks",
       "%webView_platformScriptureEditor_openChecksSidePanel%": "Open Checks Side Panel",
       "%webView_platformScriptureEditor_openFind%": "Find",
       "%webView_platformScriptureEditor_options%": "Options",
       "%webView_platformScriptureEditor_paragraphSelection_ariaLabel%": "Paragraph style",
       "%webView_platformScriptureEditor_paragraphSelection_protectedTooltip%": "Structure is locked. Paragraph format cannot be changed.",
       "%webView_platformScriptureEditor_paste%": "Paste",
+      "%webView_platformScriptureEditor_preview%": "Preview",
       "%webView_platformScriptureEditor_publisherInfo%": "Publisher Info",
       "%webView_platformScriptureEditor_punctuationInventory%": "Inventory: Punctuation...",
       "%webView_platformScriptureEditor_qualityChecks%": "Quality checks",
       "%webView_platformScriptureEditor_redo%": "Redo",
       "%webView_platformScriptureEditor_repeatedWordsInventory%": "Inventory: Repeated Words...",
       "%webView_platformScriptureEditor_resetZoomToDefault%": "Zoom reset",
+      "%webView_platformScriptureEditor_resetZoomToDefault_2%": "Zoom 100%",
       "%webView_platformScriptureEditor_shareLayout_ariaLabel%": "Share layout with team",
       "%webView_platformScriptureEditor_showBibleTextsPanel%": "Bible texts",
       "%webView_platformScriptureEditor_showCheckResults%": "Show Check Results...",
@@ -247,6 +266,7 @@
       "%webView_platformScriptureEditor_showDictionaryPanel%": "Dictionary",
       "%webView_platformScriptureEditor_showFootnotes%": "Show footnotes",
       "%webView_platformScriptureEditor_showTextCollectionPanel%": "Text collection",
+      "%webView_platformScriptureEditor_standardView%": "Standard view",
       "%webView_platformScriptureEditor_structureProtection_ariaLabel%": "Toggle structure protection",
       "%webView_platformScriptureEditor_structureProtection_errorLoading%": "Structure protection state unavailable",
       "%webView_platformScriptureEditor_structureProtection_lockStructure%": "Lock structure",
@@ -271,7 +291,11 @@
       "%webView_platformScriptureEditor_title_readonly_indicator%": "(Read-only)",
       "%webView_platformScriptureEditor_title_readonly_no_project%": "Resource Viewer",
       "%webView_platformScriptureEditor_tools%": "Tools",
+      "%webView_platformScriptureEditor_toolsAndResources%": "Tools and resources",
       "%webView_platformScriptureEditor_twoStepDelete_deleteSelection%": "Press {key} again to delete selection",
+      "%webView_platformScriptureEditor_twoStepDelete_joinNextParagraph%": "Press {key} again to join the next paragraph to this one",
+      "%webView_platformScriptureEditor_twoStepDelete_joinPreviousParagraph%": "Press {key} again to join this paragraph to the previous one",
+      "%webView_platformScriptureEditor_twoStepDelete_removeEmptyParagraph%": "Press {key} again to remove the empty paragraph",
       "%webView_platformScriptureEditor_twoStepDelete_removeVerseNumber%": "Press {key} again to remove verse marker",
       "%webView_platformScriptureEditor_undo%": "Undo",
       "%webView_platformScriptureEditor_view%": "View",
@@ -318,6 +342,7 @@
       "%webView_scriptureTextGrid_cell_status_bookNotAvailable%": "Book not in this text",
       "%webView_scriptureTextGrid_cell_status_downloading%": "Downloading…",
       "%webView_scriptureTextGrid_cell_status_failed%": "Download failed",
+      "%webView_scriptureTextGrid_cell_status_installUnverified%": "Couldn't check whether this resource is installed",
       "%webView_scriptureTextGrid_cell_status_loading%": "Resource is loading…",
       "%webView_scriptureTextGrid_cell_unavailable%": "Resource unavailable",
       "%webView_scriptureTextGrid_cell_verse_empty%": "No text for this verse",
@@ -331,6 +356,7 @@
       "%webView_scriptureTextGrid_viewOptions_adminSharedLock%": "Shared by administrator",
       "%webView_scriptureTextGrid_viewOptions_chapter%": "Chapter",
       "%webView_scriptureTextGrid_viewOptions_chapterComingSoon%": "Chapter view coming soon",
+      "%webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%": "Chapter view is not yet available.",
       "%webView_scriptureTextGrid_viewOptions_comingSoon%": "Coming soon",
       "%webView_scriptureTextGrid_viewOptions_downloadedNoProject%": "Resource downloaded. Select a project to add it to a text collection.",
       "%webView_scriptureTextGrid_viewOptions_emptyState_prompt%": "No texts added yet. Use {getResourcesLabel} to add them.",
@@ -483,6 +509,8 @@
       "%platformScriptureEditor_dialog_openScriptureEditor_title%": "Abrir el editor de Escrituras",
       "%platformScriptureEditor_markersView_readonly_dismiss%": "No mostrar de nuevo hoy",
       "%platformScriptureEditor_markersView_readonly_message_format%": "La vista de marcadores para {projectName} es de solo lectura.",
+      "%platformScriptureEditor_previewView_readonly_dismiss%": "No mostrar de nuevo hoy",
+      "%platformScriptureEditor_previewView_readonly_message_format%": "La vista previa de {projectName} es de solo lectura. Para editar, cambie a la vista estándar.",
       "%platformScriptureEditor_sharedLayout_applyNow%": "Aplicar ahora",
       "%platformScriptureEditor_sharedLayout_newLayoutAvailable%": "Un administrador compartió un nuevo diseño para este proyecto",
       "%settings_platformScriptureEditor_enableScriptureTextGrid_description%": "Mostrar la vista de cuadrícula de textos bíblicos para ver varios recursos en paralelo.",
@@ -496,7 +524,9 @@
       "%webView_footnoteList_empty%": "Este capítulo no tiene notas al pie.",
       "%webView_footnoteList_header%": "Notas al pie",
       "%webView_modelTextPanel_bookNotAvailable%": "Este libro no existe en este texto modelo. Elija otro texto modelo o vaya a un libro que este texto sí contenga.",
+      "%webView_modelTextPanel_bookNotAvailable_adminChoice%": "Este libro no existe en este texto modelo. Vaya a un libro que este texto sí contenga. Un administrador del proyecto puede elegir otro texto modelo en el diseño del equipo.",
       "%webView_modelTextPanel_catalogUnavailable%": "No se pudo cargar la lista de recursos disponibles.",
+      "%webView_modelTextPanel_changeText_ariaLabel%": "{textName} – cambiar texto modelo",
       "%webView_modelTextPanel_emptyState_baseOrModel_admin%": "Si no es el administrador del proyecto, puede elegir temporalmente un texto para mostrarlo como base o modelo. Cuando su administrador haga una elección, se reemplazará su selección. Si usted va a ser la única persona en este proyecto, deberá hacer una selección.",
       "%webView_modelTextPanel_emptyState_baseOrModel_baseDefinition%": "Una traducción literal que expresa la redacción del texto hebreo o griego (una «equivalencia formal», palabra por palabra, como la RSV).",
       "%webView_modelTextPanel_emptyState_baseOrModel_baseTerm%": "Texto base:",
@@ -525,6 +555,7 @@
       "%webView_modelTextPanel_title%": "Texto modelo",
       "%webView_modelTextPanel_title_withResource%": "Texto modelo: {textName}",
       "%webView_modelTextPanel_unknownResource%": "No se pudo encontrar el texto modelo seleccionado.",
+      "%webView_modelTextPanel_unknownResource_adminChoice%": "No se pudo encontrar el texto modelo seleccionado. Un administrador del proyecto puede elegir otro texto modelo en el diseño del equipo.",
       "%webView_platformScriptureEditor_backgroundColor%": "Color de fondo",
       "%webView_platformScriptureEditor_bookNotAvailable_description%": "Este libro aún no forma parte de este proyecto. Puede añadirlo con {buttonLabel}.",
       "%webView_platformScriptureEditor_bookNotAvailable_manageBooksButton%": "Administrar libros",
@@ -552,17 +583,28 @@
       "%webView_platformScriptureEditor_emptyChapter_messageResource%": "Este capítulo está vacío en este recurso.",
       "%webView_platformScriptureEditor_emptyChapter_protectedTooltip%": "La estructura está bloqueada. Los marcadores de capítulo y versículo no se pueden añadir.",
       "%webView_platformScriptureEditor_emptyState_noProject%": "Ningún proyecto seleccionado",
+      "%webView_platformScriptureEditor_emptyState_noProjects_description%": "Para obtener un proyecto, configure su registro de Paratext en su perfil de usuario o pida al administrador del proyecto que le dé acceso a un proyecto.",
+      "%webView_platformScriptureEditor_emptyState_noProjects_description_registered%": "Todavía no es posible crear un proyecto en {%product_name%}. Alguien tiene que compartir un proyecto con usted o usted tiene que crear un proyecto en Paratext 9. Después, use Sincronizar para obtenerlo.",
+      "%webView_platformScriptureEditor_emptyState_noProjects_title%": "Todavía no tiene ningún proyecto propio",
       "%webView_platformScriptureEditor_error_bookNotFoundResource%": "Este libro no existe en este recurso.",
+      "%webView_platformScriptureEditor_error_chapterMarkerCorrected_format%": "Proyecto {projectName}: El marcador de capítulo en {book} {chapter} no coincidía con el capítulo, por lo que se corrigió.",
       "%webView_platformScriptureEditor_error_editActionBlocked%": "La edición no está disponible en este momento, así que no cambió nada.",
       "%webView_platformScriptureEditor_error_noTextSelected%": "Por favor, seleccione un rango de texto antes de insertar un comentario.",
       "%webView_platformScriptureEditor_error_permissions_format%": "Proyecto {projectName}: No tiene permiso para editar este capítulo.",
       "%webView_platformScriptureEditor_error_removeCharacterMarkerFailed%": "No se pudo quitar el marcador de carácter. Su texto no cambió.",
+      "%webView_platformScriptureEditor_error_saveFailed_format%": "Proyecto {projectName}: No se pudieron guardar sus cambios.",
       "%webView_platformScriptureEditor_warning_pendingCommentTextChanged%": "El texto que estaba comentando cambió, por lo que se descartó el comentario nuevo. Seleccione el texto de nuevo para agregar su comentario.",
       "%webView_platformScriptureEditor_error_selectionContainsMarkers%": "Selección inválida. El texto seleccionado debe ser una palabra o frase simple sin marcadores.",
       "%webView_platformScriptureEditor_error_selectionNotResolved%": "No se pudo insertar un comentario en esta posición. Por favor, mueva el cursor e inténtelo de nuevo.",
       "%webView_platformScriptureEditor_error_structureProtected%": "La estructura está bloqueada. Los marcadores de párrafo y versículo no se pueden cambiar.",
       "%webView_platformScriptureEditor_error_syncEditBlocked%": "La edición está pausada mientras se realiza un Enviar/Recibir automático. Su cambio no se guardó.",
       "%webView_platformScriptureEditor_error_syncEditBlocked_2%": "La edición está pausada mientras se realiza una sincronización automática. Su cambio no se guardó.",
+      "%webView_platformScriptureEditor_hiddenContentDelete_cancelEdit%": "Cancelar cambio",
+      "%webView_platformScriptureEditor_hiddenContentDelete_delete%": "Eliminar",
+      "%webView_platformScriptureEditor_hiddenContentDelete_keep%": "No eliminar",
+      "%webView_platformScriptureEditor_hiddenContentDelete_prompt%": "Su cambio eliminaría contenido que esta vista no puede mostrar ({markers}). Está oculto aquí, pero forma parte de su texto.",
+      "%webView_platformScriptureEditor_hiddenContentDelete_skip%": "Saltar",
+      "%webView_platformScriptureEditor_hiddenContentDelete_title%": "¿Eliminar contenido oculto?",
       "%webView_platformScriptureEditor_info%": "Información",
       "%webView_platformScriptureEditor_insert%": "Insertar",
       "%webView_platformScriptureEditor_insertCommentAtSelection%": "Insertar comentario",
@@ -571,18 +613,21 @@
       "%webView_platformScriptureEditor_insertFootnoteAtSelection%": "Insertar nota al pie",
       "%webView_platformScriptureEditor_markersInventory%": "Inventario: Marcadores...",
       "%webView_platformScriptureEditor_openChecks%": "Abrir verificaciones...",
+      "%webView_platformScriptureEditor_openChecks_2%": "Verificaciones básicas",
       "%webView_platformScriptureEditor_openChecksSidePanel%": "Abrir el panel lateral de verificaciones",
       "%webView_platformScriptureEditor_openFind%": "Buscar",
       "%webView_platformScriptureEditor_options%": "Opciones",
       "%webView_platformScriptureEditor_paragraphSelection_ariaLabel%": "Estilo de párrafo",
       "%webView_platformScriptureEditor_paragraphSelection_protectedTooltip%": "La estructura está bloqueada. El formato de párrafo no se puede cambiar.",
       "%webView_platformScriptureEditor_paste%": "Pegar",
+      "%webView_platformScriptureEditor_preview%": "Vista previa",
       "%webView_platformScriptureEditor_publisherInfo%": "Información del editor",
       "%webView_platformScriptureEditor_punctuationInventory%": "Inventario: Puntuación...",
       "%webView_platformScriptureEditor_qualityChecks%": "Verificaciones de calidad",
       "%webView_platformScriptureEditor_redo%": "Rehacer",
       "%webView_platformScriptureEditor_repeatedWordsInventory%": "Inventario: Palabras repetidas...",
       "%webView_platformScriptureEditor_resetZoomToDefault%": "Restablecer el zoom al valor predeterminado",
+      "%webView_platformScriptureEditor_resetZoomToDefault_2%": "Zoom 100%",
       "%webView_platformScriptureEditor_shareLayout_ariaLabel%": "Compartir diseño con el equipo",
       "%webView_platformScriptureEditor_showBibleTextsPanel%": "Textos bíblicos",
       "%webView_platformScriptureEditor_showCheckResults%": "Mostrar resultados de verificación...",
@@ -591,6 +636,7 @@
       "%webView_platformScriptureEditor_showDictionaryPanel%": "Diccionario",
       "%webView_platformScriptureEditor_showFootnotes%": "Mostrar notas al pie",
       "%webView_platformScriptureEditor_showTextCollectionPanel%": "Colección de textos",
+      "%webView_platformScriptureEditor_standardView%": "Vista estándar",
       "%webView_platformScriptureEditor_structureProtection_ariaLabel%": "Alternar protección de estructura",
       "%webView_platformScriptureEditor_structureProtection_errorLoading%": "Estado de protección de estructura no disponible",
       "%webView_platformScriptureEditor_structureProtection_lockStructure%": "Bloquear estructura",
@@ -615,7 +661,11 @@
       "%webView_platformScriptureEditor_title_readonly_indicator%": "(solo lectura)",
       "%webView_platformScriptureEditor_title_readonly_no_project%": "Visor de recursos",
       "%webView_platformScriptureEditor_tools%": "Herramientas",
+      "%webView_platformScriptureEditor_toolsAndResources%": "Herramientas y recursos",
       "%webView_platformScriptureEditor_twoStepDelete_deleteSelection%": "Presione {key} de nuevo para eliminar lo seleccionado",
+      "%webView_platformScriptureEditor_twoStepDelete_joinNextParagraph%": "Presione {key} de nuevo para unir el párrafo siguiente a este",
+      "%webView_platformScriptureEditor_twoStepDelete_joinPreviousParagraph%": "Presione {key} de nuevo para unir este párrafo al anterior",
+      "%webView_platformScriptureEditor_twoStepDelete_removeEmptyParagraph%": "Presione {key} de nuevo para eliminar el párrafo vacío",
       "%webView_platformScriptureEditor_twoStepDelete_removeVerseNumber%": "Presione {key} de nuevo para borrar este número de versículo",
       "%webView_platformScriptureEditor_undo%": "Deshacer",
       "%webView_platformScriptureEditor_view%": "Ver",
@@ -662,6 +712,7 @@
       "%webView_scriptureTextGrid_cell_status_bookNotAvailable%": "El libro no está en este texto",
       "%webView_scriptureTextGrid_cell_status_downloading%": "Descargando…",
       "%webView_scriptureTextGrid_cell_status_failed%": "Error de descarga",
+      "%webView_scriptureTextGrid_cell_status_installUnverified%": "No se pudo comprobar si este recurso está instalado",
       "%webView_scriptureTextGrid_cell_status_loading%": "El recurso se está cargando…",
       "%webView_scriptureTextGrid_cell_unavailable%": "Recurso no disponible",
       "%webView_scriptureTextGrid_cell_verse_empty%": "No hay texto para este versículo",
@@ -675,6 +726,7 @@
       "%webView_scriptureTextGrid_viewOptions_adminSharedLock%": "Compartido por el administrador",
       "%webView_scriptureTextGrid_viewOptions_chapter%": "Capítulo",
       "%webView_scriptureTextGrid_viewOptions_chapterComingSoon%": "La vista de capítulo estará disponible pronto",
+      "%webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%": "La vista de capítulo aún no está disponible.",
       "%webView_scriptureTextGrid_viewOptions_comingSoon%": "Próximamente",
       "%webView_scriptureTextGrid_viewOptions_downloadedNoProject%": "Recurso descargado. Seleccione un proyecto para agregarlo a una colección de textos.",
       "%webView_scriptureTextGrid_viewOptions_emptyState_prompt%": "Aún no se han añadido textos. Use {getResourcesLabel} para añadirlos.",
@@ -1202,6 +1254,21 @@
     }
   },
   "metadata": {
+    "%platformScriptureEditor_markersView_readonly_dismiss%": {
+      "deprecationInfo": {
+        "date": "2026-10-22",
+        "message": "Superseded by %platformScriptureEditor_previewView_readonly_dismiss%."
+      }
+    },
+    "%platformScriptureEditor_previewView_readonly_dismiss%": {
+      "fallbackKey": "%platformScriptureEditor_markersView_readonly_dismiss%"
+    },
+    "%platformScriptureEditor_markersView_readonly_message_format%": {
+      "deprecationInfo": {
+        "date": "2026-10-22",
+        "message": "Superseded by %platformScriptureEditor_previewView_readonly_message_format%."
+      }
+    },
     "%webView_footnoteList_header%": {
       "fallbackKey": "%Paratext.ProjectMenu.ProjectPropertiesForm.showInFootnotes.HeaderText%"
     },
@@ -1241,13 +1308,53 @@
     "%webView_platformScriptureEditor_insert%": {
       "fallbackKey": "%Paratext.EditMenu.ListForm.insertToolStripMenuItem.Text%"
     },
+    "%webView_platformScriptureEditor_insertEndnoteAtSelection%": {
+      "fallbackKey": "%ScriptureEditorControl_21%"
+    },
     "%webView_platformScriptureEditor_openChecks%": {
-      "fallbackKey": "%webView_platformScriptureEditor_openChecksSidePanel%"
+      "fallbackKey": "%webView_platformScriptureEditor_openChecksSidePanel%",
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "Relabeled to \"Basic checks\". The new key is %webView_platformScriptureEditor_openChecks_2%."
+      }
+    },
+    "%webView_platformScriptureEditor_openChecks_2%": {
+      "fallbackKey": "%Paratext.ProjectProgress.ProgressPlanEditorForm.grpBasicChecks.Text%"
+    },
+    "%webView_platformScriptureEditor_options%": {
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "The editor menu column is now called \"View\". The new key is %webView_platformScriptureEditor_view%."
+      }
+    },
+    "%webView_platformScriptureEditor_preview%": {
+      "fallbackKey": "%ScriptureView.Preview%"
+    },
+    "%webView_platformScriptureEditor_resetZoomToDefault%": {
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "Relabeled to \"Zoom 100%\". The new key is %webView_platformScriptureEditor_resetZoomToDefault_2%."
+      }
+    },
+    "%webView_platformScriptureEditor_resetZoomToDefault_2%": {
+      "fallbackKey": "%webView_platformScriptureEditor_resetZoomToDefault%"
+    },
+    "%webView_platformScriptureEditor_qualityChecks%": {
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "The Simple editor menu no longer has a Quality checks section. Retired with no replacement key."
+      }
     },
     "%webView_platformScriptureEditor_shareLayout_ariaLabel%": {
       "deprecationInfo": {
         "date": "2026-09-21",
         "message": "The toolbar button that opens this dialog was renamed from \"Share layout with team\" to \"Team layout\". The new key is %webView_platformScriptureEditor_teamLayout_ariaLabel%."
+      }
+    },
+    "%webView_platformScriptureEditor_showCommentsPanel%": {
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "The Simple editor menu now shares the Comments label with the Power menu. The new key is %webView_legacyCommentManager_openComments_2%."
       }
     },
     "%webView_platformScriptureEditor_structureProtection_lockStructure%": {
@@ -1291,6 +1398,28 @@
     },
     "%webView_platformScriptureEditor_syncEditBlocked_banner_2%": {
       "fallbackKey": "%webView_platformScriptureEditor_syncEditBlocked_banner%"
+    },
+    "%webView_scriptureTextGrid_viewOptions_chapterComingSoon%": {
+      "deprecationInfo": {
+        "date": "2026-10-23",
+        "message": "Said \"coming soon\", which promises a delivery date nobody has set. The new key is %webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%."
+      }
+    },
+    "%webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%": {
+      "fallbackKey": "%webView_scriptureTextGrid_viewOptions_chapterComingSoon%",
+      "notes": "Hint shown under the View Options toggle group when the Chapter view option is shown but does not work yet. The user cannot turn it on. \"Available\" means \"can be used\", not \"in stock\" or \"not busy\"."
+    },
+    "%webView_scriptureTextGrid_viewOptions_comingSoon%": {
+      "deprecationInfo": {
+        "date": "2026-10-23",
+        "message": "Not used. \"Coming soon\" promises a delivery date nobody has set; a disabled feature says it is not yet available instead (see %webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%). No replacement key."
+      }
+    },
+    "%webView_platformScriptureEditor_zoom%": {
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "The Zoom items moved into the View section of the editor menu, so there is no Zoom heading. Retired with no replacement key."
+      }
     }
   }
 }

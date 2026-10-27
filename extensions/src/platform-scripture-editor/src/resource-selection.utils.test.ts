@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { PickerResource } from './downloaded-resources.utils';
-import { matchesSelectedResourceId, resolveResourceSelection } from './resource-selection.utils';
+import {
+  findSelectedRow,
+  matchesSelectedResourceId,
+  resolveResourceSelection,
+} from './resource-selection.utils';
 
 const dblRow = (id: string): PickerResource => ({
   reference: { type: 'dblResource', name: id, id },
@@ -49,6 +53,25 @@ describe('matchesSelectedResourceId', () => {
   });
 });
 
+describe('findSelectedRow', () => {
+  it('finds a DBL row by the project a selection names, once the catalog names that row', () => {
+    // Selected from Home by its project before the catalog arrived; the row is now a DBL row.
+    const rows = [dblRow('first'), dblRow('abc')];
+    expect(findSelectedRow(rows, 'project:proj-abc')).toBe(rows[1]);
+    expect(findSelectedRow(rows, 'project:proj-other')).toBeUndefined();
+  });
+
+  it('keeps the project row the user picked when the same resource is also listed by DBL entry', () => {
+    const rows = [dblRow('abc'), projectRow('proj-abc')];
+    expect(findSelectedRow(rows, 'project:proj-abc')).toBe(rows[1]);
+    expect(resolveResourceSelection(rows, 'project:proj-abc', undefined).selectedRow).toBe(rows[1]);
+  });
+
+  it('never falls back to a row that shows nothing', () => {
+    expect(findSelectedRow([notInstalledRow('abc')], 'project:proj-abc')).toBeUndefined();
+  });
+});
+
 describe('resolveResourceSelection', () => {
   it('commits a pick once its row arrives in the list', () => {
     const rows = [dblRow('old'), dblRow('new')];
@@ -86,6 +109,17 @@ describe('resolveResourceSelection', () => {
     const result = resolveResourceSelection(rows, 'abc', undefined);
     expect(result.nextSelectedResourceId).toBe('dbl:abc');
     expect(result.selectedRow?.reference).toMatchObject({ id: 'abc' });
+  });
+
+  it('keeps a project selection on its resource when the row becomes a DBL row', () => {
+    const rows = [dblRow('first'), dblRow('abc')];
+    expect(resolveResourceSelection(rows, 'project:proj-abc', undefined)).toEqual({
+      nextSelectedResourceId: 'dbl:abc',
+      nextIsUserPick: undefined,
+      shouldClearPending: false,
+      selectedRow: rows[1],
+      isDownloadedFallback: false,
+    });
   });
 
   it('leaves an already-namespaced selection alone', () => {

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { DEADLINE_EXCEEDED, UNKNOWN } from 'platform-bible-utils';
 import type { NetworkObjectDetails } from '@shared/models/network-object.model';
 
 // Each test re-imports the service (vi.resetModules, see loadService) because it caches init and
@@ -91,13 +92,14 @@ describe('waitForNetworkObject', () => {
     await expect(waiting).resolves.toBe(fromEvent);
   });
 
-  it('times out and rejects when no matching object ever appears', async () => {
+  it('times out and rejects with a DEADLINE_EXCEEDED PlatformError when no matching object ever appears', async () => {
     const service = await loadService();
     mockSnapshot({ Other: makeDetails('Other') });
 
-    await expect(service.waitForNetworkObject({ id: 'Missing' }, 30)).rejects.toThrow(
-      /Timeout reached/,
-    );
+    await expect(service.waitForNetworkObject({ id: 'Missing' }, 30)).rejects.toMatchObject({
+      code: DEADLINE_EXCEEDED,
+      message: expect.stringMatching(/Timeout reached/),
+    });
   });
 
   it('ignores non-matching snapshot entries and non-matching events', async () => {
@@ -107,7 +109,7 @@ describe('waitForNetworkObject', () => {
     const waiting = service.waitForNetworkObject({ id: 'Wanted' }, 30);
     event.emit(makeDetails('StillNotIt'));
 
-    await expect(waiting).rejects.toThrow(/Timeout reached/);
+    await expect(waiting).rejects.toMatchObject({ code: DEADLINE_EXCEEDED });
   });
 
   it('rejects the caller at the timeout even while the snapshot is still outstanding', async () => {
@@ -129,9 +131,9 @@ describe('waitForNetworkObject', () => {
       ),
     });
 
-    await expect(service.waitForNetworkObject({ id: 'Missing' }, 20)).rejects.toThrow(
-      /Timeout reached/,
-    );
+    await expect(service.waitForNetworkObject({ id: 'Missing' }, 20)).rejects.toMatchObject({
+      code: DEADLINE_EXCEEDED,
+    });
     expect(hasSnapshotResolved).toBe(false);
   });
 
@@ -139,20 +141,23 @@ describe('waitForNetworkObject', () => {
     const service = await loadService();
     mockSnapshot({ Other: makeDetails('Other') });
 
-    await expect(service.waitForNetworkObject({ id: 'Missing' }, 20)).rejects.toThrow(
-      /Timeout reached/,
-    );
+    await expect(service.waitForNetworkObject({ id: 'Missing' }, 20)).rejects.toMatchObject({
+      code: DEADLINE_EXCEEDED,
+    });
     expect(mockUnsub).toHaveBeenCalled();
   });
 
-  it('propagates a failure from getAllNetworkObjectDetails as a reason string', async () => {
+  it('propagates a failure from getAllNetworkObjectDetails as an UNKNOWN-coded PlatformError', async () => {
     const service = await loadService();
     mockGet.mockRejectedValue(new Error('network object service unavailable'));
 
     const waiting = service.waitForNetworkObject({ id: 'Anything' });
-    await expect(waiting).rejects.toThrow('network object service unavailable');
-    // The documented contract: every rejection is a reason string, whichever way the wait ended.
-    await expect(waiting).rejects.toBeTypeOf('string');
+    // UNKNOWN (not DEADLINE_EXCEEDED) is the whole point: this rejection must NOT look like a
+    // timeout to a caller that retries only on DEADLINE_EXCEEDED (see web-view-provider.service.ts).
+    await expect(waiting).rejects.toMatchObject({
+      code: UNKNOWN,
+      message: 'network object service unavailable',
+    });
     expect(mockUnsub).toHaveBeenCalled();
   });
 

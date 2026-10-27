@@ -111,7 +111,7 @@ function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
       {
         target: PROFILE_TRIGGER_SELECTOR,
         title: strings['%onboardingTour_step_profile_title%'] ?? '',
-        description: strings['%onboardingTour_step_profile_description%'] ?? '',
+        description: strings['%onboardingTour_step_profile_description_2%'] ?? '',
         side: 'bottom',
       },
     ],

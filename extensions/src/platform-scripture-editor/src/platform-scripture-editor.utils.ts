@@ -40,6 +40,7 @@ import {
   LanguageStrings,
   LocalizeKey,
   normalizeProjectId,
+  retryUntil,
   serialize,
   Unsubscriber,
   USFM_MARKERS_MAP_PARATEXT_3_0,
@@ -51,12 +52,14 @@ import {
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { ScriptureEditorViewType, ScriptureRange } from 'platform-scripture-editor';
 import type { SharedProjectsInfo } from 'platform-scripture';
+import type { UnsyncedChangesSnapshot } from 'paratext-bible-send-receive';
+import type { InternetUse } from 'paratext-registration';
 import type { SettingTypes } from 'papi-shared-types';
 import type { MutableRefObject } from 'react';
 // import type ONLY: this module is reachable from main.ts (the extension host), and any RUNTIME
 // import from the editor package drags its React-bundling dist into the main bundle, breaking
 // extension activation. See platform-scripture-editor.web-view.utils.ts's header.
-import type { DeltaOp, EditorRef } from '@eten-tech-foundation/platform-editor';
+import type { DeltaOp, EditorRef, ViewOptions } from '@eten-tech-foundation/platform-editor';
 import type { MarkerMenuItem } from 'platform-bible-react';
 
 // Note: src/main/shutdown-tasks.ts has a copy of this value — keep them in sync.
@@ -72,13 +75,23 @@ export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 export const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptureTextGrid';
 
 /**
- * Resolves the view type the editor is allowed to show under the current `platform.interfaceMode`.
- * Standard view is a power-mode-only surface: its PT9-parity editing affordances (the `\`/Enter
- * marker palettes, paragraph-marker editing) assume paragraph markers can be edited, but simple
- * mode pairs with structure protection, which intentionally blocks paragraph-marker edits — so a
- * simple-mode user must never land in standard view (e.g. via a `viewType` persisted during a
- * power-mode session). Coerces 'standard' to 'formatted' (the simple-mode default view) when not in
- * power mode; every other combination passes through unchanged.
+ * `objectType` of a project data provider factory's network object. Mirrors core's
+ * `PDP_FACTORY_OBJECT_TYPE` (`project-data-provider-factory.interface.ts`), which is not exposed to
+ * extensions. Keep in sync with it.
+ */
+const PDP_FACTORY_OBJECT_TYPE = 'pdpFactory';
+
+/**
+ * Resolves the view type the editor shows under the current `platform.interfaceMode`. Standard view
+ * is a Power-mode-only surface, and the Markers view is shown nowhere.
+ *
+ * Simple mode's editor offers one view, the Formatted "Preview", and has no menu or shortcut to
+ * leave another view. So a view type persisted during a power-mode session must not be shown in
+ * simple mode: outside Power, 'standard' and 'markers' resolve to 'formatted' (the editable Simple
+ * view). In Power, a saved 'markers' is a value from earlier versions and is shown as Standard
+ * view; 'standard' and 'formatted' pass through unchanged. The result is for display only: callers
+ * must not write it back to the persisted view type, so returning to power mode restores the user's
+ * choice.
  *
  * @param viewType The current (requested or persisted) view type
  * @param isPowerMode Whether `platform.interfaceMode` is 'power'
@@ -88,32 +101,153 @@ export function resolveViewTypeForInterfaceMode(
   viewType: ScriptureEditorViewType,
   isPowerMode: boolean,
 ): ScriptureEditorViewType {
-  if (viewType === 'standard' && !isPowerMode) return 'formatted';
-  return viewType;
+  if (!isPowerMode) return 'formatted';
+  return viewType === 'markers' ? 'standard' : viewType;
 }
 
 /**
- * Computes the next view type for the view-cycling affordance (the `changeScriptureView` command).
- * Power mode cycles formatted -> standard -> markers -> formatted; simple mode skips 'standard'
- * entirely (see {@link resolveViewTypeForInterfaceMode}), cycling formatted <-> markers.
+ * Sentinel that is never a real {@link ScriptureEditorViewType}. It is the `defaultValue` of the web
+ * view's `viewType` state, so a value equal to it means no view type has been saved for the web
+ * view. `useWebViewState` only reads its default when nothing is persisted and never writes it, so
+ * this value never reaches the store.
+ */
+export const VIEW_TYPE_UNSET = '__view_type_unset_not_a_real_view_type__' as const;
+
+/** The persisted `viewType` state: a saved view type, or {@link VIEW_TYPE_UNSET}. */
+export type PersistedViewType = ScriptureEditorViewType | typeof VIEW_TYPE_UNSET;
+
+/**
+ * Derives the view the editor shows from the persisted view type. The result is for display only
+ * and is never written back.
  *
- * Cycles on the view type rather than `ViewOptions.markerMode`: in non-power mode both 'formatted'
- * and 'markers' resolve to markerMode 'hidden' (the non-power markers view overrides only
- * noteMode), so a markerMode-based cycle would orphan 'formatted'.
+ * While `platform.interfaceMode` loads, `isPowerMode` is always `false`, so coercing then would
+ * hide a Power user's saved Standard view: the persisted value is shown as is, or the formatted
+ * view when nothing is saved. Once the mode is known, a never-saved Power tab shows Standard view
+ * (the Power default) and everything else goes through {@link resolveViewTypeForInterfaceMode}.
  *
- * @param viewType The current view type (resolved for mode first, so a lingering 'standard' in
- *   simple mode advances as if it were already coerced)
+ * @param input.persistedViewType The persisted view type, or {@link VIEW_TYPE_UNSET}
+ * @param input.isPowerMode Whether `platform.interfaceMode` is 'power'
+ * @param input.isInterfaceModeLoading Whether `platform.interfaceMode` has not resolved yet
+ * @returns The view type that should actually be shown
+ */
+export function getDisplayedViewType({
+  persistedViewType,
+  isPowerMode,
+  isInterfaceModeLoading,
+}: {
+  persistedViewType: PersistedViewType;
+  isPowerMode: boolean;
+  isInterfaceModeLoading: boolean;
+}): ScriptureEditorViewType {
+  if (persistedViewType === VIEW_TYPE_UNSET) {
+    return isPowerMode && !isInterfaceModeLoading ? 'standard' : 'formatted';
+  }
+  if (isInterfaceModeLoading) return persistedViewType;
+  return resolveViewTypeForInterfaceMode(persistedViewType, isPowerMode);
+}
+
+/** Narrows an untyped saved value to a {@link ScriptureEditorViewType}. */
+function isScriptureEditorViewType(viewType: unknown): viewType is ScriptureEditorViewType {
+  return viewType === 'formatted' || viewType === 'standard' || viewType === 'markers';
+}
+
+/**
+ * The Simple-mode marker classes for the Scripture editor's root element (see `_simple-mode.scss`).
+ * `character-marker-indicators` turns on the tint and hover line for character markers with no
+ * visible style.
+ *
+ * The character-marker indicator warns against typing inside a marker, so it is on only where the
+ * text can be typed into, and stays off until that is known: `isPowerMode` reads `false` while the
+ * interface mode loads, and the edit-permission reads default to editable while they load.
+ *
+ * Pass the durable read-only state, not `isReadOnlyEffective`: that also covers the brief freeze
+ * during an automatic Send/Receive, and would flicker the tint on every scheduled sync.
+ *
+ * @param options.isDurablyReadOnly `undefined` while edit permissions are still resolving
+ */
+export function getSimpleModeRootClassNames({
+  isPowerMode,
+  isInterfaceModeLoading,
+  isDurablyReadOnly,
+}: {
+  isPowerMode: boolean;
+  isInterfaceModeLoading: boolean;
+  isDurablyReadOnly: boolean | undefined;
+}): string[] {
+  if (isPowerMode) return [];
+  if (isInterfaceModeLoading || isDurablyReadOnly !== false) return ['editor-container-simple'];
+  return ['editor-container-simple', 'character-marker-indicators'];
+}
+
+/**
+ * Whether a saved view type makes the editor show Preview, the read-only formatted view. Preview is
+ * read-only only in Power; outside Power 'formatted' is the editable Simple view.
+ *
+ * @param viewType The view type saved in the web view's state (untyped there)
  * @param isPowerMode Whether `platform.interfaceMode` is 'power'
- * @returns The next view type in the mode-appropriate cycle
+ */
+export function showsReadOnlyPreview(viewType: unknown, isPowerMode: boolean): boolean {
+  return (
+    isPowerMode &&
+    isScriptureEditorViewType(viewType) &&
+    resolveViewTypeForInterfaceMode(viewType, isPowerMode) === 'formatted'
+  );
+}
+
+/**
+ * The view type each direct view-setting command shows. "Preview" is the user-facing name of the
+ * `'formatted'` view type.
+ */
+export const VIEW_TYPE_FOR_SET_VIEW_COMMAND = {
+  'platformScriptureEditor.setViewStandard': 'standard',
+  'platformScriptureEditor.setViewPreview': 'formatted',
+} as const satisfies Record<string, ScriptureEditorViewType>;
+
+/**
+ * Computes the next view type for the view-toggling affordance (the `changeScriptureView` command).
+ * Power mode toggles between Standard view and Preview; a saved 'markers' value goes to Standard
+ * view. Simple mode has a single view (see {@link resolveViewTypeForInterfaceMode}), so there is
+ * nothing to change to, and returning nothing keeps a view type saved in Power from being
+ * overwritten.
+ *
+ * @param viewType The current view type
+ * @param isPowerMode Whether `platform.interfaceMode` is 'power'
+ * @returns The other view type in Power, or `undefined` in simple mode, where the caller must leave
+ *   the saved view type alone
  */
 export function getNextViewTypeInCycle(
   viewType: ScriptureEditorViewType,
   isPowerMode: boolean,
-): ScriptureEditorViewType {
-  const current = resolveViewTypeForInterfaceMode(viewType, isPowerMode);
-  if (current === 'formatted') return isPowerMode ? 'standard' : 'markers';
-  if (current === 'standard') return 'markers';
-  return 'formatted';
+): ScriptureEditorViewType | undefined {
+  if (!isPowerMode) return undefined;
+  return viewType === 'standard' ? 'formatted' : 'standard';
+}
+
+/** The two editor messages that can change the saved view type. */
+export type ViewChangeMessage =
+  | { method: 'changeScriptureView' }
+  | { method: 'setScriptureView'; viewType: ScriptureEditorViewType };
+
+/**
+ * Decides which view type, if any, a view-changing message should save.
+ *
+ * `changeScriptureView` toggles per {@link getNextViewTypeInCycle}; in Simple mode there is nothing
+ * to toggle to, so nothing is saved. `setScriptureView` saves the requested view type exactly as
+ * given and is never coerced by the interface mode: the displayed view type is derived from the
+ * saved one by {@link resolveViewTypeForInterfaceMode}, and persisting that coercion (for example
+ * while `platform.interfaceMode` is still loading and reads as not Power) would overwrite the
+ * user's Power choice.
+ *
+ * @param message The view-changing message received
+ * @param context The current view type and whether `platform.interfaceMode` is 'power'
+ * @returns The view type to save, or `undefined` when the saved view type must be left alone
+ */
+export function getViewTypeToSave(
+  message: ViewChangeMessage,
+  context: { viewType: ScriptureEditorViewType; isPowerMode: boolean },
+): ScriptureEditorViewType | undefined {
+  if (message.method === 'setScriptureView') return message.viewType;
+  return getNextViewTypeInCycle(context.viewType, context.isPowerMode);
 }
 
 /**
@@ -375,29 +509,91 @@ export function validateCommentSelection(
   };
 }
 
-/** Where a note is edited: the footnotes pane (Standard view), the popover, or nowhere. */
+/**
+ * Decides whether a view uses the footnotes-pane note model, PT9's: notes are edited in place in
+ * the footnotes pane, picking a note moves the text to it, and the picked note's caller is
+ * highlighted. Every view the editor shows uses it: Standard view, Power's Preview (the read-only
+ * Formatted view, where a note caller still jumps to its note in the pane) and Simple mode's
+ * Formatted view, which edits notes exactly as Standard view does while its own text keeps hiding
+ * markers. Only a 'markers' view type keeps the popover model, and the editor never displays one
+ * once `platform.interfaceMode` has loaded (see {@link resolveViewTypeForInterfaceMode}).
+ *
+ * The answer does not depend on `isPowerMode`; the option stays so every call site passes the same
+ * view facts. While `platform.interfaceMode` is still loading, the displayed view type is the
+ * unresolved saved one, so only Standard view counts then.
+ *
+ * @param options.viewType The scripture editor's current (displayed) view type
+ * @param options.isPowerMode Whether `platform.interfaceMode` is 'power'; does not affect the
+ *   answer
+ * @param options.isInterfaceModeLoading Whether `platform.interfaceMode` is still loading
+ * @returns Whether the view uses the footnotes-pane note model
+ */
+export function usesPaneNoteModel({
+  viewType,
+  isInterfaceModeLoading,
+}: {
+  viewType: ScriptureEditorViewType;
+  isPowerMode: boolean;
+  isInterfaceModeLoading: boolean;
+}): boolean {
+  if (viewType === 'standard') return true;
+  return !isInterfaceModeLoading && viewType === 'formatted';
+}
+
+/**
+ * Where a note is edited: the footnotes pane (a view using the pane note model — see
+ * {@link usesPaneNoteModel}), the popover, or nowhere.
+ */
 export type NoteEditingSurface = 'pane' | 'popover' | 'none';
 
 /**
- * Decides the note-editing surface for a click on a note caller. Standard view edits notes in the
- * footnotes pane, in place, matching PT9's model; every other view keeps the popover. A read-only
- * text has no editing surface at all — a caller click in Standard view still navigates (see
- * {@link decideNoteCallerClickAction}) but never opens an editor; outside Standard view the caller
- * is inert.
+ * Decides the note-editing surface for a click on a note caller. A view using the pane note model
+ * (see {@link usesPaneNoteModel}) edits notes in the footnotes pane, in place, matching PT9's model;
+ * every other view keeps the popover. A read-only text has no editing surface at all — a caller
+ * click in a pane-model view still navigates (see {@link decideNoteCallerClickAction}) but never
+ * opens an editor; in any other view the caller is inert.
  *
- * @param viewType The scripture editor's current view type
+ * @param usesPaneModel Whether the view uses the pane note model ({@link usesPaneNoteModel})
  * @param isReadOnly Whether the text is read-only (editing is disabled)
  * @returns Where a click on a collapsed note caller should open its editor
  */
 export function resolveNoteEditingSurface({
-  viewType,
+  usesPaneModel,
   isReadOnly,
 }: {
-  viewType: ScriptureEditorViewType;
+  usesPaneModel: boolean;
   isReadOnly: boolean;
 }): NoteEditingSurface {
   if (isReadOnly) return 'none';
-  return viewType === 'standard' ? 'pane' : 'popover';
+  return usesPaneModel ? 'pane' : 'popover';
+}
+
+/**
+ * Decides the view options the footnotes pane and its row editor render with. Power mode's pane
+ * follows the main editor's view (in Standard view they are Standard's already). Simple mode's pane
+ * shows markers as Standard view's does, while the main text keeps Simple's own view options and
+ * goes on hiding them. While `platform.interfaceMode` is still loading, `isPowerMode` reads `false`
+ * whatever the mode really is, so the pane follows the main editor then: a Power user's pane never
+ * briefly takes Simple's answer.
+ *
+ * @param options.isPowerMode Whether `platform.interfaceMode` is 'power'
+ * @param options.isInterfaceModeLoading Whether `platform.interfaceMode` is still loading
+ * @param options.mainViewOptions The main editor's view options
+ * @param options.standardViewOptions Standard view's view options
+ * @returns The view options for the footnotes pane and its row editor
+ */
+export function resolveFootnotesPaneViewOptions({
+  isPowerMode,
+  isInterfaceModeLoading,
+  mainViewOptions,
+  standardViewOptions,
+}: {
+  isPowerMode: boolean;
+  isInterfaceModeLoading: boolean;
+  mainViewOptions: ViewOptions | undefined;
+  standardViewOptions: ViewOptions;
+}): ViewOptions | undefined {
+  return isPowerMode || isInterfaceModeLoading ? mainViewOptions : standardViewOptions;
 }
 
 /**
@@ -405,13 +601,14 @@ export function resolveNoteEditingSurface({
  * `CallerHighlightSynchronizer`: the border marks where the focused pane's caret is, so it shows
  * only while the footnotes pane owns DOM focus. Clicking back into the Scripture text leaves the
  * row selected but takes the border off the caller; clicking the row (or its editor) again puts it
- * back. Standard view is the only view that highlights callers at all.
+ * back. Only a view using the pane note model (see {@link usesPaneNoteModel}) highlights callers at
+ * all.
  *
  * PT9's pane has one caret, so the note it is in is the one marked. Here keyboard focus on a row
  * (Tab or the arrow keys) is that caret whenever a row has it, and the selected row otherwise (the
  * row editor, or the pane's chrome, holds focus).
  *
- * @param options.isStandardView Whether the editor is showing Standard view
+ * @param options.usesPaneModel Whether the view uses the pane note model
  * @param options.paneHasFocus Whether DOM focus is inside the footnotes pane (its row list or its
  *   inline row editor)
  * @param options.focusedRowIndex The footnotes pane row holding DOM focus, or `undefined` when no
@@ -421,17 +618,17 @@ export function resolveNoteEditingSurface({
  * @returns The note index to highlight, or `undefined` to clear the highlight
  */
 export function resolveCallerHighlight({
-  isStandardView,
+  usesPaneModel,
   paneHasFocus,
   focusedRowIndex,
   selectedIndex,
 }: {
-  isStandardView: boolean;
+  usesPaneModel: boolean;
   paneHasFocus: boolean;
   focusedRowIndex?: number;
   selectedIndex: number | undefined;
 }): number | undefined {
-  if (!isStandardView || !paneHasFocus) return undefined;
+  if (!usesPaneModel || !paneHasFocus) return undefined;
   return focusedRowIndex ?? selectedIndex;
 }
 
@@ -476,17 +673,18 @@ export type NoteCallerClickState = {
   /** Whether the footnotes pane is actually rendered (visible toggle AND data loaded). */
   paneRendered: boolean;
   /**
-   * Whether the interface is in Power mode. A caller click reveals a hidden pane only in Power
-   * mode; Simple mode keeps PT9's manual pane visibility.
+   * Whether the interface is in Power mode. In Power mode a caller click reveals a hidden pane in
+   * every view; otherwise only a view using the pane note model reveals it.
    */
   isPowerMode: boolean;
   /** Where the clicked note would be edited; see {@link resolveNoteEditingSurface}. */
   surface: NoteEditingSurface;
   /**
-   * Whether the text is shown in Standard view. Only Standard view gives a read-only text the
-   * navigation half of the pane model; every other view keeps a read-only caller inert.
+   * Whether the view uses the pane note model (see {@link usesPaneNoteModel}). Only such a view
+   * gives a read-only text the navigation half of the pane model; every other view keeps a
+   * read-only caller inert.
    */
-  isStandardView: boolean;
+  usesPaneModel: boolean;
 };
 
 /** What a collapsed-note caller click resolves to — see {@link decideNoteCallerClickAction}. */
@@ -512,14 +710,16 @@ export type NoteCallerClickDecision = {
    * What the caller click resolves to:
    *
    * - `ignore-expanded` — the note is expanded (edited in place), so the click does nothing.
-   * - `ignore-popover-open` — a footnote-editor popover is already shown, so the click is ignored.
-   * - `ignore-read-only` — the text is read-only and not in Standard view, so the caller is inert:
-   *   the pane's navigation model belongs to Standard view alone.
-   * - `open-popover` — open the footnote-editor popover for the clicked note (every view but
-   *   Standard).
-   * - `open-pane-editor` — open the clicked note's row editor in the footnotes pane (Standard view).
-   * - `navigate-only` — the text is read-only in Standard view, so there is no editing surface; the
-   *   click still navigates (reveals/scrolls the pane) without opening an editor.
+   * - `ignore-popover-open` — a footnote-editor popover is already shown, so the click is ignored,
+   *   including in a pane-model view the popover outlived a view or interface-mode switch into.
+   * - `ignore-read-only` — the text is read-only in a view that does not use the pane note model, so
+   *   the caller is inert: the pane's navigation model belongs to pane-model views alone.
+   * - `open-popover` — open the footnote-editor popover for the clicked note (every view that does
+   *   not use the pane note model).
+   * - `open-pane-editor` — open the clicked note's row editor in the footnotes pane (a pane-model
+   *   view).
+   * - `navigate-only` — the text is read-only in a pane-model view, so there is no editing surface;
+   *   the click still navigates (reveals/scrolls the pane) without opening an editor.
    */
   action: NoteCallerClickAction;
   /**
@@ -528,7 +728,10 @@ export type NoteCallerClickDecision = {
    * pane's focus-request machinery retries a request that arrives before its data mounts.
    */
   sendPaneFocusRequest: boolean;
-  /** Also show the footnotes pane: it is currently toggled off and the interface is in Power mode. */
+  /**
+   * Also show the footnotes pane: it is currently toggled off, and either the interface is in Power
+   * mode or the view uses the pane note model.
+   */
   showPane: boolean;
 };
 
@@ -537,20 +740,21 @@ export type NoteCallerClickDecision = {
  * `noteCallerOnClick` in the web view so the dead-click branches stay pinned by unit tests.
  *
  * The editing surface ({@link NoteCallerClickState.surface}, from {@link resolveNoteEditingSurface})
- * decides where a routed click opens an editor: the footnotes pane in Standard view, the popover
- * everywhere else, and nowhere in a read-only text, where the click still navigates without opening
- * an editor. In every case:
+ * decides where a routed click opens an editor: the footnotes pane in a view using the pane note
+ * model, the popover everywhere else, and nowhere in a read-only text, where the click still
+ * navigates without opening an editor. In every case:
  *
  * - An expanded note's caller does nothing (the note is edited in place).
- * - A read-only text outside Standard view does nothing either: the pane's navigate-to-note model is
- *   Standard view's, and every other view keeps the caller inert.
+ * - A read-only text outside a pane-model view does nothing either: the pane's navigate-to-note model
+ *   belongs to pane-model views, and every other view keeps the caller inert.
  * - While a popover is really shown, a popover-surface click is ignored (one session at a time). A
  *   pane-editor session has no such limit — its row stays open across clicks.
  * - A popover session's key left behind without a shown popover is STALE and must not block the
  *   click; a pane-editor session's key is never stale, since the pane keeps it by design.
  *
  * Alongside whichever action is chosen, the pane highlights the clicked note when it is rendered,
- * and a click also SHOWS the pane when it is toggled off and the interface is in Power mode.
+ * and a click also SHOWS the pane when it is toggled off and either the interface is in Power mode
+ * or the view uses the pane note model.
  *
  * {@link NoteCallerClickDecision.clearStaleEditingSession} is decided independently of the action
  * and is reported on EVERY branch, the dead-click ones included: orphaned popover bookkeeping has
@@ -560,7 +764,7 @@ export type NoteCallerClickDecision = {
 export function decideNoteCallerClickAction(state: NoteCallerClickState): NoteCallerClickDecision {
   const clearStaleEditingSession =
     state.editingNoteKey !== undefined && !state.popoverShown && state.surface !== 'pane';
-  const showPane = state.isPowerMode && !state.paneVisible;
+  const showPane = !state.paneVisible && (state.isPowerMode || state.usesPaneModel);
   const sendPaneFocusRequest = state.paneRendered || showPane;
 
   if (!state.isCollapsed)
@@ -570,14 +774,17 @@ export function decideNoteCallerClickAction(state: NoteCallerClickState): NoteCa
       sendPaneFocusRequest: false,
       showPane: false,
     };
-  if (state.surface === 'none' && !state.isStandardView)
+  if (state.surface === 'none' && !state.usesPaneModel)
     return {
       clearStaleEditingSession,
       action: 'ignore-read-only',
       sendPaneFocusRequest: false,
       showPane: false,
     };
-  if (state.surface === 'popover' && state.popoverShown)
+  // On every editable surface, not just the popover's: a popover opened before the view switched to
+  // the pane model applies its text only on Save, so handing the session to the row editor would
+  // discard what was typed.
+  if (state.surface !== 'none' && state.popoverShown)
     return {
       clearStaleEditingSession,
       action: 'ignore-popover-open',
@@ -886,17 +1093,21 @@ export async function openCommentListAndSelectThreadSafe(
  * @param bringToFront Whether to also bring the panel's tab to the front. Pass `false` for
  *   background confirmation (e.g. after inserting a comment, so the user's current Column 3 tab
  *   isn't interrupted) or `true` for an explicit "show me this comment" navigation.
+ * @param editorWebViewId The editor the thread belongs to. If given, the panel is first pointed at
+ *   that editor's project when it shows another one.
  */
 export async function selectCommentThreadInPanelSafe(
   papi: typeof PapiBackend | typeof PapiFrontend,
   threadId: string,
   bringToFront: boolean,
+  editorWebViewId?: string,
 ): Promise<void> {
   try {
     const panelWebViewId = await papi.commands.sendCommand(
       'legacyCommentManager.selectCommentThreadInPanel',
       threadId,
       bringToFront,
+      editorWebViewId,
     );
     if (!panelWebViewId) throw new Error('No WebView ID returned');
   } catch (e) {
@@ -904,6 +1115,36 @@ export async function selectCommentThreadInPanelSafe(
       `Failed to select thread ${threadId} in the Comment List panel: ${getErrorMessage(e)}`,
     );
   }
+}
+
+/**
+ * Brings a comment thread into view where the current interface mode keeps comments. Power mode
+ * opens (or focuses) the editor-anchored comment list on the thread. Simple mode has no such list —
+ * its comments live in the fixed Column 3 Comments tab — so that tab is brought to the front with
+ * the thread selected instead, after pointing that tab at the editor's project if it shows another
+ * one; opening the editor-anchored list there would add a second Comments column. Logs and swallows
+ * any failure, like the two functions it chooses between.
+ *
+ * @param papi The PAPI to send the navigation command through
+ * @param options.isPowerMode Whether the app is in Power interface mode
+ * @param options.editorWebViewId The ID of the editor web view the thread belongs to, which decides
+ *   the project whose comments are shown
+ * @param options.threadId The ID of the thread to show
+ */
+export async function showCommentThreadForInterfaceMode(
+  papi: typeof PapiBackend | typeof PapiFrontend,
+  {
+    isPowerMode,
+    editorWebViewId,
+    threadId,
+  }: { isPowerMode: boolean; editorWebViewId: string; threadId: string },
+): Promise<void> {
+  if (isPowerMode) {
+    await openCommentListAndSelectThreadSafe(papi, editorWebViewId, threadId);
+    return;
+  }
+
+  await selectCommentThreadInPanelSafe(papi, threadId, true, editorWebViewId);
 }
 
 // #region USJ location conversion helper functions
@@ -1140,7 +1381,12 @@ export function getParagraphMarkerTitle(
  *   focus-out selection capture, both of which live in web-view-only code this
  *   extension-host-reachable module may not import (see the note at the bottom of this file).
  *   Omitting it leaves the retag exposed to the lost-caret failure, so callers that can lose focus
- *   to the menu should always pass it.
+ *   to the menu should always pass it. It must leave a selected paragraph marker alone:
+ *   `formatPara` retags that paragraph directly, and a caret restored over it would send the retag
+ *   to the caret's paragraph instead.
+ * @param isChapterLoading Reports whether another chapter is loading, during which the editor still
+ *   shows the chapter being left and an edit would be dropped. A pick does nothing while it returns
+ *   `true`. Omitting it never blocks.
  * @returns List of marker menu items to be used for the paragraph menu
  */
 export function generateParagraphMenuListItems(
@@ -1149,6 +1395,7 @@ export function generateParagraphMenuListItems(
   isStructureProtected: boolean,
   notifyStructureProtected: () => void,
   restoreSelection?: () => void,
+  isChapterLoading?: () => boolean,
 ): MarkerMenuItem[] {
   return selectableParagraphMarkers.map((marker) => {
     // The trailing detail column would otherwise sit empty for exactly the menu this feature is
@@ -1161,6 +1408,7 @@ export function generateParagraphMenuListItems(
       title: getParagraphMarkerTitle(marker, localizedStrings) ?? marker,
       subtitle: descriptionKey ? localizedStrings[descriptionKey] : undefined,
       action: () => {
+        if (isChapterLoading?.()) return;
         // Defense-in-depth: unreachable while the paragraph control is disabled
         // (`disabled={isStructureProtected}` in the web view), so the popover never opens and this
         // action never runs. Kept as a second layer of protection in case that disabled state is
@@ -1169,10 +1417,15 @@ export function generateParagraphMenuListItems(
           notifyStructureProtected();
           return;
         }
+        // Re-picking a selected marker's own marker (a second Enter on the menu the editor opened,
+        // which highlights that row) must change nothing. `formatPara` would still rewrite the
+        // marker and leave an undo step that does nothing, so skip it. Only for a selected marker:
+        // with a range selection, the same pick retags the other paragraphs the range covers.
+        if (editorRef.current?.getSelectedParaMarker() === marker) return;
         // Restore the caret BEFORE applying, exactly as the `\` and Enter marker palettes do
         // before their applies: this menu opens in a popover that takes focus off the editor
         // input, so by the time an item is picked the live selection may already be gone, and
-        // `formatPara` refuses when there is no selection.
+        // `formatPara` refuses when there is neither a selection nor a selected paragraph marker.
         restoreSelection?.();
         editorRef.current?.formatPara(marker);
       },
@@ -1352,9 +1605,9 @@ export function selectProjectIdsForOpenMode(
 
 /**
  * Outcome of a single picker attempt. Every outcome other than `'filled'` is a "may retry on the
- * next trigger" — the driver in {@link startDefaultProjectPicker} re-invokes on web-view-open and
- * sync-completion events, so transient causes (sync still in flight, layout not loaded yet) clear
- * themselves naturally.
+ * next trigger" — the driver in {@link startDefaultProjectPicker} re-invokes on web-view-open,
+ * sync-completion and project-set-change events, so transient causes (sync still in flight, layout
+ * not loaded yet) clear themselves naturally.
  *
  * - `'wrong-mode'` — `platform.interfaceMode` is not `'simple'`; the picker does nothing until it is.
  * - `'no-empty'` — no empty Scripture Editor (no `projectId`) is currently open. The driver may retry
@@ -1363,10 +1616,11 @@ export function selectProjectIdsForOpenMode(
  *   is unavailable or hasn't activated yet. Expected on Platform.Bible on first launch (no recents
  *   yet, no S/R). Logged at debug.
  * - `'failed'` — the open command rejected; logged at warn. The driver may retry on the next trigger.
- * - `'no-candidate'` — S/R was reachable, but no shared project passed the activity / `editedStatus`
- *   filter. Projects with `editedStatus` of `'new'` (not yet downloaded locally) or
- *   `'unregistered'` (limited/provisional license) are excluded, as are projects with no
- *   `lastSendReceiveDate`. The driver may retry after a sync completes.
+ * - `'no-candidate'` — S/R was reachable, but no shared project is a candidate. Projects with
+ *   `editedStatus` of `'new'` (not yet downloaded locally) or `'unregistered'` (limited/provisional
+ *   license) are excluded, and so is any project that cannot be opened (see
+ *   {@link createUnsupportedProjectIdsCache}). The driver may retry after a sync completes or the
+ *   project set changes.
  * - `'filled'` — the picker successfully called the open command for the top candidate.
  */
 export type DefaultProjectPickerOutcome =
@@ -1380,17 +1634,20 @@ export type DefaultProjectPickerOutcome =
 /**
  * Try to open the most-recently-used project from the `platformScripture.recentlyOpenedProjects`
  * data provider. Returns `'filled'` if a recent project was successfully opened, or `undefined` if
- * the service is unavailable, the recents list is empty, or every recent project fails to open (in
- * which case the caller should fall through to the S/R-based picker).
+ * the service is unavailable, the recents list is empty, every recent project is unsupported (see
+ * {@link createUnsupportedProjectIdsCache}), or every recent project fails to open (in which case
+ * the caller should fall through to the S/R-based picker).
  */
 async function tryOpenFromRecentlyOpened(
   papi: typeof PapiBackend,
+  unsupportedProjectIds: UnsupportedProjectIdsCache,
 ): Promise<DefaultProjectPickerOutcome | undefined> {
   try {
     const service = await papi.dataProviders.get('platformScripture.recentlyOpenedProjects');
     if (!service) return undefined;
     // Data-provider getter requires an explicit selector argument, even though the value is ignored.
     const recentProjects = (await service.getRecentProjects(undefined)) ?? [];
+    const unsupported = await unsupportedProjectIds.getUnsupportedProjectIds(recentProjects);
     // Try each recent project in order until one opens successfully — in almost all cases the first
     // entry opens and the loop exits immediately. `reduce` with a Promise accumulator is used instead
     // of `for...of + await` to satisfy the no-await-in-loop ESLint rule; each callback awaits the
@@ -1400,6 +1657,12 @@ async function tryOpenFromRecentlyOpened(
       async (prev: Promise<DefaultProjectPickerOutcome | undefined>, projectId: string) => {
         const outcome = await prev;
         if (outcome !== undefined) return outcome;
+        if (unsupported.has(normalizeProjectId(projectId))) {
+          papi.logger.debug(
+            `Default active project picker: recent project ${projectId} is unsupported, trying next`,
+          );
+          return undefined;
+        }
         try {
           await papi.commands.sendCommand('platformScriptureEditor.openScriptureEditor', projectId);
           papi.logger.info(
@@ -1434,20 +1697,24 @@ async function tryOpenFromRecentlyOpened(
  * Attempt to fill the empty Scripture Editor in the simple layout with the most-recently-active
  * project. Candidates come first from `recentlyOpenedProjects` (tried in order, most-recent first);
  * `paratextBibleSendReceive.getSharedProjects` is the fallback when recents is empty or all entries
- * fail to open. The picker partitions remaining candidates by `canUserEditScripture` and prefers
- * editable projects, falling back to the most-recently-S/R'd Observer-only project so an
- * Observer-only user is not stranded with an empty editor (Observer projects are otherwise
- * reachable via the project switcher).
+ * fail to open. A project that cannot be opened (see {@link createUnsupportedProjectIdsCache}) is
+ * never picked, from either source, however recent. The picker partitions remaining candidates by
+ * `canUserEditScripture` and prefers editable projects, falling back to the most-recently-S/R'd
+ * Observer-only project so an Observer-only user is not stranded with an empty editor (Observer
+ * projects are otherwise reachable via the project switcher).
  *
  * Idempotent: each invocation re-reads the dock and the shared-projects list. The driver in
  * {@link startDefaultProjectPicker} is responsible for re-invoking on events that change those
- * inputs (web-view opens, sync completions).
+ * inputs (web-view opens, sync completions, project-set changes).
  *
  * @param papi The PAPI backend handle. Injected for testability.
+ * @param unsupportedProjectIds Which projects cannot be opened. The driver passes one that lives as
+ *   long as it does; by default each run looks up once.
  * @returns The outcome of this attempt — see {@link DefaultProjectPickerOutcome}.
  */
 export async function openDefaultActiveProjectIfApplicable(
   papi: typeof PapiBackend,
+  unsupportedProjectIds: UnsupportedProjectIdsCache = createUnsupportedProjectIdsCache(papi),
 ): Promise<DefaultProjectPickerOutcome> {
   const interfaceMode = await papi.settings.get('platform.interfaceMode');
   if (isPlatformError(interfaceMode)) {
@@ -1466,7 +1733,7 @@ export async function openDefaultActiveProjectIfApplicable(
 
   // Before consulting S/R, try the recently-opened-projects list. If a recent project opens
   // successfully, return immediately without touching the S/R service at all.
-  const recentsOutcome = await tryOpenFromRecentlyOpened(papi);
+  const recentsOutcome = await tryOpenFromRecentlyOpened(papi, unsupportedProjectIds);
   if (recentsOutcome !== undefined) return recentsOutcome;
 
   // Try `paratextBibleSendReceive.getSharedProjects` directly. If S/R hasn't activated yet (cold
@@ -1500,13 +1767,18 @@ export async function openDefaultActiveProjectIfApplicable(
     (info) => info.editedStatus !== 'new' && info.editedStatus !== 'unregistered',
   );
 
+  const unsupported = await unsupportedProjectIds.getUnsupportedProjectIds(
+    filtered.map((info) => info.id),
+  );
+  const openable = filtered.filter((info) => !unsupported.has(normalizeProjectId(info.id)));
+
   // Annotate each surviving candidate with the current user's role. Per-candidate PDP lookups or
   // method rejections are treated as Observer-equivalent — they fall to the `observerOnly` group
   // and only matter if no editable candidate exists. A missing PDP (e.g., a project that doesn't
   // advertise `platformScripture.scriptureEditPermissions`) is likewise Observer-equivalent.
   // Mirrors the C# method's "false on exception" semantics.
   const annotated = await Promise.all(
-    filtered.map(async (info) => {
+    openable.map(async (info) => {
       try {
         const pdp = await papi.projectDataProviders.get(
           'platformScripture.scriptureEditPermissions',
@@ -1592,6 +1864,15 @@ export async function openDefaultActiveProjectIfApplicable(
  * - `paratextBibleSendReceive.onSyncStateChanged` (when `isSyncing` is `false`) — handles a sync
  *   finishing. Newly-added shared projects look ineligible (`editedStatus === 'new'`, no
  *   `lastSendReceiveDate`) until the first sync settles, so the picker has to re-check after that.
+ * - `platform.onDidChangeProjects` — handles the project set changing, including through the syncs
+ *   that raise no `onSyncStateChanged` (see `adr-toolbar-sync-status-is-local`). It also fires when
+ *   a project's metadata changes (a rename, its language, whether it is editable), which re-runs
+ *   the picker for nothing. Once the editor has a project, such a run exits early (`'no-empty'`).
+ *   While an empty editor exists, each one repeats the recently-opened lookup,
+ *   `paratextBibleSendReceive.getSharedProjects`, a permission lookup per candidate and the lookup
+ *   of which candidates cannot be opened; that is bounded by the emitter's debounce and by the
+ *   coalescing below. Not debounced here: its emitter (`LocalParatextProjects`, C#) already
+ *   debounces it.
  *
  * Cold-start gap: there is no explicit "S/R command registered" signal, so if
  * `paratextBibleSendReceive` activates after `platformScriptureEditor` but before any of the
@@ -1603,6 +1884,16 @@ export async function openDefaultActiveProjectIfApplicable(
  * eligible project yet). At most one run is in flight at a time; concurrent triggers coalesce into
  * a single follow-up run.
  *
+ * Whether a candidate can be opened is looked up once for the driver's lifetime, and again only
+ * after `platform.onDidChangeProjects`, a project data provider factory registering, or a failed
+ * lookup's retry delay, since a user whose every candidate is unsupported keeps an empty editor,
+ * and so re-runs the picker, on every trigger.
+ *
+ * After a `'no-candidate'` run, the web-view triggers are skipped until something that can add a
+ * candidate happens: a sync ending, `platform.onDidChangeProjects`, a project data provider factory
+ * registering, or a Scripture Editor showing a project (which records it as recent). Each skipped
+ * run would otherwise ask for the shared projects again for the same answer.
+ *
  * Mirrors the simple-function pattern used in `home.web-view.tsx` rather than a class wrapper.
  */
 export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscriber {
@@ -1612,9 +1903,23 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
   // booleans) makes the impossible 'idle + retry-queued' combination unrepresentable; see
   // Code-Style-Guide.md "Prefer string unions over multiple interdependent booleans".
   let pickerState: 'idle' | 'running' | 'running-with-retry-queued' = 'idle';
+  const unsupportedProjectIds = createUnsupportedProjectIdsCache(papi);
   // Read via a helper to defeat TypeScript's flow narrowing — the listeners below can mutate
   // pickerState concurrently across awaits, which TS's flow analysis can't model.
   const getPickerState = () => pickerState;
+  // Bumped by each event that can add a candidate. A run that found none records the version it
+  // started at, so an event landing while it is in flight is not swallowed by its result.
+  let candidateInputsVersion = 0;
+  let noCandidateAtVersion: number | undefined;
+  const candidateInputsChanged = () => {
+    candidateInputsVersion += 1;
+  };
+  /** Whether a web view opening or updating should run the picker. */
+  const shouldRunForWebView = (webView: SavedWebViewDefinition) => {
+    if (webView.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && webView.projectId)
+      candidateInputsChanged();
+    return noCandidateAtVersion !== candidateInputsVersion;
+  };
 
   const tryPicker = async (): Promise<void> => {
     if (pickerState !== 'idle') {
@@ -1622,8 +1927,10 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
       return;
     }
     pickerState = 'running';
+    const versionAtStart = candidateInputsVersion;
     try {
-      const outcome = await openDefaultActiveProjectIfApplicable(papi);
+      const outcome = await openDefaultActiveProjectIfApplicable(papi, unsupportedProjectIds);
+      noCandidateAtVersion = outcome === 'no-candidate' ? versionAtStart : undefined;
       if (outcome !== 'filled') {
         papi.logger.debug(
           `Default active project picker: unexpected outcome received: '${outcome}'`,
@@ -1632,6 +1939,7 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
     } catch (e) {
       // `openDefaultActiveProjectIfApplicable` catches its own errors and returns 'failed'; this
       // catch only fires on unexpected throws (e.g. PAPI plumbing bugs).
+      noCandidateAtVersion = undefined;
       papi.logger.warn(
         `Default active project picker: tryPicker threw unexpectedly: ${getErrorMessage(e)}`,
       );
@@ -1651,7 +1959,8 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
 
   // `tryPicker()` catches its own errors internally; the `.catch` blocks below are defensive
   // against a future change that could leak a rejection — matches the `finally`-block retry above.
-  const unsubFromWebViewOpen = papi.webViews.onDidOpenWebView(() => {
+  const unsubFromWebViewOpen = papi.webViews.onDidOpenWebView(({ webView }) => {
+    if (!shouldRunForWebView(webView)) return;
     tryPicker().catch((e) =>
       papi.logger.warn(
         `Default active project picker: webView-open handler threw unexpectedly: ${getErrorMessage(e)}`,
@@ -1662,7 +1971,8 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
   const unsubFromWebViewUpdate = papi.webViews.onDidUpdateWebView(({ webView }) => {
     // Only Scripture Editor updates can change the picker's outcome — any other webview's update
     // can't reveal or remove an empty editor.
-    if (webView.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE) return;
+    if (webView.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE || !shouldRunForWebView(webView))
+      return;
     tryPicker().catch((e) =>
       papi.logger.warn(
         `Default active project picker: webView-update handler threw unexpectedly: ${getErrorMessage(e)}`,
@@ -1673,12 +1983,34 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
   const unsubFromSync = papi.network.getNetworkEvent<{ isSyncing: boolean }>(
     'paratextBibleSendReceive.onSyncStateChanged',
   )(({ isSyncing }) => {
-    if (!isSyncing)
+    if (isSyncing) return;
+    candidateInputsChanged();
+    tryPicker().catch((e) =>
+      papi.logger.warn(
+        `Default active project picker: sync-state handler threw unexpectedly: ${getErrorMessage(e)}`,
+      ),
+    );
+  });
+
+  const unsubFromProjectsChanged = papi.network.getNetworkEvent('platform.onDidChangeProjects')(
+    () => {
+      unsupportedProjectIds.invalidate();
+      candidateInputsChanged();
       tryPicker().catch((e) =>
         papi.logger.warn(
-          `Default active project picker: sync-state handler threw unexpectedly: ${getErrorMessage(e)}`,
+          `Default active project picker: projects-changed handler threw unexpectedly: ${getErrorMessage(e)}`,
         ),
       );
+    },
+  );
+  // A factory that registers late changes which projects are known, but raises no projects-changed
+  // event. Invalidating only drops held answers, so a burst of registrations costs no lookups.
+  const unsubFromNetworkObjectCreated = papi.network.getNetworkEvent(
+    'object:onDidCreateNetworkObject',
+  )(({ objectType }) => {
+    if (objectType !== PDP_FACTORY_OBJECT_TYPE) return;
+    unsupportedProjectIds.invalidate();
+    candidateInputsChanged();
   });
 
   // Cover the case where the empty editor and an eligible synced project are already in place
@@ -1689,7 +2021,13 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
     ),
   );
 
-  return aggregateUnsubscribers([unsubFromWebViewOpen, unsubFromWebViewUpdate, unsubFromSync]);
+  return aggregateUnsubscribers([
+    unsubFromWebViewOpen,
+    unsubFromWebViewUpdate,
+    unsubFromSync,
+    unsubFromProjectsChanged,
+    unsubFromNetworkObjectCreated,
+  ]);
 }
 
 // #endregion Default Active Project Picker
@@ -1790,6 +2128,310 @@ export async function syncOnProjectSwitch(
   }
 }
 
+/**
+ * How long {@link waitForUnsentChanges} keeps listening, once no sync is running, for a project to
+ * be reported as holding changes to send. Well past the backend's debounce after a project's last
+ * write plus its repository check, so an edit whose save was still on its way when the wait began
+ * is still seen.
+ */
+export const UNSENT_CHANGES_GRACE_MS = 10_000;
+
+/**
+ * Upper bound on how long {@link waitForUnsentChanges} waits for a running sync, and the recheck
+ * after it, to finish before giving up without an answer. Long, because a sync can take minutes.
+ */
+export const UNSENT_CHANGES_SYNC_WAIT_MS = 10 * 60_000;
+
+/** Attempts to read the unsynced-changes snapshot. A cold-start rejection must be retried. */
+const UNSYNCED_CHANGES_SEED_ATTEMPTS = 5;
+const UNSYNCED_CHANGES_SEED_RETRY_MS = 1_000;
+
+/**
+ * Checks only the fields {@link waitForUnsentChanges} reads. The renderer and Home keep guards of
+ * their own, which this extension cannot import.
+ */
+function isUnsyncedChangesSnapshot(value: unknown): value is UnsyncedChangesSnapshot {
+  if (typeof value !== 'object' || !value) return false;
+  if (!('toSend' in value) || !Array.isArray(value.toSend)) return false;
+  return value.toSend.every(isString);
+}
+
+/**
+ * Whether a project holds local changes this user's next Send/Receive would send, read from the
+ * backend's `paratextBibleSendReceive.onUnsyncedChangesChanged` signal.
+ *
+ * One read is not enough: the backend checks a project a short while after its last write, and
+ * while a sync is running (`isRechecking`) the list may predate it, still naming projects that sync
+ * is sending. So this ignores the list while a sync is running; once none is, it answers `true` as
+ * soon as a snapshot lists the project, or `false` after {@link UNSENT_CHANGES_GRACE_MS} without
+ * one. Callers should not block on it.
+ *
+ * @param papi Backend PAPI instance.
+ * @param projectId The project to ask about.
+ * @returns `true` if the project has changes to send, `false` if it has none, or `undefined` if no
+ *   snapshot could be read or a running sync did not finish within
+ *   {@link UNSENT_CHANGES_SYNC_WAIT_MS}.
+ */
+export async function waitForUnsentChanges(
+  papi: typeof PapiBackend,
+  projectId: string,
+): Promise<boolean | undefined> {
+  const normalizedProjectId = normalizeProjectId(projectId);
+  return new Promise((resolve) => {
+    let isAnswered = false;
+    let hasReceivedEvent = false;
+    let graceTimer: ReturnType<typeof setTimeout> | undefined;
+    let settleTimer: ReturnType<typeof setTimeout> | undefined;
+    let unsubscribe: Unsubscriber | undefined;
+
+    const answer = (hasUnsentChanges: boolean | undefined) => {
+      if (isAnswered) return;
+      isAnswered = true;
+      clearTimeout(graceTimer);
+      clearTimeout(settleTimer);
+      unsubscribe?.();
+      resolve(hasUnsentChanges);
+    };
+
+    settleTimer = setTimeout(() => {
+      papi.logger.warn(
+        `Could not tell whether ${projectId} has changes to send: a sync was still running after ${UNSENT_CHANGES_SYNC_WAIT_MS}ms`,
+      );
+      answer(undefined);
+    }, UNSENT_CHANGES_SYNC_WAIT_MS);
+
+    const consider = (snapshot: unknown) => {
+      if (!isUnsyncedChangesSnapshot(snapshot)) {
+        papi.logger.warn('The unsynced-changes snapshot had an unexpected shape; ignoring it');
+        return;
+      }
+      if (snapshot.isRechecking === true) {
+        clearTimeout(graceTimer);
+        graceTimer = undefined;
+        return;
+      }
+      if (snapshot.toSend.some((id) => normalizeProjectId(id) === normalizedProjectId)) {
+        answer(true);
+        return;
+      }
+      graceTimer ??= setTimeout(() => answer(false), UNSENT_CHANGES_GRACE_MS);
+    };
+
+    // Subscribed before the seed is read, so no change can land between the two unseen
+    try {
+      unsubscribe = papi.network.getNetworkEvent(
+        'paratextBibleSendReceive.onUnsyncedChangesChanged',
+      )((snapshot) => {
+        if (isUnsyncedChangesSnapshot(snapshot)) hasReceivedEvent = true;
+        consider(snapshot);
+      });
+    } catch (e) {
+      papi.logger.warn(
+        `Could not tell whether ${projectId} has changes to send: could not subscribe to the unsynced-changes signal: ${getErrorMessage(e)}`,
+      );
+      answer(undefined);
+      return;
+    }
+
+    let lastSeedError: unknown;
+    const readSeed = async (): Promise<UnsyncedChangesSnapshot | undefined> => {
+      try {
+        const snapshot = await papi.commands.sendCommand(
+          'paratextBibleSendReceive.getUnsyncedChanges',
+        );
+        if (isUnsyncedChangesSnapshot(snapshot)) return snapshot;
+        lastSeedError = new Error('the unsynced-changes snapshot had an unexpected shape');
+      } catch (e) {
+        lastSeedError = e;
+      }
+      return undefined;
+    };
+
+    (async () => {
+      const seed = await retryUntil(
+        readSeed,
+        (snapshot) => snapshot !== undefined || isAnswered || hasReceivedEvent,
+        { maxAttempts: UNSYNCED_CHANGES_SEED_ATTEMPTS, delayMs: UNSYNCED_CHANGES_SEED_RETRY_MS },
+      );
+      // An event that arrived meanwhile is newer than the seed
+      if (isAnswered || hasReceivedEvent) return;
+      if (seed) {
+        consider(seed);
+        return;
+      }
+      papi.logger.warn(
+        `Could not tell whether ${projectId} has changes to send: ${getErrorMessage(lastSeedError)}`,
+      );
+      answer(undefined);
+    })();
+  });
+}
+
+/**
+ * Projects whose switch-to-Power sync is still deciding whether to send, by normalized id. A second
+ * switch for the same project joins the first instead of deciding separately: both would see the
+ * same snapshot and start two overlapping syncs, which the backend refuses.
+ */
+const projectIdsDecidingSyncOnSwitchToPower = new Set<string>();
+
+/**
+ * After a switch from Simple to Power mode, sends what was typed in Simple. Send/receives the
+ * project only when {@link waitForUnsentChanges} answers `true`, since a sync with nothing to send
+ * would show notifications for no reason. No `suppressNotification`, so Power mode's progress and
+ * failure toasts show. Never rejects.
+ *
+ * Skipped when:
+ *
+ * - The user chose "Don't sync yet" this session (`deferred`), the first-run flag cannot be read
+ *   (`unreadable`), or the consent request rejects. Asked before and after the wait for unsent
+ *   changes, so a decline during the wait still counts. An `unconfirmed` answer does NOT skip it: a
+ *   user who started in Power mode never sees the wizard that records consent. See
+ *   `adr-switch-to-power-sends-unsent-changes`.
+ * - The mode no longer reads `'power'` when the sync would start: the switch back to Simple makes its
+ *   own (consent-gated) sync decision, and anything still unsent goes on the next switch to Power.
+ * - The saved internet setting turns Send/Receive off (`VpnRequired` or `Disabled`). Whether the
+ *   machine is actually online cannot be known without trying, so offline is left to the sync's own
+ *   failure notification.
+ * - An earlier switch-to-Power sync of the same project is still deciding; it covers this one.
+ *
+ * @param papi Backend PAPI instance.
+ * @param projectId The project the Simple-mode Scripture Editor was showing.
+ */
+export async function syncOnSwitchToPower(
+  papi: typeof PapiBackend,
+  projectId: string,
+): Promise<void> {
+  // Any PAPI client can send the command, so the argument is checked rather than trusted
+  if (!isString(projectId)) {
+    papi.logger.warn('Switch-to-Power sync: ignoring a project id that is not a string');
+    return;
+  }
+  const normalizedProjectId = normalizeProjectId(projectId);
+  if (projectIdsDecidingSyncOnSwitchToPower.has(normalizedProjectId)) {
+    papi.logger.info(
+      `Switch-to-Power sync of ${projectId} is already deciding; not starting another`,
+    );
+    return;
+  }
+
+  projectIdsDecidingSyncOnSwitchToPower.add(normalizedProjectId);
+  let shouldSync: boolean;
+  try {
+    shouldSync = await shouldSyncOnSwitchToPower(papi, projectId);
+  } finally {
+    projectIdsDecidingSyncOnSwitchToPower.delete(normalizedProjectId);
+  }
+  if (!shouldSync) return;
+
+  try {
+    await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [projectId]);
+  } catch (e) {
+    papi.logger.warn(`Switch-to-Power sync of ${projectId} failed: ${getErrorMessage(e)}`);
+  }
+}
+
+/**
+ * The first-run sync consent gate's answer when it lets the switch-to-Power sync run, or
+ * `undefined` (logged) when it does not. Only `granted` and `unconfirmed` let it run, so an answer
+ * this does not know fails closed.
+ */
+async function getSwitchToPowerSyncConsent(
+  papi: typeof PapiBackend,
+): Promise<'granted' | 'unconfirmed' | undefined> {
+  let consent;
+  try {
+    consent = await papi.commands.sendCommand('platform.getAutomaticSyncConsent');
+  } catch (e) {
+    papi.logger.warn(
+      `Switch-to-Power sync: could not check first-run sync consent (${getErrorMessage(e)}); skipping sync`,
+    );
+    return undefined;
+  }
+  if (consent === 'granted' || consent === 'unconfirmed') return consent;
+  papi.logger.info(`Switch-to-Power sync skipped: first-run sync consent is ${consent}`);
+  return undefined;
+}
+
+/**
+ * The checks {@link syncOnSwitchToPower} makes before it syncs: consent, unsent changes, the mode,
+ * the internet setting, and consent again. Logs why it answers `false`.
+ */
+async function shouldSyncOnSwitchToPower(
+  papi: typeof PapiBackend,
+  projectId: string,
+): Promise<boolean> {
+  if (!(await getSwitchToPowerSyncConsent(papi))) return false;
+
+  const hasUnsentChanges = await waitForUnsentChanges(papi, projectId);
+  if (hasUnsentChanges !== true) {
+    // Logged, not shown, even when it could not tell: the switch itself succeeded, the edits stay
+    // on disk for the next sync, and like every other automatic sync's skip there is nothing the
+    // user could act on. A sync that runs and fails does show its failure notification.
+    papi.logger.info(
+      `Switch-to-Power sync skipped: ${hasUnsentChanges === false ? 'no' : 'could not tell whether there are'} changes to send in ${projectId}`,
+    );
+    return false;
+  }
+
+  let interfaceMode: SettingTypes['platform.interfaceMode'] | undefined;
+  try {
+    interfaceMode = await papi.settings.get('platform.interfaceMode');
+  } catch (e) {
+    papi.logger.warn(
+      `Switch-to-Power sync: could not read platform.interfaceMode (${getErrorMessage(e)}); skipping sync of ${projectId}`,
+    );
+    return false;
+  }
+  if (interfaceMode !== 'power') {
+    papi.logger.info(
+      `Switch-to-Power sync of ${projectId} skipped: the interface mode is ${interfaceMode} now, and that switch decides its own sync`,
+    );
+    return false;
+  }
+
+  const internetUse = await readPermittedInternetUse(papi);
+  if (internetUse === 'VpnRequired' || internetUse === 'Disabled') {
+    papi.logger.info(
+      `Switch-to-Power sync of ${projectId} skipped: the internet setting is ${internetUse}, which turns Send/Receive off`,
+    );
+    return false;
+  }
+
+  // Asked again because the wait above can last minutes, and "Don't sync yet" chosen meanwhile
+  // must still stop this sync
+  const consent = await getSwitchToPowerSyncConsent(papi);
+  if (!consent) return false;
+  // Logged at info because every other automatic sync would skip here, so a support log must show
+  // why this one ran
+  if (consent !== 'granted')
+    papi.logger.info(
+      `Switch-to-Power sync of ${projectId}: first-run sync consent is ${consent}, which does not stop this sync`,
+    );
+  return true;
+}
+
+/**
+ * The saved internet setting, or `undefined` when it cannot be read. Blocked values mirror the
+ * backend's `InternetServicesGate.IsBlocked`, which enforces them on every Send/Receive; this check
+ * only spares a sync that gate would refuse. So an unreadable setting lets the sync go ahead.
+ */
+async function readPermittedInternetUse(
+  papi: typeof PapiBackend,
+): Promise<InternetUse | undefined> {
+  try {
+    const provider = await papi.dataProviders.get(
+      'paratextRegistration.internetSettingsDataProvider',
+    );
+    if (!provider) throw new Error('the internet settings data provider is not available');
+    return (await provider.getInternetSettings(undefined)).permittedInternetUse;
+  } catch (e) {
+    papi.logger.warn(
+      `Switch-to-Power sync: could not read the internet setting (${getErrorMessage(e)}); leaving it to Send/Receive`,
+    );
+    return undefined;
+  }
+}
+
 // #endregion Project-Switch Sync
 
 // #region Finalize Project Switch
@@ -1859,6 +2501,166 @@ export async function finalizeProjectSwitch(
 }
 
 // #endregion Finalize Project Switch
+
+// #region Unsupported Projects
+
+/**
+ * The localize key explaining why `projectId` cannot be opened, or `''` when it can.
+ *
+ * A metadata lookup is a fan-out, so keep this out of reactive loops. Any failure counts as
+ * openable, so a transient error never replaces a real project's text with the reason.
+ *
+ * Asks through an interface every Paratext project serves and only the C# factory provides, so at
+ * startup the lookup waits for that factory, whose answer carries the reason, instead of polling
+ * whichever factory registered first.
+ */
+export async function getProjectUnsupportedReason(
+  papi: typeof PapiBackend,
+  projectId: string,
+): Promise<string> {
+  try {
+    const metadata = await papi.projectLookup.getMetadataForProject(
+      projectId,
+      'platformScripture.scriptureEditPermissions',
+    );
+    return metadata.unsupportedReason ?? '';
+  } catch (e) {
+    papi.logger.warn(
+      `Could not look up whether ${projectId} can be opened (${getErrorMessage(e)}); treating it as openable`,
+    );
+    return '';
+  }
+}
+
+/**
+ * The editor web view state key holding the project's `unsupportedReason`: a localize key, or `''`
+ * when the project can be opened. Written by the web view factory, read by the web view.
+ */
+export const UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY = 'unsupportedReason';
+
+/**
+ * The editor web view's state for one build of its definition: `state` with the project's
+ * {@link UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY} set last, so a reason carried in by a saved layout
+ * or by open options never outlives the project's current metadata.
+ *
+ * Lives here rather than in the provider so a test can reach it: `main.ts` is the extension entry
+ * point, and no test imports it.
+ *
+ * @param papi The instance of papi to look the project up with.
+ * @param projectId The project the view shows, if any; no project means nothing to look up.
+ * @param state The rest of the state, already merged from the saved layout and the open options.
+ * @returns `state` with the reason applied.
+ */
+export async function buildScriptureEditorWebViewState(
+  papi: typeof PapiBackend,
+  projectId: string | undefined,
+  state: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const unsupportedReason = projectId ? await getProjectUnsupportedReason(papi, projectId) : '';
+  return { ...state, [UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY]: unsupportedReason };
+}
+
+/** Which projects cannot be opened, held across calls. See {@link createUnsupportedProjectIdsCache}. */
+export type UnsupportedProjectIdsCache = {
+  /**
+   * Which of `candidateIds` cannot be opened, as ids normalized with `normalizeProjectId`, so
+   * callers must normalize the id they test with too: ids from recents or shared-project lists may
+   * differ in case from the metadata's. Looks up only the candidates it holds no answer for, and
+   * nothing at all when it holds an answer for every one.
+   */
+  getUnsupportedProjectIds: (candidateIds: readonly string[]) => Promise<ReadonlySet<string>>;
+  /** Drop every held answer, so the next call looks up afresh. */
+  invalidate: () => void;
+};
+
+/**
+ * How long a failed {@link createUnsupportedProjectIdsCache} lookup is answered as "every project
+ * openable" before the next call looks up again.
+ */
+export const UNSUPPORTED_PROJECT_IDS_RETRY_DELAY_MS = 30_000;
+
+/**
+ * Holds, per project id, whether it can be opened, until {@link UnsupportedProjectIdsCache}'s
+ * `invalidate`. Each lookup names its candidates (`includeProjectIds`), so the lookup service's
+ * startup retry applies: while no factory knows any of the named candidates, and only within its
+ * startup grace period, it waits for one rather than answering "none". A lookup that names a
+ * candidate some factory already knows gets no such wait.
+ *
+ * A failed lookup counts as its candidates openable until
+ * {@link UNSUPPORTED_PROJECT_IDS_RETRY_DELAY_MS} has passed; the first call after that drops every
+ * held answer, successes included, and looks up again.
+ */
+export function createUnsupportedProjectIdsCache(
+  papi: typeof PapiBackend,
+): UnsupportedProjectIdsCache {
+  /** Normalized id → whether that project cannot be opened. Holds the promise, not the value. */
+  let isUnsupportedById = new Map<string, Promise<boolean>>();
+  let failedAt: number | undefined;
+  // Bumped by `invalidate`, so a late failure from a superseded lookup stamps nothing.
+  let generation = 0;
+
+  /** The normalized ids among `projectIds` that cannot be opened, or `undefined` on failure. */
+  const lookUp = async (projectIds: string[]): Promise<Set<string> | undefined> => {
+    const lookupGeneration = generation;
+    try {
+      const metadata = await papi.projectLookup.getMetadataForAllProjects({
+        includeProjectIds: projectIds,
+      });
+      return new Set(
+        metadata.filter((m) => m.unsupportedReason).map((m) => normalizeProjectId(m.id)),
+      );
+    } catch (e) {
+      papi.logger.warn(
+        `Could not look up which projects can be opened (${getErrorMessage(e)}); treating them as openable`,
+      );
+      if (lookupGeneration === generation) failedAt = Date.now();
+      return undefined;
+    }
+  };
+
+  return {
+    getUnsupportedProjectIds: async (candidateIds) => {
+      // A failure is retried in place after a delay, not held for good nor retried on every call:
+      // see `.claude/rules/architecture/provider-lookups-fan-out.md`, rule 3.
+      if (
+        failedAt !== undefined &&
+        Date.now() - failedAt >= UNSUPPORTED_PROJECT_IDS_RETRY_DELAY_MS
+      ) {
+        isUnsupportedById = new Map();
+        failedAt = undefined;
+      }
+      const unanswered = new Map<string, string>();
+      candidateIds.forEach((id) => {
+        const normalizedId = normalizeProjectId(id);
+        if (!isUnsupportedById.has(normalizedId)) unanswered.set(normalizedId, id);
+      });
+      if (unanswered.size > 0) {
+        const lookup = lookUp([...unanswered.values()]);
+        unanswered.forEach((_id, normalizedId) =>
+          isUnsupportedById.set(
+            normalizedId,
+            lookup.then((unsupported) => unsupported?.has(normalizedId) ?? false),
+          ),
+        );
+      }
+      const answers = await Promise.all(
+        candidateIds.map(async (id) => {
+          const normalizedId = normalizeProjectId(id);
+          const isUnsupported = await isUnsupportedById.get(normalizedId);
+          return isUnsupported ? normalizedId : undefined;
+        }),
+      );
+      return new Set(answers.filter((id): id is string => id !== undefined));
+    },
+    invalidate: () => {
+      generation += 1;
+      isUnsupportedById = new Map();
+      failedAt = undefined;
+    },
+  };
+}
+
+// #endregion Unsupported Projects
 
 // #region Text Connection Panels
 

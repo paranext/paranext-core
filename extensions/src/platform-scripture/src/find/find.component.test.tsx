@@ -671,6 +671,58 @@ const FAKE_RESULT = {
   text: 'God',
 };
 
+describe('Find — search errors', () => {
+  it('shows why a project cannot be searched on its own, without the generic error wording', () => {
+    render(
+      <Find
+        {...buildLifecycleProps({
+          searchStatus: 'errored',
+          openBlockedMessage: "Study Bible Additions projects aren't supported yet.",
+        })}
+      />,
+    );
+
+    expect(
+      screen.getByText("Study Bible Additions projects aren't supported yet."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/An error occurred/)).toBeNull();
+  });
+
+  it('wraps any other error in the generic error wording (positive control)', () => {
+    render(
+      <Find
+        {...buildLifecycleProps({
+          searchStatus: 'errored',
+          searchError: 'Invalid regular expression',
+        })}
+      />,
+    );
+
+    expect(screen.getByText('An error occurred: Invalid regular expression')).toBeInTheDocument();
+  });
+});
+
+describe('Find — Replace All availability', () => {
+  const replaceModeProps = {
+    activeMode: 'replace',
+    searchTerm: 'God',
+    searchStatus: 'completed',
+    results: [FAKE_RESULT],
+    focusedResultIndex: 0,
+  } satisfies Partial<FindProps>;
+
+  it('shows Replace All when given a handler for it', () => {
+    render(<Find {...buildLifecycleProps(replaceModeProps)} />);
+    expect(screen.getByRole('button', { name: 'Replace all' })).toBeInTheDocument();
+  });
+
+  it('hides Replace All but keeps Replace when no handler for it is given', () => {
+    render(<Find {...buildLifecycleProps({ ...replaceModeProps, onReplaceAll: undefined })} />);
+    expect(screen.getByRole('button', { name: 'Replace' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Replace all' })).toBeNull();
+  });
+});
+
 describe('Find — permission-blocked Replace', () => {
   function buildReplaceProps(overrides: Partial<FindProps>): FindProps {
     return buildLifecycleProps({

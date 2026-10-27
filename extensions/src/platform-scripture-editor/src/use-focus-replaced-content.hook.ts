@@ -39,14 +39,22 @@ export function useFocusReplacedContent<T extends HTMLElement>(resetKey?: unknow
   const regionRef = useRef<T>(null);
 
   useEffect(() => {
-    if (!document.hasFocus()) return;
-    // `activeElement` is `body` when the focused element was removed from the DOM, and is nullish
-    // only in edge cases where the document has no body yet. Anything else means a real element
-    // still holds focus, and it is not this region's business to take it.
-    const { activeElement } = document;
-    if (activeElement && activeElement !== document.body) return;
-    regionRef.current?.focus();
+    if (isFocusDroppedInThisDocument()) regionRef.current?.focus();
   }, [resetKey]);
 
   return regionRef;
+}
+
+/**
+ * Whether focus here was orphaned: this document has focus, but no element in it does, because the
+ * focused one was removed. The two conditions {@link useFocusReplacedContent} repairs focus under;
+ * use it wherever else this document moves focus after replacing what had it.
+ */
+export function isFocusDroppedInThisDocument(): boolean {
+  if (!document.hasFocus()) return false;
+  // `activeElement` is `body` when the focused element was removed from the DOM, and is nullish
+  // only in edge cases where the document has no body yet. Anything else means a real element
+  // still holds focus, and it is not ours to take.
+  const { activeElement } = document;
+  return !activeElement || activeElement === document.body;
 }

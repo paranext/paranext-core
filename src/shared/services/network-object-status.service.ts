@@ -11,8 +11,11 @@ import {
 import {
   AsyncVariable,
   createCachedInitializer,
+  DEADLINE_EXCEEDED,
   getErrorMessage,
   isSubset,
+  newPlatformError,
+  UNKNOWN,
 } from 'platform-bible-utils';
 import type { Unsubscriber } from 'platform-bible-utils';
 
@@ -46,9 +49,12 @@ async function getAllNetworkObjectDetails(): Promise<Record<string, NetworkObjec
 // for code understandability we'll just leave it as-is and poll inside the network object service
 // `get` for now. Other services will have to call this directly if they want to be event based.
 //
-// Every rejection from this function carries a reason string, not an Error: both the timeout and a
-// failed snapshot settle through `asyncVar`, so the caller sees one shape whichever way the wait
-// ends. The public contract in `NetworkObjectStatusServiceType` states the same.
+// Both the timeout and a failed snapshot settle through `asyncVar`, which only carries a reason
+// string internally. This function is what turns that into a `PlatformError` with a machine-
+// readable `code` — `DEADLINE_EXCEEDED` for a timeout, `UNKNOWN` otherwise — so a caller can tell
+// the two apart without relying on `AsyncVariable`'s internal `hasTimedOut` flag, which never
+// survives past this function. The public contract in `NetworkObjectStatusServiceType` states the
+// same.
 async function waitForNetworkObject(
   objectDetailsToMatch: Partial<NetworkObjectDetails>,
   timeoutInMS?: number,
@@ -67,7 +73,11 @@ async function waitForNetworkObject(
   // exactly what must not happen — see resolveFromSnapshot.
   releaseListenerWhenSettled(asyncVar.promise, unsub);
   resolveFromSnapshot(asyncVar, objectDetailsToMatch);
-  return asyncVar.promise;
+  try {
+    return await asyncVar.promise;
+  } catch (reason) {
+    throw newPlatformError(reason, asyncVar.hasTimedOut ? DEADLINE_EXCEEDED : UNKNOWN);
+  }
 }
 
 /**

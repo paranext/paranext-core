@@ -332,6 +332,35 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `SelectContent` that only mounted alongside items — so a user with no local project metadata can
   reach Home through it after all. The controlled-`open` state that closed the dropdown by hand is
   gone with it: `ProjectSelector` closes its own popover when the footer row is activated.
+- **Amended 2026-09-30 (PT-3182, Home type filter; supersedes the scoping mechanics of the
+  2026-09-18 amendment):** projects-only is no longer a fixed scope but the starting value of a
+  type filter (All / Paratext Projects / Resources) the user can change in Home. The
+  `platformGetResources.openHome(shouldShowProjectsOnly)` signature is unchanged; only `true` sets
+  the preset, because the macOS native menubar passes each menu item's group key as the command's
+  first argument. The filter lives in the web view's `state` as `projectResourceFilter`, and Home
+  writes the user's changes back to it. It is no longer "a property of the launch, not of the tab":
+  `buildHomeWebViewState` replaces it only when an opener passes a preset and otherwise keeps it,
+  because the provider also runs for window moves, extension reloads and layout restores, and a
+  visible, one-click filter is not the trap the invisible scope was. The reload rule is one-way
+  (`shouldReloadHomeForFilterPreset`, replacing `shouldReloadHomeForProjectsOnly`): the command
+  reloads an open Home only when it asks for a specific filter Home is not showing, and an open
+  with no preset raises Home showing whatever filter it last had — including a preset, which
+  therefore persists until the user changes it. The accepted cost is that "More projects…" on a
+  Home the user has widened still rebuilds the iframe, dropping its search and any in-progress
+  send/receive UI state: a Get or Sync started from it loses its progress indicator, and its
+  "Sync failed" alert and internet-block notice are never shown (they were to be sent from the
+  replaced iframe), while Get and Sync are enabled again although the sync is still running. Pushing the preset into the open Home instead
+  (`papi.webViewProviders.postMessageToWebView`) would avoid that, but Home reads its starting
+  filter once, so it would need a message handler of its own; not worth it for that case. Note
+  that the reload applies the preset only because every provider run gives the iframe a new
+  `srcNonce`, which remounts it: if web views ever keep their nonce across reloads, Home would keep
+  showing its old filter while its `state` says otherwise, and this has to be revisited.
+- **Amended 2026-10-21 (PT-3182, Simple mode):** in Simple mode `openHome` always asks for the
+  Paratext projects preset, whatever its argument (`getHomeFilterPreset`), so Home there starts on
+  projects on every open and an open Home the user had widened is reloaded back onto them; an
+  unreadable interface mode counts as Simple. The filter is not locked in Simple mode: Ian accepted
+  that on this condition, since resources a user chooses to see open in their reference tab
+  (`adr-simple-mode-resource-opens-to-reference-tab`). Power mode is unchanged.
 
 ## adr-analytics-in-extension-host: Analytics abstraction layer hosted in extension-host; environment resolved once and fail-safe toward test
 
@@ -643,6 +672,63 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   [`adr-bcv-item-value-contract`](#adr-bcv-item-value-contract-bookchaptercontrol-owns-the-cmdk-item-value-contract-activation-reads-component-state-not-cmdks-dom-internals),
   which governs how the highlight is spelled; this one governs who owns the keyboard.
 
+## adr-biblica-license-notice-computed-setting: Biblica licensing restrictions are detected in C# and surfaced as a read-only computed project setting plus a restriction list for pickers
+
+- **Date:** 2026-09-22
+- **Status:** Accepted
+- **Context:** Biblica asked that its traditionally licensed (non-Open) texts show a notice that
+  they are for reference only and may not be used as the basis of a new translation, with a "More
+  info" window of Biblica's terms for use outside Paratext, and (nice-to-have) that they cannot be
+  picked as a model or base text. Paratext 9 has no Biblica-specific logic; it only shows a banner
+  for copyrights starting with "Notification:" (`ScrText.RequiresCopyrightBanner`, used by ESVUK and
+  ESVUS16). The DBL catalog carries no copyright or rights-holder data, so a resource that is not
+  installed can only be identified by its DBL id. Biblica's list (DBL entries whose rights holder
+  is Biblica and which are not open access) names 56 texts. A survey that installed all 1,819 DBL
+  resources in Platform.Bible's resource list found that one copyright rule identifies exactly the
+  55 of those in that list (the 56th, VCB, is not in it).
+- **Decision:** `BiblicaLicensing.IsRestricted(scrText)`
+  (`c-sharp/Projects/DigitalBibleLibrary/BiblicaLicensing.cs`) is the one check. It applies only to
+  resources, so a Biblica team's own editable project is never flagged. A resource is restricted
+  when its DBL id is on Biblica's list, or when its plain-text copyright names "Biblica, Inc." or
+  "Biblica®" without "Biblica® Open" (OBTT is exempted by id); the rule covers Biblica texts
+  added to the DBL after the list was made.
+  - Panes: the read-only computed project setting `platformScripture.copyrightNotice`
+    (`CopyrightNotice.FromScrText`) returns `none | notification | restrictedLicense` with the
+    names to show. The PT9 "Notification:" text applies to any project, as in Paratext 9, takes
+    priority and shows its own copyright. A
+    restricted text carries the years of its copyright statement, which Biblica's terms quote; the
+    front end supplies and localizes the wording.
+  - Pickers: `listModelTextRestrictions` on the DBL resources provider returns Biblica's DBL ids
+    and the ids of installed resources that `IsRestricted`. platform-get-resources stamps
+    `isRestrictedAsModelText` on every catalog and local row it serves from that list, so an old
+    cached catalog and offline sessions are covered. Manage Books' `ProjectSummary.IsRestrictedAsBase`
+    uses `IsRestricted` directly.
+  - The restriction is enforced in the pickers only (Column 1, Team layout, Manage Books "Create
+    based on"); settings writes are not rejected, and a restricted model text chosen earlier stays
+    set, with its banner.
+  - A dismissal is kept per pane for the text on screen and cleared when the pane shows another
+    text, as Paratext 9 clears its per-window flag.
+  - Enhanced Resources is not covered: an Enhanced Resource is identified by a Marble resource id,
+    not a ScrText project, so the setting cannot reach it.
+- **Alternatives:**
+  - Reading the raw `Copyright` setting and deciding in TypeScript: rejected, because it duplicates
+    Paratext 9 logic and throws on resources with no copyright.
+  - A general per-provider licensing framework: rejected for now; Biblica is the only publisher
+    asking, and one could later replace `BiblicaLicensing` behind the same setting.
+  - The id list alone: rejected, because the rule also catches Biblica texts added to the DBL later,
+    and it agrees with the list on every surveyed text.
+  - Stamping the picker flag on the C# catalog rows: rejected, because the catalog is cached across
+    sessions and local rows never pass through it, so pickers failed open offline.
+  - Showing the text's own copyright in "More info": rejected, because Biblica asked for its terms
+    for use outside Paratext instead.
+  - A dismissal remembered for each text in a pane: rejected, because Paratext 9 shows the notice
+    again when a window changes text, and Biblica wants the notice seen.
+- **Consequences:** The id list does not pick up new Biblica texts by itself; a comment on the list
+  says how to refresh it. The legal wording of the notice and the terms is localized into every
+  language platform-scripture ships, so a change of meaning needs new keys and new translations. A
+  later general licensing framework could replace `BiblicaLicensing` behind the same setting.
+- **Source:** PT-4731.
+
 ## adr-blank-chapter-simple-mode-only: The blank-chapter view stays Simple-mode-only, because it removes the editing surface
 
 - **Date:** 2026-08-25
@@ -779,6 +865,211 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `npm run verify:third-party-notices` hard-fails until the production extension build runs.
   **Revisit** as its own change, with `paratext-10-studio` in scope.
 - **Source:** the multi-agent review of #2654, finding 25.
+
+## adr-chapter-marker-repair-at-the-save-boundary: A chapter's `\c` marker is repaired on the way out, in both write layers
+
+- **Date:** 2026-09-14
+- **Status:** Accepted
+- **Context:** `ScrText.ValidateChapterNumber` (in PT9 `ParatextData/ScrText.cs:1050`) refuses a
+  chapter write whose `\c` marker disagrees with the chapter being written — a wrong number, a
+  second marker typed mid-chapter, a deleted marker, or (for any chapter after the first) any
+  content at all ahead of the marker. The refusal does not touch the editor, so the offending
+  document stays on screen and every LATER save of that chapter is refused too: editing a chapter
+  marker silently stopped the chapter saving, with nothing on screen to say so (PT-4608). Paratext 9
+  does not prevent the edit. Its editor repairs the USFM inside its own save path —
+  `UsfmEditorTextLoader.FixChapterNumbers`, in PT9
+  `ParatextBase/ScriptureEditor/UsfmEditorTextLoader.cs:355` — and reloads the editor onto the
+  repaired text with `Revert()` (same file, `:277-278`), so the typing is allowed and the document
+  is made writable on its way out. PT9 tells the user only in the mid-chapter-marker case, the one
+  shape for which `FixChapterNumbers` sets an error message (`:409`, surfaced at `:318-319`);
+  notifying on every repair is our own choice, recorded in the Decision below.
+- **Decision:** Repair at the save boundary, and do it in **both** write layers rather than picking
+  one.
+  - The renderer repairs the USJ before the PDP write
+    (`extensions/src/platform-scripture-editor/src/chapter-marker-repair.util.ts`), pushes the
+    repaired document back into the editor, and notifies the user — the push-back is what stops the
+    loop, since a bad marker left on screen is repaired and reported again on every subsequent save.
+  - C# repairs the USFM inside `SetChapterUsx`/`SetChapterUsfm`
+    (`c-sharp/Projects/ChapterMarkerCorrection.cs`) as a backstop for writers that do not correct
+    their own content, silently apart from a log line.
+  - **Book-level writes are never touched.** A book legitimately carries one `\c` per chapter, so
+    only a write aimed at a single chapter knows which marker is the right one. The mechanism is
+    the call graph, not a flag: `SetBookUsfm` and `SetBookUsx` never call the corrector at all — the
+    two chapter setters are its only call sites. Both ports separately return their input untouched
+    for a non-chapter number (the opening guard of `FixChapterMarkers` in
+    `c-sharp/Projects/ChapterMarkerCorrection.cs`, and of `repairChapterMarkers` in
+    `extensions/src/platform-scripture-editor/src/chapter-marker-repair.util.ts`), but that is a
+    defensive guard inside the algorithm rather than what keeps book writes safe.
+  - **Placement rule:** a restored marker for a chapter after the first goes at index 0
+    *unconditionally*. Nothing may precede it — not even an `\id` book node typed into the chapter —
+    because `verseRef.ChapterNum != 1 && parts[0] != ""` is "Text present before chapter marker."
+    (in PT9 `ParatextData/ScrText.cs:1067`), so a marker placed behind such a node yields another
+    document the writer refuses. Chapter 1 is the sole exception: its marker stays where the author
+    has it, behind the introduction, and may legitimately be absent altogether (Jude). This is the
+    one point at which the two ports can plausibly drift, and Paratext 9's table does not pin it (no
+    row puts text ahead of a later chapter's marker), so it is recorded here rather than left to be
+    re-derived.
+- **Alternatives:**
+  - **Block the edit in the editor** (refuse the keystroke, or revert the marker in place) —
+    rejected. Paratext 9 deliberately allows the typing and fixes it on save, and the editor's
+    chapter transform is written for that parity; policing marker edits in the editor would be a
+    behaviour change to the typing surface in order to work around a writer constraint.
+  - **C# only** — rejected. `useEditorPdpSync`
+    (`extensions/src/platform-scripture-editor/src/use-editor-pdp-sync.hook.ts`) defers an incoming
+    PDP update for up to `EDITOR_OWNERSHIP_WINDOW_MS` (15 s) while the editor is focused and
+    recently edited, so a backend-only correction would not reach the editor; the still-poisoned
+    editor document would simply be written over it on the next save. A correction the editor never
+    sees also cannot be explained to the user.
+  - **Renderer only** — rejected. It would leave every non-editor writer of a chapter (imports,
+    commands, future extensions) able to poison a chapter exactly as before.
+- **Consequences:** two ports of one algorithm now exist, over two different representations (USJ
+  nodes and USFM text), and they must not drift. Both are pinned to Paratext 9's own 16-row
+  `[TestCase]` table (in PT9 `ParatextBase.Tests/ScriptureEditor/UsfmEditorTextLoaderTests.cs:573`):
+  the C# port keeps all 16 rows, the USJ port keeps the 10 distinct behaviours (the other 6 rows
+  differ only in LF-vs-CRLF line endings, which USJ does not represent). Anything that changes one
+  port must change the other or explain why not. The C# port writes exactly what Paratext 9 writes,
+  including its layout of a correctly numbered marker whose line carries more than the marker:
+  `\c 2 \ca 3\ca*` is written as `\c 2` with ` \ca 3\ca*` on the next line, so a file keeps the
+  shape Paratext 9 gives it and does not flip between the two in its revision history. It differs
+  only in what it reports (decided in the PT-4608 review): Paratext 9 counts that layout as a fix and
+  reloads its editor, but `ValidateChapterNumber` reads the number only up to the first non-word
+  character, so the marker was never wrong and the C# port does not report it as a correction. The
+  USJ port has no such case to match: there `\ca` is the chapter's `altnumber` attribute, not text on
+  its line. For editor traffic the C# half is expected to find
+  nothing to correct, so a log line from it is a signal that the renderer repair has a gap.
+  The repair also removes a protection the refusal used to provide by accident: a save carrying one
+  chapter's content into another chapter was refused as a wrong chapter number, and once the marker
+  is renumbered to match, Paratext accepts it. The editor makes that save after navigation, because
+  it goes on holding (and letting the user type into) the chapter it is leaving until the new one
+  arrives, while its saves are already bound to the new chapter. So the web view drops any save
+  whose content is not from the chapter being written (`isEditorContentForChapter` in
+  `extensions/src/platform-scripture-editor/src/debounced-pdp-save.util.ts`, fed the editor's
+  document by `useEditorPdpSync`). The C# backstop has no such view of where its content came from,
+  and does not need one for editor traffic, which is guarded before it leaves the renderer.
+  The repair can only act on what the editor saves, so the editor saves a chapter line's bytes as
+  what they are once they stop being a chapter marker (`\ 2` after the `c` is deleted, another
+  marker typed over the `\c`, text typed ahead of it): its chapter settle replaces the chapter with
+  what those bytes tokenize to (scripture-editors `$rebuildChapter` and `chapterFragmentContent`).
+  The repair then puts the marker back above them, as Paratext 9 saves the bytes it holds and
+  restores the marker at the top of a later chapter; chapter 1 is left without one, as Paratext 9
+  leaves it. Text typed ahead of a later chapter's marker is the placement rule's case above,
+  reachable by typing, and `chapter-line-left-as-text.spec.ts` pins it end to end. Text typed
+  ahead of a marker with a paragraph before it joins the end of that paragraph instead
+  (`\mt1 Ruth X`), because USFM reads text behind a line break with no marker of its own as part of
+  the paragraph before it, which is where the save and the reload put it. The caret the user had in
+  such a line stays at the same character of it, in a marker typed over the `\c` as in its text
+  (`caretInMovedText` in `chapter-marker-repair.util.ts`).
+  **Revisit** if the editor ever gains a way to reject a marker edit at the source, or if Paratext
+  relaxes the "text before chapter marker" rule.
+- **Source:** PT-4608; Paratext 9 `UsfmEditorTextLoader.FixChapterNumbers` and its test table.
+
+## adr-chapter-marker-repair-replaces-the-document: The repair's push-back replaces the whole document and re-places the caret; keeping the undo stack is deferred to the editor
+
+- **Date:** 2026-09-16
+- **Status:** Accepted
+- **Context:** The renderer half of
+  [adr-chapter-marker-repair-at-the-save-boundary](#adr-chapter-marker-repair-at-the-save-boundary)
+  pushes the repaired document back with `EditorRef.setUsj`. The editor loads external content
+  through `LoadStatePlugin`
+  (`scripture-editors` `libs/shared-react/src/plugins/usj/LoadStatePlugin.tsx`): it parses a fresh
+  editor state, calls `editor.setEditorState`, and dispatches `CLEAR_HISTORY_COMMAND`
+  **unconditionally**. So every Lexical node key regenerates, the parsed state carries no selection,
+  and the caret the correction was made under disappears while the undo/redo stack is emptied. Hand
+  QA reported the vanished caret: the correction lands mid-typing, and the user is left with no
+  insertion point.
+- **Decision:** Keep the whole-document push-back, place a caret afresh at the correction, and
+  accept the emptied undo stack for now.
+  - The repair reports where the caret belongs in the coordinates of the document it produced
+    (`ChapterMarkerRepairResult.caretTarget`). The save path applies it once the editor has loaded
+    that document, and only when the editor held DOM focus at push-back time — an unfocused editor
+    has no claim on the shared document selection, and the editor itself skips selection
+    reconciliation when it loads content unfocused.
+  - A caret in a line the repair only moved stays at the same place in that line (see "what is
+    left of the chapter line" below). Otherwise the target is just past the corrected chapter
+    number; failing that, the boundary a removed marker occupied; failing that, the surviving
+    marker. A RESTORED marker (the document had none) is the exception: its caret goes to the end
+    of the document's text (`CARET_AT_DOCUMENT_END`), applied by focusing the editor with no
+    selection, which Lexical resolves to the root's end. A restore is reached by typing into a
+    chapter with no marker at all — in Power mode, a chapter the book has not reached yet — so the
+    user was typing at the end, and keys typed into the new marker would become part of the chapter
+    number for the next repair to correct away. It is also reached by deleting the marker of a
+    chapter with text (backspacing the chapter line away); when that deletion is the ONLY
+    difference from the stored chapter, the user was working on the chapter line, so the caret goes
+    back to just past the restored number instead (`prepareUsjForChapterSave`).
+  - **The push-back has to load, and the caret is placed whatever selection the load leaves.** A
+    marker edit reaches the editor's node state only when it settles, so correcting one still in
+    progress — a number just backspaced out of the glyph — hands the editor a document equal to its
+    node state. `EditorRef.setUsj` once measured against node state and skipped that load: the
+    numberless glyph stayed, the caret target past the number had nothing to resolve against, and
+    the caret stayed where `focus()` put it — the end of the chapter, where the next keys deleted
+    text. `setUsj` skips a document equal to either the settled document or node state, so that a
+    host re-sending the text as it was does not throw away an edit in progress; the editor cannot
+    tell that re-send from this correction, so the push-back forces the load
+    (`setUsj(usj, { force: true })`, `scripture-editors` `packages/platform/src/editor/Editor.tsx`).
+    A load can leave a stray browser selection where the replaced text was, so an existing selection
+    is not taken to be the user's caret.
+  - **The target is computed from the repair, except inside a line the repair only moved.** The
+    correction the user is standing in front of is where the caret belongs, and only the repair
+    knows where that ended up. Every target is a USJ location in the repaired document, which is
+    the document the editor is about to load: just past a corrected number is the end of the
+    chapter's `number` value (`{ jsonPath: "$.content[0]['number']", propertyOffset: 1 }`).
+  - **The exception: what is left of the chapter line keeps the user's caret**
+    (`caretInMovedText` in `chapter-marker-repair.util.ts`, ranked ahead of every target above).
+    When the chapter line's bytes stop being a chapter marker (`\ 2` once the `c` is deleted, `\sc 2`
+    once an `s` is typed into it), text is typed ahead of the marker, or the chapter line merges into
+    the paragraph below it (a selection from the chapter line into that paragraph, typed over), the
+    repair restores the marker above that line and moves the line down whole, and the user is still
+    typing in it — a computed target cannot know where. `EditorRef.getSelection()` reports the
+    caret in the document `getUsj()` returns, even while the line's edit is still pending on
+    screen, and that is the document the repair works on, so the caret keeps its exact place and
+    only the line's index changes. It is read only on the top-level line where the stored marker
+    stood; a caret anywhere else is never carried across.
+- **Alternatives:**
+  - **Apply the repair as OT delta ops (`EditorRef.applyUpdate`) instead of `setUsj`** — rejected
+    for now, though it would keep the history (no load, so no `CLEAR_HISTORY_COMMAND`). A chapter is
+    an opaque embed in `$applyUpdate`'s `"apply"` coordinates — every element embed is one unit and
+    its children are never descended into — so no op can edit a character out of a chapter's glyph
+    text. The wrong-number case, which is the common one, could then only be expressed as
+    replace-the-whole-embed, which regenerates the node key and loses the caret anyway. The editor
+    also records the editable-chapter coordinate divergence as accepted and unfinished ("no live flow
+    currently routes ops across an editable chapter into `$applyUpdate`", in `scripture-editors`
+    `libs/shared-react/src/plugins/usj/collab/delta-common.utils.ts`), and it exports no USJ→OT
+    position helper, so the host would compute retains itself — where a miscomputed retain splices
+    content silently rather than failing.
+  - **Repair inside the editor as node surgery, behind a new `EditorRef` method** — deferred, and
+    it would put a Paratext rule into the editor. One `editor.update()` that rewrites the marker's glyph (the glyph is the source
+    of truth: `$chapterNodeTransform` re-derives the number from it, so `ChapterNode.setNumber`
+    alone is overwritten) or removes the offending node would keep the caret through Lexical's own
+    reconciliation and push exactly one undo entry — the shape every other structural mutation on
+    `EditorRef` already has (`removeCharacterMarker`, `insertMarker`, `splitParagraphWithMarker`).
+    Deferred because it is a `scripture-editors` change, so it carries its own PR, committed-dist
+    rebuild and `platform-yalc` move; and because it has to handle the pending, unsettled literal
+    case inside the marker-edit tiers, which is the genuinely hard part. Which way to keep the undo
+    history — this, OT ops, or a generic history-preserving load in the editor — is open in PT-4818.
+- **Consequences:** after a correction the caret sits in the marker glyph, where typed characters
+  are marker bytes that the next repair corrects away again — the same fight any autocorrect has.
+  **None of this is announced.** The notice says only that the marker did not match the chapter and
+  was corrected; it does not say where the caret was put, that undo history is gone, or that
+  annotations were cleared. That is deliberate — one sentence a reader can take in beats a warning
+  nobody finishes — but it means the losses below are unmitigated, not merely explained. Undo and
+  redo history is emptied by every repair, so a user cannot undo back past a correction; that is a
+  known limitation tracked in PT-4818 rather than a property anyone should rely on.
+  **Every annotation is cleared too** — a load replaces the node
+  map, and the `TypedMarkNode`s that carry annotations live only in that tree, never in USJ. That is
+  not new to the repair (it is true of every `setEditorUsj` call, including the ordinary PDP echo)
+  and the local bookkeeping already follows it: `setEditorUsj` runs `clearAnnotationInfo`. What is
+  NOT announced outward is the clearing itself: a per-annotation removal normally sends the
+  annotation's `interactionCommand` with a `TypedMarkRemovalCause`, but a wholesale clear fires no
+  `onRemove` at all, so nothing is sent, and the editor exposes no event for it either. This is
+  pre-existing and accepted, not something the repair introduced. Anyone revisiting it should know
+  that `destroyed` is the wrong value to reuse: the published contract defines it as "when the text
+  the annotation was on is completely deleted", so a consumer acting on it could discard data whose
+  text is intact. No annotation set in this repo carries an `interactionCommand` today. Where the
+  editor puts a caret target on screen is pinned end to end
+  (`e2e-tests/tests/isolated/scripture-editor/chapter-marker-repair.spec.ts`,
+  `chapter-marker-deleted.spec.ts` and `chapter-line-left-as-text.spec.ts` read the web view's own
+  DOM selection). **Revisit** with PT-4818.
+- **Source:** PT-4608 hand QA.
 
 ## adr-character-marker-removal-peels-one-layer: Character-marker removal peels one nesting layer per activation; the row is labelled to match rather than looping
 
@@ -1052,16 +1343,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     skips the re-point only when it is `true`: a published resource has no collection of its own, so
     following it would cost a reload, and the in-memory state it drops, for an empty panel. The rule
     lives in that function rather than in a caller, so both switch paths apply it. A translation
-    project with editing switched off is followed like any other. `platform.isEditable` is the wrong discriminator
-    for this: it is the project-wide `Editable` flag (`GetIsEditable` in
+    project with editing switched off is followed like any other. `platform.isEditable` is the
+    wrong discriminator for this: it is the project-wide `Editable` flag (`GetIsEditable` in
     `c-sharp/Projects/ScrTextExtensions.cs`, forced false for resources), not a per-user permission
     — that is `canUserEditScripture` — so gating on it stranded the Text Collection and Find on the
     outgoing project whenever an `Editable=F` translation project was opened. A failed `isPublished`
-    read counts as not published — the setting's default, and what `resolveProjectIsPublished` in
-    `web-view.service-shard.ts` does — so the grid follows. The class newly followed is a plain
-    folder project carrying `<Editable>F</Editable>`, such as the bundled WEB sample; locally
-    installed `.p8z` resources load as resource projects (`GetAllResourceScrTexts` in
-    `LocalParatextProjects.cs` filters on `IsResourceProject`, which is exactly what
+    read counts as not published (the setting's default), so the grid follows. The class newly
+    followed is a plain folder project carrying `<Editable>F</Editable>`, such as the bundled WEB
+    sample; locally installed `.p8z` resources load as resource projects (`GetAllResourceScrTexts`
+    in `LocalParatextProjects.cs` filters on `IsResourceProject`, which is exactly what
     `platform.isPublished` reports), so they are published and stay skipped. Find follows every
     editor-column switch, resources included, and withholds Replace itself per
     `adr-find-follows-editor-to-read-only`. Everything else
@@ -1750,6 +2040,31 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   mismatched result where the two projects' versifications diverge at that reference. That gap is
   accepted as a consequence of this decision, not a defect in it, until PT-4031 lands.
 - **Source:** external code review, finding 16.
+
+## adr-data-provider-waits-for-settings-service: The .NET data provider waits, bounded, for the settings service before reading persisted settings
+
+- **Date:** 2026-10-19
+- **Status:** Accepted
+- **Context:** `Program.Main` creates `PersistedParatextDataSettings` and `PersistedPtxUtilsSettings`,
+  whose constructors read settings from the extension host's settings service. Main starts the data
+  provider before it forks the extension host, and gives up on a request for an unregistered handler
+  after about 9 s. When the settings service came up later than that, the read threw out of `Main`
+  and no Paratext projects were available for the session.
+- **Decision:** Before creating the persisted settings, `Main` waits up to 60 s
+  (`SettingsService.WaitForSettingAsync`) for the settings service to answer with a value, retrying
+  only while it isn't answering yet. On timeout, startup continues and fails as before.
+- **Alternatives:** *Start with empty values when the read fails* — rejected: the next `SafeSave`
+  would overwrite what is stored. *Reorder startup so main launches the data provider after the
+  settings service registers* — rejected: it puts the data provider, and everything waiting on it,
+  behind the extension host on every launch, to fix a race that only a slow boot loses. *Wait on the
+  settings service's registration instead of a read* — rejected: a read of an unstored setting also
+  waits for the extension host's contributions to load, which registration doesn't cover.
+- **Consequences:** On a slow boot the .NET project data provider factories register up to 60 s
+  later. That delay falls inside `adr-startup-sync-readiness-gate`'s 120 s budget, which waits for
+  those factories. If the settings service never answers, the outcome is the pre-existing crash,
+  logged after the wait rather than after 9 s.
+- **Source:** paranext-core PR #2896.
+
 ## adr-data-update-scope-hook: A data type every update must refresh is added by an overridable hook on the base data provider
 
 - **Date:** 2026-09-30
@@ -1872,7 +2187,78 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   disk is out of date". Both `refreshResourceFlags` and the `recomputeDblResourcesUpdateStatus`
   method it calls through are now marked `@experimental` / `'x-experimental': true`, because this
   recompute contract remains untested beyond its one caller.
+- **Amended 2026-09-25 (`adr-dbl-empty-catalog-is-a-failed-fetch`):** `recomputeDblResourcesInstallStatus`
+  now has a second, unsynchronized caller — the grid's `use-dbl-install-lookup.hook.ts`, calling it
+  directly rather than through `ensureInstalledFlagsSynced`. It reads an empty map the same way this
+  entry's sync does: no answer, not "nothing installed".
 - **Source:** Bug report that Get Resources keeps showing "Update" after a resource is updated.
+
+## adr-dbl-empty-catalog-is-a-failed-fetch: An empty DBL catalog is a failed fetch, and installed DBL resources resolve from disk when the catalog cannot
+
+- **Date:** 2026-09-24
+- **Status:** Accepted
+- **Context:** ParatextData's `GetInstallableDBLResources` reports every failure to reach the DBL —
+  offline, a server error, a 401 — by raising an alert and returning an empty list, never by
+  throwing. PT10's `AlertCapture` only logs that alert, so the provider accepted `[]` as the
+  catalog and marked it fetched, and `platform-get-resources` persisted it over the catalog an
+  earlier online session had saved — at every offline startup and on the 12-hour refresh. The Text
+  Collection resolves a DBL reference to a project only through a catalog row, so every such cell
+  read "Resource not installed" while offline; the Bible texts panel kept working only because it
+  also lists read-only projects straight from local metadata.
+- **Decision:** Three layers. (1) The C# provider throws when a fetch returns no resources
+  (`RequireFetchedCatalog`), or none the compatibility whitelist accepts, and writes
+  `_resources`/`_hasFetchedResources` only after both checks, so install status keeps answering
+  from disk. (2) `resolveDblCatalog` rejects an empty catalog;
+  `parsePersistedCatalog` discards an empty persisted one; the startup retry loop stops on an
+  attempt that threw (it exists for `notReady`); concurrent on-demand reads share one fetch; and
+  `getLocalNonDblResources` lists local resources even when the catalog fails. (3) The grid
+  (`scripture-text-grid/use-dbl-install-lookup.hook.ts`) asks `recomputeDblResourcesInstallStatus`
+  for DBL references the catalog cannot resolve, including while the catalog is still loading. An
+  empty install map is never read as an answer — it means "no answer", not "nothing installed" —
+  and while the disk can't answer, a catalog row still decides ("not installed"). "Couldn't check"
+  shows only when the catalog failed and a reference has no row either, and it always comes with a
+  retry banner above the grid, inside a persistent `role="status"` region. An answer holds until
+  the references change or an install from the grid changes the disk; a Retry or a project change
+  anywhere asks again while keeping it, and a Retry skips the ask the catalog refetch would only
+  answer "busy". The Bible texts panel (`resource-text-panel.web-view.tsx`) lets rows that
+  resolved without the catalog — local downloads, project references — win over the catalog-error
+  view, and publishes navigable ids once the catalog has loaded or such a row is shown; a failed
+  catalog alone publishes nothing, so the saved list survives it. A saved selection with no row —
+  a DBL reference, which only the catalog resolves — keeps the catalog-error view and is never
+  overwritten by the fallback to another row.
+- **Alternatives:** *Accept empty only if nothing is cached* — rejected: an empty catalog is never
+  a true answer for a configured user, and C#'s own `_resources` would still be wiped. *Detect
+  offline from the captured alert text* — rejected: it ties behavior to localized PT9 strings;
+  alerts are captured for diagnostics only. *Resolve DBL references by project-id prefix* —
+  rejected: resource project ids are unrelated to DBL uids for many resources
+  (`adr-dbl-install-status-from-backend`). *Keep retrying thrown failures, but lock per attempt* —
+  rejected: with no cache, a reader could slip in between attempts during online startup and get
+  `notReady` instead of waiting for the catalog. *Remember a failed fetch for a window* — rejected:
+  an explicit Retry inside the window would fail without trying.
+- **Consequences:**
+  - Offline startup keeps the saved catalog; a profile whose saved catalog was already emptied
+    resolves installed resources from disk instead.
+  - After a thrown startup attempt, the catalog is not refetched until a reader needs one (none, if
+    a cache is serving), the 12-hour refresh, or the next launch — a single transient failure with a
+    cache in hand leaves "update available" badges stale for that period (installed flags are still
+    reconciled), and a newly-published DBL resource stays invisible for it too.
+  - Offline with no usable cache at all, Get Resources, Home, the resource picker, and the panels
+    all show their own retry state instead of an empty catalog.
+  - The grid is a second caller of the non-waiting `recomputeDblResourcesInstallStatus`; a grid call
+    can make a concurrent flag sync get an empty map and skip one reconcile, which the sync already
+    treats as "no answer". Once the C# catalog has loaded, that call names only catalogued uids, so
+    an installed resource withdrawn from the DBL reads "not installed" — the catalog path's existing
+    limitation.
+  - While the catalog is failing, `getLocalNonDblResources` cannot tell which local resources came
+    from the DBL, so it lists them all, and the Bible texts panel's downloaded rows likewise become
+    project references. A resource picked in that window is saved as a plain project reference: it
+    displays offline, but never gets DBL update or Get Resources status once the catalog returns.
+    Kept deliberately, because hiding those rows would leave an offline user unable to pick an
+    installed resource at all.
+  - The Model Text panel still resolves DBL references through the catalog alone — a known sibling
+    gap, tracked in PT-4814.
+  - **Revisit** if ParatextData ever throws on an unreachable DBL.
+- **Source:** PT-4686.
 
 ## adr-dbl-install-is-idempotent: Installing an already-installed DBL resource succeeds, and `installed` is a hint
 
@@ -1978,6 +2364,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `recomputeDblResourcesInstallStatus` is now marked `@experimental` / `'x-experimental': true` for
   the same reason as its sibling in `adr-dbl-cache-recompute-on-read` — the contract remains
   untested beyond its one caller.
+- **Amended 2026-09-25 (`adr-dbl-empty-catalog-is-a-failed-fetch`):** no longer one caller — the
+  Text Collection grid calls `recomputeDblResourcesInstallStatus` directly too
+  (`use-dbl-install-lookup.hook.ts`), reading an empty map as "no answer" per the contract above.
 - **Source:** PT-4484; builds directly on `adr-dbl-cache-recompute-on-read`.
 
 ## adr-decision-log-sorted-insertion: Decision-log entries are inserted in byte order by slug, not appended
@@ -2681,7 +3070,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
 - **Formerly:** ADR-0016
 - **Date:** 2026-08-18
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-10-23 — records one exception, `ResourceMessageView`'s optional
+  action button
 - **Context:** PT-4111 needed a zero-state carrying a title, a description, and an optional action
   button (the scripture editor's "this book is not in this project" state, whose Power-mode variant
   offers a Manage Books button). Three candidate shapes already existed and nothing said which to
@@ -2729,6 +3119,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4111 design + implementation. (The original design note lives under gitignored
   `docs/superpowers/specs/`, so it is not a citable reference — the reasoning is reproduced here
   precisely because that path is not readable from the repo.)
+- **Amended 2026-10-23 (PT-4780):** one recorded exception. `ResourceMessageView`'s optional action
+  button sits beside `EmptyState` rather than inside `Empty`, because most of its callers show the
+  sentence alone and it must look the same either way. The reasoning is in the 2026-10-22 amendment
+  to `adr-resource-missing-book-message`.
 
 ## adr-extension-host-exits-on-lost-connection: The extension host exits when its connection to main dies; main relays the stop to every window, and the user restarts it
 
@@ -3346,6 +3740,65 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   title header was removed by team decision, and PT9's own pane likewise closes via a corner button
   rather than a toggle in a title bar.
 - **Source:** PT-4189, PT-4478.
+- **Amended 2026-10-22 (PT-4846):** Partly superseded by `adr-footnote-pane-editing-in-simple-mode`.
+  Simple mode's Formatted view is now in scope for the pane: it resolves to `'pane'`, not
+  `'popover'`, and a caller click reveals a hidden pane there too, not only in Power mode. The
+  surface helper's input is a `usesPaneModel` flag (from `usesPaneNoteModel`) rather than the view
+  type, and `resolveCallerHighlight` takes the same flag. Everything else above stands.
+
+## adr-footnote-pane-editing-in-simple-mode: Simple mode edits footnotes in the footnotes pane, like Standard view
+
+- **Date:** 2026-10-22
+- **Status:** Accepted
+- **Context:** Simple mode edited footnotes in a popover while Power's Standard view edits them in
+  place in the footnotes pane (`adr-footnote-editing-surface-per-view`). A UX review found the
+  popover fighting the main editor in Simple: the character-style control acting on the main text
+  while it was open (PT-4836), applying the keyword marker adding a paragraph (PT-4834), Escape not
+  closing it (PT-4096), and the popover drifting off-screen when zooming. UX decided Simple should
+  edit footnotes as Power does, showing markers in the pane and editing there.
+- **Decision:** One pure predicate, `usesPaneNoteModel({ viewType, isPowerMode,
+  isInterfaceModeLoading })` in `platform-scripture-editor.utils.ts`, decides whether a view uses
+  the pane note model: Standard view, and Simple's Formatted view. Power's Formatted and Markers
+  views and Simple's Markers view (read-only, notes expanded) keep their note-editing behavior;
+  while `platform.interfaceMode` is still loading only Standard counts, so a Power user never
+  briefly gets Simple's answer. Every note check that was Standard-only in the scripture editor web
+  view goes through it — the editing surface, the caller-click decision, navigation to a picked
+  note, the caller highlight, and the pane taking focus in a read-only text — and
+  `note-pane-model-wiring.contract.test.ts` fails on any new check of the view against
+  `'standard'` anywhere in the extension's non-test sources (`===`, `!==`, either operand order, or
+  a `case`). In Simple, the pane and its row editor get Standard view's view options
+  (`resolveFootnotesPaneViewOptions`) in both of Simple's views, so the pane shows markers in
+  Markers view too, while the main text keeps Simple's. Four things stay Standard-only on purpose: Standard's own view options, the Ctrl+T /
+  Ctrl+Shift+T insert shortcuts (insertion, not editing), the project stylesheet mode, and the
+  main text's `\` marker-menu trigger (which Standard view does not use). An open popover is not
+  closed when switching from Power to Simple: its text applies only on Save, so closing it would
+  discard what was typed. That one session ends through its own Save or X. Until it does, caller
+  clicks are ignored, as a second caller click already is in Power's Formatted view, and a pane-row
+  click or Enter only moves the text to its note, as Space on the row does.
+- **Alternatives:**
+  - **Keep the popover in Simple and fix its bugs one by one.** Rejected by UX: two editing models
+    for one product, and the popover's problems come from being a second editor floating over the
+    first.
+  - **Put Simple in Standard view.** Rejected: Simple pairs with structure protection and its main
+    text must keep hiding markers (`resolveViewTypeForInterfaceMode`).
+  - **Put Simple's Markers view on the pane model too.** Rejected: Power's Markers view is not on
+    it, and the view is read-only with its notes already expanded in the text.
+- **Consequences:** The footnotes pane now opens in Simple on a caller click, and stays open until
+  the user closes it, as in Power. Simple's character-marker bar is wired to the main editor, so it
+  still acts on the main text while a pane row editor has focus; Power has nothing equivalent to
+  copy, and PT-4836 tracks it. The row editor in Simple runs Standard's editable marker mode, so the
+  `\` marker palette and Enter-for-`\fp` work there as in Standard view. For the latter it runs with
+  structure protection `'off'`, as Power's does, whatever the project's lock state: a note has no
+  verse or paragraph structure of its own to protect, its edits only ever replace the note, and
+  `'protected'` claims Enter as a paragraph insert before the note's `\fp` handling can run. The main
+  text keeps the project's protection mode.
+- **Source:** PT-4846.
+- **Amended 2026-10-26 (PT-4777):** Partly superseded by `adr-power-preview-read-only-formatted`.
+  Power's Formatted view is now the read-only Preview and uses the pane note model too: a caller
+  click there navigates to the note in the footnotes pane instead of opening a popover. The
+  Markers view is shown nowhere. So every view the editor shows uses the pane note model, and
+  `usesPaneNoteModel` answers by the view type alone (`isPowerMode` no longer changes the answer);
+  while `platform.interfaceMode` is still loading only Standard view counts, as before.
 
 ## adr-footnote-unclosed-note-edited-in-place: In Standard view an unclosed note is edited in place in the text, and in the footnotes pane too
 
@@ -3709,6 +4162,78 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   (`2026-09-02-pt-4286-mode-switch-spec.md`); amends nothing in
   `adr-primary-window-owns-app-lifetime`, which it depends on for the primary role.
 
+## adr-interface-scaling-is-per-window-zoom: Interface scaling is set by each window's page once the window has painted or is shown, on Chromium's temporary zoom, not per-host zoom
+
+- **Date:** 2026-09-25
+- **Status:** Accepted
+- **Context:** `platform.zoomFactor` used to be applied with `webContents.setZoomFactor`, which
+  Chromium stores per host. A page with no host, like the packaged app's `file://` page, is stored
+  under its full URL, query included. Since `adr-scroll-group-hosted-in-main` and
+  `adr-theme-hosted-in-main` the renderer rewrites that query whenever its scroll group or theme
+  changes, so the stored zoom stops matching the page. The next time the browser re-sends the page's
+  display settings — a resize (maximize, restore, a drag), docking DevTools, a display or DPI
+  change — the window repaints at 100 % while the setting still says otherwise. Dev mode loads
+  from `http://localhost:1212`, whose host never changes, so it never shows the problem. Electron
+  also persists per-host zoom in the profile's `Preferences` file.
+- **Decision:** Main sends the setting to each window's page over `INTERFACE_SCALING_CHANNEL`
+  (`src/shared/data/interface-scaling.model.ts`), and the preload sets it with
+  `webFrame.setZoomFactor`. A zoom set from the page is Chromium's temporary zoom: keyed by the
+  page's frame host rather than its URL, and never persisted. A plain reload keeps the frame host
+  and its zoom; a crash reload replaces it. Nothing sets any zoom on a hidden window before it has
+  painted: its first document gets the setting at `ready-to-show`. A shown window does not wait
+  for that: it takes the setting at every `did-finish-load`, and so does a hidden one once it has
+  painted or been shown. A change reaches the windows that have painted or are shown
+  (`createInterfaceScaling` in `src/main/interface-scaling.util.ts`). One subscription to the
+  setting, taken again whenever the settings provider is announced, feeds every window. It does not
+  deliver the current value first, since each window reads the setting when a document loads.
+  - **Why a shown window does not wait:** `ready-to-show` is the page's first visually non-empty
+    layout (`OnFirstNonEmptyLayout` in Electron's `electron_api_web_contents.cc`), and a window
+    covered by other windows is occluded, so its page is hidden and does not lay out. Every window
+    someone asks for is created shown (`planWindowActivation`), and one that opens behind another
+    app's window has no `ready-to-show` until it is uncovered. Measured on Electron 39.8.8 on
+    Windows: a covered shown window had none for as long as it stayed covered, and with occlusion
+    tracking off it had one every time. Waiting for it showed the first frame at 100 % at the moment
+    the window was uncovered, while a shown window that took the setting at load while still covered
+    showed the setting once uncovered, in bare Electron (under CPU load too) and the packaged app.
+- **Alternatives:** (a) Reapply the zoom on every main-frame `did-navigate-in-page`: rejected,
+  because it was measured to persist one `Preferences` entry per distinct URL, and each URL carries
+  serialized scroll-group and theme state, so a zoomed user would grow the profile with every verse
+  move. (b) Move the reload seed from the URL to `sessionStorage`: rejected as a second seed source,
+  which `adr-theme-hosted-in-main` and `Paranext-Core-Patterns.md` rule out, and zoom would stay
+  URL-keyed. (c) Serve the packaged renderer from a custom protocol with a host: rejected, because
+  the CSP, asset-path and web-view origin changes are far out of proportion. (d)
+  `webPreferences.zoomFactor`: measured not to survive the rewrite. (e) Set any zoom on a hidden
+  window before its first frame: rejected, because every variant measured can stop that frame, so
+  `ready-to-show` never fires and main never reveals a window nobody asked for. The page setting its
+  zoom while the preload runs did so in every bare-Electron run. The page setting it at
+  `DOMContentLoaded` did so in the smoke suite with another app window open, and together with a
+  main-side apply at `dom-ready` it did so in the real app (isolated
+  `web-view-move-between-windows.spec.ts` failed every run). Main's own `setZoomFactor` at
+  `did-finish-load`, which the app long used, did so intermittently under load. (f) Seed the zoom
+  on the window's URL, like the theme and scroll group, so the first frame is at the setting:
+  deferred as the bigger change, and it would still have to wait for the first frame.
+- **Consequences:** Zoom no longer depends on the URL, so the URL-seed design stays free to rewrite
+  the query, and main writes no per-URL zoom to the profile. Electron's own docs describe zoom as
+  same-origin and suggest distinct URLs for per-window zoom, which is exactly what breaks here; the
+  temporary-zoom behavior was measured on Electron 39.8.8 and is not documented.
+  `e2e-tests/tests/smoke/interface-scaling.spec.ts` reproduces the failure with a control window, for
+  windows both shown and hidden at creation, and requires `ready-to-show` of the hidden ones.
+  - **First frame:** a window's first document renders at its starting zoom until it takes the
+    setting: a hidden window's at `ready-to-show`, a shown window's at `did-finish-load`, which can
+    come after its first frames, and a crash-reloaded one's at `did-finish-load`. The starting zoom
+    is 100 % in the packaged app; in dev mode it is the zoom Chromium stored for `localhost`, which
+    main no longer updates. For a hidden window this is a change: main reveals it at its own
+    `ready-to-show`, before the setting reaches the page, so its first visible frame is at the
+    starting zoom, where it used to take the setting at `did-finish-load`, before being shown.
+    Follow-up: PT-4889, which weighs (f) against showing the window only after it takes the zoom.
+  - **Stale entries:** existing profiles keep whatever per-URL entries they had, and nothing
+    overwrites them any more. A packaged window whose launch URL happens to match one starts at that
+    zoom until it takes the setting.
+  - **Known gap:** main's settings service keeps its first provider, so after an extension-host
+    restart the re-taken subscription fails and zoom changes stop reaching open windows until the
+    app restarts. That predates this decision and belongs to the settings service (PT-4807).
+- **Source:** PT-4798.
+
 ## adr-internet-services-gate: Platform.Bible gates Send/Receive and DBL access on the saved internet setting
 
 - **Date:** 2026-09-24
@@ -3753,8 +4278,102 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   setting governs ParatextData-backed services only — network use by the Node and Chromium
   processes (extension host, renderers) is not covered. Automatic syncs that hit the gate fail the
   way other automatic-sync failures do: logged, with no user-facing error.
+- **Amended 2026-10-22 (PT-4893):** "Disable access to some Bible translation services" now saves
+  `Disabled`, the alternative rejected above, and `VpnRequired` returns to its Paratext 9 meaning
+  as the not-yet-available "sensitive locations" option — see
+  `adr-internet-use-options-follow-pt9-values`. The first rejection reason no longer holds: Platform.Bible
+  copies `InternetSettings.xml` from Paratext 9 once and keeps its own copy after that
+  (`PlatformParatextInfo`), so a co-installed Paratext 9 never reads what this app saves. Startup
+  now migrates a saved `VpnRequired` to `Disabled`. The gate itself is unchanged and still refuses
+  on both values, so an unsupported `VpnRequired` fails closed if that migration fails.
 - **Source:** PT-4590. ParatextData's internals above were read from decompiled ParatextData
   9.5.0.24, which this repo consumes as a binary package.
+
+## adr-internet-use-options-follow-pt9-values: Each internet-access option saves the ParatextData value that means the same thing in Paratext 9
+
+- **Date:** 2026-10-22
+- **Status:** Accepted
+- **Context:** Under `adr-internet-services-gate`, "Disable access to some Bible translation
+  services" saved `VpnRequired`, and the gate made that value block Send/Receive and the DBL
+  everywhere. In Paratext 9, `VpnRequired` blocks only where the machine's location is flagged as
+  sensitive, so a value carried over from Paratext 9 changed meaning on the way in. It also left
+  the "Block internet when in sensitive locations" option with no value of its own.
+- **Decision:** `InternetAccessOptionList` (`lib/platform-bible-react`) maps each row to the value
+  with its Paratext 9 meaning. "Disable access to some Bible translation services" saves
+  `Disabled`. `VpnRequired` is the "Block internet when in sensitive locations" row, still Coming
+  soon. The label keeps "some" because `Disabled` stops only ParatextData's internet use; the app's
+  Node and Chromium processes keep theirs, and its description says so. Once the app can block its
+  own internet use too, this option becomes "Disable all Internet access". The first-run wizard
+  does not offer the list: "Disable access…" leaves a new user with only the bundled sample
+  project, which suits the settings as a temporary choice but not onboarding. Instead the wizard
+  tells every user that Paratext 10 uses the internet and should only be used outside sensitive
+  countries, and asks them to choose "Use Paratext 10 with internet access", which saves `Enabled`
+  and moves on, or "Close Paratext 10", which saves nothing, so the next launch asks again. The
+  wording claims no more than the app does: the app may already have used the internet before
+  this step, and the setting governs only ParatextData. When Paratext 9's own setting is
+  `Disabled`, `VpnRequired` or `ProxyOnly`, the wizard first says, with Paratext 9's label, that
+  Paratext 10 cannot use it yet. It reads that setting read-only from the newest Paratext 8 or 9
+  folder (`paratextRegistration.getParatext9InternetUse`), not from Platform.Bible's copy. On every
+  startup, before anything reads
+  the internet settings, `InternetSettingsDataProvider.MigrateVpnRequiredToDisabled` saves
+  `Disabled` in place of a saved `VpnRequired`, since the app does not implement `VpnRequired` and
+  `Disabled` is the most restrictive option it offers. A saved `VpnRequired` cannot tell a user who
+  chose "Disable access…" under the PT-4590 mapping from ParatextData's first-run default or a
+  value carried over from Paratext 9, so every one is migrated. This writes the
+  `InternetSettings.xml` in Platform.Bible's folder, never Paratext 9's: `PlatformParatextInfo`
+  pins ParatextData to that folder and only ever reads Paratext 9's. It runs every startup because
+  ParatextData saves `VpnRequired` when nothing is stored, and a re-seed from Paratext 9 can bring
+  it back. `InternetServicesGate` still blocks `VpnRequired`, and `RegistryAccessTokenService`
+  refuses tokens for it in every location without looking the location up, so Send/Receive, the
+  DBL and extensions' Registry tokens fail closed if the migration fails. `ProxyOnly`, the other
+  not-yet-available value, is neither migrated nor gated: ParatextData honors the proxy carried over
+  from Paratext 9.
+- **Alternatives:** **Keep `VpnRequired` behind "Disable access…"** (the PT-4590 mapping) —
+  rejected: it gives a Paratext 9 value a meaning only Platform.Bible uses, and leaves the
+  sensitive-locations option nothing to save. **Migrate only the users who chose "Disable
+  access…"** — not possible: `platform.internetUseChoiceAsked` is also set when Power mode only
+  asked, and a choice made in the Internet & connectivity settings does not set it. **Leave
+  `VpnRequired` saved and show it under the unsupported-value banner** — rejected: everyone who
+  chose "Disable access…" would be told their setting is unsupported, and nearly every first run
+  starts from that value. **Stop gating `VpnRequired` and let ParatextData resolve it by
+  location** — rejected while the sensitive-locations option is unimplemented: an unsupported
+  setting should fail closed, not quietly turn these services on. **Offer the option list in the
+  wizard** — rejected: "Disable access…" during onboarding leaves the user unable to get any
+  project but the bundled sample, and the sensitive-locations and proxy options do not work yet.
+  **Give "Disable access…" a value of its own, so `Disabled` can mean "Disable all"** — rejected:
+  `InternetUse` is ParatextData's enum, so the new value would have to be stored outside it and
+  translated back to `Disabled` for ParatextData. **Keep a not-yet-available "Disable all
+  Internet access" row for a saved `Disabled`, and record in a hidden setting when the user chose "Disable
+  access…" instead** — rejected: every writer of the value would have to keep that second record in
+  step, and onboarding no longer offers "Disable access…". **Name the Paratext 9 setting from
+  Platform.Bible's copy** — rejected: startup has already changed a carried-over `VpnRequired` to
+  `Disabled`, and a new user's copy holds ParatextData's default, so both would read as "Disable
+  all Internet use".
+- **Consequences:** Every saved `VpnRequired` becomes `Disabled`. That includes ParatextData's
+  first-run default and Paratext 9 users who chose "sensitive locations". The gate already kept
+  Send/Receive and the DBL off for all of them; `Disabled` also stops ParatextData's other internet
+  uses, which is what it means in Paratext 9. Two of those change for users outside sensitive
+  locations: extensions' Registry access tokens are refused (`RegistryAccessTokenService`), and
+  writing systems are no longer looked up in the SLDR (`PlatformScrTextCollection`). Registration
+  itself is checked offline and is unaffected. Nobody is told: Simple-mode users who finished first
+  run before it asked for a choice are not asked again (`adr-power-mode-internet-use-prompt`), and
+  the stricter behavior is the safer one. Every first-run user has to allow unrestricted access to
+  finish onboarding, or close the app; a user who needs to block access chooses "Disable access…"
+  in the Internet & connectivity settings afterwards. A Paratext 9 user who chose "Disable all
+  Internet use" sees that value there as "Disable access…", whose description says Paratext may
+  still connect to other internet services. The migration keeps `Disabled` rather than
+  `VpnRequired` saved until the user chooses, so ParatextData neither looks up the computer's
+  location nor uses the internet in the meantime, including for a user who closes the app at the
+  wizard (decided 2026-10-23; see the PT-4893 comments). Power mode, which never shows the wizard,
+  still only opens the settings once (`adr-power-mode-internet-use-prompt`). The
+  Paratext 9 copy of the setting is untouched, so Paratext 9 keeps its location-dependent behavior.
+  Every Platform.Bible build on the account shares the migrated file, so a build from before this
+  change shows `Disabled` as its unsupported "Disable all Internet access" row, and choosing
+  "Disable access…" there saves `VpnRequired`, which the next launch of this build migrates again.
+  Revisit the migration when the sensitive-locations option is built (PT-4900), since `VpnRequired`
+  will then be a value to keep, while files that older builds saved for "Disable access…" will
+  still hold it.
+- **Source:** PT-4893; reverses the option-to-value mapping chosen in PT-4590.
 
 ## adr-launch-token-withdrawn: A launch token is required to deliver launch parameters to an already-open web view — WITHDRAWN
 
@@ -3867,6 +4486,39 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   content-based-guard test exercises, then delete the content-based branch and that guard's
   now-redundant test in one deliberate commit.
 - **Source:** PR #2425
+
+## adr-leaked-emudhra-certificates-blocked-in-app: The app blocks the leaked eMudhra intermediate certificates itself until Electron is upgraded
+
+- **Date:** 2026-10-27
+- **Status:** Accepted (temporary; superseded once PT-3111 upgrades Electron)
+- **Context:** In October 2026 the private keys of eight eMudhra intermediate certificates (16
+  certificates, including Sectigo `AAA Certificate Services` cross-signs) became recoverable by
+  anyone (https://emudhra.we-have-a-problem.com/). Operating systems and browsers blocked them, but
+  Electron 39.8.8 trusts them in both its Node.js and Chromium network layers, and Electron 39 gets
+  no fix (the first patched releases are 42.11.16, 43.8.1 and 44.9.1). The discovery came days
+  before the code freeze for the 9 November 2026 release (PT-4912).
+- **Decision:** Block them inside the app and stay on Electron 39.
+  `src/node/utils/leaked-certificates.util.ts` drops every root a leaked intermediate can chain to
+  from Node.js's default trusted roots at startup in the main process and the extension host,
+  including roots the OS store or `NODE_EXTRA_CA_CERTS` can add.
+  `src/main/services/leaked-certificate-check.util.ts` registers a certificate verify proc on the
+  default session that refuses any chain, sent or built, whose certificates carry one of the eight
+  leaked public keys. This creates two rules nothing enforces:
+  - every Electron session or partition the app uses must call `registerLeakedCertificateCheck`
+    (including `electron-updater`'s own partition if the updater is turned on);
+  - every Node.js process or worker thread that makes network requests must call
+    `distrustLeakedCertificateRootsInNode`, because the trust change applies only to the calling
+    thread.
+- **Alternatives:** Upgrading Electron to 42.11.16 or later before the freeze was rejected as too
+  large a jump (three major versions and a new Node.js major) to test in time. Shipping as-is, and
+  disclosing the exposure in the release notes, was rejected.
+- **Consequences:** Known gaps: the .NET data provider relies on the OS trust store, so an
+  unpatched system still accepts the leaked certificates there (PT-4913); processes extensions
+  start with `createProcess.fork` and worker threads are not covered (none makes network requests
+  today). Distrusting whole roots also refuses legitimate sites that chain to them; none of the
+  sites the app uses does. Remove both modules, and retire this entry, when PT-3111 upgrades
+  Electron to a release that blocks the certificates itself.
+- **Source:** PR #2938
 
 ## adr-library-string-keys-ship-in-shell-assets: `platform-bible-react` string-key values ship in the platform shell's locale assets by default
 
@@ -4140,6 +4792,42 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4514; `electron-log@5.4.1` `src/node/transports/file/File.js` (`writeLine`,
   `nextAsyncWrite`) and `src/node/transports/file/index.js` (`sync`, `writeAsync`).
 
+## adr-lucide-icons-by-name: Menu items and web-view tabs name a lucide icon instead of pointing at an image file
+
+- **Date:** 2026-10-20
+- **Status:** Accepted
+- **Context:** Menu items could only show an icon through `iconPathBefore` / `iconPathAfter`, which
+  `MenuItemIcon` (`lib/platform-bible-react/src/components/advanced/menus/menu-icon.component.tsx`)
+  renders as an `<img>`. An `<img>` cannot inherit `currentColor`, so such an icon does not follow
+  the dark theme or the hover, selected and disabled text colours, and every icon needs a
+  theme-specific file. Web-view tab icons have the same problem (`iconUrl`, with extensions
+  swapping files per theme).
+- **Decision:** Icons are named, not pathed. `MenuItemBase` (so both command and submenu items)
+  gains optional `iconNameBefore` / `iconNameAfter` lucide kebab-case names, and web-view
+  definitions gain a matching optional icon name. `LucideIcon` in `platform-bible-react` resolves
+  a name through a curated map of named `lucide-react` imports (`LUCIDE_ICON_NAMES` lists the
+  keys) and renders an svg that strokes with `currentColor`; a bare `LucideIcon` given an unknown
+  name renders nothing. When a name and a path are both set, a known name wins; an unknown name
+  falls back to the path (`MenuItemIcon` for menus, `PlatformTabTitle` for tabs). The path fields
+  keep working unchanged.
+- **Alternatives:**
+  - *SVG files tinted through a CSS mask.* Works for arbitrary files, but needs a mask per icon,
+    gives no per-icon stroke control, and keeps one asset per icon to ship.
+  - *`lucide-react/dynamic`.* Resolves any name at runtime, but its type declarations and per-icon
+    lazy chunks would be bundled into the checked-in `platform-bible-react` dist (the vite config
+    marks only exact package names external), and an unknown name would fail at runtime instead
+    of being absent from a list.
+  - *The full `icons` map from `lucide-react`.* Pulls every icon into the dist for the sake of a
+    few dozen.
+- **Consequences:** Adding an icon means adding it to `LUCIDE_ICON_COMPONENTS` in
+  `lucide-icons.util.ts`; a menu or tab that names an icon outside the map shows its path or URL
+  icon instead, or none if it has no path. The macOS native menubar ignores
+  icons, as it did the path fields. The new fields are `@experimental`. An extension that puts
+  `iconNameBefore` / `iconNameAfter` in its `menus.json` needs a core that has them: the menu
+  schema allows no unknown properties, so an older core rejects that whole menu document and the
+  extension's items disappear. A web-view definition's icon name is not schema-checked, so an older
+  core ignores it and keeps showing `iconUrl`.
+
 ## adr-main-orchestrates-real-windows: Multi-window uses real BrowserWindows orchestrated by main, not rc-dock's windowbox
 
 - **Date:** 2026-08-11
@@ -4174,6 +4862,44 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   hardening if such layouts recur.
 - **Source:** windowbox spike record and patch (PRD folder, `2026-08-11-pt-4281-windowbox-spike.patch`,
   design doc § spike); multi-window epic architecture discussion.
+
+## adr-marker-menu-close-focus-follows-the-opener: A pick from the paragraph menu returns focus to the text; a dismissal returns it to whatever opened the menu
+
+- **Date:** 2026-10-23
+- **Status:** Accepted. The dismissal rule is a product call that UX may still change.
+- **Context:** The editor toolbar's paragraph-style menu (`ParagraphStyleTrigger`,
+  `extensions/src/platform-scripture-editor/src/paragraph-style-trigger.component.tsx`) opens two
+  ways: from its button, or from the editor, with Enter or Alt+Down on a selected paragraph marker
+  (`onParaMarkerMenuRequest`, through `useParagraphMenuOpenState`). The dismissal guideline
+  (`dismissal-patterns.mdx`, "Restore focus on close") says to return focus to the opener, which is
+  Radix's default. But a menu the editor opened has no button behind it, and after a pick the next
+  keystroke belongs in the text, where the selected marker is live again for the next key. The
+  character-marker control beside it (`CharacterMarkerControl`) opens only from its button and
+  returns focus to the editor on every close, pick and Escape alike. The footnote type dropdown
+  keeps Radix's return to its trigger (Standard-View-Invariants §4).
+- **Decision:** For the paragraph menu:
+  - A pick returns focus to the editor, through `returnFocusToScriptureText`. That restores the
+    caret first and does nothing when this web view's document does not have focus.
+  - A dismissal (Escape, or clicking the button again) returns focus to whatever opened the menu:
+    the editor if the editor opened it, the button if the button did. If the button cannot take
+    focus any more, because structure protection disabled it or the trigger unmounted, focus goes
+    to the editor.
+  - A close caused by an outside interaction leaves focus where the user put it.
+
+  The character-marker control is unchanged and returns focus to the editor on every close.
+- **Alternatives:**
+  - Always the editor, as the character-marker control does. Rejected for the paragraph menu
+    because Escape from a menu the button opened then puts focus somewhere the user did not start,
+    against the guideline.
+  - Always the opener (Radix's default). Rejected because after a pick the user would have to get
+    back into the text before typing on. Radix also skips its own return after a pointer-down on
+    the trigger, which it counts as an outside interaction, so the trigger refocuses itself
+    explicitly.
+- **Consequences:** The two toolbar marker controls now differ on Escape from a menu their button
+  opened: the paragraph menu returns to its button, the character-marker menu to the editor.
+  Whether the character-marker control should follow the opener rule too is open for UX; revisit
+  this entry when UX settles one rule for both. `dismissal-patterns.mdx` notes the exception. The
+  behavior is pinned by `paragraph-style-trigger.component.test.tsx`.
 
 ## adr-marker-palettes-take-real-focus: Standard-view marker palettes hold real keyboard focus in the overlay; the editor stays editable
 
@@ -4324,14 +5050,17 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Consequences:** A few items are declared twice (once per mode), so a command change must touch
   both copies; `menu-data.service-host.scripture-editor-menu.test.ts` pins both modes by command id
   and order, and checks that a command served in both modes carries the same label in each, so a
-  missed, reordered or relabelled copy fails there. Simple's Tools order is pinned to the
-  third-column tab order (`shipped-simple-layout-order.test.ts`), so adding a third-column tab (e.g.
-  Dictionary) fails that test until a Tools item exists. Hiding a Power-only item without re-adding
+  missed, reordered or relabelled copy fails there. Every third-column tab must have a Simple Tools
+  item (`shipped-simple-layout-order.test.ts`; the menu's own order is the design's, not the
+  column's), so adding a third-column tab fails that test until a Tools item exists. Hiding a
+  Power-only item without re-adding
   it to a Simple column removes its only entry point: Simple now has no menu route at all to the
   four Inventories, Markers Checklist, or Open Checks. That follows the v0 Simple design, which has
   no quality tools in the Project menu; UX has not yet confirmed it. Auto-show footnote pane
   (`platformScriptureEditor.toggleFootnotesAutoShow`) is Power-only too, because Simple keeps PT9's
-  manual footnotes pane: Show footnotes opens it and it stays open. The Edit flyout's ids are not
+  manual footnotes pane: Show footnotes opens it and it stays open. *(Amended 2026-10-22: a caller
+  click now also opens Simple's pane — see `adr-footnote-pane-editing-in-simple-mode`; only the
+  auto-show toggle stays Power-only.)* The Edit flyout's ids are not
   registered commands, and `KeyboardShortcutEntry.command` is typed to registered commands, so
   those items cannot show a shortcut hint even though Ctrl+Z, Ctrl+Y and the clipboard chords work
   in the editor.
@@ -4812,6 +5541,48 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** project backup-and-restore port (restore-to-new-project scope cut, PT10 source grep
   2026-05-19).
 
+## adr-no-projects-guidance-in-empty-editor: A user with no projects is told how to get one in the empty Scripture editor, and only on a positive "none"
+
+- **Date:** 2026-09-25
+- **Status:** Accepted
+- **Context:** A new user can finish the setup wizard with no projects (unregistered, a Basic-tier
+  registration, an organization that isn't available). The wizard opens no tab; the user lands in
+  the fixed Simple layout (`simple-layout.data.ts`), whose centre column is a Scripture editor with
+  no `projectId`. Several tickets need the same "register, or ask your project administrator"
+  wording (PT-4323, PT-4324), so it needs one home.
+- **Decision:** The centre editor's no-project branch is that home. `NoProjectView`
+  (`extensions/src/platform-scripture-editor/src/no-project-view.component.tsx`) shows the guidance
+  only when `useProjectPresence` (`use-project-presence.hook.ts`) answers `none` in Simple mode, on
+  every launch; otherwise it says "No project selected". `none` is a positive claim, so anything
+  uncertain reads `unknown`: a failed lookup, a running or not-yet-known sync
+  (`paratextBibleSendReceive.getSyncActivity`), or an empty answer.
+  `LocalParatextProjects.Initialize` (C#) installs the sample WEB project whenever it finds no
+  projects, so an empty answer means the Paratext factory has not answered yet, and the sample is
+  excluded by its fixed ID along with resources (`isPublished`).
+  A registered user (`paratextRegistration.doesUserHaveValidRegistration`) cannot fix "none" by
+  registering, so they are told instead that projects cannot be created here yet: have one shared
+  with them, or create one in Paratext 9, then Sync to get it. Paratext 10 and Platform.Bible share
+  this wording, naming the product through `{%product_name%}`, although Platform.Bible has no Sync:
+  wording of its own there was judged not worth a separate branch. A registration that cannot be
+  determined keeps the "register" wording, and the guidance waits for the answer so it never swaps
+  text in front of the user.
+  `startDefaultProjectPicker` also re-runs on `platform.onDidChangeProjects`, so an arriving project
+  opens in the editor if the picker can find it (a recent project, or one Send/Receive lists).
+- **Alternatives:** Count only editable projects, which also excludes the read-only sample —
+  rejected: a real project an administrator has locked would not count, so its owner would be told
+  they have none. Open Home, or
+  a one-time dialog, after the wizard — rejected: a relaunched user would not see either. Show it
+  only right after the wizard — rejected: nothing marks that moment
+  (`onboarding-tour.component.tsx`), and the guidance is as true on the tenth launch. A "looking
+  for your projects…" state during a sync — deferred: only Paratext 10 builds report sync activity,
+  and on relaunch it would announce a search that usually ends in "none".
+- **Consequences:** Surfaces that need this wording should reuse these localized strings; Home and
+  New Tab still carry their own, different no-projects wording (`platform-get-resources`), not
+  reconciled here. Power mode keeps the plain text, since the guidance is written for Simple mode's
+  first-run experience. **Revisit** when the Sample project (PT-4324) lands: unless it reuses the
+  sample WEB's ID, it will count as a project until this rule learns to exclude it.
+- **Source:** PT-4311 implementation (2026-09-25); the registered-user wording is PT-4442.
+
 ## adr-node-dom-globals-polyfill: Node processes install `@xmldom/xmldom` DOM globals; the extension host does it in a first-import side-effect module
 
 - **Date:** 2026-08-22
@@ -5032,6 +5803,51 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   is the static-asset half of the same shape and does not cover it.
 - **Source:** the `paratext-10-studio` notices design of 2026-09-04.
 
+## adr-offered-interface-languages-allowlist: The interface languages offered to users are an explicit allowlist, not a coverage rule
+
+- **Date:** 2026-09-25
+- **Status:** Accepted
+- **Context:** Locale files ship for languages at very different stages. As of 2026-09-24, `es`
+  covered ~97% of the core strings (~75% app-wide, counting bundled extensions), `fr`/`zh-*` ~6%,
+  and `km` 0%. The first-run setup-dialog threshold (`setup-dialog-languages.util.ts`
+  `computeSetupDialogLanguages`) only measures the `%firstRun_` namespace, so a French or Chinese
+  OS was auto-switched into a mostly-English UI. Product decided to offer only English and Spanish
+  for the Nov 2026 release (PT-4751).
+- **Decision:** `OFFERED_INTERFACE_LANGUAGES` (`src/shared/data/interface-languages.data.ts`)
+  filters `getAvailableInterfaceLanguages` and `getSetupDialogLanguages`, so every picker and the
+  OS-locale default see only offered languages. Locale files, string resolution and the
+  setup-dialog threshold are unchanged. The `platform.interfaceLanguage` validator accepts any
+  loaded locale (`getAllLoadedInterfaceLanguages`), so a hidden language that is already set is
+  honored, never reset:
+  - Each picker keeps the current language listed (`includeCurrentLanguages`): Settings lists every
+    stored tag, since it shows the fallbacks too; the popover and the first-run step list only the
+    primary.
+  - Picking a language writes one value in all three pickers (`switchInterfaceLanguage`): the
+    chosen language first, then the other current languages that are offered. A hidden language is
+    dropped when the user switches away from it, since no picker can remove a fallback.
+  - The first-run OS-locale default writes only while the setting is still unset, empty or `['en']`.
+  - Some UI keeps the old language until restart (the main menu bar, PT-4503; the Settings labels),
+    so Settings and the popover offer a restart after a change of primary language, and withdraw
+    the offer when the user switches back to the language the window started with. The first-run
+    step does not offer one.
+- **Alternatives:** Filtering in each renderer surface (several places to keep in sync; PAPI
+  consumers would still see hidden languages). Excluding hidden locale files from the build (removes
+  the only way to test those translations; re-enabling means restoring assets). A coverage threshold
+  (the only existing one measures the setup dialog, which is what caused the bad auto-pick).
+  Resetting a hidden language to English on startup (overrides deliberate testers and translators
+  every launch). Keeping hidden languages as fallbacks after a switch (they could not be removed
+  again in any picker). Keeping `getAvailableInterfaceLanguages` unchanged and adding a separate
+  offered-languages data type or an `isOffered` flag (additive for extensions, but every core picker
+  would move to the new type, and nothing outside core was found using the getter).
+- **Consequences:** Offering a language is a one-line code change (plus the tests that pin the
+  list); `src/node/data/offered-interface-languages.test.ts` fails if an offered tag has no locale
+  file or misses the setup-dialog threshold. A value stored before this change keeps its
+  not-offered fallbacks until the user next picks a different language (e.g. `["es","fr"]` still
+  falls back to French). The public `getAvailableInterfaceLanguages` now means "offered", not "every
+  locale file"; PAPI has no way to list hidden languages. PT-4457 (offer languages by translation
+  coverage) is expected to supersede the list; its rule must measure app-wide coverage, not only
+  `%firstRun_`. Revisit when French is ready.
+
 ## adr-one-reference-scroll-hook-parameterized-by-verse-anchor: The Text Collection has one reference-scroll controller, parameterized by how a verse is found
 
 - **Date:** 2026-09-16
@@ -5085,51 +5901,6 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   widening this change into a file #2781 does not touch. Revisit if a layout ever needs a genuinely
   different scroll *policy* rather than a different anchor or visibility test.
 - **Source:** PT-4543.
-
-## adr-offered-interface-languages-allowlist: The interface languages offered to users are an explicit allowlist, not a coverage rule
-
-- **Date:** 2026-09-25
-- **Status:** Accepted
-- **Context:** Locale files ship for languages at very different stages. As of 2026-09-24, `es`
-  covered ~97% of the core strings (~75% app-wide, counting bundled extensions), `fr`/`zh-*` ~6%,
-  and `km` 0%. The first-run setup-dialog threshold (`setup-dialog-languages.util.ts`
-  `computeSetupDialogLanguages`) only measures the `%firstRun_` namespace, so a French or Chinese
-  OS was auto-switched into a mostly-English UI. Product decided to offer only English and Spanish
-  for the Nov 2026 release (PT-4751).
-- **Decision:** `OFFERED_INTERFACE_LANGUAGES` (`src/shared/data/interface-languages.data.ts`)
-  filters `getAvailableInterfaceLanguages` and `getSetupDialogLanguages`, so every picker and the
-  OS-locale default see only offered languages. Locale files, string resolution and the
-  setup-dialog threshold are unchanged. The `platform.interfaceLanguage` validator accepts any
-  loaded locale (`getAllLoadedInterfaceLanguages`), so a hidden language that is already set is
-  honored, never reset:
-  - Each picker keeps the current language listed (`includeCurrentLanguages`): Settings lists every
-    stored tag, since it shows the fallbacks too; the popover and the first-run step list only the
-    primary.
-  - Picking a language writes one value in all three pickers (`switchInterfaceLanguage`): the
-    chosen language first, then the other current languages that are offered. A hidden language is
-    dropped when the user switches away from it, since no picker can remove a fallback.
-  - The first-run OS-locale default writes only while the setting is still unset, empty or `['en']`.
-  - Some UI keeps the old language until restart (the main menu bar, PT-4503; the Settings labels),
-    so Settings and the popover offer a restart after a change of primary language, and withdraw
-    the offer when the user switches back to the language the window started with. The first-run
-    step does not offer one.
-- **Alternatives:** Filtering in each renderer surface (several places to keep in sync; PAPI
-  consumers would still see hidden languages). Excluding hidden locale files from the build (removes
-  the only way to test those translations; re-enabling means restoring assets). A coverage threshold
-  (the only existing one measures the setup dialog, which is what caused the bad auto-pick).
-  Resetting a hidden language to English on startup (overrides deliberate testers and translators
-  every launch). Keeping hidden languages as fallbacks after a switch (they could not be removed
-  again in any picker). Keeping `getAvailableInterfaceLanguages` unchanged and adding a separate
-  offered-languages data type or an `isOffered` flag (additive for extensions, but every core picker
-  would move to the new type, and nothing outside core was found using the getter).
-- **Consequences:** Offering a language is a one-line code change (plus the tests that pin the
-  list); `src/node/data/offered-interface-languages.test.ts` fails if an offered tag has no locale
-  file or misses the setup-dialog threshold. A value stored before this change keeps its
-  not-offered fallbacks until the user next picks a different language (e.g. `["es","fr"]` still
-  falls back to French). The public `getAvailableInterfaceLanguages` now means "offered", not "every
-  locale file"; PAPI has no way to list hidden languages. PT-4457 (offer languages by translation
-  coverage) is expected to supersede the list; its rule must measure app-wide coverage, not only
-  `%firstRun_`. Revisit when French is ready.
 
 ## adr-one-shot-launch-parameters: One-shot launch parameters on `open*` commands: optional scalar, options field, scrubbed on rebuild
 
@@ -6379,6 +7150,36 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   can launch in Power mode pin the flag `true`, so the panel does not open mid-suite.
 - **Source:** PT-4590 (paranext-core #2905 review).
 
+## adr-power-preview-read-only-formatted: Power mode's Preview is the formatted view made read-only
+
+- **Date:** 2026-10-22
+- **Status:** Accepted
+- **Context:** The editor offers Standard view (editable, with visible paragraph markers) and, in
+  Power mode, a Preview (the formatted view) that must not accept edits. Simple mode has no Preview,
+  and the Markers view is shown nowhere, yet saved web view state can still hold `'formatted'` or
+  `'markers'` as its `viewType`. Whether the
+  same saved value is editable therefore depends on the interface mode, which a plain mapping from
+  view type to editability cannot express.
+- **Decision:** Power's Preview is the formatted view made read-only. The saved value stays
+  `'formatted'`; its editability depends on `platform.interfaceMode`, so one saved value is the
+  editable Simple view in Simple mode and the read-only Preview in Power mode. A saved `'markers'` is
+  mapped to Standard view when it is read. Every view the editor shows (Standard view, Preview and
+  Simple's formatted view) uses the footnotes-pane note model; in the read-only Preview a caller
+  click navigates to its note in the pane. `showsReadOnlyPreview` (is the text read-only) and
+  `usesPaneNoteModel` (does the view use the pane note model, the one predicate
+  `adr-footnote-pane-editing-in-simple-mode` introduced) in
+  `extensions/src/platform-scripture-editor/src/platform-scripture-editor.utils.ts` are the single
+  sources for those two questions; callers ask them instead of comparing view types or interface
+  modes themselves.
+- **Alternatives:** **Rename the saved value to `'preview'`** — rejected: it needs a migration of
+  saved state and gives users nothing. **A view-type to editable map** — rejected: it cannot
+  express a value whose editability depends on the interface mode. **Delete `'markers'` from the
+  type** — rejected: values already saved would be left untyped at the read boundary.
+- **Consequences:** No saved-state migration. Every read of a saved view goes through the mapping,
+  and a new view-dependent behavior must be added to one of the two helpers (or a sibling) rather
+  than checked inline, or Simple and Power will drift apart.
+- **Source:** PT-4777.
+
 ## adr-primary-window-owns-app-lifetime: The primary window's close decides whether the app quits; the role stays a role
 
 - **Date:** 2026-08-27
@@ -7112,6 +7913,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   them because a web view can drive it. Revisit when PT-4750 lands (throw codes instead of
   returning them), when the WebSocket authenticates its clients (and remove the `Origin` stopgap
   then), or if a consent prompt becomes necessary.
+- **Amended 2026-10-22 (PT-4893):** "Disable access to some Bible translation services" now saves
+  `Disabled`, so tokens are refused for it in every location. A saved `VpnRequired`, the
+  not-yet-available "Block internet when in sensitive locations" option, is refused in every
+  location too, so it fails closed as it does in `InternetServicesGate`, and the snapshot does not
+  look up the location for it, so a slow lookup cannot turn the refusal into `UNAVAILABLE`. See
+  `adr-internet-use-options-follow-pt9-values`.
 - **Source:** PT-4865 (design spec attached there).
 
 ## adr-renderer-crash-reload-is-user-driven-and-uncapped: React-level crash recovery is one user-driven reload with no budget, unlike the process-level path
@@ -7305,19 +8112,22 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 ## adr-resource-missing-book-message: A missing book in a *published resource* is mode-agnostic and action-free; a *project* splits Simple/Power
 
 - **Date:** 2026-08-20
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-10-22 — the Model text panel's message offers a pick button when
+  the user chose the text themselves
 - **Context:** PT-4132 needed the "book not in this text" state for the Model text and Bible
   texts/Commentaries panels, and the ticket asked to "compare expected behavior for PT-4111", which
   had just built `BookNotAvailableView` with a deliberate Simple/Power split. The obvious reading was
   to reuse that view, or to mirror its shape with a second interface-mode branch.
 - **Decision:** Resource panels get ONE message for both interface modes, with no action button, via
-  a separate `ResourceBookNotAvailable` component. The Simple/Power split in `BookNotAvailableView`
+  a separate `ResourceBookNotAvailable` component. *(Amended 2026-10-22: the Model text panel adds a
+  pick button when the user chose the text; see the amendment below.)* The Simple/Power split in `BookNotAvailableView`
   exists solely because a *project* missing a book is **actionable** in Power (Manage Books can
   create it). A published resource cannot gain a book in either mode, so both arms would say the same
   thing. PT-4111's own `isResource` branch already ignores interface mode for exactly this reason.
   The panels swap only their content area, leaving the header mounted — the resource panel's selector
   is the user's real remedy (switch to a text that has the book), and the model panel's label at
-  least attributes the message to a named text.
+  least attributes the message to a named text. *(Amended 2026-10-22: that label is now a button
+  when the user chose the text.)*
 
   **Scope limit, known and deliberate.** "Published resource" is not the whole of what these panels
   display. The Bible texts tab also lists real Paratext projects (`isProjectReference` in
@@ -7350,7 +8160,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   target, and does not repeat the `role="status"` that `EmptyState` already sets. Every surface that
   shows this sentence renders it through that one component — the two resource panels and the main
   editor's `isResource` branch — so the wording, styling, live-region announcement, and focus repair
-  cannot drift apart between them.
+  cannot drift apart between them. *(Amended 2026-10-22: an optional action button may now sit beside
+  the `EmptyState`, outside its live region — a recorded exception to that ADR's "an action means
+  `Empty`", explained in the amendment below.)*
 
   The message is shown only when the failure names BOTH the book and the project the view is
   displaying right now, compared in the RENDER BODY rather than latched when the failure arrived.
@@ -7430,6 +8242,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4132 (Empty state needs to be improved for the Model and Bible texts). Premise
   scope, the shared-decision correction, and the `isLoading` mechanism correction from PR #2704
   review.
+- **Amended 2026-10-22 (PT-4780):** when the admin has chosen no model text, the text on screen is
+  the user's own (`source: 'user'`), and the user CAN remedy a missing book by picking another. There
+  the Model text panel's message offers "Pick model text…" through `ResourceBookNotAvailable`'s
+  optional `action`, and its header is a button that opens the same picker. When the admin chose the
+  text, the message names the team layout instead and has no action. The Bible texts/Commentaries
+  panel and the main editor are unchanged. The button sits beside `EmptyState`, not inside `Empty`:
+  `EmptyDescription` would style the sentence differently whenever a button follows it, and the
+  action-free callers would then render the same sentence a second way. Rejected: a header button
+  alone, which left the message's own advice unfollowable from the message.
 
 ## adr-resource-panes-name-their-zoom-areas: The Text Collection grid and the Bible Texts / Commentaries / Model Text panels each name their own zoom area, because they share one project identity; Enhanced Resources retires its private zoom
 
@@ -7808,6 +8629,78 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   back on the reference it opened on — which for a restored Scripture editor is the extra chapter
   load the seed exists to avoid. The theme service is hosted the same way in `adr-theme-hosted-in-main`.
 - **Source:** PT-4275 epic (multi-window architecture plan §6).
+- **Amended 2026-09-25 (`adr-interface-scaling-is-per-window-zoom`):** because this rewrites the
+  window's URL for as long as it is open, nothing may be keyed by that URL. Chromium keys a
+  `file://` page's zoom by it, so interface scaling uses a zoom that is not keyed by URL.
+
+## adr-settings-contribution-read-only-flag: A setting is made read-only in the Settings tab by an `isReadOnly` contribution flag, alongside `isHidden`
+
+- **Date:** 2026-10-23
+- **Status:** Accepted
+- **Context:** Product asked that all of the Scripture Project Settings be visible but not editable
+  in the Settings tab, and that several whole settings groups disappear from it. Contributions
+  could already set `isHidden` on a setting, but nothing could mark one read-only, and a group whose
+  settings were all hidden still rendered as an empty card under its own sidebar entry.
+- **Decision:** `SettingBase` (`lib/platform-bible-utils/src/extension-contributions/settings.model.ts`)
+  gains an optional `isReadOnly` next to `isHidden`, for both user and project settings. The
+  Settings tab renders a read-only text field with the native `readOnly` attribute, so its whole
+  value can still be focused, selected and scrolled; switches, steppers and selects have no
+  read-only state and are disabled. This is separate from the `disabled` prop that blocks a
+  project's settings during an automatic Send/Receive. The flag only affects the Settings tab:
+  extensions can still change the value. The Settings tab also removes `isHidden` settings once at
+  load, then any group and sidebar entry left empty, so hiding a whole group is done by hiding each
+  of its settings.
+- **Alternatives:** Disabling the Scripture Project Settings group by name in the renderer was
+  smaller but couples core's Settings tab to one extension, and every later request would add
+  another special case. Removing a contribution to hide its group would leave its settings with no
+  registered default or validator, which breaks the extension that still reads them. A group-level
+  `isReadOnly`/`isHidden` would cover settings added to the group later, but it was deferred: a
+  per-setting flag keeps the option of one editable setting in an otherwise read-only group, and
+  no request needs the group-wide rule yet.
+- **Consequences:** An extension can make any of its own settings read-only or hide a whole group
+  from JSON alone. A setting whose read-only state depends on other values (e.g.
+  `platform.isEditable` while `platform.isPublished`) still needs renderer logic; a static flag
+  cannot express it.
+- **Source:** PT-4646.
+
+## adr-settings-locks-from-computed-project-settings: The Settings tab locks a project's settings from computed, hidden project settings
+
+- **Date:** 2026-10-26
+- **Status:** Accepted
+- **Context:** Some project settings may be changed only in some projects or by some users: none of
+  a published project's, not a registered project's short or full name (Paratext changes those only
+  through the registry), and not the primary language unless the user administers the project. The
+  Settings tab lives in core and reaches a project only through `platform.base`, whose only
+  project-specific reads are settings, so it could not tell whether a project was registered or
+  whether the user administered it. The static `isReadOnly` flag
+  (`adr-settings-contribution-read-only-flag`) cannot express a lock that depends on the project or
+  the user.
+- **Decision:** The Paratext project data provider computes two hidden, read-only project settings,
+  `platform.isRegistered` and `platform.isCurrentUserAdministrator` (`Permissions.AmAdministrator`),
+  alongside the existing computed `platform.isPublished`. "Registered" uses ParatextData's own test,
+  the one behind `ProjectWrapper.IsRegistered`: the project's license is Normal or Publishable.
+  `ScrText.IsProjectShared` is not used, because a project can have a permissions file without
+  being registered. `SetProjectSetting` rejects the writes those facts lock, so no caller can bypass
+  the tab. The Settings tab reads the three once per project (`useProjectSettingLocks`), and a pure
+  function (`getSettingLock`) decides from them, plus `isReadOnly`, whether each setting is locked
+  and what to say. A published project gets one notice above all its settings; a registered
+  project's names and a non-administrator's language get a visible line under the control, which
+  is also its `aria-describedby`. While the facts load, every project setting is read-only; an
+  unreadable fact locks the names or the language, but not the whole project.
+- **Alternatives:** A new `platform.base` method listing the settings the user may not change was
+  more general, but would widen an interface every project data provider shares. A
+  `canUser*()` method like `canUserEditScripture` would have to live on a Paratext-specific
+  interface the core Settings tab does not use. Rejecting the writes in C# alone was smallest, but
+  left editable fields that fail only after the user types. Explaining a lock in a tooltip over the
+  control was dropped: a disabled control cannot be hovered or focused, so keyboard and touch users
+  never saw why.
+- **Consequences:** A per-user fact is now exposed as a project setting, so
+  `platform.isCurrentUserAdministrator` answers differently for different users of one project.
+  Project data providers that implement neither setting get the declared defaults (not registered,
+  administered by the current user), which leaves their settings unlocked as before. A new
+  conditional lock adds a case to `getSettingLock` and, if it needs a fact the tab cannot read yet,
+  another computed setting.
+- **Source:** PT-4646.
 
 ## adr-shard-discovery-by-type: Service routers discover shards by network-object type, not by rebuilding the scoped name
 
@@ -7967,7 +8860,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Alternatives:** Leave each surface to scope its own list — rejected: that is the bug, and the
   two definitions drifted apart within one component. Reset the language selection when the type
   filter changes — rejected: in Get Resources that selection is persisted web view state seeded from
-  installed resources, so a reset destroys a user's choice on a transient type change. Drop a
+  installed resources, so a reset destroys a user's choice on a transient type change. *(Amended
+  2026-10-22: PT-4700 removed the seeding, so the selection starts empty. The rejection still holds,
+  because a reset would still destroy a language the user picked.)* Drop a
   hidden value the next time the selection changes — rejected: it is the same loss by a different
   route, and it makes the result depend on the path the user took: widening the type filter first
   brings the language back, while toggling any other language first loses it. Pass the raw
@@ -8095,6 +8990,57 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   column. The next on-demand third-column tool should reuse this shape and its panel-id constant.
 - **Source:** PT-4534 (review of #2847).
 
+## adr-simple-mode-accepts-no-dock-drops: In Simple mode no drag changes what is docked; floats stay movable
+
+- **Date:** 2026-10-26
+- **Status:** Accepted
+- **Context:** Simple mode's layout is fixed, and its groups set `tabLocked`. But rc-dock honors
+  `tabLocked` only when a single tab is dragged (`DockPanel.render`), and dragging a floating panel
+  by the empty part of its tab bar drags the whole tab group. So a float could be docked onto any
+  column through rc-dock's drop squares, or merged into another float through a same-group tab
+  header (`TabCache.onDragOver`), which ignores `tabLocked` altogether.
+- **Decision:** In Simple mode, dragging never docks or undocks anything; a floating panel can still
+  be moved by its tab bar. One guard per rc-dock drop path:
+  - `disableDock` on every Simple group (`getGroups`) turns off `DockDropLayer`'s squares over a
+    panel for any drag from those groups. It is rc-dock's own option and gates drag-and-drop only.
+    Programmatic `dockMove` is unaffected.
+  - A Simple-only rule in `dock-layout-wrapper.simple-mode.scss` sets `pointer-events: none` on
+    every tab bar while `<body>` carries rc-dock's `dock-dragging`. rc-dock finds drop targets with
+    `elementFromPoint`, so no tab header can take the drop.
+  - The existing `floatable: false` keeps anything from being undocked. It is part of the same rule.
+  - The docked Resources column's tab bar starts no whole-column drag: the same stylesheet keeps
+    the bar out of hit-testing apart from each tab's `.dock-tab-btn` and the overflow button. The
+    rest of the bar, including the edge of each `.dock-tab` around its button, is rc-tabs' own
+    markup, which the app cannot mark `drag-ignore` (rc-dock checks that class only on the pressed
+    element).
+- **Alternatives:**
+  - Patch rc-dock so `tabLocked` also gates whole-group drags. Rejected: that is documented
+    behavior, not a bug, and rc-dock is patched only for bugs
+    (`adr-tab-bar-drop-zone-app-side-target`).
+  - Put a temporary `panelLock` on the dragged float from a drag-state listener, which makes
+    `TabCache` reject it. Rejected: it mutates rc-dock's live layout data mid-drag, and `panelLock`
+    also changes how rc-dock removes empty panels.
+  - Give each float its own group. Rejected: an unregistered group falls back to rc-dock's floatable
+    default group.
+  - Stop floats being dragged at all. Rejected: a float could then never be moved off whatever it
+    covers.
+  - Block the Resources column's empty-tab-bar drag with `drag-ignore`, as the tab titles are.
+    Rejected: rc-dock checks the class only on the pressed element, and that part of the bar is
+    rc-tabs' markup, so it would take a patch or DOM mutation of rc-tabs' elements.
+- **Consequences:**
+  - The CSS rule applies to every rc-dock drag in Simple mode, column-divider drags included. A drop
+    target added to a Simple-mode tab bar later would never receive a drop until the rule is
+    narrowed.
+  - A tab drag that starts on a tab's padding, which `drag-ignore` does not cover, still begins, but
+    it can no longer drop anywhere: rc-dock's `TabCache.onDragOver` would accept a same-group tab
+    whatever `tabLocked` says, so only the CSS rule stops a reorder (pinned by the e2e spec).
+  - jsdom cannot hit-test, so the tab-bar guard is covered only by the `docking` e2e subset
+    (`simple-mode-no-dock.spec.ts`).
+  - If rc-dock ever left `dock-dragging` on `<body>` after a drag ended, Simple-mode tab bars would
+    stop taking clicks. Every web view's content already would, through rc-dock's own
+    `body.dock-dragging iframe` rule, so this adds no new way to fail.
+- **Source:** PT-4848.
+
 ## adr-simple-mode-column-minimums: Simple-mode column minimums are derived from the window minimum, dividers included
 
 - **Date:** 2026-08-19
@@ -8134,6 +9080,46 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   as a local literal — and is now bound to a shared constant; see
   `adr-window-min-width-shared-constant`.
 - **Source:** PT-4344; Jolie Rabideau measured the shipped floor in the running app on macOS during review of PR #2701, 2026-08-24.
+
+## adr-simple-mode-resource-opens-to-reference-tab: In Simple mode a resource opened from Home goes to its reference tab and the user's own list
+
+- **Date:** 2026-10-19
+- **Status:** Accepted
+- **Context:** Simple mode's middle column only ever shows the project (Ian, PT-3182, 2026-10-12),
+  but Home and Get Resources opened a resource with `platformScriptureEditor.openResourceViewer`,
+  which in Simple mode replaces that project. The Bible texts and Commentaries tabs list the texts
+  of the project they show — the team's list (a project setting, synced by Send/Receive) merged
+  with each user's personal list — plus every downloaded resource.
+- **Decision:** A new command, `platformScriptureEditor.showResourceInReferencePanel` (experimental),
+  owned by the editor extension that owns those tabs, and called by `platform-get-resources` for
+  Home's and Get Resources' Open in Simple mode. It picks the tab by the resource's kind (Commentaries
+  for commentaries, Bible texts otherwise), adds the resource to the user's *personal* list for the
+  project that tab shows — never to the team's list, and not when the team's list already has it,
+  the tab is showing a resource rather than a project, or the reference's kind can't be confirmed —
+  and selects it by reloading the tab with the row id in the reload options, which `reloadWebView`
+  forwards to the provider (`ResourceTextPanelOptions`). Shows run one at a time, and each has 20 s
+  from the request to reach the point of saving: past that it is dropped and the user warned, so the
+  caller hears how it ended before PAPI's request timeout. It answers with a status: `shown`,
+  `notShown` (the user has been told; open nothing else), or `openElsewhere` (no reference tab open,
+  or a kind neither tab lists), on which the caller opens the viewer. Resources never open in
+  Simple mode's middle column (Sebastian, PT-3182, 2026-10-21): with no project open the tab still
+  shows the resource, from the downloaded ones, and nothing is saved. The catalog types every
+  resource as a Bible text or a commentary — source-language texts included — so every resource has
+  a tab.
+- **Alternatives:** **Add it to the project's (team) list** — rejected: every teammate would see
+  one user's pick. **Show it without saving** — rejected by Ian: an opened text should stay
+  available to that user. **Lock Simple-mode Home to projects only** — the fallback Sebastian
+  defined in case this didn't land; not added. Ian accepted that on PT-3182 (2026-10-21) on one
+  condition, which `openHome` keeps: in Simple mode Home always starts on Paratext projects, so a
+  user sees resources only by choosing them, and they then open in their tab. **A pending-selection slot in module
+  state**, as `currentResourceTextPanelProjectIds` is — rejected: reload options carry the value to
+  the one build it was asked for.
+- **Consequences:** The personal list is per project (`UserSettings-{user}.xml`); "available in any
+  project" comes from the tabs listing every downloaded resource. A show reloads the tab unless it
+  already shows the resource, which discards anything in progress in it (PT-4510). An open early in
+  a launch can wait on the catalog's installed-flag sync and be dropped at the deadline. With no
+  project open, a reference tab lists the downloaded resources but shows only one it was asked to
+  show, and offers no download, since there is no project's list to add to.
 
 ## adr-simple-mode-tab-menu-offers-zoom-only: Simple mode's tab menu is the platform's own contributed menu, narrowed to the content-zoom group
 
@@ -8566,6 +9552,89 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   ScrTag's `Raw*` reads (an authored `\FirstLineIndent 0` serializes as 0, distinct from absent),
   which matters because project CSS is layered over a base sheet.
 - **Source:** PT-4187 standard-view branch (core #2565 ∥ scripture-editors #545).
+
+## adr-switch-to-power-sends-unsent-changes: A switch from Simple to Power sends the Simple project's unsent changes, decided from the settled unsynced-changes signal
+
+- **Date:** 2026-10-23
+- **Status:** Accepted
+- **Context:** PT-4826. A switch from Power to Simple syncs the project it opens
+  (`finalizeProjectSwitch` → `syncOnProjectSwitch`), but a switch from Simple to Power only reloaded
+  the dock layout, so whatever was typed in Simple stayed unsent. Product wants a sync on this switch
+  only when the project has local changes to send, with the usual progress and failure
+  notifications, and without the switch waiting for it. PT-4827 will make the Power → Simple sync
+  conditional too, and both directions are to share one "does this project need a sync?" check.
+- **Decision:** The renderer's `platform.interfaceMode` subscription (`web-view.service-shard.ts`)
+  reads the project of this window's Simple-mode Scripture Editor tab (`simpleEditorTabIds`) before
+  the Power layout replaces it, and once that layout has loaded, if no newer switch has started,
+  sends `platformScriptureEditor.syncOnSwitchToPower` without awaiting it. That command
+  (`syncOnSwitchToPower` in `platform-scripture-editor.utils.ts`) asks `waitForUnsentChanges` whether
+  the project is in `UnsyncedChangesSnapshot.toSend`, re-reads the mode, checks the saved internet
+  setting, asks for consent again, and runs `sendReceiveProjects([projectId])` with no
+  `suppressNotification`, so Power mode's progress and failure toasts show
+  (`adr-sync-surface-per-interface-mode`).
+
+  **Internet:** the sync is skipped when the saved setting is `VpnRequired` or `Disabled`, the values
+  `InternetServicesGate` refuses (`adr-internet-services-gate`), so a user who turned Send/Receive
+  off is not shown a failed sync on every switch. That gate still enforces the setting, so an
+  unreadable setting lets the sync go ahead. Whether the machine is online cannot be known without
+  trying, so being offline is left to the sync's own failure notification.
+
+  `waitForUnsentChanges` is the shared check. One read of the signal is not enough: the backend
+  checks a project a debounce after its last write, and the editor's save of the last keystrokes is
+  itself asynchronous, so "type, then switch" routinely reads a snapshot from before the edit. It
+  subscribes to `paratextBibleSendReceive.onUnsyncedChangesChanged`, then seeds from
+  `getUnsyncedChanges`, and ignores the list while a snapshot says `isRechecking`: during a sync the
+  backend parks its checks, so the list still names projects that sync is sending, and the sync's
+  own result is authoritative once it ends (the write gate blocks edits to a project being synced).
+  With no sync running, it answers `true` as soon as a snapshot lists the project, or `false` after a
+  grace window (`UNSENT_CHANGES_GRACE_MS`). A second switch of the same project while the first is
+  still deciding joins it rather than deciding, and syncing, separately.
+
+  **Consent:** unlike the other syncs that ask the gate, `unconfirmed` does not stop this one. Only
+  the Simple-mode wizard records consent, and it is resolved at app mount, never on a live switch to
+  Simple, so a user who started in Power mode reads `unconfirmed` for the whole session — and this
+  sync runs in Power mode, which has no consent step. Every other answer still stops it: `deferred`
+  ("Don't sync yet" this session), `unreadable` (the first-run flag could not be read), and a
+  rejected request. It asks before the wait for unsent changes and again just before it syncs,
+  since the wait can last minutes and a decline during it must still count.
+
+  A Power-mode project switch (`syncOnProjectSwitch`) does not ask the gate at all, so it still
+  syncs after "Don't sync yet" while this trigger does not. That difference is deliberate: the
+  decline was given in the Simple-mode wizard, and this sync sends work typed in Simple mode, while
+  a Power-mode project switch is Power mode's own behavior, which that consent never governed.
+- **Alternatives:** **Trigger from the main process's mode-switch orchestration** — rejected: by the
+  time main reacts, the renderer is already replacing the Simple layout, so main cannot reliably ask
+  which project the Simple editor showed. **Fall back to the last-opened-project cache** — rejected:
+  it is one key for the whole application, and a window left in Simple mode by a close that failed
+  during the switch to Simple never loaded the Simple layout, so the fallback would sync the primary
+  window's project twice. **A new C# "check this project now" command** — rejected: it still could
+  not see a save that has not reached the backend yet (the editor's save and the check travel
+  different connections), so it would need the grace window anyway, and it needed a per-project
+  completion signal threaded through `UnsyncedChangesTracker`'s claim and park model. **Read the
+  snapshot once** — rejected for the freshness reason above. **`syncProjects` instead of
+  `sendReceiveProjects`** — rejected: the point is to send local edits, as the outgoing half of a
+  project switch and the window-close sync do; the deep sync's connected resources and partners are
+  not this switch's job. **The strict consent gate** — rejected for the Power-native user above.
+- **Consequences:** A switch with nothing to send settles after the grace window, which nobody waits
+  for. Committed-but-unsent work is visible to the signal only when the Paratext 10 last-synced-tip
+  record covers the project (`adr-unsynced-changes-signal-is-backend-read`), so an edit the editor's
+  daily commit already committed, on a project with no record yet (an upgraded installation before
+  that project's first successful sync), starts no sync — accepted. A sync that another trigger
+  starts between the check and this one makes the backend refuse this one; that is logged and not
+  retried. Only the project the Simple editor shows at the switch is considered: if the user
+  switched projects inside Simple mode first, and that switch's own sync was skipped (consent not
+  `granted`) or failed, the earlier project's changes stay unsent until that project's next sync.
+  They are committed locally, not lost. Covering every project shown since Simple mode was entered
+  would need this command to take a list and send them in one `sendReceiveProjects`, because the
+  backend refuses overlapping syncs — accepted for now. Right after launch the backend checks every
+  project once, one at a time, and `isRechecking` does not cover that scan, so a project it has not
+  reached yet reads as having nothing to send: a switch within seconds of launch can miss changes
+  left from an earlier session if nothing was typed this session. They go with the project's next
+  sync. Widening `isRechecking` to the scan would change a flag the sync status indicator also
+  reads, so it is left alone. Whether the sync locks the editor, and what the user sees offline, are
+  decided by the Send/Receive implementation, not by this trigger; as of 2026-10-23 both are
+  verified only by hand in a Paratext 10 build.
+- **Source:** PT-4826.
 
 ## adr-sync-surface-per-interface-mode: Each sync gets one persistent progress surface per interface mode, chosen by its caller
 
@@ -9090,6 +10159,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   awaited — awaiting it put ten seconds in front of both process spawns.
 - **Source:** PT-4275 epic (multi-window architecture plan §6, theme half; §9.2 for the staleness it
   closes).
+- **Amended 2026-09-25 (`adr-interface-scaling-is-per-window-zoom`):** the same constraint as in
+  `adr-scroll-group-hosted-in-main`: the rewritten URL may not be a key, which is why interface
+  scaling uses a zoom that is not keyed by URL.
 
 ## adr-toolbar-shrink-measurement: Responsive toolbars measure their own width in JS, not with CSS container queries
 
@@ -9369,6 +10441,127 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** the multi-agent review of #2654 and the follow-up decision on its finding about
   `policyRemedy`.
 
+## adr-unsupported-project-reason: Unsupported projects are enumerated but gated at open, with a generic blocking reason
+
+- **Date:** 2026-09-25
+- **Status:** Accepted
+- **Context:** Study Bible Additions (SBA) projects are enumerated with every other Scripture project
+  (`LocalParatextProjects.GetAllProjectDetails`), but Platform.Bible cannot open their Scripture
+  content. The PO wants them visible but disabled where users open projects, with the reason, and a
+  placeholder if one is opened anyway. They must stay syncable.
+- **Decision:**
+  - **One source of the reason.** C# computes a generic localize key in
+    `ScrTextExtensions.GetOpenBlockedReason` (a `ScrText` overload, and an `Enum<ProjectType>`
+    overload for projects that are only on the S/R server). It rides on
+    `ProjectMetadata.unsupportedReason`. Consumers render whatever reason they get; none names SBA.
+    Absent or empty means openable, and so does a failed lookup, so an error never locks a user out
+    of a real project.
+  - **C# enforces it at the text boundary.** `ScrTextExtensions.ThrowIfOpenBlocked` throws
+    `ProjectOpenBlockedException` (the key plus `(PROJECT_OPEN_BLOCKED)`). It guards
+    `GetFromScrText` and the four text setters, comment creation and conflict resolution, checks,
+    inventories, the Checklist, and Manage Books via `ResolveProjectOrThrow` (so
+    `CopyCustomVersification` refuses too). Core's current-text reads, including Compare versions'
+    current text, go through `GetFromScrText`, so they are blocked. Writes refuse right after
+    `EnterWrite`. It is not in `LocalParatextProjects.GetParatextProject`, which S/R, settings and
+    metadata share. `OpenBlockedCoverageTests` scans the guarded services for text reads and
+    writes and fails on any that neither refuses first nor carries an `// open-block: exempt`
+    marker naming its guarded caller. The exception's `FAILED_PRECONDITION` code is for C# callers
+    only: `CommonErrorData` drops `Exception.Data` at the JSON-RPC boundary, so TypeScript relies on
+    the sentinel.
+  - **TypeScript shows the reason.** Tools that surface the refusal detect the sentinel and show the
+    localized reason (`%project_unsupported_generic%` if the key can't be read). The inventory,
+    checks, Checklist and Manage Books `open*` commands also refuse such a project; `openFind`
+    doesn't, because Find never searches one. Defence in depth: the editor placeholder offers no
+    tool launchers (its menus live in the unmounted editor, and editor tabs don't use the renderer
+    toolbar).
+  - **Where projects are opened, shown disabled with the reason:** the Simple toolbar picker (a
+    hover tooltip), and Home and New Tab (a tooltip on the disabled Open button, and inline in the ⋯
+    menu when Open is there).
+  - **They don't count as having a project.** The empty editor's no-projects guidance
+    (`useProjectPresence`) leaves them out, so a user whose only projects cannot be opened is told
+    how to get one, even though the toolbar picker lists those projects disabled. A separate message
+    for that case was rejected: it needs new strings for a state that lasts only until SBA support
+    lands.
+  - **Tool pickers hide them.** Manage Books filters in C# (`ProjectFilterService`). Find, Checks,
+    Checklist, Settings, the select and project-picker dialogs, `open()`'s project list and the
+    resource lists filter on `unsupportedReason`. Find also ignores such projects' open tabs, so a
+    layout whose only tab is an SBA shows Find's no-open-projects state. A Find restored onto an SBA
+    while another searchable tab is open moves to that tab's project, as it does when a project's
+    last tab closes; it never searches the SBA.
+  - **Never auto-opened.** Simple-mode auto-open (recent projects, then the S/R fallback) and the
+    Power→Simple slow path skip them. The last-opened cache stores only ids verified usable, so the
+    Power→Simple fast path takes its cached id with no lookup; its key was bumped once
+    (`platform-bible.lastOpenedProject.v2`) so no entry written earlier can name an SBA. Auto-open
+    holds each candidate's answer (`createUnsupportedProjectIdsCache`, looked up by
+    `includeProjectIds` so the lookup service's startup retry still applies) until
+    `platform.onDidChangeProjects` or a new PDP factory. A failed lookup counts as openable and is
+    retried after 30 s. After a run finds no candidate, auto-open doesn't ask for shared projects
+    again until a sync ends, the set of projects changes, a PDP factory registers, or an editor
+    shows a project.
+  - **If opened anyway,** the editor factory writes the reason into the tab's state on every build
+    (`buildScriptureEditorWebViewState`), and the entry point shows it in a placeholder instead of
+    mounting the editor. The placeholder is the editor's alone; other tools rely on the C# refusal.
+  - **Sync is untouched.** Send/Receive, `commitChanges` and `commitDaily` are never blocked. Home's
+    Sync works, and double-click still Gets a project that is only on the server; only Open is
+    blocked.
+- **Alternatives:**
+  - **Refusing in the TypeScript project data provider `get()`** — rejected: it is not a real
+    boundary, because services that call C# directly (checks, inventories, the Checklist, Manage
+    Books) bypass it; and a refused `get()` leaves its callers on endless spinners.
+  - An `isStudyBibleAdditions` boolean flag — rejected: every UI surface that cares would hard-code
+    the check, drifting toward an unmaintained `ProjectKind` typology.
+  - Dropping interfaces (e.g., `USJ_Chapter`) so SBA falls out of filtered lists — rejected: it hides
+    instead of disabling, cannot explain why, and removes data access other features use.
+  - Returning a `Paratext.Data.UnsupportedReason` from `MigrateProjectIfNeeded`
+    (`PlatformScrTextCollection`) — rejected: ScrTextCollection then drops the project everywhere,
+    including Send/Receive rosters, which must show it selectable and syncable.
+  - A read-only computed project setting — rejected: `projectDataProviders.get()` already fans out to
+    `getMetadataForProject()` the same way, saving nothing and adding a settings API contract.
+  - A default filter in `getMetadataForAllProjects` — rejected: it would hide unsupported projects
+    from S/R rosters, sync-status panels, and layering factories that need to see all projects.
+  - An opt-in lookup filter (a new PAPI parameter) — rejected: a shared API change to avoid a
+    one-line filter at each picker call site.
+  - Refusing an explicit project id in `open()` — rejected: that id reaches the placeholder, and C#
+    refuses the text anyway.
+  - Re-checking the cached project on every Power→Simple switch — rejected: a lookup fan-out per
+    switch, only to cover entries written before this change, which the one-time key bump covers.
+- **Consequences:**
+  - A new unsupported project type needs one C# line in `GetOpenBlockedReason` and one localize key
+    in `en.json` and `es.json`. Every new list for picking or opening a project must hide or disable
+    such projects; Send/Receive lists keep them. The rule is in `Paranext-Core-Patterns.md`
+    ("Projects that cannot be opened").
+  - While an SBA is being synced, a write to it reports `SR_EDIT_BLOCKED` before the reason.
+  - **Pending in other repos (as of 2026-09-29):** Studio's Send/Receive service does not yet fill
+    `SharedProjectInfo.unsupportedReason` (the `Enum<ProjectType>` overload is for it), so a
+    server-only SBA shows no reason until it is downloaded. Studio's Compare-versions revision reads
+    (`CompareVersionsMethods.GetBaseVersionText` and `GetTextForRevision`, which Studio's core patch
+    adds and its `ParatextProjectSendReceiveService` calls on the `ScrText` directly) bypass the C#
+    guards, and the compare view in `paratext-bible-internal-extensions` does not yet turn the
+    sentinel into the reason. All three are for the Studio and internal-extensions PRs.
+  - **Known gaps:**
+    - A command invoked with an unsupported project id opens the placeholder, and in Simple mode
+      Column 3 follows it until the user switches projects.
+    - On the placeholder, the controller's `getSelection` waits out its 10-second timeout, because no
+      editor reports a selection.
+    - The Simple picker's reason is hover-only; keyboard users cannot reach it.
+    - A Simple layout saved before this change with Column 3 restored on an unsupported project
+      keeps it open until the user switches projects.
+    - If the C# factory hasn't registered within the lookup service's 30-second startup grace, the
+      editor factory's lookup fails open and that tab isn't re-checked until it is rebuilt. The
+      editor mounts, and shows the reason taken from the C# refusal of its first text read instead
+      of loading forever.
+    - The first auto-open run can pick an SBA in the same late-registration case, or when another
+      factory already serves one of its candidates (the startup retry then doesn't run). The
+      placeholder or the C# refusal still applies.
+    - Manage Books restored on an SBA shows an empty list with no reason.
+    - A saved Text Collection column or Bible-texts/Commentaries reference that names an SBA isn't
+      filtered (only the metadata-derived resource list is), so it shows the generic "could not be
+      loaded" / "Resource unavailable" message rather than the reason. It needs an `Editable=F` SBA
+      or a reference saved before this change; C# still refuses the read.
+    - Deferred to a follow-up: each editor build adds a `getMetadataForProject` fan-out, and
+      auto-open its own metadata lookup, rather than reusing lookups they already make.
+- **Source:** PT-4685.
+
 ## adr-unsynced-changes-signal-is-backend-read: "Unsynced changes" is read from the project's local Mercurial state in the backend and pushed as a snapshot
 
 - **Date:** 2026-10-01 (⬆️ half); 2026-10-02 (⬇️ half)
@@ -9610,6 +10803,152 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   repo's Standard View invariants.
 - **Source:** PT-3683 (decision comment 19735); scripture-editors PR paranext/scripture-editors#11,
   paranext-core PR #2823.
+
+## adr-verse-row-name-is-the-disclosure-control: The Text Collection verse row's name is its disclosure control, beside the content rather than around it
+
+- **Date:** 2026-09-21
+- **Status:** Accepted
+- **Context:** Each Text Collection verse row discloses a chapter-context panel. The row is a
+  `listitem` in a list of resources, so the obvious move was to put `aria-expanded`/`aria-controls`
+  and the tab stop on the row itself. `aria-expanded` is not in ARIA 1.2's supported set for
+  `listitem` (that role takes the globals plus `aria-level`/`aria-posinset`/`aria-setsize`), and
+  `jsx-a11y`'s `role-supports-aria-props` enforces it. An assistive technology that maps attributes
+  strictly per role can drop the state, leaving a screen-reader user with no indication the row is
+  toggleable or currently open.
+- **Decision:** The row's **name** is the disclosure control — a real `<button>` rendered by the cell
+  as a sibling of the verse content. It owns the accessible name, the tab stop, `aria-expanded`, and
+  `aria-controls` while open, and carries `data-disclosure-control`, which the grid's focus-restore
+  effects query. The `listitem` keeps `data-resource-id` (the zoom hook and drag handlers resolve
+  through it) and takes an `aria-label` only when no control exists to name it, so the name is never
+  announced twice. The row retains a click handler as a pointer-only convenience for the enlarged hit
+  area; that alone still needs `no-noninteractive-element-interactions` suppressed, which is correct,
+  because the row deliberately is not the control.
+- **Alternatives:** **`aria-expanded` on the `listitem`, with the lint rule suppressed** — rejected:
+  it trades a real accessibility guarantee for an untested assumption about AT behaviour. **A control
+  wrapping the row content** — not available: the row contains the reorder grip and the editor's
+  contenteditable surface, so wrapping nests interactive content inside a button, invalid for
+  `<button>` and the `nested-interactive` anti-pattern for `role="button"`. **`role="treeitem"` in a
+  `role="tree"`** — rejected: it supports `aria-expanded` natively but imports a keyboard contract
+  where arrow keys navigate, and arrow keys here already reorder. **Dropping `aria-expanded`** —
+  rejected: spec-clean but strictly less informative than either working alternative.
+- **Consequences:** Moving the disclosure off the row is tab-stop-neutral: the name control replaces
+  the row as the row's single stop. (A reorder-enabled verse row does end up with two — grip then
+  name control — but the second one comes from giving verse mode a grip at all, not from this decision.)
+  Enter and Space work with no key handler of our own, because the control is a native button. Anything that needs to focus a row must
+  target `[data-disclosure-control]` rather than the row element. A test double for the cell has to
+  forward the disclosure props or the control disappears from the tree, which is the same failure
+  mode the reorder grip's mock had.
+- **Source:** PT-4544 (WI-18), after `jsx-a11y/role-supports-aria-props` flagged the row-level
+  `aria-expanded`.
+
+## adr-verse-row-reserves-with-a-generated-float: The Text Collection verse row reserves its content-sized name with a generated float inside the editor's own block flow
+
+- **Date:** 2026-09-18; name sized to its text 2026-10-14
+- **Status:** Accepted for the float mechanism. The content-sized name is Proposed: as of
+  2026-10-22 it awaits product confirmation on PR #2857, because the ticket asked for a fixed-size
+  name area.
+- **Context:** The Text Collection's verse rows put a resource short name beside the verse text.
+  Laid out as a two-column flex split, wrapped lines stayed in the right-hand column, leaving a band
+  of empty space under every name. The requirement is "flow content after and beneath shortname —
+  same as PT9": content flowing after the name on line 1 and *beneath* it on line 2+. That is a
+  text-wrap-around shape, which no flex or grid split produces — a split necessarily keeps line 2 in
+  the text column. PT9's Text Collection (`ParatextBase/TextCollection/TextCollectionCss.css`,
+  `.abbrev`) floats the abbreviation at its own width with an 8px margin, so the text starts right
+  after it. Zoom is per-resource: the platform applies CSS `zoom` to the element marking the
+  resource's text (`ContentZoomRoot`), so anything sized inside that subtree is multiplied while the
+  name beside it is not.
+- **Decision:** The name is `position: absolute` at the row's inline-start, `inline-size:
+  max-content` up to a cap (`--stg-name-max-width`, 6rem, or 40% of a narrow row), past which it
+  truncates with the full-name tooltip. The space it occupies is reserved inside the text's own flow
+  by `.stg-verse-content .editor-input::before`, a float as wide as the name and as tall as its line,
+  which shortens only the lines beside the name, so line 2+ start at the row's flush inline edge.
+  The float lives inside the zoomed text, which CSS cannot size from the unzoomed name beside it, so
+  `ResourceCellView` measures the name with a `ResizeObserver` and sets `--stg-name-width` on the
+  row; every derived length (`--stg-text-start`, the float, the placeholder reserve) follows it.
+  Until the first measurement the cap stands in, so line 1 never starts under the name, and a zero
+  measurement (a row in a hidden tab, which has no layout) is ignored until the observer reports
+  again. The row hands its resource's zoom level (the platform's `--platform-content-zoom-<area>`
+  variable, with the same fallback the platform's own rule uses) to `--stg-zoom` from **outside**
+  the zoomed subtree, and every length inside divides by it, so a row at any zoom reserves the same
+  device pixels as the unzoomed name beside it. The first block's top margin and `text-indent` are
+  reset to 0: its line 1 is the slot beside the name, where a marker's top margin would drop it below
+  the name, a positive indent would only widen the gap, and a hanging indent (`\q1`) would pull it
+  back under the name. Later blocks keep both. Centered placeholders have no line boxes for a float to
+  shorten, so they reserve the same width with `padding-inline-start`, compensated identically. The
+  rules live in their own `_scripture-text-grid-verse.scss`, used only by the grid web view, because
+  they target `.editor-input` and `_editor-overrides.scss` reaches four web views. `.editor-input`'s
+  `min-height`, sized for the full-panel editors, is reset to `0` for verse cells only: measured in
+  the running app it floors every verse row at 150px regardless of content.
+- **Alternatives:** **A fixed-width name area (6rem)**, which the ticket's wording asked for so rows
+  align — rejected: it leaves a wide gap after a short name (`WEB`, `KJV`), which is most rows, and
+  PT9 does not do it. **Size every row to the widest name in the collection** — keeps rows aligned
+  with far less gap, but is not what PT9 does; not chosen. **A `text-indent` on the first line** —
+  rejected: it reserves space on line 1 of the first block only, so when that block is a single short
+  line (a zoomed-out row, or a one-line `\q1` followed by `\q2`) the next line starts under the name;
+  a float as tall as the name keeps every line beside it clear. **A flex or grid split** — rejected:
+  it cannot put line 2 under the name. **Reserving with padding on the editor**, as
+  `_simple-mode.scss` does for the inline-end marker-bar gutter — it indents *every* line rather than
+  only those beside the name, the opposite of the required shape. That rule's reasoning ("no right
+  margin to float over") is about an element floated *over* laid-out text, which does not shorten
+  line boxes; a float generated inside the flow does, so the two decisions do not conflict. **Sizing
+  the reserve in CSS alone** (float the real name and zoom only a wrapper around the editor, or render
+  the label in `::before` from a custom property) — would remove the measurement, but reworks how
+  zoom applies to the whole row; not taken.
+- **Consequences:** Rows with different names start line 1 on different columns, as in PT9; rows
+  with the same name still align at any zoom. The layout depends on a measurement in JavaScript, not
+  CSS alone. The float and the verse's blocks are siblings inside `.editor-input`, so the shape
+  survives any `overflow` on `.editor-input` or `.editor-inner`. It breaks if `.editor-input`
+  becomes a flex or grid container (the float stops floating), or if the first block establishes its
+  own formatting context (`display: flow-root`, a non-`visible` `overflow`): that block then sits
+  beside the float as a whole, so line 2+ stay indented. A local-only e2e geometry spec asserts those
+  computed values and the resulting line rects so that failure is loud rather than a subtle
+  misrender. `float: inline-start` resolves against the element's own `direction`, so RTL needs no
+  second rule; the stylesheet containing no `[dir]` selector is the check that this holds. Storybook
+  needs a stand-in carrying the real class chain to show any of this; the stories import the real
+  stylesheet, but only the e2e spec checks the cascade against the real editor styles.
+- **Source:** PT-4544 (WI-18), serving TODD-NTH-1.1/1.2 and TODD-NTH-1.3's residual grip.
+
+## adr-wait-for-network-object-rejects-with-platform-error: A bounded network-object wait distinguishes a genuine timeout from any other failure via `PlatformError.code`, not by inspecting the rejection's shape
+
+- **Date:** 2026-10-20
+- **Status:** Accepted
+- **Context:** `waitForWebViewProviderPatiently` (see `adr-web-view-provider-retry-scoped-to-tab-restore`)
+  re-arms a bounded `waitForNetworkObject` wait, up to a total budget, when a webview provider's
+  owning extension may still be activating. Its catch block could not tell a genuine per-arm timeout
+  apart from any other rejection — `waitForNetworkObject` collapsed both a timeout and a failed
+  `getAllNetworkObjectDetails()` snapshot read into one plain rejection reason string, by design
+  (`AsyncVariable` tracks `hasTimedOut` internally, but that flag never survived past
+  `waitForNetworkObject`'s own return). A loop that cannot tell the two apart either retries blindly
+  on any failure — hammering the main process with repeated IPC round trips and delaying a real,
+  non-recoverable error by the full patient budget instead of surfacing it immediately — or cannot
+  retry at all.
+- **Decision:** `waitForNetworkObject` (`network-object-status.service.ts`) now rejects with a
+  `PlatformError` instead of a bare string: `code` is `DEADLINE_EXCEEDED` when `asyncVar.hasTimedOut`,
+  `UNKNOWN` otherwise. This widens `waitForNetworkObject`'s public contract
+  (`NetworkObjectStatusServiceType`), used by multiple call sites (scroll-group
+  service, startup-readiness, etc.), but needs no change to `AsyncVariable` itself: `waitForNetworkObject` already holds the
+  `asyncVar` instance and can read `hasTimedOut` before it returns, so the wrapping happens entirely
+  at this one layer. A caller that needs to distinguish the two reasons checks `isPlatformError(e) && e.code === DEADLINE_EXCEEDED`;
+  any other caller is unaffected, since each either propagates the rejection untouched or formats
+  it through `getErrorMessage`, which already treats a `PlatformError` as a first-class message
+  source.
+- **Alternatives:** **Widen `AsyncVariable`'s rejection type directly** — rejected: `AsyncVariable`
+  is a generic utility with multiple unrelated consumers (not all network-object waits), so changing its
+  shared type would ripple through call sites that have nothing to do with this decision, for no
+  benefit to them. **Inspect the rejection message string** (e.g. match `/^Timeout reached/`) —
+  rejected: it is a string the function itself generates, so any future wording change would
+  silently re-break the distinction, exactly the brittleness `PlatformError.code` exists to avoid.
+  **Leave the retry loop retrying on any rejection** — rejected (the status quo this decision fixes):
+  it hammers the main process with repeated IPC round trips on a fast-failing, non-timeout error, and
+  delays that error from surfacing in ~20s to up to the full patient budget.
+- **Consequences:** `waitForNetworkObject`'s documented contract now promises a `PlatformError`, not
+  a bare string, on rejection — a new caller should rely on that rather than re-deriving a reason
+  string. This establishes the pattern for any future bounded-retry loop in this codebase that needs
+  to distinguish "the operation can still be retried" from "this failure will recur no matter how
+  many times we ask": reject with a `PlatformError` carrying the right `code`, rather than inventing
+  a new out-of-band signal or parsing a message string.
+- **Source:** PT-4734 (PR #2901); architect input mid-review on using `PlatformError`'s `code` field
+  for this.
 
 ## adr-web-view-content-zoom-in-iframe-shortcuts: Content-zoom chords are handled by a platform-injected bootstrap inside each web view
 
@@ -9906,6 +11245,80 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   The mount-time focus in `platform-panel.component.tsx` is unchanged, since a reload does not
   remount the panel.
 - **Source:** PT-4534 (review of #2847), found checking the Checks tab in the running app.
+
+## adr-web-view-provider-retry-scoped-to-tab-restore: A tab-restore request and the extension-reload re-fetch get the webview provider's patient retry; a fresh `openWebView()` keeps the shorter 20s failure
+
+- **Date:** 2026-10-20
+- **Status:** Accepted — the 2-minute budget is a bounded patch, not a full fix; see the deferred
+  alternative at the end of Alternatives.
+- **Context:** `getWebViewProvider` (`web-view-provider.service.ts`) waited a single, fixed 20
+  seconds for a webview provider's network object to register, then gave up permanently. On a cold
+  launch, several bundled extensions can take long enough that any tab whose provider did not
+  complete its registration in time could render as an empty placeholder — unconditionally mounted
+  at layout load on every Simple-mode launch, and so exposed to this race on every cold start.
+  `waitForNetworkObject` already listens for `onDidCreateNetworkObject`; the gap was that
+  `getWebViewProvider`'s single wait never re-armed after giving up. On Windows, it was confirmed
+  empirically that Windows Defender's real-time scan on a cold file read was responsible for the
+  extra delay, during `require()` rather than `activate()`.
+- **Decision:** `retrieveWebViewContent` (`web-view.component.tsx`) calls
+  `waitForWebViewProviderToRegister` (`web-view.service-shard.ts`) BEFORE calling `reloadWebView`.
+  Both of `retrieveWebViewContent`'s callers get this patience — a tab-restore request and the
+  `platform.onDidReloadExtensions` re-fetch for every open tab — since neither is a user action and
+  both can hit the same still-activating-extension race. `waitForWebViewProviderToRegister` re-arms
+  the same 20-second wait up to a 2-minute total budget before propagating the final rejection; once
+  it resolves, `reloadWebView` → `openOrReloadWebView` → `getWebViewProvider` run exactly as they
+  always have, with a single, shorter 20-second wait. Every other caller — a fresh `openWebView()`
+  request, the error boundary's retry, a PAPI-triggered reload — never calls
+  `waitForWebViewProviderToRegister` and so uses the shorter 20-second wait. Whether the
+  extension-reload re-fetch should keep this same scope, or be narrowed to only the tabs whose
+  extension is actually still activating, is a separate, still-open question. As of 2026-10-22, it
+  was confirmed reachable through `paratext-bible-internal-extensions`'
+  `paratext-bible-marketplace` extension's "Manage extensions" menu, which can fire
+  `onDidReloadExtensions` while other tabs are open. PT-4803 (PR #2908) removes that menu item for
+  unrelated product-priority reasons, so this question's near-term urgency is lower, but the
+  underlying race returns whenever the menu does, or sooner if another caller reaches
+  `manageExtensions` first. Tracked by PT-1993, the epic that would bring the menu back — not
+  PT-2274 ("Deploy Marketplace"), whose own subtasks are already closed, which makes it a poor
+  anchor for when this resurfaces despite being the more specific-sounding ticket.
+- **Alternatives:** Re-arm the wait uniformly inside `getWebViewProvider` itself, with no caller-side
+  opt-in — rejected because it would apply the same ~2-minute patience to a fresh, explicit
+  `openWebView()` request too: a Power-mode user choosing "Open X" from a menu would see that request
+  silently resolve minutes later instead of failing within 20 seconds, a regression in its own right,
+  not just a missed improvement. A genuinely missing or mistyped `webViewType` would also take up to
+  2 minutes to surface an error instead of 20 seconds, for every caller.
+
+  Thread a dedicated `shouldWaitPatientlyForProvider` flag through `reloadWebView` →
+  `openOrReloadWebView` → `getWebViewProvider` instead, so the patient wait runs inside that chain
+  rather than ahead of it — the first version of this fix took this approach (reusing the existing
+  `isReloadOfAnOpenWebView` flag for the same purpose was considered and rejected first, since the
+  error boundary's retry and `main/services/web-view.service-router.ts`'s pass-through of arbitrary
+  PAPI-triggered reloads both already set it for an unrelated reason, so reusing it would have
+  wrongly granted extended patience to those call shapes too) — replaced after review reproduced
+  two bugs that trace directly to applying patience AFTER `openOrReloadWebView` had already read
+  the dock and minted a nonce:
+  a tab that left the dock mid-wait left behind a `WebViewController` the extension host had by then
+  registered, which the existing "left the dock" bail-out never disposed (it only ever cleaned up the
+  nonce, the right fix for a provider that was never created, not one that was); and the saved
+  definition `reloadWebView` reads before the wait went stale across the stretched-out window, so a
+  change made to the tab's definition while it waited was silently reverted once the wait resolved
+  and the stale snapshot was finally written into the dock. Both bugs existed in the pre-PT-4734
+  code too, in a 20-second window narrow enough that nobody had hit them; widening that window to up
+  to 2 minutes made them easy to reproduce. Waiting entirely before the dock is ever read removes the
+  precondition for either: by the time `reloadWebView` runs, its own read-then-write sequence is back
+  to its original short size regardless of how long the provider took to register.
+
+  Replace the bounded budget with an open-ended, event-driven recovery instead — subscribe to
+  `onDidCreateNetworkObject` for this provider's id and re-run `retrieveWebViewContent` whenever it
+  fires, dropping the subscription when the tab closes, the way `use-project-picker-data.hook.ts`
+  already heals a late PDP factory — deferred, not rejected. It would close the residual gap the
+  2-minute budget still leaves (a provider that is merely slower than 2 minutes, not broken, still
+  leaves its tab permanently blank), but it removes the flag/budget/loop shape entirely, which is a
+  bigger change than this decision's scope; tracked separately rather than folded in here.
+- **Consequences:** Any future caller that wants this patience must call
+  `waitForWebViewProviderToRegister` itself before its own reload/open — nothing inherits it by
+  default. Revisit the 2-minute budget if cold-start activation times grow enough (more bundled
+  extensions, slower disks) to approach it.
+- **Source:** PT-4734.
 
 ## adr-window-activation-is-declared-not-inferred: Whether a new window activates is declared by its caller; focus state cannot answer it
 

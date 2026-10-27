@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeAll, describe, it, expect, vi } from 'vitest';
 import * as React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
@@ -15,6 +15,7 @@ import {
   ResourceTextPanel,
   ResourceTextPanelProps,
 } from './resource-text-panel.component';
+import { RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID } from './resource-book-not-available.component';
 
 /**
  * Records every `setUsj` the panel pushes into the editor, across editor instances.
@@ -245,6 +246,14 @@ describe('ResourceTextPanel book not in this resource', () => {
 
     expect(screen.getByText(BIBLE_TEXT_MISSING_BOOK)).toBeInTheDocument();
     expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+  });
+
+  it('offers no button in the message, since the selector above it is the remedy', () => {
+    renderPanel({ usjPossiblyError: missingBookError('MAT') });
+
+    const message = screen.getByTestId(RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID);
+    expect(message).toHaveTextContent(BIBLE_TEXT_MISSING_BOOK);
+    expect(within(message).queryByRole('button')).not.toBeInTheDocument();
   });
 
   it('uses the commentary wording when the panel is showing a commentary', () => {
@@ -507,5 +516,73 @@ describe('ResourceTextPanel install failure', () => {
       screen.getByText(STRINGS['%webView_resourcePanel_installedButUnavailable%']),
     ).toBeInTheDocument();
     expect(screen.queryByText(/couldn't be installed/)).not.toBeInTheDocument();
+  });
+});
+
+/*
+ * Resources never open in Simple mode's middle column, so with no project open a resource opened
+ * from Home still shows here. With no project there is no list to download into.
+ */
+describe('ResourceTextPanel with no project open', () => {
+  it('shows a resource it was asked to show', () => {
+    renderPanel({ hasProject: false });
+
+    expectEditorShowing();
+    expect(screen.queryByText('No project.')).toBeNull();
+  });
+
+  it('asks for a project when it has nothing to show', () => {
+    renderPanel({ hasProject: false, selectedRef: undefined });
+
+    expect(screen.queryByText('No project.')).not.toBeNull();
+  });
+
+  it('offers no download, which needs a project to add to', async () => {
+    renderPanel({ hasProject: false });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /WEB/ }));
+    await screen.findByRole('menuitemcheckbox', { name: /WEB/ });
+
+    expect(screen.queryByRole('menuitem', { name: 'Download resources…' })).toBeNull();
+  });
+
+  it('offers the download with a project open', async () => {
+    renderPanel();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /WEB/ }));
+
+    expect(
+      await screen.findByRole('menuitem', { name: 'Download resources…' }),
+    ).toBeInTheDocument();
+  });
+});
+
+/** Whether `later` comes after `earlier` in document order */
+function comesAfter(earlier: Node, later: Node) {
+  // compareDocumentPosition reports its answer as bit flags
+  // eslint-disable-next-line no-bitwise
+  return (earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+}
+
+describe('ResourceTextPanel copyright notice', () => {
+  const NOTICE = <div data-testid="copyright-notice">Notice</div>;
+
+  it('shows the notice between the resource selector and the text', () => {
+    renderPanel({ copyrightNotice: NOTICE });
+
+    const notice = screen.getByTestId('copyright-notice');
+    const selector = screen.getByRole('button', { name: /WEB/ });
+    const editor = screen.getByTestId(RESOURCE_TEXT_EDITOR_CONTAINER_TEST_ID);
+    expect(comesAfter(selector, notice)).toBe(true);
+    expect(comesAfter(notice, editor)).toBe(true);
+  });
+
+  it('keeps the notice on screen when the resource lacks the book', () => {
+    renderPanel({ copyrightNotice: NOTICE, usjPossiblyError: missingBookError('MAT') });
+
+    expect(screen.getByText(BIBLE_TEXT_MISSING_BOOK)).toBeInTheDocument();
+    expect(screen.getByTestId('copyright-notice')).toBeInTheDocument();
   });
 });

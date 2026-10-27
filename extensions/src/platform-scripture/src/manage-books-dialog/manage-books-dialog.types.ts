@@ -107,6 +107,12 @@ export type ManageBooksDialogProject = {
    */
   versificationName?: string;
   /**
+   * Whether licensing terms prohibit using the project as the base of new text: a traditionally
+   * licensed Biblica text. Sourced from the C# `ProjectSummary.IsRestrictedAsBase` field. The
+   * Create "Based on" picker lists such a project but does not let it be chosen.
+   */
+  isRestrictedAsBase?: boolean;
+  /**
    * Locale-stable project-type key (the PT9 `ProjectType` enum value, e.g. "Standard"). Forwarded
    * to the Copy "From" `<ProjectSelector>` so it can group projects by type. Arrives on the same
    * project-list round-trip as the rest of this shape, so it costs no extra fetch.
@@ -250,6 +256,9 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_genericError%',
   '%manageBooks_projectSelector_versificationSectionHeading%',
   '%manageBooks_projectSelector_versificationUnknownSectionHeading%',
+  // Create "Based on" disabled-row tooltip. A core resource picker string shared with the model
+  // text pickers, so it lives in core's localization files rather than this extension's.
+  '%restrictedModelOrBaseText_disabledReason%',
   // Section headings for the built-in `type` grouping in the manage-books project pickers. The
   // wire carries the raw PT9 `ProjectType` enum value with no display name, so the web view maps
   // each value onto one of these keys consumer-side.
@@ -302,7 +311,7 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_grid_selectAll%',
   // View-mode shared stub label
   '%manageBooks_view_compareVersions_label%',
-  '%manageBooks_view_disabledStub_notYetAvailable%',
+  '%manageBooks_view_disabledStub_notYetAvailable_2%',
   // Import flow
   '%manageBooks_import_choose%',
   '%manageBooks_import_addMore%',
@@ -408,10 +417,10 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   // Disabled future sections (DEF-UI-011/012/013)
   '%manageBooks_progressTracking_label%',
   '%manageBooks_progressTracking_subtitle%',
-  '%manageBooks_progressTracking_notYetAvailable%',
+  '%manageBooks_progressTracking_notYetAvailable_2%',
   '%manageBooks_bookNames_label%',
   '%manageBooks_bookNames_subtitle%',
-  '%manageBooks_bookNames_notYetAvailable%',
+  '%manageBooks_bookNames_notYetAvailable_2%',
 ] as const);
 
 /** Localized strings consumed by `ManageBooksDialog`. */

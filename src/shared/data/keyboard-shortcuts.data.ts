@@ -118,6 +118,26 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     locations: ['src/main/main.ts', 'src/main/verse-navigation-shortcuts.util.ts'],
   },
   {
+    id: 'open-home',
+    purpose: 'Open Home, which lists your projects and resources (Power mode)',
+    category: 'Navigation',
+    context: 'Main process (global)',
+    keys: { macOS: '⌘O', windows: 'Ctrl+O', linux: 'Ctrl+O' },
+    locations: ['src/main/main.ts', 'src/main/app-chords.util.ts'],
+    command: 'platformGetResources.openHome',
+  },
+  {
+    id: 'open-project-settings',
+    purpose:
+      'Open the Settings of the project shown in the focused tab. Does nothing when no tab with a web view has focus',
+    category: 'Navigation',
+    // Per window: the focused tab is read from the window that received the keypress
+    context: 'Main process (per window)',
+    keys: { macOS: '⌘J', windows: 'Ctrl+J', linux: 'Ctrl+J' },
+    locations: ['src/main/main.ts', 'src/main/app-chords.util.ts'],
+    command: 'platform.openProjectSettingsForWebView',
+  },
+  {
     id: 'book-chapter-control-move-grid-highlight',
     purpose:
       'Move the highlighted chapter or verse in the Book Chapter Control grid (mirrored horizontally in right-to-left layouts). While the search box is on screen the horizontal arrows move the text caret first, and reach the preview grid either once the caret has nowhere left to go or once a vertical arrow has stepped into the grid; editing the query hands them back to the caret',
@@ -355,6 +375,24 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     ],
   },
   {
+    id: 'reveal-server-picker',
+    purpose:
+      'Reveal the hidden server-selection control when opening Internet & connectivity settings',
+    category: 'Developer',
+    context: 'User profile popover',
+    // Both Enter and Space on a focused native <button> trigger a browser-synthesized activation
+    // click that carries Chromium's live modifier state (see the row Button's own comment), so
+    // Shift+Space reaches the unlock there too, with no Space-specific handling of its own. The
+    // badge is a role="button" span, not a real button, so it has no such native activation — its
+    // onKeyDown claims Enter and Space explicitly instead.
+    keys: {
+      macOS: '⇧⏎ / ⇧␣',
+      windows: 'Shift+Enter / Shift+Space',
+      linux: 'Shift+Enter / Shift+Space',
+    },
+    locations: ['src/renderer/components/user-profile-popover/user-profile-popover.component.tsx'],
+  },
+  {
     id: 'scripture-markers-menu',
     purpose:
       'Open the inline markers menu. Does nothing while the editor’s right-click menu is open, in every view',
@@ -372,7 +410,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Commit the marker typed in the markers menu',
     category: 'Editing',
     context:
-      'Scripture editor web view (main text, the footnote editor popover, or a note being edited in the footnotes pane in Standard view), while the markers menu is open',
+      'Scripture editor web view (main text, the footnote editor popover, or a note being edited in the footnotes pane in Standard view or Simple’s Formatted view), while the markers menu is open',
     // Space commits what was TYPED, not the highlighted entry — the same in the `\` menu and the
     // Enter-triggered paragraph menu, both of which the forwarding table drives now that every
     // marker palette focuses its LIST rather than an input of its own. At a collapsed caret it
@@ -390,7 +428,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Commit the highlighted entry in the markers menu',
     category: 'Editing',
     context:
-      'Scripture editor web view (main text, the footnote editor popover, or a note being edited in the footnotes pane in Standard view), while the markers menu is open',
+      'Scripture editor web view (main text, the footnote editor popover, or a note being edited in the footnotes pane in Standard view or Simple’s Formatted view), while the markers menu is open',
     // Enter and Tab are one commit gesture, matching the editor package's own menus, and the same
     // in both menus — including the Enter-triggered paragraph menu, which the forwarding table
     // drives throughout now that it focuses its list instead of an input, so an Enter-Enter cannot
@@ -408,7 +446,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Move the highlight and widen or narrow the typed filter in the markers menu',
     category: 'Editing',
     context:
-      'Scripture editor web view (main text or a note being edited in the footnotes pane, Standard view), while the markers menu is open',
+      'Scripture editor web view (main text in Standard view, or a note being edited in the footnotes pane in Standard view or Simple’s Formatted view), while the markers menu is open',
     // Arrow keys move the highlighted entry; Backspace widens the typed filter, or closes the
     // menu when nothing is typed — the same in both menus. Marker characters (letters, digits,
     // `+`, `-`) narrow it. The character the layout produced is what counts whenever it can name a
@@ -429,7 +467,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Commit a closing marker from the markers menu',
     category: 'Editing',
     context:
-      'Scripture editor web view (main text or a note being edited in the footnotes pane, Standard view), while the markers menu is open',
+      'Scripture editor web view (main text in Standard view, or a note being edited in the footnotes pane in Standard view or Simple’s Formatted view), while the markers menu is open',
     // The counterpart to Space's opening-marker commit: commits the typed marker's closing form
     // with no terminating space, in both menus. Over a non-collapsed selection the selected content
     // is replaced, which is what typing a closing marker by hand has always done — except with
@@ -443,7 +481,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Commit the typed marker and immediately open the markers menu again',
     category: 'Editing',
     context:
-      'Scripture editor web view (main text or a note being edited in the footnotes pane, Standard view), while the markers menu is open',
+      'Scripture editor web view (main text in Standard view, or a note being edited in the footnotes pane in Standard view or Simple’s Formatted view), while the markers menu is open',
     // Commits like Space but without the terminating space, then reopens for the backslash just
     // pressed, so a paired marker is one continuous flow — in both menus. With nothing typed there
     // is nothing to commit, so it is ignored and the menu stays open. Not a commit key over a
@@ -508,38 +546,76 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     ],
     command: 'platformScriptureEditor.insertCommentAtSelection',
   },
-  // TODO(PT-4735): Show hints on the rest of Simple's Project menu. ⌃T and ⌃⇧T below need a
-  // `command` that works in every view; the design's ⌃J, ⌃E and F7 have no editor handler or entry
-  // here yet. A new `command` also needs its row in `EXPECTED_MENU_HINTS`.
+  {
+    id: 'scripture-toggle-view',
+    purpose:
+      'Switch between Standard view and Preview (Power mode). Does nothing in Simple mode or while a comment draft is open',
+    category: 'View',
+    context: 'Scripture editor web view',
+    // Control on every platform, like ⌃F and ⌃T. No `command`: the Switch scripture view items
+    // deliberately show no hint.
+    keys: { macOS: '⌃E', windows: 'Ctrl+E', linux: 'Ctrl+E' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/editor-chords.util.ts',
+    ],
+  },
   {
     id: 'scripture-insert-footnote',
     purpose:
-      'Insert a footnote at the selection (Standard view, editable). Does nothing while the editor’s right-click menu is open',
+      'Insert a footnote at the selection (editable text, every view). Does nothing while the editor’s right-click menu is open',
     category: 'Editing',
     context: 'Scripture editor web view',
     // macOS intentionally uses ⌃T (not ⌘T) to match the handler in
     // platform-scripture-editor.web-view.tsx (`event.ctrlKey`), like the find dialog's ⌃F.
-    // No `command`: the chord works only in Standard view, but the menu item works in every view
     keys: { macOS: '⌃T', windows: 'Ctrl+T', linux: 'Ctrl+T' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
-      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
+      'extensions/src/platform-scripture-editor/src/editor-chords.util.ts',
     ],
+    command: 'platformScriptureEditor.insertFootnoteAtSelection',
   },
   {
     id: 'scripture-insert-cross-reference',
     purpose:
-      'Insert a cross-reference at the selection (Standard view, editable). Does nothing while the editor’s right-click menu is open',
+      'Insert a cross-reference at the selection (editable text, every view). Does nothing while the editor’s right-click menu is open',
     category: 'Editing',
     context: 'Scripture editor web view',
     // macOS intentionally uses ⌃⇧T (not ⌘⇧T) to match the handler in
     // platform-scripture-editor.web-view.tsx (`event.ctrlKey`), like the find dialog's ⌃F.
-    // No `command`: the chord works only in Standard view, but the menu item works in every view
     keys: { macOS: '⌃⇧T', windows: 'Ctrl+Shift+T', linux: 'Ctrl+Shift+T' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
-      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
+      'extensions/src/platform-scripture-editor/src/editor-chords.util.ts',
     ],
+    command: 'platformScriptureEditor.insertCrossReferenceAtSelection',
+  },
+  {
+    id: 'scripture-toggle-footnotes',
+    purpose: 'Show or hide the footnotes pane',
+    category: 'View',
+    context: 'Scripture editor web view',
+    keys: { macOS: 'F7', windows: 'F7', linux: 'F7' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/editor-chords.util.ts',
+    ],
+    command: 'platformScriptureEditor.toggleFootnotes',
+  },
+  {
+    id: 'scripture-open-basic-checks',
+    // Kept while Basic checks are hidden in both modes, so the chord stays reserved and its menu
+    // hint returns with the menu item
+    purpose: 'Open Basic checks for the project (Power mode; off while Basic checks are hidden)',
+    category: 'Navigation',
+    context: 'Scripture editor web view',
+    // macOS uses ⌃⇧R (not ⌘⇧R) because ⌘⇧R is the macOS menu bar's force reload
+    keys: { macOS: '⌃⇧R', windows: 'Ctrl+Shift+R', linux: 'Ctrl+Shift+R' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/editor-chords.util.ts',
+    ],
+    command: 'platformScripture.openChecksSidePanel',
   },
   {
     id: 'scripture-remove-character-formatting',
@@ -621,50 +697,72 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
     ],
   },
+  {
+    id: 'scripture-open-paragraph-menu-from-marker',
+    purpose: 'Open the paragraph style menu to change the selected paragraph marker',
+    category: 'Editing',
+    // Handled inside the editor library that ships as the `@eten-tech-foundation/platform-editor`
+    // package: its `ParaMarkerSelectionPlugin` claims Enter and Alt+Down from a `KEY_DOWN_COMMAND`
+    // handler only while a paragraph marker is selected (by clicking its gutter glyph in the
+    // paragraph-structure view), and asks the web view to open its toolbar paragraph menu through
+    // `onParaMarkerMenuRequest`. `locations` names the in-repo code that answers that request.
+    // No `command`: the chord does nothing unless a paragraph marker is selected.
+    context:
+      'Scripture editor web view (handled by the @eten-tech-foundation/platform-editor package)',
+    keys: { macOS: '⏎ / ⌥↓', windows: 'Enter / Alt+↓', linux: 'Enter / Alt+↓' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/use-paragraph-menu-open-state.hook.ts',
+      'extensions/src/platform-scripture-editor/src/paragraph-style-trigger.component.tsx',
+    ],
+  },
   // The editor's arrow-key caret movement (verse hops, note boundaries, the two caret stops
   // around an \fp span's rendered line break — all in the scripture-editors repo's
   // ArrowNavigationPlugin) is deliberately NOT cataloged: arrow keys moving the caret in a
   // natural way is expected editor behavior, not a keyboard shortcut.
   {
     id: 'scripture-text-grid-open-chapter-context',
-    purpose: 'Open the chapter-context view for the focused cell',
+    purpose: "Open or close the chapter-context view from the focused row's name control",
     category: 'View',
-    context: 'Scripture Text Grid web view',
+    context: 'Scripture Text Grid web view (the cell itself focused, not a control inside it)',
     keys: { macOS: '⏎ / ␣', windows: 'Enter / Space', linux: 'Enter / Space' },
     locations: [
-      'extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid.component.tsx',
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/resource-cell-view.component.tsx',
     ],
   },
   {
     id: 'scripture-text-grid-move-between-cells',
-    purpose: 'Move to the next or previous cell in the Scripture Text Grid',
+    purpose: 'Move to the next or previous control in the Scripture Text Grid',
     category: 'Navigation',
     context: 'Scripture Text Grid web view',
     keys: { macOS: '⇥ / ⇧⇥', windows: 'Tab / Shift+Tab', linux: 'Tab / Shift+Tab' },
     locations: [
-      'extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid.component.tsx',
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/resource-cell-view.component.tsx',
     ],
   },
   {
     id: 'scripture-text-grid-close-chapter-context',
     purpose: 'Close the chapter-context view',
     category: 'View',
-    context: 'Scripture Text Grid web view',
+    context: 'Scripture Text Grid web view (not inside an open window or menu, which closes first)',
     keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
-    locations: ['extensions/src/platform-scripture-editor/src/scripture-text-grid.web-view.tsx'],
+    locations: [
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/chapter-context-escape.utils.ts',
+    ],
   },
   {
     id: 'scripture-text-grid-reorder-cell',
-    // The reorder grip is rendered only by the header-band layout, which is the chapter and grid
-    // views; the verse view hangs its resource name inline and shows no grip, so there is nothing
-    // to focus there and the arrow keys never reach the handler. Tracked as PT-4184 follow-up.
-    purpose: 'Reorder the focused Scripture Text Grid column one position (chapter and grid views)',
+    // One handler serves every view: ↑ and ← move toward the start, ↓ and → toward the end. The
+    // vertical pair suits the verse view's stacked rows, the horizontal pair the side-by-side columns.
+    purpose:
+      'Move the resource whose reorder grip has focus one position toward the start or the end',
     category: 'View',
     context: 'Scripture Text Grid web view',
     keys: {
-      macOS: '← / →',
-      windows: '← / →',
-      linux: '← / →',
+      macOS: '↑ / ↓ / ← / →',
+      windows: '↑ / ↓ / ← / →',
+      linux: '↑ / ↓ / ← / →',
     },
     locations: [
       'extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid.component.tsx',
@@ -687,9 +785,11 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Undo the last edit in the editor',
     category: 'Editing',
     context: 'Editor (text editing)',
+    command: 'platformScriptureEditor.undo',
     keys: { macOS: '⌘Z', windows: 'Ctrl+Z', linux: 'Ctrl+Z' },
     locations: [
       'lib/platform-bible-react/src/components/basics/editor-keyboard-shortcuts.component.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
     ],
   },
   {
@@ -697,9 +797,11 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Redo the last undone edit',
     category: 'Editing',
     context: 'Editor (text editing)',
+    command: 'platformScriptureEditor.redo',
     keys: { macOS: '⇧⌘Z', windows: 'Ctrl+Y / Ctrl+Shift+Z', linux: 'Ctrl+Y / Ctrl+Shift+Z' },
     locations: [
       'lib/platform-bible-react/src/components/basics/editor-keyboard-shortcuts.component.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
     ],
   },
   {

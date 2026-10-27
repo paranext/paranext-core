@@ -32,6 +32,55 @@ internal sealed class InternetSettingsDataProvider(PapiClient papiClient)
     protected override Task StartDataProviderAsync() => Task.CompletedTask;
 
     /// <summary>
+    /// Saves <see cref="InternetUse.Disabled"/> in place of a saved
+    /// <see cref="InternetUse.VpnRequired"/> (see <see cref="InternetSettingsLogic.MigratedRawStatus"/>).
+    /// Call on every startup, after <see cref="ParatextUtils.PlatformParatextInfo"/> is installed
+    /// and before anything reads the internet settings: ParatextData geolocates the machine whenever
+    /// something reads the effective status of a saved <see cref="InternetUse.VpnRequired"/>, and
+    /// the UI should never show the old value. Every startup, because ParatextData saves
+    /// <see cref="InternetUse.VpnRequired"/> when nothing is stored and a re-seed from Paratext 9
+    /// can bring it back.
+    /// </summary>
+    /// <remarks>
+    /// Writes the <c>InternetSettings.xml</c> in Platform.Bible's folder, which every Platform.Bible
+    /// build on this account shares, never Paratext 9's. Never throws. If the save fails,
+    /// ParatextData may already hold <see cref="InternetUse.Disabled"/> in memory while the file
+    /// keeps <see cref="InternetUse.VpnRequired"/>; <see cref="InternetServicesGate"/> blocks on
+    /// both.
+    /// </remarks>
+    public static void MigrateVpnRequiredToDisabled() =>
+        MigrateVpnRequiredToDisabled(
+            () => InternetAccess.RawStatus,
+            rawStatus => InternetAccess.RawStatus = rawStatus
+        );
+
+    /// <summary>
+    /// <see cref="MigrateVpnRequiredToDisabled()"/> with the saved value read and saved through
+    /// <paramref name="readRawStatus"/> and <paramref name="saveRawStatus"/>, so tests need not
+    /// write a real <c>InternetSettings.xml</c>. Never throws.
+    /// </summary>
+    public static void MigrateVpnRequiredToDisabled(
+        Func<InternetUse> readRawStatus,
+        Action<InternetUse> saveRawStatus
+    )
+    {
+        try
+        {
+            var migratedRawStatus = InternetSettingsLogic.MigratedRawStatus(readRawStatus());
+            if (!migratedRawStatus.HasValue)
+                return;
+            saveRawStatus(migratedRawStatus.Value);
+            Console.WriteLine(
+                $"Replaced the saved internet use VpnRequired with {migratedRawStatus.Value}"
+            );
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Migrating the saved internet use failed! {e}");
+        }
+    }
+
+    /// <summary>
     /// Returns information about the user's current ParatextData.dll internet settings. Also backs
     /// the deprecated <c>paratextRegistration.getParatextDataInternetSettings</c> command.
     /// </summary>

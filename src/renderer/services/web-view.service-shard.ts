@@ -73,6 +73,7 @@ import { sendCommand } from '@shared/services/command.service';
 import { dataProviderService } from '@shared/services/data-provider.service';
 import { logger } from '@shared/services/logger.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
+import type { ProjectMetadata } from '@shared/models/project-metadata.model';
 import { startWorkspaceUpdate } from '@renderer/services/workspace-updating-store';
 import {
   getLastOpenedProject,
@@ -1464,8 +1465,9 @@ function trackSimpleEditorReplaceTab(layout: Layout, newTabId: WebViewId): void 
  * enough), none of which a Power-mode editor tab can ever carry, so this needs no `isPowerMode`
  * check to stay accurate.
  *
- * Excludes published resources from the cache: `platform.isPublished` is stable, cheap metadata, so
- * checking it here keeps a resource from ever becoming a Power → Simple switch's fast-path target.
+ * Excludes published resources and unsupported projects from the cache: `platform.isPublished` and
+ * `unsupportedReason` are stable, cheap metadata, so checking them here keeps such a project from
+ * ever becoming a Power → Simple switch's fast-path target.
  */
 function cacheLastOpenedSimpleProject(webView: SavedWebViewDefinition): void {
   if (webView.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE) return;
@@ -1475,7 +1477,7 @@ function cacheLastOpenedSimpleProject(webView: SavedWebViewDefinition): void {
   projectLookupService
     .getMetadataForProject(projectId)
     .then((metadata) => {
-      if (metadata.isPublished) return undefined;
+      if (!isUsableForSimple(metadata)) return undefined;
       return setLastOpenedProject({ id: projectId });
     })
     .catch((err) => {
@@ -1536,6 +1538,11 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
           // the `loadLayout()` call in `registerDockLayout`, so it reflects the real mode by the
           // time this fires.
           if (newMode === currentInterfaceMode) return;
+          // Read before the Power layout replaces the Simple one below
+          const simpleProjectIdToSync =
+            currentInterfaceMode === 'simple' && newMode === 'power'
+              ? getSimpleEditorProjectId()
+              : undefined;
           // Update the cache synchronously with the notification so any `saveLayout` racing the
           // switch reads the new mode immediately (before `loadLayout`'s own read resolves).
           currentInterfaceMode = newMode;
@@ -1549,6 +1556,9 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
           const generation = startNewSwitchGeneration();
           if (newMode === 'simple') await handleSwitchToSimpleMode(generation);
           else await loadLayoutWithWarning(generation);
+          // A switch back to Simple that superseded this one makes its own sync decision
+          if (simpleProjectIdToSync && generation === switchGeneration)
+            syncOnSwitchToPower(simpleProjectIdToSync);
         },
         { retrieveDataImmediately: false },
       );
@@ -1606,11 +1616,11 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
 
 /**
  * Bound on the whole {@link getMostRecentUsableProjectId} walk (recents fetch plus every candidate's
- * `isPublished` check) while resolving the Simple-mode cold-start path (no cached last-opened
- * project). Without this, a slow or not-yet-registered PDP factory can leave
+ * usability lookup) while resolving the Simple-mode slow path (no cached last-opened project).
+ * Without this, a slow or not-yet-registered PDP factory can leave
  * `projectLookupService.getMetadataForProject` waiting up to 20s for a factory plus a further
- * startup-grace retry loop (see `project-lookup.service-model.ts`), stalling the whole switch for
- * tens of seconds - defeating the point of this being the "fast" switch path.
+ * startup-grace retry loop (see `project-lookup.service-model.ts`), stalling the whole
+ * project-bound switch for tens of seconds while the overlay is up.
  */
 export const COLD_START_LOOKUP_TIMEOUT_MS = 3000;
 
@@ -1719,11 +1729,13 @@ async function isThisWindowRunningTheSwitchToSimple(): Promise<boolean> {
  * with no empty-placeholder → reload round-trip.
  *
  * Fast path: `getLastOpenedProject` returns the cached id synchronously (kept current by the
- * Scripture Editor tab event subscription further down this file).
+ * Scripture Editor tab event subscription further down this file). It is taken with no lookup: only
+ * a project whose lookup showed it usable is ever cached.
  *
- * Slow path: cold start (no cache yet) — fall back to {@link getMostRecentUsableProjectId}, which
- * walks the recents list trying each candidate until one isn't a published resource, bounded
- * overall by {@link COLD_START_LOOKUP_TIMEOUT_MS}.
+ * Slow path: cold start (no cache) — fall back to {@link getMostRecentUsableProjectId}, which picks
+ * the most recent usable candidate, bounded overall by {@link COLD_START_LOOKUP_TIMEOUT_MS}. The
+ * pick is cached only when its lookup succeeded; one that failed is still opened (fail open) but
+ * left uncached, and a timed-out walk loads the bare layout.
  *
  * Fallback: if neither cache nor recents can produce a usable project, load the bare `simpleLayout`
  * and let the picker do the slow legacy path.
@@ -1773,23 +1785,20 @@ export async function handleSwitchToSimpleMode(
       return;
     }
 
-    const resolvedId = await withTimeout(
-      getMostRecentUsableProjectId,
-      COLD_START_LOOKUP_TIMEOUT_MS,
-    );
-    if (resolvedId === LOOKUP_TIMED_OUT) {
+    const resolved = await withTimeout(getMostRecentUsableProjectId, COLD_START_LOOKUP_TIMEOUT_MS);
+    if (resolved === LOOKUP_TIMED_OUT) {
       logger.warn(
         `Timed out after ${COLD_START_LOOKUP_TIMEOUT_MS}ms resolving a usable most-recent project while switching to Simple mode; loading the bare layout instead.`,
       );
     }
-    if (!resolvedId || resolvedId === LOOKUP_TIMED_OUT) {
+    if (!resolved || resolved === LOOKUP_TIMED_OUT) {
       await loadLayoutWithWarning(generation);
       return;
     }
-    // Populate the cache so the next switch can take the fast path.
-    setLastOpenedProject({ id: resolvedId });
-    await runProjectBoundSimpleSwitch(resolvedId, generation);
-    switchedProjectId = resolvedId;
+    // The fast path trusts the cache without a lookup, so only a verified pick may go in it.
+    if (resolved.isVerifiedUsable) setLastOpenedProject({ id: resolved.projectId });
+    await runProjectBoundSimpleSwitch(resolved.projectId, generation);
+    switchedProjectId = resolved.projectId;
   } catch (err) {
     // `runProjectBoundSimpleSwitch` logs its own warning and deliberately rethrows on failure (see
     // its own catch/comment), so this catch is the normal recovery point when the project-bound load
@@ -1954,22 +1963,27 @@ function waitForNextPaint(): Promise<void> {
 }
 
 /**
- * Resolves the most-recently-opened project id that's usable as a Simple-mode switch target: the
- * first entry in `recentlyOpenedProjects` (most-recent first, already capped at
- * `MAX_RECENT_PROJECTS` by the provider) that isn't a published resource, or `undefined` if the
- * list holds none. Mirrors `tryOpenFromRecentlyOpened`'s same try-next-candidate pattern in
- * `platform-scripture-editor.utils.ts` (the default project picker's own recents fallback) - but
- * scoped to what this fast-path switch needs: a project id, not an opened editor. A published
- * resource is never a valid target here, matching `cacheLastOpenedSimpleProject`'s exclusion on the
- * live event-driven cache-write path - this is a different mechanism (a one-shot recents read, not
- * a webview event), so it needs its own check to stay consistent with that one.
+ * Resolves the most-recently-opened project that's usable as a Simple-mode switch target: the first
+ * entry in `recentlyOpenedProjects` (most-recent first, already capped at `MAX_RECENT_PROJECTS` by
+ * the provider) that isn't a published resource or otherwise unsupported, or `undefined` if the
+ * list holds none. A candidate whose lookup failed counts as usable, and comes back with
+ * `isVerifiedUsable: false` so the caller does not cache it. Mirrors `tryOpenFromRecentlyOpened`'s
+ * same try-next-candidate pattern in `platform-scripture-editor.utils.ts` (the default project
+ * picker's own recents fallback) - but scoped to what the project-bound switch needs: a project id,
+ * not an opened editor. An unusable project is never a valid target here, matching
+ * `cacheLastOpenedSimpleProject`'s exclusion on the live event-driven cache-write path - this is a
+ * different mechanism (a one-shot recents read, not a webview event), so it needs its own check to
+ * stay consistent with that one.
  *
  * The whole walk (recents fetch + every candidate's metadata lookup) shares one bound from the
  * caller ({@link COLD_START_LOOKUP_TIMEOUT_MS}, via `withTimeout`), not a bound per candidate -
- * otherwise a full walk of a slow list could take several times the intended "fast path" budget.
- * That shared bound is also why the candidates are checked concurrently rather than one at a time.
+ * otherwise a full walk of a slow list could take several times the project-bound switch's intended
+ * budget. That shared bound is also why the candidates are checked concurrently rather than one at
+ * a time.
  */
-async function getMostRecentUsableProjectId(): Promise<string | undefined> {
+async function getMostRecentUsableProjectId(): Promise<
+  { projectId: string; isVerifiedUsable: boolean } | undefined
+> {
   try {
     const recentsProvider = await dataProviderService.get(
       'platformScripture.recentlyOpenedProjects',
@@ -1978,15 +1992,18 @@ async function getMostRecentUsableProjectId(): Promise<string | undefined> {
     const recents = await recentsProvider.getRecentProjects(undefined);
     if (!Array.isArray(recents)) return undefined;
     // Checked CONCURRENTLY, then picked in recents order. Checking them one at a time would stop
-    // at the first usable candidate and so issue fewer lookups, but every published resource ahead
+    // at the first usable candidate and so issue fewer lookups, but every unusable candidate ahead
     // of that candidate adds a full round trip - `getMetadataForProject` waits on a PDP factory and
     // then retries - and the whole walk shares one {@link COLD_START_LOOKUP_TIMEOUT_MS} budget. A
-    // run of resources at the head of the list could therefore exhaust the budget and leave Simple
-    // mode with no project at all, which became reachable once the titlebar picker started
-    // offering read-only projects. The list is already capped at `MAX_RECENT_PROJECTS`, so the
-    // extra lookups are bounded, and concurrently they cost about what one costs.
-    const publishedFlags = await Promise.all(recents.map(resolveProjectIsPublished));
-    return recents.find((_candidateId, index) => !publishedFlags[index]);
+    // run of unusable candidates at the head of the list could therefore exhaust the budget and
+    // leave Simple mode with no project at all - a real case, since the title bar picker opens
+    // read-only resources and each one opened goes to the head of the list. It is capped at
+    // `MAX_RECENT_PROJECTS`, so the extra lookups are bounded, and concurrently they cost about
+    // what one costs.
+    const usabilities = await Promise.all(recents.map(resolveSimpleSwitchCandidateUsability));
+    const index = usabilities.findIndex((usability) => usability !== 'unusable');
+    if (index < 0) return undefined;
+    return { projectId: recents[index], isVerifiedUsable: usabilities[index] === 'usable' };
   } catch (err) {
     // Distinct from a timeout (logged separately by the caller, which races this whole function
     // against COLD_START_LOOKUP_TIMEOUT_MS via withTimeout): this is a genuine failure of the
@@ -2001,21 +2018,30 @@ async function getMostRecentUsableProjectId(): Promise<string | undefined> {
 }
 
 /**
- * Resolves whether a candidate project from {@link getMostRecentUsableProjectId} is a published
- * (read-only) resource. Defaults to `false` on a lookup failure, matching `platform.isPublished`'s
- * own "absent means not a resource" default (see `project-metadata.model.ts`) - the safer
- * assumption is to proceed with the candidate rather than silently skip it over a transient lookup
- * error.
+ * Whether a project can be a Simple-mode switch target: not a published (read-only) resource, and
+ * no `unsupportedReason` (see `ProjectMetadata.unsupportedReason`). Read-only is a separate
+ * question (`platform.isEditable`).
  */
-async function resolveProjectIsPublished(projectId: string): Promise<boolean> {
+function isUsableForSimple(metadata: ProjectMetadata): boolean {
+  return !metadata.isPublished && !metadata.unsupportedReason;
+}
+
+/**
+ * Looks up whether a candidate from {@link getMostRecentUsableProjectId} is usable (see
+ * {@link isUsableForSimple}). A failed lookup is `'unverified'`, which the caller treats as usable -
+ * a transient error must not skip a real project - but never caches.
+ */
+async function resolveSimpleSwitchCandidateUsability(
+  projectId: string,
+): Promise<'usable' | 'unusable' | 'unverified'> {
   try {
     const metadata = await projectLookupService.getMetadataForProject(projectId);
-    return metadata.isPublished === true;
+    return isUsableForSimple(metadata) ? 'usable' : 'unusable';
   } catch (err) {
     logger.warn(
-      `Could not resolve whether project ${projectId} is a published resource while switching to Simple mode, assuming it is not: ${getErrorMessage(err)}`,
+      `Could not resolve whether project ${projectId} is usable while switching to Simple mode, assuming it is: ${getErrorMessage(err)}`,
     );
-    return false;
+    return 'unverified';
   }
 }
 
@@ -2040,6 +2066,41 @@ function finalizeProjectSwitch(projectId: string): void {
   sendCommand('platformScriptureEditor.finalizeProjectSwitch', projectId).catch((err: unknown) => {
     logger.warn(
       `Failed to finalize project switch for project ${projectId} after Simple-mode switch: ${getErrorMessage(err)}`,
+    );
+  });
+}
+
+/**
+ * The project the Simple-mode Scripture Editor in this window is showing, or `undefined` when this
+ * window has no such tab. Every tab of the Simple layout is bound to that one project.
+ *
+ * Read from the dock, never from `getLastOpenedProject`: that cache is one key for the whole
+ * application, and a window left in Simple mode by a close that failed during the switch to Simple
+ * never loaded the Simple layout — reading the cache there would sync the primary window's project
+ * a second time.
+ */
+function getSimpleEditorProjectId(): string | undefined {
+  try {
+    return getDockLayoutSync()
+      .getAllWebViewDefinitions()
+      .find((definition) => simpleEditorTabIds.has(definition.id))?.projectId;
+  } catch (err) {
+    logger.warn(
+      `Could not read which project the Simple-mode Scripture Editor is showing, so nothing typed in Simple mode is synced on the switch to Power mode: ${getErrorMessage(err)}`,
+    );
+    return undefined;
+  }
+}
+
+/**
+ * Asks the Scripture Editor extension to send what was typed in Simple mode, now that the user has
+ * switched to Power mode. Fire-and-forget, after the Power layout has loaded: the switch must not
+ * wait on a send/receive, and the command decides for itself whether there is anything to send.
+ */
+function syncOnSwitchToPower(projectId: string): void {
+  sendCommand('platformScriptureEditor.syncOnSwitchToPower', projectId).catch((err: unknown) => {
+    logger.warn(
+      `Failed to sync project ${projectId} after the switch to Power mode: ${getErrorMessage(err)}`,
     );
   });
 }
@@ -2116,6 +2177,7 @@ export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo {
     tabTitle,
     tabTooltip,
     tabIconUrl,
+    tabIconName,
     content,
     minWidth,
     minHeight,
@@ -2699,6 +2761,28 @@ async function admitContentToDock(operation: string): Promise<void> {
 }
 
 /**
+ * Waits, re-arming up to the full patient budget, for a web view provider whose owning extension
+ * may still be activating — see {@link webViewProviderService.getWebViewProvider}'s
+ * `shouldWaitPatiently` parameter. Resolves once the provider registers (discarding the value —
+ * callers that need the provider itself ask for it again, cheaply, once it is known to exist) or
+ * throws once the budget is spent.
+ *
+ * Called by `retrieveWebViewContent` — both its tab-restore and extension-reload-re-fetch callers —
+ * BEFORE `reloadWebView`, rather than threading a patience flag through
+ * `reloadWebView`/`openOrReloadWebView` to wait internally, because `openOrReloadWebView` reads the
+ * dock and mints the nonce the web view provider's `getWebView` call relies on — and both are
+ * supposed to describe the dock as it is right now, not as it was whenever the provider wait
+ * finally settles. Waiting here first keeps the window between that read and the write it leads to
+ * at its ordinary short size regardless of how long the provider takes, so a tab that leaves the
+ * dock mid-wait is simply gone by the time `reloadWebView` reads it (bailing out before any
+ * controller is ever created) instead of leaving one orphaned by a dock-membership check that only
+ * ever cleaned up a nonce.
+ */
+export async function waitForWebViewProviderToRegister(webViewType: string): Promise<void> {
+  await webViewProviderService.getWebViewProvider(webViewType, true);
+}
+
+/**
  * Creates a new WebView or reloads an existing one based on the saved WebView definition.
  *
  * @param savedWebViewDefinition Saved WebView definition to pass to
@@ -2739,8 +2823,11 @@ export async function openOrReloadWebView(
   // trace once it is over — recorded here, ahead of both, so the recheck further down can tell.
   const layoutLoadGenerationBeforeProvider = layoutLoadGeneration;
 
-  // Get the WebView definition from the webview provider
-  const webViewProvider = await webViewProviderService.getWebViewProvider(webViewType);
+  // Get the WebView definition from the webview provider. A caller who can afford to wait longer
+  // for a still-activating extension (tab restore) does so itself, via
+  // `waitForWebViewProviderToRegister`, before ever reaching here — see that function's doc for why
+  // the wait does not belong on this side of the dock read.
+  const webViewProvider = await webViewProviderService.getWebViewProvider(webViewType, false);
   if (!webViewProvider)
     throw new Error(`getWebView: Cannot find Web View Provider for webview type ${webViewType}`);
 

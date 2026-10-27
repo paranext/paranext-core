@@ -2104,7 +2104,9 @@ declare module 'platform-scripture' {
    * - `running`: The job is currently running
    * - `stopped`: The job was stopped by the user
    * - `errored`: The job itself failed and is no longer running. A check that could not run does not
-   *   make the job errored; see {@link CheckJobStatusReport.checkErrors}.
+   *   make the job errored; see {@link CheckJobStatusReport.checkErrors}. A project that cannot be
+   *   opened in Platform.Bible does (see `ProjectMetadata.unsupportedReason`): the job stops there,
+   *   and its error message ends with the `(PROJECT_OPEN_BLOCKED)` sentinel.
    * - `completed`: The job finished. Checks that could not run are listed in
    *   {@link CheckJobStatusReport.checkErrors}
    */
@@ -2727,6 +2729,16 @@ declare module 'platform-scripture' {
     /** Names of admins on this project. Only filled if project is new */
     adminNames?: string[];
     warnings?: string[];
+    /**
+     * Localize key explaining why this project cannot be opened (see
+     * `ProjectMetadata.unsupportedReason`); omitted when it can be. Only opening is blocked:
+     * Send/Receive and download stay allowed, so mark the row with the reason rather than disabling
+     * its Send/Receive actions.
+     *
+     * Producers set it for local and server-only projects alike. When it is absent, callers fall
+     * back to the local project's metadata.
+     */
+    unsupportedReason?: string;
   };
 
   /**
@@ -3100,6 +3112,27 @@ declare module 'platform-scripture' {
   }
 
   // #endregion Markers Checklist Types
+
+  /**
+   * The copyright notice to show when a project is opened: the value of the
+   * `platformScripture.copyrightNotice` project setting. Treat a `kind` not listed here as `none`,
+   * since a newer backend may add kinds.
+   *
+   * - `none`: no notice.
+   * - `notification`: any project whose copyright starts with "Notification:", as the ESV's does.
+   *   `bannerText` is the rest of that first paragraph and `details` the rest of the copyright.
+   * - `restrictedLicense`: a resource that is a traditionally licensed Biblica text, for reference
+   *   only and not to be used as the basis of a new translation. Only resources get it.
+   *   `copyrightYears` is the years in its copyright statement (e.g. "1973, 1978, 1984, 2011"), or
+   *   "" when it names none.
+   *
+   * `name` is the project's short name and `fullName` its full name, which is the short name when
+   * it has none. `details` is plain text with one paragraph per line (`\n`), never HTML.
+   */
+  export type CopyrightNotice =
+    | { kind: 'none' }
+    | { kind: 'notification'; name: string; fullName: string; bannerText: string; details: string }
+    | { kind: 'restrictedLicense'; name: string; fullName: string; copyrightYears: string };
 }
 
 declare module 'papi-shared-types' {
@@ -3137,6 +3170,7 @@ declare module 'papi-shared-types' {
     ResourceReferenceList,
     IRecentlyOpenedProjectsService,
     IFindHistoryDataProvider,
+    CopyrightNotice,
   } from 'platform-scripture';
 
   export interface ProjectDataProviderInterfaces {
@@ -3210,7 +3244,10 @@ declare module 'papi-shared-types' {
      *   from) — not a project id. The project is resolved from it internally via
      *   `papi.webViews.getOpenWebViewDefinition`.
      * @returns Id of the newly opened characters inventory web view, or `undefined` if no web view
-     *   id was provided or the web view has no project (nothing is opened in that case).
+     *   id was provided, the web view has no project, or the project cannot be opened (see
+     *   `ProjectMetadata.unsupportedReason`), in which case the user is told why. Nothing is opened
+     *   in those cases. If the project's metadata lookup fails or takes over 1.5 seconds, the tool
+     *   opens anyway and the backend refuses the project's text.
      */
     'platformScripture.openCharactersInventory': (
       webViewId?: string | undefined,
@@ -3223,7 +3260,10 @@ declare module 'papi-shared-types' {
      *   from) — not a project id. The project is resolved from it internally via
      *   `papi.webViews.getOpenWebViewDefinition`.
      * @returns Id of the newly opened repeated-words inventory web view, or `undefined` if no web
-     *   view id was provided or the web view has no project (nothing is opened in that case).
+     *   view id was provided, the web view has no project, or the project cannot be opened (see
+     *   `ProjectMetadata.unsupportedReason`), in which case the user is told why. Nothing is opened
+     *   in those cases. If the project's metadata lookup fails or takes over 1.5 seconds, the tool
+     *   opens anyway and the backend refuses the project's text.
      */
     'platformScripture.openRepeatedWordsInventory': (
       webViewId?: string | undefined,
@@ -3236,7 +3276,10 @@ declare module 'papi-shared-types' {
      *   from) — not a project id. The project is resolved from it internally via
      *   `papi.webViews.getOpenWebViewDefinition`.
      * @returns Id of the newly opened markers inventory web view, or `undefined` if no web view id
-     *   was provided or the web view has no project (nothing is opened in that case).
+     *   was provided, the web view has no project, or the project cannot be opened (see
+     *   `ProjectMetadata.unsupportedReason`), in which case the user is told why. Nothing is opened
+     *   in those cases. If the project's metadata lookup fails or takes over 1.5 seconds, the tool
+     *   opens anyway and the backend refuses the project's text.
      */
     'platformScripture.openMarkersInventory': (
       webViewId?: string | undefined,
@@ -3249,7 +3292,10 @@ declare module 'papi-shared-types' {
      *   from) — not a project id. The project is resolved from it internally via
      *   `papi.webViews.getOpenWebViewDefinition`.
      * @returns Id of the newly opened punctuation inventory web view, or `undefined` if no web view
-     *   id was provided or the web view has no project (nothing is opened in that case).
+     *   id was provided, the web view has no project, or the project cannot be opened (see
+     *   `ProjectMetadata.unsupportedReason`), in which case the user is told why. Nothing is opened
+     *   in those cases. If the project's metadata lookup fails or takes over 1.5 seconds, the tool
+     *   opens anyway and the backend refuses the project's text.
      */
     'platformScripture.openPunctuationInventory': (
       webViewId?: string | undefined,
@@ -3270,8 +3316,10 @@ declare module 'papi-shared-types' {
      *   `papi.webViews.getOpenWebViewDefinition`, and in Power mode the panel is placed relative to
      *   that editor tab.
      * @returns Id of the opened, re-pointed, or fronted checks side panel web view, or `undefined`
-     *   if no editor web view id was provided or the web view has no project (nothing is opened in
-     *   that case).
+     *   if no editor web view id was provided, the web view has no project, or the project cannot
+     *   be opened (see `ProjectMetadata.unsupportedReason`), in which case the user is told why.
+     *   Nothing is opened in those cases. If the project's metadata lookup fails or takes over 1.5
+     *   seconds, the tool opens anyway and the backend refuses the project's text.
      */
     'platformScripture.openChecksSidePanel': (
       editorWebViewId?: string | undefined,
@@ -3365,8 +3413,11 @@ declare module 'papi-shared-types' {
      *   from) — not a project id. The target project is resolved from it internally via
      *   `papi.webViews.getOpenWebViewDefinition`.
      * @returns Id of the opened markers checklist web view, or `undefined` if no web view id was
-     *   provided or the web view has no project (nothing is opened in that case), or if the
-     *   provider did not create one.
+     *   provided, the web view has no project, or the project cannot be opened (see
+     *   `ProjectMetadata.unsupportedReason`), in which case the user is told why. Nothing is opened
+     *   in those cases. If the project's metadata lookup fails or takes over 1.5 seconds, the tool
+     *   opens anyway and the backend refuses the project's text. Also `undefined` if the provider
+     *   did not create one.
      * @experimental
      */
     'platformScripture.openMarkersChecklist': (
@@ -3397,7 +3448,10 @@ declare module 'papi-shared-types' {
      * @param intent Pass `'createMissingBook'` to open the dialog on its Create-books section with
      *   the calling editor's current book pre-selected, instead of the default view.
      * @returns Id of the Manage Books web view — the existing one if reused, or a newly opened one
-     *   — or `undefined` if the provider did not create one.
+     *   — or `undefined` if the project cannot be opened (see `ProjectMetadata.unsupportedReason`;
+     *   the user is told why and nothing is opened) or the provider did not create one. If the
+     *   project's metadata lookup fails or takes over 1.5 seconds, the tool opens anyway and the
+     *   backend refuses the project's text.
      * @experimental
      */
     'platformScripture.openManageBooks': (
@@ -3607,6 +3661,14 @@ declare module 'papi-shared-types' {
      * `†` (ViewUsfmXhtmlConverter.cs:73-74).
      */
     'platformScripture.crossRefCallers': string;
+
+    /**
+     * The copyright notice to show when this project is opened: `restrictedLicense` only for
+     * resources; `notification` for any project whose copyright starts with "Notification:";
+     * otherwise `none`. Computed from its copyright, names and DBL id; read-only through the
+     * settings surface.
+     */
+    'platformScripture.copyrightNotice': CopyrightNotice;
   }
 
   export interface NetworkEvents {

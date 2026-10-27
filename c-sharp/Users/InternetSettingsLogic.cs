@@ -1,3 +1,5 @@
+using System.Xml;
+using System.Xml.Linq;
 using Paratext.Data;
 using Paratext.Data.Users;
 
@@ -49,4 +51,40 @@ internal static class InternetSettingsLogic
         && requested != InternetUse.ProxyOnly
             ? requested
             : null;
+
+    /// <summary>
+    /// The RawStatus to save at startup in place of <paramref name="savedRawStatus"/>, or null to
+    /// leave it. A saved <see cref="InternetUse.VpnRequired"/> — "Block internet when in sensitive
+    /// locations", which Platform.Bible does not implement yet — becomes
+    /// <see cref="InternetUse.Disabled"/>, the most restrictive option the app offers.
+    /// </summary>
+    // TODO(PT-4900): when the sensitive-locations option is built, stop replacing a VpnRequired the
+    // user chose. Deleting this outright would turn a file that older Platform.Bible builds saved
+    // for "Disable access to some Bible translation services" into "sensitive locations".
+    public static InternetUse? MigratedRawStatus(InternetUse savedRawStatus) =>
+        savedRawStatus == InternetUse.VpnRequired ? InternetUse.Disabled : null;
+
+    /// <summary>
+    /// The <c>PermittedInternetUse</c> saved in an <c>InternetSettings.xml</c> document, or null when
+    /// it is missing, is not one of the <see cref="InternetUse"/> names, or the document is not
+    /// well-formed XML.
+    /// </summary>
+    public static InternetUse? ParsePermittedInternetUse(string xml)
+    {
+        XDocument document;
+        try
+        {
+            // ParatextData writes a byte order mark, which XDocument.Parse rejects in a string.
+            document = XDocument.Parse(xml.TrimStart('﻿'));
+        }
+        catch (XmlException)
+        {
+            return null;
+        }
+        var value = document.Root?.Element("PermittedInternetUse")?.Value.Trim();
+        // By name only: Enum.TryParse also accepts any number as a value of its own.
+        return Enum.GetValues<InternetUse>()
+            .Select(internetUse => (InternetUse?)internetUse)
+            .FirstOrDefault(internetUse => internetUse.ToString() == value);
+    }
 }

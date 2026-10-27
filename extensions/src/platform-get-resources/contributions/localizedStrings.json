@@ -1,19 +1,44 @@
 {
-  "metadata": {},
+  "metadata": {
+    "%resources_filterInput%": {
+      "deprecationInfo": {
+        "date": "2026-10-19",
+        "message": "Superseded by %resources_filterInput_searchPlaceholder%."
+      }
+    },
+    "%resources_filterInput_searchPlaceholder%": {
+      "fallbackKey": "%resources_filterInput%"
+    },
+    "%mainMenu_open%": {
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "Relabeled to \"Open\". The new key is %mainMenu_open_2%."
+      }
+    },
+    "%mainMenu_open_2%": {
+      "fallbackKey": "%mainMenu_open%"
+    }
+  },
   "localizedStrings": {
     "en": {
       "%new_tab_dialog_title%": "New Tab",
       "%resources_action%": "Action",
       "%resources_actionDidNotTakeEffect%": "This change couldn't be confirmed. The list of resources may be out of date. Try again.",
       "%resources_activity%": "Activity",
+      "%resources_activity_tooltip%": "Last synchronized",
       "%resources_any_language%": "Any",
       "%resources_any_type%": "Any",
+      "%resources_clearFilters%": "Clear filters",
       "%resources_clearSearch%": "Clear Search",
+      "%resources_couldNotOpen%": "That couldn't be opened. Please try again.",
       "%resources_dialog_subtitle%": "Add resources to Home",
       "%resources_dialog_title%": "Get Resources",
       "%resources_downloadsUnavailable%": "Resource downloads aren't available on this installation.",
       "%resources_filterBy%": "Filter by",
+      "%resources_filterByValue%": "Filter by: {filter}",
+      "%resources_filter_all%": "All",
       "%resources_filterInput%": "Search by name, language, type",
+      "%resources_filterInput_searchPlaceholder%": "Search by name or language",
       "%resources_shortNameText%": "Name",
       "%resources_fullName%": "Full Name",
       "%resources_get%": "Get",
@@ -27,15 +52,22 @@
       "%resources_languages_noResults%": "No languages found",
       "%resources_languages_searchPlaceholder%": "Search languages…",
       "%resources_loading%": "Loading...",
+      "%resources_noParatextProjectsFound%": "No Paratext projects found.",
       "%resources_noProjects%": "Nothing here.",
       "%resources_noProjectsInstruction%": "To get started, ask a teammate to add you to a project, or get resources.",
       "%resources_noProjectsInstructionWithoutResources%": "To get started, ask a teammate to add you to a project.",
+      "%resources_noResourcesFound%": "No resources found.",
       "%resources_noSearchResults%": "Nothing found.",
       "%resources_noResults%": "No results found",
       "%resources_noResultsError%": "Unable to search for resources",
       "%resources_open%": "Open",
+      "%resources_paratextProjectReadOnly_tooltip%": "Paratext project (read-only)",
+      "%resources_paratextProject_tooltip%": "Paratext project",
+      "%resources_paratextProjects_label%": "Paratext projects",
       "%resources_providerNotReady%": "Resources aren't ready yet. Please try again in a moment.",
       "%resources_remove%": "Remove",
+      "%resources_resource_tooltip%": "Resource",
+      "%resources_resources_label%": "Resources",
       "%resources_results%": "results",
       "%resources_retry%": "Try again",
       "%resources_searchedFor%": "Searched for",
@@ -61,21 +93,28 @@
       "%settings_get_resources_group1_label%": "Get Resources Project Settings",
       "%settings_get_resources_excludePdpFactoryIdsInHome_label%": "PDP Factory IDs to exclude in Home",
       "%settings_get_resources_excludePdpFactoryIdsInHome_description%": "List of PDP Factory IDs to exclude when searching for projects to display in the Home projects list",
-      "%mainMenu_open%": "Open..."
+      "%mainMenu_open%": "Open...",
+      "%mainMenu_open_2%": "Open"
     },
     "es": {
       "%new_tab_dialog_title%": "Nueva pestaña",
       "%resources_action%": "Acción",
       "%resources_actionDidNotTakeEffect%": "No se pudo confirmar este cambio. Es posible que la lista de recursos esté desactualizada. Inténtelo de nuevo.",
       "%resources_activity%": "Actividad",
+      "%resources_activity_tooltip%": "Última sincronización",
       "%resources_any_language%": "Sin filtro",
       "%resources_any_type%": "Sin filtro",
+      "%resources_clearFilters%": "Borrar filtros",
       "%resources_clearSearch%": "Borrar búsqueda",
+      "%resources_couldNotOpen%": "No se pudo abrir. Inténtelo de nuevo.",
       "%resources_dialog_subtitle%": "Agregar recursos a Inicio",
       "%resources_dialog_title%": "Obtener recursos",
       "%resources_downloadsUnavailable%": "Las descargas de recursos no están disponibles en esta instalación.",
       "%resources_filterBy%": "Filtrar por",
+      "%resources_filterByValue%": "Filtrar por: {filter}",
+      "%resources_filter_all%": "Todos",
       "%resources_filterInput%": "Buscar por nombre, idioma, tipo",
+      "%resources_filterInput_searchPlaceholder%": "Buscar por nombre o idioma",
       "%resources_shortNameText%": "Nombre",
       "%resources_fullName%": "Nombre completo",
       "%resources_get%": "Obtener",
@@ -89,15 +128,22 @@
       "%resources_languages_noResults%": "No se encontraron idiomas",
       "%resources_languages_searchPlaceholder%": "Buscar idiomas…",
       "%resources_loading%": "Cargando...",
+      "%resources_noParatextProjectsFound%": "No se encontraron proyectos Paratext.",
       "%resources_noProjects%": "Nada para mostrar",
       "%resources_noProjectsInstruction%": "Para comenzar, pide a un compañero que te agregue a un proyecto, o consigue recursos.",
       "%resources_noProjectsInstructionWithoutResources%": "Para comenzar, pide a un compañero que te agregue a un proyecto.",
+      "%resources_noResourcesFound%": "No se encontraron recursos.",
       "%resources_noSearchResults%": "No se encontraron resultados.",
       "%resources_noResults%": "No se encontraron resultados.",
       "%resources_noResultsError%": "Se produjo un error al buscar recursos.",
       "%resources_open%": "Abrir",
+      "%resources_paratextProjectReadOnly_tooltip%": "Proyecto Paratext (solo lectura)",
+      "%resources_paratextProject_tooltip%": "Proyecto Paratext",
+      "%resources_paratextProjects_label%": "Proyectos Paratext",
       "%resources_providerNotReady%": "Los recursos aún no están listos. Vuelva a intentarlo en un momento.",
       "%resources_remove%": "Eliminar",
+      "%resources_resource_tooltip%": "Recurso",
+      "%resources_resources_label%": "Recursos",
       "%resources_results%": "resultados",
       "%resources_retry%": "Reintentar",
       "%resources_searchedFor%": "Buscado:",
@@ -123,7 +169,8 @@
       "%settings_get_resources_group1_label%": "Obtención de recursos",
       "%settings_get_resources_excludePdpFactoryIdsInHome_label%": "IDs de PDP Factory a excluir en Inicio",
       "%settings_get_resources_excludePdpFactoryIdsInHome_description%": "Lista de IDs de PDP Factory a excluir al buscar proyectos para mostrar en la lista de proyectos de Inicio",
-      "%mainMenu_open%": "Abrir..."
+      "%mainMenu_open%": "Abrir...",
+      "%mainMenu_open_2%": "Abrir"
     }
   }
 }

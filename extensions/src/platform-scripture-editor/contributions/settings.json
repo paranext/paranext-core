@@ -6,6 +6,7 @@
       "platformScriptureEditor.enableScriptureTextGrid": {
         "label": "%settings_platformScriptureEditor_enableScriptureTextGrid_label%",
         "description": "%settings_platformScriptureEditor_enableScriptureTextGrid_description%",
+        "isHidden": true,
         "default": true
       },
       "platformScriptureEditor.markerSettleDelayMs": {

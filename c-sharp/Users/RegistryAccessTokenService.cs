@@ -127,8 +127,7 @@ internal sealed class RegistryAccessTokenService(
                 extensionName,
                 resource,
                 PlatformErrorCodes.Unavailable,
-                "Checking the Internet & connectivity settings, including this computer's location, "
-                    + "took too long."
+                "Reading the Paratext registration and Internet & connectivity settings took too long."
             );
         }
         catch (Exception ex)
@@ -150,19 +149,24 @@ internal sealed class RegistryAccessTokenService(
                 "There is no valid Paratext registration. The user must register before a Registry "
                     + "access token can be issued."
             );
-        // Follows ParatextData's own rule for direct Registry calls such as registration: refuse
-        // only when the effective status is Disabled. InternetServicesGate's stricter saved-setting
-        // check covers Send/Receive and the DBL, not every Registry call.
+        // A saved VpnRequired fails closed wherever the computer is, as it does in
+        // InternetServicesGate: the app does not implement that option yet (PT-4900), and startup
+        // replaces it with Disabled, so it is only still saved if that migration failed.
+        if (user.IsVpnRequired)
+            return Fail(
+                extensionName,
+                resource,
+                PlatformErrorCodes.FailedPrecondition,
+                "\"Block internet when in sensitive locations\" is selected in Internet & "
+                    + "connectivity settings, which this version of Paratext does not support yet."
+            );
         if (user.IsInternetDisabled)
             return Fail(
                 extensionName,
                 resource,
                 PlatformErrorCodes.FailedPrecondition,
-                user.IsVpnRequired
-                    ? "\"Disable access to some Bible translation services\" is selected in Internet & "
-                        + "connectivity settings, and this computer's location is restricted or "
-                        + "could not be determined."
-                    : "Internet access is turned off in Internet & connectivity settings."
+                "\"Disable access to some Bible translation services\" is selected in "
+                    + "Internet & connectivity settings."
             );
         if (!user.IsConnected)
             return Fail(

@@ -9,8 +9,8 @@ import { getErrorMessage } from 'platform-bible-utils';
  *
  * - `granted`: the first-run wizard has been answered, and the user has not deferred sync this
  *   session.
- * - `unconfirmed`: the wizard has not been answered yet, or `platform.firstRunComplete` could not be
- *   read.
+ * - `unconfirmed`: the wizard has not been answered yet.
+ * - `unreadable`: `platform.firstRunComplete` could not be read.
  * - `deferred`: the user chose "Don't sync yet" in the wizard earlier in this app session.
  *
  * Derived from the `platform.getAutomaticSyncConsent` command's declaration, which exposes the same
@@ -26,6 +26,7 @@ export const WITHHELD_SYNC_CONSENT_REASONS: Record<
   string
 > = {
   unconfirmed: 'first-run sync consent not confirmed',
+  unreadable: 'first-run sync consent could not be read',
   deferred: `automatic sync deferred for this session ("Don't sync yet")`,
 };
 
@@ -50,20 +51,22 @@ export function deferAutomaticSyncForSession(): void {
  * Simple-mode sync must get `granted` from this before it starts: the startup, shutdown and
  * window-close syncs call it directly, and the extension host reaches it through the
  * `platform.getAutomaticSyncConsent` command. The rationale and rejected alternatives are in
- * `adr-first-run-sync-consent` (`.context/standards/Architecture-Decisions.md`).
+ * `adr-first-run-sync-consent` (`.context/standards/Architecture-Decisions.md`). The sync on a
+ * switch from Simple to Power asks too, but lets `unconfirmed` through: see
+ * `adr-switch-to-power-sends-unsent-changes`.
  *
  * TODO(PT-4605): the Send/Receive extension's `paratextBibleSendReceive.syncOpenProjects` can start
  * an automatic sync that never asks this gate; core has no call site to gate it at.
  *
  * Fails CLOSED: only a literal `true` in `platform.firstRunComplete` counts as answered, and an
- * unreadable flag reads as `unconfirmed`. Never rejects, so callers need no try/catch of their
- * own.
+ * unreadable flag reads as `unreadable`, which withholds the sync like every answer but `granted`.
+ * Never rejects, so callers need no try/catch of their own.
  *
- * Precondition: the caller has already established that the app is in Simple mode.
- * `platform.firstRunComplete` is only ever written by the Simple-mode wizard, so in Power mode it
- * stays `false` forever, and consulting this there would permanently disable Power mode's scheduled
- * sync. An interface mode that cannot be read must not become a way past this gate: treat it as
- * Simple, or skip the sync.
+ * Precondition: the caller has already established that the app is in Simple mode (except the
+ * switch-to-Power sync above, which does not act on `unconfirmed`). `platform.firstRunComplete` is
+ * only ever written by the Simple-mode wizard, so in Power mode it stays `false` forever, and
+ * consulting this there would permanently disable Power mode's scheduled sync. An interface mode
+ * that cannot be read must not become a way past this gate: treat it as Simple, or skip the sync.
  */
 export async function getAutomaticSyncConsent(): Promise<AutomaticSyncConsent> {
   if (isAutomaticSyncDeferred) return 'deferred';
@@ -71,12 +74,11 @@ export async function getAutomaticSyncConsent(): Promise<AutomaticSyncConsent> {
     const firstRunComplete = await settingsService.get('platform.firstRunComplete');
     return firstRunComplete === true ? 'granted' : 'unconfirmed';
   } catch (e) {
-    // The call site's skip line cannot tell an unreadable flag from an unfinished wizard, so this
-    // warn is the only record of which one closed the gate.
+    // The call site's skip line names the answer; this warn carries the error behind it
     logger.warn(
-      `Could not read platform.firstRunComplete; skipping the automatic sync: ${getErrorMessage(e)}`,
+      `Could not read platform.firstRunComplete; answering unreadable: ${getErrorMessage(e)}`,
     );
-    return 'unconfirmed';
+    return 'unreadable';
   }
 }
 

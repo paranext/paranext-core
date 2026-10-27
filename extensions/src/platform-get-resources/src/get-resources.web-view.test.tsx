@@ -1,11 +1,10 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import * as React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { WebViewProps } from '@papi/core';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { getErrorMessage } from 'platform-bible-utils';
 import type { ResourceAction } from './get-resources.component';
+import { renderGetResourcesWebView } from './get-resources.web-view.test-utils';
 
 const mocks = vi.hoisted(() => {
   /** Rejection messages the table saw, which is how the dialog reports a failure to the user. */
@@ -14,6 +13,7 @@ const mocks = vi.hoisted(() => {
     sendCommand: vi.fn(),
     installDblResource: vi.fn(async () => {}),
     uninstallDblResource: vi.fn(async () => {}),
+    openResourceFrom: vi.fn<(where: string, projectId: string) => Promise<void>>(async () => {}),
     actionErrors,
   };
 });
@@ -31,6 +31,8 @@ vi.mock('@papi/frontend/react', () => ({
   }),
 }));
 
+vi.mock('./open-home-item', () => ({ openResourceFrom: mocks.openResourceFrom }));
+
 // Stand in for the resource table: this test is about which uid the dialog reports after an action,
 // not about how the table renders. The two buttons are the table's two actions.
 vi.mock('./get-resources.component', async (importOriginal) => {
@@ -39,9 +41,11 @@ vi.mock('./get-resources.component', async (importOriginal) => {
     ...actual,
     GetResources: ({
       onInstallOrRemoveResource,
+      onOpenResource,
       idsBeingHandled,
     }: {
       onInstallOrRemoveResource?: (dblEntryUid: string, action: ResourceAction) => unknown;
+      onOpenResource?: (projectId: string) => unknown;
       idsBeingHandled?: string[];
     }) => {
       // The real table awaits this call and renders whatever it rejects with; ignoring the promise
@@ -61,6 +65,9 @@ vi.mock('./get-resources.component', async (importOriginal) => {
           <button type="button" onClick={() => act('remove')}>
             remove
           </button>
+          <button type="button" onClick={() => onOpenResource?.('proj-1')}>
+            open
+          </button>
           {/* The rows showing a spinner: the real table renders one per id in this list. */}
           <span data-testid="handling">{(idsBeingHandled ?? []).join(',')}</span>
         </div>
@@ -68,19 +75,6 @@ vi.mock('./get-resources.component', async (importOriginal) => {
     },
   };
 });
-
-// The file assigns to globalThis.webViewComponent as its side effect, so it must be imported after
-// the mocks above; vitest hoists those regardless of position.
-// eslint-disable-next-line import/first
-import './get-resources.web-view';
-
-/** Reads the component set by the web view file's side effect. */
-function getResourcesDialog(): React.ComponentType<WebViewProps> {
-  // globalThis is a special interface; cast to access a property added at runtime.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return (globalThis as Record<string, unknown>)
-    .webViewComponent as React.ComponentType<WebViewProps>;
-}
 
 /** Every `refreshResourceFlags` call this dialog has made. */
 function refreshCalls(): unknown[][] {
@@ -95,11 +89,7 @@ function refreshCalls(): unknown[][] {
  * refresh read the mount's instead.
  */
 async function renderDialogAndSettle() {
-  // `useWebViewState` backs the type and language filters; the stub table reads neither.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const props = { useWebViewState: () => [[], vi.fn()] } as unknown as WebViewProps;
-  const GetResourcesDialog = getResourcesDialog();
-  const rendered = render(<GetResourcesDialog {...props} />);
+  const rendered = renderGetResourcesWebView();
   await waitFor(() => expect(refreshCalls()).toHaveLength(1));
   return rendered;
 }
@@ -193,5 +183,37 @@ describe('GetResourcesDialog action reporting', () => {
 
     await waitFor(() => expect(screen.getByTestId('handling')).toHaveTextContent(''));
     expect(mocks.actionErrors).toEqual([]);
+  });
+});
+
+/*
+ * Each Open queues a whole show behind any already running, so a resource still opening ignores
+ * further opens, as in Home.
+ */
+describe('GetResourcesDialog opening a resource', () => {
+  it('ignores repeat opens of a resource that is still opening', async () => {
+    mocks.sendCommand.mockImplementation(async () => undefined);
+    let finishOpen: () => void = () => {};
+    mocks.openResourceFrom.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishOpen = resolve;
+        }),
+    );
+    renderGetResourcesWebView();
+
+    fireEvent.click(screen.getByRole('button', { name: 'open' }));
+    fireEvent.click(screen.getByRole('button', { name: 'open' }));
+    expect(mocks.openResourceFrom).toHaveBeenCalledTimes(1);
+
+    finishOpen();
+    // Lets the finished open release the resource before it is opened again.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'open' }));
+
+    expect(mocks.openResourceFrom).toHaveBeenCalledTimes(2);
+    expect(mocks.openResourceFrom).toHaveBeenCalledWith('Get Resources', 'proj-1');
   });
 });

@@ -5,6 +5,7 @@ import {
   getDefaultViewOptions,
 } from '@eten-tech-foundation/platform-editor';
 import { BaseOrModelTextExplanation } from 'platform-bible-react/experimental';
+import { ChevronDown } from 'lucide-react';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
@@ -26,16 +27,25 @@ import {
 import type {
   DblResourceReference,
   EffectiveResourceReference,
-  ProjectReference,
+  EffectiveResourceReferenceList,
   ResourceReferenceList,
 } from 'platform-scripture';
-import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ComponentProps,
+  ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { selectTextConnection } from './select-dbl-resource';
 import {
   getModelResourceProjectId,
   getRefLabel,
+  getResourceReferenceBareId,
+  getResourceReferenceRowId,
   isDblResourceReference,
-  isProjectReference,
 } from './resource-reference.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
@@ -54,6 +64,7 @@ import { blockCopyWhileChapterLoads } from './copy-limit/resolve-copy-limit.util
 import { ResourceBookNotAvailable } from './resource-book-not-available.component';
 import { ResourceBlankChapter } from './resource-blank-chapter.component';
 import { ResourceTextUnavailable } from './resource-text-unavailable.component';
+import { isFocusDroppedInThisDocument } from './use-focus-replaced-content.hook';
 import {
   isBlankChapterOnScreen,
   isMissingBookError,
@@ -96,6 +107,13 @@ const localize = (strings: ModelTextPanelLocalizedStrings, key: ModelTextPanelLo
   strings[key] ?? key;
 
 const DEFAULT_SCR_REF: SerializedVerseRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
+
+/**
+ * How long a written pick waits for the list it wrote to arrive. An update normally lands within
+ * moments of the write; this bounds the wait for one that never comes (the settings subscription
+ * failed, say), which would otherwise leave "Selecting…" up until the panel is reloaded.
+ */
+export const WRITTEN_PICK_MAX_WAIT_MS = 10_000;
 
 export type ModelTextPanelProps = {
   /** Localized strings; import `MODEL_TEXT_PANEL_STRING_KEYS` to resolve them. */
@@ -163,6 +181,11 @@ export type ModelTextPanelProps = {
   resourceCopyLimit: number | undefined;
   /** Logger forwarded to the editor (the webview supplies the PAPI logger; stories may omit it). */
   logger?: ComponentProps<typeof Editorial>['logger'];
+  /**
+   * The model text's copyright notice, shown below the header. The web view supplies it because
+   * reading the notice needs PAPI.
+   */
+  copyrightNotice?: ReactNode;
 };
 
 /**
@@ -188,6 +211,7 @@ export function ModelTextPanel({
   getResourceChapter,
   resourceCopyLimit,
   logger,
+  copyrightNotice,
 }: ModelTextPanelProps) {
   // --- Resolve the configured model text against the DBL resource list ---
 
@@ -202,6 +226,10 @@ export function ModelTextPanel({
   const modelTextLabel = effectiveModelText
     ? getRefLabel(effectiveModelText, dblResources)
     : undefined;
+  // Admin items are listed first, so the text on screen is the user's own only while the admin has
+  // chosen nothing. Only then can the user change it from this panel (the header and the
+  // missing-book message offer the picker); the admin's choice is changed in the team layout.
+  const isUserChosenModelText = effectiveModelText?.source === 'user';
 
   // Only show the tooltip when the label is actually clipped — an unconditional Tooltip would fire
   // on every hover, even when the full label already fits. The ref goes on the inner span that
@@ -440,47 +468,79 @@ export function ModelTextPanel({
 
   // --- Resource picker / selection ---
 
-  const currentModelTextIds = useMemo(() => {
-    const items = effectiveModelTexts?.items ?? [];
-    const dblItems = items.filter(
-      (r): r is EffectiveResourceReference & DblResourceReference => r.type === 'dblResource',
-    );
-    const adminDblItems = dblItems.filter((r) => r.source === 'admin');
-    const relevantDblItems =
-      adminDblItems.length > 0 ? adminDblItems : dblItems.filter((r) => r.source === 'user');
-    // Also include project reference IDs so locally-installed non-DBL resources (added as
-    // ProjectReferences) appear in the INCLUDED section when the picker reopens.
-    // Apply the same admin-precedence logic as DBL items.
-    const allProjectItems = items.filter((r): r is EffectiveResourceReference & ProjectReference =>
-      isProjectReference(r),
-    );
-    const adminProjectItems = allProjectItems.filter((r) => r.source === 'admin');
-    const relevantProjectItems =
-      adminProjectItems.length > 0
-        ? adminProjectItems
-        : allProjectItems.filter((r) => r.source === 'user');
-    const projectIds = relevantProjectItems.map((r) => r.id);
-    return [...relevantDblItems.map((r) => r.id), ...projectIds];
-  }, [effectiveModelTexts]);
+  // The picker lists these as "Already selected" and won't let them be picked. Every pick stays in
+  // the user's list behind the newer ones, so only the text on screen is passed: an earlier pick
+  // must stay pickable.
+  const currentModelTextId = effectiveModelText && getResourceReferenceBareId(effectiveModelText);
+  const currentModelTextIds = useMemo(
+    () => (currentModelTextId ? [currentModelTextId] : []),
+    [currentModelTextId],
+  );
+
+  // The list on screen when a pick was written. Until a newer list arrives, the panel would show the
+  // text being replaced again, so the pick still counts as in progress. It waits for a newer list
+  // rather than for the picked id, because an admin item listed first would keep that id off screen.
+  // "Newer" is by identity: every update from `useEffectiveResourceReferenceList` is a new object.
+  // If none arrives within `WRITTEN_PICK_MAX_WAIT_MS`, the panel stops waiting and shows the list it
+  // has.
+  const [listBeforeWrittenPick, setListBeforeWrittenPick] = useState<
+    EffectiveResourceReferenceList | undefined
+  >(undefined);
+  const isPickInProgress =
+    isSelecting ||
+    (listBeforeWrittenPick !== undefined && listBeforeWrittenPick === effectiveModelTexts);
+  useEffect(() => {
+    if (listBeforeWrittenPick === undefined) return undefined;
+    if (listBeforeWrittenPick !== effectiveModelTexts) {
+      setListBeforeWrittenPick(undefined);
+      return undefined;
+    }
+    const timeout = setTimeout(() => setListBeforeWrittenPick(undefined), WRITTEN_PICK_MAX_WAIT_MS);
+    return () => clearTimeout(timeout);
+  }, [listBeforeWrittenPick, effectiveModelTexts]);
+
+  // Read when a pick lands rather than when the picker opened, since the list can change while the
+  // user is choosing.
+  const effectiveModelTextsRef = useRef(effectiveModelTexts);
+  effectiveModelTextsRef.current = effectiveModelTexts;
 
   const handleResourceSelect = useCallback(
     async (resource: DblResourceData) => {
+      const listBeforePick = effectiveModelTextsRef.current;
       setIsSelecting(true);
       // A user-initiated pick is a fresh attempt: clear any prior auto-install failure so the
       // install-failed state doesn't stick.
       clearInstallFailure();
       try {
-        await selectTextConnection(resource, getUserModelTexts, setUserModelTexts, async () => {
-          try {
-            await installResource(resource.dblEntryUid);
-          } catch (e) {
-            // Record the failure so that once the pick finishes and the auto-install effect
-            // re-enables, its failed-uid guard suppresses a duplicate install attempt; this also
-            // surfaces the install-failed state immediately instead of after a second attempt.
-            markInstallFailed(resource.dblEntryUid);
-            throw e;
-          }
-        });
+        await selectTextConnection(
+          resource,
+          getUserModelTexts,
+          setUserModelTexts,
+          async () => {
+            try {
+              await installResource(resource.dblEntryUid);
+            } catch (e) {
+              // Record the failure so that once the pick finishes and the auto-install effect
+              // re-enables, its failed-uid guard suppresses a duplicate install attempt.
+              //
+              // TODO(PT-4508): This does NOT surface the failure on screen. `selectTextConnection`
+              // swallows the rethrow below and returns without persisting, so the text on screen
+              // never changes and `installFailed` never becomes true — a failed pick is silent.
+              markInstallFailed(resource.dblEntryUid);
+              throw e;
+            }
+          },
+          (writtenReference) => {
+            // Re-picking the user's first text writes an identical list, which sends no update, so
+            // there would be no newer list to wait for.
+            const firstUserText = listBeforePick?.items.find((item) => item.source === 'user');
+            const isListUnchanged =
+              firstUserText !== undefined &&
+              getResourceReferenceRowId(firstUserText) ===
+                getResourceReferenceRowId(writtenReference);
+            if (!isListUnchanged) setListBeforeWrittenPick(listBeforePick);
+          },
+        );
       } finally {
         setIsSelecting(false);
       }
@@ -494,16 +554,42 @@ export function ModelTextPanel({
   // is still installing and let the older pick's write land last.
   const isPickingRef = useRef(false);
 
+  // A pick from the missing-book message replaces its button with "Selecting…", so focus falls to
+  // `body`; once the pick is over and the content below the header has arrived, it goes to the
+  // header. Waiting for the content lets a message that arrives instead (the picked text lacks this
+  // book too, say) take focus itself, so it is announced rather than appearing silently beside a
+  // focused header. A header pick keeps focus, since the header stays mounted.
+  //
+  // Runs after every commit, rather than on a change of the conditions below, so a header that only
+  // comes back after the pick (a catalog refresh can hide the whole panel) is still found. A passive
+  // effect runs after its children's, so a message mounted in the same commit has already taken
+  // focus by then.
+  // Using null for React ref compatibility
+  // eslint-disable-next-line no-null/no-null
+  const headerButtonRef = useRef<HTMLButtonElement | null>(null);
+  const shouldFocusHeaderAfterPickRef = useRef(false);
+  useEffect(() => {
+    const header = headerButtonRef.current;
+    if (!header || !shouldFocusHeaderAfterPickRef.current) return;
+    if (isPickInProgress || !isAnswerCurrent || isUsjLoading) return;
+    shouldFocusHeaderAfterPickRef.current = false;
+    if (isFocusDroppedInThisDocument()) header.focus();
+  });
+
   // Called from click handlers, which nothing awaits, so a failure is caught here or nowhere. The
   // log names the resource once one was picked, so a failed settings read or write (which has no UI
-  // of its own, unlike a failed install) can be told apart from a picker that failed to open.
+  // of its own) can be told apart from a picker that failed to open.
   const handlePickModelText = useCallback(async () => {
     if (isPickingRef.current) return;
     isPickingRef.current = true;
     let resource: DblResourceData | undefined;
     try {
       resource = await showResourcePicker(currentModelTextIds);
-      if (resource) await handleResourceSelect(resource);
+      if (resource) {
+        // Only a pick made beside the header returns focus to it.
+        shouldFocusHeaderAfterPickRef.current = Boolean(headerButtonRef.current);
+        await handleResourceSelect(resource);
+      }
     } catch (e) {
       const stage = resource ? `selecting ${resource.dblEntryUid}` : 'opening the picker';
       logger?.error(`Model text selection failed while ${stage}: ${getErrorMessage(e)}`);
@@ -523,16 +609,23 @@ export function ModelTextPanel({
   // --- Render the resolved state ---
 
   // Not-found: a configured model text can't be resolved to a displayable resource (not in the DBL
-  // catalog, a non-DBL reference, or an entry missing its id). Offer the picker so the user can
-  // recover rather than being stranded.
+  // catalog, a non-DBL reference, or an entry missing its id). For the user's own text, offer the
+  // picker so they are not stranded. A pick could never replace the admin's text, so that case says
+  // where it can be changed instead.
   const notFoundState = (
     <div
       className={`tw:flex tw:flex-col tw:items-center tw:gap-4 tw:p-8 tw:text-center ${PANEL_FILL_CLASSES}`}
     >
-      <p>{localize(localizedStrings, '%webView_modelTextPanel_unknownResource%')}</p>
-      <Button onClick={() => handlePickModelText()}>
-        {localize(localizedStrings, '%webView_modelTextPanel_pickModelText%')}
-      </Button>
+      {isUserChosenModelText ? (
+        <>
+          <p>{localize(localizedStrings, '%webView_modelTextPanel_unknownResource%')}</p>
+          <Button onClick={() => handlePickModelText()}>
+            {localize(localizedStrings, '%webView_modelTextPanel_pickModelText%')}
+          </Button>
+        </>
+      ) : (
+        <p>{localize(localizedStrings, '%webView_modelTextPanel_unknownResource_adminChoice%')}</p>
+      )}
     </div>
   );
 
@@ -543,6 +636,16 @@ export function ModelTextPanel({
         <p>{localize(localizedStrings, '%webView_modelTextPanel_noProject%')}</p>
       </div>
     );
+  }
+
+  // A pick with no text on screen to keep: from the empty state, from a not-found state, or with the
+  // panel hidden by a catalog refresh. Checked before those states return, because a picked text
+  // that isn't installed downloads before the pick is written, and until then the state the user
+  // picked from would stay on screen, Pick button included. A pick made while a text is on screen
+  // waits in the content area instead (see `renderContent`), so the header and the hidden editor
+  // stay mounted.
+  if (isPickInProgress && !resourceProjectId) {
+    return <LoadingView label={localize(localizedStrings, '%webView_modelTextPanel_selecting%')} />;
   }
 
   // Front of the state machine: still resolving, an unreadable setting, a catalog that failed, or
@@ -625,16 +728,15 @@ export function ModelTextPanel({
     );
   }
 
-  // Installing: resource found but not yet installed. Distinguish the two causes so the label is
-  // accurate: a user pick (isSelecting) reads "Selecting…", while an auto-install of a configured
-  // resource (isInstalling) — where the user picked nothing and it's just downloading — reads
-  // "Installing…".
-  if (isSelecting || isInstalling) {
+  // Installing: an auto-install of a configured resource, where the user picked nothing and it's
+  // just downloading, reads "Installing…". One that overlaps a pick reads "Selecting…", like the
+  // pick.
+  if (isInstalling) {
     return (
       <LoadingView
         label={localize(
           localizedStrings,
-          isSelecting
+          isPickInProgress
             ? '%webView_modelTextPanel_selecting%'
             : '%webView_modelTextPanel_installing%',
         )}
@@ -653,9 +755,10 @@ export function ModelTextPanel({
   // The model text, or the reason there is none. These are the panel's CONTENT area only: the label
   // header stays mounted above all of them, including the spinner, so the message is attributed to a
   // named text rather than floating in an anonymous panel and does not blink away on every chapter
-  // step. Unlike the Bible texts panel there is no in-panel selector to preserve — this panel
-  // surfaces its picker only in the zero and not-found states — so this panel's message has to name
-  // the remedy in words instead: a different model text, or a book this one covers.
+  // step.
+  //
+  // A pick in progress takes the content area too: it hides the editor rather than unmounting it, so
+  // the editor still holds its text if the pick changes nothing.
   //
   // A blank chapter is one the model text HAS but with nothing in it. It is invisible to
   // `isBookMissing`, which keys off the fetch rejecting, so it needs its own check; the missing book
@@ -668,11 +771,32 @@ export function ModelTextPanel({
   // text is RTL.
   const renderContent = () => {
     const message = (() => {
+      if (isPickInProgress)
+        return (
+          <LoadingView
+            label={localize(localizedStrings, '%webView_modelTextPanel_selecting%')}
+            heightClassName="tw:h-full"
+          />
+        );
+
       if (isBookMissing)
         return (
           <ResourceBookNotAvailable
-            message={localize(localizedStrings, '%webView_modelTextPanel_bookNotAvailable%')}
+            message={localize(
+              localizedStrings,
+              isUserChosenModelText
+                ? '%webView_modelTextPanel_bookNotAvailable%'
+                : '%webView_modelTextPanel_bookNotAvailable_adminChoice%',
+            )}
             announcementKey={`${resourceProjectId}:${scrRef.book}`}
+            action={
+              isUserChosenModelText
+                ? {
+                    label: localize(localizedStrings, '%webView_modelTextPanel_pickModelText%'),
+                    onClick: () => handlePickModelText(),
+                  }
+                : undefined
+            }
           />
         );
 
@@ -748,6 +872,32 @@ export function ModelTextPanel({
     );
   };
 
+  // The model text header row, shared by the label and button forms of the header.
+  //
+  // 42px total, matching Column 3's dock tab-bar OUTER height (the 36px active tab plus its 6px
+  // --tab-header-to-content-gap) and the Scripture Editor's Simple-mode toolbar override — all three
+  // rows' bottom edges need to land at the same Y, which matching total row height achieves on its
+  // own. `tw:items-center` centers the text symmetrically within the full 42px box (no extra
+  // top-only padding needed — see _simple-mode.scss's .scripture-editor-tab-nav-simple comment for
+  // why that was tried and reverted).
+  //
+  // Truncation + Tooltip: the column has a ~300px minWidth (simple-layout.data.ts) and the
+  // "{displayName} - {fullName}" label can exceed it, so the label ellipsises to keep the fixed 42px
+  // row height intact, with the full text on hover/focus per the Responsiveness guideline.
+  // `tw:min-w-0` unlocks the shrink that `tw:overflow-hidden` then bounds.
+  const modelTextHeaderClassName =
+    'tw:flex tw:h-[42px] tw:min-w-0 tw:shrink-0 tw:items-center tw:overflow-hidden tw:border-b tw:border-border tw:px-3 tw:text-sm tw:font-semibold';
+
+  // The header's text. `dir="auto"`: the label is a joined short/full name in one text node, so it
+  // carries its own direction rather than the panel's. The ellipsis lives here rather than on the
+  // header box: `text-overflow` is inert on a flex container, because the text becomes an anonymous
+  // flex item and hard-clips mid-glyph.
+  const modelTextHeaderLabel = (
+    <span ref={modelTextLabelRef} className="tw:min-w-0 tw:truncate" dir="auto">
+      {modelTextLabel}
+    </span>
+  );
+
   // Active: read-only editor showing the model text.
   // This panel is Simple-mode-only, so `editor-container-simple` (flattens .editor-container's
   // rounded top corners — see _simple-mode.scss) is applied unconditionally, unlike the
@@ -756,52 +906,70 @@ export function ModelTextPanel({
     <div className="tw:flex tw:h-screen tw:flex-col editor-container-simple">
       {modelTextLabel && (
         <TooltipProvider>
-          <Tooltip open={isModelTextLabelTruncatedHovered}>
-            <TooltipTrigger asChild>
-              <div
-                onPointerEnter={onModelTextLabelPointerEnter}
-                onPointerLeave={onModelTextLabelPointerLeave}
-                // Keyboard/screen-reader users can't hover to trigger the tooltip, so make this
-                // otherwise-non-interactive div focusable and reuse the same truncation-gated
-                // handlers for focus/blur (they only measure ref.current and set state, so they
-                // work regardless of which event triggered them). Matches the tooltip-trigger
-                // pattern in platform-scripture-editor.web-view.tsx's structure-protection wrapper.
-                onFocus={onModelTextLabelPointerEnter}
-                onBlur={onModelTextLabelPointerLeave}
-                // This div has no native interactive role, but it must be focusable so keyboard
-                // users can reach it and trigger the tooltip via the onFocus handler above.
+          <Tooltip
+            open={isModelTextLabelTruncatedHovered}
+            // Lets Escape, a press on the header, and leaving it close the tooltip. Opening stays
+            // with the truncation check, so a label that fits never gets one.
+            onOpenChange={(open) => {
+              if (!open) onModelTextLabelPointerLeave();
+            }}
+          >
+            {/* Both header forms take these from the trigger. Focus opens the tooltip only on a
+                keyboard arrival (`:focus-visible`): focus returned to the header after a pointer
+                pick, or moved there by the panel, must not pop it up. */}
+            <TooltipTrigger
+              asChild
+              onPointerEnter={onModelTextLabelPointerEnter}
+              onPointerLeave={onModelTextLabelPointerLeave}
+              onFocus={(event) => {
+                if (event.currentTarget.matches(':focus-visible')) onModelTextLabelPointerEnter();
+              }}
+              onBlur={onModelTextLabelPointerLeave}
+              data-testid="model-text-header"
+            >
+              {isUserChosenModelText ? (
+                <Button
+                  ref={headerButtonRef}
+                  variant="ghost"
+                  // The picker is a modal dialog. This also turns off `Button`'s 1px press nudge,
+                  // which would shift the whole row out of line with the editor toolbar.
+                  aria-haspopup="dialog"
+                  onClick={() => {
+                    // A keyboard press fires no pointer event, so close the tooltip here too.
+                    onModelTextLabelPointerLeave();
+                    handlePickModelText();
+                  }}
+                  aria-label={formatReplacementString(
+                    localize(localizedStrings, '%webView_modelTextPanel_changeText_ariaLabel%'),
+                    { textName: modelTextLabel },
+                  )}
+                  // `tw:border-0` clears `Button`'s border on every side, and must come BEFORE the
+                  // row's `tw:border-b`: `Button` merges classes, so a later reset would drop the
+                  // bottom rule. The ring is inset because the row touches the panel's top and side
+                  // edges, which would clip one drawn outside it.
+                  className={`tw:border-0 ${modelTextHeaderClassName} tw:w-full tw:justify-start tw:rounded-none tw:focus-visible:ring-inset`}
+                >
+                  {modelTextHeaderLabel}
+                  {/* At the end edge, so it stays put whatever the name's length */}
+                  <ChevronDown className="tw:ms-auto" />
+                </Button>
+              ) : (
+                // Keyboard and screen-reader users can't hover, so this otherwise non-interactive
+                // label is focusable to reach its tooltip. Matches the tooltip-trigger pattern in
+                // platform-scripture-editor.web-view.tsx's structure-protection wrapper.
                 // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
-                tabIndex={0}
-                aria-label={modelTextLabel}
-                data-testid="model-text-header"
-                // 42px total, matching Column 3's dock tab-bar OUTER height (the 36px active tab
-                // plus its 6px --tab-header-to-content-gap) and the Scripture Editor's Simple-mode
-                // toolbar override — all three rows' bottom edges need to land at the same Y, which
-                // matching total row height achieves on its own. tw:items-center centers the text
-                // symmetrically within the full 42px box (no extra top-only padding needed — see
-                // _simple-mode.scss's .scripture-editor-tab-nav-simple comment for why that was
-                // tried and reverted).
-                //
-                // Truncation + Tooltip: the column has a ~300px minWidth (simple-layout.data.ts) and
-                // "{fullName} ({displayName})" can exceed it, so the label ellipsises to keep the
-                // fixed 42px row height intact, with the full text on hover/focus per the
-                // Responsiveness guideline. The ellipsis has to live on the inner span rather than
-                // this box: `text-overflow` is inert on a flex container, because the text becomes
-                // an anonymous flex item and hard-clips mid-glyph instead of ellipsising.
-                // `tw:min-w-0` unlocks the shrink that `tw:overflow-hidden` then bounds.
-                className="tw:flex tw:h-[42px] tw:min-w-0 tw:shrink-0 tw:items-center tw:overflow-hidden tw:border-b tw:border-border tw:px-3 tw:text-sm tw:font-semibold"
-              >
-                {/* `dir="auto"`: the label is a joined short/full name in one text node, so it
-                    carries its own direction rather than the panel's. */}
-                <span ref={modelTextLabelRef} className="tw:min-w-0 tw:truncate" dir="auto">
-                  {modelTextLabel}
-                </span>
-              </div>
+                <div tabIndex={0} aria-label={modelTextLabel} className={modelTextHeaderClassName}>
+                  {modelTextHeaderLabel}
+                </div>
+              )}
             </TooltipTrigger>
             <TooltipContent dir="auto">{modelTextLabel}</TooltipContent>
           </Tooltip>
         </TooltipProvider>
       )}
+      {/* Below the header, so the header keeps the fixed 42px height that lines it up with
+          Column 3's tab bar */}
+      {copyrightNotice}
       {/* The label row stays outside the zoom area (marked inside the editor's scroll box in
           `renderContent`) so its pinned 42 px height — aligned with the editor's toolbar and
           Column 3's tab bar — doesn't scale with the content. */}

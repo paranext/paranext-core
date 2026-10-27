@@ -5,12 +5,15 @@ import * as React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import type { DblResourceData } from 'platform-bible-utils';
-import type { UseWebViewScrollGroupScrRefHook, WebViewProps } from '@papi/core';
+import type { WebViewProps } from '@papi/core';
 import { usePromise } from 'platform-bible-react';
 import { useDialogCallback } from '@papi/frontend/react';
+import { NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY } from 'platform-bible-utils/experimental';
+import type { EffectiveResourceReference } from 'platform-scripture';
 import type { PickerResource } from './downloaded-resources.utils';
 import { selectTextConnection } from './select-dbl-resource';
 import { resetCopyLimitLookupsBeforeEach } from './copy-limit/copy-limit.test-utils';
+import { RESOURCE_TEXT_WAITING_TEST_ID } from './resource-text-panel.component';
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks — must be before any import that touches the component
@@ -27,6 +30,8 @@ const {
   mockFindCachedDblResource,
   capturedResourceTextPanelProps,
   realUsePromise,
+  mockUseScrollGroupScrRef,
+  copyrightNoticesByProject,
 } = vi.hoisted(() => ({
   mockUseEffectiveResourceReferenceList: vi.fn(),
   mockUseDblResourceAutoInstall: vi.fn(),
@@ -40,6 +45,8 @@ const {
   capturedResourceTextPanelProps: vi.fn(),
   /** The real `usePromise`, which the copy-limit tests need in place of the stub below. */
   realUsePromise: { current: undefined as unknown },
+  mockUseScrollGroupScrRef: vi.fn(),
+  copyrightNoticesByProject: new Map<string, unknown>(),
 }));
 
 // @papi/frontend — papi default export used for themes subscription and commands
@@ -83,16 +90,31 @@ vi.mock('@papi/frontend/react', () => ({
       '%webView_resourcePanel_commentaries_pick%': 'Pick commentary…',
       '%webView_resourcePanel_commentaries_title%': 'Commentaries',
       '%webView_resourcePanel_commentaries_title_withResource%': 'Commentaries ({textName})',
+      '%platformScripture_copyrightNotice_restrictedLicense_banner%':
+        '{label}: The {name} is for reference only.',
+      '%platformScripture_copyrightNotice_moreInfo%': 'More info',
+      '%platformScripture_copyrightNotice_dismiss%': 'Dismiss copyright notice',
+      '%platformScripture_copyrightNotice_details_title%': 'Copyright for {name}',
     },
     false,
   ],
   useDataProvider: vi.fn(() => undefined),
   useProjectDataProvider: (...args: unknown[]) => mockUseProjectDataProvider(...args),
   useProjectData: (...args: unknown[]) => mockUseProjectData(...args),
-  useProjectSetting: vi.fn(() => ['ltr', false]),
+  useProjectSetting: vi.fn((projectId: string | undefined, key: string, fallback: unknown) => {
+    if (key === 'platformScripture.copyrightNotice')
+      return [
+        (projectId && copyrightNoticesByProject.get(projectId)) ?? fallback,
+        vi.fn(),
+        vi.fn(),
+        false,
+      ];
+    return ['ltr', false];
+  }),
   useSetting: vi.fn(() => ['simple', false]),
   useDialogCallback: vi.fn(() => vi.fn()),
   usePromise: vi.fn(() => [undefined, false]),
+  useScrollGroupScrRef: (...args: unknown[]) => mockUseScrollGroupScrRef(...args),
 }));
 
 // platform-bible-react — keep UI components real; stub hooks that hit runtime
@@ -211,6 +233,9 @@ import './resource-text-panel.web-view';
 function makeProps(
   overrides: Partial<WebViewProps> = {},
   resourceType: 'ScriptureResource' | 'Commentary' = 'ScriptureResource',
+  /** Web view state the panel reads, by key, and the setter it gets for each */
+  state: Record<string, unknown> = {},
+  setState: (key: string, value: unknown) => void = () => {},
 ): WebViewProps {
   // The object literal only provides the minimum props needed for testing — the double cast
   // avoids satisfying every optional field of WebViewProps in each helper.
@@ -223,13 +248,10 @@ function makeProps(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (key: string, defaultValue: any): [any, (val: any) => void] => {
         if (key === 'resourceType') return [resourceType, vi.fn()];
+        if (key in state) return [state[key], (value: unknown) => setState(key, value)];
         return [defaultValue, vi.fn()];
       },
     ),
-    useWebViewScrollGroupScrRef: vi.fn(() => [
-      { book: 'GEN', chapterNum: 1, verseNum: 1, versificationStr: 'English' },
-      vi.fn(),
-    ]),
     ...overrides,
   } as unknown as WebViewProps;
 }
@@ -266,6 +288,34 @@ function renderZeroState(resourceType: 'ScriptureResource' | 'Commentary' = 'Scr
   return render(<ResourceTextPanel {...props} />);
 }
 
+/**
+ * A `useWebViewState` stub that records every setter it hands out, keyed by state key, so a test
+ * can assert what a render published without re-deriving `usePublishNavigableProjectIds`'s own
+ * logic. `persisted` seeds what a key reads back, standing in for earlier saved state.
+ */
+function makeTrackedWebViewState(
+  resourceType: 'ScriptureResource' | 'Commentary',
+  persisted: Record<string, unknown> = {},
+) {
+  const setters = new Map<string, ReturnType<typeof vi.fn>>();
+  const useWebViewState = vi.fn(
+    // useWebViewState is generic (key → TState) and its real return tuple also carries a
+    // resetWebViewState function, which none of these tests need — mocks can't express the
+    // genericity, so the reset slot is a no-op `vi.fn()` purely to keep the tuple's shape.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (key: string, defaultValue: any): [any, (val: any) => void, () => void] => {
+      if (key === 'resourceType') return [resourceType, vi.fn(), vi.fn()];
+      let setter = setters.get(key);
+      if (!setter) {
+        setter = vi.fn();
+        setters.set(key, setter);
+      }
+      return [key in persisted ? persisted[key] : defaultValue, setter, vi.fn()];
+    },
+  );
+  return { useWebViewState, setters };
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -298,14 +348,40 @@ function resetPanelHooks() {
   });
   mockUseProjectDataProvider.mockReturnValue(undefined);
   mockFindCachedDblResource.mockReturnValue(undefined);
+  mockUseScrollGroupScrRef.mockReturnValue([
+    { book: 'GEN', chapterNum: 1, verseNum: 1, versificationStr: 'English' },
+    vi.fn(),
+  ]);
   // Module-scoped, so it outlives `restoreAllMocks` and has to be cleared explicitly.
   setUsjSpy.mockClear();
 }
 
+// jsdom ships no ResizeObserver, which the copyright notice banner measures itself with
+class NoopResizeObserver {
+  private readonly targets = new Set<Element>();
+
+  observe(target: Element) {
+    this.targets.add(target);
+  }
+
+  unobserve(target: Element) {
+    this.targets.delete(target);
+  }
+
+  disconnect() {
+    this.targets.clear();
+  }
+}
+
 resetCopyLimitLookupsBeforeEach();
-beforeEach(resetPanelHooks);
+beforeEach(() => {
+  vi.stubGlobal('ResizeObserver', NoopResizeObserver);
+  resetPanelHooks();
+  copyrightNoticesByProject.clear();
+});
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
@@ -681,16 +757,15 @@ function renderSelectedResource(projectDataMethods: Record<string, unknown>, cha
     list: { dataVersion: '1.0.0', items: [] },
   });
 
-  const propsAt = (chapter: number) =>
-    makeProps({
-      useWebViewScrollGroupScrRef: vi.fn<UseWebViewScrollGroupScrRefHook>(() => [
-        { book: 'GEN', chapterNum: chapter, verseNum: 1, versificationStr: 'English' },
-        vi.fn(),
-        undefined,
-        vi.fn(),
-        undefined,
-      ]),
-    });
+  // The panel follows the scroll group through `useScrollGroupScrRef` (in the displayed resource's
+  // versification), so the chapter is set on that mock rather than through a web-view prop.
+  const propsAt = (chapter: number) => {
+    mockUseScrollGroupScrRef.mockReturnValue([
+      { book: 'GEN', chapterNum: chapter, verseNum: 1, versificationStr: 'English' },
+      vi.fn(),
+    ]);
+    return makeProps();
+  };
   const ResourceTextPanel = getResourceTextPanel();
   const { rerender } = render(<ResourceTextPanel {...propsAt(chapterNum)} />);
   return (chapter: number) => rerender(<ResourceTextPanel {...propsAt(chapter)} />);
@@ -774,5 +849,405 @@ describe('ResourceTextPanel — copy limit', () => {
     expect(capturedResourceTextPanelProps).toHaveBeenLastCalledWith(
       expect.objectContaining({ copyLimit: 12 }),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Versification conversion frame
+// ---------------------------------------------------------------------------
+
+/**
+ * A picker row for a project-reference resource whose project is `projectId` — i.e. a resource that
+ * lives in a DIFFERENT project from the panel's own container project.
+ */
+function makeProjectRow(projectId: string | undefined): PickerResource {
+  return {
+    reference: { type: 'project', name: 'Vulgate', id: 'resource-reference-id' },
+    source: 'user',
+    isAdminLocked: false,
+    type: 'ScriptureResource',
+    installed: true,
+    projectId,
+  };
+}
+
+/** Renders the panel over `rows`, with the referenced list settled so selection can resolve. */
+function renderWithRows(rows: PickerResource[], propOverrides: Partial<WebViewProps> = {}) {
+  mockUseEffectiveResourceReferenceList.mockReturnValue({
+    status: 'ready',
+    list: { dataVersion: '1.0.0', items: [] },
+  });
+  mockUseResourcePickerResources.mockReturnValue([rows, false]);
+
+  const ResourceTextPanel = getResourceTextPanel();
+  return render(<ResourceTextPanel {...makeProps(propOverrides)} />);
+}
+
+/** The conversion-frame argument of every `useScrollGroupScrRef` call made during a render. */
+function conversionFrames(): unknown[] {
+  return mockUseScrollGroupScrRef.mock.calls.map((call) => call[2]);
+}
+
+// The panel's own `projectId` prop is the CONTAINER project whose reference list is shown; the
+// chapter on screen comes from the selected resource's project, which may use a different
+// versification. Converting into the container's frame would show the wrong verse and would stamp
+// the container as the scroll group's source on a verse click. Asserted on the conversion-frame
+// argument rather than on rendered text because the conversion itself lives in the platform hook,
+// which is mocked here — what belongs to this consumer is which project it asks to convert into.
+describe('ResourceTextPanel — versification conversion frame', () => {
+  it('follows the scroll group in the displayed resource’s versification, not the container project’s', () => {
+    renderWithRows([makeProjectRow('resource-project-id')]);
+
+    expect(mockUseScrollGroupScrRef).toHaveBeenCalled();
+    expect(conversionFrames()).toContain('resource-project-id');
+    expect(conversionFrames()).not.toContain('test-project-id');
+  });
+
+  it('passes no conversion frame before a resource resolves', () => {
+    renderWithRows([]);
+
+    expect(mockUseScrollGroupScrRef).toHaveBeenCalled();
+    conversionFrames().forEach((frame) => expect(frame).toBeUndefined());
+  });
+
+  // A row can be in the list with no local project yet (a DBL resource still installing). There is
+  // nothing to convert into, and passing the container project would reintroduce the wrong frame.
+  it('passes no conversion frame for a selected row that has no project yet', () => {
+    renderWithRows([makeProjectRow(undefined)]);
+
+    expect(mockUseScrollGroupScrRef).toHaveBeenCalled();
+    conversionFrames().forEach((frame) => expect(frame).toBeUndefined());
+  });
+
+  // The hook falls back to scroll group 0 when its first argument is `undefined`, so a panel set to
+  // another group would silently follow group 0; and an independent-reference write that never
+  // reaches the definition is lost on the next render.
+  it('follows its own scroll group and writes changes back to its definition', () => {
+    const updateWebViewDefinition = vi.fn(() => true);
+    renderWithRows([], { scrollGroupScrRef: 1, updateWebViewDefinition });
+
+    const [scrollGroupArg, setScrollGroupScrRef] = mockUseScrollGroupScrRef.mock.calls[0];
+    expect(scrollGroupArg).toBe(1);
+    setScrollGroupScrRef(2);
+    expect(updateWebViewDefinition).toHaveBeenCalledWith({ scrollGroupScrRef: 2 });
+  });
+});
+
+/*
+ * Resources never open in Simple mode's middle column, so with no project open the panel shows a
+ * resource it was asked to show (one opened from Home), from the downloaded resources alone. It
+ * never picks one by itself: there is no list of the user's texts to pick from.
+ */
+describe('ResourceTextPanel — no project open', () => {
+  function renderWithoutProject(selectedResourceId: string | undefined) {
+    const setSelectedResourceId = vi.fn();
+    mockUseResourcePickerResources.mockReturnValue([[SELECTED_RESOURCE], false]);
+    // There is no project, so its referenced list never arrives.
+    mockUseEffectiveResourceReferenceList.mockReturnValue({ status: 'loading' });
+    const props = makeProps(
+      { projectId: undefined },
+      'ScriptureResource',
+      { selectedResourceId },
+      (key, value) => {
+        if (key === 'selectedResourceId') setSelectedResourceId(value);
+      },
+    );
+    const ResourceTextPanel = getResourceTextPanel();
+    render(<ResourceTextPanel {...props} />);
+    return { setSelectedResourceId, panelProps: capturedResourceTextPanelProps.mock.lastCall?.[0] };
+  }
+
+  it('shows the resource it was asked to show', () => {
+    const { panelProps } = renderWithoutProject('project:resource-project-id');
+
+    expect(panelProps).toEqual(
+      expect.objectContaining({
+        hasProject: false,
+        readiness: 'configured',
+        selectedRef: SELECTED_RESOURCE,
+      }),
+    );
+  });
+
+  it('picks nothing by itself when it was asked for nothing', () => {
+    const { panelProps, setSelectedResourceId } = renderWithoutProject(undefined);
+
+    expect(panelProps).toEqual(expect.objectContaining({ selectedRef: undefined }));
+    expect(setSelectedResourceId).not.toHaveBeenCalled();
+  });
+
+  describe('while the catalog is down', () => {
+    beforeEach(() => {
+      mockUseDblResourceCatalog.mockReturnValue({
+        dblResources: [],
+        isLoadingResources: false,
+        isCatalogReady: false,
+        hasCatalogError: true,
+        refetchCatalog: vi.fn(),
+      });
+    });
+
+    it('says the catalog is unavailable when the resource it was asked for has no row without it', () => {
+      // A DBL resource is listed only once the catalog resolves it; "open a project" would mislead.
+      const { panelProps } = renderWithoutProject('dbl:uid-not-downloaded');
+
+      expect(panelProps).toEqual(
+        expect.objectContaining({ readiness: 'catalogError', selectedRef: undefined }),
+      );
+    });
+
+    it('still shows a downloaded resource it was asked for', () => {
+      const { panelProps } = renderWithoutProject('project:resource-project-id');
+
+      expect(panelProps).toEqual(
+        expect.objectContaining({ readiness: 'configured', selectedRef: SELECTED_RESOURCE }),
+      );
+    });
+  });
+});
+
+describe('ResourceTextPanel — copyright notice', () => {
+  it("shows the notice of the resource on screen, not of the panel's own project", () => {
+    copyrightNoticesByProject.set('niv-project', {
+      kind: 'restrictedLicense',
+      name: 'NIV11',
+      fullName: 'New International Version 2011',
+      copyrightYears: '2011',
+    });
+    copyrightNoticesByProject.set('test-project-id', {
+      kind: 'restrictedLicense',
+      name: 'OWN',
+      fullName: 'The panel project',
+      copyrightYears: '2011',
+    });
+    mockUseEffectiveResourceReferenceList.mockReturnValue({
+      status: 'ready',
+      list: { dataVersion: '1.0.0', items: [] },
+    });
+    mockUseResourcePickerResources.mockReturnValue([
+      [
+        {
+          reference: { type: 'project', id: 'niv-project', name: 'NIV11' },
+          source: 'downloaded',
+          isAdminLocked: false,
+          type: 'ScriptureResource',
+          installed: true,
+          projectId: 'niv-project',
+        },
+      ],
+      false,
+    ]);
+
+    const ResourceTextPanel = getResourceTextPanel();
+    render(<ResourceTextPanel {...makeProps()} />);
+
+    expect(screen.getByRole('note')).toHaveTextContent(/^NIV11:/);
+  });
+});
+
+// A configured DBL reference the (failed) catalog would otherwise be needed to resolve. Its
+// presence is what makes readiness `catalogError` rather than `empty` — see
+// `getResourcePanelReadiness`.
+const CONFIGURED_DBL_REFERENCE: EffectiveResourceReference = {
+  type: 'dblResource',
+  name: 'Configured DBL Resource',
+  id: 'abc123',
+  source: 'admin',
+};
+
+/** A locally-installed project the picker resolved without the catalog (a `downloaded` row). */
+const DOWNLOADED_ROW: PickerResource = {
+  reference: { type: 'project', name: 'Local Project', id: 'local-project-1' },
+  source: 'downloaded',
+  isAdminLocked: false,
+  type: 'ScriptureResource',
+  installed: true,
+  projectId: 'local-project-1',
+};
+
+/** A catalog that already failed, with nothing resolved from it. */
+const FAILED_CATALOG = {
+  dblResources: [],
+  isLoadingResources: false,
+  isCatalogReady: false,
+  hasCatalogError: true,
+  refetchCatalog: vi.fn(),
+};
+
+describe('ResourceTextPanel — catalog failure keeps resolved rows visible', () => {
+  it('renders a row that resolved locally, and publishes its project id, when the catalog failed', () => {
+    mockUseEffectiveResourceReferenceList.mockReturnValue({
+      status: 'ready',
+      list: { dataVersion: '1.1.0', items: [CONFIGURED_DBL_REFERENCE] },
+    });
+    mockUseDblResourceCatalog.mockReturnValue(FAILED_CATALOG);
+    mockUseResourcePickerResources.mockReturnValue([[DOWNLOADED_ROW], false]);
+
+    // The user's own pick, since a downloaded resource the panel only fell back to is never offered
+    // to navigation, catalog or not.
+    const { useWebViewState, setters } = makeTrackedWebViewState('ScriptureResource', {
+      selectedResourceId: `project:${DOWNLOADED_ROW.projectId}`,
+      isSelectedResourceUserPick: true,
+    });
+    const ResourceTextPanel = getResourceTextPanel();
+    render(<ResourceTextPanel {...makeProps({ useWebViewState })} />);
+
+    // Not the catalog-error view: its message has no translation in this test's localized-strings
+    // mock, so it would render its own raw key if shown.
+    expect(
+      screen.queryByText('%webView_resourcePanel_catalogUnavailable%'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Local Project/ })).toBeInTheDocument();
+    expect(screen.getByTestId(RESOURCE_TEXT_WAITING_TEST_ID)).toBeInTheDocument();
+
+    expect(setters.get(NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY)).toHaveBeenCalledWith([
+      DOWNLOADED_ROW.projectId,
+    ]);
+  });
+
+  it('still shows the catalog-error view when the catalog failed and nothing resolved locally', () => {
+    mockUseEffectiveResourceReferenceList.mockReturnValue({
+      status: 'ready',
+      list: { dataVersion: '1.1.0', items: [CONFIGURED_DBL_REFERENCE] },
+    });
+    mockUseDblResourceCatalog.mockReturnValue(FAILED_CATALOG);
+
+    const { useWebViewState, setters } = makeTrackedWebViewState('ScriptureResource', {
+      [NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY]: ['persisted-project'],
+    });
+    const ResourceTextPanel = getResourceTextPanel();
+    render(<ResourceTextPanel {...makeProps({ useWebViewState })} />);
+
+    expect(screen.getByText('%webView_resourcePanel_catalogUnavailable%')).toBeInTheDocument();
+    // A failed catalog is no answer about what is displayed, so the saved list is kept.
+    const setNavigableProjectIds = setters.get(NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY);
+    expect(setNavigableProjectIds).toBeDefined();
+    expect(setNavigableProjectIds).not.toHaveBeenCalled();
+  });
+
+  it('waits for local rows still loading instead of showing the catalog-error view', () => {
+    mockUseEffectiveResourceReferenceList.mockReturnValue({
+      status: 'ready',
+      list: { dataVersion: '1.1.0', items: [CONFIGURED_DBL_REFERENCE] },
+    });
+    mockUseDblResourceCatalog.mockReturnValue(FAILED_CATALOG);
+    mockUseResourcePickerResources.mockReturnValue([undefined, true]);
+
+    const { useWebViewState } = makeTrackedWebViewState('ScriptureResource');
+    const ResourceTextPanel = getResourceTextPanel();
+    render(<ResourceTextPanel {...makeProps({ useWebViewState })} />);
+
+    expect(
+      screen.queryByText('%webView_resourcePanel_catalogUnavailable%'),
+    ).not.toBeInTheDocument();
+    // The still-loading picker rows are what the wait is for, so the loading view (the live region
+    // `LoadingView` renders) must be what's shown instead of the catalog-error view being absent.
+    expect(screen.getByRole('status')).toBeInTheDocument();
+  });
+
+  it('shows the catalog-error view, and keeps a saved DBL selection, when only an unrelated resource resolved', () => {
+    mockUseEffectiveResourceReferenceList.mockReturnValue({
+      status: 'ready',
+      list: { dataVersion: '1.1.0', items: [CONFIGURED_DBL_REFERENCE] },
+    });
+    mockUseDblResourceCatalog.mockReturnValue(FAILED_CATALOG);
+    mockUseResourcePickerResources.mockReturnValue([[DOWNLOADED_ROW], false]);
+
+    const { useWebViewState, setters } = makeTrackedWebViewState('ScriptureResource', {
+      selectedResourceId: `dbl:${CONFIGURED_DBL_REFERENCE.id}`,
+    });
+    const ResourceTextPanel = getResourceTextPanel();
+    render(<ResourceTextPanel {...makeProps({ useWebViewState })} />);
+
+    expect(screen.getByText('%webView_resourcePanel_catalogUnavailable%')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Local Project/ })).not.toBeInTheDocument();
+    const setSelectedResourceId = setters.get('selectedResourceId');
+    expect(setSelectedResourceId).toBeDefined();
+    expect(setSelectedResourceId).not.toHaveBeenCalled();
+  });
+
+  it('reads no text for the first downloaded row while the catalog-error view covers it', () => {
+    mockUseEffectiveResourceReferenceList.mockReturnValue({
+      status: 'ready',
+      list: { dataVersion: '1.1.0', items: [CONFIGURED_DBL_REFERENCE] },
+    });
+    mockUseDblResourceCatalog.mockReturnValue(FAILED_CATALOG);
+    mockUseResourcePickerResources.mockReturnValue([[DOWNLOADED_ROW], false]);
+
+    const { useWebViewState } = makeTrackedWebViewState('ScriptureResource', {
+      selectedResourceId: `dbl:${CONFIGURED_DBL_REFERENCE.id}`,
+    });
+    const ResourceTextPanel = getResourceTextPanel();
+    render(<ResourceTextPanel {...makeProps({ useWebViewState })} />);
+
+    expect(screen.getByText('%webView_resourcePanel_catalogUnavailable%')).toBeInTheDocument();
+    // Positive control: the chapter text is asked for, just not for the row the error view hides.
+    expect(mockUseProjectDataProvider).toHaveBeenCalledWith(
+      'platformScripture.USJ_Chapter',
+      undefined,
+    );
+    expect(mockUseProjectDataProvider).not.toHaveBeenCalledWith(
+      'platformScripture.USJ_Chapter',
+      DOWNLOADED_ROW.projectId,
+    );
+  });
+
+  it('still migrates a legacy bare selection id while the catalog has failed', () => {
+    mockUseEffectiveResourceReferenceList.mockReturnValue({
+      status: 'ready',
+      list: { dataVersion: '1.1.0', items: [CONFIGURED_DBL_REFERENCE] },
+    });
+    mockUseDblResourceCatalog.mockReturnValue(FAILED_CATALOG);
+    mockUseResourcePickerResources.mockReturnValue([[DOWNLOADED_ROW], false]);
+
+    const { useWebViewState, setters } = makeTrackedWebViewState('ScriptureResource', {
+      selectedResourceId: DOWNLOADED_ROW.projectId,
+    });
+    const ResourceTextPanel = getResourceTextPanel();
+    render(<ResourceTextPanel {...makeProps({ useWebViewState })} />);
+
+    expect(setters.get('selectedResourceId')).toHaveBeenCalledWith(
+      `project:${DOWNLOADED_ROW.projectId}`,
+    );
+  });
+
+  it('shows the catalog-error view for a saved DBL selection even when nothing is referenced', () => {
+    // A downloaded DBL resource picked while online is saved as `dbl:`, without being referenced.
+    mockUseEffectiveResourceReferenceList.mockReturnValue({
+      status: 'ready',
+      list: { dataVersion: '1.1.0', items: [] },
+    });
+    mockUseDblResourceCatalog.mockReturnValue(FAILED_CATALOG);
+    mockUseResourcePickerResources.mockReturnValue([[DOWNLOADED_ROW], false]);
+
+    const { useWebViewState, setters } = makeTrackedWebViewState('ScriptureResource', {
+      selectedResourceId: 'dbl:downloaded-dbl-uid',
+    });
+    const ResourceTextPanel = getResourceTextPanel();
+    render(<ResourceTextPanel {...makeProps({ useWebViewState })} />);
+
+    expect(screen.getByText('%webView_resourcePanel_catalogUnavailable%')).toBeInTheDocument();
+    expect(setters.get('selectedResourceId')).not.toHaveBeenCalled();
+  });
+
+  it('renders a saved selection that resolved locally when the catalog failed', () => {
+    mockUseEffectiveResourceReferenceList.mockReturnValue({
+      status: 'ready',
+      list: { dataVersion: '1.1.0', items: [CONFIGURED_DBL_REFERENCE] },
+    });
+    mockUseDblResourceCatalog.mockReturnValue(FAILED_CATALOG);
+    mockUseResourcePickerResources.mockReturnValue([[DOWNLOADED_ROW], false]);
+
+    const { useWebViewState, setters } = makeTrackedWebViewState('ScriptureResource', {
+      selectedResourceId: `project:${DOWNLOADED_ROW.projectId}`,
+    });
+    const ResourceTextPanel = getResourceTextPanel();
+    render(<ResourceTextPanel {...makeProps({ useWebViewState })} />);
+
+    expect(
+      screen.queryByText('%webView_resourcePanel_catalogUnavailable%'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Local Project/ })).toBeInTheDocument();
+    expect(setters.get('selectedResourceId')).not.toHaveBeenCalled();
   });
 });

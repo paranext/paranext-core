@@ -16,6 +16,7 @@ import { isBlockMarker, isLocalizeKey } from 'platform-bible-utils';
 import {
   CONTEXT_MENU_ACTION_TO_NOTE_KIND,
   createInsertContextMenuItems,
+  deriveReadOnlyFlags,
   flushRowEditsThenSave,
   generateInlineMarkerMenuListItems,
   getChapterKey,
@@ -23,9 +24,10 @@ import {
   insertNoteAtCurrentSelectionCore,
   markerMenuItemsToResolvedPaletteItems,
   nextEditingNoteOps,
-  noteKindForCtrlTChord,
   NOTE_INSERT_CONFIG,
+  forgetCaretSnapshotIfParaMarkerSelected,
   parseCallerSequenceSetting,
+  type ReadOnlyInputs,
   resolveEditingSessionActivity,
   restoreSelectionIfLost,
   returnFocusToScriptureTextIfDocumentFocused,
@@ -96,6 +98,28 @@ describe('generateInlineMarkerMenuListItems', () => {
     // that offered them would be listing markers that cannot occur here.
     expect(markers).not.toContain('ip');
     expect(markers).not.toContain('imt');
+  });
+
+  it('while a chapter is loading: a pick closes the menu without inserting', () => {
+    const { ref, insertMarker } = makeMockEditorRef();
+    const close = vi.fn();
+    const restoreSelection = vi.fn();
+    const items = generateInlineMarkerMenuListItems(
+      ref,
+      close,
+      {},
+      false,
+      vi.fn(),
+      restoreSelection,
+      PARENT,
+      () => true,
+    );
+
+    items.find((item) => item.marker === 'nd')?.action();
+
+    expect(insertMarker).not.toHaveBeenCalled();
+    expect(restoreSelection).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalledTimes(1);
   });
 
   it('sorts by marker code', () => {
@@ -273,17 +297,19 @@ describe('getChapterKey', () => {
   });
 });
 
+/** The caret position a focus-out captured, for the selection-restoring helpers below. */
+const snapshot: SelectionRange = { start: { jsonPath: '$.content[0].content[1]', offset: 4 } };
+
+/** Editor stub exposing only the selection methods the selection-restoring helpers use. */
+function makeEditor(liveSelection: SelectionRange | undefined, selectedParaMarker?: string) {
+  return {
+    getSelection: vi.fn((): SelectionRange | undefined => liveSelection),
+    setSelection: vi.fn(),
+    getSelectedParaMarker: vi.fn((): string | undefined => selectedParaMarker),
+  };
+}
+
 describe('restoreSelectionIfLost', () => {
-  const snapshot: SelectionRange = { start: { jsonPath: '$.content[0].content[1]', offset: 4 } };
-
-  /** Editor stub exposing only the two selection methods the helper consults. */
-  function makeEditor(liveSelection: SelectionRange | undefined) {
-    return {
-      getSelection: vi.fn((): SelectionRange | undefined => liveSelection),
-      setSelection: vi.fn(),
-    };
-  }
-
   it('restores the snapshot when the live selection is gone', () => {
     const editor = makeEditor(undefined);
 
@@ -304,6 +330,17 @@ describe('restoreSelectionIfLost', () => {
     expect(editor.setSelection).not.toHaveBeenCalled();
   });
 
+  it('leaves a selected paragraph marker alone, so the dropdown retags that paragraph', () => {
+    // `getSelection()` reports undefined for a marker selection — a USJ selection is a text range
+    // and cannot represent a selected node — yet the selection is live. Restoring the snapshot over
+    // it would move the retag to whichever paragraph last held the caret.
+    const editor = makeEditor(undefined, 'li2');
+
+    restoreSelectionIfLost(editor, snapshot);
+
+    expect(editor.setSelection).not.toHaveBeenCalled();
+  });
+
   it('does nothing when the selection is gone but no snapshot was captured', () => {
     const editor = makeEditor(undefined);
 
@@ -316,6 +353,48 @@ describe('restoreSelectionIfLost', () => {
     // `editorRef.current` is genuinely `null` before the editor mounts — the exact value under test
     // eslint-disable-next-line no-null/no-null
     expect(() => restoreSelectionIfLost(null, snapshot)).not.toThrow();
+  });
+});
+
+describe('forgetCaretSnapshotIfParaMarkerSelected', () => {
+  it('forgets the snapshot while a paragraph marker is the selection', () => {
+    const snapshotRef: MutableRefObject<SelectionRange | undefined> = { current: snapshot };
+
+    forgetCaretSnapshotIfParaMarkerSelected(makeEditor(undefined, 'p'), snapshotRef);
+
+    expect(snapshotRef.current).toBeUndefined();
+  });
+
+  it('keeps the snapshot when no paragraph marker is selected', () => {
+    // The paragraph menu opened over a caret: the snapshot is that caret, and a pick needs it back.
+    const snapshotRef: MutableRefObject<SelectionRange | undefined> = { current: snapshot };
+
+    forgetCaretSnapshotIfParaMarkerSelected(makeEditor(undefined), snapshotRef);
+
+    expect(snapshotRef.current).toBe(snapshot);
+  });
+
+  it('leaves nothing for a pick to restore once the document is replaced under an open menu', () => {
+    // The caret was last in paragraph C, then B's marker was selected and the menu opened. A reload
+    // (a Replace in Find, an automatic Send/Receive) drops B's marker selection while the menu is
+    // open; restoring the old snapshot then would retag C, which may be off-screen.
+    const snapshotRef: MutableRefObject<SelectionRange | undefined> = { current: snapshot };
+    forgetCaretSnapshotIfParaMarkerSelected(makeEditor(undefined, 'q1'), snapshotRef);
+    const reloadedEditor = makeEditor(undefined);
+
+    restoreSelectionIfLost(reloadedEditor, snapshotRef.current);
+
+    expect(reloadedEditor.setSelection).not.toHaveBeenCalled();
+  });
+
+  it('tolerates a null editor handle (ref not mounted)', () => {
+    const snapshotRef: MutableRefObject<SelectionRange | undefined> = { current: snapshot };
+
+    // `editorRef.current` is genuinely `null` before the editor mounts — the exact value under test
+    // eslint-disable-next-line no-null/no-null
+    forgetCaretSnapshotIfParaMarkerSelected(null, snapshotRef);
+
+    expect(snapshotRef.current).toBe(snapshot);
   });
 });
 
@@ -541,14 +620,14 @@ describe('parseCallerSequenceSetting', () => {
 });
 
 describe('returnFocusToScriptureTextIfDocumentFocused', () => {
-  function makeEditor() {
+  function makeNoteFocusEditor() {
     return { selectAfterNote: vi.fn(), focus: vi.fn() };
   }
 
   // A popover closed from another view must not pull focus into this editor: the user's typing
   // would then be saved into this text instead of the one they are typing in.
   it('does nothing while the document does not have focus', () => {
-    const editor = makeEditor();
+    const editor = makeNoteFocusEditor();
     const restoreSelection = vi.fn();
 
     returnFocusToScriptureTextIfDocumentFocused(editor, restoreSelection, 2, {
@@ -564,7 +643,7 @@ describe('returnFocusToScriptureTextIfDocumentFocused', () => {
   });
 
   it('restores the caret, then focuses, when no note is given', () => {
-    const editor = makeEditor();
+    const editor = makeNoteFocusEditor();
     const calls: string[] = [];
     const restoreSelection = vi.fn(() => calls.push('restore'));
     editor.focus.mockImplementation(() => calls.push('focus'));
@@ -578,7 +657,7 @@ describe('returnFocusToScriptureTextIfDocumentFocused', () => {
   });
 
   it('puts the caret just past the given note, then focuses', () => {
-    const editor = makeEditor();
+    const editor = makeNoteFocusEditor();
     const calls: string[] = [];
     editor.selectAfterNote.mockImplementation(() => calls.push('selectAfterNote'));
     editor.focus.mockImplementation(() => calls.push('focus'));
@@ -753,6 +832,75 @@ describe('shouldSkipNoteInsert', () => {
   });
 });
 
+describe('deriveReadOnlyFlags', () => {
+  const writable: ReadOnlyInputs = {
+    isReadOnly: false,
+    isProjectEditableLoading: false,
+    isProjectEditable: true,
+    isCanUserEditScriptureUnresolved: false,
+    canUserEditScripture: true,
+    isSyncBlocked: false,
+    isInterfaceModeLoading: false,
+    viewType: 'standard',
+    isPowerMode: true,
+  };
+
+  it('is writable when nothing blocks editing', () => {
+    expect(deriveReadOnlyFlags(writable)).toEqual({
+      isReadOnlyEffective: false,
+      isDurablyReadOnly: false,
+      isReadOnlyForTitle: false,
+    });
+  });
+
+  it.each<[string, Partial<ReadOnlyInputs>]>([
+    ['isReadOnly', { isReadOnly: true }],
+    ['project not editable', { isProjectEditable: false }],
+    ['user cannot edit Scripture', { canUserEditScripture: false }],
+    ['Preview in Power mode', { viewType: 'formatted', isPowerMode: true }],
+  ])('is read-only in every output for %s', (_name, override) => {
+    expect(deriveReadOnlyFlags({ ...writable, ...override })).toEqual({
+      isReadOnlyEffective: true,
+      isDurablyReadOnly: true,
+      isReadOnlyForTitle: true,
+    });
+  });
+
+  it('freezes editing but is not durably read-only while a sync blocks it', () => {
+    expect(deriveReadOnlyFlags({ ...writable, isSyncBlocked: true })).toEqual({
+      isReadOnlyEffective: true,
+      isDurablyReadOnly: false,
+      isReadOnlyForTitle: false,
+    });
+  });
+
+  it.each<[string, Partial<ReadOnlyInputs>]>([
+    ['project editability loading', { isProjectEditableLoading: true }],
+    ['permission unresolved', { isCanUserEditScriptureUnresolved: true }],
+    ['interface mode loading', { isInterfaceModeLoading: true }],
+  ])('fails closed with an undefined title flag while %s', (_name, override) => {
+    expect(deriveReadOnlyFlags({ ...writable, ...override })).toEqual({
+      isReadOnlyEffective: true,
+      isDurablyReadOnly: false,
+      isReadOnlyForTitle: undefined,
+    });
+  });
+
+  it('leaves the formatted view writable in Simple mode', () => {
+    expect(deriveReadOnlyFlags({ ...writable, viewType: 'formatted', isPowerMode: false })).toEqual(
+      { isReadOnlyEffective: false, isDurablyReadOnly: false, isReadOnlyForTitle: false },
+    );
+  });
+
+  it.each([true, false])('never makes the markers view read-only (Power: %s)', (isPowerMode) => {
+    expect(deriveReadOnlyFlags({ ...writable, viewType: 'markers', isPowerMode })).toEqual({
+      isReadOnlyEffective: false,
+      isDurablyReadOnly: false,
+      isReadOnlyForTitle: false,
+    });
+  });
+});
+
 describe('insertNoteAtCurrentSelectionCore', () => {
   // Resolves every kind's commit-message key to a traceable `LOC:<key>` string, same convention as
   // the localized-strings stub further down this file.
@@ -842,16 +990,6 @@ describe('CONTEXT_MENU_ACTION_TO_NOTE_KIND', () => {
   });
 });
 
-describe('noteKindForCtrlTChord', () => {
-  it('maps Ctrl+T (no Shift) to the footnote kind', () => {
-    expect(noteKindForCtrlTChord(false)).toBe('insertFootnoteAtSelection');
-  });
-
-  it('maps Ctrl+Shift+T to the cross-reference kind', () => {
-    expect(noteKindForCtrlTChord(true)).toBe('insertCrossReferenceAtSelection');
-  });
-});
-
 describe('createInsertContextMenuItems', () => {
   // Parity contract: the context menu must offer exactly the Insert-menu inserts, in menu order.
   // Read the Insert menu straight from the contribution so a menus.json change without a
@@ -931,12 +1069,23 @@ describe('createInsertContextMenuItems', () => {
       ...ENABLED,
       isReadOnly: true,
     });
-    expect(readOnly.map((i) => !!i.isDisabled)).toEqual([true, true, true, false]);
+    expect(readOnly.map((i) => !!i.isDisabled)).toEqual([false, true, true, true]);
     const noCommentPermission = createInsertContextMenuItems(strings, makeActions(), {
       ...ENABLED,
       canUserCreateComments: false,
     });
-    expect(noCommentPermission.map((i) => !!i.isDisabled)).toEqual([false, false, false, true]);
+    expect(noCommentPermission.map((i) => !!i.isDisabled)).toEqual([true, false, false, false]);
+  });
+
+  it('keeps Insert comment selectable in read-only text when the user may comment', () => {
+    const items = createInsertContextMenuItems(strings, makeActions(), {
+      ...ENABLED,
+      isReadOnly: true,
+      canUserCreateComments: true,
+      isSyncBlocked: false,
+    });
+    expect(items[0].isDisabled).toBe(false);
+    expect(items.slice(1).every((i) => i.isDisabled)).toBe(true);
   });
 
   // A sync freeze reaches the note inserts through the editor's own read-only state, so only the
@@ -946,7 +1095,7 @@ describe('createInsertContextMenuItems', () => {
       ...ENABLED,
       isSyncBlocked: true,
     });
-    expect(syncBlocked.map((i) => !!i.isDisabled)).toEqual([false, false, false, true]);
+    expect(syncBlocked.map((i) => !!i.isDisabled)).toEqual([true, false, false, false]);
   });
 
   // Per-item, not aggregate: calling every item's onSelect and counting each action's TOTAL calls
@@ -954,10 +1103,10 @@ describe('createInsertContextMenuItems', () => {
   // wired to insertCrossReference from the correct wiring. Asserting ONE item's onSelect against
   // every action's call count catches exactly that cross-wiring.
   it.each([
-    [0, 'insertFootnote'],
-    [1, 'insertCrossReference'],
-    [2, 'insertEndnote'],
-    [3, 'insertComment'],
+    [0, 'insertComment'],
+    [1, 'insertFootnote'],
+    [2, 'insertCrossReference'],
+    [3, 'insertEndnote'],
   ] as const)('item %i runs ONLY its own action (%s)', (index, actionName) => {
     const actions = makeActions();
     const items = createInsertContextMenuItems(strings, actions, ENABLED);

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { shouldRoutePaletteKey } from './palette-key-routing.util';
+import {
+  INLINE_MARKERS_MENU_TRIGGER,
+  shouldOpenInlineMarkersMenu,
+  shouldRoutePaletteKey,
+} from './palette-key-routing.util';
 
 const base = {
   viewType: 'standard',
@@ -45,5 +49,40 @@ describe('shouldRoutePaletteKey', () => {
     // view's `runPaletteSessionKey` repeats the check and ends the session; this test exists so
     // that the duplication reads as deliberate rather than as something to tidy away.
     expect(shouldRoutePaletteKey({ ...base, isReadOnly: true, isEditorFocused: true })).toBe(false);
+  });
+});
+
+describe('shouldOpenInlineMarkersMenu', () => {
+  const menuBase = {
+    key: INLINE_MARKERS_MENU_TRIGGER,
+    isMenuShown: false,
+    isEditorFocused: true,
+    isReadOnly: false,
+    viewType: 'formatted',
+  };
+
+  it('opens on the trigger key in a focused, editable, non-Standard editor', () => {
+    expect(shouldOpenInlineMarkersMenu({ ...menuBase })).toBe(true);
+    expect(shouldOpenInlineMarkersMenu({ ...menuBase, viewType: 'markers' })).toBe(true);
+  });
+
+  it('does not open for any other key', () => {
+    expect(shouldOpenInlineMarkersMenu({ ...menuBase, key: 'x' })).toBe(false);
+  });
+
+  it('does not open while the menu is already shown', () => {
+    expect(shouldOpenInlineMarkersMenu({ ...menuBase, isMenuShown: true })).toBe(false);
+  });
+
+  it('does not open when the editor does not hold focus', () => {
+    expect(shouldOpenInlineMarkersMenu({ ...menuBase, isEditorFocused: false })).toBe(false);
+  });
+
+  it('does not open in a read-only editor', () => {
+    expect(shouldOpenInlineMarkersMenu({ ...menuBase, isReadOnly: true })).toBe(false);
+  });
+
+  it('does not open in Standard view, which has the palette instead', () => {
+    expect(shouldOpenInlineMarkersMenu({ ...menuBase, viewType: 'standard' })).toBe(false);
   });
 });

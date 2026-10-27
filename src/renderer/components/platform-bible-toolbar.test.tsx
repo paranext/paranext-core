@@ -11,7 +11,10 @@ import {
 } from '@renderer/hooks/papi-hooks';
 import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
 import { useOpenProjectBookIds } from '@renderer/hooks/use-open-project-book-ids.hook';
-import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-overlay.hook';
+import {
+  useWindowControlsOverlay,
+  type WindowControlsOverlayInsets,
+} from '@renderer/hooks/use-window-controls-overlay.hook';
 import { ResolvedWebView } from '@renderer/services/navigation-target.util';
 import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-shard';
 import { resetSyncActivity, setSyncActivity } from '@renderer/services/sync-activity-store';
@@ -105,7 +108,7 @@ vi.mock('@renderer/hooks/use-open-project-book-ids.hook', () => ({
 }));
 
 vi.mock('@renderer/hooks/use-window-controls-overlay.hook', () => ({
-  useWindowControlsOverlay: vi.fn((): DOMRect | undefined => undefined),
+  useWindowControlsOverlay: vi.fn((): WindowControlsOverlayInsets | undefined => undefined),
 }));
 
 vi.mock('@renderer/services/web-view.service-shard', () => ({
@@ -1240,9 +1243,7 @@ describe('PlatformBibleToolbar — title bar reserved space', () => {
   });
 
   it('reserves the live-measured overlay width plus breathing room on Windows, and does not also apply the static class', async () => {
-    vi.mocked(useWindowControlsOverlay).mockReturnValue(
-      new DOMRect(0, 0, window.innerWidth - 150, 32),
-    );
+    vi.mocked(useWindowControlsOverlay).mockReturnValue({ left: 0, right: 150 });
     mockSendCommandForOS('win32');
 
     render(<PlatformBibleToolbar />);
@@ -1271,10 +1272,7 @@ describe('PlatformBibleToolbar — title bar reserved space', () => {
   });
 
   it('reserves space on the left when the live-measured gap is on the left (e.g., RTL locales)', async () => {
-    // left = 150, right = window.innerWidth: the gap sits on the left instead of the right.
-    vi.mocked(useWindowControlsOverlay).mockReturnValue(
-      new DOMRect(150, 0, window.innerWidth - 150, 32),
-    );
+    vi.mocked(useWindowControlsOverlay).mockReturnValue({ left: 150, right: 0 });
     mockSendCommandForOS('win32');
 
     render(<PlatformBibleToolbar />);
@@ -1304,9 +1302,7 @@ describe('PlatformBibleToolbar — title bar reserved space', () => {
   it('reserves the live-measured overlay width on Linux, the same as Windows', async () => {
     // Linux takes the frameless path with its own caption buttons, so the toolbar has to leave room
     // for them. Without the reservation the account icon draws on top of the maximize glyph.
-    vi.mocked(useWindowControlsOverlay).mockReturnValue(
-      new DOMRect(0, 0, window.innerWidth - 150, 32),
-    );
+    vi.mocked(useWindowControlsOverlay).mockReturnValue({ left: 0, right: 150 });
     mockSendCommandForOS('linux');
 
     render(<PlatformBibleToolbar />);
@@ -1321,7 +1317,7 @@ describe('PlatformBibleToolbar — title bar reserved space', () => {
   });
 
   it('does not reserve space on macOS regardless of overlay geometry, keeping the static traffic-lights class', async () => {
-    vi.mocked(useWindowControlsOverlay).mockReturnValue(new DOMRect(0, 0, 700, 32));
+    vi.mocked(useWindowControlsOverlay).mockReturnValue({ left: 0, right: 150 });
     mockSendCommandForOS('darwin');
 
     render(<PlatformBibleToolbar />);
@@ -1920,5 +1916,80 @@ describe('PlatformBibleToolbar — project selector accessible name', () => {
     expect(requireCapturedProjectSelectorProps().localizedStrings?.ariaLabel).toBe(
       'Test select a project, no projects',
     );
+  });
+});
+
+describe('PlatformBibleToolbar — unsupported reason localization', () => {
+  const SBA_REASON_KEY = '%project_unsupported_studyBibleAdditions%';
+  const OTHER_REASON_KEY = '%project_unsupported_other%';
+
+  let defaultPickerData: (() => ProjectPickerData) | undefined;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    mockSendCommand(true);
+    const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
+    defaultPickerData ??= vi.mocked(useProjectPickerData).getMockImplementation();
+  });
+
+  afterEach(async () => {
+    const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
+    if (defaultPickerData) vi.mocked(useProjectPickerData).mockImplementation(defaultPickerData);
+  });
+
+  /** Answers every picker-data read with new list identities, as each refresh does. */
+  async function answerWithNewLists(makeAllProjects: () => ProjectPickerData['allProjects']) {
+    const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
+    vi.mocked(useProjectPickerData).mockImplementation(() => ({
+      currentSimpleProject: undefined,
+      recentProjects: [],
+      allProjects: makeAllProjects(),
+      currentSimpleProjectError: undefined,
+      isLoading: false,
+    }));
+  }
+
+  /** The key lists `useLocalizedStrings` received that `matches` picks out. */
+  async function requestedKeyLists(matches: (keys: string[]) => boolean) {
+    const { useLocalizedStrings } = await import('@renderer/hooks/papi-hooks');
+    return vi
+      .mocked(useLocalizedStrings)
+      .mock.calls.map(([keys]) => keys)
+      .filter(matches);
+  }
+
+  it('keeps one reason key list across refreshes that bring the same reasons', async () => {
+    let isReversed = false;
+    await answerWithNewLists(() => {
+      const projects = [
+        { id: 'sba', shortName: 'SBA', fullName: 'SBA', unsupportedReason: SBA_REASON_KEY },
+        { id: 'oth', shortName: 'OTH', fullName: 'Other', unsupportedReason: OTHER_REASON_KEY },
+        { id: 'ok', shortName: 'OK', fullName: 'Openable' },
+      ];
+      return isReversed ? projects.reverse() : projects;
+    });
+    const { rerender } = render(<PlatformBibleToolbar />);
+    await screen.findByTestId('project-selector-stub');
+
+    isReversed = true;
+    rerender(<PlatformBibleToolbar />);
+
+    const reasonKeyLists = await requestedKeyLists((keys) => keys.includes(SBA_REASON_KEY));
+    expect(reasonKeyLists.length).toBeGreaterThan(1);
+    expect(reasonKeyLists[0]).toHaveLength(2);
+    reasonKeyLists.forEach((keys) => expect(keys).toBe(reasonKeyLists[0]));
+  });
+
+  it('keeps one empty key list across refreshes when no project has a reason', async () => {
+    await answerWithNewLists(() => [{ id: 'ok', shortName: 'OK', fullName: 'Openable' }]);
+    const { rerender } = render(<PlatformBibleToolbar />);
+    await screen.findByTestId('project-selector-stub');
+
+    rerender(<PlatformBibleToolbar />);
+
+    const emptyKeyLists = await requestedKeyLists((keys) => keys.length === 0);
+    expect(emptyKeyLists.length).toBeGreaterThan(1);
+    emptyKeyLists.forEach((keys) => expect(keys).toBe(emptyKeyLists[0]));
   });
 });

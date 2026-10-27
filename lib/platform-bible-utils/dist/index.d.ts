@@ -1723,6 +1723,26 @@ export type MenuItemBase = OrderedItem & {
 	 * items that should show in every mode — most items need no value here at all.
 	 */
 	hiddenInterfaceModes?: InterfaceMode[];
+	/**
+	 * Lucide icon name (kebab-case, e.g. `refresh-cw`) identifying the icon to display before the
+	 * menu text. The icon takes the text colour of the item. The curated names are listed in
+	 * `LUCIDE_ICON_NAMES` (exported from `platform-bible-react/experimental`). Wins over
+	 * `iconPathBefore` when both are set, unless the name is not in that set: then `iconPathBefore`
+	 * is shown if set, else no icon.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	iconNameBefore?: string;
+	/**
+	 * Lucide icon name (kebab-case, e.g. `external-link`) identifying the icon to display after the
+	 * menu text. The icon takes the text colour of the item. The curated names are listed in
+	 * `LUCIDE_ICON_NAMES` (exported from `platform-bible-react/experimental`). Wins over
+	 * `iconPathAfter` when both are set, unless the name is not in that set: then `iconPathAfter` is
+	 * shown if set, else no icon.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	iconNameAfter?: string;
 };
 /** Menu item that hosts a submenu */
 export type MenuItemContainingSubmenu = MenuItemBase & {
@@ -1734,13 +1754,13 @@ export type MenuItemContainingCommand = MenuItemBase & {
 	/** Name of the PAPI command to run when this menu item is selected. */
 	command: ReferencedItem;
 	/**
-	 * Uri path to the icon to display after the menu text. Ex:
-	 * `papi-extension://helloWorld/assets/icon.png`
+	 * Uri path to the icon to display after the menu text, shown at up to 16px wide and tall (the
+	 * size of a named icon). Ex: `papi-extension://helloWorld/assets/icon.png`
 	 */
 	iconPathAfter?: string;
 	/**
-	 * Uri path to the icon to display before the menu text. Ex:
-	 * `papi-extension://helloWorld/assets/icon.png`
+	 * Uri path to the icon to display before the menu text, shown at up to 16px wide and tall (the
+	 * size of a named icon). Ex: `papi-extension://helloWorld/assets/icon.png`
 	 */
 	iconPathBefore?: string;
 	/**
@@ -2092,6 +2112,14 @@ export declare const menuDocumentSchema: {
 						enum: string[];
 					};
 					uniqueItems: boolean;
+				};
+				iconNameBefore: {
+					description: string;
+					type: string;
+				};
+				iconNameAfter: {
+					description: string;
+					type: string;
 				};
 			};
 			required: string[];
@@ -4844,29 +4872,6 @@ export type NameablePhysicalKey = "Backspace" | "Delete";
  * use this without an extension having to declare its own copy of the string.
  */
 export declare function getLocalizeKeyForPhysicalKey(key: NameablePhysicalKey): LocalizeKey;
-/** Inputs to {@link computeEffectiveStructureProtection}. */
-export type EffectiveStructureProtectionInputs = {
-	/** Global `platform.interfaceMode` value; the feature applies only in `'simple'`. */
-	interfaceMode: string | undefined;
-	/** Project-level `platformScripture.structureProtected` admin setting. */
-	isAdminProtected: boolean;
-	/** Whether the current user can toggle the admin/project lock. */
-	canAdminToggle: boolean;
-	/** The user's personal preference; `undefined` when never set. */
-	userSetting: boolean | undefined;
-};
-/**
- * Computes whether structure protection (a.k.a. structure locking) is effectively active.
- *
- * This is the single source of truth for the effective-protection algebra, shared across extensions
- * that cannot import each other directly: the `platform-scripture-editor` structure-protection hook
- * and the `platform-scripture` Scripture Finder PDP both call it.
- *
- * The feature applies in simple interface mode only; in power mode it is always inactive. Within
- * simple mode, an admin project lock that the user cannot toggle forces protection on; otherwise
- * the user's own preference governs (defaulting to on when never set).
- */
-export declare function computeEffectiveStructureProtection({ interfaceMode, isAdminProtected, canAdminToggle, userSetting, }: EffectiveStructureProtectionInputs): boolean;
 /** Localized string value associated with this key */
 export type LocalizedStringValue = string;
 /**
@@ -5031,6 +5036,77 @@ export declare const localizedStringsDocumentSchema: {
 	};
 };
 /**
+ * Shown instead of a project's `unsupportedReason` when that reason could not be read or has no
+ * translation, so the user never sees a raw key or message.
+ */
+export declare const PROJECT_OPEN_BLOCKED_FALLBACK_KEY: "%project_unsupported_generic%";
+/** Shown when not even {@link PROJECT_OPEN_BLOCKED_FALLBACK_KEY} can be localized. */
+export declare const PROJECT_OPEN_BLOCKED_FALLBACK_MESSAGE = "This project can't be opened.";
+/**
+ * A project's `unsupportedReason` as a key that can be localized. The field is always a localize
+ * key; anything else is replaced by {@link PROJECT_OPEN_BLOCKED_FALLBACK_KEY} rather than shown
+ * raw.
+ *
+ * @param unsupportedReason The project's `unsupportedReason`
+ * @returns `unsupportedReason` if it is a localize key, otherwise the generic reason's key
+ */
+export declare function toProjectOpenBlockedReasonKey(unsupportedReason: string): LocalizeKey;
+/**
+ * The localize key explaining why the project was refused, when `error` is paranext-core's C#
+ * refusing a request on a project that cannot be opened (the message ends with the
+ * `(PROJECT_OPEN_BLOCKED)` sentinel).
+ *
+ * @param error Error, thrown value, or message string to inspect
+ * @returns The reason's localize key, {@link PROJECT_OPEN_BLOCKED_FALLBACK_KEY} if the refusal names
+ *   no readable reason, or `undefined` if `error` is not such a refusal
+ */
+export declare function getProjectOpenBlockedReasonKey(error: unknown): LocalizeKey | undefined;
+/** What {@link notifyProjectOpenBlocked} needs from PAPI, passed in so it runs in any process. */
+export type NotifyProjectOpenBlockedDependencies = {
+	/** Looks up the translations of `localizeKeys`, e.g. `papi.localization.getLocalizedStrings` */
+	getLocalizedStrings: (localizeKeys: LocalizeKey[]) => Promise<LanguageStrings>;
+	/** Shows `notification` to the user, e.g. `papi.notifications.send` */
+	sendNotification: (notification: {
+		message: LocalizeKey;
+		severity: "warning";
+	}) => Promise<unknown>;
+	/** Logs `message` as a warning, e.g. `logger.warn` */
+	logWarning: (message: string) => void;
+};
+/**
+ * Tells the user why a project was refused, as a warning notification (the notification service
+ * localizes the key). A key with no translation is replaced by the generic reason, so the
+ * notification never shows a raw key. Self-catching, so fire-and-forget callers never leak a
+ * rejection.
+ *
+ * @param reasonKey Localize key explaining why the project was refused
+ * @param dependencies The PAPI services to localize with, notify through, and log to
+ */
+export declare function notifyProjectOpenBlocked(reasonKey: LocalizeKey, { getLocalizedStrings, sendNotification, logWarning }: NotifyProjectOpenBlockedDependencies): Promise<void>;
+/** Inputs to {@link computeEffectiveStructureProtection}. */
+export type EffectiveStructureProtectionInputs = {
+	/** Global `platform.interfaceMode` value; the feature applies only in `'simple'`. */
+	interfaceMode: string | undefined;
+	/** Project-level `platformScripture.structureProtected` admin setting. */
+	isAdminProtected: boolean;
+	/** Whether the current user can toggle the admin/project lock. */
+	canAdminToggle: boolean;
+	/** The user's personal preference; `undefined` when never set. */
+	userSetting: boolean | undefined;
+};
+/**
+ * Computes whether structure protection (a.k.a. structure locking) is effectively active.
+ *
+ * This is the single source of truth for the effective-protection algebra, shared across extensions
+ * that cannot import each other directly: the `platform-scripture-editor` structure-protection hook
+ * and the `platform-scripture` Scripture Finder PDP both call it.
+ *
+ * The feature applies in simple interface mode only; in power mode it is always inactive. Within
+ * simple mode, an admin project lock that the user cannot toggle forces protection on; otherwise
+ * the user's own preference governs (defaulting to on when never set).
+ */
+export declare function computeEffectiveStructureProtection({ interfaceMode, isAdminProtected, canAdminToggle, userSetting, }: EffectiveStructureProtectionInputs): boolean;
+/**
  * One selectable item in a command/marker palette. The dependency-free shared shape consumed by
  * every layer that handles palette items — the renderer overlay service's `CommandPaletteItem`
  * extends it, `platform-bible-react`'s `FootnoteEditor` marker palette uses it directly, and
@@ -5160,6 +5236,12 @@ export type DblResourceData = {
 	installed: boolean;
 	updateAvailable: boolean;
 	projectId: string;
+	/**
+	 * Whether licensing terms prohibit using this resource as a model or base for a new translation,
+	 * so pickers for those must not offer it. Set by the platform-get-resources extension on the rows
+	 * it serves; absent when it could not tell.
+	 */
+	isRestrictedAsModelText?: boolean;
 };
 /**
  * Whether a DBL catalog row already accounts for a local project — by exact `projectId` match, or,
@@ -5204,9 +5286,17 @@ export type SettingBase = StateBase & {
 	/**
 	 * Boolean that controls whether a setting should be hidden or not. If hidden, the setting will
 	 * not show up in the settings dialog in `paranext-core`, and thus will not be configurable by the
-	 * user unless an extension provides a way to interact with the setting.
+	 * user unless an extension provides a way to interact with the setting. If every setting in a
+	 * group is hidden, the group does not show up either.
 	 */
 	isHidden?: boolean;
+	/**
+	 * Boolean that controls whether a setting is read-only in the settings dialog. If read-only, the
+	 * setting still shows up in the settings dialog in `paranext-core`, but the user cannot change it
+	 * there. A read-only text field can still be selected and copied; controls with no read-only
+	 * state, such as switches, are disabled. Extensions can still change the setting's value.
+	 */
+	isReadOnly?: boolean;
 };
 /** The data an extension provides to inform Platform.Bible of the project settings it provides */
 export type ProjectSettingsContribution = ProjectSettingsGroup | ProjectSettingsGroup[];
@@ -5595,6 +5685,10 @@ export declare const projectSettingsDocumentSchema: {
 						description: string;
 						type: string;
 					};
+					isReadOnly: {
+						description: string;
+						type: string;
+					};
 				};
 				required: string[];
 				$ref?: undefined;
@@ -5888,6 +5982,10 @@ export declare const settingsDocumentSchema: {
 						$ref: string;
 					};
 					isHidden: {
+						description: string;
+						type: string;
+					};
+					isReadOnly: {
 						description: string;
 						type: string;
 					};

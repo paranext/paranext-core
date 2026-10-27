@@ -772,16 +772,12 @@ export async function launchElectronApp(
   const pinnedAppGlobalState = !opts.userDataDir;
   if (pinnedAppGlobalState) pinAppGlobalState();
 
-  // VSCode/Claude Code set ELECTRON_RUN_AS_NODE=1 which forces the Electron
-  // binary to run as plain Node.js. We must omit it (do not set it to undefined:
-  // Playwright's env type is Record<string, string>).
   // NODE_ENV=development so the renderer loads from the webpack dev server.
-  // Omit ELECTRON_RUN_AS_NODE so the Electron child does not inherit it.
-  // Also strip PLATFORM_BIBLE_PROJECT_ROOT_FOLDER: the C# backend honors it, so an ambient value
-  // from the dev/CI shell would silently redirect the project root of suites that did not opt into
-  // isolatedProjectRoot. Only the isolatedProjectRoot branch (or an explicit envOverride) below sets it.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { ELECTRON_RUN_AS_NODE, PLATFORM_BIBLE_PROJECT_ROOT_FOLDER, ...restEnv } = process.env;
+  // Strip PLATFORM_BIBLE_PROJECT_ROOT_FOLDER as well as what electronChildEnv always omits: the C#
+  // backend honors it, so an ambient value from the dev/CI shell would silently redirect the project
+  // root of suites that did not opt into isolatedProjectRoot. Only the isolatedProjectRoot branch (or
+  // an explicit envOverride) below sets it.
+  const restEnv = electronChildEnv('PLATFORM_BIBLE_PROJECT_ROOT_FOLDER');
   isolatedProjectRootDir = opts.isolatedProjectRoot
     ? path.join(userDataDir, 'projects')
     : undefined;
@@ -865,6 +861,22 @@ export async function launchElectronApp(
 }
 
 /**
+ * `process.env` for an Electron child launched through Playwright: string-valued, as Playwright's
+ * `env` requires, and without `ELECTRON_RUN_AS_NODE`, which VS Code and Claude Code set and which
+ * would start the Electron binary as plain Node.js.
+ *
+ * @param alsoOmit Further variables to leave out
+ */
+export function electronChildEnv(...alsoOmit: string[]): Record<string, string> {
+  const omitted = new Set(['ELECTRON_RUN_AS_NODE', ...alsoOmit]);
+  return Object.fromEntries(
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] => !omitted.has(entry[0]) && entry[1] !== undefined,
+    ),
+  );
+}
+
+/**
  * Best-effort removal of a user-data directory: never throws, so a stuck removal only warns instead
  * of replacing — or, called from a launch failure path, being the only thing that ran after — an
  * error that already sent the caller here.
@@ -875,7 +887,7 @@ export async function launchElectronApp(
  * seconds: on Windows, Chromium's utility process releases its cache journal (e.g.
  * `Cache\No_Vary_Search\journal.baj`) moments after the tree is killed, not the instant it is.
  */
-function removeUserDataDirBestEffort(userDataDir: string): void {
+export function removeUserDataDirBestEffort(userDataDir: string): void {
   try {
     fs.rmSync(userDataDir, { recursive: true, force: true, maxRetries: 6, retryDelay: 250 });
   } catch (error) {
@@ -2802,6 +2814,24 @@ export async function waitForOpenWebViewIdByType(
       lastSeenTypes.length > 0 ? lastSeenTypes.join(', ') : '<none>'
     })`,
   );
+}
+
+/**
+ * Open the Markers Checklist for the open scripture editor by sending
+ * `platformScripture.openMarkersChecklist` with the editor's web view id; the handler resolves the
+ * project from the web view definition. The editor menu hides the Markers Checklist item in both
+ * interface modes, so the command is the only way in.
+ */
+export async function sendOpenMarkersChecklistCommand(page: Page): Promise<void> {
+  const editorWebViewId = await waitForOpenWebViewIdByType(page, 'platformScriptureEditor.react');
+  await page.evaluate(async (webViewId) => {
+    // The renderer exposes `papi` on `window` without a declared type in the e2e project.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const win = window as unknown as {
+      papi: { commands: { sendCommand: (command: string, id: string) => Promise<unknown> } };
+    };
+    await win.papi.commands.sendCommand('platformScripture.openMarkersChecklist', webViewId);
+  }, editorWebViewId);
 }
 
 /** Options accepted by {@link openFromEditorHamburger}. */

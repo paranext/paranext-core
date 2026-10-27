@@ -38,6 +38,8 @@ import {
   makeProjectSelectorCustomData,
   normalizeFullName,
   normalizeProjectId,
+  notifyProjectOpenBlocked,
+  NotifyProjectOpenBlockedDependencies,
 } from 'platform-bible-utils';
 import { getBookIdsFromBooksPresent } from 'platform-bible-utils/experimental';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
@@ -62,11 +64,18 @@ import {
   GreekEstherTemplatePicker,
   GreekEstherTemplatePickerLocalizedStrings,
 } from './greek-esther-template-picker.component';
+import { getProjectOpenBlockedReasonKeyFromResult } from './project-open-blocked.util';
 import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 
 const NETWORK_OBJECT_ID = 'platformScripture.manageBooks';
 const BOOKS_PRESENT_DEFAULT = '0'.repeat(123);
+
+const PROJECT_OPEN_BLOCKED_NOTIFY_DEPENDENCIES: NotifyProjectOpenBlockedDependencies = {
+  getLocalizedStrings: (localizeKeys) => papi.localization.getLocalizedStrings({ localizeKeys }),
+  sendNotification: (notification) => papi.notifications.send(notification),
+  logWarning: (message) => logger.warn(message),
+};
 
 // Only Scripture Editor tabs should mark a project as "open" in the ProjectSelector.
 // Other project-bound tabs (Manage Books itself, Checks side panel, etc.) carry a `projectId`
@@ -121,6 +130,11 @@ type ProjectListResult = {
      * list so the frontend does not have to fetch `platformScripture.versification` per project.
      */
     versification: string;
+    /**
+     * Whether licensing terms prohibit using the project as the base of new text. Mirrors the C#
+     * `ProjectSummary.IsRestrictedAsBase` wire field.
+     */
+    isRestrictedAsBase: boolean;
   }[];
 };
 
@@ -866,6 +880,8 @@ global.webViewComponent = function ManageBooksWebView({
         // versification grouping. The localized name is resolved on the dialog side (it owns the
         // localizedStrings → versificationLabelKey map); here we forward the raw id.
         versificationId: p.versification,
+        // Licensing-restricted texts stay listed in the Create "Based on" picker but cannot be chosen
+        isRestrictedAsBase: p.isRestrictedAsBase,
         // Project type for the Copy "From" picker's type grouping. Already on this same wire
         // response, so it adds no round-trip. There is no localized display name on the wire, so
         // the raw key doubles as the section heading.
@@ -983,6 +999,11 @@ global.webViewComponent = function ManageBooksWebView({
         notifySyncEditBlocked();
         return;
       }
+      const openBlockedReasonKey = getProjectOpenBlockedReasonKeyFromResult(entry.text);
+      if (openBlockedReasonKey) {
+        notifyProjectOpenBlocked(openBlockedReasonKey, PROJECT_OPEN_BLOCKED_NOTIFY_DEPENDENCIES);
+        return;
+      }
       // notificationService is exposed on @papi/frontend; per ui-spec-manage-books.md:118 toasts
       // are the canonical surface. `.catch` rather than try/catch: the send is fire-and-forget
       // (this callback cannot await inside forEach), so a try/catch would only ever see
@@ -1089,14 +1110,12 @@ global.webViewComponent = function ManageBooksWebView({
   }, []);
 
   // ===== Cross-launch stubs (DEF-UI-007/008) =================================
-  // Project canons and Registry have no PT10 cross-launch target yet. Per Phase 3 UI
-  // Decision 13 (2026-05-04), the wiring layer simply omits the `onOpenProjectCanons` /
-  // `onOpenRegistry` props from <ManageBooksDialog>. The dialog renders each button as
-  // disabled with a "Not yet available — coming soon" tooltip on hover (the convention
-  // used elsewhere in the dialog for not-yet-implemented affordances). When real
-  // platform commands ship, replace the omission with `useCallback` handlers that route
-  // to those commands — the buttons will auto-enable and the disabled+tooltip stub
-  // disappears.
+  // Project canons and Registry have no PT10 cross-launch target yet, so the wiring layer
+  // simply omits the `onOpenProjectCanons` / `onOpenRegistry` props from <ManageBooksDialog>.
+  // The dialog renders each button as disabled with a not-yet-available tooltip on hover (the
+  // convention used elsewhere in the dialog for not-yet-implemented affordances). When real
+  // platform commands ship, replace the omission with `useCallback` handlers that route to those
+  // commands — the buttons will auto-enable and the disabled+tooltip stub disappears.
 
   // ===== File picker stub (DEF-UI-009 / FN-010 spike) ========================
   // No platform multi-file picker exists in PT10. The component falls back to

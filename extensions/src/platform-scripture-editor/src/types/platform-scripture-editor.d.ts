@@ -43,11 +43,41 @@ declare module 'platform-scripture-editor' {
   };
 
   /**
-   * Tell the editor to cycle between the Scripture view types (currently just a toggle between
-   * formatted and Marker view)
+   * Tell the editor to toggle between Standard view and Preview. This only has an effect in Power
+   * mode; outside Power mode the editor has a single view, so nothing changes.
    */
   export type EditorMessageChangeScriptureView = {
     method: 'changeScriptureView';
+  };
+
+  /**
+   * Tell the editor to show a specific Scripture view type. A `'standard'` or `'markers'` request
+   * resolves to the formatted view (the Simple view) when the interface mode is not Power. In Power
+   * mode a `'markers'` request is shown as Standard view.
+   *
+   * @experimental This message is unstable and may change or disappear without notice
+   */
+  export type EditorMessageSetScriptureView = {
+    method: 'setScriptureView';
+    viewType: ScriptureEditorViewType;
+  };
+
+  /**
+   * Tell the editor to undo its last edit, unless the editor is read-only
+   *
+   * @experimental This message is unstable and may change or disappear without notice
+   */
+  export type EditorMessageUndo = {
+    method: 'undo';
+  };
+
+  /**
+   * Tell the editor to redo its last undone edit, unless the editor is read-only
+   *
+   * @experimental This message is unstable and may change or disappear without notice
+   */
+  export type EditorMessageRedo = {
+    method: 'redo';
   };
 
   /** Tell the editor to toggle footnotes pane visibility */
@@ -83,6 +113,26 @@ declare module 'platform-scripture-editor' {
    *   - `destroyed` - when the text the annotation was on is completely deleted
    */
   export type AnnotationAction = 'clicked' | TypedMarkRemovalCause;
+
+  /**
+   * How `platformScriptureEditor.showResourceInReferencePanel` ended.
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  export type ShowResourceInReferencePanelResult =
+    /** The resource is shown, in the tab with this web view ID */
+    | { status: 'shown'; webViewId: string }
+    /**
+     * The tab could not be shown, or not in time. The user has been told, and the resource should
+     * not be opened some other way.
+     */
+    | { status: 'notShown' }
+    /**
+     * Neither reference tab is open (outside Simple mode's layout), or the resource is of a kind
+     * neither tab lists, which the catalog does not produce today. Open it some other way. With no
+     * project open the resource is still shown in its tab — just not saved to any list.
+     */
+    | { status: 'openElsewhere' };
 
   /**
    * Handler function for annotation interactions. To handle annotation interactions, register a
@@ -145,6 +195,9 @@ declare module 'platform-scripture-editor' {
     | EditorMessageSelectRange
     | EditorMessageUpdateDecorations
     | EditorMessageChangeScriptureView
+    | EditorMessageSetScriptureView
+    | EditorMessageUndo
+    | EditorMessageRedo
     | EditorMessageToggleFootnotesPaneVisibility
     | EditorMessageChangeFootnotesPaneLocation
     | EditorMessageInsertTextualNoteAtSelection
@@ -287,7 +340,10 @@ declare module 'platform-scripture-editor' {
   // #region editor WebView types
 
   /**
-   * Ways Scripture project text can be viewed in the editor.
+   * Ways Scripture project text can be viewed in the editor. `'formatted'` is the editable Simple
+   * view outside Power mode and Preview, which is read-only, in Power mode. `'standard'` is
+   * Standard view (Power mode only). `'markers'` is a value saved by earlier versions; it is shown
+   * as Standard view in Power mode and as the Simple view otherwise.
    *
    * @experimental The set of view types is expected to grow.
    */
@@ -300,7 +356,7 @@ declare module 'platform-scripture-editor' {
     /**
      * Ways Scripture project text can be viewed in the editor
      *
-     * Defaults to 'formatted'.
+     * Defaults to 'standard' in Power mode and 'formatted' otherwise.
      *
      * @experimental
      */
@@ -371,10 +427,32 @@ declare module 'platform-scripture-editor' {
      */
     selectRange(range: ScriptureRange): Promise<void>;
     /**
-     * Cycle through the Scripture view types in the editor (currently just a toggle between
-     * formatted and Marker view)
+     * Toggle the editor between Standard view and Preview. This only has an effect in Power mode;
+     * outside Power mode the editor has a single view, so nothing changes.
      */
     changeScriptureView(): Promise<void>;
+    /**
+     * Show a specific Scripture view type in the editor (`'standard'` and `'markers'` resolve to
+     * the formatted view, the Simple view, outside Power mode; in Power mode `'markers'` is shown
+     * as Standard view)
+     *
+     * @experimental This method is unstable and may change or disappear without notice
+     */
+    setScriptureView(viewType: ScriptureEditorViewType): Promise<void>;
+    /**
+     * Undo the last edit in the editor. Does nothing but tell the user while the editor is
+     * read-only
+     *
+     * @experimental This method is unstable and may change or disappear without notice
+     */
+    undo(): Promise<void>;
+    /**
+     * Redo the last undone edit in the editor. Does nothing but tell the user while the editor is
+     * read-only
+     *
+     * @experimental This method is unstable and may change or disappear without notice
+     */
+    redo(): Promise<void>;
     /** Toggle the visibility of the footnotes pane in the editor */
     toggleFootnotesPaneVisibility(): Promise<void>;
     /** Toggle the visibility of the footnotes pane in the editor */
@@ -709,6 +787,7 @@ declare module 'papi-shared-types' {
     OpenEditorOptions,
     PlatformScriptureEditorWebViewController,
     SelectionChangeEvent,
+    ShowResourceInReferencePanelResult,
   } from 'platform-scripture-editor';
   import type { ResourceType } from 'platform-bible-utils';
   // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
@@ -795,6 +874,11 @@ declare module 'papi-shared-types' {
     /**
      * Opens a new read-only editor WebView and returns the WebView id
      *
+     * In Simple mode this opens in the editor column, replacing the project there. To open a
+     * resource the user asked for in Simple mode, call
+     * `platformScriptureEditor.showResourceInReferencePanel` first, and this only when that answers
+     * `openElsewhere`.
+     *
      * @param projectId Optional project ID of the project/resource to open. If a project ID
      *   (editable) is provided, this will properly open the Scripture editor. Prompts the user to
      *   select a resource if this parameter is not provided.
@@ -812,12 +896,49 @@ declare module 'papi-shared-types' {
     ) => Promise<string | undefined>;
 
     /**
-     * Cycles through the Scripture view types in the editor (currently just a toggle between
-     * formatted and Marker view) for the given the WebView ID
+     * Toggles the editor between Standard view and Preview for the given WebView ID. This only has
+     * an effect in Power mode; outside Power mode the editor has a single view, so nothing
+     * changes.
      *
      * @param webViewId The WebView ID of the scripture editor or resource viewer.
      */
     'platformScriptureEditor.changeView': (webViewId: string | undefined) => Promise<void>;
+
+    /**
+     * Shows Standard view in the editor for the given WebView ID. Outside Power mode the editor
+     * shows the Simple view instead.
+     *
+     * @param webViewId The WebView ID of the scripture editor or resource viewer.
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platformScriptureEditor.setViewStandard': (webViewId: string | undefined) => Promise<void>;
+
+    /**
+     * Shows Preview (the formatted view) in the editor for the given WebView ID. Preview is
+     * read-only in Power mode.
+     *
+     * @param webViewId The WebView ID of the scripture editor or resource viewer.
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platformScriptureEditor.setViewPreview': (webViewId: string | undefined) => Promise<void>;
+
+    /**
+     * Undoes the last edit in the editor for the given WebView ID. Does nothing but tell the user
+     * while the editor is read-only.
+     *
+     * @param webViewId The WebView ID of the scripture editor or resource viewer.
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platformScriptureEditor.undo': (webViewId: string | undefined) => Promise<void>;
+
+    /**
+     * Redoes the last undone edit in the editor for the given WebView ID. Does nothing but tell the
+     * user while the editor is read-only.
+     *
+     * @param webViewId The WebView ID of the scripture editor or resource viewer.
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platformScriptureEditor.redo': (webViewId: string | undefined) => Promise<void>;
 
     /**
      * Toggles the visibility of the footnotes pane for the given the WebView ID
@@ -888,8 +1009,8 @@ declare module 'papi-shared-types' {
       editorWebViewId?: string | undefined,
     ) => Promise<void>;
     /**
-     * Dismiss the marker-view readonly notification for a given notification ID. The command
-     * receives the `notificationId` when the notification's click action is used.
+     * Dismiss the read-only Preview notification for a given notification ID. The command receives
+     * the `notificationId` when the notification's click action is used.
      */
     'platformScriptureEditor.dismissMarkerNotificationForProjectToday': NotificationClickCommandHandler;
     /**
@@ -910,6 +1031,18 @@ declare module 'papi-shared-types' {
      * @experimental This command is unstable and may change or disappear without notice
      */
     'platformScriptureEditor.finalizeProjectSwitch': (projectId: string) => Promise<void>;
+    /**
+     * After a switch from Simple to Power mode, send/receives the project if it holds local changes
+     * to send. Resolves as soon as that work has started, not when it ends; the sync reports its
+     * own progress and failures, so this never rejects for them. Syncs nothing if the user chose
+     * "Don't sync yet" this session.
+     *
+     * Intended for Platform.Bible core's Simple -> Power mode switch.
+     *
+     * @param projectId The project the Simple-mode Scripture Editor was showing.
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platformScriptureEditor.syncOnSwitchToPower': (projectId: string) => Promise<void>;
     /**
      * Opens the model text panel WebView for a translation project
      *
@@ -933,6 +1066,27 @@ declare module 'papi-shared-types' {
       resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
       projectId?: string,
     ) => Promise<string | undefined>;
+    /**
+     * Shows a locally-installed resource in the tab for its kind — Commentaries for commentaries,
+     * Bible texts for Bible texts and for resources the catalog does not describe — and brings that
+     * tab to the front. Unless the team's list already has it, the resource is added to the current
+     * user's personal list for the project the tab shows. It is shown but not added when that
+     * cannot be settled safely (the team's list or the resource's catalog entry cannot be read
+     * yet). The team's list is never written.
+     *
+     * Decides within 20 seconds of the request, waiting behind another show included, whether to go
+     * ahead: a show that has not got as far as saving by then is dropped, and the user told. One
+     * that has started saving runs to completion, however long the save and the tab's reload take.
+     *
+     * @param resourceProjectId The local project id of the resource to show
+     * @returns How the show ended. The command itself never rejects: a rejection means it was not
+     *   reached, or PAPI's request timeout (`platform.requestTimeout`) elapsed first — a show that
+     *   has started saving can run past it.
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platformScriptureEditor.showResourceInReferencePanel': (
+      resourceProjectId: string,
+    ) => Promise<ShowResourceInReferencePanelResult>;
     /**
      * Brings the Bible texts tab to the front. If it isn't open, opens it for the editor's project.
      * An open tab is raised, never reloaded, so it keeps its state.

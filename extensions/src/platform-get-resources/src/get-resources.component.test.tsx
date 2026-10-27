@@ -5,6 +5,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi, beforeAll, afterAll } from 'vitest';
 import type { DblResourceData } from 'platform-bible-utils';
 import { FAILED_PRECONDITION, isPlatformError } from 'platform-bible-utils';
+import localizedStringsContribution from '../contributions/localizedStrings.json';
 import {
   GetResources,
   newResourceActionDidNotTakeEffectError,
@@ -39,7 +40,7 @@ afterAll(() => {
  */
 
 const STRINGS = {
-  '%data_loading_error_internetAccess_disabled_2%': 'Internet access is disabled, translated',
+  '%data_loading_error_internetAccess_disabled_3%': 'Internet access is disabled, translated',
   '%resources_noResults%': 'No resources found',
   '%resources_noResultsError%': 'Unable to search for resources',
   '%resources_retry%': 'Try again',
@@ -396,8 +397,8 @@ describe('GetResources', () => {
       <GetResources
         localizedStringsWithLoadingState={[
           {
-            '%data_loading_error_internetAccess_disabled_2%':
-              '%data_loading_error_internetAccess_disabled_2%',
+            '%data_loading_error_internetAccess_disabled_3%':
+              '%data_loading_error_internetAccess_disabled_3%',
             '%resources_get%': '%resources_get%',
           },
           true,
@@ -423,7 +424,7 @@ describe('GetResources', () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText('%data_loading_error_internetAccess_disabled_2%'),
+      screen.queryByText('%data_loading_error_internetAccess_disabled_3%'),
     ).not.toBeInTheDocument();
   });
 });
@@ -453,7 +454,7 @@ const resource = (
 const RESOURCES: DblResourceData[] = [
   resource({ bestLanguageName: 'Amharic', type: 'ScriptureResource' }),
   resource({ bestLanguageName: 'Nepali', type: 'ScriptureResource' }),
-  resource({ bestLanguageName: 'Coptic', type: 'XmlResource' }),
+  resource({ bestLanguageName: 'Coptic', type: 'CommentaryResource' }),
 ];
 
 function renderGetResources(overrides: Partial<Parameters<typeof GetResources>[0]> = {}) {
@@ -467,12 +468,77 @@ function renderGetResources(overrides: Partial<Parameters<typeof GetResources>[0
   );
 }
 
-/** The language filter is the second combo box; the first is the type filter. */
-function openLanguageFilter() {
+/** Opens the filter at `index` among the combo boxes and returns the text of each option. */
+function openFilter(index: number) {
   const triggers = screen.getAllByRole('combobox').filter((el) => el.tagName === 'BUTTON');
-  fireEvent.click(triggers[1]);
+  fireEvent.click(triggers[index]);
   return screen.queryAllByRole('option').map((option) => option.textContent ?? '');
 }
+
+describe('GetResources search box', () => {
+  it("is described by what it matches, which isn't type", () => {
+    renderGetResources();
+
+    // The search matches name and language only; the type filter is the control for type.
+    expect(screen.getByRole('textbox')).toHaveAttribute(
+      'placeholder',
+      '%resources_filterInput_searchPlaceholder%',
+    );
+    // The wording itself, not just the key: it must not promise a search by type.
+    expect(
+      localizedStringsContribution.localizedStrings.en['%resources_filterInput_searchPlaceholder%'],
+    ).not.toMatch(/type/i);
+  });
+});
+
+/** The type filter is the first combo box. */
+function openTypeFilter() {
+  return openFilter(0);
+}
+
+/** The language filter is the second combo box. */
+function openLanguageFilter() {
+  return openFilter(1);
+}
+
+describe('GetResources type filter', () => {
+  it('offers Scripture and commentary types, but not source language, Enhanced or XML', () => {
+    renderGetResources();
+
+    // No localized strings are served, so each option renders its label key.
+    const offered = openTypeFilter();
+
+    expect(offered.some((label) => label.includes('%resources_type_Scripture%'))).toBe(true);
+    expect(offered.some((label) => label.includes('%resources_type_Commentary%'))).toBe(true);
+    expect(offered.some((label) => label.includes('%resources_type_SLR%'))).toBe(false);
+    expect(offered.some((label) => label.includes('%resources_type_ER%'))).toBe(false);
+    expect(offered.some((label) => label.includes('%resources_type_XR%'))).toBe(false);
+  });
+
+  it('lists no source language, Enhanced or XML resource, or a language only they have, when no type is selected', () => {
+    renderGetResources({
+      selectedTypes: [],
+      resources: [
+        ...RESOURCES,
+        resource({ bestLanguageName: 'Greek', type: 'SourceLanguageResource' }),
+        resource({ bestLanguageName: 'Hebrew', type: 'EnhancedResource' }),
+        resource({ bestLanguageName: 'Syriac', type: 'XmlResource' }),
+      ],
+    });
+
+    // Positive control: "Any type" does widen past Scripture.
+    expect(screen.getByText('Resource Coptic CommentaryResource')).toBeInTheDocument();
+    expect(screen.queryByText('Resource Greek SourceLanguageResource')).not.toBeInTheDocument();
+    expect(screen.queryByText('Resource Hebrew EnhancedResource')).not.toBeInTheDocument();
+    expect(screen.queryByText('Resource Syriac XmlResource')).not.toBeInTheDocument();
+
+    const offered = openLanguageFilter();
+    expect(offered.some((label) => label.includes('Coptic'))).toBe(true);
+    expect(offered.some((label) => label.includes('Greek'))).toBe(false);
+    expect(offered.some((label) => label.includes('Hebrew'))).toBe(false);
+    expect(offered.some((label) => label.includes('Syriac'))).toBe(false);
+  });
+});
 
 describe('GetResources language filter', () => {
   it('offers only languages that have a resource of a selected type', () => {
@@ -515,11 +581,11 @@ describe('GetResources language filter', () => {
     // The badges placeholder stands where the badges would be, so nothing is selected.
     expect(screen.getByText('%resources_any_type%')).toBeInTheDocument();
     // And with no type in play the grid shows the whole catalogue rather than nothing.
-    expect(screen.getByText('Resource Coptic XmlResource')).toBeInTheDocument();
+    expect(screen.getByText('Resource Coptic CommentaryResource')).toBeInTheDocument();
   });
 
   it('ignores a selected language the type filter no longer offers, rather than emptying the grid', () => {
-    // Coptic is persisted from a session where XML resources were shown. Filtering rows on it now
+    // Coptic is persisted from a session where commentaries were shown. Filtering rows on it now
     // would hide every Scripture row and leave no way to un-pick it.
     renderGetResources({ selectedLanguages: ['Coptic'] });
 

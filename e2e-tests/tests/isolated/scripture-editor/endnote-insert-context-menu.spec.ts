@@ -51,12 +51,6 @@
  *   (`platform-scripture-editor.web-view.tsx`'s Ctrl+T/Ctrl+Shift+T and comment-hotkey checks), so
  *   this proves the menu's own blanket claim, not those host guards — which stand ready here only
  *   as an unexercised fallback for an editor package that doesn't claim every key itself.
- * - Cycling the SAME editor to Formatted view proves the menu's blanket key-claim holds outside
- *   Standard view too: the same document-capture listener claims `\` before it can ever reach the
- *   host's own Formatted-view guard (`isEditorContextMenuOpen` inside `handleKeyDown`), so this is
- *   another case of the menu itself being under test — with a positive control (the same key with
- *   the menu closed) showing the check is falsifiable — and the host's own guard again exercised
- *   only as an unexercised fallback.
  * - A real window resize (never `page.setViewportSize()` — see `setWindowHeight`) forces the menu's
  *   list past its natural height, proving the scrollbar declared in the step above is not just
  *   declared but load-bearing: the list actually caps, actually scrolls, and stays open while doing
@@ -66,25 +60,15 @@
  * Run: `npm run test:e2e:isolated scripture-editor`.
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
-import { setWindowHeight, sleep } from '../../../fixtures/helpers';
+import { setWindowHeight } from '../../../fixtures/helpers';
 import {
   EDITOR_HAMBURGER_SELECTOR,
   makeSampleProjectEditable,
   navigateToolbarBcv,
   openEditableScriptureEditorForProject,
   SAMPLE_WEB_PROJECT_ID,
-  sendPapiCommandWhenRegistered,
   waitForHomeTab,
 } from '../../../fixtures/scripture-editor-helpers';
-
-/**
- * Budget for the double-rAF settle wait below, mirroring `WINDOW_WIDTH_RAF_SETTLE_TIMEOUT_MS` in
- * `helpers.ts`: Chromium's `backgroundThrottling` stops `requestAnimationFrame` entirely for a
- * hidden or occluded window, and `page.evaluate` (here, `Locator.evaluate`) carries no timeout of
- * its own, so this wait needs its own bound rather than relying on the test's overall timeout to
- * end it.
- */
-const RAF_SETTLE_TIMEOUT_MS = 2_000;
 
 test.use({
   interfaceMode: 'power',
@@ -102,8 +86,6 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
     await makeSampleProjectEditable();
     const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
     const editorFrame = mainPage.frameLocator(`iframe[data-web-view-id="${editorId}"]`);
-    // Scoped by view-agnostic markup (not `.editor-input.marker-editable`, which only matches
-    // Standard view) so it stays valid once a later step cycles the view to Formatted.
     const editorContainer = editorFrame.locator('.editor-container');
     await editorContainer.waitFor({ timeout: 60_000 });
     await navigateToolbarBcv(mainPage, 'Jonah 1:2');
@@ -129,15 +111,6 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
      */
     const nextClearVersePara = () =>
       mainEditor.locator('p.usfm_p:has(span.verse):not(:has(span.note))').first();
-
-    /**
-     * Same idea as {@link nextClearVersePara}, scoped to {@link editorContainer} instead of
-     * {@link mainEditor}: the later Formatted-view and overflow steps run after a view switch that
-     * drops the `.marker-editable` class `mainEditor` depends on, but `.editor-container` is stable
-     * across every view.
-     */
-    const nextClearVersePicker = () =>
-      editorContainer.locator('p.usfm_p:has(span.verse):not(:has(span.note))').first();
 
     /**
      * Watches `document` in the MAIN page for the command palette overlay ever appearing, from
@@ -230,10 +203,10 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       optionTexts = await contextMenu.locator('[role="option"]').allTextContents();
       const insertOptions = optionTexts.filter((text) => text.startsWith('Insert'));
       expect(insertOptions).toEqual([
+        'Insert comment',
         'Insert footnote',
         'Insert cross-reference',
         'Insert endnote',
-        'Insert comment',
       ]);
     });
 
@@ -488,109 +461,19 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       await expect(endnotesInVerseParas).toHaveCount(endnotesBefore + 1);
     });
 
-    await test.step('the backslash does not open the inline markers menu while the context menu is open, in Formatted view', async () => {
-      // The footnote editor popover from earlier steps has no `onOpenChange` and only closes on a
-      // chapter change; leaving it open here would sit over the click below. Also re-establishes a
-      // rendered chapter (rather than the empty mid-navigation editor) before the view switch.
+    await test.step('the menu genuinely overflows and scrolls when the editor panel is too short to fit it', async () => {
+      // The footnote editor popover the mouse insert above opened has no `onOpenChange` and only
+      // closes on a chapter change (see constraint 2 in the header); left open, it would sit over
+      // the paragraph to right-click and give the frame a second `.editor-container`.
       await navigateToolbarBcv(mainPage, 'Jonah 2:1');
       await expect(mainEditor).toContainText('prayed to Yahweh, his God', { timeout: 60_000 });
       await navigateToolbarBcv(mainPage, 'Jonah 1:2');
       await expect(mainEditor).toContainText('word came to Jonah', { timeout: 60_000 });
+      await expect(editorInput).toHaveCount(1);
 
-      // Power mode cycles Standard -> Markers -> Formatted; Simple mode's view is pinned to the
-      // same 'formatted' endpoint. Waiting for the intermediate Markers step to land before firing
-      // the second command avoids racing a stale pre-cycle state.
-      await sendPapiCommandWhenRegistered('platformScriptureEditor.changeView', editorId);
-      await expect(editorFrame.locator('.editor-input.marker-visible')).toBeAttached({
-        timeout: 20_000,
-      });
-      await sendPapiCommandWhenRegistered('platformScriptureEditor.changeView', editorId);
-      await expect(editorFrame.locator('.editor-input.marker-hidden')).toBeAttached({
-        timeout: 20_000,
-      });
-
-      const versePara = nextClearVersePicker();
-      await expect(versePara).toBeVisible({ timeout: 30_000 });
-      await versePara.click();
-      await openContextMenu(versePara);
-
-      // The inline markers menu's search input (`.marker-menu-search`, the one class unique to this
-      // popover's `CommandInput`) is the DOM signal to watch for: its `Popover` has no
-      // `forceMount`, so nothing of it exists until React actually opens it. Watched inside the
-      // EDITOR frame's own document — this popover renders there, not in the main page.
-      await editorContainer.evaluate(() => {
-        // Stashed on `window` so the disconnect-and-check call below can find the same observer and
-        // flag; neither is part of the standard DOM typings.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        const w = window as unknown as {
-          strayMarkerMenuObserver?: MutationObserver;
-          strayMarkerMenuSeen?: boolean;
-        };
-        const markIfPresent = () => {
-          if (document.querySelector('.marker-menu-search')) w.strayMarkerMenuSeen = true;
-        };
-        w.strayMarkerMenuSeen = false;
-        markIfPresent();
-        const observer = new MutationObserver(markIfPresent);
-        observer.observe(document, { childList: true, subtree: true });
-        w.strayMarkerMenuObserver = observer;
-      });
-
-      await mainPage.keyboard.press('\\');
-
-      // The open is a synchronous React state update from a discrete keydown handler, so it has
-      // committed (or not) by the time two animation frames inside the editor frame have run.
-      // Raced against a bounded sleep, not awaited outright: a hidden/occluded window suspends
-      // requestAnimationFrame indefinitely (see RAF_SETTLE_TIMEOUT_MS), so this must fail fast
-      // instead of hanging — mirrors `setWindowWidth` in `helpers.ts`. `Promise.race` never cancels
-      // its loser, so the `.catch(() => {})` keeps the abandoned `evaluate` call from surfacing as
-      // an unhandled rejection once the window becomes visible again after the race has settled.
-      await Promise.race([
-        editorContainer
-          .evaluate(
-            () =>
-              new Promise<void>((resolve) => {
-                requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-              }),
-          )
-          .catch(() => {}),
-        sleep(RAF_SETTLE_TIMEOUT_MS),
-      ]);
-
-      const strayMarkerMenuSeen = await editorContainer.evaluate(() => {
-        // See the install call above for why this cast is needed.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        const w = window as unknown as {
-          strayMarkerMenuObserver?: MutationObserver;
-          strayMarkerMenuSeen?: boolean;
-        };
-        w.strayMarkerMenuObserver?.disconnect();
-        w.strayMarkerMenuObserver = undefined;
-        const result = w.strayMarkerMenuSeen;
-        w.strayMarkerMenuSeen = undefined;
-        return result;
-      });
-      expect(strayMarkerMenuSeen).toBe(false);
-      await expect(contextMenu).toBeAttached();
-
-      // Positive control: the same backslash DOES open the inline markers menu once the context
-      // menu is out of the way — proof the check above is falsifiable rather than vacuously true
-      // because Formatted view never opens that menu at all.
-      await mainPage.keyboard.press('Escape');
-      await expect(contextMenu).not.toBeAttached({ timeout: 15_000 });
-      await versePara.click();
-      await mainPage.keyboard.press('\\');
-      const markerMenuSearch = editorFrame.locator('.marker-menu-search');
-      await expect(markerMenuSearch).toBeVisible({ timeout: 15_000 });
-      await mainPage.keyboard.press('Escape');
-      await expect(markerMenuSearch).not.toBeVisible({ timeout: 15_000 });
-    });
-
-    await test.step('the menu genuinely overflows and scrolls when the editor panel is too short to fit it', async () => {
       // How much of the window belongs to chrome outside the editor iframe (toolbars, tab strip),
       // measured at the window's current size, so the target height below is computed rather than
-      // guessed. Run LAST, after the view switch above, because shrinking the real window affects
-      // every locator after it.
+      // guessed. Run LAST, because shrinking the real window affects every locator after it.
       const iframeInnerHeightBefore = await editorContainer.evaluate(() => window.innerHeight);
       const windowOuterHeightBefore = await mainPage.evaluate(() => window.outerHeight);
       const chromeOverheadPx = windowOuterHeightBefore - iframeInnerHeightBefore;
@@ -606,7 +489,7 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       // vacuous, passing regardless of whether the menu's own cap does anything.
       expect(iframeInnerHeightAfter).toBeLessThan(menuNaturalScrollHeightPx);
 
-      const versePara = nextClearVersePicker();
+      const versePara = nextClearVersePara();
       await expect(versePara).toBeVisible({ timeout: 30_000 });
       await openContextMenu(versePara);
 

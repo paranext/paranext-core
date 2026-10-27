@@ -6,60 +6,70 @@
         "label": "%project_settings_platformScripture_booksPresent_label%",
         "description": "%project_settings_platformScripture_booksPresent_description%",
         "default": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "isReadOnly": true,
         "includeProjectInterfaces": ["Paratext", "Scripture"]
       },
       "platformScripture.versification": {
         "label": "%project_settings_platformScripture_versification_label%",
         "description": "%project_settings_platformScripture_versification_description%",
         "default": 4,
+        "isReadOnly": true,
         "includeProjectInterfaces": ["Paratext", "Scripture"]
       },
       "platformScripture.validCharacters": {
         "label": "%project_settings_platformScripture_validCharacters_label%",
         "description": "%project_settings_platformScripture_validCharacters_description%",
         "default": "",
+        "isReadOnly": true,
         "includeProjectInterfaces": ["Paratext", "Scripture"]
       },
       "platformScripture.invalidCharacters": {
         "label": "%project_settings_platformScripture_invalidCharacters_label%",
         "description": "%project_settings_platformScripture_invalidCharacters_description%",
         "default": "",
+        "isReadOnly": true,
         "includeProjectInterfaces": ["Paratext", "Scripture"]
       },
       "platformScripture.repeatableWords": {
         "label": "%project_settings_platformScripture_repeatableWords_label%",
         "description": "%project_settings_platformScripture_repeatableWords_description%",
         "default": "",
+        "isReadOnly": true,
         "includeProjectInterfaces": ["Paratext", "Scripture"]
       },
       "platformScripture.nonRepeatableWords": {
         "label": "%project_settings_platformScripture_nonRepeatableWords_label%",
         "description": "%project_settings_platformScripture_nonRepeatableWords_description%",
         "default": "",
+        "isReadOnly": true,
         "includeProjectInterfaces": ["Paratext", "Scripture"]
       },
       "platformScripture.validMarkers": {
         "label": "%project_settings_platformScripture_validMarkers_label%",
         "description": "%project_settings_platformScripture_validMarkers_description%",
         "default": "",
+        "isReadOnly": true,
         "includeProjectInterfaces": ["Paratext", "Scripture"]
       },
       "platformScripture.invalidMarkers": {
         "label": "%project_settings_platformScripture_invalidMarkers_label%",
         "description": "%project_settings_platformScripture_invalidMarkers_description%",
         "default": "",
+        "isReadOnly": true,
         "includeProjectInterfaces": ["Paratext", "Scripture"]
       },
       "platformScripture.validPunctuation": {
         "label": "%project_settings_platformScripture_validPunctuation_label%",
         "description": "%project_settings_platformScripture_validPunctuation_description%",
         "default": "",
+        "isReadOnly": true,
         "includeProjectInterfaces": ["Paratext", "Scripture"]
       },
       "platformScripture.invalidPunctuation": {
         "label": "%project_settings_platformScripture_invalidPunctuation_label%",
         "description": "%project_settings_platformScripture_invalidPunctuation_description%",
         "default": "",
+        "isReadOnly": true,
         "includeProjectInterfaces": ["Paratext", "Scripture"]
       },
       "platformScripture.baseCharacterClassRegex": {
@@ -122,24 +132,28 @@
         "label": "%project_settings_platformScripture_chapterVerseSeparator_label%",
         "description": "%project_settings_platformScripture_chapterVerseSeparator_description%",
         "default": ".",
+        "isReadOnly": true,
         "includeProjectInterfaces": ["Paratext", "Scripture"]
       },
       "platformScripture.verseRangeSeparator": {
         "label": "%project_settings_platformScripture_verseRangeSeparator_label%",
         "description": "%project_settings_platformScripture_verseRangeSeparator_description%",
         "default": "-",
+        "isReadOnly": true,
         "includeProjectInterfaces": ["Paratext", "Scripture"]
       },
       "platformScripture.defaultFootnoteCaller": {
         "label": "%project_settings_platformScripture_defaultFootnoteCaller_label%",
         "description": "%project_settings_platformScripture_defaultFootnoteCaller_description%",
         "default": "+",
+        "isReadOnly": true,
         "includeProjectInterfaces": ["Paratext", "Scripture"]
       },
       "platformScripture.defaultCrossRefCaller": {
         "label": "%project_settings_platformScripture_defaultCrossRefCaller_label%",
         "description": "%project_settings_platformScripture_defaultCrossRefCaller_description%",
         "default": "-",
+        "isReadOnly": true,
         "includeProjectInterfaces": ["Paratext", "Scripture"]
       },
       "platformScripture.footnoteCallers": {
@@ -153,6 +167,13 @@
         "label": "%project_settings_platformScripture_crossRefCallers_label%",
         "description": "%project_settings_platformScripture_crossRefCallers_description%",
         "default": "",
+        "isHidden": true,
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.copyrightNotice": {
+        "label": "%project_settings_platformScripture_copyrightNotice_label%",
+        "description": "%project_settings_platformScripture_copyrightNotice_description%",
+        "default": { "kind": "none" },
         "isHidden": true,
         "includeProjectInterfaces": ["Paratext", "Scripture"]
       }

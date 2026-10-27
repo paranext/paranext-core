@@ -21,6 +21,7 @@ import {
   EditorWebViewMessage,
   OpenEditorOptions,
   PlatformScriptureEditorWebViewController,
+  ScriptureEditorViewType,
   ScriptureRangeUsjVerseRefChapterLocation,
 } from 'platform-scripture-editor';
 import { AnnotationStyleDataProviderEngine } from './annotations/annotation-style.data-provider-engine.model';
@@ -38,6 +39,7 @@ import {
   convertScriptureRangeToEditorRange,
   finalizeProjectSwitch,
   formatEditorTitle,
+  buildScriptureEditorWebViewState,
   getTabTitleProjectName,
   openCommentListAndSelectThread,
   type OpenEditorDispatch,
@@ -48,13 +50,16 @@ import {
   buildScriptureTextGridWebView,
   type TextCollectionPanelOptions,
   selectProjectIdsForOpenMode,
+  showsReadOnlyPreview,
   startDefaultProjectPicker,
   syncOnProjectSwitch,
+  syncOnSwitchToPower,
   toScriptureEditorInfos,
   updateRelatedChecksSidePanel,
   updateRelatedFindPanel,
+  VIEW_TYPE_FOR_SET_VIEW_COMMAND,
 } from './platform-scripture-editor.utils';
-import { MarkersViewNotifier } from './markers-view-notifier.model';
+import { ReadOnlyViewNotifier } from './read-only-view-notifier.model';
 import { SharedLayoutReceiver } from './shared-layout-receiver.model';
 import {
   BIBLE_TEXTS_PANEL_WEBVIEW_TYPE,
@@ -63,6 +68,11 @@ import {
   showCommentariesTab,
   showTextCollectionTab,
 } from './show-panel.util';
+import {
+  buildResourceTextPanelState,
+  showResourceInReferencePanel,
+  type ResourceTextPanelOptions,
+} from './show-resource-in-panel.util';
 
 logger.debug('Scripture Editor is importing!');
 
@@ -216,8 +226,11 @@ async function open(
         'platformGetResources.excludePdpFactoryIdsInHome',
       ),
     });
+    const openableProjectMetadatas = projectMetadatas.filter(
+      (projectMetadata) => !projectMetadata.unsupportedReason,
+    );
     const projectsWithIsPublished = await Promise.all(
-      projectMetadatas.map(async (projectMetadata) => {
+      openableProjectMetadatas.map(async (projectMetadata) => {
         const pdp = await papi.projectDataProviders.get('platform.base', projectMetadata.id);
         return {
           projectId: projectMetadata.id,
@@ -491,6 +504,24 @@ async function changeScriptureView(webViewId: string | undefined): Promise<void>
   await controller?.changeScriptureView();
 }
 
+async function setScriptureView(
+  webViewId: string | undefined,
+  viewType: ScriptureEditorViewType,
+): Promise<void> {
+  const controller = await getScriptureEditorController(webViewId);
+  await controller?.setScriptureView(viewType);
+}
+
+async function undoInEditor(webViewId: string | undefined): Promise<void> {
+  const controller = await getScriptureEditorController(webViewId);
+  await controller?.undo();
+}
+
+async function redoInEditor(webViewId: string | undefined): Promise<void> {
+  const controller = await getScriptureEditorController(webViewId);
+  await controller?.redo();
+}
+
 async function toggleFootnotesPane(webViewId: string | undefined): Promise<void> {
   const controller = await getScriptureEditorController(webViewId);
   await controller?.toggleFootnotesPaneVisibility();
@@ -560,14 +591,25 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       unformattedTitle,
     };
 
+    // Started here so its project lookup overlaps the permission check and title formatting below.
+    const webViewStatePromise = buildScriptureEditorWebViewState(
+      papi,
+      projectId,
+      savedWebViewStateUpdated,
+    );
+
     // Fold the Scripture-edit role check into the title's read-only computation only — `isReadOnly`
     // itself must keep its narrower "opened as Resource Viewer" tab-identity meaning (see Section 2
     // of the design spec). A lookup failure or a project that doesn't advertise
     // `platformScripture.scriptureEditPermissions` fails open here (title stays whatever
-    // isReadOnly/markers already computed), matching the same fail-open convention the webview's
+    // isReadOnly/Preview already computed), matching the same fail-open convention the webview's
     // own reactive `canUserEditScripture` signal uses — so the open-time label and the live gate
     // never disagree about which direction an error should bias.
-    let isReadOnlyForTitle = isReadOnly || savedWebViewStateUpdated.viewType === 'markers';
+    // Preview is read-only only in Power: outside Power a saved formatted view is the editable
+    // Simple view
+    let isReadOnlyForTitle =
+      isReadOnly ||
+      showsReadOnlyPreview(savedWebViewStateUpdated.viewType, interfaceMode === 'power');
     if (!isReadOnlyForTitle && projectId) {
       try {
         const scriptureEditPermissionsPdp = await papi.projectDataProviders.get(
@@ -592,6 +634,8 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       papi.localization.getLocalizedStrings,
     );
 
+    const webViewState = await webViewStatePromise;
+
     return {
       ...savedWebView,
       title,
@@ -599,7 +643,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       tooltip: optionsTooltip ?? savedWebView.tooltip,
       content: platformScriptureEditorWebView,
       styles: platformScriptureEditorWebViewStyles,
-      state: savedWebViewStateUpdated,
+      state: webViewState,
       projectId,
       allowPopups: true,
       shouldShowToolbar: false,
@@ -713,6 +757,63 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
           );
         } catch (e) {
           const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running changeScriptureView! ${getErrorMessage(e)}`;
+          logger.warn(message);
+          throw new Error(message);
+        }
+      },
+      async setScriptureView(viewType) {
+        try {
+          logger.debug(
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to setScriptureView ${viewType}`,
+          );
+          if (!currentWebViewDefinition.projectId)
+            throw new Error(`webViewDefinition.projectId is empty!`);
+
+          const message: EditorWebViewMessage = {
+            method: 'setScriptureView',
+            viewType,
+          };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+        } catch (e) {
+          const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running setScriptureView! ${getErrorMessage(e)}`;
+          logger.warn(message);
+          throw new Error(message);
+        }
+      },
+      async undo() {
+        try {
+          logger.debug(
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to undo`,
+          );
+          const message: EditorWebViewMessage = { method: 'undo' };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+        } catch (e) {
+          const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running undo! ${getErrorMessage(e)}`;
+          logger.warn(message);
+          throw new Error(message);
+        }
+      },
+      async redo() {
+        try {
+          logger.debug(
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to redo`,
+          );
+          const message: EditorWebViewMessage = { method: 'redo' };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+        } catch (e) {
+          const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running redo! ${getErrorMessage(e)}`;
           logger.warn(message);
           throw new Error(message);
         }
@@ -945,7 +1046,8 @@ const modelTextPanelWebViewProvider: IWebViewProvider = {
  * type. A Map entry present (even with value `undefined`) means a reload is in progress and the
  * pending value should be used. Absence means no pending value.
  *
- * Used to pass a new projectId through reloadWebView, which has no options for extra data.
+ * Used to pass a new projectId through reloadWebView. For new data, prefer the reload options
+ * (`ResourceTextPanelOptions`), which `reloadWebView` forwards to the provider.
  */
 const currentResourceTextPanelProjectIds = new Map<string, string | undefined>();
 
@@ -963,9 +1065,9 @@ const scriptureTextGridWebViewProvider: IWebViewProvider = {
 
 /**
  * Creates a resource panel web view provider that injects the given resourceType into web view
- * state so the shared component can filter resources appropriately.
+ * state so the shared component can filter resources appropriately. Exported for its tests.
  */
-function createResourceTextPanelProvider(
+export function createResourceTextPanelProvider(
   webViewType: string,
   title: string,
   resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
@@ -974,7 +1076,7 @@ function createResourceTextPanelProvider(
   return {
     async getWebView(
       savedWebView: SavedWebViewDefinition,
-      openWebViewOptions: ResourceViewerOptions,
+      openWebViewOptions: ResourceTextPanelOptions,
     ): Promise<WebViewDefinition | undefined> {
       if (savedWebView.webViewType !== webViewType)
         throw new Error(
@@ -1005,10 +1107,8 @@ function createResourceTextPanelProvider(
         // exactly as today, since it is text-labeled there (see resource-text-panel.web-view.tsx
         // for the live theme/selection-adaptive swap, which is likewise gated on Power mode).
         iconUrl: interfaceMode === 'simple' ? defaultIconUrl : savedWebView.iconUrl,
-        state: {
-          ...savedWebView.state,
-          resourceType,
-        },
+        // Also selects a resource opened elsewhere — from Home in Simple mode — when one is passed.
+        state: buildResourceTextPanelState(savedWebView.state, resourceType, openWebViewOptions),
         // This webview only ever appears in the fixed 3-column simple-mode layout (Column 3) and
         // must always remain open there, so it's non-closable in simple mode.
         isClosable: interfaceMode === 'power',
@@ -1219,7 +1319,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     changeScriptureView,
     {
       method: {
-        summary: 'Change the Scripture view type in the editor',
+        summary: 'Toggle the editor between Standard view and Preview (Power mode only)',
         params: [
           {
             name: 'webViewId',
@@ -1235,6 +1335,99 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
       },
     },
   );
+
+  const setViewStandardPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.setViewStandard',
+    (webViewId) =>
+      setScriptureView(
+        webViewId,
+        VIEW_TYPE_FOR_SET_VIEW_COMMAND['platformScriptureEditor.setViewStandard'],
+      ),
+    {
+      method: {
+        'x-experimental': true,
+        summary: 'Show Standard view in the editor (the Simple view outside Power mode)',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the WebView whose Scripture view is to be changed',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  const setViewPreviewPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.setViewPreview',
+    (webViewId) =>
+      setScriptureView(
+        webViewId,
+        VIEW_TYPE_FOR_SET_VIEW_COMMAND['platformScriptureEditor.setViewPreview'],
+      ),
+    {
+      method: {
+        'x-experimental': true,
+        summary:
+          'Show Preview, the read-only formatted view, in the editor (the Simple view outside Power mode)',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the WebView whose Scripture view is to be changed',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  const undoPromise = papi.commands.registerCommand('platformScriptureEditor.undo', undoInEditor, {
+    method: {
+      'x-experimental': true,
+      summary: 'Undo the last edit in the editor',
+      params: [
+        {
+          name: 'webViewId',
+          required: false,
+          summary: 'The ID of the WebView whose last edit is to be undone',
+          schema: { type: 'string' },
+        },
+      ],
+      result: {
+        name: 'return value',
+        schema: { type: 'null' },
+      },
+    },
+  });
+
+  const redoPromise = papi.commands.registerCommand('platformScriptureEditor.redo', redoInEditor, {
+    method: {
+      'x-experimental': true,
+      summary: 'Redo the last undone edit in the editor',
+      params: [
+        {
+          name: 'webViewId',
+          required: false,
+          summary: 'The ID of the WebView whose last undone edit is to be redone',
+          schema: { type: 'string' },
+        },
+      ],
+      result: {
+        name: 'return value',
+        schema: { type: 'null' },
+      },
+    },
+  });
 
   const toggleFootnotesPanePromise = papi.commands.registerCommand(
     'platformScriptureEditor.toggleFootnotes',
@@ -1330,6 +1523,39 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
           name: 'return value',
           summary: 'The ID of the opened WebView, or undefined if it could not be opened',
           schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
+  const showResourceInReferencePanelPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.showResourceInReferencePanel',
+    showResourceInReferencePanel,
+    {
+      method: {
+        'x-experimental': true,
+        summary:
+          "Show a resource in the Bible texts or Commentaries tab, adding it to the user's personal list unless the team's list has it",
+        params: [
+          {
+            name: 'resourceProjectId',
+            required: true,
+            summary: 'The local project id of the resource to show',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary:
+            "How the show ended: 'shown' (with the tab's webViewId), 'notShown' (the user has been told; open nothing else) or 'openElsewhere' (no reference tab is open, or neither tab lists its kind). Never rejects",
+          schema: {
+            type: 'object',
+            properties: {
+              status: { type: 'string', enum: ['shown', 'notShown', 'openElsewhere'] },
+              webViewId: { type: 'string' },
+            },
+            required: ['status'],
+          },
         },
       },
     },
@@ -1448,10 +1674,10 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     EDITOR_SELECTION_CHANGED_EVENT,
   );
 
-  // Default active project picker for simple layout. Subscribes to web-view-open and
-  // sync-completion events and attempts to fill the empty Scripture Editor with the
-  // most-recently-active editable project. Re-runs on each subscribed event; concurrent
-  // triggers coalesce into a single follow-up run.
+  // Default active project picker for simple layout. Subscribes to web-view-open, sync-completion
+  // and project-set-change events and attempts to fill the empty Scripture Editor with the
+  // most-recently-active project. Re-runs on each subscribed event; concurrent triggers coalesce
+  // into a single follow-up run.
   const unsubFromDefaultProjectPicker = startDefaultProjectPicker(papi);
 
   // Payload type is inferred from the NetworkEvents augmentation added earlier — do NOT pass an
@@ -1507,9 +1733,36 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
+  const syncOnSwitchToPowerPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.syncOnSwitchToPower',
+    async (projectId) => {
+      // Not awaited: waiting for the answer and then the sync can outlast the caller's request
+      // timeout. The catch only backs up `syncOnSwitchToPower`'s own handling of its failures.
+      syncOnSwitchToPower(papi, projectId).catch((e) =>
+        logger.warn(`Switch-to-Power sync of ${projectId} failed: ${getErrorMessage(e)}`),
+      );
+    },
+    {
+      method: {
+        'x-experimental': true,
+        summary:
+          'Send/receive the project the Simple-mode Scripture Editor was showing, if it holds local changes to send, after a switch to Power mode',
+        params: [
+          {
+            name: 'projectId',
+            required: true,
+            summary: 'The project the Simple-mode Scripture Editor was showing',
+            schema: { type: 'string' },
+          },
+        ],
+        result: { name: 'return value', schema: { type: 'null' } },
+      },
+    },
+  );
+
   // Await the registration promises at the end so we don't hold everything else up
-  const markerNotifier = new MarkersViewNotifier(papi, context.executionToken);
-  const markerNotifierUnsubscribers = await markerNotifier.start();
+  const readOnlyViewNotifier = new ReadOnlyViewNotifier(papi, context.executionToken);
+  const readOnlyViewNotifierUnsubscribers = await readOnlyViewNotifier.start();
 
   // Resolve the feature flag (kicked off above so it overlapped the other registrations) and, only
   // if enabled, register the provider. Awaiting the flag here rather than up front keeps every
@@ -1526,6 +1779,10 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await openPlatformScriptureEditorPromise,
     await openPlatformResourceViewerPromise,
     await changeScriptureViewPromise,
+    await setViewStandardPromise,
+    await setViewPreviewPromise,
+    await undoPromise,
+    await redoPromise,
     await toggleFootnotesPanePromise,
     await changeFootnotesPaneLocationPromise,
     await insertFootnotePromise,
@@ -1539,6 +1796,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await commentariesPanelWebViewProviderPromise,
     ...(scriptureTextGridRegistration ? [scriptureTextGridRegistration] : []),
     await openResourceTextPromise,
+    await showResourceInReferencePanelPromise,
     await showBibleTextsPanelPromise,
     await showCommentariesPanelPromise,
     await showTextCollectionPanelPromise,
@@ -1553,9 +1811,10 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
       },
     },
     unsubFromDefaultProjectPicker,
-    ...markerNotifierUnsubscribers,
+    ...readOnlyViewNotifierUnsubscribers,
     await applySharedLayoutPromise,
     await finalizeProjectSwitchPromise,
+    await syncOnSwitchToPowerPromise,
     sharedLayoutReArmEmitter,
     {
       dispose: async () => {

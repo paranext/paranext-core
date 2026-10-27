@@ -1633,9 +1633,16 @@ export interface MarkerMenuProps {
 	 * `%markerMenu_searchPlaceholder%` localized string.
 	 */
 	searchPlaceholder?: string;
+	/**
+	 * Optional marker whose row is highlighted when the menu opens, in place of the first row. Pass
+	 * the marker the selection already has, so that Enter on a freshly opened menu re-applies it
+	 * rather than picking whatever sorts first. Ignored when no selectable row has this marker, in
+	 * which case the first row is highlighted as usual. Read only on mount.
+	 */
+	defaultHighlightedMarker?: string;
 }
 /** Marker menu component to render the list of markers and a few commands in the scripture editor */
-export declare function MarkerMenu({ localizedStrings, markerMenuItems, searchRef, searchPlaceholder, }: MarkerMenuProps): import("react/jsx-runtime").JSX.Element;
+export declare function MarkerMenu({ localizedStrings, markerMenuItems, searchRef, searchPlaceholder, defaultHighlightedMarker, }: MarkerMenuProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Whether a delta op is an UNCLOSED note: one written with no closing marker (`\f` with no `\f*`),
  * which USJ marks `closed: "false"`. Such a note is edited in place in the text, as PT9 does its
@@ -2460,9 +2467,10 @@ type TabDropdownMenuProps = {
 /**
  * Dropdown menu for Platform.Bible menu data. Each column that has items is a section, divided from
  * the next by a line; columns without items are left out. Groups within a column are not
- * distinguished. Items show their tooltip on hover and their `shortcut`, if any, at the end of the
- * row. With `showSectionHeadings`, each section is headed by its column label, except a column that
- * sets `isHeaderHidden`, whose label names the section for screen readers only.
+ * distinguished, while the groups of a submenu are divided by a line. Items show their tooltip on
+ * hover and their `shortcut`, if any, at the end of the row. With `showSectionHeadings`, each
+ * section is headed by its column label, except a column that sets `isHeaderHidden`, whose label
+ * names the section for screen readers only.
  *
  * A child component can be passed in to show as an icon on the menu trigger button.
  */
@@ -2747,6 +2755,8 @@ export type UiLanguageSelectorProps = {
 	className?: string;
 	/** Optional id for the root element */
 	id?: string;
+	/** When true, the language cannot be changed. Defaults to `false`. */
+	disabled?: boolean;
 };
 /**
  * A component for selecting the user interface language and managing fallback languages. Allows
@@ -2754,7 +2764,7 @@ export type UiLanguageSelectorProps = {
  *
  * @param {UiLanguageSelectorProps} props - The props for the component.
  */
-export declare function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, id, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, id, disabled, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Immutable array of localization keys this component uses. Pass into `useLocalizedStrings` and
  * feed the result to the `localizedStrings` prop.

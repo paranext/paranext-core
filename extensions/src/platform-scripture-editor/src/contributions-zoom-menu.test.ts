@@ -3,10 +3,11 @@ import menus from '../contributions/menus.json';
 import localizedStringsFile from '../contributions/localizedStrings.json';
 
 /**
- * Guards the three zoom items the editor's own hamburger menu contributes, in a Zoom column of
- * their own, in Simple mode only (the editor's Simple-mode tab bar is headless, so the hamburger is
- * its only menu route to zoom) — `menus.json` and `localizedStrings.json` have no compile-time link
- * to each other or to the command names the platform registers, so a rename or a dropped locale on
+ * Guards the three zoom items the editor's own hamburger menu contributes, in the View column next
+ * to the footnote items, in both Power and Simple mode (the editor's Simple-mode tab bar is
+ * headless, so the hamburger is its only menu route to zoom there; Power also offers the items on
+ * the tab's context menu) — `menus.json` and `localizedStrings.json` have no compile-time link to
+ * each other or to the command names the platform registers, so a rename or a dropped locale on
  * either side would otherwise only surface as a blank/broken menu item at runtime.
  *
  * The commands are asserted as literal strings rather than imported from
@@ -18,7 +19,7 @@ import localizedStringsFile from '../contributions/localizedStrings.json';
 const { topMenu } = menus.webViewMenus['platformScriptureEditor.react'];
 const { columns, groups, items } = topMenu;
 
-const ZOOM_COLUMN = 'platformScriptureEditor.zoomSection';
+const VIEW_COLUMN = 'platformScriptureEditor.options';
 const ZOOM_GROUP = 'platformScriptureEditor.zoom';
 
 const ZOOM_COMMANDS = {
@@ -30,25 +31,23 @@ const ZOOM_COMMANDS = {
 const zoomItems = items.filter((item) => item.group === ZOOM_GROUP);
 
 describe('platform-scripture-editor zoom menu contribution', () => {
-  it('declares a Zoom column of its own, between Options and Tools, labeled and marked experimental', () => {
-    const columnsByKey: Record<string, { label: string; order: number; isExperimental?: boolean }> =
-      columns;
-    const zoomColumn = columnsByKey[ZOOM_COLUMN];
-    expect(zoomColumn).toBeDefined();
-    expect(zoomColumn.label).toBe('%webView_platformScriptureEditor_zoom%');
-    expect(zoomColumn.isExperimental).toBe(true);
-    expect(zoomColumn.order).toBeGreaterThan(columnsByKey['platformScriptureEditor.options'].order);
-    expect(zoomColumn.order).toBeLessThan(columnsByKey['platformScriptureEditor.tools'].order);
+  it('declares no column of its own for zoom: the items sit in the View column', () => {
+    const columnsByKey: Record<string, { label: string; order: number }> = columns;
+    expect(columnsByKey['platformScriptureEditor.zoomSection']).toBeUndefined();
+    expect(columnsByKey[VIEW_COLUMN].label).toBe('%webView_platformScriptureEditor_view%');
   });
 
-  it('puts the zoom group, and only it, in that column, marked experimental', () => {
+  it('puts the zoom group in the View column between the layout and footnote groups, marked experimental', () => {
     const groupsByKey: Record<string, { column: string; order: number; isExperimental?: boolean }> =
       groups;
-    const inZoomColumn = Object.entries(groupsByKey)
-      .filter(([, group]) => group.column === ZOOM_COLUMN)
-      .map(([key]) => key);
-    expect(inZoomColumn).toEqual([ZOOM_GROUP]);
+    expect(groupsByKey[ZOOM_GROUP].column).toBe(VIEW_COLUMN);
     expect(groupsByKey[ZOOM_GROUP].isExperimental).toBe(true);
+    expect(groupsByKey[ZOOM_GROUP].order).toBeGreaterThan(
+      groupsByKey['platformScriptureEditor.layout'].order,
+    );
+    expect(groupsByKey[ZOOM_GROUP].order).toBeLessThan(
+      groupsByKey['platformScriptureEditor.footnotesPane'].order,
+    );
   });
 
   it('contributes exactly three ordered items to the zoom group, one per command', () => {
@@ -62,20 +61,28 @@ describe('platform-scripture-editor zoom menu contribution', () => {
     ]);
   });
 
-  it('hides every zoom item in Power mode, where the tab menu carries them, and marks none experimental', () => {
+  it('shows every zoom item in both Power and Simple mode, and marks none experimental', () => {
     zoomItems.forEach((item) => {
-      expect('hiddenInterfaceModes' in item ? item.hiddenInterfaceModes : undefined).toEqual([
-        'power',
-      ]);
+      expect('hiddenInterfaceModes' in item).toBe(false);
       expect('isExperimental' in item).toBe(false);
     });
+  });
+
+  it('labels the reset item "Zoom 100%" in en and es', () => {
+    const { en, es } = localizedStringsFile.localizedStrings;
+    const resetItem = zoomItems.find((item) => item.command === ZOOM_COMMANDS.reset);
+    const label = resetItem?.label ?? '';
+    const enLookup: Record<string, string> = en;
+    const esLookup: Record<string, string> = es;
+    expect(enLookup[label]).toBe('Zoom 100%');
+    expect(esLookup[label]).toBe('Zoom 100%');
   });
 
   it('has an en and es localized string for the column heading and every zoom item label', () => {
     const { en, es } = localizedStringsFile.localizedStrings;
     const enLookup: Record<string, string> = en;
     const esLookup: Record<string, string> = es;
-    ['%webView_platformScriptureEditor_zoom%', ...zoomItems.map((item) => item.label)].forEach(
+    ['%webView_platformScriptureEditor_view%', ...zoomItems.map((item) => item.label)].forEach(
       (key) => {
         expect(enLookup[key]).toBeTruthy();
         expect(esLookup[key]).toBeTruthy();
