@@ -35,6 +35,7 @@ import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util'
 import { getVerseNavigationCommand } from '@main/verse-navigation-shortcuts.util';
 import { getPhysicalHistoryNavigationDirection } from '@main/reference-history-keyboard.util';
 import { createInterfaceScaling } from '@main/interface-scaling.util';
+import { matchAppChord, runAppChord } from '@main/app-chords.util';
 import { openTermsOfServiceWindow } from '@main/terms-of-service-window';
 import chroma from 'chroma-js';
 import {
@@ -1846,10 +1847,10 @@ async function main() {
       logger.error(`Window ${windowId} could not load URL "${urlToLoad}". ${getErrorMessage(e)}`);
     });
 
-    // Window-chrome keyboard shortcuts: dev tools (F12), tab and tab-group navigation, and PT9-style
-    // verse/reference-history navigation. Content zoom is not among them — the window-chrome zoom
-    // chords live in `web-view-content-zoom.chrome-keys.ts`, and the in-view case in the bootstrap
-    // script it injects.
+    // Window-chrome keyboard shortcuts: dev tools (F12), tab and tab-group navigation, PT9-style
+    // verse/reference-history navigation, and Open and Project settings. Content zoom is not among
+    // them — the window-chrome zoom chords live in `web-view-content-zoom.chrome-keys.ts`, and the
+    // in-view case in the bootstrap script it injects.
     newWindow.webContents.on('before-input-event', (event, input) => {
       // Just act on keyDown and ignore keyUp. Could cause trouble if we need to preventDefault on keyUp
       if (input.type === 'keyUp') return;
@@ -1931,6 +1932,27 @@ async function main() {
             logger.warn(`Reference history keyboard navigation failed. ${getErrorMessage(e)}`);
           }
         })();
+        return;
+      }
+
+      // Ctrl/Cmd+O opens Home (not in Simple mode, which hides Open) and Ctrl/Cmd+J opens Project
+      // settings for the web view whose tab has focus in this window. Both send the command their
+      // menu item runs, so the chord and the item cannot drift apart.
+      //
+      // TODO (PT-4143): claimed regardless of focus, like the chords above.
+      const appChord = matchAppChord(
+        input,
+        process.platform === 'darwin',
+        getCachedInterfaceMode(),
+      );
+      if (appChord) {
+        event.preventDefault();
+        runAppChord(appChord, {
+          getFocus: async () => (await getWindowServiceShard(windowId))?.getFocus(),
+          sendCommand: commandService.sendCommand,
+        }).catch((e) => {
+          logger.warn(`Failed to run the ${appChord} keyboard shortcut: ${getErrorMessage(e)}`);
+        });
         return;
       }
 

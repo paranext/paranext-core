@@ -13,7 +13,7 @@ type Story = StoryObj<typeof WizardStepHeading>;
 
 /** The step heading on its own — an `<h2>` that sits under the wizard shell's `<h1>`. */
 export const Default: Story = {
-  args: { children: 'Internet & connectivity' },
+  args: { children: 'Internet connectivity' },
 };
 
 /**

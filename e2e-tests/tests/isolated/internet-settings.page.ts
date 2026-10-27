@@ -44,7 +44,7 @@ export async function restoreSavedInternetSettings(settings: SavedInternetSettin
 }
 
 /**
- * Open the user-profile popover and return its "Internet & connectivity" action.
+ * Open the user-profile popover and return its "Internet connectivity" action.
  *
  * The trigger toggles, so the click is only issued while the popover itself is closed and then
  * retried: a click that lands before the toolbar button is interactive (or while a dock rebuild is
@@ -69,7 +69,7 @@ export async function openUserProfilePopover(mainPage: Page): Promise<Locator> {
 }
 
 /**
- * Opens the Internet & Connectivity settings panel from the profile popover.
+ * Opens the Internet connectivity settings panel from the profile popover.
  *
  * Retries the whole open-and-click, with the panel's own heading as the success condition: a dock
  * rebuild after startup re-renders the toolbar and takes the open popover down with it, so an
@@ -101,10 +101,9 @@ export async function openInternetSettings(
 /**
  * Returns a FrameLocator scoped to the internet settings web view iframe.
  *
- * Matched on the iframe's title attribute, case-insensitively and on the stable word alone: the web
- * view provider still names itself with the deprecated `%internetSettings_webView_title%`
- * ("Internet Settings") while its replacement key reads "Internet & connectivity", so anything
- * matching the full phrase or its capitalization breaks on whichever key wins.
+ * Matched on the iframe's title attribute, case-insensitively and on the stable word alone, so a
+ * change to the rest of the title ("Internet connectivity") or its capitalization does not break
+ * it.
  *
  * Does not wait for the panel to finish loading — callers should await a stable element (e.g.,
  * `frame.locator('h2').toBeVisible()`) before interacting with the frame.

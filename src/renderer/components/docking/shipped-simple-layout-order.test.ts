@@ -104,10 +104,10 @@ const EDITOR_MENUS_PATH = resolve(
 const TAB_FOR_COMMAND: Record<string, string> = {
   'platformScriptureEditor.showBibleTextsPanel': 'platformScriptureEditor.bibleTexts',
   'platformScriptureEditor.showCommentariesPanel': 'platformScriptureEditor.commentaries',
-  'platformLexicalTools.openDictionary': 'platformLexicalTools.dictionary',
   'legacyCommentManager.showCommentListPanel': 'legacyCommentManager.commentListPanel',
   'platformScriptureEditor.showTextCollectionPanel': 'platformScriptureEditor.scriptureTextGrid',
   'platformScripture.openFind': 'platformScripture.find',
+  'platformLexicalTools.openDictionary': 'platformLexicalTools.dictionary',
 };
 
 type MenuItemJson = {
@@ -275,14 +275,16 @@ describe('shipped Simple-mode Column 3 order', () => {
     ]);
   });
 
-  it("lists the Simple Project menu's TOOLS section in the same order as the third column", () => {
+  it('lists a TOOLS item for every third-column tab', () => {
     const merged = mergeDefaultLayoutSupplement(simpleLayout, supplementEntries, 'simple');
     const mappedTabs = simpleToolsCommands().map((command) => TAB_FOR_COMMAND[command]);
     // TAB_FOR_COMMAND[command] is undefined for an unmapped command, and a missing layout slot is
     // also undefined, so the two could compare equal below for the wrong reason. Guard each mapped
     // entry first so an unmapped command fails here instead.
     mappedTabs.forEach((tab) => expect(tab).toBeDefined());
-    expect(mappedTabs).toEqual(columnWebViewTypes(merged, 2));
+    // The menu's own order is the design's (Text collection before Comments), not the column's;
+    // what must hold is that every tab a user can bring forward has an item.
+    expect([...mappedTabs].sort()).toEqual(columnWebViewTypes(merged, 2).sort());
   });
 
   it('the real supplement leaves nothing Simple-mode-only behind in a power-mode merge', () => {

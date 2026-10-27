@@ -12,7 +12,7 @@ describe('getInternetBlockedNotification', () => {
   it("reports ParatextData's own block with a link to the internet settings", () => {
     expect(getInternetBlockedNotification(new Error(PARATEXT_DATA_BLOCK_ERROR))).toEqual({
       severity: 'error',
-      message: '%data_loading_error_internetAccess_disabled_2%',
+      message: '%data_loading_error_internetAccess_disabled_3%',
       clickCommandLabel: '%general_open%',
       clickCommand: 'paratextRegistration.showInternetSettings',
       notificationId: INTERNET_BLOCKED_NOTIFICATION_ID,

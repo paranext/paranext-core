@@ -442,6 +442,16 @@ declare module 'shared/models/web-view.model' {
      */
     iconUrl?: string;
     /**
+     * Name of a lucide icon (kebab-case, e.g. `refresh-cw`) to show on the title bar of the tab. The
+     * icon follows the tab's text colour, so it suits every theme and tab state. Takes precedence
+     * over {@link WebViewDefinitionBase.iconUrl}. The icons the platform can show are listed in
+     * `LUCIDE_ICON_NAMES` (exported from `platform-bible-react/experimental`). If the name is not one
+     * of them, `iconUrl` is used instead (and then the software's standard logo).
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    iconName?: string;
+    /**
      * Name of the tab (or a localizeKey for the name that will automatically be localized) for the
      * WebView
      */
@@ -776,6 +786,7 @@ declare module 'shared/models/web-view.model' {
    */
   export const WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS: readonly [
     'iconUrl',
+    'iconName',
     'title',
     'tooltip',
     'projectId',
@@ -4797,6 +4808,15 @@ declare module 'shared/models/docking-framework.model' {
      */
     tabIconUrl?: string;
     /**
+     * Name of a lucide icon (kebab-case, e.g. `refresh-cw`) to show on the title bar of the tab
+     * instead of {@link tabIconUrl}. The icons the platform can show are listed in `LUCIDE_ICON_NAMES`
+     * (exported from `platform-bible-react/experimental`). An unknown name is ignored, so
+     * {@link tabIconUrl} (and then the standard logo) is shown instead.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    tabIconName?: string;
+    /**
      * Text to show (or a localizeKey that will automatically be localized) on the title bar of the
      * tab
      */
@@ -6510,6 +6530,16 @@ declare module 'papi-shared-types' {
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openUserSettings': () => Promise<void>;
     'platform.openSettings': (webViewId?: WebViewId) => Promise<void>;
+    /**
+     * Open a Settings tab limited to the project shown in the given web view — the same as
+     * `platform.openSettings`, under a name of its own so a web view's Project settings menu item
+     * can show its keyboard shortcut without the main menu's Settings item, which runs
+     * `platform.openSettings`, showing it too.
+     *
+     * @param webViewId Web view whose project the Settings tab should be limited to, if any
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.openProjectSettingsForWebView': (webViewId?: WebViewId) => Promise<void>;
     /**
      * Move a web view to a window created for it.
      *
@@ -9471,6 +9501,15 @@ declare module 'shared/models/dialog-options.model' {
     title?: string | LocalizeKey;
     /** Url of dialog icon to display in the header. Default is Platform.Bible logo */
     iconUrl?: string;
+    /**
+     * Name of a lucide icon (kebab-case, e.g. `refresh-cw`) to display in the header. Takes
+     * precedence over {@link DialogOptions.iconUrl}. The icons the platform can show are listed in
+     * `LUCIDE_ICON_NAMES` (exported from `platform-bible-react/experimental`). An unknown name is
+     * ignored and {@link DialogOptions.iconUrl} is used instead.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    iconName?: string;
     /**
      * The message to show the user in the dialog. If you provide a {@link LocalizeKey}, it will be
      * localized before displaying.

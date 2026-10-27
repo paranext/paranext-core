@@ -43,7 +43,7 @@ export function constructParatextErrorNotification(
   if (isErrorMessageAboutParatextBlockingInternetAccess(exception))
     return {
       severity: 'error',
-      message: '%data_loading_error_internetAccess_disabled_2%',
+      message: '%data_loading_error_internetAccess_disabled_3%',
       clickCommandLabel: '%general_open%',
       clickCommand: SHOW_INTERNET_SETTINGS_COMMAND,
       notificationId: INTERNET_BLOCKED_NOTIFICATION_ID,

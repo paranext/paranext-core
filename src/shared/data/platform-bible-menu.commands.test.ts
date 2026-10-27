@@ -30,23 +30,23 @@ describe('Help menu links open the destinations their labels promise', () => {
   /**
    * The label and the destination are the two halves of a menu link that can drift apart, and a
    * rename is exactly when that happens: "Community support" is a relabel of the item formerly
-   * called "FAQs", and its Support.Bible target is deliberately unchanged.
+   * called "FAQs".
    */
   test('Community support opens the Support.Bible page', () => {
     handleMenuCommand(menuItem('platform.visitFAQsPage'));
 
     expect(commandService.sendCommand).toHaveBeenCalledWith(
       'platform.openWindow',
-      'https://support.bible/paratext-10-studio',
+      'https://support.bible/paratext-10',
     );
   });
 
-  test('Getting started opens the Getting Started page', () => {
+  test('Browse help opens the Paratext 10 help articles', () => {
     handleMenuCommand(menuItem('platform.visitGettingStartedPage'));
 
     expect(commandService.sendCommand).toHaveBeenCalledWith(
       'platform.openWindow',
-      'https://studio.paratext.org/start',
+      'https://paratext.org/tutorial-article/paratext-10/',
     );
   });
 });

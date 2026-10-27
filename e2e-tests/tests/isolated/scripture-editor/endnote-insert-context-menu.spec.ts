@@ -230,10 +230,10 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       optionTexts = await contextMenu.locator('[role="option"]').allTextContents();
       const insertOptions = optionTexts.filter((text) => text.startsWith('Insert'));
       expect(insertOptions).toEqual([
+        'Insert comment',
         'Insert footnote',
         'Insert cross-reference',
         'Insert endnote',
-        'Insert comment',
       ]);
     });
 

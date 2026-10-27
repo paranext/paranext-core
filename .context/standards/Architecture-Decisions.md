@@ -4786,6 +4786,42 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4514; `electron-log@5.4.1` `src/node/transports/file/File.js` (`writeLine`,
   `nextAsyncWrite`) and `src/node/transports/file/index.js` (`sync`, `writeAsync`).
 
+## adr-lucide-icons-by-name: Menu items and web-view tabs name a lucide icon instead of pointing at an image file
+
+- **Date:** 2026-10-20
+- **Status:** Accepted
+- **Context:** Menu items could only show an icon through `iconPathBefore` / `iconPathAfter`, which
+  `MenuItemIcon` (`lib/platform-bible-react/src/components/advanced/menus/menu-icon.component.tsx`)
+  renders as an `<img>`. An `<img>` cannot inherit `currentColor`, so such an icon does not follow
+  the dark theme or the hover, selected and disabled text colours, and every icon needs a
+  theme-specific file. Web-view tab icons have the same problem (`iconUrl`, with extensions
+  swapping files per theme).
+- **Decision:** Icons are named, not pathed. `MenuItemBase` (so both command and submenu items)
+  gains optional `iconNameBefore` / `iconNameAfter` lucide kebab-case names, and web-view
+  definitions gain a matching optional icon name. `LucideIcon` in `platform-bible-react` resolves
+  a name through a curated map of named `lucide-react` imports (`LUCIDE_ICON_NAMES` lists the
+  keys) and renders an svg that strokes with `currentColor`; a bare `LucideIcon` given an unknown
+  name renders nothing. When a name and a path are both set, a known name wins; an unknown name
+  falls back to the path (`MenuItemIcon` for menus, `PlatformTabTitle` for tabs). The path fields
+  keep working unchanged.
+- **Alternatives:**
+  - *SVG files tinted through a CSS mask.* Works for arbitrary files, but needs a mask per icon,
+    gives no per-icon stroke control, and keeps one asset per icon to ship.
+  - *`lucide-react/dynamic`.* Resolves any name at runtime, but its type declarations and per-icon
+    lazy chunks would be bundled into the checked-in `platform-bible-react` dist (the vite config
+    marks only exact package names external), and an unknown name would fail at runtime instead
+    of being absent from a list.
+  - *The full `icons` map from `lucide-react`.* Pulls every icon into the dist for the sake of a
+    few dozen.
+- **Consequences:** Adding an icon means adding it to `LUCIDE_ICON_COMPONENTS` in
+  `lucide-icons.util.ts`; a menu or tab that names an icon outside the map shows its path or URL
+  icon instead, or none if it has no path. The macOS native menubar ignores
+  icons, as it did the path fields. The new fields are `@experimental`. An extension that puts
+  `iconNameBefore` / `iconNameAfter` in its `menus.json` needs a core that has them: the menu
+  schema allows no unknown properties, so an older core rejects that whole menu document and the
+  extension's items disappear. A web-view definition's icon name is not schema-checked, so an older
+  core ignores it and keeps showing `iconUrl`.
+
 ## adr-main-orchestrates-real-windows: Multi-window uses real BrowserWindows orchestrated by main, not rc-dock's windowbox
 
 - **Date:** 2026-08-11
@@ -5008,9 +5044,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Consequences:** A few items are declared twice (once per mode), so a command change must touch
   both copies; `menu-data.service-host.scripture-editor-menu.test.ts` pins both modes by command id
   and order, and checks that a command served in both modes carries the same label in each, so a
-  missed, reordered or relabelled copy fails there. Simple's Tools order is pinned to the
-  third-column tab order (`shipped-simple-layout-order.test.ts`), so adding a third-column tab (e.g.
-  Dictionary) fails that test until a Tools item exists. Hiding a Power-only item without re-adding
+  missed, reordered or relabelled copy fails there. Every third-column tab must have a Simple Tools
+  item (`shipped-simple-layout-order.test.ts`; the menu's own order is the design's, not the
+  column's), so adding a third-column tab fails that test until a Tools item exists. Hiding a
+  Power-only item without re-adding
   it to a Simple column removes its only entry point: Simple now has no menu route at all to the
   four Inventories, Markers Checklist, or Open Checks. That follows the v0 Simple design, which has
   no quality tools in the Project menu; UX has not yet confirmed it. Auto-show footnote pane

@@ -66,7 +66,7 @@ import { getInternetBlockedMessageKey } from './internet-block-notification.util
  * component.
  */
 export const GET_RESOURCES_STRING_KEYS = Object.freeze([
-  '%data_loading_error_internetAccess_disabled_2%',
+  '%data_loading_error_internetAccess_disabled_3%',
   '%general_error_title%',
   '%resources_action%',
   '%resources_actionDidNotTakeEffect%',

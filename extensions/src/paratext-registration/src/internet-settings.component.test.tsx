@@ -31,13 +31,13 @@ beforeAll(() => {
 
 // Sentinel strings: deliberately differ from production English to prove localization wiring.
 const mockLocalizedStrings: LanguageStrings = {
-  '%internetSettings_webView_title%': 'Title sentinel',
+  '%internetSettings_webView_title_3%': 'Title sentinel',
   '%internetSettings_webView_subtitle_2%': 'Subtitle sentinel',
   '%paratextRegistration_button_reset%': 'Discard changes sentinel',
   '%paratextRegistration_button_saveAndRestart%': 'Save and restart sentinel',
   '%paratextRegistration_button_restarting%': 'Restarting sentinel',
   '%general_error_title%': 'Error sentinel',
-  '%paratextRegistration_alert_updatedInternetSettings_2%': 'Settings updated sentinel',
+  '%paratextRegistration_alert_updatedInternetSettings_3%': 'Settings updated sentinel',
   '%paratextRegistration_alert_updatedRegistration_description%': 'Restarting description sentinel',
   '%paratextRegistration_alert_updatedRegistration_description_hasRestarted%': 'Restarted sentinel',
   // Minimum required for sub-components to render

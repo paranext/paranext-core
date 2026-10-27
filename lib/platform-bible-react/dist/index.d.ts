@@ -2467,9 +2467,10 @@ type TabDropdownMenuProps = {
 /**
  * Dropdown menu for Platform.Bible menu data. Each column that has items is a section, divided from
  * the next by a line; columns without items are left out. Groups within a column are not
- * distinguished. Items show their tooltip on hover and their `shortcut`, if any, at the end of the
- * row. With `showSectionHeadings`, each section is headed by its column label, except a column that
- * sets `isHeaderHidden`, whose label names the section for screen readers only.
+ * distinguished, while the groups of a submenu are divided by a line. Items show their tooltip on
+ * hover and their `shortcut`, if any, at the end of the row. With `showSectionHeadings`, each
+ * section is headed by its column label, except a column that sets `isHeaderHidden`, whose label
+ * names the section for screen readers only.
  *
  * A child component can be passed in to show as an icon on the menu trigger button.
  */

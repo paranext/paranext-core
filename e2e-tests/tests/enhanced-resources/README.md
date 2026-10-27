@@ -55,9 +55,11 @@ config — `playwright.config.ts`'s `globalSetup` rejects the very app they need
 Marble resources (e.g. `ESV16UK+`) that are not available in CI. Two specs are additionally
 quarantined from type-checking in `e2e-tests/tsconfig.json`.
 
-**Start the app in Power mode.** "Open enhanced resource" is hidden in Simple mode, so every spec
-that opens it requires Power: `enhanced-resources.fixture.ts` declares `requiredInterfaceMode: 'power'`, and
-attaching to a Simple-mode app fails fast with that message rather than timing out on the menu. Set
+**Start the app in Power mode.** The "Open enhanced resource" main menu item is hidden in both
+modes, so the specs open the window with the `platformEnhancedResources.openEnhancedResource`
+command (`openEnhancedResource` in `test-helpers.ts`). The suite's layout is written for Power:
+`enhanced-resources.fixture.ts` declares `requiredInterfaceMode: 'power'`, and attaching to a
+Simple-mode app fails fast with that message. Set
 `'platform.interfaceMode': 'power'` in `dev-appdata/data/settings.json` before starting the app.
 `text-collection-schema.spec.ts` is the exception — it drives the project data provider directly,
 works in either mode, and stays on `cdp.fixture`.

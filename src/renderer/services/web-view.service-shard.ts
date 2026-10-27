@@ -2177,6 +2177,7 @@ export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo {
     tabTitle,
     tabTooltip,
     tabIconUrl,
+    tabIconName,
     content,
     minWidth,
     minHeight,
