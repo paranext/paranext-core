@@ -53,6 +53,17 @@ function stripMarkerSuffix(marker: string): string {
 }
 
 /**
+ * The markers map's by-pattern entries, compiled once. A lookup falls through to these for every
+ * marker the map does not name — table cells, `\z*` markers, milestones — and runs per token.
+ */
+const MARKER_MAP_TYPES_BY_PATTERN = Object.entries(USFM_MARKERS_MAP_3_0.markersRegExp).map(
+  ([pattern, markerInfo]) => ({
+    regex: new RegExp(`^(?:${pattern})$`),
+    type: markerInfo?.type,
+  }),
+);
+
+/**
  * Looks a marker up in the shared markers map, which answers for markers that the `usfmMarkers`
  * list omits entirely — table cells and rows, sidebars, the deprecated `\ph#` and `\p#` paragraphs,
  * and the study-Bible note variants.
@@ -66,10 +77,7 @@ function lookupMarkerMapType(marker: string): string | undefined {
   const byName = USFM_MARKERS_MAP_3_0.markers[marker]?.type;
   if (byName) return byName;
   const baseName = stripMarkerSuffix(marker);
-  const byPattern = Object.entries(USFM_MARKERS_MAP_3_0.markersRegExp).find(([pattern]) =>
-    new RegExp(`^(?:${pattern})$`).test(baseName),
-  );
-  return byPattern?.[1]?.type;
+  return MARKER_MAP_TYPES_BY_PATTERN.find(({ regex }) => regex.test(baseName))?.type;
 }
 
 /**
@@ -155,7 +163,25 @@ const VERSE_OR_CHAPTER_OPERAND_REGEX = /^[ \t\r\n]*\d[\w-]*/;
  * "show invisible characters" exists to display.
  */
 const SEPARATOR_WHITESPACE_REGEX = /^[ \t\r\n]+/;
-const TRAILING_SEPARATOR_WHITESPACE_REGEX = /[ \t\r\n]+$/;
+const SEPARATOR_WHITESPACE_CHARACTERS = new Set([' ', '\t', '\r', '\n']);
+
+/**
+ * Removes the separator whitespace at the end of the text `pieces` spell out, across as many pieces
+ * as it spans. Walks back from the end one character at a time, so the work is the whitespace
+ * removed plus one piece, never the whole text.
+ */
+function trimTrailingSeparatorWhitespace(pieces: string[]): void {
+  while (pieces.length > 0) {
+    const last = pieces[pieces.length - 1];
+    let end = last.length;
+    while (end > 0 && SEPARATOR_WHITESPACE_CHARACTERS.has(last[end - 1])) end -= 1;
+    if (end > 0) {
+      pieces[pieces.length - 1] = last.slice(0, end);
+      return;
+    }
+    pieces.pop();
+  }
+}
 
 /**
  * Renders a raw USFM span as the text a reader sees, for display in a result card and for copying
@@ -192,14 +218,16 @@ export function collapseUsfmMarkersForDisplay(text: string): string {
     .replace(UNCLOSED_NOTE_TAIL_REGEX, '');
   const remaining = withoutNotes.replace(MARKER_ATTRIBUTES_REGEX, '');
 
-  let result = '';
+  // Built as pieces and joined once. A result card collapses a whole book's prefix and suffix, so
+  // re-scanning one accumulated string at every structural marker would be quadratic in the book.
+  const pieces: string[] = [];
   let cursor = 0;
   const regex = new RegExp(MARKER_CONSTRUCT_PATTERN, 'g');
   let match = regex.exec(remaining);
   // regex.exec() returns null (not undefined) when there is no match
   // eslint-disable-next-line no-null/no-null
   while (match !== null) {
-    result += remaining.slice(cursor, match.index);
+    pieces.push(remaining.slice(cursor, match.index));
     // A bare `\*` closer has no name to capture.
     const marker = match[1];
     const isClosingMarker = match[0].endsWith('*');
@@ -214,9 +242,9 @@ export function collapseUsfmMarkersForDisplay(text: string): string {
       // The editor shows a line break here, so the marker and the whitespace on either side of it
       // become one space. Consecutive structural markers (`\p\r\n\v 2`) coalesce into that same
       // one space, because the space this appends is what the next one strips.
-      result = result.replace(TRAILING_SEPARATOR_WHITESPACE_REGEX, '');
+      trimTrailingSeparatorWhitespace(pieces);
       end += remaining.slice(end).match(SEPARATOR_WHITESPACE_REGEX)?.[0].length ?? 0;
-      result += ' ';
+      pieces.push(' ');
     } else if (!isClosingMarker) {
       // An opening character or note marker is separated from its content by whitespace that is
       // USFM syntax, not text, so it goes with the marker. A closing marker has no such separator,
@@ -229,5 +257,6 @@ export function collapseUsfmMarkersForDisplay(text: string): string {
     match = regex.exec(remaining);
   }
 
-  return result + remaining.slice(cursor);
+  pieces.push(remaining.slice(cursor));
+  return pieces.join('');
 }

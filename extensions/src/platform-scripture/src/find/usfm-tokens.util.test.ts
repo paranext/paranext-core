@@ -176,5 +176,30 @@ describe('usfm-tokens.util', () => {
         'two  spaces here and  two  more',
       );
     });
+
+    it('coalesces a structural marker with whitespace left behind by markers that collapse to nothing', () => {
+      expect(collapseUsfmMarkersForDisplay('end. \\nd \\nd* \r\n\\q1\r\n\\v 2 Next')).toBe(
+        'end. Next',
+      );
+      expect(collapseUsfmMarkersForDisplay('end.\r\n\\p\r\n\\b\r\n\\q2 \r\n\\v 3 Next')).toBe(
+        'end. Next',
+      );
+    });
+
+    it('collapses a whole book in time linear in its length', () => {
+      // Each result card collapses the whole-book prefix and suffix on the web view's main thread,
+      // so work that grows faster than the book freezes Find on a large book like Psalms.
+      const verse =
+        '\\q1 \\v 1 Blessed is the man who doesn’t walk in the counsel of the wicked,\r\n';
+      const book = `\\c 1\r\n${verse.repeat(4000)}`;
+      expect(book.length).toBeGreaterThan(250_000);
+
+      const startMs = performance.now();
+      const collapsed = collapseUsfmMarkersForDisplay(book);
+      const elapsedMs = performance.now() - startMs;
+
+      expect(collapsed.startsWith(' Blessed is the man')).toBe(true);
+      expect(elapsedMs).toBeLessThan(250);
+    });
   });
 });
