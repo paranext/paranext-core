@@ -349,6 +349,28 @@ export async function setSampleProjectBookUsfm(
   if (!isWritten) throw new Error(`Sample project did not accept USFM for ${book.book}`);
 }
 
+/** The text after the book code on the `\id` line {@link prepareEmptySampleBook} writes. */
+export const EMPTY_BOOK_ID_TEXT = 'empty book';
+
+/**
+ * Makes the sample WEB project editable and cuts one of its books down to its `\id` line, as a
+ * newly created book is, then reads it back so a failed write fails here rather than as a later
+ * timeout. Writes project data, so it needs `isolatedProjectRoot: true` like
+ * {@link setSampleProjectBookUsfm}.
+ *
+ * @param book Any reference in the book; only `book` is read.
+ * @returns The book's USFM as written, which is also all of its chapter 1.
+ */
+export async function prepareEmptySampleBook(book: SampleChapterRef): Promise<string> {
+  const usfm = `\\id ${book.book} - ${EMPTY_BOOK_ID_TEXT}\r\n`;
+  await makeSampleProjectEditable();
+  await setSampleProjectBookUsfm(book, usfm);
+  const chapterOne = await getSampleProjectChapterUsfm({ ...book, chapterNum: 1 });
+  if (chapterOne !== usfm)
+    throw new Error(`Sample project did not empty ${book.book}; chapter 1 reads ${chapterOne}`);
+  return usfm;
+}
+
 /**
  * Shared engine for the open-editor helpers: waits for the dock layout's initial loadLayout() to
  * finish (signalled by the first iframe — the Home webview — appearing) so loadLayout can't wipe

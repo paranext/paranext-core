@@ -26,9 +26,8 @@ export async function openMarkerPalette(mainPage: Page): Promise<Locator> {
 }
 
 /**
- * Picks `marker` from the open palette: types it to filter the list, then presses Enter, which
- * commits the highlighted entry. Typing filters by label prefix, so `marker` must be the first
- * entry that prefix matches.
+ * Picks `marker` from the open palette: types it, then presses Enter to commit the highlighted
+ * entry. The palette ranks an exact match first, so typing the whole marker highlights it.
  */
 export async function pickFromMarkerPalette(mainPage: Page, marker: string): Promise<void> {
   await mainPage.keyboard.type(marker);

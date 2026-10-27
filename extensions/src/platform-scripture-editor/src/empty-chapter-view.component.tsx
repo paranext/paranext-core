@@ -22,7 +22,7 @@ const localize = (strings: EmptyChapterViewLocalizedStrings, key: EmptyChapterVi
 export type EmptyChapterViewProps = {
   /** Localized strings for the message, button label, and disabled tooltip. */
   localizedStrings?: EmptyChapterViewLocalizedStrings;
-  /** Whether structure protection is active — disables the button and shows an explanatory tooltip. */
+  /** Whether structure protection disables the button, which then shows an explanatory tooltip. */
   isStructureProtected: boolean;
   /**
    * Whether the text being displayed is a published resource. Resources get a message naming the

@@ -206,7 +206,6 @@ import { useProjectStylesheet } from './use-project-stylesheet.hook';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import {
   availableScrollGroupIds,
-  buildChapterScaffoldOps,
   canAddChapterNumber,
   correctEditorUsjVersion,
   decideNoteCallerClickAction,
@@ -218,6 +217,7 @@ import {
   getSimpleModeRootClassNames,
   getViewTypeToSave,
   hasDisplayableParagraphMarkerTitle,
+  insertChapterScaffold,
   isAddChapterNumberProtected,
   isChapterBlank,
   isMissingBookError,
@@ -3427,8 +3427,8 @@ function PlatformScriptureEditor({
 
   // Tracks a scaffold insert this component triggered that hasn't yet been observed to land
   // (`isBlankChapter` flipping to `false`) or been superseded by navigating away. Serves two roles
-  // that are always set and reset together: (1) re-entrancy guard for the whole applyUpdate -> save
-  // -> PDP-echo round trip (~300ms measured) — while `true`, a second click is a no-op instead of
+  // that are always set and reset together: (1) re-entrancy guard for the whole insert -> save ->
+  // PDP-echo round trip (~300ms measured) — while `true`, a second click is a no-op instead of
   // inserting the scaffold twice; (2) "the chapter just stopped being blank because of THIS insert"
   // signal for the refocus effect below, distinguishing that from any other cause of the same
   // transition (ordinary navigation, a remote/collaborative update, a Send/Receive sync landing).
@@ -3467,7 +3467,6 @@ function PlatformScriptureEditor({
       );
       return;
     }
-    pendingScaffoldInsertRef.current = true;
     // Undo for this insert depends on the editor keeping its history across the `onUsjChange` round
     // trip this call sets off: the editor's state-load effect fires Lexical's
     // `CLEAR_HISTORY_COMMAND` unconditionally, so anything that re-runs it moments after an edit
@@ -3476,22 +3475,14 @@ function PlatformScriptureEditor({
     // not. The editor is staged from the revision `dev-packages.json` pins, so it can change with
     // no version diff here at all, and no test here or upstream covers undo for this path —
     // re-check it by hand whenever that revision moves.
-    //
-    // A later chapter's scaffold starts its document. Chapter 1's goes after the book's `\id` line
-    // and any headings or introduction, which only the editor can place.
-    if (scrRef.chapterNum !== 1) {
-      editorRef.current?.applyUpdate(
-        buildChapterScaffoldOps(scrRef.chapterNum, lastVerse),
-        'local',
+    if (!insertChapterScaffold(editorRef.current, scrRef.chapterNum, lastVerse)) {
+      logger.warn(
+        `handleAddChapterNumber: no chapter added to ${scrRef.book} ${scrRef.chapterNum}; the editor is not mounted or refused the insert`,
       );
       return;
     }
-    if (!editorRef.current?.insertFirstChapter(lastVerse)) {
-      pendingScaffoldInsertRef.current = false;
-      logger.warn(
-        `handleAddChapterNumber: the editor added no chapter to ${scrRef.book} 1; ignoring click`,
-      );
-    }
+    // Set only after the insert, so a refused or throwing insert never leaves the button stuck.
+    pendingScaffoldInsertRef.current = true;
   }, [scrRef.book, scrRef.chapterNum, lastVerse, isAddChapterProtected, notifyStructureProtected]);
 
   // `Editorial` stays mounted but visually hidden while the chapter is blank, so any focus/cursor

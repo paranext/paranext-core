@@ -16,11 +16,10 @@ import { test, expect } from '../../../fixtures/isolated.fixture';
 import { waitForAppReady } from '../../../fixtures/helpers';
 import {
   getSampleProjectChapterUsfm,
-  makeSampleProjectEditable,
   navigateToolbarBcv,
   openEditableScriptureEditorForProject,
+  prepareEmptySampleBook,
   SAMPLE_WEB_PROJECT_ID,
-  setSampleProjectBookUsfm,
 } from '../../../fixtures/scripture-editor-helpers';
 
 test.use({
@@ -32,11 +31,8 @@ test.use({
 
 const JONAH_1 = { book: 'JON', chapterNum: 1, verseNum: 1 };
 
-/** An empty book: its `\id` line and nothing else, as a newly created book is. */
-const EMPTY_BOOK_USFM = '\\id JON - empty book\r\n';
-
-/** Jonah 1 has 17 verses, so the scaffold is `\c 1` and `\v 1` to `\v 17`, after the `\id` line. */
-const SCAFFOLDED_CHAPTER_1_USFM = `${EMPTY_BOOK_USFM}\\c 1\r\n${Array.from(
+/** Jonah 1 has 17 verses, so its scaffold is `\c 1` then `\v 1` to `\v 17`. */
+const CHAPTER_1_SCAFFOLD_USFM = `\\c 1\r\n${Array.from(
   { length: 17 },
   (_, index) => `\\v ${index + 1}\r\n`,
 ).join('')}`;
@@ -50,8 +46,7 @@ test.describe('scripture editor chapter marker in an empty book', () => {
 
     // Simple mode has no Home tab (simple-layout.data.ts); see formatted-default-simple-mode.spec.ts.
     await waitForAppReady(mainPage);
-    await makeSampleProjectEditable();
-    await setSampleProjectBookUsfm(JONAH_1, EMPTY_BOOK_USFM);
+    const emptyBookUsfm = await prepareEmptySampleBook(JONAH_1);
 
     const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
     const editorFrame = mainPage.frameLocator(`iframe[data-web-view-id="${editorId}"]`);
@@ -77,7 +72,7 @@ test.describe('scripture editor chapter marker in an empty book', () => {
       });
       await expect
         .poll(() => getSampleProjectChapterUsfm(JONAH_1), { timeout: 30_000 })
-        .toBe(SCAFFOLDED_CHAPTER_1_USFM);
+        .toBe(`${emptyBookUsfm}${CHAPTER_1_SCAFFOLD_USFM}`);
     });
   });
 });

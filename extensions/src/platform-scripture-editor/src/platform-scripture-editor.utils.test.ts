@@ -58,6 +58,7 @@ import {
   buildChapterScaffoldOps,
   canAddChapterNumber,
   isAddChapterNumberProtected,
+  insertChapterScaffold,
   resolveAddChapterNumberClick,
   isMissingBookError,
   isMissingBookOnScreen,
@@ -4493,11 +4494,41 @@ describe('buildChapterScaffoldOps', () => {
   });
 
   it('builds one chapter-embed op and one verse-embed op when the chapter has exactly one verse', () => {
-    const ops = buildChapterScaffoldOps(1, 1);
+    const ops = buildChapterScaffoldOps(2, 1);
     expect(ops).toEqual([
-      { insert: { chapter: { number: '1', style: 'c' } } },
+      { insert: { chapter: { number: '2', style: 'c' } } },
       { insert: { verse: { number: '1', style: 'v' } } },
     ]);
+  });
+});
+
+describe('insertChapterScaffold', () => {
+  function makeEditor(isFirstChapterInserted = true) {
+    return { applyUpdate: vi.fn(), insertFirstChapter: vi.fn(() => isFirstChapterInserted) };
+  }
+
+  it('inserts nothing while the editor is not mounted', () => {
+    expect(insertChapterScaffold(undefined, 2, 10)).toBe(false);
+  });
+
+  it('has the editor place chapter 1, with its verses, after the front matter', () => {
+    const editor = makeEditor();
+
+    expect(insertChapterScaffold(editor, 1, 17)).toBe(true);
+    expect(editor.insertFirstChapter).toHaveBeenCalledWith(17);
+    expect(editor.applyUpdate).not.toHaveBeenCalled();
+  });
+
+  it('reports chapter 1 as not inserted when the editor refuses it', () => {
+    expect(insertChapterScaffold(makeEditor(false), 1, 17)).toBe(false);
+  });
+
+  it('inserts a later chapter as a local scaffold update at the start of its document', () => {
+    const editor = makeEditor();
+
+    expect(insertChapterScaffold(editor, 2, 10)).toBe(true);
+    expect(editor.applyUpdate).toHaveBeenCalledWith(buildChapterScaffoldOps(2, 10), 'local');
+    expect(editor.insertFirstChapter).not.toHaveBeenCalled();
   });
 });
 
