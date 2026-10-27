@@ -1490,3 +1490,91 @@ describe('FootnotesLayout copy of a no-break space the row editor holds as its s
     },
   );
 });
+
+describe('FootnotesLayout copy reaching into the row editor', () => {
+  const NBSP = ' ';
+  const STAND_IN = '\u001A';
+  /** The second note's text stores a no-break space; the pane shows it in a read-only row. */
+  const usjWithStoredNbsp = usjWithNotes('alpha', `be${NBSP}ta`);
+
+  describe.each([
+    {
+      setting: 'off',
+      rowEditorViewOptions: getEditorViewOptions('standard', false, false),
+      shown: '~',
+      copied: '~',
+    },
+    {
+      setting: 'on',
+      rowEditorViewOptions: getEditorViewOptions('standard', false, true),
+      shown: STAND_IN,
+      copied: NBSP,
+    },
+  ])('with allowInvisibleCharacters $setting', ({ rowEditorViewOptions, shown, copied }) => {
+    // How Standard view shows the first note: a separator after each opening marker, a run of two
+    // spaces, and its stored no-break space as `shown`.
+    const editorDisplay = `\\f +${NBSP}\\ft${NBSP}al${shown}pha \\+nd${NBSP}L\\+nd*${NBSP}${NBSP}x\\f*`;
+    const editorUsfm = `\\f + \\ft al${copied}pha \\+nd L\\+nd*  x\\f*`;
+
+    function renderPaneEditingFirstRow(copyLimit: number | undefined) {
+      return renderPane({
+        usj: usjWithStoredNbsp,
+        copyLimit,
+        rowEditorViewOptions,
+        editingFootnoteIndex: 0,
+        renderEditingFootnote: () => (
+          <div className="editor-input" contentEditable suppressContentEditableWarning>
+            {editorDisplay}
+          </div>
+        ),
+      });
+    }
+
+    it("writes the row editor's part as its USFM and keeps the read-only row's no-break spaces", () => {
+      const { container } = renderPaneEditingFirstRow(undefined);
+
+      const { setData, isCancelled, selectedText } = copyWholePane(container);
+
+      // A positive control: the selection spans the row editor and a read-only row.
+      expect(selectedText).toContain(editorDisplay);
+      expect(selectedText).toContain(`be${NBSP}ta`);
+      expect(isCancelled).toBe(true);
+      expect(setData).toHaveBeenCalledTimes(1);
+      const [format, text] = setData.mock.calls[0];
+      expect(format).toBe('text/plain');
+      expect(text).toBe(selectedText.replace(editorDisplay, editorUsfm));
+    });
+
+    it('shortens the written copy to the copy limit', () => {
+      const { container: measuring } = renderPaneEditingFirstRow(undefined);
+      const { selectedText: whole } = copyWholePane(measuring);
+      const limit = whole.indexOf(editorDisplay) + editorDisplay.length;
+      cleanup();
+      const { container } = renderPaneEditingFirstRow(limit);
+
+      const { setData, isCancelled, selectedText } = copyWholePane(container);
+
+      // A positive control: the copy is over the limit, and the row editor falls inside it.
+      expect(selectedText.length).toBeGreaterThan(limit);
+      expect(isCancelled).toBe(true);
+      expect(setData).toHaveBeenCalledTimes(1);
+      const [, text] = setData.mock.calls[0];
+      expect(text).toBe(selectedText.replace(editorDisplay, editorUsfm).slice(0, limit));
+    });
+  });
+
+  it('leaves a copy of read-only rows alone, stored no-break spaces and all', () => {
+    const { container } = renderPane({
+      usj: usjWithStoredNbsp,
+      copyLimit: undefined,
+      rowEditorViewOptions: getEditorViewOptions('standard', false, true),
+    });
+
+    const { setData, isCancelled, selectedText } = copyWholePane(container);
+
+    // A positive control: the rows hold a stored no-break space.
+    expect(selectedText).toContain(`be${NBSP}ta`);
+    expect(isCancelled).toBe(false);
+    expect(setData).not.toHaveBeenCalled();
+  });
+});

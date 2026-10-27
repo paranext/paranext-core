@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { toUsfmNbspSpelling, ViewOptions } from '@eten-tech-foundation/platform-editor';
+import { ViewOptions } from '@eten-tech-foundation/platform-editor';
 import { MarkerObject, Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
   Button,
@@ -39,6 +39,7 @@ import {
   findEditorUsjNotes,
   valuesAreDeeplyEqual as deepEqualAcrossIframes,
 } from './platform-scripture-editor.utils';
+import { getFootnotesPaneCopyText } from './footnotes-pane-copy.util';
 
 // TODO (PT-3657): calculate these dynamically:
 const footnoteRowHeightPx = 20; // DOM says 32, and yet at 20, a full row is visible.
@@ -176,8 +177,9 @@ export type FootnotesLayoutProps = PropsWithChildren<{
   /**
    * The view options the pane's row editor renders with, or `undefined` when the pane has no row
    * editor. A copy from the pane that reaches into the row editor carries the editor's display, so
-   * the pane respells each no-break space the editor holds as its internal stand-in the way the
-   * project spells it (see `toUsfmNbspSpelling`). Required so a caller states it.
+   * the pane writes that part the way the editor's own copy would: its display spacing as spaces,
+   * and each no-break space the editor holds as its internal stand-in the way the project spells it
+   * (see `getFootnotesPaneCopyText`). Required so a caller states it.
    */
   rowEditorViewOptions: ViewOptions | undefined;
 }>;
@@ -530,17 +532,19 @@ function FootnotesPane({
   }, [selectedFootnote, onSelectedFootnoteChange]);
 
   // The pane is outside the editor, whose own copy guard handles only selections that reach into
-  // the editor, so the pane shortens its own copies and respells the no-break spaces a selection
-  // takes from the row editor's display. A copy that needs neither is left to the browser, with all
-  // its usual clipboard formats; only one that needs either is written, as plain text. A copy
-  // inside a row editor has already been handled by that editor's own copy guard, so it is left as
-  // the editor wrote it.
+  // the editor, so the pane shortens its own copies and writes what a selection takes from the row
+  // editor's display the way the row editor's own copy would (see `getFootnotesPaneCopyText`). A
+  // copy that needs neither is left to the browser, with all its usual clipboard formats; only one
+  // that needs either is written, as plain text. A copy inside a row editor has already been
+  // handled by that editor's own copy guard, so it is left as the editor wrote it.
   const handleFootnotesCopy = useCallback(
     (event: ClipboardEvent<HTMLDivElement>) => {
       if (event.defaultPrevented) return;
-      const selectedText = window.getSelection()?.toString() ?? '';
+      const selection = window.getSelection() ?? undefined;
+      const selectedText = selection?.toString() ?? '';
+      const rowEditorRoot = paneContainerRef.current?.querySelector('.editor-input') ?? undefined;
       const text = truncateToCopyLimit(
-        toUsfmNbspSpelling(selectedText, rowEditorViewOptions),
+        getFootnotesPaneCopyText(selection, rowEditorRoot, rowEditorViewOptions),
         copyLimit,
       );
       if (text === selectedText) return;
