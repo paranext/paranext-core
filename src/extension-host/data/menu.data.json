@@ -23,12 +23,18 @@
       "platform.helpRegistration": { "column": "platform.help", "order": 1, "isExtensible": true },
       "platform.helpInfo": { "column": "platform.help", "order": 2 },
       "platform.helpFeedback": { "column": "platform.help", "order": 3 },
-      "platform.helpMisc": { "column": "platform.help", "order": 4 }
+      "platform.helpMisc": {
+        "column": "platform.help",
+        "order": 4,
+        "isExtensible": true,
+        "isExperimental": true
+      }
     },
     "items": [
       {
         "label": "%mainMenu_settings%",
         "localizeNotes": "Application main menu > Project > Settings",
+        "iconNameBefore": "settings",
         "group": "platform.projectSettings",
         "order": 1,
         "command": "platform.openSettings"
@@ -41,61 +47,43 @@
         "command": "platform.quit"
       },
       {
-        "label": "%mainMenu_openNewWindow%",
-        "localizeNotes": "Application main menu > Project > Open new window",
+        "label": "%mainMenu_openNewWindow_2%",
+        "localizeNotes": "Application main menu > Project > New window",
         "group": "platform.projectMisc",
         "order": 1,
         "command": "platform.createWindow",
         "hiddenInterfaceModes": ["simple"]
       },
       {
-        "label": "%mainMenu_helpInfo_visitGettingStartedPage%",
-        "localizeNotes": "Application main menu > Help > Visit Getting Started Page",
+        "label": "%mainMenu_helpInfo_visitGettingStartedPage_2%",
+        "localizeNotes": "Application main menu > Help > Browse help (opens the Paratext 10 help articles on paratext.org)",
         "group": "platform.helpInfo",
         "order": 1,
         "command": "platform.visitGettingStartedPage",
-        "iconPathAfter": "papi-extension://platformScripture/assets/icons/external-link.svg"
+        "iconNameBefore": "circle-question-mark",
+        "iconNameAfter": "external-link"
       },
       {
-        "label": "%mainMenu_helpInfo_visitFAQsPage%",
-        "localizeNotes": "Application main menu > Help > Visit FAQs Page",
+        "label": "%mainMenu_helpInfo_visitCommunitySupportPage%",
+        "localizeNotes": "Application main menu > Help > Community support (opens the Support.Bible site, where translators find help from the wider community)",
         "group": "platform.helpInfo",
         "order": 2,
         "command": "platform.visitFAQsPage",
-        "iconPathAfter": "papi-extension://platformScripture/assets/icons/external-link.svg"
-      },
-      {
-        "label": "%mainMenu_helpInfo_visitFeatureRoadmapPage%",
-        "localizeNotes": "Application main menu > Help > Visit Feature Roadmap Page",
-        "group": "platform.helpInfo",
-        "order": 3,
-        "command": "platform.visitFeatureRoadmapPage",
-        "iconPathAfter": "papi-extension://platformScripture/assets/icons/external-link.svg"
+        "iconNameBefore": "users",
+        "iconNameAfter": "external-link"
       },
       {
         "label": "%mainMenu_helpInfo_showTour%",
+        "hiddenInterfaceModes": ["power"],
         "localizeNotes": "Application main menu > Help > Show the tour",
         "group": "platform.helpInfo",
-        "order": 4,
+        "order": 3,
         "command": "platform.showOnboardingTour"
       },
       {
-        "label": "%mainMenu_feedbackForm_textArea%",
-        "localizeNotes": "Application main menu > Help > Submit an idea",
-        "group": "platform.helpFeedback",
-        "order": 1,
-        "command": "platform.usersnapSubmitIdea"
-      },
-      {
-        "label": "%mainMenu_feedbackForm_screenshot%",
-        "localizeNotes": "Application main menu > Help > Report a bug / Send feedback",
-        "group": "platform.helpFeedback",
-        "order": 2,
-        "command": "platform.usersnapReportIssue"
-      },
-      {
         "label": "%mainMenu_openDeveloperDocumentation%",
-        "localizeNotes": "Application main menu > Help > Open Developer Documentation",
+        "hiddenInterfaceModes": ["simple", "power"],
+        "localizeNotes": "Application main menu > Help > Open Developer Documentation (opens the documentation for extension developers)",
         "group": "platform.helpMisc",
         "order": 2,
         "command": "platform.openDeveloperDocumentationUrl",
@@ -122,11 +110,12 @@
     },
     "items": [
       {
-        "label": "%webView_openProjectSettings%",
-        "localizeNotes": "Web view main menu > Project > Open Project Settings...",
+        "label": "%webView_openProjectSettings_2%",
+        "localizeNotes": "Web view main menu > Project > Project settings. Shared by every mode and web view.",
+        "iconNameBefore": "settings",
         "group": "platform.projectTop",
         "order": 3,
-        "command": "platform.openSettings"
+        "command": "platform.openProjectSettingsForWebView"
       }
     ]
   },
@@ -138,6 +127,7 @@
     "items": [
       {
         "label": "%insertNote%",
+        "hiddenInterfaceModes": ["simple", "power"],
         "localizeNotes": "Web view context menu > Insert note...",
         "group": "platform.insert",
         "order": 1,
@@ -145,6 +135,7 @@
       },
       {
         "label": "%menuItemName_wordList%",
+        "hiddenInterfaceModes": ["simple", "power"],
         "localizeNotes": "Web view context menu > Word list...",
         "group": "platform.wordList",
         "order": 1,
@@ -154,9 +145,31 @@
   },
   "defaultWebViewTabMenu": {
     "groups": {
+      "platform.tabZoom": { "order": 50, "isExtensible": false, "isExperimental": true },
       "platform.tabWindow": { "order": 100, "isExtensible": true, "isExperimental": true }
     },
     "items": [
+      {
+        "label": "%tab_contextMenu_zoomIn%",
+        "localizeNotes": "Tab context menu > Zoom in. Enlarges the pane last used in this tab (for a tab with one pane, the tab's project text); the application's own menus and toolbars are unaffected.",
+        "group": "platform.tabZoom",
+        "order": 100,
+        "command": "platform.webViewContentZoomIn"
+      },
+      {
+        "label": "%tab_contextMenu_zoomOut%",
+        "localizeNotes": "Tab context menu > Zoom out. Shrinks the pane last used in this tab (for a tab with one pane, the tab's project text); the application's own menus and toolbars are unaffected.",
+        "group": "platform.tabZoom",
+        "order": 200,
+        "command": "platform.webViewContentZoomOut"
+      },
+      {
+        "label": "%tab_contextMenu_resetZoom%",
+        "localizeNotes": "Tab context menu > Zoom reset. Returns the pane last used in this tab (for a tab with one pane, the tab's project text) to the default size set in Settings; the application's own menus and toolbars are unaffected.",
+        "group": "platform.tabZoom",
+        "order": 300,
+        "command": "platform.webViewContentZoomReset"
+      },
       {
         "label": "%tab_contextMenu_floatPanel%",
         "localizeNotes": "Tab context menu > Float tab",
@@ -169,7 +182,8 @@
         "localizeNotes": "Tab context menu > Move tab to new window",
         "group": "platform.tabWindow",
         "order": 200,
-        "command": "platform.moveWebViewToNewWindow"
+        "command": "platform.moveWebViewToNewWindow",
+        "hiddenInterfaceModes": ["simple"]
       },
       {
         "id": "platform.moveTabToWindow",

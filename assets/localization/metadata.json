@@ -1,9 +1,21 @@
 {
+  "%about_ariaLabel_opensTermsOfService%": {
+    "deprecationInfo": {
+      "date": "2026-09-10",
+      "message": "The Terms of Service now open in a window the application owns rather than in the operating system's handler for Markdown files. The new key is %about_ariaLabel_opensTermsOfService_2%."
+    }
+  },
   "%about_db_ip_attribution_intro%": {
     "fallbackKey": "%Paratext.Base.SplashScreen.Splash_Load.&quot;  Internet safety features use data&#xA;from &quot;%"
   },
   "%about_db_ip_attribution_terms%": {
     "fallbackKey": "%Paratext.Base.SplashScreen.Splash_Load.&quot;Terms&quot;%"
+  },
+  "%about_error_couldNotOpenTermsOfService%": {
+    "deprecationInfo": {
+      "date": "2026-09-10",
+      "message": "The document ships as TERMS-OF-SERVICE.html rather than TERMS-OF-SERVICE.md, so the message names a different file and points the reader at their web browser, which can open it. The new key is %about_error_couldNotOpenTermsOfService_2%."
+    }
   },
   "%acceptButton_tooltip%": {
     "fallbackKey": "%Paratext.Checklists.ChecklistsTool.saveToolStripButton.ToolTipText%"
@@ -22,6 +34,15 @@
       "date": "2026-07-26",
       "message": "Updated error text to include a link to the internet settings panel. The new key is %data_loading_error_internetAccess_disabled_2%."
     }
+  },
+  "%data_loading_error_internetAccess_disabled_2%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "The panel it names is now called \"Internet connectivity\". The new key is %data_loading_error_internetAccess_disabled_3%."
+    }
+  },
+  "%data_loading_error_internetAccess_disabled_3%": {
+    "fallbackKey": "%data_loading_error_internetAccess_disabled_2%"
   },
   "%data_loading_error_paratextData_internet_disabled%": {
     "deprecationInfo": {
@@ -44,11 +65,39 @@
       "message": "Replaced by %firstRun_button_skipSync% when the real sync-consent step was implemented in PT-4178."
     }
   },
+  "%firstRun_button_skipSync%": {
+    "fallbackKey": "%firstRun_button_dontSyncYet%",
+    "deprecationInfo": {
+      "date": "2026-08-16",
+      "message": "Reworded to \"Don't sync yet\" per PT-4178's approved labelling: the choice defers every automatic sync for the rest of the session rather than setting a standing preference. The new key is %firstRun_button_dontSyncYet%."
+    }
+  },
   "%firstRun_error_body%": {
     "deprecationInfo": {
       "date": "2026-07-30",
       "message": "Reworded to stop blaming the network: the registration check is local, so an unresolved probe means the provider is still starting up, not that the connection is down (PT-4302). The new key is %firstRun_error_body_providerStartingUp%."
     }
+  },
+  "%firstRun_step_internetSettings_body%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "The wizard now asks the user to choose an option before Next is enabled, so the lead-in asks them to choose rather than to manage the setting. The new key is %firstRun_step_internetSettings_body_2%."
+    }
+  },
+  "%firstRun_step_internetSettings_heading%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Renamed to \"Internet connectivity\" to match the internet settings panel. The new key is %firstRun_step_internetSettings_heading_2%."
+    }
+  },
+  "%firstRun_step_internetSettings_heading_2%": {
+    "fallbackKey": "%firstRun_step_internetSettings_heading%"
+  },
+  "%firstRun_step_internetSettings_paratext9Setting_Disabled%": {
+    "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.cmbxInternetUse.Items[2]%"
+  },
+  "%firstRun_step_internetSettings_paratext9Setting_VpnRequired%": {
+    "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.cmbxInternetUse.Items[1]%"
   },
   "%firstRun_step_language_placeholder%": {
     "deprecationInfo": {
@@ -81,8 +130,75 @@
   "%general_open%": {
     "fallbackKey": "%Paratext.Base.CommonForms.SelectScrTextsForm.SelectScrTextsForm.Text%"
   },
+  "%getResources_errorInstallResource_resourceAlreadyInstalled%": {
+    "deprecationInfo": {
+      "date": "2026-09-22",
+      "message": "Installing a resource that is already installed and up to date now succeeds as a no-op instead of failing, so there is no error to show and no replacement key. A stale catalog used to make this the only outcome a retry could ever reach."
+    }
+  },
+  "%mainMenu_helpInfo_visitFAQsPage%": {
+    "fallbackKey": "%mainMenu_helpInfo_visitCommunitySupportPage%",
+    "deprecationInfo": {
+      "date": "2026-09-10",
+      "message": "Relabeled to \"Community support\" so the name matches the Support.Bible destination the item has always opened. Use %mainMenu_helpInfo_visitCommunitySupportPage% instead."
+    }
+  },
+  "%mainMenu_helpInfo_visitFeatureRoadmapPage%": {
+    "deprecationInfo": {
+      "date": "2026-09-24",
+      "message": "Retired with no replacement key; the Feature roadmap item was removed from the Help menu because the roadmap page it opened is no longer published."
+    }
+  },
+  "%mainMenu_helpInfo_visitGettingStartedPage%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Relabeled to \"Browse help\". The new key is %mainMenu_helpInfo_visitGettingStartedPage_2%."
+    }
+  },
+  "%mainMenu_helpInfo_visitGettingStartedPage_2%": {
+    "fallbackKey": "%mainMenu_helpInfo_visitGettingStartedPage%"
+  },
+  "%mainMenu_openNewWindow%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Relabeled to \"New window\". The new key is %mainMenu_openNewWindow_2%."
+    }
+  },
+  "%mainMenu_openNewWindow_2%": {
+    "fallbackKey": "%mainMenu_openNewWindow%"
+  },
   "%mainMenu_visitSupportBible%": {
-    "fallbackKey": "%mainMenu_helpInfo_visitFAQsPage%"
+    "fallbackKey": "%mainMenu_helpInfo_visitCommunitySupportPage%"
+  },
+  "%onboardingTour_step_modelText_description%": {
+    "deprecationInfo": {
+      "date": "2026-09-30",
+      "message": "The tour's left-column stop now names both Base and Model texts rather than the model text alone. The new key is %onboardingTour_step_baseOrModelText_description%."
+    }
+  },
+  "%onboardingTour_step_modelText_title%": {
+    "deprecationInfo": {
+      "date": "2026-09-30",
+      "message": "The tour's left-column stop now names both Base and Model texts rather than the model text alone. The new key is %onboardingTour_step_baseOrModelText_title%."
+    }
+  },
+  "%onboardingTour_step_profile_description%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "The tour's profile stop now also names the Simple / Power switch in the User menu. The new key is %onboardingTour_step_profile_description_2%."
+    }
+  },
+  "%onboardingTour_step_profile_description_2%": {
+    "fallbackKey": "%onboardingTour_step_profile_description%"
+  },
+  "%onboardingTour_step_sendReceive_description%": {
+    "deprecationInfo": {
+      "date": "2026-10-13",
+      "message": "The new key is %onboardingTour_step_sendReceive_description_2%, which adds that Paratext 9 called sync \"Send/Receive\"."
+    }
+  },
+  "%onboardingTour_step_sendReceive_description_2%": {
+    "fallbackKey": "%onboardingTour_step_sendReceive_description%"
   },
   "%product_shortName%": {
     "fallbackKey": "%product_name%"
@@ -98,6 +214,24 @@
   },
   "%project_settings_project_group1_label%": {
     "fallbackKey": "%project_settings_platform_group1_label%"
+  },
+  "%projectPicker_toolbar_label_nameAndShortName%": {
+    "deprecationInfo": {
+      "date": "2026-09-23",
+      "message": "Project labels now lead with the short name, the field that identifies a project to a Paratext user and the half that must survive truncation. Use %projectPicker_toolbar_label_shortNameAndFullName% for the new order."
+    }
+  },
+  "%projectPicker_toolbar_label_shortNameOnly%": {
+    "deprecationInfo": {
+      "date": "2026-09-23",
+      "message": "The toolbar label no longer parenthesizes a project that has no distinct full name; it shows the short name as-is. No replacement key is needed."
+    }
+  },
+  "%projectPicker_toolbar_trigger_label%": {
+    "deprecationInfo": {
+      "date": "2026-09-23",
+      "message": "The spoken trigger name now leads with the short name and separates the pair with a comma rather than a hyphen, which several screen readers announce as \"dash\". Use %projectPicker_toolbar_trigger_label_2%."
+    }
   },
   "%redoButton_tooltip%": {
     "notes": "The tooltip text for the redo button in the common undo/redo control used in various editors.",
@@ -133,11 +267,86 @@
   "%settings_platform_group1_label_alternative%": {
     "fallbackKey": "%settings_platform_group1_label%"
   },
+  "%settings_platform_showRegistrationReminderOnStartup_label%": {
+    "deprecationInfo": {
+      "date": "2026-10-23",
+      "message": "UX renamed this setting to say what it reminds the user about. The new key is %settings_platform_showRegistrationReminderOnStartup_label_2%."
+    }
+  },
+  "%settings_platform_showRegistrationReminderOnStartup_label_2%": {
+    "fallbackKey": "%settings_platform_showRegistrationReminderOnStartup_label%"
+  },
+  "%settings_platform_webViewContentZoom_description%": {
+    "deprecationInfo": {
+      "date": "2026-09-23",
+      "message": "UX limited content zoom to project text, so the description no longer says every pane's content scales. The new key is %settings_platform_webViewContentZoom_description_2%."
+    }
+  },
+  "%settings_platform_webViewContentZoomTypesWithAreas_label%": {
+    "deprecationInfo": {
+      "date": "2026-09-22",
+      "message": "The hidden per-type content-zoom record this labelled was removed: a pane now takes content zoom only if core declares it zoomable or it marks a zoom area, so nothing needs to remember which types mark areas."
+    }
+  },
+  "%settings_platform_zoomFactor_description%": {
+    "deprecationInfo": {
+      "date": "2026-09-23",
+      "message": "Interface scaling is now shown as a percentage, so the description gives its default and range in percent. The new key is %settings_platform_zoomFactor_description_2%."
+    }
+  },
+  "%settings_platform_zoomFactor_label%": {
+    "deprecationInfo": {
+      "date": "2026-09-15",
+      "message": "UX renamed this setting to \"Interface scaling\" to distinguish it from the per-tab content zoom setting. The new key is %settings_platform_zoomFactor_label_2%."
+    }
+  },
   "%settings_sidebar_projectsComboBoxPlaceholder%": {
     "fallbackKey": "%Paratext.WindowMenu.ShareLayoutWithProjectsForm..ctor.&quot;Select project&quot;&quot;Select project&quot;%"
   },
   "%settings_title_projectSettings%": {
     "fallbackKey": "%Paratext.Terms.Internal.BiblicalTermsForm.settingsToolStripMenuItem.Text%"
+  },
+  "%shareLayoutDialog_commentaryResources_label%": {
+    "deprecationInfo": {
+      "date": "2026-09-21",
+      "message": "The Team layout dialog lists commentaries under a tab rather than a standalone labelled section. Retired with no replacement key; the tab is labelled by %shareLayoutDialog_tab_commentaryResources%."
+    }
+  },
+  "%shareLayoutDialog_confirm_label%": {
+    "deprecationInfo": {
+      "date": "2026-09-21",
+      "message": "The confirm button now names its outcome instead of reading \"OK\". The new key is %shareLayoutDialog_saveForTeam_label%."
+    }
+  },
+  "%shareLayoutDialog_description%": {
+    "deprecationInfo": {
+      "date": "2026-09-21",
+      "message": "The description now also states when saved changes reach the team. The new key is %shareLayoutDialog_reviewAndSyncNotice%."
+    }
+  },
+  "%shareLayoutDialog_modelText_label%": {
+    "deprecationInfo": {
+      "date": "2026-09-30",
+      "message": "The Team layout dialog's left column now names both Base and Model texts rather than the model text alone. The new key is %shareLayoutDialog_baseOrModelText_label%."
+    }
+  },
+  "%shareLayoutDialog_scriptureResources_label%": {
+    "deprecationInfo": {
+      "date": "2026-09-21",
+      "message": "The Team layout dialog lists Bible texts under a tab rather than a standalone labelled section. Retired with no replacement key; the tab is labelled by %shareLayoutDialog_tab_scriptureResources%."
+    }
+  },
+  "%shareLayoutDialog_textCollectionResources_label%": {
+    "deprecationInfo": {
+      "date": "2026-09-21",
+      "message": "The text collection is now expressed as a per-resource checkbox plus a count rather than as its own labelled list. Retired with no replacement key; the count is %shareLayoutDialog_textCollection_hint%."
+    }
+  },
+  "%shareLayoutDialog_title%": {
+    "deprecationInfo": {
+      "date": "2026-09-21",
+      "message": "The dialog was renamed from \"Share layout with team\" to \"Team layout\". The new key is %shareLayoutDialog_teamLayout_title%."
+    }
   },
   "%submit%": {
     "fallbackKey": "%yes%"
@@ -222,15 +431,87 @@
       "message": "The toolbar's standalone theme toggle button was replaced by the appearance toggle in the User Profile popover, which does not surface a separate theme-loading error tooltip."
     }
   },
+  "%toolbar_userProfile_label%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Renamed to \"User menu\". The new key is %toolbar_userProfile_label_2%."
+    }
+  },
+  "%toolbar_userProfile_label_2%": {
+    "fallbackKey": "%toolbar_userProfile_label%"
+  },
+  "%toolbar_userProfile_label_registrationNeeded%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Renamed to \"User menu — registration needed\". The new key is %toolbar_userProfile_label_registrationNeeded_2%."
+    }
+  },
+  "%toolbar_userProfile_label_registrationNeeded_2%": {
+    "fallbackKey": "%toolbar_userProfile_label_registrationNeeded%"
+  },
   "%undoButton_tooltip%": {
     "notes": "The tooltip text for the undo button in the common undo/redo control used in various editors.",
     "fallbackKey": "%Paratext.Base.ProjectComments.CommentEditorForm.uiUndo.ToolTipText%"
+  },
+  "%userProfile_interfaceMode_power_description%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Power mode is now described as a configurable interface to use alongside Paratext 9 rather than the full Paratext interface. The new key is %userProfile_interfaceMode_power_description_2%."
+    }
+  },
+  "%userProfile_interfaceMode_power_description_2%": {
+    "fallbackKey": "%userProfile_interfaceMode_power_description%"
+  },
+  "%userProfile_interfaceMode_simple_description%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Simple mode is now described by what it supports (basic exegesis, drafting and AI checks) rather than as focused translation work. The new key is %userProfile_interfaceMode_simple_description_2%."
+    }
+  },
+  "%userProfile_interfaceMode_simple_description_2%": {
+    "fallbackKey": "%userProfile_interfaceMode_simple_description%"
   },
   "%userProfile_networkSettings%": {
     "deprecationInfo": {
       "date": "2026-07-26",
       "message": "Renamed to \"Internet & connectivity\" to match the internet settings panel. The new key is %userProfile_networkSettings_2%."
     }
+  },
+  "%userProfile_server_badge_development%": {
+    "notes": "Usually left untranslated (falling back to the English \"Development\") since this badge targets a dev/support audience who will likely recognize the terse English environment name regardless of interface language. Translate it if that reasoning doesn't hold in your language or script — it is not required to match the English string. The tooltip, %userProfile_server_tooltip_development%, should still be translated: it carries the full explanation for anyone who ends up on this server."
+  },
+  "%userProfile_server_badge_qualityAssurance%": {
+    "notes": "Usually left untranslated (falling back to the English \"QA\") since this badge targets a dev/support audience who will likely recognize the terse English environment abbreviation regardless of interface language. Translate it if that reasoning doesn't hold in your language or script — it is not required to match the English string. The tooltip, %userProfile_server_tooltip_qualityAssurance%, should still be translated: it carries the full explanation for anyone who ends up on this server."
+  },
+  "%userProfile_server_badge_test%": {
+    "notes": "Usually left untranslated (falling back to the English \"Test\") since this badge targets a dev/support audience who will likely recognize the terse English environment name regardless of interface language. Translate it if that reasoning doesn't hold in your language or script — it is not required to match the English string. The tooltip, %userProfile_server_tooltip_test%, should still be translated: it carries the full explanation for anyone who ends up on this server."
+  },
+  "%userProfile_networkSettings_2%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Renamed to \"Internet connectivity\". The new key is %userProfile_networkSettings_3%."
+    }
+  },
+  "%userProfile_networkSettings_3%": {
+    "fallbackKey": "%userProfile_networkSettings_2%"
+  },
+  "%userProfile_profileAndRegistration%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Renamed to \"Registration information\". The new key is %userProfile_profileAndRegistration_2%."
+    }
+  },
+  "%userProfile_profileAndRegistration_2%": {
+    "fallbackKey": "%userProfile_profileAndRegistration%"
+  },
+  "%webView_openProjectSettings%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Relabeled to \"Project settings\" for every mode and web view. The new key is %webView_openProjectSettings_2%."
+    }
+  },
+  "%webView_openProjectSettings_2%": {
+    "fallbackKey": "%webView_openProjectSettings%"
   },
   "%yes%": {
     "notes": "A confirmation word used in many places. For example, this may be used as the label on a button on a dialog.",

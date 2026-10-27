@@ -1,17 +1,18 @@
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
   ColumnDef,
+  ContentZoomTextProvider,
   getInventoryHeader,
   Inventory,
   inventoryCountColumn,
   InventorySummaryItem,
-  inventoryItemColumn,
   inventoryStatusColumn,
   InventoryTableData,
   Scope,
 } from 'platform-bible-react';
 import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import { useMemo } from 'react';
+import { zoomableInventoryItemColumn } from './inventory-item-column';
 
 /**
  * Localization keys this inventory needs for its table headers. Resolve these via the Platform's
@@ -60,7 +61,7 @@ const createColumns = (
   unapprovedItems: string[],
   onUnapprovedItemsChange: (items: string[]) => void,
 ): ColumnDef<InventoryTableData>[] => [
-  inventoryItemColumn(itemLabel),
+  zoomableInventoryItemColumn(itemLabel),
   inventoryCountColumn(countLabel),
   {
     accessorKey: 'styleName',
@@ -185,24 +186,27 @@ export function MarkerInventory({
     ],
   );
 
+  // Opts the shared occurrence table into content zoom: its snippet text zooms with the pane.
   return (
-    <Inventory
-      inventoryItems={newInventoryItems}
-      setVerseRef={setVerseRef}
-      localizedStrings={localizedStrings}
-      approvedItems={approvedItems}
-      unapprovedItems={unapprovedItems}
-      scope={scope}
-      onScopeChange={onScopeChange}
-      columns={columns}
-      additionalItemsLabels={{
-        checkboxText: showPrecedingMarkerLabel,
-        tableHeaders: [precedingMarkerLabel],
-      }}
-      areInventoryItemsLoading={areInventoryItemsLoading}
-      classNameForVerseText="scripture-font"
-      onItemSelected={onItemSelected}
-    />
+    <ContentZoomTextProvider>
+      <Inventory
+        inventoryItems={newInventoryItems}
+        setVerseRef={setVerseRef}
+        localizedStrings={localizedStrings}
+        approvedItems={approvedItems}
+        unapprovedItems={unapprovedItems}
+        scope={scope}
+        onScopeChange={onScopeChange}
+        columns={columns}
+        additionalItemsLabels={{
+          checkboxText: showPrecedingMarkerLabel,
+          tableHeaders: [precedingMarkerLabel],
+        }}
+        areInventoryItemsLoading={areInventoryItemsLoading}
+        classNameForVerseText="scripture-font"
+        onItemSelected={onItemSelected}
+      />
+    </ContentZoomTextProvider>
   );
 }
 

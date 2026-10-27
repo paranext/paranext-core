@@ -6,8 +6,10 @@
 // the renderer's own document.body, a different document). So Simple-mode scoping here is done
 // via plain marker classes applied directly to each web view's own root element instead:
 // `.editor-container-simple` (unconditional in model-text-panel.component.tsx and
-// resource-text-panel.web-view.tsx — both Simple-mode-only web views; conditional on
-// `!isPowerMode` in platform-scripture-editor.web-view.tsx, which is used in both modes) and
+// resource-text-panel.component.tsx — both Simple-mode-only web views; conditional on
+// `!isPowerMode` in platform-scripture-editor.web-view.tsx, which is used in both modes),
+// `.character-marker-indicators` (beside `.editor-container-simple` on the Scripture editor's root,
+// only while its text can be typed into; see `getSimpleModeRootClassNames`) and
 // `.scripture-editor-tab-nav-simple` (conditional in platform-scripture-editor.web-view.tsx only).
 //
 // This file is @used from _editor-overrides.scss, which all three web-view entry points already
@@ -106,9 +108,62 @@
   --psc-character-marker-bar-width: 64px;
 }
 
+// The bar sits outside the editor's content-zoom area at its fixed width, while this padding is on
+// `.usfm`, inside that area, where CSS `zoom` multiplies it. Dividing by the area's factor makes
+// the reserved space render at exactly the bar's width at every level; without it the reservation
+// shrinks under the bar below 100 % and the bar paints over text.
 .editor-container-simple .usfm.psc-gutter-markers {
-  padding-inline-end: var(--psc-character-marker-bar-width);
+  padding-inline-end: calc(
+    var(--psc-character-marker-bar-width) /
+      var(--platform-content-zoom-main, var(--platform-content-zoom-default, 1))
+  );
 }
+
+// Character markers with no visible style. Simple styles character markers only through the static
+// `_usj-nodes.scss`, where these set nothing but `font-size: 100%`, so their text looks like plain
+// text and users type inside them unawares. `simple-mode.scss.test.ts` keeps the list in step
+// with `_usj-nodes.scss`.
+//
+// The tint is solid `--muted`, so nested markers are no darker. It keeps the text's own color on
+// purpose: `--muted-foreground` would dim Scripture. Find, comments and the selection paint above
+// it, and an expanded footnote's own tint wins (one class more specific).
+//
+// The hover line is always drawn but transparent; only the hover rule carries the delay, so the
+// line appears late and fades out at once. Chromium also paints it in the selection's text color
+// while the text is selected. No overline: at this line height it sits just under the line above
+// and reads as underlining that text instead.
+/* stylelint-disable selector-class-pattern -- `usfm_<marker>` is the editor library's class name */
+.editor-container-simple.character-marker-indicators
+  :is(
+    .usfm_ior,
+    .usfm_liv,
+    .usfm_liv1,
+    .usfm_liv2,
+    .usfm_liv3,
+    .usfm_liv4,
+    .usfm_liv5,
+    .usfm_ndx,
+    .usfm_no,
+    .usfm_rb,
+    .usfm_w,
+    .usfm_wa,
+    .usfm_wg,
+    .usfm_wh,
+    .usfm_zpa-d,
+    .usfm_zpa-xb,
+    .usfm_zpa-xv
+  ) {
+  background-color: var(--muted);
+  text-decoration-line: underline;
+  text-decoration-color: transparent;
+  transition: text-decoration-color 150ms;
+
+  &:hover {
+    text-decoration-color: currentColor;
+    transition-delay: 500ms;
+  }
+}
+/* stylelint-enable selector-class-pattern */
 
 // RTL: `_usj-nodes.scss`'s mirror rule (`.usfm.psc-gutter-markers[dir='rtl']`) re-asserts
 // `padding-left: 10px` PHYSICALLY — the same side `padding-inline-end` resolves to in RTL — at
@@ -117,5 +172,8 @@
 // attribute raises specificity to (0,4,0) and settles it deterministically. That rule's
 // `padding-right` (the start-side gutter in RTL) is untouched and still applies.
 .editor-container-simple .usfm.psc-gutter-markers[dir='rtl'] {
-  padding-left: var(--psc-character-marker-bar-width);
+  padding-left: calc(
+    var(--psc-character-marker-bar-width) /
+      var(--platform-content-zoom-main, var(--platform-content-zoom-default, 1))
+  );
 }

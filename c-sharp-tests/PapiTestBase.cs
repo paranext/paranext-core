@@ -5,9 +5,12 @@ using System.Text.Json.Nodes;
 using System.Web;
 using System.Xml.Linq;
 using Paranext.DataProvider;
+using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.Projects;
 using Paranext.DataProvider.Projects.SendReceive;
 using Paratext.Data;
+using Paratext.Data.ProjectSettingsAccess;
+using PtxUtils;
 
 namespace TestParanextDataProvider
 {
@@ -90,6 +93,21 @@ namespace TestParanextDataProvider
             DummyScrText scrText = new();
             return scrText;
         }
+
+        /// <summary>
+        /// Sets the project's type, giving a derived type the placeholder base project it needs
+        /// </summary>
+        protected static void SetProjectType(ScrText scrText, Enum<ProjectType> type) =>
+            scrText.Settings.TranslationInfo = new TranslationInformation(
+                type,
+                type.IsDerivedType() ? "PlaceholderBase" : ""
+            );
+
+        /// <summary>
+        /// Makes the project a Study Bible Additions project, which Platform.Bible can't open
+        /// </summary>
+        protected static void MakeStudyBibleAdditions(ScrText scrText) =>
+            SetProjectType(scrText, ProjectType.StudyBibleAdditions);
 
         /// <summary>
         /// Creates project details from the specified project
@@ -192,6 +210,19 @@ namespace TestParanextDataProvider
                 ParatextProjects
             );
         }
+
+        /// <summary>
+        /// The options the PAPI JSON-RPC formatter actually serializes with — what a wire-shape
+        /// assertion has to use. Not interchangeable with
+        /// <see cref="SerializationOptions.CreateSerializationOptions"/>: the formatter copies only
+        /// some of those options onto its own, so an assertion made against the shared options alone
+        /// can pass while the wire differs.
+        /// </summary>
+        protected static JsonSerializerOptions WireSerializerOptions() =>
+            (
+                (StreamJsonRpc.SystemTextJsonFormatter)
+                    SerializationOptions.CreateJsonRpcMessageFormatter()
+            ).JsonSerializerOptions;
 
         /// <summary>
         /// Creates a JSON string node with the specified data

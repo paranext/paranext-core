@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { DblResourceData } from 'platform-bible-utils';
 import type {
   DblResourceReference,
   ProjectReference,
@@ -259,39 +260,47 @@ describe('getViewOptionsTexts', () => {
       isUserRemovable: false,
     },
     {
-      label: 'admin unflagged but overlay present → bottom (past-admin), not locked, not removable',
+      label: 'admin unflagged but overlay present → top, checked, locked',
       sources: () =>
         makeSources({
           adminReferenced: list([project('a')]),
           overlay: { a: true },
         }),
-      section: 'bottom' as const,
+      section: 'top' as const,
       checked: true,
-      isAdminLocked: false,
+      isAdminLocked: true,
       isUserRemovable: false,
     },
     {
-      label: 'admin flag false, no overlay → bottom, unchecked, not locked, not removable',
+      label: 'admin unflagged, no overlay, not in user list → top, unchecked, locked',
+      sources: () => makeSources({ adminReferenced: list([project('a')]), overlay: {} }),
+      section: 'top' as const,
+      checked: false,
+      isAdminLocked: true,
+      isUserRemovable: false,
+    },
+    {
+      label: 'admin flag false, no overlay → top, unchecked, locked',
       sources: () =>
         makeSources({
           adminReferenced: list([project('a', { isInTextCollection: false })]),
           overlay: {},
         }),
-      section: 'bottom' as const,
+      section: 'top' as const,
       checked: false,
-      isAdminLocked: false,
+      isAdminLocked: true,
       isUserRemovable: false,
     },
     {
-      label: 'admin flag false, overlay true → bottom, checked, not locked, not removable',
+      label: 'admin flag false, overlay true → top, checked, locked',
       sources: () =>
         makeSources({
           adminReferenced: list([project('a', { isInTextCollection: false })]),
           overlay: { a: true },
         }),
-      section: 'bottom' as const,
+      section: 'top' as const,
       checked: true,
-      isAdminLocked: false,
+      isAdminLocked: true,
       isUserRemovable: false,
     },
     {
@@ -365,18 +374,61 @@ describe('getViewOptionsTexts', () => {
     expect(bottom).toHaveLength(0);
   });
 
-  it('lists a user-added resource that is only an unflagged (download-only) admin entry in the bottom', () => {
-    const { top, bottom } = getViewOptionsTexts(
+  // The Bible texts dropdown lists such a resource as the team's, so View Options must not offer to
+  // remove it.
+  it.each([true, false])(
+    "lists a user-added resource the admin also references, unflagged, as the team's (user flag %s)",
+    (isInTextCollectionForUser) => {
+      const { top, bottom } = getViewOptionsTexts(
+        makeSources({
+          adminReferenced: list([project('x')]),
+          userReferenced: list([
+            project('x', { isInTextCollectionForUser }),
+            project('u', { isInTextCollectionForUser: true }),
+          ]),
+          overlay: {},
+        }),
+      );
+      expect(top).toEqual([
+        expect.objectContaining({
+          reference: expect.objectContaining({ id: 'x' }),
+          checked: isInTextCollectionForUser,
+          isAdminLocked: true,
+          isUserRemovable: false,
+        }),
+      ]);
+      // Positive control: a user entry the admin does not name stays the user's own.
+      expect(bottom).toEqual([
+        expect.objectContaining({
+          reference: expect.objectContaining({ id: 'u' }),
+          isAdminLocked: false,
+          isUserRemovable: true,
+        }),
+      ]);
+    },
+  );
+
+  it("lists the team's rows in referenced-list order, whoever else lists them", () => {
+    const { top } = getViewOptionsTexts(
       makeSources({
-        adminReferenced: list([project('x')]),
+        adminReferenced: list([
+          project('x'),
+          project('a', { isInTextCollection: true }),
+          project('n'),
+          project('f', { isInTextCollection: false }),
+        ]),
         userReferenced: list([project('x', { isInTextCollectionForUser: true })]),
         overlay: {},
       }),
     );
-    expect(top).toHaveLength(0);
-    expect(bottom.map((entry) => entry.reference.id)).toEqual(['x']);
-    expect(bottom[0].checked).toBe(true);
-    expect(bottom[0].isAdminLocked).toBe(false);
+    expect(top.map((entry) => entry.reference.id)).toEqual(['x', 'a', 'n', 'f']);
+  });
+
+  it('lists a referenced id once, even when the referenced list names it twice', () => {
+    const { top } = getViewOptionsTexts(
+      makeSources({ adminReferenced: list([project('a'), project('a')]) }),
+    );
+    expect(top.map((entry) => entry.reference.id)).toEqual(['a']);
   });
 
   it('stamps longName from the resolver onto rows', () => {
@@ -428,7 +480,7 @@ describe('getViewOptionsTexts', () => {
     const downloaded: DownloadedResource[] = [
       { projectId: 'proj-kjn', name: 'KJN', fullName: 'King James New', language: 'English' },
     ];
-    const { bottom } = getViewOptionsTexts(sources, undefined, { downloaded });
+    const { bottom } = getViewOptionsTexts(sources, undefined, { downloaded, dblResources: [] });
     expect(bottom).toContainEqual(
       expect.objectContaining({
         reference: expect.objectContaining({ id: 'proj-kjn' }),
@@ -446,12 +498,15 @@ describe('getViewOptionsTexts', () => {
     const downloaded: DownloadedResource[] = [
       { projectId: 'proj-web', name: 'WEB', fullName: 'World English Bible', language: 'English' },
     ];
-    const { top, bottom } = getViewOptionsTexts(sources, undefined, { downloaded });
+    const { top, bottom } = getViewOptionsTexts(sources, undefined, {
+      downloaded,
+      dblResources: [],
+    });
     const allForWeb = [...top, ...bottom].filter((r) => r.reference.id === 'proj-web');
     expect(allForWeb).toHaveLength(1);
   });
 
-  it('does not append a downloaded project whose ID starts with an existing DblResourceReference ID', () => {
+  it('does not append a downloaded project a listed DblResourceReference already covers', () => {
     const sources = makeSources({
       adminReferenced: list([dbl('dbl-uid-123', { isInTextCollection: true })]),
     });
@@ -463,9 +518,40 @@ describe('getViewOptionsTexts', () => {
         language: 'English',
       },
     ];
-    const { top, bottom } = getViewOptionsTexts(sources, undefined, { downloaded });
+    const dblResources: DblResourceData[] = [
+      {
+        dblEntryUid: 'dbl-uid-123',
+        displayName: 'DBL Resource',
+        fullName: 'DBL Resource Full',
+        bestLanguageName: 'English',
+        type: 'ScriptureResource',
+        size: 0,
+        installed: true,
+        updateAvailable: false,
+        projectId: 'dbl-uid-123extra',
+      },
+    ];
+
+    const { top, bottom } = getViewOptionsTexts(sources, undefined, { downloaded, dblResources });
+
     const duplicate = [...top, ...bottom].filter((r) => r.reference.id === 'dbl-uid-123extra');
     expect(duplicate).toHaveLength(0);
+  });
+
+  // `downloaded` and `dblResources` are required together, so a caller cannot supply projects
+  // without the rows needed to tell whether they are already listed. Omitting `options` entirely is
+  // the remaining shape: the referenced rows still come back, and nothing is appended beside them.
+  // The exact id list is the point — asserting only that the appended row is absent would pass just
+  // as happily against a function that returned nothing at all.
+  it('returns the referenced rows and appends nothing when no options are supplied', () => {
+    const sources = makeSources({
+      adminReferenced: list([dbl('dbl-uid-123', { isInTextCollection: true })]),
+    });
+
+    const { top, bottom } = getViewOptionsTexts(sources, undefined);
+
+    expect([...top, ...bottom].map((r) => r.reference.id)).toEqual(['dbl-uid-123']);
+    expect(bottom).toHaveLength(0);
   });
 });
 
@@ -503,6 +589,17 @@ describe('setUserDisplay', () => {
     const { overlay, userReferenced } = setUserDisplay('a', true, sources);
     expect(overlay).toEqual({ a: true }); // admin-owned (flag is set), so it writes the overlay
     expect(userReferenced.items).toEqual([]);
+  });
+
+  // View Options lists such a resource as the team's, unchecked; checking it must reach the grid.
+  it('shows an unflagged team resource in the grid once the user checks it', () => {
+    const sources = makeSources({ adminReferenced: list([project('n')]), overlay: {} });
+    const { overlay, userReferenced } = setUserDisplay('n', true, sources);
+    expect(overlay).toEqual({ n: true });
+    expect(userReferenced.items).toEqual([]);
+    expect(ids(getScriptureTextGridContents({ ...sources, overlay, userReferenced }))).toEqual([
+      'n',
+    ]);
   });
 
   it('is a no-op for an orphan overlay id that is in no list', () => {

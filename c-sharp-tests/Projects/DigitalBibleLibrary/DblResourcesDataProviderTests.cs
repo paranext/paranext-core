@@ -1,4 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
+using Paranext.DataProvider.JsonUtils;
+using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Projects.DigitalBibleLibrary;
 using Paratext.Data;
 using Paratext.Data.Archiving;
@@ -22,7 +25,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
     ///
     /// NOT covered, deliberately: the body of <c>RecomputeDblResourcesUpdateStatus</c> past its
     /// <c>_hasFetchedResources</c> guard — the gate and the one line joining the two halves,
-    /// <c>ProjectUpdateStatus(_resources, InstalledDblIds())</c>. Reaching it needs
+    /// <c>ProjectUpdateStatus(_resources, InstalledProjectIdsByDblId())</c>. Reaching it needs
     /// <c>_resources</c> populated, and its only writer is a live DBL download, so every test here
     /// returns at that guard. Replacing that call's arguments therefore passes the suite. Read the
     /// count below as covering the two halves, not the seam between them; the seam is verified by
@@ -34,9 +37,15 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
         private const string RecomputeUpdateStatusWireName =
             "object:platformGetResources.dblResourcesProvider-data.recomputeDblResourcesUpdateStatus";
 
+        // A uid on DblResourceWhiteList, so a fetched catalog keeps it after filtering.
+        private const string WhitelistedUid = "008ee554c0859eb6";
+
+        // A uid absent from DblResourceWhiteList, so filtering drops it.
+        private const string NotWhitelistedUid = "0123456789abcdef";
+
         /// <summary>
         /// A catalog entry whose <see cref="InstallableResource.ExistingScrText"/> throws. That
-        /// property is the live project-collection lookup the installed-uid set exists to avoid, so
+        /// property is the live project-collection lookup the installed-project map exists to avoid, so
         /// a test that reaches it fails loudly instead of silently depending on collection state.
         /// </summary>
         private sealed class ThrowingLookupResource : InstallableResource
@@ -113,12 +122,64 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
         /// An installed entry that reports an update available, via the name-mismatch branch of
         /// <c>IsNewerThanCurrentlyInstalled</c>.
         /// </summary>
-        private static InstallableResource OutOfDateResource(string dblEntryUid, ScrText existing) =>
+        private static InstallableResource OutOfDateResource(
+            string dblEntryUid,
+            ScrText existing
+        ) =>
             new InstalledResource(existing)
             {
                 DBLEntryUid = HexId.FromStr(dblEntryUid),
                 Name = existing.Name + "-renamed",
             };
+
+        /// <summary>
+        /// Installing a resource that is already installed and up to date is what the caller asked
+        /// for, so it is a no-op success rather than a throw. A caller whose
+        /// catalog wrongly reports the resource missing would otherwise retry forever.
+        /// </summary>
+        [Test]
+        public void IsInstallAlreadySatisfied_TrueForAnInstalledUpToDateResourceOnDisk()
+        {
+            using DummyScrText existing = new();
+
+            Assert.That(
+                DblResourcesDataProvider.IsInstallAlreadySatisfied(
+                    UpToDateResource("97196133a859179b", existing)
+                ),
+                Is.True
+            );
+        }
+
+        /// <summary>
+        /// A resource with no local project is not "already satisfied", so the install proceeds.
+        /// This is also why the caller asks twice either side of a refresh rather than comparing
+        /// two different properties: <c>Installed</c> is <c>ExistingScrText != null</c> resolved
+        /// against the live collection, so refreshing is the only thing that changes the answer.
+        /// </summary>
+        [Test]
+        public void IsInstallAlreadySatisfied_FalseWhenNoLocalProjectBacksTheResource()
+        {
+            InstallableResource notInstalled = new InstalledResource(null!)
+            {
+                DBLEntryUid = HexId.FromStr("97196133a859179b"),
+            };
+
+            Assert.That(DblResourcesDataProvider.IsInstallAlreadySatisfied(notInstalled), Is.False);
+        }
+
+        /// <summary>An update is still an install: it must not be skipped as already satisfied.</summary>
+        [Test]
+        public void IsInstallAlreadySatisfied_FalseWhenANewerVersionIsAvailable()
+        {
+            using DummyScrText existing = new();
+
+            Assert.That(
+                DblResourcesDataProvider.IsInstallAlreadySatisfied(
+                    OutOfDateResource("97196133a859179b", existing)
+                ),
+                Is.False
+            );
+        }
 
         [Test]
         public async Task RecomputeDblResourcesUpdateStatus_ReturnsEmptyBeforeCatalogIsFetched()
@@ -156,7 +217,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
 
             var updateStatus = DblResourcesDataProvider.ProjectUpdateStatus(
                 resources,
-                new HashSet<string>()
+                new Dictionary<string, string>()
             );
 
             Assert.That(
@@ -168,7 +229,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
         /// <summary>
         /// The uninstalled answer is `true` — the same value ParatextData returns, since
         /// `IsNewerThanCurrentlyInstalled` opens with `if (!Installed) return true;`. Reaching it
-        /// without touching the project collection is the whole point of the installed-uid set, and
+        /// without touching the project collection is the whole point of the installed-project map, and
         /// the throwing lookup is what proves the collection was not touched.
         /// </summary>
         [Test]
@@ -178,7 +239,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
 
             var updateStatus = DblResourcesDataProvider.ProjectUpdateStatus(
                 resources,
-                new HashSet<string>()
+                new Dictionary<string, string>()
             );
 
             Assert.That(updateStatus["97196133a859179b"], Is.True);
@@ -202,7 +263,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
             // fake's lookup throws; the second stays on the no-lookup path.
             var updateStatus = DblResourcesDataProvider.ProjectUpdateStatus(
                 resources,
-                new HashSet<string> { "97196133a859179b" }
+                new Dictionary<string, string> { ["97196133a859179b"] = "PROJ-HBKENG" }
             );
 
             Assert.Multiple(() =>
@@ -225,7 +286,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
 
             var updateStatus = DblResourcesDataProvider.ProjectUpdateStatus(
                 resources,
-                new HashSet<string> { "97196133a859179b" }
+                new Dictionary<string, string> { ["97196133a859179b"] = "PROJ-HBKENG" }
             );
 
             Assert.That(updateStatus["97196133a859179b"], Is.False);
@@ -244,7 +305,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
 
             var updateStatus = DblResourcesDataProvider.ProjectUpdateStatus(
                 resources,
-                new HashSet<string> { "97196133a859179b" }
+                new Dictionary<string, string> { ["97196133a859179b"] = "PROJ-HBKENG" }
             );
 
             Assert.That(updateStatus["97196133a859179b"], Is.True);
@@ -268,7 +329,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
 
             var updateStatus = DblResourcesDataProvider.ProjectUpdateStatus(
                 resources,
-                new HashSet<string> { "97196133a859179b" }
+                new Dictionary<string, string> { ["97196133a859179b"] = "PROJ-HBKENG" }
             );
 
             Assert.Multiple(() =>
@@ -284,14 +345,109 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
         /// exists for, so the uid has to come back, and a project that is not a resource must not.
         /// </summary>
         [Test]
-        public void InstalledDblIds_ReturnsResourceProjectDblIdsAndSkipsOtherProjects()
+        public void InstalledProjectIdsByDblId_ReturnsResourceProjectDblIdsAndSkipsOtherProjects()
         {
-            AddInstalledResourceProject("97196133a859179b");
+            var installed = AddInstalledResourceProject("97196133a859179b");
             ScrTextCollection.Add(new DummyScrText(), true);
 
-            var installedDblIds = DblResourcesDataProvider.InstalledDblIds();
+            var installedProjectIds = DblResourcesDataProvider.InstalledProjectIdsByDblId();
 
-            Assert.That(installedDblIds, Is.EquivalentTo(new[] { "97196133a859179b" }));
+            Assert.That(
+                installedProjectIds.ProjectIdsByDblId.Keys,
+                Is.EquivalentTo(new[] { "97196133a859179b" })
+            );
+            Assert.That(installedProjectIds.IsComplete, Is.True);
+            Assert.That(
+                installedProjectIds.ProjectIdsByDblId["97196133a859179b"],
+                Is.EqualTo(installed.Guid.ToString().ToUpperInvariant())
+            );
+        }
+
+        /// <summary>
+        /// The project id a resource is installed as, keyed by its DBL entry uid. This is the whole
+        /// point of the map: a resource project's id is unrelated to the uid it was installed from,
+        /// so nothing in the local project list identifies the catalog row it belongs to, and a
+        /// front end matching the two by prefix gets it wrong for any resource whose ids diverge.
+        /// </summary>
+        [Test]
+        public void ProjectInstallStatus_ReportsTheProjectIdOfAnInstalledResource()
+        {
+            var installed = AddInstalledResourceProject("97196133a859179b");
+            var resources = new[] { ResourceWithUid("97196133a859179b") };
+
+            var installStatus = DblResourcesDataProvider.ProjectInstallStatus(
+                resources,
+                DblResourcesDataProvider.InstalledProjectIdsByDblId()
+            );
+
+            Assert.That(
+                installStatus["97196133a859179b"],
+                Is.EqualTo(installed.Guid.ToString().ToUpperInvariant())
+            );
+        }
+
+        /// <summary>
+        /// An incomplete pass cannot tell "the scan skipped a project it could not read" from
+        /// "this resource is not installed", and the TypeScript persists what it is told. Omitting
+        /// the uid leaves the cached row alone; an empty string would demote an installed resource
+        /// and write that to user data, after which the picker reclassifies it as non-DBL.
+        /// </summary>
+        [Test]
+        public void ProjectInstallStatus_OmitsAnAbsentUidWhenTheScanWasIncomplete()
+        {
+            var resources = new[] { ResourceWithUid("97196133a859179b") };
+
+            var installStatus = DblResourcesDataProvider.ProjectInstallStatus(
+                resources,
+                new DblResourcesDataProvider.InstalledResourceProjects(
+                    new Dictionary<string, string>(),
+                    IsComplete: false
+                )
+            );
+
+            Assert.That(installStatus.ContainsKey("97196133a859179b"), Is.False);
+        }
+
+        /// <summary>
+        /// An incomplete pass still reports what it did find — omitting those too would stop a
+        /// genuine install from ever being recognised.
+        /// </summary>
+        [Test]
+        public void ProjectInstallStatus_StillReportsWhatAnIncompleteScanFound()
+        {
+            var resources = new[] { ResourceWithUid("97196133a859179b") };
+
+            var installStatus = DblResourcesDataProvider.ProjectInstallStatus(
+                resources,
+                new DblResourcesDataProvider.InstalledResourceProjects(
+                    new Dictionary<string, string> { ["97196133a859179b"] = "PROJ-HBKENG" },
+                    IsComplete: false
+                )
+            );
+
+            Assert.That(installStatus["97196133a859179b"], Is.EqualTo("PROJ-HBKENG"));
+        }
+
+        /// <summary>
+        /// An uninstalled resource reports an empty string, never an absent key. The front end
+        /// reads an absent key as "the backend said nothing, keep what you have" and an empty
+        /// string as "not installed", so collapsing the two would make a removal undetectable.
+        /// </summary>
+        [Test]
+        public void ProjectInstallStatus_ReportsAnEmptyStringForAnUninstalledResource()
+        {
+            var resources = new[] { ResourceWithUid("97196133a859179b") };
+
+            var installStatus = DblResourcesDataProvider.ProjectInstallStatus(
+                resources,
+                new DblResourcesDataProvider.InstalledResourceProjects(
+                    new Dictionary<string, string>(),
+                    IsComplete: true
+                )
+            );
+
+            Assert.That(installStatus.ContainsKey("97196133a859179b"), Is.True);
+            Assert.That(installStatus["97196133a859179b"], Is.EqualTo(""));
         }
 
         /// <summary>
@@ -301,16 +457,358 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
         /// to prevent.
         /// </summary>
         [Test]
-        public void InstalledDblIds_SkipsAnUnreadableProjectAndKeepsTheRest()
+        public void InstalledProjectIdsByDblId_SkipsAnUnreadableProjectAndKeepsTheRest()
         {
             UnreadableScrText unreadable = new();
             ScrTextCollection.Add(unreadable, true);
             unreadable.IsUnreadable = true;
             AddInstalledResourceProject("6c21e835eb8ca3b2");
 
-            var installedDblIds = DblResourcesDataProvider.InstalledDblIds();
+            var installedProjectIds = DblResourcesDataProvider.InstalledProjectIdsByDblId();
 
-            Assert.That(installedDblIds, Is.EquivalentTo(new[] { "6c21e835eb8ca3b2" }));
+            Assert.That(
+                installedProjectIds.ProjectIdsByDblId.Keys,
+                Is.EquivalentTo(new[] { "6c21e835eb8ca3b2" })
+            );
+            // The flag the whole "a skipped project no longer demotes a resource" behaviour hangs
+            // on. Without this the single `isComplete = false` in the catch could be deleted and
+            // the suite would stay green, because every consumer test constructs the record itself.
+            Assert.That(installedProjectIds.IsComplete, Is.False);
+        }
+
+        private const string ListModelTextRestrictionsWireName =
+            "object:platformGetResources.dblResourcesProvider-data.listModelTextRestrictions";
+
+        private const string BiblicaCopyright =
+            "The Holy Bible, New International Version® NIV® Copyright © 2011 by Biblica, Inc.®";
+
+        private static string ProjectId(ScrText scrText) =>
+            scrText.Guid.ToString().ToUpperInvariant();
+
+        [Test]
+        public async Task ListModelTextRestrictions_IsRegisteredUnderItsContractName()
+        {
+            DblResourcesDataProvider provider = new(Client, ParatextProjects);
+
+            await provider.RegisterDataProviderAsync();
+
+            Assert.That(
+                Client.IsHandlerRegistered(ListModelTextRestrictionsWireName),
+                Is.True,
+                $"Expected '{ListModelTextRestrictionsWireName}' on the wire; "
+                    + $"registered: {string.Join(", ", Client.RegisteredRequestTypes)}"
+            );
+        }
+
+        [Test]
+        public async Task ListModelTextRestrictions_ListsBiblicasIdsAndTheRestrictedInstalledProjects()
+        {
+            // On Biblica's list (NIV11)
+            var listed = AddInstalledResourceProject("71c6eab17ae5b667");
+            // Not on the list, but its copyright says it is Biblica's
+            var byCopyright = AddInstalledResourceProject("0123456789abcdef");
+            byCopyright.Settings.Copyright = BiblicaCopyright;
+            // An ordinary resource (WEB)
+            AddInstalledResourceProject("97196133a859179b");
+            // A Biblica translation team's own project
+            DummyScrText teamProject = new();
+            teamProject.Settings.Copyright = BiblicaCopyright;
+            ScrTextCollection.Add(teamProject, true);
+            DblResourcesDataProvider provider = new(Client, ParatextProjects);
+
+            ModelTextRestrictions restrictions = await provider.ListModelTextRestrictions();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(
+                    restrictions.DblIds,
+                    Is.EquivalentTo(BiblicaLicensing.RestrictedTextIds)
+                );
+                Assert.That(
+                    restrictions.ProjectIds,
+                    Is.EquivalentTo(new[] { ProjectId(listed), ProjectId(byCopyright) })
+                );
+            });
+        }
+
+        [Test]
+        public async Task ListModelTextRestrictions_SkipsAnUnreadableProjectAndKeepsTheRest()
+        {
+            UnreadableScrText unreadable = new();
+            ScrTextCollection.Add(unreadable, true);
+            unreadable.IsUnreadable = true;
+            var listed = AddInstalledResourceProject("71c6eab17ae5b667");
+            DblResourcesDataProvider provider = new(Client, ParatextProjects);
+
+            ModelTextRestrictions restrictions = await provider.ListModelTextRestrictions();
+
+            Assert.That(restrictions.ProjectIds, Is.EquivalentTo(new[] { ProjectId(listed) }));
+        }
+
+        [Test]
+        public void ModelTextRestrictions_SerializesToTheShapeTheFrontEndReads()
+        {
+            string json = JsonSerializer.Serialize(
+                new ModelTextRestrictions(["71c6eab17ae5b667"], ["ABC123"]),
+                SerializationOptions.CreateSerializationOptions()
+            );
+
+            Assert.That(
+                json,
+                Is.EqualTo("""{"dblIds":["71c6eab17ae5b667"],"projectIds":["ABC123"]}""")
+            );
+        }
+
+        [Test]
+        public void RequireFetchedCatalog_ThrowsWhenTheDblCouldNotBeReached()
+        {
+            // What ParatextData hands back offline: no resources, and the alert it raised instead
+            // of throwing.
+            var alerts = new List<AlertEntry>
+            {
+                new(
+                    "Paratext was not able to connect to the DBL server to retrieve available resources.",
+                    "Paratext",
+                    AlertLevel.Information
+                ),
+            };
+
+            var exception = Assert.Throws<Exception>(
+                () => DblResourcesDataProvider.RequireFetchedCatalog([], false, alerts)
+            );
+
+            Assert.That(
+                exception!.Message,
+                Does.Contain("Could not retrieve the resource list from the DBL.")
+                    .And.Contain("not able to connect to the DBL server")
+            );
+        }
+
+        [Test]
+        public void RequireFetchedCatalog_ThrowsForAnEmptyCatalogEvenWithoutAnAlert()
+        {
+            var exception = Assert.Throws<Exception>(
+                () => DblResourcesDataProvider.RequireFetchedCatalog([], false, [])
+            );
+
+            Assert.That(
+                exception!.Message,
+                Is.EqualTo("Could not retrieve the resource list from the DBL.")
+            );
+        }
+
+        [Test]
+        public void RequireFetchedCatalog_ReportsAnInvalidRegistrationAheadOfAnEmptyCatalog()
+        {
+            // A 401 also comes back as an empty list. The TypeScript side matches this exact text
+            // (`isErrorMessageAboutRegistryAuthFailure`), so it must win over the generic failure.
+            var exception = Assert.Throws<Exception>(
+                () => DblResourcesDataProvider.RequireFetchedCatalog([], true, [])
+            );
+
+            Assert.That(
+                exception!.Message,
+                Is.EqualTo("User registration is not valid. Cannot retrieve resources from DBL.")
+            );
+        }
+
+        [Test]
+        public void RequireFetchedCatalog_ReturnsADeliveredCatalog()
+        {
+            List<InstallableResource> fetched = [ResourceWithUid(WhitelistedUid)];
+
+            Assert.That(
+                DblResourcesDataProvider.RequireFetchedCatalog(fetched, false, []),
+                Is.SameAs(fetched)
+            );
+        }
+
+        [Test]
+        public void RequireFetchedCatalog_RedactsPathsFromAlertText()
+        {
+            var alerts = new List<AlertEntry>
+            {
+                new(
+                    @"Failed reading C:\Users\someone\secret\file.xml",
+                    "Paratext",
+                    AlertLevel.Error
+                ),
+            };
+
+            var exception = Assert.Throws<Exception>(
+                () => DblResourcesDataProvider.RequireFetchedCatalog([], false, alerts)
+            );
+
+            // Positive control: proves the redactor actually ran over this text (and did not,
+            // say, drop the whole alert), not merely that the raw path happens to be absent.
+            Assert.That(
+                exception!.Message,
+                Does.Contain("Failed reading").And.Contain("<path>").And.Not.Contain(@"C:\Users")
+            );
+        }
+
+        /// <summary>
+        /// The state half of the contract: an offline first fetch must leave the provider in its
+        /// never-fetched state, so install status keeps answering from disk.
+        /// </summary>
+        [Test]
+        public async Task GetDblResources_AnUnreachableFirstFetchLeavesInstallStatusAnsweringFromDisk()
+        {
+            DblResourcesDataProvider provider = new(Client, ParatextProjects, () => []);
+            var installed = AddInstalledResourceProject(WhitelistedUid);
+
+            Assert.ThrowsAsync<Exception>(() => provider.GetDblResources(default));
+            var installStatus = await provider.RecomputeDblResourcesInstallStatus();
+
+            Assert.That(
+                installStatus[WhitelistedUid],
+                Is.EqualTo(installed.Guid.ToString().ToUpperInvariant())
+            );
+        }
+
+        /// <summary>
+        /// A catalog the whitelist empties is rejected like an unreachable one, so the provider
+        /// stays in its never-fetched state and install status keeps answering from disk.
+        /// </summary>
+        [Test]
+        public async Task GetDblResources_ACatalogWithNoWhitelistedResourceLeavesInstallStatusAnsweringFromDisk()
+        {
+            DblResourcesDataProvider provider =
+                new(Client, ParatextProjects, () => [ResourceWithUid(NotWhitelistedUid)]);
+            var installed = AddInstalledResourceProject(WhitelistedUid);
+
+            var exception = Assert.ThrowsAsync<Exception>(() => provider.GetDblResources(default));
+            var installStatus = await provider.RecomputeDblResourcesInstallStatus();
+
+            Assert.That(exception!.Message, Does.Contain("no compatible resources"));
+            Assert.That(
+                installStatus[WhitelistedUid],
+                Is.EqualTo(installed.Guid.ToString().ToUpperInvariant())
+            );
+        }
+
+        /// <summary>
+        /// A catalog loaded earlier in the session survives a later fetch that could not reach the
+        /// DBL: the 12-hour refresh after the network drops.
+        /// </summary>
+        [Test]
+        public async Task GetDblResources_AnUnreachableLaterFetchKeepsTheLoadedCatalog()
+        {
+            using DummyScrText existing = new();
+            var fetches = new Queue<List<InstallableResource>>(
+                [
+                    [UpToDateResource(WhitelistedUid, existing)],
+                    [],
+                ]
+            );
+            DblResourcesDataProvider provider = new(Client, ParatextProjects, fetches.Dequeue);
+
+            await provider.GetDblResources(default);
+            Assert.ThrowsAsync<Exception>(() => provider.GetDblResources(default));
+            var updateStatus = await provider.RecomputeDblResourcesUpdateStatus();
+
+            Assert.That(updateStatus.Keys, Does.Contain(WhitelistedUid));
+        }
+
+        /// <summary>
+        /// End-to-end version of <c>RequireFetchedCatalog_ThrowsWhenTheDblCouldNotBeReached</c>: an
+        /// alert a fetcher raises through the real <c>Alert.Show</c> reaches the thrown exception,
+        /// not just an <see cref="AlertEntry"/> list built by hand.
+        /// </summary>
+        [Test]
+        public void GetDblResources_CapturesAnAlertRaisedDuringTheFetchIntoTheThrownException()
+        {
+            DblResourcesDataProvider provider =
+                new(
+                    Client,
+                    ParatextProjects,
+                    () =>
+                    {
+                        Alert.Show(
+                            "Paratext was not able to connect to the DBL server to retrieve available resources.",
+                            "Paratext"
+                        );
+                        return [];
+                    }
+                );
+
+            var exception = Assert.ThrowsAsync<Exception>(() => provider.GetDblResources(default));
+
+            Assert.That(exception!.Message, Does.Contain("not able to connect"));
+        }
+
+        /// <summary>
+        /// A captured alert must reach the console even when the fetch never gets far enough to
+        /// build a catalog to accept or reject — the capture scope suppresses AlertCapture's own
+        /// console fallback, so nothing else will log it.
+        /// </summary>
+        [Test]
+        public void GetDblResources_LogsACapturedAlertEvenWhenTheFetcherThrows()
+        {
+            DblResourcesDataProvider provider =
+                new(
+                    Client,
+                    ParatextProjects,
+                    () =>
+                    {
+                        Alert.Show("alert raised before the fetcher failed", "Paratext");
+                        throw new InvalidOperationException("network exploded");
+                    }
+                );
+
+            using var output = new StringWriter();
+            TextWriter previousOut = Console.Out;
+            Console.SetOut(output);
+            try
+            {
+                Assert.ThrowsAsync<InvalidOperationException>(
+                    () => provider.GetDblResources(default)
+                );
+            }
+            finally
+            {
+                Console.SetOut(previousOut);
+            }
+
+            Assert.That(output.ToString(), Does.Contain("alert raised before the fetcher failed"));
+        }
+
+        /// <summary>
+        /// A captured alert from a fetch that succeeds anyway must still reach the console — the
+        /// capture scope exists to route the alert into an exception message on failure, but a
+        /// success has no exception to carry it, so logging is its only way out.
+        /// </summary>
+        [Test]
+        public void GetDblResources_LogsACapturedAlertFromASuccessfulFetch()
+        {
+            using DummyScrText existing = new();
+            DblResourcesDataProvider provider =
+                new(
+                    Client,
+                    ParatextProjects,
+                    () =>
+                    {
+                        Alert.Show("non-fatal warning during a successful fetch", "Paratext");
+                        return [UpToDateResource(WhitelistedUid, existing)];
+                    }
+                );
+
+            using var output = new StringWriter();
+            TextWriter previousOut = Console.Out;
+            Console.SetOut(output);
+            try
+            {
+                Assert.DoesNotThrowAsync(() => provider.GetDblResources(default));
+            }
+            finally
+            {
+                Console.SetOut(previousOut);
+            }
+
+            Assert.That(
+                output.ToString(),
+                Does.Contain("non-fatal warning during a successful fetch")
+            );
         }
     }
 }

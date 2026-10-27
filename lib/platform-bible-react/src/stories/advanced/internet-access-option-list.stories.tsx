@@ -1,24 +1,20 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { expect, waitFor, within } from 'storybook/test';
 import {
   InternetAccessOptionList,
   type InternetAccessOptionListProps,
+  type InternetUse,
 } from '@/components/advanced/internet-access-option-list/internet-access-option-list.component';
-
-// Mirror the InternetUse union from the component (which does not export it).
-type InternetUse = 'Enabled' | 'VpnRequired' | 'Disabled' | 'ProxyOnly';
 
 const localizedStrings = {
   '%paratextRegistration_description_internetUse_option_Enabled_2%': 'Unrestricted',
-  '%paratextRegistration_description_internetUse_option_Enabled_details%':
-    'Allows Paratext to use the internet for all services: Registry, Send/Receive, and resource downloads.',
+  '%paratextRegistration_description_internetUse_option_Enabled_details_2%':
+    'Allows Paratext to use the internet for all services: Registry, sync, and resource downloads.',
   '%paratextRegistration_description_internetUse_option_VpnRequired_2%':
     'Disable access to some Bible translation services',
-  '%paratextRegistration_description_internetUse_option_VpnRequired_details%':
-    'Disables access to Registry, Send/Receive, and the Digital Bible Library within the Paratext app. Other internet features and other applications are not affected.',
-  '%paratextRegistration_description_internetUse_option_Disabled_2%': 'Disable ALL internet access',
-  '%paratextRegistration_description_internetUse_option_Disabled_details%':
-    'Blocks all internet access within the Paratext app. Other applications on your computer are not affected.',
+  '%paratextRegistration_description_internetUse_option_DisableSomeServices_details%':
+    'Disables access to Registry, Send-Receive (sync), and the Digital Bible Library within Paratext 10. Paratext may connect to other internet services! This option will automatically change to “Disable all Internet access” once available.',
   '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%':
     'Block internet when in sensitive locations',
   '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%':
@@ -26,18 +22,35 @@ const localizedStrings = {
   '%paratextRegistration_description_internetUse_option_ProxyOnly_2%': 'Configure proxy',
   '%paratextRegistration_description_internetUse_option_ProxyOnly_details%':
     'Routes Paratext internet traffic through a configured proxy server.',
-  '%paratextRegistration_internetUse_comingSoon%': 'Coming soon',
-  '%paratextRegistration_internetUse_footer%': 'Disabled options are planned for future updates.',
+  '%paratextRegistration_internetUse_notYetAvailable%': 'Not yet available',
+  '%paratextRegistration_internetUse_unsupportedSelection_title_2%':
+    '“{selectedOption}” is not supported yet',
+  '%paratextRegistration_internetUse_unsupportedSelection_description_2%':
+    'Choose one of the available options to continue or stop using Paratext 10 until it is supported.',
 };
 
+const ENABLED_DESCRIPTION =
+  localizedStrings['%paratextRegistration_description_internetUse_option_Enabled_details_2%'];
+
 function Controlled(
-  props: Omit<InternetAccessOptionListProps, 'value' | 'onChange'> & { initialValue: InternetUse },
+  props: Omit<InternetAccessOptionListProps, 'value' | 'onChange'> & {
+    initialValue: InternetUse | undefined;
+  },
 ) {
   const { initialValue, ...rest } = props;
-  const [value, setValue] = useState<InternetUse>(initialValue);
+  const [value, setValue] = useState<InternetUse | undefined>(initialValue);
   return <InternetAccessOptionList {...rest} value={value} onChange={setValue} />;
 }
 
+/**
+ * Each option's description sits behind an info icon button beside its label, revealed as a tooltip
+ * on hover or keyboard focus, rather than under the label as body copy — which kept the list from
+ * becoming stacked paragraphs of small grey text. The button carries the description as its
+ * accessible name and is its own tab stop, so the description is reachable on every row, including
+ * the "Not yet available" rows whose radios are disabled. A visually-hidden copy of the same
+ * description is also wired to each radio via `aria-describedby`, so a screen reader moving through
+ * the radios hears it too.
+ */
 const meta: Meta<typeof InternetAccessOptionList> = {
   title: 'Advanced/InternetAccessOptionList',
   component: InternetAccessOptionList,
@@ -51,35 +64,144 @@ export default meta;
 
 type Story = StoryObj<typeof InternetAccessOptionList>;
 
-/** Option 1 (Unrestricted) selected — active row, description text visible. */
+/**
+ * Option 1 (Unrestricted) selected — active row, no description shown until its info button is
+ * used.
+ */
 export const Unrestricted: Story = {
   render: (args) => <Controlled {...args} initialValue="Enabled" />,
 };
 
-/** Option 2 selected — "Disable access to some Bible translation services". */
-export const DisabledAccess: Story = {
-  render: (args) => <Controlled {...args} initialValue="VpnRequired" />,
+/**
+ * Waits for the visible tooltip content and asserts it carries the expected description. Targets
+ * `[data-slot="tooltip-content"]` rather than `role="tooltip"`, which Radix puts on a
+ * visually-hidden copy that is present even when nothing is on screen.
+ */
+async function expectVisibleTooltip(text: string) {
+  await waitFor(() => {
+    const content = document.querySelector('[data-slot="tooltip-content"]');
+    expect(content).toBeInTheDocument();
+    expect(content).toHaveTextContent(text);
+  });
+}
+
+/** Hovering an option's info button opens its description tooltip. */
+export const DescriptionTooltipOnHover: Story = {
+  render: (args) => <Controlled {...args} initialValue="Enabled" />,
+  play: async ({ canvasElement, userEvent }) => {
+    await userEvent.hover(within(canvasElement).getByRole('button', { name: ENABLED_DESCRIPTION }));
+    await expectVisibleTooltip(ENABLED_DESCRIPTION);
+  },
 };
 
 /**
- * A coming-soon value is the current setting (e.g., persisted from an older PT9 migration). The row
- * renders selected-but-disabled; the user cannot interact with it.
+ * The same descriptions are reachable without a mouse, on every row. Tabbing into the group lands
+ * on the checked radio, and each info button after it is a tab stop of its own — so a "Not yet
+ * available" row's description opens even though its disabled radio never takes focus.
+ *
+ * The mirror image — the panel's programmatic focus on the checked radio revealing nothing — is
+ * asserted in a real browser by the `internet-settings` Playwright spec.
  */
-export const ComingSoonSelected: Story = {
+export const DescriptionTooltipOnKeyboardFocus: Story = {
+  render: (args) => <Controlled {...args} initialValue="Enabled" />,
+  play: async ({ canvasElement, userEvent }) => {
+    const unavailableOptionDescription =
+      localizedStrings[
+        '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%'
+      ];
+    await userEvent.tab(); // the checked radio
+    await userEvent.tab(); // Unrestricted's info button
+    await userEvent.tab(); // "Disable access to some Bible translation services" info button
+    // "Block internet when in sensitive locations" info button, on an unavailable row
+    await userEvent.tab();
+    await expect(
+      within(canvasElement).getByRole('button', { name: unavailableOptionDescription }),
+    ).toHaveFocus();
+    await expectVisibleTooltip(unavailableOptionDescription);
+  },
+};
+
+/**
+ * Each label's click target stretches over its whole row, so clicking anywhere on a row selects its
+ * option. The info button has to sit above that target, or a click meant for the description would
+ * select the option instead. Both are hit-tested against real layout, which jsdom lacks.
+ */
+export const RowClickTargets: Story = {
+  render: (args) => <Controlled {...args} initialValue="Enabled" />,
+  play: async ({ canvasElement, userEvent }) => {
+    const canvas = within(canvasElement);
+
+    const infoButton = canvas.getByRole('button', { name: ENABLED_DESCRIPTION });
+    const buttonBox = infoButton.getBoundingClientRect();
+    const hitOnButton = document.elementFromPoint(
+      buttonBox.left + buttonBox.width / 2,
+      buttonBox.top + buttonBox.height / 2,
+    );
+    await expect(infoButton.contains(hitOnButton)).toBe(true);
+
+    const radio = canvas.getByRole('radio', {
+      name: 'Disable access to some Bible translation services',
+    });
+    const row = radio.closest('div');
+    if (!row) throw new Error('expected the radio to sit inside its row');
+    const rowBox = row.getBoundingClientRect();
+    // The far end of the row, past both the label's text and its info button.
+    const hitOnRowEnd = document.elementFromPoint(rowBox.right - 4, rowBox.top + rowBox.height / 2);
+    if (!(hitOnRowEnd instanceof HTMLElement))
+      throw new Error('expected an element at the far end of the row');
+    await expect(hitOnRowEnd).toHaveAttribute('for', radio.id);
+
+    await userEvent.click(hitOnRowEnd);
+    await expect(radio).toBeChecked();
+  },
+};
+
+/**
+ * A narrow column, where the longer labels wrap onto a second line. The info button stays with its
+ * label's last word instead of drifting out to the row's edge next to the "Not yet available"
+ * badge, which reads as if it belonged to the badge.
+ */
+export const NarrowColumn: Story = {
+  render: (args) => (
+    <div className="tw:w-[380px]">
+      <Controlled {...args} initialValue="Enabled" />
+    </div>
+  ),
+};
+
+/** Option 2 selected — "Disable access to some Bible translation services", which saves `Disabled`. */
+export const DisabledAccess: Story = {
   render: (args) => <Controlled {...args} initialValue="Disabled" />,
 };
 
-/** All rows non-interactive — simulates the loading or saving state. */
-export const FormDisabled: Story = {
-  render: (args) => <Controlled {...args} initialValue="VpnRequired" />,
-  args: { disabled: true },
+/**
+ * No option selected — for a caller that needs the user to choose rather than accept a stored value
+ * they never chose. No banner: nothing unsupported is selected.
+ */
+export const NothingSelected: Story = {
+  render: (args) => <Controlled {...args} initialValue={undefined} />,
 };
 
 /**
- * Footer note suppressed for space-constrained hosts such as the first-run wizard step. The "Coming
- * soon" badges still mark the unavailable options.
+ * A not-yet-available value is the current setting. The row renders selected-but-disabled so the
+ * stored setting is visible rather than silently swapped, and a banner says why nothing acts on it.
+ * The app replaces a stored `VpnRequired` at startup, so this shows only if that fails; see
+ * `UnavailableProxySelected` for the value a Paratext 9 settings file usually carries.
  */
-export const WithoutFooter: Story = {
+export const UnavailableOptionSelected: Story = {
   render: (args) => <Controlled {...args} initialValue="VpnRequired" />,
-  args: { showFooter: false },
+};
+
+/** The other unsupported value a settings file can carry: "Configure proxy". */
+export const UnavailableProxySelected: Story = {
+  render: (args) => <Controlled {...args} initialValue="ProxyOnly" />,
+};
+
+/**
+ * All radios non-interactive — simulates the loading or saving state. The info buttons stay usable,
+ * since the descriptions explain the options rather than being part of the setting.
+ */
+export const FormDisabled: Story = {
+  render: (args) => <Controlled {...args} initialValue="Enabled" />,
+  args: { disabled: true },
 };

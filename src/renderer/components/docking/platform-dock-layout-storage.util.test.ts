@@ -336,6 +336,11 @@ describe('Dock Layout Component', () => {
       // nothing to show for the command but a log line.
       // Ensure this is an add (rather than an update).
       when(mockDockLayout.find(anything())).thenReturn(undefined);
+      when(mockDockLayout.getLayout()).thenReturn(
+        // Only the dock box matters to the placement of a panel.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        { dockbox: { children: [] } } as unknown as LayoutData,
+      );
       const dockLayout = instance(mockDockLayout);
       const webView: WebViewTabProps = { id: 'myId', webViewType: 'test', content: '' };
       const layout: Layout = { type: 'panel', direction: 'top', targetTabId: 'unknownTabId' };
@@ -348,6 +353,11 @@ describe('Dock Layout Component', () => {
     it('should name the target tab it could not find rather than dropping it silently', () => {
       const warn = vi.spyOn(logger, 'warn');
       when(mockDockLayout.find(anything())).thenReturn(undefined);
+      when(mockDockLayout.getLayout()).thenReturn(
+        // Only the dock box matters to the placement of a panel.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        { dockbox: { children: [] } } as unknown as LayoutData,
+      );
       const dockLayout = instance(mockDockLayout);
       const webView: WebViewTabProps = { id: 'myId', webViewType: 'test', content: '' };
       const layout: Layout = { type: 'panel', direction: 'top', targetTabId: 'unknownTabId' };

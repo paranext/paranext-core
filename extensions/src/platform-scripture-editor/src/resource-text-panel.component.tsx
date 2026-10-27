@@ -3,10 +3,13 @@ import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
   Button,
+  ContentZoomRoot,
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   useExtraValidMarkers,
@@ -19,12 +22,14 @@ import {
   PlatformError,
   ResourceType,
 } from 'platform-bible-utils';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Lock } from 'lucide-react';
 import {
   ComponentProps,
+  Fragment,
   ReactNode,
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -34,8 +39,10 @@ import {
   isEchoOfPublishedScrRef,
   SCROLL_MAX_WAIT_MS,
   scrollToVerse,
+  waitForLayoutToSettle,
 } from './editor-dom.util';
 import { getRefLabel, getResourceReferenceRowId } from './resource-reference.utils';
+import { isTeamPickerResource, splitPickerResourcesBySource } from './resource-selection.utils';
 import type { PickerResource } from './downloaded-resources.utils';
 import type { ResourcePanelReadiness } from './resource-panel-readiness.utils';
 import { PanelReadinessView } from './panel-readiness-view.component';
@@ -57,6 +64,10 @@ import type {
   ResourcePanelLocalizedStringKey,
   ResourcePanelLocalizedStrings,
 } from './resource-text-panel.const';
+import type { DblResourceInstallFailureReason } from './use-dbl-resource-auto-install.hook';
+import { RESOURCE_PANEL_INSTALL_FAILURE_KEYS } from './resource-text-panel.const';
+import { RESOURCE_COLLECTION_OPTIONS_KEYS } from './resource-collection-options/resource-collection-options.types';
+import { getInstallFailureMessageKey } from './install-failure-message.utils';
 
 /**
  * Falls back to the key itself, matching the idiom in `model-text-panel.component.tsx`. Falling
@@ -117,8 +128,13 @@ type ResourceSelectorDropdownProps = {
   filteredResources: PickerResource[];
   selectedRef: PickerResource | undefined;
   dblResources: DblResourceData[];
+  /** Whether the DBL catalog failed to load. See `splitPickerResourcesBySource`. */
+  isCatalogUnavailable: boolean;
+  /** When `false`, the rows are one list with no headings, caption or locks */
+  isGrouped: boolean;
   onSelectResource: (id: string) => void;
-  onShowResourcePicker: () => void;
+  /** Undefined hides the option: downloading adds to the project's list, so needs a project */
+  onShowResourcePicker: (() => void) | undefined;
   downloadResourcesLabel: string;
   /**
    * Already-localized text for the trigger while no row is selected yet — the window where the
@@ -128,17 +144,88 @@ type ResourceSelectorDropdownProps = {
    * button renders blank AND has no accessible name at all.
    */
   noSelectionLabel: string;
+  /** Heading over the resources the project administrator put in the team layout */
+  teamResourcesLabel: string;
+  /** Heading over the user's own resources */
+  userResourcesLabel: string;
+  /** Heading over resources installed on this computer that neither list names */
+  otherResourcesLabel: string;
+  /** Says, once under the team heading, that only a project administrator can remove those rows */
+  teamResourcesCaption: string;
+  /** Names the lock on each team row */
+  teamResourceLockLabel: string;
 };
 
+/**
+ * The panel's resource selector. Rows are grouped as the team's, the user's own and other installed
+ * resources (see `splitPickerResourcesBySource`), each under its heading, and a group with no rows
+ * gets none. The team's come first, with a caption saying only a project administrator can remove
+ * them and a lock on each; they always get their heading, since the caption is what explains the
+ * locks. With no team rows and only one other group, the rows are one unlabeled list. Ungrouped,
+ * every row is in one unlabeled list, in the order given, with no caption or locks.
+ */
 function ResourceSelectorDropdown({
   filteredResources,
   selectedRef,
   dblResources,
+  isCatalogUnavailable,
+  isGrouped,
   onSelectResource,
   onShowResourcePicker,
   downloadResourcesLabel,
   noSelectionLabel,
+  teamResourcesLabel,
+  userResourcesLabel,
+  otherResourcesLabel,
+  teamResourcesCaption,
+  teamResourceLockLabel,
 }: ResourceSelectorDropdownProps) {
+  const headingIdPrefix = useId();
+  const teamHeadingId = `${headingIdPrefix}-team`;
+  const teamCaptionId = `${headingIdPrefix}-team-caption`;
+  const selectedRowId = selectedRef ? getResourceReferenceRowId(selectedRef.reference) : undefined;
+  // TODO(PT-4063): order the team's rows the way the administrator pins them.
+  const { team, user, other } = splitPickerResourcesBySource(filteredResources, {
+    isCatalogUnavailable,
+  });
+  // The groups below the team's, leaving out any with no rows.
+  const nonTeamGroups = [
+    { headingId: `${headingIdPrefix}-user`, label: userResourcesLabel, rows: user },
+    { headingId: `${headingIdPrefix}-other`, label: otherResourcesLabel, rows: other },
+  ].filter((group) => group.rows.length > 0);
+  const isUnlabeled = team.length === 0 && nonTeamGroups.length <= 1;
+
+  const renderRow = (row: PickerResource) => {
+    const rowId = getResourceReferenceRowId(row.reference);
+    const label = getRefLabel(row.reference, dblResources);
+    return (
+      <DropdownMenuCheckboxItem
+        key={rowId}
+        checked={rowId === selectedRowId}
+        onCheckedChange={() => {
+          onSelectResource(rowId);
+        }}
+      >
+        {/* `dir="auto"` on the name rather than the item: `getRefLabel` returns the joined
+            short/full name as one text node, so the name needs its own direction, while the check
+            and the lock keep to the panel's side. A long name ellipsizes rather than wrapping, and
+            `title` shows it whole. */}
+        <span className="tw:min-w-0 tw:truncate" dir="auto" title={label}>
+          {label}
+        </span>
+        {isGrouped && isTeamPickerResource(row) && (
+          <span
+            role="img"
+            aria-label={teamResourceLockLabel}
+            className="tw:ms-auto tw:flex tw:shrink-0 tw:text-muted-foreground"
+          >
+            <Lock aria-hidden />
+          </span>
+        )}
+      </DropdownMenuCheckboxItem>
+    );
+  };
+
   return (
     <div className="tw:px-2 tw:py-1">
       <DropdownMenu>
@@ -147,34 +234,51 @@ function ResourceSelectorDropdown({
             variant="outline"
             className="tw:h-8 tw:w-full tw:justify-between tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap"
           >
-            <span className="tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
+            {/* `dir="auto"`: `getRefLabel` returns the joined short/full name as one text node, so
+                the label needs the name's own direction rather than the panel's. */}
+            <span className="tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap" dir="auto">
               {selectedRef ? getRefLabel(selectedRef.reference, dblResources) : noSelectionLabel}
             </span>
             <ChevronDown className="tw:ml-1 tw:h-4 tw:w-4 tw:shrink-0" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="tw:w-72">
-          {filteredResources.map((ref) => {
-            const refId = getResourceReferenceRowId(ref.reference);
-            return (
-              <DropdownMenuCheckboxItem
-                key={refId}
-                checked={
-                  refId ===
-                  (selectedRef ? getResourceReferenceRowId(selectedRef.reference) : undefined)
-                }
-                onCheckedChange={() => {
-                  onSelectResource(refId);
-                }}
-              >
-                {getRefLabel(ref.reference, dblResources)}
-              </DropdownMenuCheckboxItem>
-            );
-          })}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => onShowResourcePicker()}>
-            {downloadResourcesLabel}
-          </DropdownMenuItem>
+          {!isGrouped && filteredResources.map(renderRow)}
+          {isGrouped && isUnlabeled && nonTeamGroups[0]?.rows.map(renderRow)}
+          {isGrouped && !isUnlabeled && (
+            <>
+              {team.length > 0 && (
+                // The caption says once what the locks mean, rather than repeating it on every row.
+                <DropdownMenuGroup aria-labelledby={teamHeadingId} aria-describedby={teamCaptionId}>
+                  <DropdownMenuLabel id={teamHeadingId}>{teamResourcesLabel}</DropdownMenuLabel>
+                  <p
+                    id={teamCaptionId}
+                    className="tw:px-1.5 tw:pb-1 tw:text-xs tw:text-muted-foreground"
+                  >
+                    {teamResourcesCaption}
+                  </p>
+                  {team.map(renderRow)}
+                </DropdownMenuGroup>
+              )}
+              {nonTeamGroups.map((group, index) => (
+                <Fragment key={group.headingId}>
+                  {(team.length > 0 || index > 0) && <DropdownMenuSeparator />}
+                  <DropdownMenuGroup aria-labelledby={group.headingId}>
+                    <DropdownMenuLabel id={group.headingId}>{group.label}</DropdownMenuLabel>
+                    {group.rows.map(renderRow)}
+                  </DropdownMenuGroup>
+                </Fragment>
+              ))}
+            </>
+          )}
+          {onShowResourcePicker && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => onShowResourcePicker()}>
+                {downloadResourcesLabel}
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
@@ -184,7 +288,11 @@ function ResourceSelectorDropdown({
 export type ResourceTextPanelProps = {
   /** Localized strings; import `RESOURCE_PANEL_STRING_KEYS` to resolve them. */
   localizedStrings: ResourcePanelLocalizedStrings;
-  /** Whether the panel has a project context (opened with a project id). */
+  /**
+   * Whether the panel has a project context (opened with a project id). Without one it shows only a
+   * resource it was asked to show, in `selectedRef`, and offers no download, which needs a
+   * project.
+   */
   hasProject: boolean;
   /**
    * Which kind of resource this panel shows. `'ScriptureResource'` is the Bible texts tab; every
@@ -213,6 +321,17 @@ export type ResourceTextPanelProps = {
   readiness: ResourcePanelReadiness;
   /** All DBL resources — used to label the selector rows. */
   dblResources: DblResourceData[];
+  /**
+   * Whether the DBL catalog failed to load. The selector then lists the user's own and other
+   * installed resources together, since without the catalog the user's DBL references resolve as
+   * plain downloads.
+   */
+  isCatalogUnavailable: boolean;
+  /**
+   * Whether the selector groups its rows as the team's, the user's own and other installed ones,
+   * with the team caption and locks. `false` in Power mode, which has no notion of team resources.
+   */
+  isGrouped: boolean;
   /** Re-runs the DBL resource catalog fetch. */
   onRetryCatalog: () => void;
   /** The reference the panel is displaying. */
@@ -241,6 +360,8 @@ export type ResourceTextPanelProps = {
   onRetryChapter: () => void;
   /** The displayed resource's text direction. Applied to the editor only, never to the messages. */
   textDirection: EditorOptions['textDirection'];
+  /** The editor's copy limit for the chapter on screen. See `EditorOptions.copyLimit`. */
+  copyLimit: EditorOptions['copyLimit'];
   /**
    * Whether a user-initiated pick is in flight, which this panel renders as "Selecting…". Distinct
    * from `isInstalling`, where the user picked nothing and a configured resource is just
@@ -251,7 +372,9 @@ export type ResourceTextPanelProps = {
   isInstalling: boolean;
   /** Whether the last install attempt for the selected resource failed. */
   installFailed: boolean;
-  /** Clears the failed-install state and re-attempts the same resource. */
+  /** Why the install failed, when it did. Decides whether the connection hint applies. */
+  installFailureReason: DblResourceInstallFailureReason | undefined;
+  /** Re-reads the catalog and re-attempts the same resource. */
   retryInstall: () => void;
   /** Whether the machine is online. Only adds a "check your connection" hint to install failures. */
   isOnline: boolean;
@@ -264,6 +387,12 @@ export type ResourceTextPanelProps = {
   onShowResourcePicker: () => void;
   /** Logger forwarded to the editor (the web view supplies the PAPI logger; tests may omit it). */
   logger?: ComponentProps<typeof Editorial>['logger'];
+  /**
+   * The selected resource's copyright notice, shown under the selector whatever the content state
+   * (loading, missing book, error or text). The web view supplies it because reading the notice
+   * needs PAPI.
+   */
+  copyrightNotice?: ReactNode;
 };
 
 /**
@@ -294,6 +423,8 @@ export function ResourceTextPanel({
   selectedRef,
   readiness,
   dblResources,
+  isCatalogUnavailable,
+  isGrouped,
   onRetryCatalog,
   scrRef,
   onScrRefChange,
@@ -302,13 +433,16 @@ export function ResourceTextPanel({
   isUsjLoading,
   onRetryChapter,
   textDirection,
+  copyLimit,
   isSelecting,
   isInstalling,
   installFailed,
+  installFailureReason,
   retryInstall,
   isOnline,
   onShowResourcePicker,
   logger,
+  copyrightNotice,
 }: ResourceTextPanelProps) {
   // #region Content state
 
@@ -410,9 +544,10 @@ export function ResourceTextPanel({
       isReadonly: true,
       hasSpellCheck: false,
       textDirection,
+      copyLimit,
       ...(extraValidMarkers.length > 0 ? { nodes: { extraValidMarkers } } : {}),
     }),
-    [textDirection, extraValidMarkers],
+    [textDirection, copyLimit, extraValidMarkers],
   );
 
   // `contentState` and `isBlankChapter` are deps because the content-area branches below UNMOUNT
@@ -513,73 +648,76 @@ export function ResourceTextPanel({
     // Sampling the scroll container's height until it stops changing avoids both: the geometry is
     // trustworthy by then, and the single call that follows animates uninterrupted.
     let cancelled = false;
-    const start = Date.now();
-    let lastScrollHeight = -1;
     // Pulses the verse we land on, so the match is identifiable when several share a verse or a
     // commentary entry is long. Same treatment the Scripture editor gives an arrived verse.
     let highlightedVerseElement: HTMLElement | undefined;
-    const scrollWhenSettled = () => {
-      if (cancelled) return;
-      const timedOut = Date.now() - start > SCROLL_MAX_WAIT_MS;
+    let cancelSettleWait: (() => void) | undefined;
 
-      // Below verse 1 means the chapter top, which `scrollToVerse` reaches without a verse marker
-      // and so without settled geometry — but it still needs the container in the DOM, and it
-      // cannot report that, since it returns an element only when it matched a marker. So the
-      // container is checked here before recording; otherwise a reveal that beat the container into
-      // the DOM would scroll nothing and still be recorded as done. Verse 1 is NOT in this case: it
-      // has a real marker and real geometry, so it goes through the settle loop like any other.
-      if (scrRef.verseNum < 1) {
+    if (scrRef.verseNum < 1) {
+      // Chapter top: `scrollToVerse` reaches it without a verse marker and so without settled
+      // geometry to sample — but it still needs the container in the DOM, and it cannot report
+      // that, since it returns an element only when it matched a marker. This stays its own small
+      // retry rather than going through `waitForLayoutToSettle`: that helper always requires two
+      // agreeing samples before it acts, even when the very first one is already correct, and a
+      // container already in the DOM when this effect runs should scroll on the spot rather than
+      // waiting a frame for nothing. Verse 1 is NOT in this case: it has a real marker and real
+      // geometry, so it goes through the settle wait below like any other.
+      const start = Date.now();
+      const tryScrollToChapterTop = () => {
+        if (cancelled) return;
         if (document.querySelector('.editor-container')) {
           scrollToVerse(scrRef);
           lastScrolledForRef.current = { scrRef, usj: usjFromPdp };
           return;
         }
-        if (timedOut) return;
-        requestAnimationFrame(scrollWhenSettled);
-        return;
-      }
+        if (Date.now() - start > SCROLL_MAX_WAIT_MS) return;
+        requestAnimationFrame(tryScrollToChapterTop);
+      };
+      tryScrollToChapterTop();
+    } else {
+      cancelSettleWait = waitForLayoutToSettle<number>({
+        // `.editor-container` is sampled as a CONTENT-GROWTH PROXY, not as the scroll container.
+        // Which element actually scrolls differs by host — `_editor-overrides.scss` warns that this
+        // one is auto-height in the Scripture editor and its wrapper scrolls instead — so the scroll
+        // itself is left to `scrollToVerse`, which discovers the container via `findScrollContainer`.
+        // Only the height is read here, and that tracks the chapter laying out either way. `-1`
+        // stands for "no container yet", which never counts as agreeing with itself.
+        sample: () => {
+          const contentElement = document.querySelector<HTMLElement>('.editor-container');
+          return contentElement ? contentElement.scrollHeight : -1;
+        },
+        samplesMatch: (previous, current) => current !== -1 && current === previous,
+        onSettled: () => {
+          highlightedVerseElement = scrollToVerse(scrRef);
+          // Only a scroll that actually landed is recorded. The verse marker can be genuinely
+          // absent — a `\v 16-17` range publishes no `[data-number="17"]` — so recording regardless
+          // would make `hasNewScrollTarget` answer "same target" forever and the panel would never
+          // catch up on a later reveal.
+          if (highlightedVerseElement) {
+            lastScrolledForRef.current = { scrRef, usj: usjFromPdp };
+            highlightedVerseElement.classList.add('highlighted');
+            return 'settled';
+          }
+          // Settled but no marker yet. Two consecutive equal heights are cheap to reach — an empty,
+          // flex-sized container reports the same height every frame before Lexical has reconciled
+          // the chapter — so "settled" is not "rendered". Keep waiting rather than treating one
+          // agreeing pair as the answer; `scrollToVerse` does not scroll without a marker, so
+          // re-calling it cannot restart an animation.
+          return 'keep-waiting';
+        },
+        // Out of time: give up WITHOUT recording, so a later reveal tries again instead of being
+        // told the target is unchanged.
+        onTimedOut: () => {},
+      });
+    }
 
-      // `.editor-container` is sampled as a CONTENT-GROWTH PROXY, not as the scroll container.
-      // Which element actually scrolls differs by host — `_editor-overrides.scss` warns that this
-      // one is auto-height in the Scripture editor and its wrapper scrolls instead — so the scroll
-      // itself is left to `scrollToVerse`, which discovers the container via `findScrollContainer`.
-      // Only the height is read here, and that tracks the chapter laying out either way.
-      const contentElement = document.querySelector<HTMLElement>('.editor-container');
-      // `querySelector` yields null, not undefined, so compare truthily — treating a missing
-      // element as "settled" would scroll against geometry that does not exist yet.
-      const scrollHeight = contentElement ? contentElement.scrollHeight : -1;
-      const isSettled = !!contentElement && scrollHeight === lastScrollHeight;
-      lastScrollHeight = scrollHeight;
-
-      if (isSettled) {
-        highlightedVerseElement = scrollToVerse(scrRef);
-        // Only a scroll that actually landed is recorded. The verse marker can be genuinely absent
-        // — a `\v 16-17` range publishes no `[data-number="17"]` — so recording regardless would
-        // make `hasNewScrollTarget` answer "same target" forever and the panel would never catch up
-        // on a later reveal.
-        if (highlightedVerseElement) {
-          lastScrolledForRef.current = { scrRef, usj: usjFromPdp };
-          highlightedVerseElement.classList.add('highlighted');
-          return;
-        }
-        // Settled but no marker yet. Two consecutive equal heights are cheap to reach — an empty,
-        // flex-sized container reports the same height every frame before Lexical has reconciled
-        // the chapter — so "settled" is not "rendered". Keep waiting rather than treating one
-        // agreeing pair as the answer; `scrollToVerse` does not scroll without a marker, so
-        // re-calling it cannot restart an animation.
-      }
-      // Out of time: give up WITHOUT recording, so a later reveal tries again instead of being
-      // told the target is unchanged.
-      if (timedOut) return;
-      requestAnimationFrame(scrollWhenSettled);
-    };
-    scrollWhenSettled();
     return () => {
       cancelled = true;
+      cancelSettleWait?.();
       highlightedVerseElement?.classList.remove('highlighted');
     };
     // The rule wants `scrRef` itself, but this effect is keyed on the three fields that decide where
-    // to scroll. `useWebViewScrollGroupScrRef` hands back a fresh object whenever the scroll group
+    // to scroll. `useScrollGroupScrRef` hands back a fresh object whenever the scroll group
     // publishes, including for a reference that did not change, so depending on the object would
     // restart the settle loop on updates that cannot move the target.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -593,7 +731,13 @@ export function ResourceTextPanel({
   const { emptyStatePromptKey, bookNotAvailableKey, pickButtonKey } =
     resolveResourcePanelStringKeys(resourceType);
 
-  if (!hasProject) {
+  // Both web-view types share this component and resolve to the same content-zoom memory identity
+  // (their container project), so each names its own area to keep its remembered level separate.
+  const contentZoomArea = resourceType === 'ScriptureResource' ? 'bible-texts' : 'commentaries';
+
+  // With no project open, a resource the panel was asked to show (one opened from Home) is still
+  // shown; only with nothing to show does it ask for a project.
+  if (!hasProject && !selectedRef) {
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
         <p>{localize(localizedStrings, '%webView_resourcePanel_noProject%')}</p>
@@ -678,9 +822,11 @@ export function ResourceTextPanel({
       <PanelRetryableErrorView
         message={localize(
           localizedStrings,
-          isOnline
-            ? '%webView_resourcePanel_installFailed%'
-            : '%webView_resourcePanel_installFailedOffline%',
+          getInstallFailureMessageKey(
+            installFailureReason,
+            isOnline,
+            RESOURCE_PANEL_INSTALL_FAILURE_KEYS,
+          ),
         )}
         retryLabel={localize(localizedStrings, '%webView_resourcePanel_retry%')}
         onRetry={retryInstall}
@@ -762,19 +908,26 @@ export function ResourceTextPanel({
         />
       );
 
+    // The zoom marker sits INSIDE the scroll box, never on it or above it: `scrollToVerse` adds a
+    // `getBoundingClientRect()` distance (zoomed pixels) to the box's `scrollTop` (unzoomed pixels),
+    // which agree only while the box itself is unscaled. The messages and the spinner above are app
+    // chrome and stay unmarked; while one of them shows, the pane reports no area and its declared
+    // default area stands in.
     return (
       <div
         className="tw:flex-1 tw:overflow-auto"
         dir={options.textDirection}
         data-testid={RESOURCE_TEXT_EDITOR_CONTAINER_TEST_ID}
       >
-        <Editorial
-          ref={editorRef}
-          scrRef={scrRef}
-          onScrRefChange={handleScrRefChange}
-          options={options}
-          logger={logger}
-        />
+        <ContentZoomRoot area={contentZoomArea}>
+          <Editorial
+            ref={editorRef}
+            scrRef={scrRef}
+            onScrRefChange={handleScrRefChange}
+            options={options}
+            logger={logger}
+          />
+        </ContentZoomRoot>
       </div>
     );
   };
@@ -789,16 +942,37 @@ export function ResourceTextPanel({
         filteredResources={filteredResources}
         selectedRef={selectedRef}
         dblResources={dblResources}
+        isCatalogUnavailable={isCatalogUnavailable}
+        isGrouped={isGrouped}
         onSelectResource={onSelectResource}
-        onShowResourcePicker={onShowResourcePicker}
+        onShowResourcePicker={hasProject ? onShowResourcePicker : undefined}
         downloadResourcesLabel={localize(
           localizedStrings,
           '%webView_resourcePanel_downloadResources%',
         )}
         noSelectionLabel={localize(localizedStrings, '%webView_resourcePanel_loadingResources%')}
+        teamResourcesLabel={localize(
+          localizedStrings,
+          RESOURCE_COLLECTION_OPTIONS_KEYS.teamResourcesHeader,
+        )}
+        userResourcesLabel={localize(
+          localizedStrings,
+          RESOURCE_COLLECTION_OPTIONS_KEYS.userResourcesHeader,
+        )}
+        otherResourcesLabel={localize(localizedStrings, '%webView_resourcePanel_otherResources%')}
+        teamResourcesCaption={localize(
+          localizedStrings,
+          '%webView_resourcePanel_teamResourcesCaption%',
+        )}
+        teamResourceLockLabel={localize(
+          localizedStrings,
+          RESOURCE_COLLECTION_OPTIONS_KEYS.teamSharedLock,
+        )}
       />
 
-      {renderContent()}
+      {copyrightNotice}
+
+      <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">{renderContent()}</div>
     </div>
   );
 

@@ -5,8 +5,9 @@ import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
-// cmdk (inside MarkerMenu) instantiates a ResizeObserver and schedules scrollTo/scrollIntoView;
-// jsdom ships none. Same shim the shipped control test uses.
+// cmdk (inside MarkerMenu) instantiates a ResizeObserver and schedules scrollTo; jsdom ships
+// neither. Same shim the shipped control test uses. scrollIntoView is shimmed repo-wide in
+// vitest.setup.ts.
 class NoopResizeObserver implements ResizeObserver {
   private readonly targets = new Set<Element>();
 
@@ -29,9 +30,6 @@ beforeAll(() => {
   }
   if (typeof Element.prototype.scrollTo !== 'function') {
     Element.prototype.scrollTo = () => {};
-  }
-  if (typeof Element.prototype.scrollIntoView !== 'function') {
-    Element.prototype.scrollIntoView = () => {};
   }
 });
 
@@ -72,7 +70,7 @@ const STRINGS = {
   // fill the same shared `MarkerMenu` search field.
   '%markerMenu_searchPlaceholder_character%': 'Search to change character style.',
   '%webView_platformScriptureEditor_characterMarkerMenu_removeMarker%': 'Remove character marker',
-  '%webView_platformScriptureEditor_syncEditBlocked_banner%': 'Editing paused',
+  '%webView_platformScriptureEditor_syncEditBlocked_banner_2%': 'Editing paused',
   // `usfmMarkers.bd.description`. The editor web view loads every marker description (see
   // EDITOR_LOCALIZED_STRINGS), so the bar really does have this string available at runtime.
   '%markerMenu_marker_bd_description%': 'Bold',
@@ -181,7 +179,7 @@ describe('CharacterMarkerBar', () => {
     await user.click(screen.getByRole('button', { name: /Character marker/ }));
 
     // The menu portals to `document.body`, outside the only element this app gives a `dir`, so it
-    // inherits no direction and `align="end"` would resolve PHYSICALLY — pinning a 200px menu to the
+    // inherits no direction and `align="end"` would resolve PHYSICALLY — pinning the menu to the
     // right in an RTL project, off the iframe's inline-start edge. Only an explicit `dir` mirrors it.
     expect(await screen.findByRole('dialog')).toHaveAttribute('dir', 'rtl');
   });

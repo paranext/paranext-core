@@ -31,6 +31,8 @@ vi.mock('@renderer/services/web-view.service-shard', () => ({
   closeTab: vi.fn(async () => true),
   throwIfWindowIsClosing: vi.fn(),
   waitForLayoutLoadToSettle: vi.fn(async () => {}),
+  // No layout load happens in this file; the subscription just has to exist to start the shard.
+  onLayoutLoadTabIds: vi.fn(() => () => {}),
 }));
 vi.mock('@shared/services/logger.service', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },

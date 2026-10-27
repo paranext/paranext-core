@@ -2,7 +2,7 @@ import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { getErrorMessage, isString } from 'platform-bible-utils';
-import type { SyncActivitySnapshot } from 'paratext-bible-send-receive';
+import type { SyncActivitySnapshot, SyncOutcome } from 'paratext-bible-send-receive';
 import { seedWithRetry } from './seed-with-retry.util';
 import {
   setSyncActivity,
@@ -46,7 +46,19 @@ const GET_SYNC_ACTIVITY_COMMAND = 'paratextBibleSendReceive.getSyncActivity';
 const SYNC_ACTIVITY_WATCHDOG_INTERVAL_MS = 30_000;
 
 /**
- * Narrows an untrusted `{ isSyncing, projectIds }` payload.
+ * Every outcome this build can read. A `Record` rather than a list so that adding a member to
+ * `SyncOutcome` fails to compile until it is listed here, instead of that value arriving and being
+ * dropped as unrecognized.
+ */
+const KNOWN_SYNC_OUTCOMES: Record<SyncOutcome, true> = { succeeded: true, failed: true };
+
+function isKnownSyncOutcome(outcome: unknown): outcome is SyncOutcome {
+  return isString(outcome) && Object.hasOwn(KNOWN_SYNC_OUTCOMES, outcome);
+}
+
+/**
+ * Reads an untrusted `{ isSyncing, projectIds, outcome }` payload, returning the snapshot to apply,
+ * or `undefined` when the payload is unusable.
  *
  * Applied to the EVENT as well as the seed. The seam types both, but both are wire data crossing a
  * process boundary from C#, and the failure modes are not symmetrical with a rejected read: a
@@ -54,15 +66,65 @@ const SYNC_ACTIVITY_WATCHDOG_INTERVAL_MS = 30_000;
  * running, and a `null` payload would throw inside the event emitter's dispatch loop, costing every
  * later subscriber the delivery.
  *
- * `projectIds` is accepted when ABSENT — the seam declares it required, but a Studio build
+ * `projectIds` is accepted when ABSENT — the seam declares it required, but a Paratext 10 build
  * predating that field answers without it, and "the projects are unknown" is a usable snapshot
  * while "malformed" is not.
+ *
+ * `outcome` is read field by field rather than all-or-nothing. Absent or `null` means "cannot say"
+ * and is left off. A value this build does not recognize is logged and left off too, while the rest
+ * of the snapshot still applies: rejecting the whole payload over it would discard a well-formed
+ * `isSyncing` along with it, blinding the indicator to a running sync over a field that only
+ * describes how the last one went. It is checked for membership rather than for being a string,
+ * because reading an unrecognized value as either verdict is exactly the guess this field must
+ * never make. Each unrecognized value is logged only the first time it is seen: the backend repeats
+ * the outcome on every closing snapshot and every later read, so a build mismatch would otherwise
+ * log the same line at the end of every sync.
  */
-function isValidSyncActivity(snapshot: unknown): snapshot is SyncActivitySnapshot {
-  if (typeof snapshot !== 'object' || !snapshot) return false;
-  if (!('isSyncing' in snapshot) || typeof snapshot.isSyncing !== 'boolean') return false;
-  if (!('projectIds' in snapshot) || snapshot.projectIds === undefined) return true;
-  return Array.isArray(snapshot.projectIds) && snapshot.projectIds.every(isString);
+function readSyncActivitySnapshot(
+  payload: unknown,
+  reportedUnknownOutcomes: Set<string>,
+): SyncActivitySnapshot | undefined {
+  if (typeof payload !== 'object' || !payload) return undefined;
+  if (!('isSyncing' in payload) || typeof payload.isSyncing !== 'boolean') return undefined;
+  const snapshot: SyncActivitySnapshot = { isSyncing: payload.isSyncing };
+
+  const projectIds = 'projectIds' in payload ? payload.projectIds : undefined;
+  if (projectIds !== undefined) {
+    if (!Array.isArray(projectIds) || !projectIds.every(isString)) return undefined;
+    snapshot.projectIds = projectIds;
+  }
+
+  const outcome = 'outcome' in payload ? payload.outcome : undefined;
+  // Loose on purpose, so a `null` is caught alongside an absent field without naming `null` here.
+  // eslint-disable-next-line eqeqeq
+  if (outcome == undefined) return snapshot;
+  if (!isKnownSyncOutcome(outcome)) {
+    const reported = JSON.stringify(outcome);
+    if (!reportedUnknownOutcomes.has(reported)) {
+      reportedUnknownOutcomes.add(reported);
+      logger.warn(
+        `Ignoring an unrecognized send/receive sync outcome ${reported}; reading it as unknown`,
+      );
+    }
+    return snapshot;
+  }
+  snapshot.outcome = outcome;
+
+  // Carried only when it is a time that can actually be compared. A consumer orders this outcome
+  // against the claim's own verdict by it, so an unparsable value is worse than none: it would order
+  // the two by a number that means nothing.
+  const completedAt = 'completedAt' in payload ? payload.completedAt : undefined;
+  // Loose for the same reason as the outcome above: a `null` is absent, not malformed.
+  // eslint-disable-next-line eqeqeq
+  if (completedAt == undefined) return snapshot;
+  if (isString(completedAt) && !Number.isNaN(Date.parse(completedAt))) {
+    snapshot.completedAt = completedAt;
+  } else {
+    logger.warn(
+      `Ignoring an unreadable send/receive sync outcome time ${JSON.stringify(completedAt)}`,
+    );
+  }
+  return snapshot;
 }
 
 /**
@@ -80,11 +142,16 @@ export function initSyncActivityService(): () => void {
   let isDisposed = false;
   const runRef = { current: 0 };
   let watchdogTimeout: ReturnType<typeof setTimeout> | undefined;
+  /** Unrecognized outcomes already logged, so each is reported once rather than on every sync. */
+  const reportedUnknownOutcomes = new Set<string>();
 
   const readSyncActivity = async (): Promise<SyncActivitySnapshot | undefined> => {
     try {
-      const snapshot = await sendCommand(GET_SYNC_ACTIVITY_COMMAND);
-      if (!isValidSyncActivity(snapshot)) {
+      const snapshot = readSyncActivitySnapshot(
+        await sendCommand(GET_SYNC_ACTIVITY_COMMAND),
+        reportedUnknownOutcomes,
+      );
+      if (!snapshot) {
         logger.warn(
           'Send/receive returned a sync activity snapshot in an unexpected shape; ignoring it',
         );
@@ -99,11 +166,13 @@ export function initSyncActivityService(): () => void {
     }
   };
 
-  const unsubscribe = getNetworkEvent(SYNC_ACTIVITY_CHANGED_EVENT)((snapshot) => {
+  const unsubscribe = getNetworkEvent(SYNC_ACTIVITY_CHANGED_EVENT)((payload) => {
     // Validate BEFORE recording that an event has been applied. Recording it first would disarm the
     // seed — the one path that could still produce a good snapshot — on the strength of a payload
-    // that turned out to be unusable.
-    if (!isValidSyncActivity(snapshot)) {
+    // that turned out to be unusable. A payload whose only fault is an unrecognized outcome is still
+    // usable, so it does count.
+    const snapshot = readSyncActivitySnapshot(payload, reportedUnknownOutcomes);
+    if (!snapshot) {
       logger.warn(`Ignoring a malformed ${SYNC_ACTIVITY_CHANGED_EVENT} payload`);
       return;
     }

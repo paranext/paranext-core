@@ -1,15 +1,18 @@
 import {
   Button,
   Checkbox,
+  cn,
   EmptyState,
   Label,
   ToggleGroup,
   ToggleGroupItem,
 } from 'platform-bible-react';
 import { Lock, X } from 'lucide-react';
+import { ReactNode, useId } from 'react';
 import { formatReplacementString } from 'platform-bible-utils';
 import {
   RESOURCE_COLLECTION_OPTIONS_KEYS,
+  isResourceCollectionViewMode,
   type ResourceCollectionOptionsLocalizedStrings,
   type ResourceCollectionOptionsProps,
   type ResourceCollectionOptionsStringKey,
@@ -19,6 +22,8 @@ import {
 export {
   RESOURCE_COLLECTION_OPTIONS_KEYS,
   RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
+  RESOURCE_COLLECTION_VIEW_MODES,
+  isResourceCollectionViewMode,
   type ResourceCollectionOptionsStringKey,
   type ResourceCollectionOptionsLocalizedStrings,
   type ResourceCollectionOptionsProps,
@@ -33,11 +38,13 @@ const localize = (
 
 /**
  * Reusable, presentational View Options inner component: a VIEW toggle (Verse / Chapter), a TEXTS
- * list (admin-shared top section + user bottom section), and a Get Resources button. It holds no
- * PAPI/popover/persistence state — callers pass the computed rows and callbacks — so the same
- * component renders inside the Scripture Text Grid popover and inside a resource-sharing dialog.
+ * list (admin-shared top section + user bottom section, headed "Team resources" and "User
+ * resources" when there are admin-shared rows and `isGrouped` is on), and a Get Resources button.
+ * It holds no PAPI/popover/persistence state — callers pass the computed rows and callbacks — so
+ * the same component renders inside the Scripture Text Grid popover and inside a resource-sharing
+ * dialog.
  *
- * Chapter is disabled with a "coming soon" hint unless `isChapterEnabled` is set. The hover-✕
+ * Chapter is disabled with a "not yet available" hint unless `isChapterEnabled` is set. The hover-✕
  * renders only on rows with `isUserRemovable === true`.
  *
  * Per UX: admin-chosen resources always stay visible in the top grouping of View Options — a user
@@ -51,6 +58,7 @@ export function ResourceCollectionOptions({
   isChapterEnabled = false,
   top,
   bottom,
+  isGrouped = true,
   installingResourceNames = [],
   onCheckedChange,
   onRemoveFromList,
@@ -59,6 +67,14 @@ export function ResourceCollectionOptions({
   disabledMessage,
   localizedStrings = {},
 }: ResourceCollectionOptionsProps) {
+  const headingIdPrefix = useId();
+  const teamHeadingId = `${headingIdPrefix}-team`;
+  const userHeadingId = `${headingIdPrefix}-user`;
+  // A group's heading shows only over rows. Installing rows belong with the user's own, so they
+  // alone are enough for its heading.
+  const hasTeamRows = top.length > 0;
+  const hasUserRows = bottom.length > 0 || installingResourceNames.length > 0;
+
   // Shown only when interactive (`!disabled`): while disabled we show `disabledMessage` (no
   // project) or nothing (brief load), so this never double-messages or fires prematurely.
   const isTextsListEmpty =
@@ -79,7 +95,7 @@ export function ResourceCollectionOptions({
   const handleViewModeChange = (value: string) => {
     // Radix single-toggle emits '' when the active item is clicked again; ignore that (a view mode
     // is always selected) and any unexpected value.
-    if (value === 'verse' || value === 'chapter') onViewModeChange(value);
+    if (isResourceCollectionViewMode(value)) onViewModeChange(value);
   };
 
   const renderRow = (row: ViewOptionsTextEntry) => {
@@ -107,6 +123,9 @@ export function ResourceCollectionOptions({
               <span className="tw:shrink-0" dir="auto">
                 {name}
               </span>
+              {/* An em dash rather than `PROJECT_NAME_SEPARATOR`: this is a long-name SLOT the row
+                  renders after the short name, not a joined label, and the panel's own typography
+                  uses the em dash. The order still leads with the short name. */}
               <span
                 className="tw:min-w-0 tw:flex-1 tw:truncate"
                 dir="auto"
@@ -133,17 +152,14 @@ export function ResourceCollectionOptions({
             <X className="tw:h-4 tw:w-4" />
           </Button>
         )}
-        {/* Lock marks admin-shared rows (the admin's current selection), which can't be removed.
-            Gated on isAdminLocked, NOT !isUserRemovable: opted-out admin rows in the bottom section
-            are also non-removable but are not currently shared, so they get no lock. `role="img"`
+        {/* Lock marks the team's rows (the top section), which can't be removed.
+            Gated on isAdminLocked, NOT !isUserRemovable: downloaded rows in the bottom section
+            are also non-removable but are not the team's, so they get no lock. `role="img"`
             makes the label reliably announced even while the icon is visually hover-revealed. */}
-        {row.isAdminLocked && (
+        {isGrouped && row.isAdminLocked && (
           <span
             role="img"
-            aria-label={localize(
-              localizedStrings,
-              RESOURCE_COLLECTION_OPTIONS_KEYS.adminSharedLock,
-            )}
+            aria-label={localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.teamSharedLock)}
             className="tw:flex tw:h-8 tw:w-8 tw:items-center tw:justify-center tw:text-muted-foreground tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100"
           >
             <Lock className="tw:h-4 tw:w-4" />
@@ -152,6 +168,45 @@ export function ResourceCollectionOptions({
       </div>
     );
   };
+
+  // `bottom` is not only what the user picked: it can also hold downloaded resources nobody listed,
+  // hence "User resources" rather than a word claiming a choice.
+  const userRows = (
+    <>
+      {bottom.map(renderRow)}
+      {installingResourceNames.map((name) => (
+        <div
+          key={`installing-${name}`}
+          className="tw:flex tw:items-center tw:py-1 tw:text-sm tw:text-muted-foreground tw:italic"
+        >
+          {formatReplacementString(
+            localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.installing),
+            { resourceName: name },
+          )}
+        </div>
+      ))}
+    </>
+  );
+
+  // A plain element rather than `Label`, which renders a `<label>` with no control to label. Regular
+  // weight, against the section headings' semibold, so the groups read as part of TEXTS.
+  const renderGroup = (
+    headingId: string,
+    headingKey: ResourceCollectionOptionsStringKey,
+    rows: ReactNode,
+    className?: string,
+  ) => (
+    <div
+      role="group"
+      aria-labelledby={headingId}
+      className={cn('tw:flex tw:flex-col tw:gap-1', className)}
+    >
+      <div id={headingId} className="tw:text-xs tw:text-muted-foreground">
+        {localize(localizedStrings, headingKey)}
+      </div>
+      {rows}
+    </div>
+  );
 
   return (
     <div className="tw:flex tw:w-64 tw:flex-col tw:gap-4">
@@ -172,10 +227,15 @@ export function ResourceCollectionOptions({
             <ToggleGroupItem value="chapter" disabled={!isChapterEnabled}>
               {localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.chapter)}
             </ToggleGroupItem>
+            {/* The verse-aligned grid. Labeled "Grid" for the user; the value is `aligned` because
+                the surface as a whole is the Scripture Text Grid. */}
+            <ToggleGroupItem value="aligned">
+              {localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.grid)}
+            </ToggleGroupItem>
           </ToggleGroup>
           {!isChapterEnabled && (
             <span className="tw:text-xs tw:text-muted-foreground tw:italic">
-              {localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.comingSoon)}
+              {localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.chapterNotYetAvailable)}
             </span>
           )}
         </div>
@@ -197,19 +257,29 @@ export function ResourceCollectionOptions({
             )}
           />
         )}
-        {top.map(renderRow)}
-        {bottom.map(renderRow)}
-        {installingResourceNames.map((name) => (
-          <div
-            key={`installing-${name}`}
-            className="tw:flex tw:items-center tw:py-1 tw:text-sm tw:text-muted-foreground tw:italic"
-          >
-            {formatReplacementString(
-              localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.installing),
-              { resourceName: name },
+        {/* Ungrouped, or with no team rows, the list is one unlabeled run. */}
+        {isGrouped && hasTeamRows ? (
+          <>
+            {renderGroup(
+              teamHeadingId,
+              RESOURCE_COLLECTION_OPTIONS_KEYS.teamResourcesHeader,
+              top.map(renderRow),
+              'tw:mt-1',
             )}
-          </div>
-        ))}
+            {hasUserRows &&
+              renderGroup(
+                userHeadingId,
+                RESOURCE_COLLECTION_OPTIONS_KEYS.userResourcesHeader,
+                userRows,
+                'tw:mt-2',
+              )}
+          </>
+        ) : (
+          <>
+            {top.map(renderRow)}
+            {userRows}
+          </>
+        )}
       </section>
 
       {/* Deliberately not gated on `disabled` — see the prop's docs. */}

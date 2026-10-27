@@ -1,6 +1,13 @@
-import { EmptyState } from 'platform-bible-react';
+import { Button, EmptyState } from 'platform-bible-react';
 import type { ReactNode } from 'react';
 import { useFocusReplacedContent } from './use-focus-replaced-content.hook';
+
+/** A button shown under the message, for a caller that can offer the user a way out. */
+export type ResourceMessageAction = {
+  /** The already-localized button text. */
+  label: string;
+  onClick: () => void;
+};
 
 export type ResourceMessageViewProps = {
   /**
@@ -22,6 +29,11 @@ export type ResourceMessageViewProps = {
    * screen-reader user gets no confirmation that their navigation applied at all.
    */
   announcementKey?: string;
+  /**
+   * An optional button under the sentence. It sits outside the `role="status"` region, so only the
+   * sentence is announced. Leave it out when the message has no remedy.
+   */
+  action?: ResourceMessageAction;
 };
 
 export type ResourceMessageFrameProps = {
@@ -81,7 +93,7 @@ export function ResourceMessageFrame({
       data-testid={testId}
       tabIndex={-1}
       aria-label={label}
-      className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:gap-3 tw:px-4 tw:outline-none"
+      className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center-safe tw:gap-4 tw:overflow-y-auto tw:px-4 tw:outline-none"
     >
       {children}
     </div>
@@ -94,11 +106,15 @@ export function ResourceMessageFrame({
  *
  * `EmptyState` is the message-only zero-state primitive `adr-empty-is-zero-state-primitive`
  * reserves for a bare sentence with no title, media, or action; going through it keeps these
- * reading like every other empty state in the app and supplies the `role="status"` live region.
+ * reading like every other empty state in the app and supplies the `role="status"` live region. The
+ * optional `action` button is a deliberate exception to that rule's "action means `Empty`": it sits
+ * beside `EmptyState` so the sentence looks the same with or without it, as the panels that pass no
+ * action (Bible texts, the main editor) need. See `adr-resource-missing-book-message`.
  *
- * For the states whose whole content is that sentence. A state that also offers a way out renders
- * {@link ResourceMessageFrame} directly around a richer body, so its recovery control matches the
- * one every other surface shows for the same condition.
+ * For the states whose content is that sentence, with at most a plain button under it. A state
+ * whose way out is a shared recovery control renders {@link ResourceMessageFrame} directly around
+ * that richer body, so the control matches the one every other surface shows for the same
+ * condition.
  *
  * `EmptyState` supplies the `role="status"` live region; the focus repair and re-announcement are
  * {@link ResourceMessageFrame}'s, which also explains why the message is not reliably announced by
@@ -108,10 +124,12 @@ export function ResourceMessageView({
   message,
   testId,
   announcementKey,
+  action,
 }: ResourceMessageViewProps) {
   return (
     <ResourceMessageFrame testId={testId} announcementKey={announcementKey} label={message}>
       <EmptyState message={message} className="tw:text-center" />
+      {action && <Button onClick={action.onClick}>{action.label}</Button>}
     </ResourceMessageFrame>
   );
 }

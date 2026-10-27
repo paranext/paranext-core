@@ -1,8 +1,10 @@
+import type { Page } from '@playwright/test';
 import { expect, test } from '../../fixtures/isolated.fixture';
 import {
   preConfigureRecentlyOpenedProjects,
   sendPapiRequestOnce,
   waitForAppReady,
+  waitForOpenWebViewIdByType,
   waitForOverlayGone,
   waitForPapiMethodRegistered,
 } from '../../fixtures/helpers';
@@ -10,8 +12,13 @@ import {
   cleanupCommentTestProject,
   createCommentTestProject,
   removeRevelationFromProject,
+  setReferencedProjectsAndResources,
   type CommentTestProject,
 } from '../../fixtures/comment-test-helpers';
+import {
+  openSimpleModeEditor,
+  SCRIPTURE_EDITOR_SLOT_WEBVIEW_TYPE,
+} from '../../fixtures/simple-mode-columns.page';
 
 /**
  * End-to-end proof that the top toolbar's book/chapter/verse control reaches a book that exists
@@ -49,6 +56,10 @@ import {
 
 /** The top toolbar's BookChapterControl trigger. In simple mode it is the only one on the page. */
 const BCV_TRIGGER = '[aria-label="book-chapter-trigger"]';
+// The titlebar project selector composes its accessible name as
+// "Select project, {fullName} ({shortName})" (`src/renderer/components/platform-bible-toolbar.tsx`).
+// The name prefix is what separates it from the book/chapter control, which is also a `combobox`.
+const PROJECT_SELECTOR_NAME = /^Select project,/;
 
 /**
  * Book rows carry an accessible name of `English Name (ID)`, with the dimmed explanation appended
@@ -65,59 +76,14 @@ const GENESIS_ITEM = bookItemSelector('Genesis', 'GEN');
 const DIMMED_BOOK_CLASS_PATTERN = /tw:text-muted-foreground\/50/;
 
 /**
- * Fixed simple-layout tab ids, from `src/renderer/components/docking/simple-layout.data.ts`.
- * Matched as a PREFIX because the renderer suffixes ids loaded from a shared layout with the window
- * they were loaded into (`-w1`, ...), so the rendered attribute is the UUID plus that suffix.
- *
- * The Scripture editor slot must be in the dock state before `openScriptureEditor` is called —
- * simple mode routes the open to that slot as a tab replacement, which fails outright if the target
- * tab is not there yet.
+ * `webViewType` of the fixed Column 3 Bible-texts panel in the simple layout
+ * (`src/renderer/components/docking/simple-layout.data.ts`). Every materialization of a baked
+ * layout mints each web view a fresh id (`mintFreshWebViewIds` in
+ * `src/renderer/components/docking/mint-web-view-ids.util.ts`), so a slot can only be identified by
+ * type — its id is read live via {@link waitForOpenWebViewIdByType}. The Column 2 editor slot's type
+ * is {@link SCRIPTURE_EDITOR_SLOT_WEBVIEW_TYPE}.
  */
-const SCRIPTURE_EDITOR_SLOT_UUID = '3cf575f0-2cc2-464b-8765-b588f216dfce';
-const BIBLE_TEXTS_PANEL_UUID = '27616073-bf60-4f2b-9518-922d1a7d3601';
-
-/**
- * `openScriptureEditor` sequentially awaits the `openOrUpdateRelatedPanels` commands — five for an
- * editable project, four for a read-only resource — each of which opens or re-points a Column 3
- * panel, so the combined response routinely exceeds the default 30 s PAPI request timeout.
- */
-const OPEN_EDITOR_TIMEOUT_MS = 150_000;
-
-/**
- * Opens the editable Scripture editor for `projectId`, retrying a dock "Replacing tab failed"
- * rejection. That failure is a known race: `openOrUpdateRelatedPanels` re-points the Column 3
- * panels, and the resulting dock rebuild can briefly remove the editor slot this open is trying to
- * replace. A short delay and retry settles it.
- *
- * @param projectId The project to open in the editor column
- * @returns The web view id of the editor the open produced
- */
-async function openScriptureEditor(projectId: string, maxRetries = 2): Promise<string> {
-  // Sequential retry loop: each attempt must await the PAPI response and find out whether it was
-  // the dock race before deciding whether to retry, so the awaits cannot be parallelized.
-  /* eslint-disable no-await-in-loop */
-  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
-    if (attempt > 0)
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 2_000);
-      });
-    try {
-      const editorId = await sendPapiRequestOnce<string | undefined>(
-        'command:platformScriptureEditor.openScriptureEditor',
-        [projectId],
-        undefined,
-        OPEN_EDITOR_TIMEOUT_MS,
-      );
-      if (editorId) return editorId;
-      throw new Error(`openScriptureEditor returned no web view id for project ${projectId}`);
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      if (attempt >= maxRetries || !message.includes('Replacing tab failed')) throw e;
-    }
-  }
-  /* eslint-enable no-await-in-loop */
-  throw new Error(`Could not open a Scripture editor for project ${projectId}`);
-}
+const BIBLE_TEXTS_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.bibleTexts';
 
 // DEV_NOISY=false keeps the test-only extensions and their tabs out of the layout, so the only web
 // views carrying a project are the ones this test puts there.
@@ -131,6 +97,55 @@ test.use({
   interfaceMode: 'simple',
   seedSettings: { 'platform.firstRunComplete': true },
 });
+
+/** `webViewType` of the fixed Column 3 Commentaries panel in the simple layout. */
+const COMMENTARIES_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.commentaries';
+
+/**
+ * Waits until the Bible-texts and Commentaries panels have both published the projects they display
+ * (`navigableProjectIds`, see `adr-navigable-project-ids`), and returns the ones other than
+ * `targetProjectId`. A panel publishes only once its lists have loaded, so a published value is the
+ * settled answer.
+ */
+async function waitForColumn3DeclaredProjectIds(
+  page: Page,
+  targetProjectId: string,
+): Promise<string[]> {
+  let declared: string[] = [];
+  await expect
+    .poll(
+      async () => {
+        const published = await page.evaluate(
+          async (panelTypes) => {
+            // `globalThis.papi` is set by the renderer and untyped in the Playwright context.
+            // eslint-disable-next-line no-type-assertion/no-type-assertion -- Playwright page has no PAPI types
+            const { papi } = window as unknown as {
+              papi: {
+                webViews: {
+                  getAllOpenWebViewDefinitions: () => Promise<
+                    { webViewType: string; state?: Record<string, unknown> }[]
+                  >;
+                };
+              };
+            };
+            const definitions = await papi.webViews.getAllOpenWebViewDefinitions();
+            return panelTypes.map(
+              (type) =>
+                definitions.find((definition) => definition.webViewType === type)?.state
+                  ?.navigableProjectIds,
+            );
+          },
+          [BIBLE_TEXTS_PANEL_WEBVIEW_TYPE, COMMENTARIES_PANEL_WEBVIEW_TYPE],
+        );
+        if (!published.every(Array.isArray)) return false;
+        declared = published.flat().filter((id): id is string => id !== targetProjectId);
+        return true;
+      },
+      { timeout: 60_000 },
+    )
+    .toBe(true);
+  return declared;
+}
 
 test.describe('simple mode: book/chapter/verse control reaches books in an open resource', () => {
   // App startup, the editor open with its four related-panel commands, the resource panel re-point,
@@ -153,6 +168,15 @@ test.describe('simple mode: book/chapter/verse control reaches books in an open 
     // so Revelation is reachable only through the open resource.
     removeRevelationFromProject(targetProject);
 
+    // Pin the target project's own reference list to itself. Without this, the Bible-texts panel's
+    // "no configured reference list" fallback (`resolveResourceSelection` in
+    // `resource-selection.utils.ts`) shows a locally-installed read-only resource instead — on any
+    // machine with one downloaded (e.g. WEB), that resource's full book list leaks into Phase 1
+    // below. A self-reference makes the panel show the target project itself, which
+    // `getOpenProjectIds` (`src/renderer/hooks/use-open-project-book-ids.hook.ts`) excludes as the
+    // active project — see `setReferencedProjectsAndResources`'s docblock for the full mechanism.
+    setReferencedProjectsAndResources(targetProject, [targetProject.projectId]);
+
     // Simple mode auto-opens the most recent project into its empty editor slot, asynchronously and
     // late enough to replace an editor this test opened and drag every Column 3 panel along with it.
     // Pointing the list at the target project makes that auto-open agree with this test's own open
@@ -161,9 +185,17 @@ test.describe('simple mode: book/chapter/verse control reaches books in an open 
   });
 
   test.afterAll(() => {
-    cleanupCommentTestProject(targetProject);
-    cleanupCommentTestProject(resourceProject);
-    restoreRecentProjects?.();
+    // Each step on its own: a project folder Windows still holds open makes its delete throw, which
+    // must skip neither the other delete nor the recent-projects restore.
+    try {
+      try {
+        cleanupCommentTestProject(targetProject);
+      } finally {
+        cleanupCommentTestProject(resourceProject);
+      }
+    } finally {
+      restoreRecentProjects?.();
+    }
   });
 
   test('offers a book from an open resource, greyed, and navigates to it', async ({ mainPage }) => {
@@ -171,14 +203,19 @@ test.describe('simple mode: book/chapter/verse control reaches books in an open 
 
     // The fixed layout has to be in the dock before either open below: the editor open replaces the
     // Column 2 slot, and the resource open re-points the Column 3 Bible-texts panel. Neither can
-    // find its target until the dock has processed the simple layout.
+    // find its target until the dock has processed the simple layout. Each slot's id is minted fresh
+    // at materialization, so it is read live by type, then confirmed on screen by that id.
+    const [scriptureEditorSlotId, bibleTextsPanelId] = await Promise.all([
+      waitForOpenWebViewIdByType(mainPage, SCRIPTURE_EDITOR_SLOT_WEBVIEW_TYPE),
+      waitForOpenWebViewIdByType(mainPage, BIBLE_TEXTS_PANEL_WEBVIEW_TYPE),
+    ]);
     await Promise.all([
       expect(
-        mainPage.locator(`.platform-tab-title[data-web-view-id^="${SCRIPTURE_EDITOR_SLOT_UUID}"]`),
-      ).toBeAttached({ timeout: 120_000 }),
+        mainPage.locator(`.platform-tab-title[data-web-view-id="${scriptureEditorSlotId}"]`),
+      ).toBeAttached({ timeout: 60_000 }),
       expect(
-        mainPage.locator(`.platform-tab-title[data-web-view-id^="${BIBLE_TEXTS_PANEL_UUID}"]`),
-      ).toBeAttached({ timeout: 120_000 }),
+        mainPage.locator(`.platform-tab-title[data-web-view-id="${bibleTextsPanelId}"]`),
+      ).toBeAttached({ timeout: 60_000 }),
     ]);
     // The "Updating project view" overlay intercepts pointer events, so no click below can land
     // while a dock rebuild is in flight.
@@ -190,7 +227,7 @@ test.describe('simple mode: book/chapter/verse control reaches books in an open 
 
     // ── Phase 1: only the Revelation-less project is open ──────────────────────────────────────
     await waitForPapiMethodRegistered('command:platformScriptureEditor.openScriptureEditor');
-    const editorId = await openScriptureEditor(targetProject.projectId);
+    const editorId = await openSimpleModeEditor(targetProject.projectId);
     await expect(mainPage.locator(`iframe[data-web-view-id="${editorId}"]`)).toBeAttached({
       timeout: 60_000,
     });
@@ -209,7 +246,7 @@ test.describe('simple mode: book/chapter/verse control reaches books in an open 
     // the book list below is asserted against. Naming the Revelation-less copy explicitly is what
     // keeps the rest of the test from passing against some OTHER project that happened to be
     // auto-opened into the editor column.
-    await expect(mainPage.locator('[data-slot="select-trigger"]').first()).toContainText(
+    await expect(mainPage.getByRole('combobox', { name: PROJECT_SELECTOR_NAME })).toContainText(
       targetProject.shortName,
       { timeout: 60_000 },
     );
@@ -219,10 +256,21 @@ test.describe('simple mode: book/chapter/verse control reaches books in an open 
     // The book list is populated from the target project, right up to the book before Revelation.
     await expect(mainPage.locator(GENESIS_ITEM)).toBeVisible({ timeout: 30_000 });
     await expect(mainPage.locator(JUDE_ITEM)).toBeVisible();
-    // Baseline for the phase-2 assertions: opening the editor also re-points every Column 3 panel at
-    // this same project, and the hook excludes the navigation target's own project, so there is no
-    // book to reach beyond the project's own — neither the expansion control nor Revelation exists.
-    await expect(showMoreBooks).toHaveCount(0);
+    // Baseline for the phase-2 assertions: Revelation is not reachable yet. Opening the editor
+    // re-points every Column 3 panel at this same project, which the hook excludes as the navigation
+    // target's own. But a panel with nothing of its kind configured shows a resource of that kind
+    // installed on this machine, and offers its books — the Commentaries panel does, wherever a
+    // commentary is installed. So the expansion control may be here, and Revelation must not be
+    // behind it either. Waiting for the panels to publish keeps the control from turning up only
+    // after this check.
+    const otherDeclaredProjectIds = await waitForColumn3DeclaredProjectIds(
+      mainPage,
+      targetProject.projectId,
+    );
+    if (otherDeclaredProjectIds.length > 0) {
+      await expect(showMoreBooks).toBeVisible({ timeout: 60_000 });
+      await showMoreBooks.click();
+    } else await expect(showMoreBooks).toHaveCount(0);
     await expect(mainPage.locator(REVELATION_ITEM)).toHaveCount(0);
     await mainPage.keyboard.press('Escape');
     await expect(searchInput).toHaveCount(0);

@@ -111,6 +111,101 @@ describe('sync-activity-store', () => {
     });
   });
 
+  describe('outcome', () => {
+    it('carries the outcome of a completed run', () => {
+      setSyncActivity({ isSyncing: true, projectIds: ['PROJ1'] });
+      setSyncActivity({ isSyncing: false, projectIds: [], outcome: 'failed' });
+
+      expect(getSyncActivityState().outcome).toBe('failed');
+    });
+
+    it('drops an outcome reported alongside a running sync', () => {
+      // An outcome describes the last COMPLETED run. Keeping one beside `isSyncing: true` would let a
+      // consumer attach the previous run's verdict to the run still in progress.
+      setSyncActivity({ isSyncing: true, projectIds: [], outcome: 'succeeded' });
+
+      expect(getSyncActivityState().outcome).toBeUndefined();
+    });
+
+    it('clears the outcome when the backend can no longer be asked', () => {
+      setSyncActivity({ isSyncing: false, projectIds: [], outcome: 'succeeded' });
+
+      setSyncActivityUnknown();
+
+      expect(getSyncActivityState().outcome).toBeUndefined();
+    });
+
+    it('treats a change of outcome alone as a change', () => {
+      setSyncActivity({ isSyncing: false, projectIds: [], outcome: 'succeeded' });
+      const first = getSyncActivityState();
+
+      setSyncActivity({ isSyncing: false, projectIds: [], outcome: 'failed' });
+
+      expect(getSyncActivityState()).not.toBe(first);
+    });
+
+    it('keeps one object identity when a snapshot with an outcome repeats', () => {
+      setSyncActivity({ isSyncing: false, projectIds: [], outcome: 'succeeded' });
+      const first = getSyncActivityState();
+
+      setSyncActivity({ isSyncing: false, projectIds: [], outcome: 'succeeded' });
+
+      expect(getSyncActivityState()).toBe(first);
+    });
+
+    it('carries the time the outcome describes', () => {
+      setSyncActivity({
+        isSyncing: false,
+        projectIds: [],
+        outcome: 'succeeded',
+        completedAt: '2026-09-18T10:00:00Z',
+      });
+
+      expect(getSyncActivityState().completedAt).toBe('2026-09-18T10:00:00Z');
+    });
+
+    it('drops an outcome time with no outcome to date', () => {
+      // On its own it dates nothing, and a consumer ordering verdicts by it would be ordering one
+      // this store does not have.
+      setSyncActivity({ isSyncing: false, projectIds: [], completedAt: '2026-09-18T10:00:00Z' });
+
+      expect(getSyncActivityState().completedAt).toBeUndefined();
+    });
+
+    it('drops the outcome time while a run is in progress, as it drops the outcome', () => {
+      setSyncActivity({
+        isSyncing: true,
+        projectIds: [],
+        outcome: 'succeeded',
+        completedAt: '2026-09-18T10:00:00Z',
+      });
+
+      expect(getSyncActivityState().completedAt).toBeUndefined();
+    });
+
+    it('clears the outcome time when the backend can no longer be asked', () => {
+      setSyncActivity({
+        isSyncing: false,
+        projectIds: [],
+        outcome: 'succeeded',
+        completedAt: '2026-09-18T10:00:00Z',
+      });
+
+      setSyncActivityUnknown();
+
+      expect(getSyncActivityState().completedAt).toBeUndefined();
+    });
+
+    it('keeps one object identity when a running sync repeats with an outcome it drops', () => {
+      setSyncActivity({ isSyncing: true, projectIds: ['PROJ1'] });
+      const first = getSyncActivityState();
+
+      setSyncActivity({ isSyncing: true, projectIds: ['PROJ1'], outcome: 'failed' });
+
+      expect(getSyncActivityState()).toBe(first);
+    });
+  });
+
   describe('subscribers', () => {
     it('notifies on a real change and not on a no-op', () => {
       const listener = vi.fn();

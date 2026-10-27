@@ -16,7 +16,7 @@ const MANAGE_BOOKS_BUTTON_KEY =
   '%webView_platformScriptureEditor_bookNotAvailable_manageBooksButton%';
 const READ_ONLY_TOOLTIP_KEY = '%webView_platformScriptureEditor_bookNotAvailable_readOnlyTooltip%';
 const SYNC_IN_PROGRESS_TOOLTIP_KEY =
-  '%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip%';
+  '%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip_2%';
 
 export const BOOK_NOT_AVAILABLE_VIEW_KEYS = {
   SIMPLE_MESSAGE_KEY,
@@ -54,8 +54,9 @@ export type BookNotAvailableViewLocalizedStrings = {
  * Why the Manage books action cannot be taken right now. Each reason maps to its own tooltip text
  * so the disabled button explains the actual cause instead of a generic "unavailable".
  *
- * Deliberately excludes the editor's markers view: Manage Books is a separate floating dialog, so
- * its ability to create a book does not depend on which view the editor canvas is showing.
+ * Deliberately excludes Preview (read-only in Power mode): Manage Books is a separate floating
+ * dialog, so its ability to create a book does not depend on which view the editor canvas is
+ * showing.
  */
 export type ManageBooksDisabledReason = 'readOnly' | 'syncInProgress';
 

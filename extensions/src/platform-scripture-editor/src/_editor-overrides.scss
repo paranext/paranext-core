@@ -7,7 +7,7 @@
 
 // Semi-transparent amber for the Find current-result highlight, shared by the base rule and the
 // ::selection re-apply below. Deliberately a fixed amber rather than a theme token: it must read on
-// top of the ::selection primary/secondary colors and stay distinct from them in both light and
+// top of the focused and unfocused ::selection colors and stay distinct from them in both light and
 // dark mode (see the find-result-highlight rules).
 $find-current-result-highlight-bg: rgb(255 213 0 / 40%);
 
@@ -15,9 +15,9 @@ $find-current-result-highlight-bg: rgb(255 213 0 / 40%);
 
 // NOTE: `height: 100%` / `overflow-y: auto` below are currently inert. Wrapper divs between the
 // web view's sized flex column and this element (EditorKeyboardShortcuts, the paragraph-marker
-// tooltip overlay) leave it auto-height, so it grows to its content and the web view's outer
-// `tw:overflow-auto` wrapper is what actually scrolls. Scroll code must not assume this element
-// scrolls — editor-dom.util.ts discovers the scroll container dynamically (findScrollContainer).
+// tooltip overlay) leave it auto-height, so it grows to its content and the Scripture text's panel
+// in `FootnotesLayout` is what actually scrolls. Scroll code must not assume this element scrolls —
+// editor-dom.util.ts discovers the scroll container dynamically (findScrollContainer).
 .editor-container {
   height: 100%;
   max-width: none;
@@ -43,9 +43,12 @@ $find-current-result-highlight-bg: rgb(255 213 0 / 40%);
   background-color: var(--primary);
 }
 
+// Unfocused: primary at 30%, not `--secondary`, which equals or nearly equals the `--muted` that
+// Simple tints character markers with (`_simple-mode.scss`), so a selection there would disappear.
+// Selected text takes `--foreground`, which reads over the 30% tint in every theme.
 ::selection {
-  color: var(--secondary-foreground);
-  background-color: var(--secondary);
+  color: var(--foreground);
+  background-color: color-mix(in oklab, var(--primary) 30%, transparent);
 }
 
 // Find/Replace current-result highlight.
@@ -53,16 +56,16 @@ $find-current-result-highlight-bg: rgb(255 213 0 / 40%);
 // 'find-current-result') from the Find web view (platform-scripture/src/find.web-view.tsx), which
 // wraps the match in a TypedMarkNode carrying this class. Semi-transparent amber so it reads on top
 // of the ::selection color above (selectRange selects the same match) and stays distinct from the
-// primary/secondary selection in both light and dark mode.
+// focused and unfocused selection in both light and dark mode.
 .editor-typed-mark-external-find-result-highlight {
   background-color: $find-current-result-highlight-bg;
   border-radius: 2px;
 }
 
 // The Find web view also calls selectRange on the current match, so the native ::selection color
-// (--primary when focused, --secondary when not) paints on top of the semi-transparent amber above
-// and hides it — the inactive --secondary reads as grayish-blue. Re-apply the amber to the selected
-// glyphs inside the find-result mark so the current result stays amber regardless of pane focus.
+// (--primary when focused, primary at 30% when not) paints on top of the semi-transparent amber
+// above and hides or tints it. Re-apply the amber to the selected glyphs inside the find-result mark
+// so the current result stays amber regardless of pane focus.
 .editor-typed-mark-external-find-result-highlight::selection,
 .editor-typed-mark-external-find-result-highlight ::selection {
   background-color: $find-current-result-highlight-bg;
@@ -74,9 +77,13 @@ $find-current-result-highlight-bg: rgb(255 213 0 / 40%);
   outline-offset: 2px;
   --tw-ring-offset-width: 2px;
   --tw-ring-color: var(--ring);
-  --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width)
+  // The empty fallback in `var(--tw-ring-inset,)` is load-bearing: Tailwind 4 registers
+  // `--tw-ring-inset` with no initial value, so a bare `var()` of it is invalid, both shadows
+  // fall back to transparent, and no focus ring renders at all. Tailwind's own ring utilities
+  // use the same empty fallback.
+  --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width)
     var(--tw-ring-offset-color);
-  --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width))
+  --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width))
     var(--tw-ring-color);
   --tw-ring-offset-color: var(--background);
   box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
@@ -227,6 +234,41 @@ button.toolbar-item {
   color: var(--accent-foreground);
 }
 
+// The 200px cap on `.typeahead-popover ul` is sized for the marker typeahead's long, FILTERABLE
+// list, where scrolling past a fold is the point. The right-click context menu reuses the same
+// popover markup but is a short fixed list (~36px per item) with no filter to narrow it, so under
+// that cap its last items sit behind a fold. Capped to the viewport instead: the menu portal is
+// `position: fixed`, so `vh` is the height of the panel it opens in. Every item shows whenever
+// there is room, and the menu still can't outgrow the panel when there isn't.
+// Needs the `.typeahead-popover` qualifier to out-specify that rule — the plugin puts both classes
+// on the menu's outer element and nests a second `.typeahead-popover` inside it.
+// Drop this override once `paranext/scripture-editors`' own editor stylesheet caps
+// `.typeahead-popover.auto-embed-menu ul` to the viewport itself — check that repo directly, not
+// merely whether `_editor.scss` was refreshed: the fix is not on `scripture-editors` `main` today,
+// and the upstream PR this is adapted from (eten-tech-foundation/scripture-editors#555) closed
+// unmerged, so a routine refresh from either source reinstates the fixed 200px cap with a hidden
+// scrollbar. Pinned by `_editor-overrides.scss.test.ts`.
+.typeahead-popover.auto-embed-menu ul {
+  max-height: calc(100vh - 16px);
+
+  // The vendored rule pairs `overflow-y: scroll` with a hidden scrollbar, which suits the marker
+  // typeahead — you narrow that list by typing, not by scrolling. This menu has no filter, so when
+  // the panel is too short for the whole list the only way to the rest of it is to scroll, and a
+  // hidden scrollbar leaves nothing on screen saying there is more. `auto` keeps the gutter out of
+  // the way at the heights where the whole menu already fits.
+  overflow-y: auto;
+  scrollbar-width: thin;
+
+  // Without this, a wheel gesture that reaches the end of the list chains to the ancestor
+  // scroller. That ancestor's scroll event does not originate inside the menu, so the
+  // close-on-scroll listener reads it as the page moving out from under a fixed-positioned menu
+  // and closes the menu mid-read — exactly when the list is long enough to need scrolling. This
+  // protects the CHAINED ancestor scroll specifically: the close-on-scroll listener's own
+  // scroll-target check (scripture-editors#14) already exempts a scroll of the list itself, but
+  // that exemption does not cover a scroll that chains past it to an ancestor.
+  overscroll-behavior: contain;
+}
+
 .CommentPlugin_CommentInputBox_Editor,
 .CommentPlugin_CommentsPanel_Editor {
   background-color: var(--popover);
@@ -344,4 +386,72 @@ button {
   transform: translate(-50%, -50%);
   opacity: 0.8;
   animation: highlight 2s;
+}
+
+// Paragraph-marker selection (paragraph-structure view). The editor puts `psc-para-marker-selected`
+// on the paragraph whose gutter marker is the selection. Here rather than in the vendored
+// _usj-nodes.scss: the editor library styles this class in its own editor.css, which this repo does
+// not load, and keeps app overrides out of usj-nodes.css.
+//
+// Selection gets a channel of its own, as in adr-list-selection-on-a-dedicated-visual-channel (a 4px
+// leading bar, never the active-text focus box, which owns this element's ::after, and no
+// pseudo-element), but diverges from that ADR in two ways. It adds a row fill, which the ADR rejects
+// for comment cards: those backgrounds carry status, whereas a paragraph row's background carries
+// none. And the bar is a box-shadow rather than a logical border-inline-start, because the gutter
+// lies outside the paragraph's box (the glyph is absolutely positioned into .editor-input's
+// padding), where no border can reach; box-shadow has no logical form, hence the explicit RTL rule
+// below. Both layers are outer box-shadows offset toward inline-start by the gutter width plus the
+// paragraph's own indent compensation; the fill layer stops 4px short, which is the bar.
+// `--foreground` is the bar token by measured contrast (>= 3:1 against --background and --accent in
+// every built-in theme), pinned by paragraph-marker-selection-contrast.test.ts.
+//
+// The gutter width is a registered length so it computes once, on `.psc-gutter-markers`. The
+// gutter's own `--psc-gutter-width` is an unregistered `4em`, which would otherwise resolve in each
+// paragraph's own font size: on a `\mt1` (166%) the bar would overshoot the editor's edge and be
+// clipped, and on an `\s1` (0.8rem) it would stop short inside the gutter. `--para-indent` stays per
+// paragraph, since it is that paragraph's own indent compensation.
+@property --psc-para-marker-gutter-width {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0;
+}
+
+.psc-gutter-markers {
+  --psc-para-marker-gutter-width: var(--psc-gutter-width, 4em);
+}
+
+.psc-gutter-markers .para.psc-para-marker-selected {
+  --psc-para-marker-selection-reach: calc(
+    var(--psc-para-marker-gutter-width) + var(--para-indent, 0px)
+  );
+  // Muted text in the row (the `\s1`-`\s3` headings and the empty-verse placeholder) drops below
+  // 4.5:1 on the fill in the light theme, so while selected it takes the fill's own foreground.
+  --muted-foreground: var(--accent-foreground);
+
+  background-color: var(--accent);
+  box-shadow:
+    calc(4px - var(--psc-para-marker-selection-reach)) 0 0 0 var(--accent),
+    calc(-1 * var(--psc-para-marker-selection-reach)) 0 0 0 var(--foreground);
+}
+
+.psc-gutter-markers[dir='rtl'] .para.psc-para-marker-selected {
+  box-shadow:
+    calc(var(--psc-para-marker-selection-reach) - 4px) 0 0 0 var(--accent),
+    var(--psc-para-marker-selection-reach) 0 0 0 var(--foreground);
+}
+
+// 0,7,0, one class more specific than the base gutter glyph rule in _usj-nodes.scss.
+.psc-gutter-markers .para.psc-para-marker-selected > .marker:not(.verse):not(.chapter):first-child {
+  color: var(--accent-foreground);
+  font-weight: 700;
+}
+
+// Forced colors (e.g. Windows high contrast) drop box-shadow and replace the --accent fill with the
+// system background, which would leave only the bold glyph to mark the selection. An outline in the
+// system Highlight colour survives there and, drawn around the whole paragraph box, needs no
+// direction-specific rule.
+@media (forced-colors: active) {
+  .psc-gutter-markers .para.psc-para-marker-selected {
+    outline: 2px solid Highlight;
+  }
 }

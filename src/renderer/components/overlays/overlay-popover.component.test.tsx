@@ -1,7 +1,14 @@
 import { vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { OverlayPopoverPresentational } from './overlay-popover.component';
+import { OverlayEntry } from '@renderer/services/overlays/overlay.service-model';
+import { OverlayPopover, OverlayPopoverPresentational } from './overlay-popover.component';
+
+// The store-connected component resolves LocalizeKeys via useLocalizedStrings; an empty map makes
+// every value fall back to its raw text, so tests assert against the literal item labels.
+vi.mock('@renderer/hooks/papi-hooks', () => ({
+  useLocalizedStrings: vi.fn(() => [{}, false]),
+}));
 
 // Radix Popover uses ResizeObserver internally; jsdom doesn't provide it, so we stub a no-op
 // implementation. The methods intentionally don't use `this` since they're empty stubs.
@@ -184,5 +191,141 @@ describe('OverlayPopoverPresentational', () => {
 
       expect(onDismiss).toHaveBeenCalled();
     });
+  });
+
+  describe('sizing and anchoring', () => {
+    it('sizes the inner wrapper with the default caps and leaves PopoverContent unsized', () => {
+      render(
+        <OverlayPopoverPresentational
+          content={{ type: 'text', body: 'Just a body' }}
+          position={position}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const inner = document.querySelector('[data-overlay-popover-zoom]');
+      expect(inner).toBeInTheDocument();
+      // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const innerEl = inner as HTMLElement;
+      const { style } = innerEl;
+      // jsdom leaves an inline style property that was never assigned as `undefined` rather than
+      // the empty string a real browser reports for an unset CSS property, so the absent `zoom` is
+      // checked against both.
+      expect(style.zoom || '').toBe('');
+      // The popover's own default cap.
+      expect(style.maxHeight).toBe('400px');
+      // PopoverContent's own width is 'auto', so the inner div is what actually sizes the popover
+      // — it must carry the width and flex layout classes for the popover to size and space its
+      // content correctly.
+      expect(innerEl.className).toContain('tw:w-72');
+      expect(innerEl.className).toContain('tw:flex');
+      expect(innerEl.className).toContain('tw:flex-col');
+      expect(innerEl.className).toContain('tw:gap-2.5');
+
+      const content = document.querySelector('[data-overlay-popover]');
+      expect(content).toBeInTheDocument();
+      // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      expect((content as HTMLElement).style.width).toBe('auto');
+    });
+
+    it("leaves the caller's own maxWidth exactly as given at interface scale", () => {
+      render(
+        <OverlayPopoverPresentational
+          content={{ type: 'text', body: 'Just a body' }}
+          position={position}
+          maxWidth={280}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const inner = document.querySelector('[data-overlay-popover-zoom]');
+      expect(inner).toBeInTheDocument();
+      // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const { style } = inner as HTMLElement;
+      expect(style.maxWidth).toBe('280px');
+    });
+
+    it('renders the arrow as a sibling of the inner wrapper, not inside it', () => {
+      render(
+        <OverlayPopoverPresentational
+          content={{ type: 'text', body: 'Just a body' }}
+          position={position}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const content = document.querySelector('[data-overlay-popover]');
+      const inner = document.querySelector('[data-overlay-popover-zoom]');
+      expect(content).toBeInTheDocument();
+      expect(inner).toBeInTheDocument();
+      // querySelector returns Element | null; the assertions above guard null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const contentEl = content as HTMLElement;
+      // PopoverContent has exactly two direct children: the inner wrapper and the arrow. Radix
+      // requires the arrow to be a child of PopoverContent, and it must be the OTHER child — inside
+      // the wrapper it would sit in the scrolled box.
+      const otherChildren = Array.from(contentEl.children).filter((child) => child !== inner);
+      expect(otherChildren).toHaveLength(1);
+      expect(inner?.contains(otherChildren[0])).toBe(false);
+    });
+
+    it('sizes the anchor to the trigger as the pane measured it', () => {
+      render(
+        <OverlayPopoverPresentational
+          content={{ type: 'text', body: 'Just a body' }}
+          position={position}
+          anchor={{ width: 40, height: 20 }}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const anchor = document.querySelector('[data-overlay-popover-anchor]');
+      expect(anchor).toBeInTheDocument();
+      // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const { style } = anchor as HTMLElement;
+      expect(style.width).toBe('40px');
+      expect(style.height).toBe('20px');
+    });
+  });
+});
+
+describe('OverlayPopover (store-connected)', () => {
+  // The connector hands the request's anchor to the presentational component without reading any
+  // service of its own, so this test needs no service mocks.
+  type PopoverEntry = Extract<OverlayEntry, { type: 'popover' }>;
+
+  function createPopoverEntry(overrides?: Partial<PopoverEntry>): PopoverEntry {
+    return {
+      type: 'popover',
+      id: 'popover-1',
+      webViewId: 'webview-1',
+      request: {
+        anchor: { x: 100, y: 200, width: 40, height: 20 },
+        content: { type: 'text', body: 'Hello' },
+      },
+      content: { type: 'text', body: 'Hello' },
+      position: { x: 100, y: 200 },
+      resolve: vi.fn(),
+      reject: vi.fn(),
+      ...overrides,
+    };
+  }
+
+  it('hands the request’s anchor size to the presentational component it renders', () => {
+    const entry = createPopoverEntry();
+    render(<OverlayPopover overlay={entry} />);
+
+    const anchor = document.querySelector('[data-overlay-popover-anchor]');
+    expect(anchor).toBeInTheDocument();
+    // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const { style: anchorStyle } = anchor as HTMLElement;
+    // request.anchor is 40x20, drawn at that size.
+    expect(anchorStyle.width).toBe('40px');
+    expect(anchorStyle.height).toBe('20px');
   });
 });

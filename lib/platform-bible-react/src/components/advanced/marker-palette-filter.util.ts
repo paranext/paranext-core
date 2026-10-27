@@ -13,7 +13,11 @@
  * outrank — or bury — the exact label match.
  */
 
-import { filterAndRankItems, type Item } from '@eten-tech-foundation/platform-editor';
+import {
+  filterAndRankItems,
+  type Item,
+  type StyleInfo,
+} from '@eten-tech-foundation/platform-editor';
 
 /**
  * How {@link filterAndRankPaletteItems} matches filter text against item labels — one mode per
@@ -46,6 +50,28 @@ type RankableItem = Item & { label: string };
  */
 export function stripMarkerNestingPrefix(markerText: string): string {
   return markerText.replace(/^\+/, '');
+}
+
+/**
+ * Whether `marker` names a NOTE style in the project's stylesheet.
+ *
+ * What every marker palette hands the forwarding table as
+ * {@link MarkerPaletteSessionState.isNoteMarker}, so its Space branch can apply PT9's note rule. The
+ * table cannot answer this from its own `items`: a note marker a palette does not offer is missing
+ * from that list precisely in the cases the rule exists for — the Enter palette, whose source is
+ * paragraph markers; a `\` palette at a caret where notes are not valid; and the footnote popover,
+ * which offers note-INTERNAL markers. The stylesheet knows `f` is a note either way.
+ *
+ * Normalization matches the visible list's: case-folded, with the `+` nesting prefix stripped from
+ * both sides, so `\F` and `\+f` resolve to the same `f` entry the palette shows them matching.
+ */
+export function isNoteMarker(styleInfo: StyleInfo | undefined, marker: string): boolean {
+  if (!styleInfo || marker === '') return false;
+  const typed = stripMarkerNestingPrefix(marker).toLowerCase();
+  return Object.values(styleInfo.markers).some(
+    (style) =>
+      style.styleType === 'note' && stripMarkerNestingPrefix(style.marker).toLowerCase() === typed,
+  );
 }
 
 /**

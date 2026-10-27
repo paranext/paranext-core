@@ -41,6 +41,7 @@
   ],
   "main": "./.erb/dll/main.bundle.dev.js",
   "scripts": {
+    "assert:snap-metadata": "tsx ./.erb/scripts/assert-generated-snap-metadata.ts",
     "prebuild": "tsx ./.erb/scripts/notices-build-id.ts",
     "build": "concurrently --kill-others-on-fail \"npm:build:main\" \"npm:build:extension-host\" \"npm:build:renderer\" \"npm:build:types\" \"npm:build:extensions\" \"npm:build:data-release\"",
     "build:data": "dotnet build c-sharp/ParanextDataProvider.sln",
@@ -157,7 +158,7 @@
     "platform-bible-utils": "file:./lib/platform-bible-utils",
     "posthog-node": "^5.51.1",
     "radix-ui": "^1.4.3",
-    "rc-dock": "^3.3.2",
+    "rc-dock": "3.3.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^6.30.3",

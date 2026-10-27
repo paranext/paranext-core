@@ -1,4 +1,4 @@
-import { createElement } from 'react';
+import { createElement, Fragment } from 'react';
 import type { CSSProperties } from 'react';
 import { DIALOGS } from '@renderer/components/dialogs';
 import {
@@ -13,9 +13,10 @@ import { SCRIPTURE_EDITOR_WEBVIEW_TYPE, WebViewDefinition } from '@shared/models
 import cloneDeep from 'lodash/cloneDeep';
 import { FloatPosition, FloatSize, LayoutSize, TabGroup } from 'rc-dock';
 import { ChevronsUpDown } from 'lucide-react';
-import { getToolbarHeight } from '@renderer/components/toolbar-height.util';
+import { getDockTop } from '@renderer/components/toolbar-height.util';
 import { TabType } from './docking-framework-internal.model';
 import { PanelExtraContent } from './panel-extra-content.component';
+import { TabBarDropZone } from './tab-bar-drop-zone.component';
 import { HEADLESS_GROUP, TAB_GROUP, TAB_GROUP_RESOURCES } from './dock-tab-group.util';
 
 // Re-exported for existing consumers of these group-name constants from this module; the
@@ -46,10 +47,11 @@ const MAX_FLOAT_HEIGHT_FRACTION = 0.85;
 
 /**
  * Build the rc-dock group config for `TAB_GROUP`. The shape depends on `platform.interfaceMode`:
- * power mode allows new tabs (`panelExtra` "+"), simple mode locks tabs in place (`tabLocked`) and
- * drops `panelExtra`. In simple mode, also registers `HEADLESS_GROUP` (for the home and editor
- * columns, whose tab bars are hidden via CSS) and `TAB_GROUP_RESOURCES` (for the resources column,
- * which still shows its tab bar) so tabs can't be dragged across columns.
+ * power mode allows new tabs (`panelExtra` "+"), simple mode locks tabs in place (`tabLocked`),
+ * turns off docking (`disableDock`) and drops `panelExtra`. In simple mode, also registers
+ * `HEADLESS_GROUP` (for the home and editor columns, whose tab bars are hidden via CSS) and
+ * `TAB_GROUP_RESOURCES` (for the resources column, which still shows its tab bar) so tabs can't be
+ * dragged across columns.
  */
 export function getGroups(isPowerMode: boolean): { [key: string]: TabGroup } {
   const baseConfig: TabGroup = {
@@ -65,16 +67,26 @@ export function getGroups(isPowerMode: boolean): { [key: string]: TabGroup } {
     return {
       [TAB_GROUP]: {
         ...baseConfig,
-        panelExtra: (panelData) => createElement(PanelExtraContent, { panelData }),
+        panelExtra: (panelData, context) =>
+          createElement(
+            Fragment,
+            undefined,
+            createElement(PanelExtraContent, { panelData }),
+            createElement(TabBarDropZone, { panelData, context }),
+          ),
       },
     };
   }
 
-  // Simple mode: lock tabs (no drag-to-reorder, no drag-to-split) and hide the "+" new-tab button.
+  // Simple mode: no drag docks or undocks anything (floats can still be moved), and the "+" new-tab
+  // button is hidden. `tabLocked` covers only a dragged single tab, not a whole tab group (which is
+  // how a float moves), so `disableDock` turns off rc-dock's drop squares for any drag from these
+  // groups (`dockMove` calls are unaffected). Drops onto another tab bar are blocked in
+  // `dock-layout-wrapper.simple-mode.scss`; `floatable: false` prevents undocking.
   // Register `HEADLESS_GROUP` (home + editor columns) and `TAB_GROUP_RESOURCES` (resources column)
   // so tabs can't be dragged across columns. `TAB_GROUP` itself is kept as the default group for
   // floating tabs and any tab not pinned to a fixed column — see `getTabGroup`.
-  const simpleConfig: TabGroup = { ...baseConfig, tabLocked: true };
+  const simpleConfig: TabGroup = { ...baseConfig, tabLocked: true, disableDock: true };
   return {
     [TAB_GROUP]: simpleConfig,
     [HEADLESS_GROUP]: simpleConfig,
@@ -84,20 +96,23 @@ export function getGroups(isPowerMode: boolean): { [key: string]: TabGroup } {
 
 /**
  * WebViewTypes that make up Simple mode's fixed 3-column layout, mapped to the rc-dock group each
- * is confined to while pinned there. Kept in sync with two sources: every webViewType hardcoded in
- * `simple-layout.data.ts` (all of Columns 1 and 2, and all of Column 3 except `scriptureTextGrid`),
- * plus `scriptureTextGrid` (Text Collection) itself, which is absent from that static layout and
- * instead joins Column 3 at runtime from `default-layout-supplement.json` once its feature flag is
- * enabled.
+ * is confined to while pinned there. Kept in sync with three sources: every webViewType hardcoded
+ * in `simple-layout.data.ts` (all of Columns 1 and 2, and all of Column 3 except the two below);
+ * `scriptureTextGrid` (Text Collection), which is absent from that static layout and instead joins
+ * Column 3 when the layout loads, from `default-layout-supplement.json`, once its feature flag is
+ * enabled; and `checksSidePanel`, which is also absent from it and joins Column 3 only when the
+ * user opens Checks (`openChecksSidePanelWebView` in `platform-scripture`).
  */
 const FIXED_LAYOUT_WEBVIEW_GROUPS: Record<string, string> = {
   'platformScriptureEditor.modelText': HEADLESS_GROUP,
   [SCRIPTURE_EDITOR_WEBVIEW_TYPE]: HEADLESS_GROUP,
   'platformScriptureEditor.bibleTexts': TAB_GROUP_RESOURCES,
   'platformScriptureEditor.commentaries': TAB_GROUP_RESOURCES,
+  'platformLexicalTools.dictionary': TAB_GROUP_RESOURCES,
   'legacyCommentManager.commentListPanel': TAB_GROUP_RESOURCES,
   'platformScriptureEditor.scriptureTextGrid': TAB_GROUP_RESOURCES,
   'platformScripture.find': TAB_GROUP_RESOURCES,
+  'platformScripture.checksSidePanel': TAB_GROUP_RESOURCES,
 };
 
 /**
@@ -114,10 +129,10 @@ const FIXED_LAYOUT_WEBVIEW_GROUPS: Record<string, string> = {
  * (e.g. opened freely in Power mode, where they aren't confined to a fixed column) — gets the
  * default `TAB_GROUP`, matching pre-existing behavior.
  *
- * Reading `isClosable` here is what makes six providers across three extensions each compute
- * `isClosable: interfaceMode === 'power'` for themselves. PT-4405 centralizes it: the two halves
- * needed to decide pinning already live in this module and `readCachedInterfaceMode()`, so the
- * renderer can derive it for any webViewType in {@link FIXED_LAYOUT_WEBVIEW_GROUPS} and the per-
+ * Reading `isClosable` here is what makes various providers across multiple extensions each compute
+ * `isClosable: interfaceMode === 'power'` for themselves. TODO(PT-4405) centralizes it: the two
+ * halves needed to decide pinning already live in this module and `readCachedInterfaceMode()`, so
+ * the renderer can derive it for any webViewType in {@link FIXED_LAYOUT_WEBVIEW_GROUPS} and the per-
  * provider copies can go away.
  */
 export function getTabGroup(tabInfo: TabInfo): string {
@@ -135,12 +150,15 @@ export function getTabGroup(tabInfo: TabInfo): string {
  * original 8px gap on every side below the main toolbar; Simple mode removes that gap on the
  * left/right/bottom and uses the taller Simple-mode toolbar's clearance instead — see
  * `docs/superpowers/specs/2026-07-20-simple-layout-styling-adjustments-design.md`, Section 7.
+ *
+ * The top inset also clears the strip that sits in flow below the toolbar (`getDockTop`), through a
+ * CSS variable rather than a prop, so the strip's height changes re-lay the dock without
+ * re-rendering it.
  */
 export function getDockLayoutOuterInset(isPowerMode: boolean): CSSProperties {
-  if (isPowerMode) {
-    return { position: 'absolute', top: getToolbarHeight(true), bottom: 8, left: 8, right: 8 };
-  }
-  return { position: 'absolute', top: getToolbarHeight(false), bottom: 0, left: 0, right: 0 };
+  const top = getDockTop(isPowerMode);
+  if (isPowerMode) return { position: 'absolute', top, bottom: 8, left: 8, right: 8 };
+  return { position: 'absolute', top, bottom: 0, left: 0, right: 0 };
 }
 
 /** Initial sizes for each tab in CSS `px` units if created as floating tabs */

@@ -44,6 +44,12 @@ export type UseCharacterMarkerStateOptions = {
    * TODO(PT-4394): wire this to `EditorRef.replaceCharacterMarker`.
    */
   changeCharacterMarker?: (fromMarker: string, toMarker: string) => void;
+  /**
+   * Reports whether another chapter is loading, during which the editor still shows the chapter
+   * being left and an edit would be dropped. Picking a marker does nothing while it returns `true`.
+   * Omitting it never blocks.
+   */
+  isChapterLoading?: () => boolean;
 };
 
 /** The control props this hook derives. Placement and sync state stay the caller's business. */
@@ -58,12 +64,15 @@ export type CharacterMarkerState = Pick<
  *
  * Empty `markerStates` together with `hasUncovered === false` is the pure function's "no
  * information" result, and it is treated as such here — never as "the selection carries no marker".
- * It arises whenever there was nothing to measure: the selection's json paths do not resolve
- * against this USJ (e.g. drift between the editor's USJ and its selection after an edit), the
- * selection resolves inside a note (which coverage excludes entirely), or a collapsed caret's start
- * node is not a text node, so no text segment is collected at all. Returning `undefined` makes the
- * hook degrade exactly as it does with no selection or no USJ — falling back to `contextMarker` —
- * rather than confidently reporting "nothing applied".
+ * It arises whenever there was nothing to measure: the selection resolves inside a note (which
+ * coverage excludes entirely), a collapsed caret's start node is not a text node, so no text
+ * segment is collected at all, or the selection's json paths do not resolve against this USJ — a
+ * selection taken from a different document than the one `getUsj()` returns, for instance after an
+ * edit the selection has not yet caught up with. Property, closing-marker and attribute locations
+ * are not in that group: they are measured from the marker object that owns them. Degrading is
+ * better than reporting a marker state derived from nothing. Returning `undefined` makes the hook
+ * degrade exactly as it does with no selection or no USJ — falling back to `contextMarker` — rather
+ * than confidently reporting "nothing applied".
  */
 function computeCoverage(
   editorRef: MutableRefObject<EditorRef | null>,
@@ -103,6 +112,7 @@ function buildMarkerMenuItems(
     | 'blockMarker'
     | 'changeCharacterMarker'
     | 'removeCharacterMarker'
+    | 'isChapterLoading'
   > & {
     currentMarker: string | undefined;
     coverage: CharacterMarkerCoverage | undefined;
@@ -114,6 +124,7 @@ function buildMarkerMenuItems(
     blockMarker,
     changeCharacterMarker,
     removeCharacterMarker,
+    isChapterLoading,
     currentMarker,
     coverage,
   } = options;
@@ -130,6 +141,7 @@ function buildMarkerMenuItems(
       coverage,
       changeCharacterMarker,
       removeCharacterMarker,
+      isChapterLoading,
     },
   );
 }
@@ -149,6 +161,7 @@ export function useCharacterMarkerState({
   localizedStrings,
   removeCharacterMarker,
   changeCharacterMarker,
+  isChapterLoading,
 }: UseCharacterMarkerStateOptions): CharacterMarkerState {
   const [coverage, setCoverage] = useState<CharacterMarkerCoverage | undefined>(undefined);
 
@@ -165,6 +178,8 @@ export function useCharacterMarkerState({
 
   const onClose = useCallback(() => {
     setCoverage(undefined);
+    // TODO(PT-4764): Restore the caret before focusing, as `returnFocusToScriptureText` does. A
+    // bare `focus()` after the blur nulled the selection can put the caret at the chapter end.
     editorRef.current?.focus();
   }, [editorRef]);
 
@@ -217,6 +232,7 @@ export function useCharacterMarkerState({
         blockMarker,
         changeCharacterMarker,
         removeCharacterMarker,
+        isChapterLoading,
         currentMarker,
         coverage,
       }),
@@ -227,6 +243,7 @@ export function useCharacterMarkerState({
       currentMarker,
       changeCharacterMarker,
       removeCharacterMarker,
+      isChapterLoading,
       coverage,
     ],
   );

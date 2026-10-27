@@ -17,6 +17,7 @@ import {
   DirectionFromTabAdjacent,
   Layout,
   LayoutInfo,
+  PanelDirection,
   SavedTabInfo,
   TAB_TYPE_WEBVIEW,
   TabInfo,
@@ -26,6 +27,7 @@ import {
 } from '@shared/models/docking-framework.model';
 import { WebViewDefinition, WebViewDefinitionUpdateInfo } from '@shared/models/web-view.model';
 import { getErrorMessage } from 'platform-bible-utils';
+import { readDirection } from 'platform-bible-react/experimental';
 
 import { DIALOGS } from '@renderer/components/dialogs';
 import {
@@ -45,6 +47,10 @@ import {
 import { TAB_TYPE_BUTTONS, loadButtonsTab } from '@renderer/testing/test-buttons-panel.component';
 import { TAB_TYPE_TEST, loadTestTab } from '@renderer/testing/test-panel.component';
 import {
+  isWindowAwaitingFirstActivation,
+  noteTabAwaitingDocumentFocus,
+} from '@renderer/services/window-activation.util';
+import {
   TAB_TYPE_QUICK_VERSE_HERESY,
   loadQuickVerseHeresyTab,
 } from '@renderer/testing/test-quick-verse-heresy-panel.component';
@@ -55,6 +61,15 @@ import { RCDockTabInfo, TabType, isPanel, isTab } from './docking-framework-inte
 import { ErrorTabData, TAB_TYPE_ERROR, createErrorTab, saveErrorTab } from './error-tab.component';
 import { getFloatPosition, layoutDefaults } from './platform-dock-layout-positioning.util';
 import { createRCDockTabFromTabInfo } from './platform-dock-tab.component';
+import {
+  DOCK_SPAN_TOLERANCE,
+  DockAxis,
+  DockSpan,
+  getExtentInDock,
+  getNewGroupExtent,
+  getSpanInDock,
+  getSpanOverlap,
+} from './dock-layout-geometry.util';
 
 /** Regex on the tab id for tab header elements made by rc-dock */
 const TAB_HEADER_ID_REGEX = /rc-tabs-\d+-tab-(.+)/;
@@ -796,6 +811,7 @@ export function updateWebViewDefinition(
   updateInfo: WebViewDefinitionUpdateInfo,
   shouldBringToFront: boolean,
   dockLayout: DockLayout,
+  activateWithoutDocumentFocus?: boolean,
 ): boolean {
   const [targetTabInfo, targetTabWebViewData] = getWebViewTabInfoById(
     webViewId,
@@ -822,7 +838,13 @@ export function updateWebViewDefinition(
   );
 
   // Update existing tab
-  updateTab(dockLayout, updatedTabData, shouldBringToFront);
+  updateTab(
+    dockLayout,
+    updatedTabData,
+    shouldBringToFront,
+    undefined,
+    activateWithoutDocumentFocus,
+  );
 
   // Only consider the WebView to have updated if its properties actually changed, not just if it was brought to front
   return !!updatedWebViewData;
@@ -888,15 +910,23 @@ export function containsTab(dockLayout: DockLayout, tabOrTabGroupId: string): bo
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
  *   layout
  * @param tabId ID of the tab to set active and focused
+ * @param activateWithoutDocumentFocus If `true`, the tab is made active without taking document
+ *   focus. Every mounted panel and every loaded web view asks to be focused, so this is reached
+ *   without anyone deliberately asking for focus — see
+ *   {@link revealTabGroupAndSetDocumentFocusToTab} for why that matters to a background window
  * @returns `true` if successfully found tab to update, `false` otherwise
  */
-export function focusTab(dockLayout: DockLayout, tabId: string): boolean {
+export function focusTab(
+  dockLayout: DockLayout,
+  tabId: string,
+  activateWithoutDocumentFocus?: boolean,
+): boolean {
   // Bring the tab to front of its tab group
   // `rc-dock` requires null here to mean "don't change the tab data"
   // eslint-disable-next-line no-null/no-null
   const didFindTab = dockLayout.updateTab(tabId, null, true);
 
-  revealTabGroupAndSetDocumentFocusToTab(dockLayout, tabId);
+  revealTabGroupAndSetDocumentFocusToTab(dockLayout, tabId, activateWithoutDocumentFocus);
 
   return didFindTab;
 }
@@ -912,6 +942,8 @@ export function focusTab(dockLayout: DockLayout, tabId: string): boolean {
  *   tabs. Note: you must update the `tabInfo.flashTriggerTime` property before calling this in
  *   order to make the tab flash.
  * @param tabIdToReplace If specified, the tab with this ID will be replaced with the new tab
+ * @param activateWithoutDocumentFocus If `true`, the tab is made active without taking document
+ *   focus. See {@link revealTabGroupAndSetDocumentFocusToTab}
  * @returns `true` if successfully found tab to update, `false` otherwise
  */
 function updateTab(
@@ -919,13 +951,15 @@ function updateTab(
   tabInfo: RCDockTabInfo,
   shouldBringToFront: boolean,
   tabIdToReplace?: string,
+  activateWithoutDocumentFocus?: boolean,
 ): boolean {
   const tabId = tabIdToReplace ?? tabInfo.id;
 
   const didFindTab = dockLayout.updateTab(tabId, tabInfo, shouldBringToFront);
 
   // Make sure the tab is unobscured and focus the tab
-  if (shouldBringToFront) revealTabGroupAndSetDocumentFocusToTab(dockLayout, tabId);
+  if (shouldBringToFront)
+    revealTabGroupAndSetDocumentFocusToTab(dockLayout, tabId, activateWithoutDocumentFocus);
 
   return didFindTab;
 }
@@ -958,6 +992,351 @@ function findTabGroupById(
 }
 
 /**
+ * The root box a tab group sits in: rc-dock's dock box, or its floating, window or maximized layer
+ *
+ * @param tabGroup The tab group to look from
+ * @returns The root box, or `undefined` if the tab group is not in a layout
+ */
+function getRootBox(tabGroup: PanelData): BoxData | undefined {
+  let rootBox = tabGroup.parent;
+  while (rootBox?.parent) rootBox = rootBox.parent;
+  return rootBox;
+}
+
+/**
+ * Whether a tab group is in the docked area: whether its root box is the layout's dock box rather
+ * than rc-dock's floating, window or maximized layer. Decided by identity, not by the root's
+ * `mode`, since rc-dock never sets the dock box's mode and a saved layout may lack it.
+ *
+ * @param tabGroup The tab group to check
+ * @param dockbox The dock box of the layout holding the tab group
+ * @returns `true` if the tab group is in the docked area, `false` otherwise
+ */
+function isInDockedArea(tabGroup: PanelData, dockbox: BoxData): boolean {
+  return getRootBox(tabGroup) === dockbox;
+}
+
+/** A panel direction that places a tab group against one side of another */
+type PanelSideDirection = 'left' | 'right' | 'top' | 'bottom';
+
+/**
+ * Whether a panel direction places the new tab group against one side of the target's tab group, as
+ * opposed to the tab-position and state directions rc-dock also accepts
+ */
+function isPanelSideDirection(direction: PanelDirection): direction is PanelSideDirection {
+  return (
+    direction === 'left' || direction === 'right' || direction === 'top' || direction === 'bottom'
+  );
+}
+
+/** The rc-dock box mode that lays tab groups out along `direction`'s axis */
+function getModeAlong(direction: PanelSideDirection): DockAxis {
+  return direction === 'left' || direction === 'right' ? 'horizontal' : 'vertical';
+}
+
+/** The axis across `direction`, along which two tab groups facing each other share an edge */
+function getAxisAcross(direction: PanelSideDirection): DockAxis {
+  return direction === 'left' || direction === 'right' ? 'vertical' : 'horizontal';
+}
+
+/**
+ * The tab group in `branch` that touches the edge `branch` shares with whatever lies before it in
+ * `direction`, beside the source tab group: the group a new tab group arriving from that side would
+ * sit against.
+ *
+ * In a box laid out along `direction`'s axis only the nearest child touches that edge. In a box
+ * laid out across it every child does, and the one whose span across `direction` overlaps
+ * `sourceSpan` most is used (the first one on a tie). A child that meets the source only at a
+ * corner overlaps it by nothing, so it is never picked.
+ *
+ * @param branch The tab group or box lying in `direction` from the source tab group
+ * @param direction The direction travelled from the source tab group to reach `branch`
+ * @param sourceSpan The source tab group's span on the axis across `direction` (see
+ *   {@link getSpanInDock})
+ * @returns The tab group touching that edge beside the source, or `undefined` if `branch` holds
+ *   none
+ */
+function getTabGroupFacing(
+  branch: PanelData | BoxData,
+  direction: PanelSideDirection,
+  sourceSpan: DockSpan,
+): PanelData | undefined {
+  if (isPanel(branch)) return branch;
+  if (branch.children.length === 0) return undefined;
+  if (branch.mode === getModeAlong(direction)) {
+    const isNearestChildLast = direction === 'left' || direction === 'top';
+    return getTabGroupFacing(
+      branch.children[isNearestChildLast ? branch.children.length - 1 : 0],
+      direction,
+      sourceSpan,
+    );
+  }
+  const axisAcross = getAxisAcross(direction);
+  const { child: mostOverlappingChild } = branch.children.reduce<{
+    child: PanelData | BoxData | undefined;
+    overlap: number;
+  }>(
+    (best, child) => {
+      const overlap = getSpanOverlap(getSpanInDock(child, axisAcross), sourceSpan);
+      return overlap > best.overlap + DOCK_SPAN_TOLERANCE ? { child, overlap } : best;
+    },
+    { child: undefined, overlap: 0 },
+  );
+  return mostOverlappingChild
+    ? getTabGroupFacing(mostOverlappingChild, direction, sourceSpan)
+    : undefined;
+}
+
+/**
+ * Finds the docked tab group directly on the `direction` side of a docked tab group: the group a
+ * new tab group created on that side would sit against.
+ *
+ * Walks up from `tabGroup` to the nearest box laid out along `direction`'s axis in which the branch
+ * holding `tabGroup` has a sibling on that side. Boxes laid out across the axis, and boxes in which
+ * that branch is already the last one on that side, are passed through. Within the sibling,
+ * {@link getTabGroupFacing} picks the group touching the shared edge beside `tabGroup`.
+ *
+ * @param tabGroup The docked tab group to look from
+ * @param direction The side to look on
+ * @returns The adjacent tab group, or `undefined` if `tabGroup` is at that edge of the docked area
+ */
+function findAdjacentTabGroup(
+  tabGroup: PanelData,
+  direction: PanelSideDirection,
+): PanelData | undefined {
+  const mode = getModeAlong(direction);
+  const step = direction === 'right' || direction === 'bottom' ? 1 : -1;
+  const sourceSpan = getSpanInDock(tabGroup, getAxisAcross(direction));
+  let branch: PanelData | BoxData = tabGroup;
+  let box = tabGroup.parent;
+  while (box) {
+    const branchIndex = box.children.indexOf(branch);
+    if (box.mode === mode && branchIndex >= 0) {
+      const sibling = box.children[branchIndex + step];
+      if (sibling) return getTabGroupFacing(sibling, direction, sourceSpan);
+    }
+    branch = box;
+    box = box.parent;
+  }
+  return undefined;
+}
+
+/**
+ * Whether a new tab should be added to `adjacentTabGroup`, the tab group on the `direction` side of
+ * `targetTabGroup`, rather than get a tab group of its own beside the target. All of these must
+ * hold:
+ *
+ * - The group has tabs. A tab group with none is the stand-in rc-dock keeps where a maximized group
+ *   will be restored, which would drop a tab added to it.
+ * - It is of the new tab's rc-dock group. rc-dock refuses to drop a tab into a group of another one.
+ * - It is not locked in place (`panelLock`). Simple mode's fixed columns are, and a tab added to one
+ *   would become its active tab and hide the tab the column is there to show; in the model-text and
+ *   editor columns, whose tab bar is hidden, that tab could not even be reached again.
+ * - It is at least as wide (as tall for `top` and `bottom`) as the tab group rc-dock would create
+ *   beside the target, so joining never leaves the new tab less room than a group of its own.
+ *
+ * @param adjacentTabGroup The tab group found on the `direction` side of the target's tab group
+ * @param targetTabGroup The docked tab group the new tab is opened beside
+ * @param tab The new tab
+ * @param direction The side of the target's tab group, as rc-dock lays it out
+ * @returns `true` to add the tab to `adjacentTabGroup`, `false` to give it a group of its own
+ */
+function canJoinAdjacentTabGroup(
+  adjacentTabGroup: PanelData,
+  targetTabGroup: PanelData,
+  tab: RCDockTabInfo,
+  direction: PanelSideDirection,
+): boolean {
+  if (adjacentTabGroup.tabs.length === 0 || adjacentTabGroup.group !== tab.group) return false;
+  if (adjacentTabGroup.panelLock) return false;
+  const axis = getModeAlong(direction);
+  return (
+    getExtentInDock(adjacentTabGroup, axis) >=
+    getNewGroupExtent(targetTabGroup, axis) - DOCK_SPAN_TOLERANCE
+  );
+}
+
+/**
+ * Mirrors `left` and `right` in a right-to-left UI. rc-dock lays the dock out left to right
+ * whatever the UI direction, so a caller asking for a panel on the `right` (the reading-end side)
+ * means rc-dock's left in a right-to-left UI. That holds only while nothing sets `dir` or
+ * `direction: rtl` on the dock's ancestors: rc-dock's `.dock-hbox` is a plain flex row and would
+ * mirror under them, which would make this swap flip twice. If the dock is ever mirrored by CSS,
+ * remove the swap. `top`, `bottom` and the non-side directions pass through.
+ *
+ * @param direction The side a caller asked for, in reading order
+ * @returns The side to hand rc-dock
+ */
+function resolvePanelDirection(direction: PanelDirection): PanelDirection {
+  if (readDirection() !== 'rtl') return direction;
+  if (direction === 'right') return 'left';
+  if (direction === 'left') return 'right';
+  return direction;
+}
+
+/**
+ * The share of the dock box's own `size` that rc-dock gives a tab group it docks at the left or
+ * right edge of a horizontal dock box (`dockPanelToBox`), shrinking that `size` to the rest
+ */
+const RC_DOCK_EDGE_GROUP_SHARE = 0.3;
+
+/**
+ * Moves a floating tab group sideways until it no longer covers the tab group holding `tabId`, just
+ * docked at the `edge` side of the docked area. rc-dock draws its floating layer over the docked
+ * area, so otherwise the new tab could open, and take focus, hidden under the floating group.
+ *
+ * The floating group keeps its id, tabs, active tab, top and height; it is narrowed only when the
+ * docked area beside the new group is narrower than it. Nothing moves when the floating group does
+ * not cover the new one, when the dock has no size yet (it has not been laid out), when the
+ * floating group has no position yet, or when the new group fills the whole docked area and leaves
+ * nowhere to move to. The moved group is a copy of the original object, because rc-dock's
+ * `DockPanel` re-renders only for a new panel object (see the comment at the move).
+ *
+ * @param dockLayout The rc-dock dock layout React component ref
+ * @param floatingTabGroupId Id of the floating tab group to move
+ * @param tabId Id of the new tab, in the tab group just docked at the edge
+ * @param edge The side of the docked area the new tab group was docked at, as rc-dock lays it out
+ */
+function moveFloatingTabGroupClear(
+  dockLayout: DockLayout,
+  floatingTabGroupId: string,
+  tabId: string,
+  edge: PanelDirection,
+): void {
+  const { width: layoutWidth, height: layoutHeight } = dockLayout.getLayoutSize();
+  if (layoutWidth <= 0 || layoutHeight <= 0) return;
+  const floatingTabGroup = dockLayout.find(floatingTabGroupId);
+  const newTab = dockLayout.find(tabId);
+  if (!isPanel(floatingTabGroup) || !isTab(newTab) || !newTab.parent) return;
+  const { x, y, w, h } = floatingTabGroup;
+  if (x === undefined || y === undefined || w === undefined || h === undefined) return;
+
+  // The new tab group is a column of the dock box itself, so it spans the dock's full height.
+  // Floating positions are pixels in the same space as `getLayoutSize`.
+  const [start, end] = getSpanInDock(newTab.parent, 'horizontal');
+  const newGroupLeft = start * layoutWidth;
+  const newGroupRight = end * layoutWidth;
+  const isCovering = x < newGroupRight && x + w > newGroupLeft && y < layoutHeight && y + h > 0;
+  if (!isCovering) return;
+
+  const isNewGroupAtLeftEdge = edge === 'left';
+  const room = isNewGroupAtLeftEdge ? layoutWidth - newGroupRight : newGroupLeft;
+  if (room <= 0) return;
+  const width = Math.min(w, room);
+  const left = isNewGroupAtLeftEdge ? newGroupRight : newGroupLeft - width;
+
+  // rc-dock moves a floating tab group by writing the new position into the same object, and it
+  // redraws a tab group only when it gets a different object, so the group would stay drawn where
+  // it was. Moving a copy that takes its place gives rc-dock a new object to draw; the copy keeps
+  // the id, so the group is updated in place rather than re-created.
+  const floatbox = floatingTabGroup.parent;
+  if (!floatbox) return;
+  const movedTabGroup: PanelData = { ...floatingTabGroup };
+  floatbox.children[floatbox.children.indexOf(floatingTabGroup)] = movedTabGroup;
+  // Null required by the external API
+  // eslint-disable-next-line no-null/no-null
+  dockLayout.dockMove(movedTabGroup, null, 'float', { left, top: y, width, height: h });
+}
+
+/**
+ * Docks a new tab as a tab group of its own at the reading-end edge of the docked area (right, or
+ * left in a right-to-left UI), for a target tab group that is not docked.
+ *
+ * - The new tab group is as wide as the average tab group at the top level of a horizontal dock box.
+ *   rc-dock sizes it as a share of the dock box's own `size` (see {@link RC_DOCK_EDGE_GROUP_SHARE}),
+ *   which nothing on screen follows: it has no effect on what is drawn and divider drags never
+ *   update it, so the group could arrive as a sliver, and each further open would add a narrower
+ *   one. Setting it just before the move is the same kind of write rc-dock makes to it during the
+ *   move. A dock box laid out top to bottom needs nothing: rc-dock puts it beside the new group at
+ *   70% and 30%.
+ * - A floating target that covers the new group is moved aside (see
+ *   {@link moveFloatingTabGroupClear}). A maximized target needs nothing: bringing the new tab to
+ *   the front un-maximizes it.
+ *
+ * @param dockLayout The rc-dock dock layout React component ref
+ * @param tab The new tab
+ * @param dockbox The layout's dock box
+ * @param targetTabGroup The tab group the tab was asked to open beside, which is not docked
+ */
+function dockAtReadingEndEdge(
+  dockLayout: DockLayout,
+  tab: RCDockTabInfo,
+  dockbox: BoxData,
+  targetTabGroup: PanelData,
+): void {
+  const edge = resolvePanelDirection('right');
+  const floatingTabGroupId =
+    getRootBox(targetTabGroup) === dockLayout.getLayout().floatbox ? targetTabGroup.id : undefined;
+
+  if (dockbox.mode === 'horizontal' && dockbox.children.length > 0) {
+    const totalSize = dockbox.children.reduce((total, child) => total + (child.size ?? 0), 0);
+    if (totalSize > 0)
+      dockbox.size = totalSize / dockbox.children.length / RC_DOCK_EDGE_GROUP_SHARE;
+  }
+  dockLayout.dockMove(tab, dockbox, edge);
+
+  if (floatingTabGroupId !== undefined)
+    moveFloatingTabGroupClear(dockLayout, floatingTabGroupId, tab.id, edge);
+}
+
+/**
+ * Adds a new tab beside the tab group holding `targetTab`: into the tab group already on that side
+ * if there is one it can join, otherwise as a tab group of its own.
+ *
+ * - A target tab group that is not in the docked area (it is in rc-dock's floating, maximized or
+ *   window layer) gets the new tab as a tab group of its own at the reading-end edge of the docked
+ *   area instead, whichever side was asked for (see {@link dockAtReadingEndEdge}). rc-dock would
+ *   otherwise wrap both groups in a new box inside that layer. Those layers draw only the tab
+ *   groups directly inside them, so both groups would disappear while their tabs stayed open.
+ * - A docked target whose `direction` side holds a tab group that can take the tab (see
+ *   {@link findAdjacentTabGroup} and {@link canJoinAdjacentTabGroup}) gets the new tab added to that
+ *   group as its active tab, rather than a new group squeezed in between. Otherwise the new tab
+ *   gets a tab group of its own beside the target's.
+ * - `left` and `right` are mirrored in a right-to-left UI (see {@link resolvePanelDirection}).
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @param tab The new tab to add
+ * @param targetTab The tab to place the new tab beside. If it is not a tab in a tab group, the new
+ *   tab is placed against the docked area as a whole
+ * @param direction The side of the target's tab group to place the new tab on, in reading order
+ */
+function addTabAsPanel(
+  dockLayout: DockLayout,
+  tab: RCDockTabInfo,
+  targetTab: PanelData | TabData | BoxData | undefined,
+  direction: PanelDirection,
+): void {
+  const { dockbox } = dockLayout.getLayout();
+  const resolvedDirection = resolvePanelDirection(direction);
+  const targetTabGroup =
+    isTab(targetTab) && isPanel(targetTab.parent) ? targetTab.parent : undefined;
+
+  if (!targetTabGroup) {
+    dockLayout.dockMove(tab, dockbox, resolvedDirection);
+    return;
+  }
+
+  if (!isInDockedArea(targetTabGroup, dockbox)) {
+    dockAtReadingEndEdge(dockLayout, tab, dockbox, targetTabGroup);
+    return;
+  }
+
+  if (isPanelSideDirection(resolvedDirection)) {
+    const adjacentTabGroup = findAdjacentTabGroup(targetTabGroup, resolvedDirection);
+    if (
+      adjacentTabGroup &&
+      canJoinAdjacentTabGroup(adjacentTabGroup, targetTabGroup, tab, resolvedDirection)
+    ) {
+      dockLayout.dockMove(tab, adjacentTabGroup, 'middle');
+      return;
+    }
+  }
+
+  dockLayout.dockMove(tab, targetTabGroup, resolvedDirection);
+}
+
+/**
  * Add or update a tab in the layout
  *
  * @param savedTabInfo Info for tab to add or update
@@ -974,6 +1353,7 @@ export function addTabToDock(
   layout: Layout,
   shouldBringToFront: boolean,
   dockLayout: DockLayout,
+  activateWithoutDocumentFocus?: boolean,
 ): Layout | undefined {
   const tab = loadTab(savedTabInfo, shouldBringToFront);
   let targetTab = dockLayout.find(tab.id);
@@ -985,7 +1365,7 @@ export function addTabToDock(
         `addTabToDock: target tab with id '${targetTab.id}' is not a tab. This should not happen.`,
       );
 
-    updateTab(dockLayout, tab, shouldBringToFront);
+    updateTab(dockLayout, tab, shouldBringToFront, undefined, activateWithoutDocumentFocus);
     previousTabId = tab.id;
 
     // We did not add a tab, so return undefined to indicate that
@@ -1087,16 +1467,10 @@ export function addTabToDock(
       // Didn't ask for a specific tab, so just get the previous tab and go from there
       else targetTab = findPreviousTab(dockLayout);
 
-      dockLayout.dockMove(
+      addTabAsPanel(
+        dockLayout,
         tab,
-        // Add to the parent of the found tab if we found a tab. Assert the more specific type.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        (targetTab?.parent as PanelData) ??
-          // Otherwise find the first thing (the dock box) and add the tab to it
-          dockLayout.find(() => true) ??
-          // Null required by the external API
-          // eslint-disable-next-line no-null/no-null
-          null,
+        targetTab,
         // Defaults are added in `layoutDefaults`.
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         updatedLayout.direction!,
@@ -1107,7 +1481,15 @@ export function addTabToDock(
       if (!updatedLayout.targetTabId) {
         throw new LogError(`When replacing a tab, targetTabId must be specified`);
       }
-      if (updateTab(dockLayout, tab, shouldBringToFront, updatedLayout.targetTabId))
+      if (
+        updateTab(
+          dockLayout,
+          tab,
+          shouldBringToFront,
+          updatedLayout.targetTabId,
+          activateWithoutDocumentFocus,
+        )
+      )
         didFocusTab = true;
       else
         throw new LogError(
@@ -1134,7 +1516,7 @@ export function addTabToDock(
   }
 
   if (shouldBringToFront && !didFocusTab)
-    revealTabGroupAndSetDocumentFocusToTab(dockLayout, tab.id);
+    revealTabGroupAndSetDocumentFocusToTab(dockLayout, tab.id, activateWithoutDocumentFocus);
 
   // If there was an error loading the tab, we create an error tab. But we also want to throw here
   // so people know there was a problem.
@@ -1167,6 +1549,7 @@ export function addWebViewToDock(
   layout: Layout,
   shouldBringToFront: boolean,
   dockLayout: DockLayout,
+  activateWithoutDocumentFocus?: boolean,
 ): Layout | undefined {
   const tabId = webView.id;
   if (!tabId)
@@ -1178,6 +1561,7 @@ export function addWebViewToDock(
     layout,
     shouldBringToFront,
     dockLayout,
+    activateWithoutDocumentFocus,
   );
 }
 
@@ -1192,11 +1576,26 @@ export function addWebViewToDock(
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
  *   layout
  * @param tabId ID of tab in the tab group to reveal
+ * @param activateWithoutDocumentFocus If `true`, the tab group is revealed and the tab is made
+ *   active, but document focus is left where it is. Focusing a tab focuses its web view's iframe,
+ *   and a `focus()` inside a window that does not hold OS focus sets that document's active element
+ *   without activating the window — latently, until the window is next activated. Left alone,
+ *   whichever tab's content calls `focus()` last would claim that latent focus and decide who owns
+ *   the caret once a window opened deliberately in the background is finally raised. Left
+ *   unspecified, this defaults to whether this window is still awaiting its first activation, so a
+ *   door into the dock that does not know this parameter exists still gets the right answer instead
+ *   of unconditionally taking focus.
  */
-function revealTabGroupAndSetDocumentFocusToTab(dockLayout: DockLayout, tabId: string): void {
+function revealTabGroupAndSetDocumentFocusToTab(
+  dockLayout: DockLayout,
+  tabId: string,
+  activateWithoutDocumentFocus?: boolean,
+): void {
   unmaximizeAnyMaximizedTabGroup(dockLayout, tabId);
   bringFloatingTabGroupToFront(dockLayout, tabId);
-  setDocumentFocusToTab(dockLayout, tabId);
+  if (activateWithoutDocumentFocus ?? isWindowAwaitingFirstActivation())
+    noteTabAwaitingDocumentFocus(tabId);
+  else setDocumentFocusToTab(dockLayout, tabId);
 }
 
 /**

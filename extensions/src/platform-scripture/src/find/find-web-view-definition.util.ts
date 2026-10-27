@@ -5,8 +5,8 @@ import { buildFindWebViewState, resolveFindScrollGroupScrRef } from './find-web-
 /** Localize key for the Find tab's title, used as both the tab title and the source of its tooltip. */
 export const FIND_TITLE_KEY = '%webView_find_title%';
 
-/** Lucide "Search" glyph for the tab icon, shown when Simple mode collapses tabs to icons only. */
-export const FIND_ICON_URL = 'papi-extension://platformScripture/assets/icons/search.svg';
+/** Lucide icon name for the tab icon, shown when Simple mode collapses tabs to icons only. */
+export const FIND_ICON_NAME = 'search';
 
 /** The fields the Find web view provider computes, minus the bundled `content` and `styles`. */
 export type FindWebViewFields = {
@@ -14,7 +14,8 @@ export type FindWebViewFields = {
   tooltip: string | undefined;
   projectId: string | undefined;
   isClosable: boolean;
-  iconUrl: string | undefined;
+  iconName: string | undefined;
+  iconUrl: undefined;
   scrollGroupScrRef: ScrollGroupScrRef | undefined;
   state: WebViewDefinition['state'];
 };
@@ -66,14 +67,17 @@ export function buildFindWebViewFields(
     // routes `isClosable === false` to `TAB_GROUP_RESOURCES`, which is only registered in simple
     // mode.
     //
-    // The sixth copy of this same per-mode computation across three extensions. PT-4405 moves it into
-    // the renderer, which already holds both halves it needs; this line goes away with that.
+    // Another copy of this same per-mode computation across multiple extensions. TODO(PT-4405) move
+    // it into the renderer, which already holds both halves it needs.
     isClosable: !isSimpleMode,
-    // Icon-only tab in Simple mode only — Power mode keeps this tab text-labeled and un-iconed,
-    // matching the resource panels. Without an icon here, Simple mode's icon-only collapse (which
-    // hides the label) falls back to the generic app logo hard-coded in
-    // platform-tab-title.component.scss, so the tab would lose every trace of its identity.
-    iconUrl: isSimpleMode ? FIND_ICON_URL : savedWebView.iconUrl,
+    // Icon-only tab in Simple mode only, drawn in the tab's text colour so it follows the theme.
+    // Without an icon here, Simple mode's icon-only collapse (which hides the label) falls back to
+    // the generic app logo hard-coded in platform-tab-title.component.scss, so the tab would lose
+    // every trace of its identity. Power mode keeps this tab text-labeled with the default logo,
+    // matching the resource panels, and drops any saved icon so a Simple-mode icon doesn't carry
+    // over into Power mode.
+    iconName: isSimpleMode ? FIND_ICON_NAME : undefined,
+    iconUrl: undefined,
     scrollGroupScrRef: resolveFindScrollGroupScrRef(interfaceMode, savedWebView, options),
     state: buildFindWebViewState(savedWebView, options),
   };

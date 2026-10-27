@@ -65,6 +65,15 @@ export type TabInfo = SavedTabInfo & {
    */
   tabIconUrl?: string;
   /**
+   * Name of a lucide icon (kebab-case, e.g. `refresh-cw`) to show on the title bar of the tab
+   * instead of {@link tabIconUrl}. The icons the platform can show are listed in `LUCIDE_ICON_NAMES`
+   * (exported from `platform-bible-react/experimental`). An unknown name is ignored, so
+   * {@link tabIconUrl} (and then the standard logo) is shown instead.
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
+  tabIconName?: string;
+  /**
    * Text to show (or a localizeKey that will automatically be localized) on the title bar of the
    * tab
    */
@@ -82,8 +91,9 @@ export type TabInfo = SavedTabInfo & {
   /** Last known focused element. Used for restoring focus in the tab */
   lastFocusedElement?: HTMLElement;
   /**
-   * Whether this tab can be closed by the user (shows the tab's close button). Set to `false` for
-   * tabs that must always remain open, such as views that are part of the default layout.
+   * Whether this tab can be closed by the user (shows the tab's close button and allows closing it
+   * with a middle click anywhere on its header). Set to `false` for tabs that must always remain
+   * open, such as views that are part of the default layout.
    *
    * Note: this default is applied by consumers (treat `undefined` as `true`, e.g. `isClosable ??
    * true`), not enforced by the type.
@@ -233,11 +243,35 @@ export type PanelDirection =
   | 'active'
   | 'update';
 
-/** Information about a panel */
+/**
+ * Information about a panel: a tab opened beside the tab group holding `targetTabId`. When no
+ * `targetTabId` is given (or it is not in this window), the tab opens beside the tab group of the
+ * tab most recently opened as a `'tab'` or re-opened in this window, else of the first tab in it.
+ *
+ * When the target's tab group is docked, the tab is added, as its active tab, to the tab group
+ * directly on the `direction` side instead of a new group being created, if that group can take it:
+ * it sits beside the target's group (a group touching it only at a corner does not count), has at
+ * least one tab, holds the same kind of tab, is not one of Simple mode's fixed columns, and is at
+ * least as wide (as tall for `top` and `bottom`) as a new group beside the target would be.
+ * Otherwise the tab opens as a new group beside the target's group.
+ *
+ * When the target's tab group is floating or maximized, the tab opens as a new group at the
+ * reading-end edge of the dock area (the right, or the left in a right-to-left UI), whichever
+ * `direction` was asked for, and a floating target that would cover that group is moved aside.
+ * `left` and `right` are mirrored in a right-to-left UI. A target in another application window is
+ * placed by these same rules in the window that holds it.
+ */
 interface PanelLayout {
   type: 'panel';
+  /**
+   * The side of the target's tab group to open on, in reading order: `right` is the reading-end
+   * side, which is the left in a right-to-left UI
+   */
   direction?: PanelDirection;
-  /** If undefined, it will add in the `direction` relative to the previously added tab. */
+  /**
+   * If undefined (or not in this window), the panel is placed relative to the tab most recently
+   * opened as a `'tab'` or re-opened in this window, else the first tab in it.
+   */
   targetTabId?: string;
 }
 
@@ -339,13 +373,23 @@ export type PapiDockLayout = {
    * @param layout Information about where to put a new webview
    * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
    *   tabs. Defaults to `true`
+   * @param activateWithoutDocumentFocus If true, the tab is made active in its tab group without
+   *   taking document focus. Focusing a tab focuses its web view's iframe, and a `focus()` inside a
+   *   window that does not hold OS focus sets that document's active element without activating the
+   *   window — latently, until the window is next activated — so a window opened deliberately in
+   *   the background docks its content without taking that latent focus, leaving who owns the caret
+   *   to be decided when the window is actually raised. Left unspecified, this defaults to whether
+   *   this window is still awaiting its first activation.
    * @returns If WebView added, final layout used to display the new webView. If existing webView
    *   updated, `undefined`
+   * @experimental The optional `activateWithoutDocumentFocus` parameter is new; the rest of this
+   *   member is long-established.
    */
   addWebViewToDock: (
     webView: WebViewTabProps,
     layout: Layout,
     shouldBringToFront?: boolean,
+    activateWithoutDocumentFocus?: boolean,
   ) => Layout | undefined;
   /**
    * Remove a tab in the layout
@@ -417,12 +461,22 @@ export type PapiDockLayout = {
    *   doesn't always work well) or merged (so we can remove properties from `state`).
    * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
    *   tabs. Defaults to `false`
+   * @param activateWithoutDocumentFocus If true, a tab brought to the front is made active without
+   *   being given document focus. For content arriving in a window the user has not activated:
+   *   focusing the tab focuses its iframe, and a `focus()` call inside a window that does not hold
+   *   OS focus sets that document's active element without raising the window — so without this,
+   *   whichever tab's content focuses last would claim the caret the moment the window is finally
+   *   raised, rather than the tab the raise is actually showing. Left unspecified, this defaults to
+   *   whether this window is still awaiting its first activation.
    * @returns True if successfully found the WebView to update; false otherwise
+   * @experimental The optional `activateWithoutDocumentFocus` parameter is new; the rest of this
+   *   member is long-established.
    */
   updateWebViewDefinition: (
     webViewId: string,
     updateInfo: WebViewDefinitionUpdateInfo,
     shouldBringToFront?: boolean,
+    activateWithoutDocumentFocus?: boolean,
   ) => boolean;
   /**
    * Gets info for a tab in a direction from the source tab.
@@ -470,9 +524,18 @@ export type PapiDockLayout = {
    * tabs, and sets the document focus in that tab
    *
    * @param tabId ID of the tab to set active and focused
+   * @param activateWithoutDocumentFocus If true, the tab is made active in its tab group without
+   *   taking document focus. Every mounted panel and every loaded web view asks to be focused, and
+   *   a `focus()` call inside a window that does not hold OS focus only sets that document's active
+   *   element — it does not raise the window — so without this, whichever tab's content focuses
+   *   last would claim the caret the moment a window still awaiting its first activation is finally
+   *   raised. Left unspecified, this defaults to whether this window is still awaiting its first
+   *   activation.
    * @returns `true` if successfully found tab to update, `false` otherwise
+   * @experimental The optional `activateWithoutDocumentFocus` parameter is new; the rest of this
+   *   member is long-established.
    */
-  focusTab: (tabId: string) => boolean;
+  focusTab: (tabId: string, activateWithoutDocumentFocus?: boolean) => boolean;
   /**
    * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
    *

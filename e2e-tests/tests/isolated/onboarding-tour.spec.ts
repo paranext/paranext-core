@@ -54,21 +54,25 @@ import { test, expect } from '../../fixtures/isolated.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
 import {
   clearTourDone,
+  getTourBackButton,
   getTourDialog,
+  getTourDoneButton,
+  getTourNextButton,
   getTourTotalSteps,
   getCurrentStepTitle,
   advanceTour,
   advanceToLastStep,
   goBackTour,
   skipTour,
-} from './onboarding-tour.page';
+  englishLabel,
+} from '../../fixtures/onboarding-tour.page';
 
 /** Title of the one stop whose anchor the toolbar renders in both interface modes. */
 const PROFILE_STEP_TITLE = 'Profile';
 /** Titles (from `assets/localization/en.json`) of the stops that always resolve in this build. */
 const REQUIRED_STEP_TITLES = [
   'Your project',
-  'Your model text',
+  englishLabel('%onboardingTour_step_baseOrModelText_title%'),
   'Your resources and tools',
   PROFILE_STEP_TITLE,
 ];
@@ -86,8 +90,7 @@ async function waitForAppReadyWithTour(page: Page): Promise<void> {
 /** Walks the tour from its current step to the last one, collecting each step's title in order. */
 async function collectStepTitles(page: Page): Promise<string[]> {
   const titles: string[] = [];
-  const dialog = getTourDialog(page);
-  const nextButton = dialog.getByRole('button', { name: /^Next$/i });
+  const nextButton = getTourNextButton(page);
   // Bounded well above the real stop count so a regression cannot loop forever.
   for (let i = 0; i < 10; i += 1) {
     // Walking the tour is sequential by definition — each step must be read, then clicked past,
@@ -150,8 +153,8 @@ test.describe('Onboarding tour', () => {
     await advanceToLastStep(mainPage);
 
     // On the last step the primary button label changes to "Done".
-    await expect(dialog.getByRole('button', { name: /^Done$/i })).toBeVisible({ timeout: 5_000 });
-    await expect(dialog.getByRole('button', { name: /^Next$/i })).not.toBeVisible();
+    await expect(getTourDoneButton(mainPage)).toBeVisible({ timeout: 5_000 });
+    await expect(getTourNextButton(mainPage)).not.toBeVisible();
   });
 
   test('Back returns to the previous step', async ({ mainPage }) => {
@@ -161,7 +164,7 @@ test.describe('Onboarding tour', () => {
     await expect(dialog).toBeVisible({ timeout: 15_000 });
 
     // Back is deliberately absent on the first step, so it only appears once we have advanced.
-    await expect(dialog.getByRole('button', { name: /^Back$/i })).not.toBeVisible();
+    await expect(getTourBackButton(mainPage)).not.toBeVisible();
     expect(await getCurrentStepTitle(mainPage)).toBe(REQUIRED_STEP_TITLES[0]);
 
     await advanceTour(mainPage);
@@ -192,7 +195,7 @@ test.describe('Onboarding tour', () => {
 
     // Advance through all steps and click Done, which is what records completion.
     await advanceToLastStep(mainPage);
-    await dialog.getByRole('button', { name: /^Done$/i }).click();
+    await getTourDoneButton(mainPage).click();
     await expect(dialog).not.toBeVisible({ timeout: 5_000 });
 
     await mainPage.reload();
@@ -260,7 +263,7 @@ test.describe('Onboarding tour', () => {
 test.describe('Onboarding tour in Power mode', () => {
   test.use({ interfaceMode: 'power', seedSettings: SEED_PAST_FIRST_RUN });
 
-  test('does not show on its own, and a Help replay reduces to the profile stop', async ({
+  test('does not show on its own, Help offers no replay, and the tour command reduces to the profile stop', async ({
     mainPage,
   }) => {
     await waitForAppReadyWithTour(mainPage);
@@ -270,8 +273,22 @@ test.describe('Onboarding tour in Power mode', () => {
     const dialog = getTourDialog(mainPage);
     await expect(dialog).not.toBeVisible({ timeout: 5_000 });
 
+    // Power's Help menu leaves the tour out. The positive control proves the menu opened and
+    // filled before the absence is asserted.
     await mainPage.getByRole('menuitem', { name: /^Help$/i }).click();
-    await mainPage.getByRole('menuitem', { name: /Show the tour/i }).click();
+    await expect(mainPage.getByRole('menuitem', { name: /^About/i })).toBeVisible();
+    await expect(mainPage.getByRole('menuitem', { name: /Show the tour/i })).toHaveCount(0);
+    await mainPage.keyboard.press('Escape');
+
+    // The command stays registered, so the tour's Power filtering is still reachable through it.
+    await mainPage.evaluate(async () => {
+      // The renderer exposes `papi` on `window` without a declared type in the e2e project.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const win = window as unknown as {
+        papi: { commands: { sendCommand: (command: string) => Promise<unknown> } };
+      };
+      await win.papi.commands.sendCommand('platform.showOnboardingTour');
+    });
 
     await expect(dialog).toBeVisible({ timeout: 15_000 });
 
@@ -284,7 +301,7 @@ test.describe('Onboarding tour in Power mode', () => {
     expect(await getCurrentStepTitle(mainPage)).toBe(PROFILE_STEP_TITLE);
 
     // One stop is both first and last, so the primary action is Done rather than Next.
-    await expect(dialog.getByRole('button', { name: /^Done$/i })).toBeVisible({ timeout: 5_000 });
-    await expect(dialog.getByRole('button', { name: /^Next$/i })).not.toBeVisible();
+    await expect(getTourDoneButton(mainPage)).toBeVisible({ timeout: 5_000 });
+    await expect(getTourNextButton(mainPage)).not.toBeVisible();
   });
 });

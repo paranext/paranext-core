@@ -9,22 +9,31 @@
       "includeDefaults": true,
       "topMenu": {
         "columns": {
+          "platformScriptureEditor.simpleEdit": {
+            "label": "%webView_platformScriptureEditor_edit%",
+            "order": 1.5,
+            "isHeaderHidden": true
+          },
           "platformScriptureEditor.edit": {
             "label": "%webView_platformScriptureEditor_edit%",
             "order": 2,
             "isExtensible": true
           },
           "platformScriptureEditor.options": {
-            "label": "%webView_platformScriptureEditor_options%",
+            "label": "%webView_platformScriptureEditor_view%",
             "order": 3
-          },
-          "platformScriptureEditor.tools": {
-            "label": "%webView_platformScriptureEditor_tools%",
-            "order": 4
           },
           "platformScriptureEditor.insert": {
             "label": "%webView_platformScriptureEditor_insert%",
             "order": 5
+          },
+          "platformScriptureEditor.tools": {
+            "label": "%webView_platformScriptureEditor_tools%",
+            "order": 5.5
+          },
+          "platformScriptureEditor.simpleTools": {
+            "label": "%webView_platformScriptureEditor_toolsAndResources%",
+            "order": 5.6
           },
           "platformScriptureEditor.info": {
             "label": "%webView_platformScriptureEditor_info%",
@@ -32,10 +41,6 @@
           }
         },
         "groups": {
-          "platformScriptureEditor.find": {
-            "column": "platformScriptureEditor.edit",
-            "order": 1
-          },
           "platformScriptureEditor.colors": {
             "column": "platformScriptureEditor.options",
             "order": 1
@@ -43,6 +48,11 @@
           "platformScriptureEditor.layout": {
             "column": "platformScriptureEditor.options",
             "order": 2
+          },
+          "platformScriptureEditor.zoom": {
+            "column": "platformScriptureEditor.options",
+            "order": 2.5,
+            "isExperimental": true
           },
           "platformScriptureEditor.footnotesPane": {
             "column": "platformScriptureEditor.options",
@@ -56,119 +66,313 @@
             "column": "platformScriptureEditor.info",
             "order": 2
           },
+          "platformScriptureEditor.comments": {
+            "column": "platformScriptureEditor.tools",
+            "order": 1
+          },
           "platformScriptureEditor.inventory": {
             "column": "platformScriptureEditor.tools",
             "order": 2
           },
           "platformScriptureEditor.checks": {
             "column": "platformScriptureEditor.tools",
-            "order": 3
+            "order": 3,
+            "isExtensible": true,
+            "isExperimental": true
           },
-          "platformScriptureEditor.comments": {
-            "column": "platformScriptureEditor.tools",
-            "order": 4
+          "platformScriptureEditor.simpleEditMenu": {
+            "column": "platformScriptureEditor.simpleEdit",
+            "order": 1
+          },
+          "platformScriptureEditor.simpleToolsPanels": {
+            "column": "platformScriptureEditor.simpleTools",
+            "order": 1
+          },
+          "platformScriptureEditor.editActions": {
+            "menuItem": "platformScriptureEditor.editSubmenu",
+            "order": 1
+          },
+          "platformScriptureEditor.editFind": {
+            "menuItem": "platformScriptureEditor.editSubmenu",
+            "order": 2,
+            "isExperimental": true
+          },
+          "platformScriptureEditor.viewModes": {
+            "menuItem": "platformScriptureEditor.viewSubmenu",
+            "order": 1,
+            "isExperimental": true
           }
         },
         "items": [
           {
             "label": "%manageBooks_openMenuItem%",
             "hiddenInterfaceModes": ["simple"],
-            "localizeNotes": "Scripture editor top menu > Project > Manage books… (opens Manage Books targeting the editor's active project; the reserved platform.manageBooks default group places it in the Project section). Hidden in Simple mode: book management is a Power-mode task there, and the Simple book-not-available message tells the user to ask their project administrator — leaving the item visible would contradict that advice in the very same tab. Same gate the sibling comments item uses",
-            "group": "platform.manageBooks",
-            "order": 1,
+            "localizeNotes": "Scripture editor top menu > Project > Manage books… (opens Manage Books targeting the editor's active project; sits between Sync and Project settings in the Project section)",
+            "iconNameBefore": "book-copy",
+            "group": "platform.projectTop",
+            "order": 2,
             "command": "platformScripture.openManageBooks"
           },
           {
-            "label": "%webView_platformScriptureEditor_openFind%",
-            "group": "platformScriptureEditor.find",
+            "id": "platformScriptureEditor.editSubmenu",
+            "label": "%webView_platformScriptureEditor_edit%",
+            "localizeNotes": "Scripture editor top menu > Edit ▸ — opens the Undo/Redo/Cut/Copy/Paste flyout (plus Find in Power), in its own section with no heading between Project and View",
+            "iconNameBefore": "pencil",
+            "group": "platformScriptureEditor.simpleEditMenu",
+            "order": 1
+          },
+          {
+            "label": "%webView_platformScriptureEditor_undo%",
+            "localizeNotes": "Scripture editor top menu > Edit > Undo",
+            "group": "platformScriptureEditor.editActions",
+            "order": 1,
+            "command": "platformScriptureEditor.undo"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_redo%",
+            "localizeNotes": "Scripture editor top menu > Edit > Redo",
+            "group": "platformScriptureEditor.editActions",
+            "order": 2,
+            "command": "platformScriptureEditor.redo"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_cut%",
+            "localizeNotes": "Scripture editor top menu > Edit > Cut (the selected text)",
+            "group": "platformScriptureEditor.editActions",
             "order": 3,
+            "command": "platformScriptureEditor.cutSelection"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_copy%",
+            "localizeNotes": "Scripture editor top menu > Edit > Copy (the selected text)",
+            "group": "platformScriptureEditor.editActions",
+            "order": 4,
+            "command": "platformScriptureEditor.copySelection"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_paste%",
+            "localizeNotes": "Scripture editor top menu > Edit > Paste",
+            "group": "platformScriptureEditor.editActions",
+            "order": 5,
+            "command": "platformScriptureEditor.pasteAtSelection"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_openFind%",
+            "hiddenInterfaceModes": ["simple"],
+            "localizeNotes": "Scripture editor top menu (Power) > Edit > Find. Simple offers Find under Tools and resources instead",
+            "iconNameBefore": "search",
+            "group": "platformScriptureEditor.editFind",
+            "order": 1,
             "command": "platformScripture.openFind"
           },
           {
+            "id": "platformScriptureEditor.viewSubmenu",
             "label": "%webView_platformScriptureEditor_switchScriptureView%",
+            "hiddenInterfaceModes": ["simple"],
+            "localizeNotes": "Scripture editor top menu (Power) > View > Switch Scripture view ▸ — opens the Standard view / Preview flyout",
+            "iconNameBefore": "eye",
             "group": "platformScriptureEditor.layout",
+            "order": 1
+          },
+          {
+            "label": "%webView_platformScriptureEditor_standardView%",
+            "hiddenInterfaceModes": ["simple"],
+            "localizeNotes": "Scripture editor top menu (Power) > View > Switch Scripture view > Standard view — shows the editable view with visible paragraph markers",
+            "group": "platformScriptureEditor.viewModes",
             "order": 1,
-            "command": "platformScriptureEditor.changeView"
+            "command": "platformScriptureEditor.setViewStandard"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_preview%",
+            "hiddenInterfaceModes": ["simple"],
+            "localizeNotes": "Scripture editor top menu (Power) > View > Switch Scripture view > Preview — shows the read-only formatted view of the text, the way it reads when published",
+            "group": "platformScriptureEditor.viewModes",
+            "order": 2,
+            "command": "platformScriptureEditor.setViewPreview"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_zoomIn%",
+            "localizeNotes": "Scripture editor top menu > View > Zoom in. Enlarges the text of whichever pane of this editor tab was used last (the Scripture text pane or the footnotes pane); toolbars are unaffected. In Power mode the tab's own context menu offers the same item too.",
+            "iconNameBefore": "zoom-in",
+            "group": "platformScriptureEditor.zoom",
+            "order": 1,
+            "command": "platform.webViewContentZoomIn"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_zoomOut%",
+            "localizeNotes": "Scripture editor top menu > View > Zoom out. Shrinks the text of whichever pane of this editor tab was used last (the Scripture text pane or the footnotes pane); toolbars are unaffected. In Power mode the tab's own context menu offers the same item too.",
+            "iconNameBefore": "zoom-out",
+            "group": "platformScriptureEditor.zoom",
+            "order": 2,
+            "command": "platform.webViewContentZoomOut"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_resetZoomToDefault_2%",
+            "localizeNotes": "Scripture editor top menu > View > Zoom 100%. Returns whichever pane of this editor tab was used last (the Scripture text pane or the footnotes pane) to the Settings default zoom. In Power mode the tab's own context menu offers the same item too.",
+            "iconNameBefore": "scan",
+            "group": "platformScriptureEditor.zoom",
+            "order": 3,
+            "command": "platform.webViewContentZoomReset"
           },
           {
             "label": "%webView_platformScriptureEditor_showFootnotes%",
+            "localizeNotes": "Scripture editor top menu > View > Show footnotes — toggles the footnotes pane's visibility",
+            "iconNameBefore": "file-text",
             "group": "platformScriptureEditor.footnotesPane",
             "order": 1,
             "command": "platformScriptureEditor.toggleFootnotes"
           },
           {
             "label": "%temp_webView_platformScriptureEditor_changeFootnotePaneLocation%",
+            "localizeNotes": "Scripture editor top menu > View > Change footnote pane location — toggles the footnotes pane between bottom and side-by-side",
+            "iconNameBefore": "panel-bottom",
             "group": "platformScriptureEditor.footnotesPane",
             "order": 2,
             "command": "platformScriptureEditor.changeFootnotesPaneLocation"
           },
           {
-            "label": "%webView_platformScriptureEditor_toggleFootnotesAutoShow%",
-            "group": "platformScriptureEditor.footnotesPane",
+            "label": "%webView_platformScriptureEditor_insertCommentAtSelection%",
+            "localizeNotes": "Scripture editor top menu > Insert > Insert comment",
+            "iconNameBefore": "message-square-plus",
+            "group": "platformScriptureEditor.insertTextualNotes",
+            "order": 1,
+            "command": "platformScriptureEditor.insertCommentAtSelection"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_insertFootnoteAtSelection%",
+            "localizeNotes": "Scripture editor top menu > Insert > Insert footnote",
+            "iconNameBefore": "square-function",
+            "group": "platformScriptureEditor.insertTextualNotes",
+            "order": 2,
+            "command": "platformScriptureEditor.insertFootnoteAtSelection"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_insertCrossReferenceAtSelection%",
+            "localizeNotes": "Scripture editor top menu > Insert > Insert cross-reference",
+            "iconNameBefore": "square-x",
+            "group": "platformScriptureEditor.insertTextualNotes",
             "order": 3,
-            "command": "platformScriptureEditor.toggleFootnotesAutoShow"
+            "command": "platformScriptureEditor.insertCrossReferenceAtSelection"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_insertEndnoteAtSelection%",
+            "localizeNotes": "Scripture editor top menu > Insert > Insert endnote",
+            "iconNameBefore": "square-sigma",
+            "group": "platformScriptureEditor.insertTextualNotes",
+            "order": 4,
+            "command": "platformScriptureEditor.insertEndnoteAtSelection"
+          },
+          {
+            "label": "%webView_legacyCommentManager_openComments_2%",
+            "hiddenInterfaceModes": ["simple"],
+            "localizeNotes": "Scripture editor top menu (Power) > Tools > Comments (opens the Comment List web view). Simple's Tools and resources section brings the Comments tab forward instead",
+            "iconNameBefore": "message-square",
+            "group": "platformScriptureEditor.comments",
+            "order": 1,
+            "command": "legacyCommentManager.openCommentList"
           },
           {
             "label": "%webView_platformScriptureEditor_charactersInventory%",
+            "hiddenInterfaceModes": ["simple", "power"],
+            "localizeNotes": "Scripture editor top menu > Tools > Inventory > Characters",
             "group": "platformScriptureEditor.inventory",
             "order": 1,
             "command": "platformScripture.openCharactersInventory"
           },
           {
             "label": "%webView_platformScriptureEditor_repeatedWordsInventory%",
+            "hiddenInterfaceModes": ["simple", "power"],
+            "localizeNotes": "Scripture editor top menu > Tools > Inventory > Repeated words",
             "group": "platformScriptureEditor.inventory",
             "order": 2,
             "command": "platformScripture.openRepeatedWordsInventory"
           },
           {
             "label": "%webView_platformScriptureEditor_markersInventory%",
+            "hiddenInterfaceModes": ["simple", "power"],
+            "localizeNotes": "Scripture editor top menu > Tools > Inventory > Markers",
             "group": "platformScriptureEditor.inventory",
             "order": 3,
             "command": "platformScripture.openMarkersInventory"
           },
           {
             "label": "%webView_platformScriptureEditor_punctuationInventory%",
+            "hiddenInterfaceModes": ["simple", "power"],
+            "localizeNotes": "Scripture editor top menu > Tools > Inventory > Punctuation",
             "group": "platformScriptureEditor.inventory",
             "order": 4,
             "command": "platformScripture.openPunctuationInventory"
           },
           {
             "label": "%markersChecklist_menu_openTool%",
+            "hiddenInterfaceModes": ["simple", "power"],
             "localizeNotes": "Scripture editor top menu > Tools > Markers Checklist... (opens the markers checklist for the editor's active project)",
             "group": "platformScriptureEditor.inventory",
             "order": 5,
             "command": "platformScripture.openMarkersChecklist"
           },
           {
-            "label": "%webView_platformScriptureEditor_openChecks%",
+            "label": "%webView_platformScriptureEditor_openChecks_2%",
+            "hiddenInterfaceModes": ["simple", "power"],
+            "localizeNotes": "Scripture editor top menu (Power) > Tools > Basic checks — opens the Checks panel for the editor's project as a tab in the third column, or brings that tab to the front",
+            "iconNameBefore": "circle-check-big",
             "group": "platformScriptureEditor.checks",
             "order": 3,
             "command": "platformScripture.openChecksSidePanel"
           },
           {
-            "label": "%webView_platformScriptureEditor_insertFootnoteAtSelection%",
-            "group": "platformScriptureEditor.insertTextualNotes",
+            "label": "%webView_platformScriptureEditor_showBibleTextsPanel%",
+            "hiddenInterfaceModes": ["power"],
+            "localizeNotes": "Scripture editor top menu (Simple) > Tools and resources > Bible texts — brings the Bible texts tab in the third column to the front",
+            "iconNameBefore": "book",
+            "group": "platformScriptureEditor.simpleToolsPanels",
             "order": 1,
-            "command": "platformScriptureEditor.insertFootnoteAtSelection"
+            "command": "platformScriptureEditor.showBibleTextsPanel"
           },
           {
-            "label": "%webView_platformScriptureEditor_insertCrossReferenceAtSelection%",
-            "group": "platformScriptureEditor.insertTextualNotes",
+            "label": "%webView_platformScriptureEditor_showCommentariesPanel%",
+            "hiddenInterfaceModes": ["power"],
+            "localizeNotes": "Scripture editor top menu (Simple) > Tools and resources > Commentaries — brings the Commentaries tab in the third column to the front",
+            "iconNameBefore": "book-marked",
+            "group": "platformScriptureEditor.simpleToolsPanels",
             "order": 2,
-            "command": "platformScriptureEditor.insertCrossReferenceAtSelection"
+            "command": "platformScriptureEditor.showCommentariesPanel"
           },
           {
-            "label": "%webView_platformScriptureEditor_insertCommentAtSelection%",
-            "group": "platformScriptureEditor.insertTextualNotes",
+            "label": "%webView_platformScriptureEditor_showTextCollectionPanel%",
+            "hiddenInterfaceModes": ["power"],
+            "localizeNotes": "Scripture editor top menu (Simple) > Tools and resources > Text collection — brings the Text collection tab in the third column to the front",
+            "iconNameBefore": "library",
+            "group": "platformScriptureEditor.simpleToolsPanels",
             "order": 3,
-            "command": "platformScriptureEditor.insertCommentAtSelection"
+            "command": "platformScriptureEditor.showTextCollectionPanel"
           },
           {
-            "label": "%webView_legacyCommentManager_openComments%",
-            "hiddenInterfaceModes": ["simple"],
-            "group": "platformScriptureEditor.comments",
-            "order": 1,
-            "command": "legacyCommentManager.openCommentList"
+            "label": "%webView_platformScriptureEditor_showDictionaryPanel%",
+            "hiddenInterfaceModes": ["power"],
+            "localizeNotes": "Scripture editor top menu (Simple) > Tools and resources > Dictionary — brings the Dictionary tab in the third column to the front",
+            "iconNameBefore": "book-a",
+            "group": "platformScriptureEditor.simpleToolsPanels",
+            "order": 4,
+            "command": "platformLexicalTools.openDictionary"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_openFind%",
+            "hiddenInterfaceModes": ["power"],
+            "localizeNotes": "Scripture editor top menu (Simple) > Tools and resources > Find — brings the Find tab in the third column to the front. Power offers Find under Edit instead",
+            "iconNameBefore": "search",
+            "group": "platformScriptureEditor.simpleToolsPanels",
+            "order": 5,
+            "command": "platformScripture.openFind"
+          },
+          {
+            "label": "%webView_legacyCommentManager_openComments_2%",
+            "hiddenInterfaceModes": ["power"],
+            "localizeNotes": "Scripture editor top menu (Simple) > Tools and resources > Comments — brings the project's Comments tab in the third column to the front",
+            "iconNameBefore": "message-square",
+            "group": "platformScriptureEditor.simpleToolsPanels",
+            "order": 6,
+            "command": "legacyCommentManager.showCommentListPanel"
           }
         ]
       },

@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { forwardRef, useImperativeHandle } from 'react';
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
-import { act, render } from '@testing-library/react';
+import { forwardRef, ReactNode, useImperativeHandle } from 'react';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { act, render, waitFor } from '@testing-library/react';
+import { ContentZoomRoot } from '@/components/advanced/content-zoom-root.component';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import type {
@@ -16,48 +17,27 @@ import FootnoteEditor, {
   FootnoteEditorMarkerPalette,
   markerMenuItemToPaletteItem,
 } from './footnote-editor.component';
+import { installPopoverJsdomStubs } from './footnote-editor.test-harness';
 import {
   FOOTNOTE_EDITOR_STRING_KEYS,
   FootnoteEditorLocalizedStrings,
 } from './footnote-editor.types';
+import { editableView } from './footnote-editor.fixtures';
 
-// cmdk (Command/CommandInput, used by the inline MarkerMenu popover) instantiates a
-// ResizeObserver on mount and schedules scrollTo/scrollIntoView; jsdom ships none of these.
-// No-op stubs are sufficient since these tests never open that popover.
-class NoopResizeObserver implements ResizeObserver {
-  private readonly targets = new Set<Element>();
-
-  observe(target: Element) {
-    this.targets.add(target);
-  }
-
-  unobserve(target: Element) {
-    this.targets.delete(target);
-  }
-
-  disconnect() {
-    this.targets.clear();
-  }
-}
-
-beforeAll(() => {
-  if (typeof globalThis.ResizeObserver === 'undefined') {
-    globalThis.ResizeObserver = NoopResizeObserver;
-  }
-  if (typeof Element.prototype.scrollTo !== 'function') {
-    Element.prototype.scrollTo = () => {};
-  }
-  if (typeof Element.prototype.scrollIntoView !== 'function') {
-    Element.prototype.scrollIntoView = () => {};
-  }
-});
+installPopoverJsdomStubs();
 
 /**
  * Mutable holder for the mocked `EditorRef` the stubbed `Editorial` below exposes via
  * `useImperativeHandle`. Declared with `vi.hoisted` so the `vi.mock` factory (itself hoisted to the
  * top of the file by Vitest) can close over it.
  */
-const { mockEditorRefHolder, mockGetMarkerMenuItems, mockRegisterOnUsjChange } = vi.hoisted(() => ({
+const {
+  mockEditorRefHolder,
+  mockGetMarkerMenuItems,
+  mockRegisterOptions,
+  mockRegisterOnUsjChange,
+  mockRegisterOnStateChange,
+} = vi.hoisted(() => ({
   mockEditorRefHolder: {
     // Placeholder only — every test overwrites this with a full mock (see `renderFootnoteEditor`)
     // before rendering, so the empty object is never actually read as an `EditorRef`.
@@ -65,10 +45,16 @@ const { mockEditorRefHolder, mockGetMarkerMenuItems, mockRegisterOnUsjChange } =
     current: {} as EditorRef,
   },
   mockGetMarkerMenuItems: vi.fn(),
+  // Records the `options` the stubbed `Editorial` was handed, so a test can assert what this
+  // component decided to pass down rather than what its caller supplied.
+  mockRegisterOptions: vi.fn(),
   // Records the `onUsjChange` the stubbed `Editorial` was handed, so a test can fire the editor
   // change the real editor would have: that is what evaluates note-type switchability, and so what
   // enables the note-type dropdown.
   mockRegisterOnUsjChange: vi.fn(),
+  // Records the `onStateChange` the stubbed `Editorial` was handed, so a test can report the
+  // caret's context marker the way the real editor does: that is what fills the inline markers menu.
+  mockRegisterOnStateChange: vi.fn(),
 }));
 
 // Replaces the real `Editorial` with a minimal stub exposing `.editor-input` (queried by the
@@ -81,17 +67,24 @@ vi.mock('@eten-tech-foundation/platform-editor', async (importOriginal) => {
   return {
     ...actual,
     getMarkerMenuItems: mockGetMarkerMenuItems,
-    Editorial: forwardRef<EditorRef, { onUsjChange?: (usj: unknown) => void }>(
-      ({ onUsjChange }, ref) => {
-        mockRegisterOnUsjChange(onUsjChange);
-        useImperativeHandle(ref, () => mockEditorRefHolder.current);
-        // This stub only stands in for the real editor in tests that dispatch keydown events at
-        // `document` and check `document.activeElement`; it's never navigated via Tab/keyboard, so
-        // it doesn't need the interaction handlers a real focusable non-form element would.
-        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
-        return <div className="editor-input" tabIndex={0} data-testid="popover-editor-input" />;
-      },
-    ),
+    Editorial: forwardRef<
+      EditorRef,
+      {
+        options?: unknown;
+        onUsjChange?: (usj: unknown) => void;
+        onStateChange?: (state: unknown) => void;
+      }
+    >(({ options, onUsjChange, onStateChange }, ref) => {
+      mockRegisterOptions(options);
+      mockRegisterOnUsjChange(onUsjChange);
+      mockRegisterOnStateChange(onStateChange);
+      useImperativeHandle(ref, () => mockEditorRefHolder.current);
+      // This stub only stands in for the real editor in tests that dispatch keydown events at
+      // `document` and check `document.activeElement`; it's never navigated via Tab/keyboard, so
+      // it doesn't need the interaction handlers a real focusable non-form element would.
+      // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+      return <div className="editor-input" tabIndex={0} data-testid="popover-editor-input" />;
+    }),
   };
 });
 
@@ -100,6 +93,7 @@ vi.mock('@eten-tech-foundation/platform-editor', async (importOriginal) => {
 // behavior — any earlier test that exercised the same path leaks its calls into later ones.
 beforeEach(() => {
   mockGetMarkerMenuItems.mockClear();
+  mockRegisterOptions.mockClear();
 });
 
 function buildLocalizedStrings(): FootnoteEditorLocalizedStrings {
@@ -178,6 +172,10 @@ function placeDomCaretOutsideNote(editorInput: HTMLElement): void {
 function renderFootnoteEditor(
   editorOptions: EditorOptions,
   markerPalette?: FootnoteEditorMarkerPalette,
+  {
+    inline = false,
+    wrapper,
+  }: { inline?: boolean; wrapper?: (props: { children: ReactNode }) => ReactNode } = {},
 ) {
   // EditorRef has many required methods; using a partial mock via type assertion is simpler than
   // stubbing all of them in a test (same rationale as
@@ -196,6 +194,7 @@ function renderFootnoteEditor(
     applyUpdate: vi.fn(),
     replaceEmbedUpdate: vi.fn(),
     getSelection: vi.fn(),
+    getSelectedParaMarker: vi.fn(),
     setSelection: vi.fn(),
     setAnnotation: vi.fn(),
     removeAnnotation: vi.fn(),
@@ -208,8 +207,11 @@ function renderFootnoteEditor(
     commitTypedMarker: vi.fn(),
     commitTypedCloser: vi.fn(),
     commitPendingMarkerEdits: vi.fn(),
+    setMarkerSettleSuspended: vi.fn(),
     insertNote: vi.fn(),
     getNoteOps: vi.fn(() => []),
+    getOpsAfterNote: vi.fn(() => []),
+    takeOpsAfterNote: vi.fn(() => []),
     selectNote: vi.fn(),
   } as unknown as EditorRef;
 
@@ -225,10 +227,11 @@ function renderFootnoteEditor(
       defaultMarkerMenuTrigger={'\\'}
       localizedStrings={buildLocalizedStrings()}
       markerPalette={markerPalette}
+      inline={inline}
     />
   );
 
-  const utils = render(renderElement(scrRef));
+  const utils = render(renderElement(scrRef), { wrapper });
 
   const editorInput = utils.getByTestId('popover-editor-input');
   editorInput.focus();
@@ -240,6 +243,189 @@ function renderFootnoteEditor(
     rerenderScrRef: (nextScrRef: SerializedVerseRef) => utils.rerender(renderElement(nextScrRef)),
   };
 }
+
+describe('FootnoteEditor width lock', () => {
+  it('locks the container to its own CSS width, not its painted width', () => {
+    // jsdom has no layout: client rects are all zero and computed widths are empty. Report a layout
+    // width for the container only, so the lock has something to read; a lock taken from client
+    // rects (the painted size, which a zoomed ancestor scales) would stay unset here.
+    const originalGetComputedStyle = window.getComputedStyle.bind(window);
+    const spy = vi
+      .spyOn(window, 'getComputedStyle')
+      .mockImplementation((element, pseudoElement) => {
+        const style = originalGetComputedStyle(element, pseudoElement);
+        if (!element.classList.contains('footnote-editor')) return style;
+        return new Proxy(style, {
+          get: (target, property) =>
+            property === 'width' ? '480.5px' : Reflect.get(target, property),
+        });
+      });
+    try {
+      const { container } = renderFootnoteEditor({
+        view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true },
+      });
+      const lockedContainer = container.querySelector<HTMLElement>('.footnote-editor');
+      expect(lockedContainer?.style.width).toBe('480.5px');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
+describe('FootnoteEditor Copy button', () => {
+  function clickCopy(
+    copyLimit: number | undefined,
+    writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined),
+  ) {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      writable: true,
+      configurable: true,
+    });
+    const { editorInput, getByRole } = renderFootnoteEditor({
+      view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true },
+      copyLimit,
+    });
+    editorInput.textContent = 'note text';
+    act(() => {
+      getByRole('button', { name: '%footnoteEditor_copyButton_tooltip%' }).click();
+    });
+    return writeText;
+  }
+
+  it('copies the whole note when there is no copy limit', () => {
+    expect(clickCopy(undefined)).toHaveBeenCalledWith('note text');
+  });
+
+  it('copies only as much of the note as the copy limit allows', () => {
+    const writeText = clickCopy(4);
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText).toHaveBeenCalledWith('note');
+  });
+
+  it('copies nothing while the copy limit is 0', () => {
+    expect(clickCopy(0)).not.toHaveBeenCalled();
+  });
+
+  it('reports a clipboard write that fails rather than leaving it unhandled', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const writeText = clickCopy(
+        undefined,
+        vi.fn<(text: string) => Promise<void>>().mockRejectedValue(new Error('denied')),
+      );
+      expect(writeText).toHaveBeenCalledWith('note text');
+      await act(async () => {});
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('denied'));
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
+describe('FootnoteEditor context menu', () => {
+  it('hands its editor no context-menu container, so the menu stays at interface scale', () => {
+    renderFootnoteEditor({ view: editableView });
+
+    const passedOptions: unknown = mockRegisterOptions.mock.calls.at(-1)?.[0];
+    // Positive control: this component always sets `hasExternalUI`, so the options really arrived.
+    expect(passedOptions).toHaveProperty('hasExternalUI', true);
+    expect(passedOptions).not.toHaveProperty('contextMenuContainer');
+  });
+});
+
+describe('FootnoteEditor inline markers menu placement', () => {
+  /**
+   * Makes every `Range` report `rect` as its one client rect. jsdom does not implement either
+   * method on `Range`, so they are defined for the test and removed again by the returned
+   * function.
+   */
+  function stubRangeRect(rect: DOMRect) {
+    const originals = {
+      getBoundingClientRect: Object.getOwnPropertyDescriptor(
+        Range.prototype,
+        'getBoundingClientRect',
+      ),
+      getClientRects: Object.getOwnPropertyDescriptor(Range.prototype, 'getClientRects'),
+    };
+    Object.defineProperty(Range.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => rect,
+    });
+    // Only the length is read, and jsdom exposes no `DOMRectList` to build a real one from.
+    Object.defineProperty(Range.prototype, 'getClientRects', {
+      configurable: true,
+      value: () => [rect],
+    });
+    return () => {
+      Object.entries(originals).forEach(([name, descriptor]) => {
+        if (descriptor) Object.defineProperty(Range.prototype, name, descriptor);
+        else Reflect.deleteProperty(Range.prototype, name);
+      });
+    };
+  }
+
+  /** The Radix wrapper that positions the markers menu (the popover holding its search box). */
+  function getMenuPositioner(): HTMLElement {
+    const wrapper = document
+      .querySelector('[cmdk-input]')
+      ?.closest<HTMLElement>('[data-radix-popper-content-wrapper]');
+    if (!wrapper) throw new Error('inline markers menu is not open');
+    return wrapper;
+  }
+
+  it('places the menu at the left edge of the live selection rect, not at an offset inside the pop-up', async () => {
+    // jsdom has no layout, so any element's client rect is all zeros. An anchor placed inside the
+    // pop-up from offsets would therefore put the menu at the origin; the selection's own rect is
+    // what the menu must sit against (it stays correct when the text around the pop-up is zoomed).
+    let restoreRange = stubRangeRect(new DOMRect(120, 50, 30, 10));
+    try {
+      const { editorInput } = renderFootnoteEditor(
+        { view: { markerMode: 'visible', hasSpacing: true, isFormattedFont: true } },
+        undefined,
+        {
+          wrapper: ({ children }) => <ContentZoomRoot area="footnotes">{children}</ContentZoomRoot>,
+        },
+      );
+      // The `\` menu offers the markers allowed inside the caret's context marker.
+      await act(async () => {
+        const onStateChange = mockRegisterOnStateChange.mock.calls.at(-1)?.[0];
+        onStateChange?.({ contextMarker: 'f', canRedo: false });
+      });
+      placeDomCaretInsideNote(editorInput);
+
+      await act(async () => {
+        editorInput.ownerDocument.dispatchEvent(
+          new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
+        );
+      });
+
+      // Centered on the selection's left edge (the menu itself has no size in jsdom), 4px (the
+      // popover's side offset) below or above the selection's 50–60px band. Which side is up to the
+      // positioning's collision checks, which jsdom's empty layout decides, so either is accepted.
+      await waitFor(() =>
+        expect(getMenuPositioner().style.transform).toMatch(/^translate\(120px, (64|46)px\)$/),
+      );
+
+      // Opened from inside a zoom area, the menu stays at interface scale: it carries no marker.
+      expect(
+        getMenuPositioner().querySelector('[data-slot="popover-content"]'),
+      ).not.toHaveAttribute('data-platform-content-zoom-root');
+
+      // The anchor is read again when the menu is repositioned, so the menu follows its text.
+      restoreRange();
+      restoreRange = stubRangeRect(new DOMRect(200, 80, 30, 10));
+      await act(async () => {
+        window.dispatchEvent(new Event('resize'));
+      });
+      await waitFor(() =>
+        expect(getMenuPositioner().style.transform).toMatch(/^translate\(200px, (94|76)px\)$/),
+      );
+    } finally {
+      restoreRange();
+    }
+  });
+});
 
 function makeItem(overrides: Partial<EditorMarkerMenuItem> = {}): EditorMarkerMenuItem {
   return {
@@ -268,6 +454,40 @@ function mockMarkerMenuContext(editorRef: EditorRef, ctx: MockMarkerMenuContext)
   (editorRef.getMarkerMenuContext as ReturnType<typeof vi.fn>).mockReturnValue(ctx);
 }
 
+const standardView: EditorOptions['view'] = {
+  markerMode: 'editable',
+  hasSpacing: true,
+  isFormattedFont: true,
+};
+
+describe('FootnoteEditor toolbar layout', () => {
+  it('groups undo/redo with the caller dropdown when inline', () => {
+    // In the footnotes pane the editor is one row among the notes, so the controls read as a
+    // single cluster at the start of the row rather than splitting across its full width.
+    const { getByRole } = renderFootnoteEditor({ view: standardView }, undefined, { inline: true });
+    const callerButton = getByRole('button', { name: /callerDropdown_item_generated/ });
+    const undoButton = getByRole('button', { name: '%undoButton_tooltip%' });
+
+    expect(callerButton.parentElement?.contains(undoButton)).toBe(true);
+  });
+
+  it('keeps undo/redo out of the caller group and at the end of the row in the popover', () => {
+    const { getByRole } = renderFootnoteEditor({ view: standardView });
+    const callerButton = getByRole('button', { name: /callerDropdown_item_generated/ });
+    const undoButton = getByRole('button', { name: '%undoButton_tooltip%' });
+    const callerGroup = callerButton.parentElement;
+
+    expect(callerGroup?.contains(undoButton)).toBe(false);
+    // Still the same toolbar row, just the other end of it - alongside Cancel/Save.
+    expect(callerGroup?.parentElement?.contains(undoButton)).toBe(true);
+    expect(
+      callerGroup?.parentElement?.contains(
+        getByRole('button', { name: '%footnoteEditor_saveButton_tooltip%' }),
+      ),
+    ).toBe(true);
+  });
+});
+
 describe('FootnoteEditor marker palette wiring', () => {
   describe('editable marker mode, no markerPalette prop (pass-through degradation)', () => {
     it('lets a typed backslash land as a literal character', () => {
@@ -283,12 +503,12 @@ describe('FootnoteEditor marker palette wiring', () => {
     });
   });
 
-  describe('editable marker mode with markerPalette, collapsed caret (non-focus-stealing palette)', () => {
-    it('claims the trigger (never lands) and opens the palette in its non-focus-stealing display', () => {
-      // ACTIVE palette: the trigger `\` is claimed in every selection shape — nothing of the
-      // palette's ever reaches the document. The collapsed-caret palette still requests the
-      // `passive: true` DISPLAY (no focus steal; filter and highlight driven via the session
-      // table), which is now purely an overlay display mode, not a typing mode.
+  describe('editable marker mode with markerPalette, collapsed caret', () => {
+    it('claims the trigger (never lands) and opens the palette with ONE options object', () => {
+      // The trigger `\` is claimed in every selection shape — nothing of the palette's ever
+      // reaches the note. One options object rather than positional parameters, so an
+      // implementation cannot silently drop the last one (which is how the popover's palette once
+      // opened with no key forwarding at all).
       mockGetMarkerMenuItems.mockReturnValue([makeItem()]);
       const show = vi.fn(() => new Promise<string | undefined>(() => {}));
       const markerPalette = makeMarkerPalette(show);
@@ -311,17 +531,16 @@ describe('FootnoteEditor marker palette wiring', () => {
       );
 
       expect(notPrevented).toBe(false); // claimed — the trigger never lands
-      expect(show).toHaveBeenCalledWith(
-        [markerMenuItemToPaletteItem(makeItem())],
-        { x: 1, y: 2, width: 3, height: 4 },
-        true,
+      expect(show).toHaveBeenCalledWith({
+        items: [markerMenuItemToPaletteItem(makeItem())],
+        anchor: { x: 1, y: 2, width: 3, height: 4 },
         // The session declares the keys it owns so a palette that takes focus forwards them back
         // instead of consuming them.
-        expect.objectContaining({
+        keyForwarding: expect.objectContaining({
           keys: expect.arrayContaining([' ', 'Enter', 'Escape', 'Tab', '*', '\\']),
           onKey: expect.any(Function),
         }),
-      );
+      });
     });
 
     it('never shows a palette (and starts no session) when there are no marker menu items', () => {
@@ -548,6 +767,22 @@ describe('FootnoteEditor marker palette wiring', () => {
       expect(mocks.apply).toHaveBeenCalledOnce();
     });
 
+    it('leaves a selected paragraph marker alone on commit', async () => {
+      const { editorInput, editorRef, mocks, commit } = setUpCommitScenario();
+
+      // A caret captured earlier, then a paragraph marker selected: it has no text range, so
+      // `getSelection` reports nothing, yet restoring the older caret would move the selection off it.
+      mocks.getSelection.mockReturnValueOnce(sampleSelection);
+      editorInput.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+      vi.mocked(editorRef.getSelectedParaMarker).mockReturnValue('q1');
+
+      await commit('fq');
+
+      expect(mocks.setSelection).not.toHaveBeenCalled();
+      expect(mocks.selectNote).not.toHaveBeenCalled();
+      expect(mocks.apply).toHaveBeenCalledOnce();
+    });
+
     it('falls back to selecting the note content when the selection is gone and nothing was captured', async () => {
       const { mocks, commit } = setUpCommitScenario();
 
@@ -633,15 +868,148 @@ describe('FootnoteEditor marker palette wiring', () => {
       // Flush the promise microtask queue so the `.then` handler runs.
       await Promise.resolve();
 
-      expect(focusMock).toHaveBeenCalled(); // the palette's search input had focus — hand it back
+      expect(focusMock).toHaveBeenCalled(); // the palette had focus — hand it back
       expect(editorRef.applyMarkerMenuSelection).not.toHaveBeenCalled();
-      // A dismissal must not move the caret — only a commit restores/repositions it.
-      expect(editorRef.setSelection).not.toHaveBeenCalled();
-      expect(editorRef.selectNote).not.toHaveBeenCalled();
+      // A DISMISSAL restores the caret too, not only a commit. The palette takes focus, so
+      // Lexical's blur processing can null the editor-state selection; focusing without restoring
+      // first leaves the caret wherever that put it — `focus()` falls back to the document END —
+      // and the user's next keystroke lands somewhere they never chose. The same defect as a
+      // mis-landed commit, just quieter. (This harness reports no live selection, so the restore
+      // runs here; it is a no-op whenever the selection survived.) Nothing is applied either way.
+      expect(editorRef.selectNote).toHaveBeenCalled();
+    });
+
+    it('restores the caret when a COLLAPSED-CARET `\\` palette is dismissed too', async () => {
+      // The `\\` palette was excluded from the dismissal restore while it was passive and never
+      // took focus; the overlay host's own restore was expected to cover it. Now every palette
+      // takes focus, so this is the kind that needs it most — and the host's restore cannot stand
+      // in: it refocuses the web view's iframe rather than `.editor-input`, and cannot rebuild a
+      // selection Lexical nulled on blur.
+      mockGetMarkerMenuItems.mockReturnValue([makeItem({ marker: 'nd' })]);
+      let resolveShow: (id: string | undefined) => void = () => {};
+      const showPromise = new Promise<string | undefined>((resolve) => {
+        resolveShow = resolve;
+      });
+      const markerPalette = makeMarkerPalette(vi.fn(() => showPromise));
+      const { editorInput, editorRef } = renderFootnoteEditor(
+        { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
+        markerPalette,
+      );
+      mockMarkerMenuContext(editorRef, {
+        source: 'character',
+        previousParaMarkers: [],
+        openCharMarkers: [],
+        hasTextSelection: false, // collapsed caret -> kind 'backslash'
+        inMarkerText: false,
+        anchorRect: { x: 1, y: 2, width: 3, height: 4 },
+      });
+      placeDomCaretInsideNote(editorInput);
+      editorInput.ownerDocument.dispatchEvent(
+        new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
+      );
+      // Every mocked EditorRef method is a `vi.fn()` (see `renderFootnoteEditor`); reaching
+      // `.mockClear` needs the same cast `mockMarkerMenuContext` uses. Mount-time focus calls are
+      // cleared so the assertion below isolates the palette-outcome path.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      (editorRef.focus as ReturnType<typeof vi.fn>).mockClear();
+
+      resolveShow(undefined);
+      await showPromise;
+      await Promise.resolve();
+
+      expect(editorRef.focus).toHaveBeenCalled();
+      expect(editorRef.selectNote).toHaveBeenCalled();
     });
   });
 
   describe('editable marker mode with markerPalette, an open session forwarding table', () => {
+    /** Opens a passive `\` palette session in the popover and returns the rendered parts. */
+    function openListFocusedSession() {
+      mockGetMarkerMenuItems.mockReturnValue([makeItem()]);
+      const markerPalette = makeMarkerPalette(
+        vi.fn(() => new Promise<string | undefined>(() => {})),
+      );
+      const rendered = renderFootnoteEditor(
+        { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
+        markerPalette,
+      );
+      mockMarkerMenuContext(rendered.editorRef, {
+        source: 'character',
+        previousParaMarkers: [],
+        openCharMarkers: [],
+        hasTextSelection: false,
+        inMarkerText: false,
+        anchorRect: { x: 1, y: 2, width: 3, height: 4 },
+      });
+      placeDomCaretInsideNote(rendered.editorInput);
+      rendered.editorInput.focus();
+      rendered.editorInput.dispatchEvent(
+        new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
+      );
+      return { ...rendered, markerPalette };
+    }
+
+    it('leaves the popover editor EDITABLE for the life of a session', () => {
+      // Making it non-editable would blur it, putting the user's keys on the page body and losing
+      // the caret. Nothing can land in the editor anyway while the palette holds focus.
+      const { editorInput, markerPalette } = openListFocusedSession();
+      const editableBefore = editorInput.getAttribute('contenteditable');
+      expect(markerPalette.show).toHaveBeenCalled();
+      // Never disabled while the session is open.
+      expect(editorInput.getAttribute('contenteditable')).not.toBe('false');
+      expect(editorInput.getAttribute('contenteditable')).toBe(editableBefore);
+
+      editorInput.ownerDocument.body.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+
+      expect(markerPalette.dismiss).toHaveBeenCalled();
+      expect(editorInput.getAttribute('contenteditable')).toBe(editableBefore);
+    });
+
+    it('routes session keys typed in the editor during the window before the palette has focus', () => {
+      // The session is created synchronously in the trigger's keydown, while the editor still has
+      // focus. Keys typed in those few frames would otherwise land in the note.
+      const { editorInput, markerPalette } = openListFocusedSession();
+
+      editorInput.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'w', bubbles: true, cancelable: true }),
+      );
+
+      expect(markerPalette.update).toHaveBeenCalledWith({ filterText: 'w' });
+    });
+
+    it('leaves keys typed into another element alone while a session is open', () => {
+      // Keys belong to whatever holds focus. A comment box or any other input in this document
+      // keeps its own, and claiming them would feed the palette's filter — or commit a marker —
+      // while the user is typing somewhere else entirely.
+      const { markerPalette } = openListFocusedSession();
+      const otherInput = document.createElement('textarea');
+      document.body.appendChild(otherInput);
+      otherInput.focus();
+
+      const notPrevented = otherInput.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'w', bubbles: true, cancelable: true }),
+      );
+
+      expect(notPrevented).toBe(true);
+      expect(markerPalette.update).not.toHaveBeenCalled();
+      otherInput.remove();
+    });
+
+    it('does NOT cancel a paste — the editor is never made non-editable', () => {
+      // With the palette holding focus a paste goes to the palette, not the editor, so there is
+      // nothing to block; a paste that does reach the
+      // editor (only possible before the palette has focus) is handled by closing the palette
+      // rather than by disabling the editor.
+      const { editorInput } = openListFocusedSession();
+      const paste = new Event('paste', { bubbles: true, cancelable: true });
+
+      editorInput.dispatchEvent(paste);
+
+      expect(paste.defaultPrevented).toBe(false);
+    });
+
     it('claims the trigger and typed characters — they filter the palette, never the document', () => {
       // ACTIVE palette: under the passive palette the `\` and the typed characters landed as
       // literals and were only mirrored; now the trigger and every filter character are claimed,
@@ -997,9 +1365,10 @@ describe('FootnoteEditor marker palette wiring', () => {
       expect(show.mock.calls.length).toBe(showCallsBefore + 1);
     });
 
-    it('`\\` on an EMPTY filter lands a literal backslash and opens NO new palette', () => {
-      // With nothing typed there is nothing to commit, so the backslash is an ordinary character
-      // and must reach the document unclaimed.
+    it('`\\` on an EMPTY filter is IGNORED — claimed, no commit, no new palette', () => {
+      // With nothing typed there is nothing to commit. The palette holds focus, so the backslash
+      // cannot reach the note text whatever happens here — and a key that can only be a no-op
+      // must not also throw away the palette the user just opened.
       mockGetMarkerMenuItems.mockReturnValue([makeItem({ marker: 'nd' })]);
       const show = vi.fn(() => new Promise<string | undefined>(() => {}));
       const markerPalette = makeMarkerPalette(show);
@@ -1026,10 +1395,10 @@ describe('FootnoteEditor marker palette wiring', () => {
         new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
       );
 
-      expect(secondTriggerNotPrevented).toBe(true); // NOT claimed — the backslash lands
+      expect(secondTriggerNotPrevented).toBe(false); // CLAIMED — nothing reaches the note
       expect(editorRef.commitTypedMarker).not.toHaveBeenCalled();
       expect(show.mock.calls.length).toBe(showCallsBefore);
-      expect(markerPalette.dismiss).toHaveBeenCalled();
+      expect(markerPalette.dismiss).not.toHaveBeenCalled(); // the palette stays open
     });
 
     it('selection wrap: typed exact match + Space applies THAT item over the selection', () => {
@@ -1361,6 +1730,28 @@ describe('stray caret snap (wrapper-para dead-space normalization)', () => {
     expect(editorRef.selectNote).not.toHaveBeenCalled();
     expect(editorRef.focus).not.toHaveBeenCalled();
   });
+
+  it('leaves a stray caret alone on selectionchange while an overlay in another document holds focus', () => {
+    // A palette click moves focus to an overlay outside this document: the editor stays this
+    // document's active element, but the document itself no longer has focus. A snap here would
+    // move the caret a pending palette commit is about to restore.
+    const { editorInput, editorRef } = renderFootnoteEditor({
+      view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true },
+    });
+    placeDomCaretOutsideNote(editorInput);
+    expect(editorInput.ownerDocument.activeElement).toBe(editorInput);
+    vi.mocked(editorRef.focus).mockClear();
+    const hasFocusSpy = vi.spyOn(editorInput.ownerDocument, 'hasFocus').mockReturnValue(false);
+
+    try {
+      editorInput.ownerDocument.dispatchEvent(new Event('selectionchange'));
+    } finally {
+      hasFocusSpy.mockRestore();
+    }
+
+    expect(editorRef.selectNote).not.toHaveBeenCalled();
+    expect(editorRef.focus).not.toHaveBeenCalled();
+  });
 });
 
 describe('paste guard (dead-space caret)', () => {
@@ -1456,9 +1847,17 @@ describe('close-and-save settle (abandonment window)', () => {
       new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
     );
 
+    // Nothing settles on open any more — the host suspends the editor's own clocks for the life of
+    // a session instead. The count is taken here so this test measures only what follows.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const settleMock = editorRef.commitPendingMarkerEdits as ReturnType<typeof vi.fn>;
+    const settlesBefore = settleMock.mock.calls.length;
+
     rerenderScrRef(nextChapterScrRef);
 
-    expect(editorRef.commitPendingMarkerEdits).not.toHaveBeenCalled();
+    // The close-and-save settle stays skipped: a settle here would update the editor, move the
+    // selection, and pull focus out of the open palette.
+    expect(settleMock.mock.calls.length).toBe(settlesBefore);
   });
 });
 

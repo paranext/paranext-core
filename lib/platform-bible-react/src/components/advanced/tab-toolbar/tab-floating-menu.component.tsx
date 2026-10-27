@@ -23,6 +23,7 @@ export function TabFloatingMenu({
           icon={menuButtonIcon}
           className={`tw:pointer-events-auto tw:shadow-lg ${className}`}
           buttonVariant="outline"
+          showSectionHeadings
         />
       )}
     </TabToolbarContainer>

@@ -1,3 +1,5 @@
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 import { vi } from 'vitest';
 import { BoxData, PanelData } from 'rc-dock';
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
@@ -50,11 +52,11 @@ describe('simple-layout.data', () => {
       });
     });
 
-    it('column 3 has exactly 4 tabs', () => {
+    it('column 3 has exactly the fixed number of tabs', () => {
       // Narrowing column to BoxData and its first child to PanelData to access tabs.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const col3Panel = (columns[2] as BoxData).children[0] as PanelData;
-      expect(col3Panel.tabs).toHaveLength(4);
+      expect(col3Panel.tabs).toHaveLength(5);
     });
 
     it('all tab ids are unique across the layout', () => {
@@ -78,7 +80,7 @@ describe('simple-layout.data', () => {
       });
     });
 
-    it('contains the six expected webViewType strings', () => {
+    it('contains the expected webViewType strings', () => {
       const allWebViewTypes: string[] = [];
       columns.forEach((col) => {
         // Narrowing column to BoxData and its first child to PanelData to iterate tabs.
@@ -95,6 +97,7 @@ describe('simple-layout.data', () => {
       expect(allWebViewTypes).toContain('platformScriptureEditor.react');
       expect(allWebViewTypes).toContain('platformScriptureEditor.bibleTexts');
       expect(allWebViewTypes).toContain('platformScriptureEditor.commentaries');
+      expect(allWebViewTypes).toContain('platformLexicalTools.dictionary');
       expect(allWebViewTypes).toContain('legacyCommentManager.commentListPanel');
       expect(allWebViewTypes).toContain('platformScripture.find');
     });
@@ -118,6 +121,28 @@ describe('simple-layout.data', () => {
           expect(data.isClosable).toBe(false);
         });
       });
+    });
+
+    it("keeps platform-scripture's mirrored Column 3 panel ID equal to SIMPLE_PANEL_ID_RESOURCES", () => {
+      // Opening Checks in Simple mode adds its tab to Column 3 by naming this panel ID as the tab
+      // layout's `parentTabGroupId`. Extensions cannot import renderer source, so platform-scripture
+      // keeps a copy; if it drifts, the dock silently falls back to its default placement and can add
+      // a pane on top of a column. Resolved from the repo root (Vitest runs with it as cwd).
+      const extensionSource = readFileSync(
+        resolve(
+          process.cwd(),
+          'extensions/src/platform-scripture/src/simple-resources-panel-id.const.ts',
+        ),
+        'utf8',
+      );
+      const match = extensionSource.match(
+        /export const SIMPLE_RESOURCES_PANEL_ID\s*=\s*['"]([^'"]+)['"]/,
+      );
+
+      // A null match means the constant moved or was renamed, so the mirror can no longer be
+      // verified — treated as drift.
+      expect(match).not.toBeNull();
+      expect(match?.[1]).toBe(SIMPLE_PANEL_ID_RESOURCES);
     });
 
     it('each column panel has the expected onboarding-tour panel ID', () => {

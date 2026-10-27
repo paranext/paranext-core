@@ -51,6 +51,7 @@ namespace TestParanextDataProvider.ManageBooks
         private DummyScrText _bt = null!;
         private DummyScrText _notes = null!;
         private DummyScrText _marble = null!;
+        private DummyScrText _sba = null!;
         private ResourceDummyScrText _resource = null!;
         private ResourceDummyScrText _editableFlaggedResource = null!;
 
@@ -80,6 +81,13 @@ namespace TestParanextDataProvider.ManageBooks
                 type: ProjectType.MarbleResource,
                 editable: false
             );
+            // Study Bible Additions is a scripture-typed project (passes IsScripture()) that
+            // Platform.Bible cannot open — see ScrTextExtensions.GetOpenBlockedReason.
+            _sba = CreateScrText(
+                name: "SbaAdditions",
+                type: ProjectType.StudyBibleAdditions,
+                editable: true
+            );
             // Scripture-typed resource project — surfaces
             // ProjectSummary.IsResource = true so the Copy "From" / Create
             // "Based on" pickers can hide resources without an extra API
@@ -108,6 +116,7 @@ namespace TestParanextDataProvider.ManageBooks
             AddProject(_bt);
             AddProject(_notes);
             AddProject(_marble);
+            AddProject(_sba);
             AddProject(_resource);
             AddProject(_editableFlaggedResource);
         }
@@ -120,6 +129,7 @@ namespace TestParanextDataProvider.ManageBooks
             _bt?.Dispose();
             _notes?.Dispose();
             _marble?.Dispose();
+            _sba?.Dispose();
             _resource?.Dispose();
             _editableFlaggedResource?.Dispose();
         }
@@ -192,6 +202,34 @@ namespace TestParanextDataProvider.ManageBooks
             }
         }
 
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-011")]
+        [Property("BehaviorId", "BHV-411")]
+        [Description(
+            "A Study Bible Additions project cannot be opened (see "
+                + "ScrTextExtensions.GetOpenBlockedReason), so no Manage Books picker offers it — "
+                + "AllScripture excludes it while still returning an openable Standard project."
+        )]
+        public void FilterProjects_AllScripture_ExcludesStudyBibleAdditions()
+        {
+            var input = new ProjectFilterInput(ProjectFilterPurpose.AllScripture, null);
+
+            ProjectListResult result = ProjectFilterService.FilterProjects(input);
+
+            var names = result.Projects.Select(p => p.Name).ToList();
+            Assert.That(
+                names,
+                Has.Member(_std.Name),
+                "an openable Standard project is still offered"
+            );
+            Assert.That(
+                names,
+                Has.No.Member(_sba.Name),
+                "Study Bible Additions cannot be opened, so it is not offered"
+            );
+        }
+
         // -------------------------------------------------------------------
         // I2 — FullName + Versification projection (so the frontend drops its
         // per-project getSetting fan-out)
@@ -227,6 +265,111 @@ namespace TestParanextDataProvider.ManageBooks
                     Is.EqualTo(((int)ScrVersType.English).ToString()),
                     "Versification is the numeric ScrVersType code (English = 4) as a string."
                 );
+            });
+        }
+
+        private const string NivCopyright =
+            "The Holy Bible, New International Version® NIV® Copyright © 2011 by Biblica, Inc.®";
+
+        [Test]
+        public void FromScrText_MarksATraditionallyLicensedBiblicaResourceAsRestrictedAsABase()
+        {
+            using ResourceDummyScrText scrText = CreateResourceScrText(
+                "NIV11",
+                ProjectType.Standard,
+                editable: false
+            );
+            scrText.Settings.Copyright = NivCopyright;
+
+            Assert.That(ProjectSummary.FromScrText(scrText).IsRestrictedAsBase, Is.True);
+        }
+
+        [Test]
+        public void FromScrText_DoesNotRestrictABiblicaOpenTextKnownOnlyByItsDblId()
+        {
+            using ResourceDummyScrText scrText = CreateResourceScrText(
+                "OBTT",
+                ProjectType.Standard,
+                editable: false
+            );
+            scrText.Settings.Copyright = "Copyright © 2023 by Biblica, Inc., The Translation Trust";
+            scrText.Settings.DBLId = HexId.FromStr("f6a5ef6e2e75a8b4");
+
+            Assert.That(ProjectSummary.FromScrText(scrText).IsRestrictedAsBase, Is.False);
+        }
+
+        [Test]
+        public void FromScrText_DoesNotRestrictOtherTexts()
+        {
+            using ResourceDummyScrText scrText = CreateResourceScrText(
+                "WEB",
+                ProjectType.Standard,
+                editable: false
+            );
+            scrText.Settings.Copyright = "Public domain";
+
+            Assert.That(ProjectSummary.FromScrText(scrText).IsRestrictedAsBase, Is.False);
+        }
+
+        [Test]
+        public void FromScrText_DoesNotRestrictAnEditableProjectWithABiblicaCopyright()
+        {
+            // A Biblica translation team's own project carries Biblica's copyright
+            using DummyScrText scrText = CreateScrText(
+                "NIVTeam",
+                ProjectType.Standard,
+                editable: true
+            );
+            scrText.Settings.Copyright = NivCopyright;
+
+            Assert.That(ProjectSummary.FromScrText(scrText).IsRestrictedAsBase, Is.False);
+        }
+
+        [Test]
+        public void FromScrText_DoesNotRestrictAnEditableProjectWithAListedDblId()
+        {
+            // Biblica's master project has the DBL id of the resource published from it (NIV11)
+            using DummyScrText scrText = CreateScrText(
+                "NIVMaster",
+                ProjectType.Standard,
+                editable: true
+            );
+            scrText.Settings.DBLId = HexId.FromStr("71c6eab17ae5b667");
+
+            Assert.That(ProjectSummary.FromScrText(scrText).IsRestrictedAsBase, Is.False);
+        }
+
+        [Test]
+        public void FilterProjects_AResourceWhoseLicenseCannotBeRead_StillListsEveryProject()
+        {
+            using var unreadable = new UnreadableLicenseResourceScrText(
+                new Paranext.DataProvider.Projects.ProjectDetails(
+                    "UnreadableResource",
+                    new Paranext.DataProvider.Projects.ProjectMetadata(
+                        HexId.CreateNew().ToString(),
+                        []
+                    ),
+                    ""
+                )
+            );
+            unreadable.Settings.TranslationInfo = new TranslationInformation(
+                ProjectType.Standard,
+                ""
+            );
+            AddProject(unreadable);
+
+            ProjectListResult result = ProjectFilterService.FilterProjects(
+                new ProjectFilterInput(ProjectFilterPurpose.AllScripture, null)
+            );
+
+            ProjectSummary? unreadableSummary = result.Projects.FirstOrDefault(p =>
+                p.Name == unreadable.Name
+            );
+            Assert.Multiple(() =>
+            {
+                Assert.That(unreadableSummary, Is.Not.Null);
+                Assert.That(unreadableSummary?.IsRestrictedAsBase, Is.False);
+                Assert.That(result.Projects.Select(p => p.Name), Does.Contain(_std.Name));
             });
         }
 
@@ -711,6 +854,37 @@ namespace TestParanextDataProvider.ManageBooks
             scrText.Settings.TranslationInfo = new TranslationInformation(type, baseName);
             scrText.Settings.Editable = editable;
             return scrText;
+        }
+
+        /// <summary>
+        /// A resource whose settings fail when the license check reads them, as a damaged resource's
+        /// can. Its full name is one of the settings that check reads.
+        /// </summary>
+        private sealed class UnreadableLicenseResourceScrText(
+            Paranext.DataProvider.Projects.ProjectDetails details
+        ) : DummyScrText(details)
+        {
+            public override bool IsResourceProject => true;
+
+            protected override ProjectSettings CreateProjectSettings(bool ignoreFileMissing)
+            {
+                ProjectSettings readable = base.CreateProjectSettings(ignoreFileMissing);
+                return new UnreadableFullNameSettings(this)
+                {
+                    MinParatextDataVersion = readable.MinParatextDataVersion,
+                    Guid = readable.Guid,
+                };
+            }
+        }
+
+        private sealed class UnreadableFullNameSettings(ScrText scrText)
+            : ProjectSettings(scrText, true)
+        {
+            public override string FullName
+            {
+                get => throw new InvalidOperationException("The settings could not be read");
+                set => base.FullName = value;
+            }
         }
     }
 }

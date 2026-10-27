@@ -21,7 +21,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
     /// so no live PAPI connection is needed.
     /// <para>
     /// Transitions are driven through the service's own <c>RaiseSyncActivityChanged</c> — the
-    /// scaffolding entry point the Paratext 10 Studio patch's run bracket calls — so these tests pin
+    /// scaffolding entry point the Paratext 10 patch's run bracket calls — so these tests pin
     /// the forwarding contract without depending on a sync implementation that does not exist in
     /// public core.
     /// </para>
@@ -61,7 +61,6 @@ namespace TestParanextDataProvider.Projects.SendReceive
             );
         }
 
-
         [Test]
         public void InitializeAsync_RegistersGetSyncActivityWithExperimentalDocs()
         {
@@ -98,9 +97,6 @@ namespace TestParanextDataProvider.Projects.SendReceive
                 );
             });
         }
-
-
-
 
         [Test]
         public async Task SyncActivityChanged_ForwardsTheSnapshotToThePapi()
@@ -163,14 +159,12 @@ namespace TestParanextDataProvider.Projects.SendReceive
         [Test]
         public void SyncActivityState_SerializesToTheCamelCaseWireShape()
         {
-            // The renderer consumes exactly { isSyncing, projectIds }. Serialize with the same
-            // options the PAPI JSON-RPC formatter uses (PropertyNamingPolicy = CamelCase) to pin that
-            // contract at the C# boundary.
-            var options = SerializationOptions.CreateSerializationOptions();
-
+            // The renderer consumes exactly { isSyncing, projectIds }. Serialized with the options
+            // the PAPI JSON-RPC formatter really uses, so this pins the wire shape rather than one
+            // only the shared options produce (see PapiTestBase.WireSerializerOptions).
             var json = JsonSerializer.Serialize(
                 new SyncActivityState(true, new[] { "PROJ1" }),
-                options
+                WireSerializerOptions()
             );
 
             Assert.Multiple(() =>
@@ -190,10 +184,167 @@ namespace TestParanextDataProvider.Projects.SendReceive
             });
         }
 
+        [Test]
+        public void SyncActivityState_SerializesTheOutcomeAsACamelCaseString()
+        {
+            // The TS seam declares `outcome` as the string union `'succeeded' | 'failed'`, so it must
+            // not reach the wire as the enum's integer.
+            var json = JsonSerializer.Serialize(
+                new SyncActivityState(false, []) { Outcome = SyncOutcome.Succeeded },
+                WireSerializerOptions()
+            );
+
+            Assert.That(json, Does.Contain("\"outcome\":\"succeeded\""));
+        }
+
+        [Test]
+        public void SyncActivityState_OmitsTheOutcomeWhenAbsent()
+        {
+            // Absent means "this build cannot say", so the key is left off rather than sent as `null`.
+            // Checked against both option sets because they are not interchangeable (see
+            // WireSerializerOptions): an omission configured only on the shared options would pass
+            // against those while the real wire still carried `"outcome":null`.
+            var idle = new SyncActivityState(false, []);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(
+                    JsonSerializer.Serialize(
+                        idle,
+                        SerializationOptions.CreateSerializationOptions()
+                    ),
+                    Does.Not.Contain("outcome")
+                );
+                Assert.That(
+                    JsonSerializer.Serialize(idle, WireSerializerOptions()),
+                    Does.Not.Contain("outcome")
+                );
+            });
+        }
+
+        [Test]
+        public void SyncActivityState_SerializesTheOutcomeTimeAsADateString()
+        {
+            var json = JsonSerializer.Serialize(
+                new SyncActivityState(false, [])
+                {
+                    Outcome = SyncOutcome.Succeeded,
+                    CompletedAt = new DateTimeOffset(2026, 9, 18, 10, 0, 0, TimeSpan.Zero),
+                },
+                WireSerializerOptions()
+            );
+
+            // The renderer parses this with Date.parse and orders the verdict by it, so it has to
+            // reach the wire as a date string rather than as a tick count.
+            Assert.That(json, Does.Contain("\"completedAt\":\"2026-09-18T10:00:00+00:00\""));
+        }
+
+        [Test]
+        public void SyncActivityState_OmitsTheOutcomeTimeWhenAbsent()
+        {
+            var json = JsonSerializer.Serialize(
+                new SyncActivityState(false, []),
+                WireSerializerOptions()
+            );
+
+            Assert.That(json, Does.Not.Contain("completedAt"));
+        }
+
+        [Test]
+        public void SyncActivityState_EqualityIncludesTheOutcome()
+        {
+            // Publishers dedupe on this equality (`if (snapshot == _last) return;`), so a closing
+            // snapshot that differs from the one before it only in its outcome must not be dropped as
+            // a repeat.
+            var succeeded = new SyncActivityState(false, []) { Outcome = SyncOutcome.Succeeded };
+            var succeededAgain = new SyncActivityState(false, [])
+            {
+                Outcome = SyncOutcome.Succeeded,
+            };
+            var failed = new SyncActivityState(false, []) { Outcome = SyncOutcome.Failed };
+            var noOutcome = new SyncActivityState(false, []);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(succeeded == failed, Is.False, "different outcomes");
+                Assert.That(succeeded == noOutcome, Is.False, "an outcome versus none");
+                Assert.That(
+                    succeeded == succeeded with { CompletedAt = DateTimeOffset.UnixEpoch },
+                    Is.False,
+                    "the same outcome at different times"
+                );
+                Assert.That(succeeded == succeededAgain, Is.True, "the same outcome");
+                Assert.That(succeeded.GetHashCode(), Is.EqualTo(succeededAgain.GetHashCode()));
+            });
+        }
+
+        [Test]
+        public async Task SyncActivityChanged_ForwardsTheOutcome()
+        {
+            using var client = new DummyPapiClient();
+            var service = CreateSendReceiveService(client);
+            var notifier = new SyncActivityNotifierService(client, service);
+            await notifier.InitializeAsync();
+            _ = client.NextSentEvent; // drop the baseline emit
+
+            RaiseSyncActivity(
+                service,
+                new SyncActivityState(false, []) { Outcome = SyncOutcome.Failed }
+            );
+
+            var (_, payload) = client.NextSentEvent;
+            Assert.That(((SyncActivityState)payload!).Outcome, Is.EqualTo(SyncOutcome.Failed));
+        }
+
+        [Test]
+        public void GetSyncActivityCommand_ReportsNoOutcome()
+        {
+            // No sync runs in public core, so there is no completed run to describe. An idle snapshot
+            // carrying a verdict would tell a consumer that a sync had happened.
+            var state = (SyncActivityState)Client.InvokeRequestHandler(GetSyncActivityCommand)!;
+
+            Assert.That(state.Outcome, Is.Null);
+        }
+
+        [Test]
+        public void SyncActivityState_KeepsItsTwoValueConstructionAndDeconstruction()
+        {
+            // The Paratext 10 Studio patch builds and reads these from outside this repository, so
+            // promoting a property to a positional parameter would break a build this repo cannot
+            // see. Both halves below stop compiling if that ever happens, which is the alarm.
+            var state = new SyncActivityState(true, new[] { "PROJ1" })
+            {
+                Outcome = SyncOutcome.Failed,
+            };
+
+            var (isSyncing, projectIds) = state;
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(isSyncing, Is.True);
+                Assert.That(projectIds, Is.EquivalentTo(new[] { "PROJ1" }));
+            });
+        }
+
+        [Test]
+        public void SyncActivityState_DefaultValueComparesAndHashesWithoutThrowing()
+        {
+            // A publisher's dedupe field (`if (snapshot == _last) return;`) starts at `default`,
+            // whose ProjectIds is null, so the first snapshot it ever compares lands here.
+            var idle = new SyncActivityState(false, []);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(() => default(SyncActivityState) == idle, Throws.Nothing);
+                Assert.That(() => idle == default(SyncActivityState), Throws.Nothing);
+                Assert.That(() => default(SyncActivityState).GetHashCode(), Throws.Nothing);
+            });
+        }
+
         /// <summary>
         /// Raises <see cref="ParatextProjectSendReceiveService.SyncActivityChanged"/> with
         /// <paramref name="state"/> through the service's own protected
-        /// <c>RaiseSyncActivityChanged</c> — the scaffolding entry point the Paratext 10 Studio
+        /// <c>RaiseSyncActivityChanged</c> — the scaffolding entry point the Paratext 10
         /// patch's run bracket calls at every transition. Reflection because that member is
         /// deliberately protected: only the service's own run bracket may announce activity.
         /// </summary>
@@ -202,7 +353,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
             SyncActivityState state
         )
         {
-            // Matched by parameter type, not by name alone: the Paratext 10 Studio patch adds a
+            // Matched by parameter type, not by name alone: the Paratext 10 patch adds a
             // parameterless overload for its own call sites, which makes a name-only lookup
             // ambiguous once the patch is applied.
             var info = typeof(ParatextProjectSendReceiveService).GetMethod(

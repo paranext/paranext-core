@@ -91,7 +91,7 @@ Do NOT reach for it to park a test that is merely inconvenient, flaky, or unfini
 named defect and no ticket is a skipped test wearing a disguise; skip it explicitly instead.
 
 Live example: the three reconnect blockers in
-`src/client/services/__tests__/rpc-client.reconnect-gaps.test.ts`, all pinned to PT-4435.
+`src/client/services/__tests__/rpc-client.reconnect-gaps.test.ts`, all pinned to PT-4495.
 
 ### Continuous Testing Frequency
 
@@ -601,29 +601,47 @@ internal abstract class PapiTestBase
 [ExcludeFromCodeCoverage]
 public class FixtureSetup
 {
-    private static readonly string s_testFolder = Path.Combine(
-        Path.GetTempPath(),
-        "Platform.Bible.Tests"
-    );
+    internal const string TEST_FOLDER_PREFIX = "Platform.Bible.Tests";
 
-    public static string TestFolderPath => s_testFolder;
+    public static string RunId { get; } = Guid.NewGuid().ToString("N");
+
+    public static string TestFolderPath =>
+        Path.Combine(Path.GetTempPath(), $"{TEST_FOLDER_PREFIX}-{RunId}");
 
     [OneTimeSetUp]
     public void RunBeforeAnyTests()
     {
-        if (!Directory.Exists(s_testFolder))
-            Directory.CreateDirectory(s_testFolder);
-        ParatextGlobals.Initialize(s_testFolder);
+        // Best effort: deletes Platform.Bible.Tests and Platform.Bible.Tests-* folders that were
+        // neither created nor modified in the last 24 hours, left by runs that never tore down.
+        DeleteStaleTestFolders(Path.GetTempPath(), DateTime.UtcNow.AddHours(-24));
+
+        Directory.CreateDirectory(TestFolderPath);
+        // usfm.sty is copied in with overwrite: true, so setup tolerates an existing folder.
+        ParatextGlobals.Initialize(TestFolderPath);
     }
 
     [OneTimeTearDown]
     public void RunAfterAnyTests()
     {
-        if (Directory.Exists(s_testFolder))
-            Directory.Delete(s_testFolder, true);
+        if (Directory.Exists(TestFolderPath))
+            Directory.Delete(TestFolderPath, true);
     }
+
+    internal static void DeleteStaleTestFolders(string parentDirectory, DateTime cutoffUtc);
 }
 ```
+
+The folder is unique per run, so two runs at once (two sessions, or an IDE run beside a CLI run)
+never delete each other's files in teardown. A test that needs its own temp folder names it
+`{FixtureSetup.TEST_FOLDER_PREFIX}-{FixtureSetup.RunId}-{TestContext.CurrentContext.Test.ID}` (as
+`TestLocalParatextProjectsInTempDir` does), so it is unique per run too and falls under the prefix
+the sweep cleans up if a crashed run leaks it.
+
+No fixture in `c-sharp-tests` is `[Parallelizable]`, so a test may change process-global state
+(`Trace.Listeners`, `Console.Out`/`Console.Error`, a static flag) as long as it restores it, even
+when an assertion fails (`[TearDown]` or `finally`). New fixtures of that kind are marked
+`[NonParallelizable]` so they stay serial if parallel execution is ever turned on; two older ones,
+`ThreadingUtilsTests` and `StartupTimingTests`, document the assumption in a comment instead.
 
 ### Test Doubles
 
@@ -1277,7 +1295,7 @@ Where a spec lives is decided by how it gets its app, and that choice also picks
   standard run (see their READMEs for what collects each and why), so put new work in one of the
   three directories above rather than extending them.
 - `tests/smoke/` — what CI runs. Launch-based, `app.fixture`/`papi.fixture`; not for per-feature
-  tests.
+  tests, apart from the bare-Electron checks its README describes.
 
 ```
 e2e-tests/
@@ -1449,6 +1467,19 @@ npx playwright test e2e-tests/tests/isolated/{feature}/ --config=e2e-tests/playw
 # A bare Xvfb has no window manager, so compositor-dependent suites can behave differently.
 e2e-tests/run-e2e-wsl.sh --wrap npx playwright test e2e-tests/tests/isolated/{feature}/ --config=e2e-tests/playwright.config.ts --project=isolated
 ```
+
+**On an Electron upgrade, re-run `tests/isolated/web-view-lifecycle/` by hand.** CI runs only the
+smoke project (`.github/workflows/test.yml`), and that subset is the only place that would notice
+Chromium no longer firing `unload` in web view iframes: the React web view bootstrap unmounts a
+replaced document's root on `unload`, and `extension-teardown-listeners.spec.ts` goes red if it stops.
+
+### Manually Testing the First-Run Wizard
+
+To bring the setup wizard back in a running app (dev or installed), including as a registered or
+unregistered Paratext 9 user, use the `platform.resetFirstRun` command from DevTools — see
+[Resetting the first-run wizard](../../README.md#resetting-the-first-run-wizard) in the README. The
+automated first-run suites (`e2e-tests/tests/isolated/first-run/`) run in demo mode instead, so
+they do not depend on the machine's Paratext registration.
 
 ### Failure Analysis
 

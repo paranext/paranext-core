@@ -1,10 +1,10 @@
 // Core's copy of the type seam with the closed-source `paratext-bible-send-receive` extension
-// (shipped with Paratext 10 Studio). It declares the subset of that extension's contract that this
+// (shipped with Paratext 10). It declares the subset of that extension's contract that this
 // repository consumes — commands, network events, and the payload types they reference — so core
 // and its bundled extensions can talk to Send/Receive with real types.
 //
 // Derived from
-// https://github.com/paranext/paratext-bible-internal-extensions/blob/0d01d96b71f43af0e94749e5092728831072dba4/src/paratext-bible-send-receive/src/types/paratext-bible-send-receive.d.ts
+// https://github.com/paranext/paratext-bible-internal-extensions/blob/4421feebe3f4f88830d74c17bd8e51e602c954fe/src/paratext-bible-send-receive/src/types/paratext-bible-send-receive.d.ts
 // When the Send/Receive contract changes, re-sync the parts declared here from that file.
 // NOTE: Preserve any types that exist here but not in the upstream file (structural refinements
 // added in core before the upstream adopts them). Do not replace the module block wholesale.
@@ -12,14 +12,15 @@
 // declaration here (extra doc detail or type refinements) to a poorer upstream one — merge the
 // two, and upstream the improvement instead.
 // DELIBERATE DIVERGENCE — do not "restore" these to match upstream on a re-sync. Each is optional
-// here because a shipped Paratext 10 Studio build answers without it; making it required turns each
+// here because a shipped Paratext 10 build answers without it; making it required turns each
 // consumer's `?? fallback` into a lint-flagged unnecessary coalesce, and removing that coalesce
-// crashes an older Studio build on the missing value:
+// crashes an older Paratext 10 build on the missing value:
 //   * `SyncState.syncingProjectIds` — required in the upstream file above.
-//   * `SyncActivitySnapshot.projectIds` — no upstream declaration to diverge from yet; this whole
-//     type, `getSyncActivity` and `onSyncActivityChanged` are declared here ahead of the Paratext 10
-//     Studio patch that raises the signal, the same way the write-gate seam
-//     (`getAutoSyncBlocking` / `onSyncWriteLockChanged`) is.
+//   * `SyncActivitySnapshot.projectIds` and `SyncActivitySnapshot.outcome` — no upstream declaration
+//     to diverge from yet; this whole type, `SyncOutcome`, `getSyncActivity` and
+//     `onSyncActivityChanged` are declared here ahead of the Paratext 10 patch that raises the
+//     signal, the same way the write-gate seam (`getAutoSyncBlocking` /
+//     `onSyncWriteLockChanged`) is.
 //
 // Why this lives in `src/@types` and not under an extension's `src/types`:
 //
@@ -290,7 +291,8 @@ declare module 'paratext-bible-send-receive' {
    * Two core paths are on the invisible side today, both worth knowing before relying on this for a
    * startup status:
    *
-   * - **Simple mode startup sync** (`main/startup-tasks.ts`) calls `syncProjects` directly.
+   * - **Simple mode startup sync** (`main/startup-tasks.ts`) calls `syncProjects` directly, with its
+   *   progress toast suppressed — `onSyncActivityChanged` is its surface.
    * - **The picker's per-project sync** (`syncOnProjectSwitch` in `platform-scripture-editor`) calls
    *   `syncProjects`/`sendReceiveProjects` directly.
    *
@@ -327,10 +329,10 @@ declare module 'paratext-bible-send-receive' {
      *   reports a change on every read.
      *
      * Optional in core's copy only: it was added to the Send/Receive contract after the version
-     * shipping in some builds, so a Paratext 10 Studio build predating that change answers
-     * `getSyncState` without it. ABSENT means "this build cannot say" and consumers must handle it
-     * by falling back to a status that names no projects; PRESENT AND EMPTY means "nothing is
-     * syncing", per the invariant above. The two must not be conflated.
+     * shipping in some builds, so a Paratext 10 build predating that change answers `getSyncState`
+     * without it. ABSENT means "this build cannot say" and consumers must handle it by falling back
+     * to a status that names no projects; PRESENT AND EMPTY means "nothing is syncing", per the
+     * invariant above. The two must not be conflated.
      */
     syncingProjectIds?: string[];
   };
@@ -362,8 +364,8 @@ declare module 'paratext-bible-send-receive' {
    * (`main/startup-tasks.ts` and `syncOnProjectSwitch`). That is what makes a Simple-mode startup
    * sync visible.
    *
-   * Only a Paratext 10 Studio build emits this. Public Platform.Bible carries this declaration but
-   * no implementation behind it, so both surfaces are absent there and a consumer must fall back
+   * Only a Paratext 10 build emits this. Public Platform.Bible carries this declaration but no
+   * implementation behind it, so both surfaces are absent there and a consumer must fall back
    * rather than assume idle.
    *
    * @experimental This type is unstable and may change shape or disappear without notice
@@ -385,7 +387,58 @@ declare module 'paratext-bible-send-receive' {
      * an array. See the DELIBERATE DIVERGENCE note at the top of this file.
      */
     projectIds?: string[];
+    /**
+     * How the most recently completed run in this backend process turned out.
+     *
+     * ABSENT means "cannot say" and must never be read as either verdict. Three situations produce
+     * it, and a consumer handles them identically: a run is in progress (it is always absent while
+     * `isSyncing` is `true`), no run has completed since the backend started, or the build predates
+     * this field. PRESENT on the snapshot that closes a run and on every later one — events and
+     * `getSyncActivity` reads alike — until the next run opens, so a consumer that seeds after a
+     * run ended still learns how it went.
+     *
+     * Optional for the same reason as {@link SyncActivitySnapshot.projectIds}; see the DELIBERATE
+     * DIVERGENCE note at the top of this file.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    outcome?: SyncOutcome;
+    /**
+     * The date of the run {@link SyncActivitySnapshot.outcome} describes, as an ISO 8601 string.
+     * Present exactly when `outcome` is.
+     *
+     * A consumer that also reads {@link SyncState.lastResults} holds two verdicts from different
+     * sources, and this is what orders them against that snapshot's `sendReceiveDate`: the newer
+     * one describes the sync that just finished, and the older one belongs to a sync it never saw.
+     * Without it a consumer can only guess, so treat its absence as "these cannot be ordered" and
+     * fall back on something other than a guess.
+     *
+     * Not necessarily when the run finished. What it guarantees is the ordering: a later run always
+     * has a later date, later too than the `sendReceiveDate` of any earlier run's `lastResults`,
+     * and for a run `lastResults` also describes it is never later than `sendReceiveDate` — so on a
+     * tie, keep `lastResults`, the richer of the two.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    completedAt?: string;
   };
+
+  /**
+   * How a completed Send/Receive run turned out, as carried by {@link SyncActivitySnapshot.outcome}.
+   *
+   * - `succeeded` = the run succeeded for every project it covered, including a run that found
+   *   nothing to sync
+   * - `failed` = the run did not succeed for at least one project it covered. A run the user
+   *   cancelled reports this too, matching how {@link ResultInfo.resultStatus} reports a cancelled
+   *   sync as a non-success rather than as a status of its own
+   *
+   * Deliberately coarse: which projects did not succeed, and why, is in
+   * {@link SyncState.lastResults} and the sync status web view. See
+   * `adr-sync-activity-outcome-is-coarse` in `.context/standards/Architecture-Decisions.md`.
+   *
+   * @experimental The set of values in this type may change
+   */
+  export type SyncOutcome = 'succeeded' | 'failed';
 
   /**
    * Backend-authoritative snapshot of which projects an automatic Send/Receive is blocking edits on
@@ -401,6 +454,49 @@ declare module 'paratext-bible-send-receive' {
     /** Ids of the blocked projects. `isBlocking` false always pairs with an empty array. */
     projectIds: string[];
   };
+
+  /**
+   * Backend-authoritative snapshot of the projects that are out of step with the Send/Receive
+   * server, in each direction. Carried identically by the
+   * `paratextBibleSendReceive.onUnsyncedChangesChanged` event and the
+   * `paratextBibleSendReceive.getUnsyncedChanges` command return. A project can appear in both
+   * lists.
+   *
+   * Emitted by core's own `UnsyncedChangesNotifierService`, so every build serves it; only a
+   * Paratext 10 build can also detect "committed but unsent" (it alone records the last-synced
+   * tip), public Platform.Bible reports uncommitted edits only.
+   *
+   * @experimental This type is unstable and may change shape or disappear without notice
+   */
+  export type UnsyncedChangesSnapshot = {
+    /**
+     * Projects with local changes this user's next sync would send (⬆️). Normalized (upper-case)
+     * ids of the projects whose local repository holds uncommitted edits or local commits made
+     * since the last successful sync, and whose current user has a role that may change the
+     * project; never a project where the user is an Observer or not a member. Empty when none.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    toSend: string[];
+    /**
+     * Projects for which the server holds changes not yet received (⬇️). Always empty in public
+     * Platform.Bible. Normalized (upper-case) ids. Read from the server periodically rather than
+     * live, so it can lag the server: an empty list is not a claim that the server holds nothing
+     * new.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    toReceive: string[];
+    /**
+     * True from the start of a sync until the local recheck and the server lookup that follow its
+     * end have both finished. While true, `toSend` and `toReceive` can still describe the moment
+     * before the sync. The snapshot that clears it is pushed even when neither list changed. Absent
+     * from builds that predate the field; treat absent as `false`.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    isRechecking?: boolean;
+  };
 }
 
 declare module 'papi-shared-types' {
@@ -411,6 +507,7 @@ declare module 'papi-shared-types' {
     SyncProgressEvent,
     SyncState,
     SyncWriteLockSnapshot,
+    UnsyncedChangesSnapshot,
   } from 'paratext-bible-send-receive';
   import type { SharedProjectsInfo } from 'platform-scripture';
 
@@ -447,9 +544,15 @@ declare module 'papi-shared-types' {
      *
      * Note: this command is served from the dotnet process.
      *
+     * The backend runs one Send/Receive at a time and rejects a concurrent call with a
+     * `FAILED_PRECONDITION` platform error before doing any work, so callers whose calls may
+     * overlap have to batch the projects into one call or serialize them rather than firing
+     * several.
+     *
      * @param projectIds Ids of projects to send/receive
-     * @param suppressNotification When `true`, the dotnet process skips its own progress toast (the
-     *   caller — e.g. the open S/R dialog — shows its own progress + Cancel). Defaults to `false`.
+     * @param suppressNotification When `true`, the caller owns all sync feedback: the dotnet
+     *   process skips its progress toast and its failure and role-change toasts (e.g. the open S/R
+     *   dialog shows its own progress, Cancel and results). Defaults to `false`.
      * @returns S/R results
      */
     'paratextBibleSendReceive.sendReceiveProjects': (
@@ -465,6 +568,14 @@ declare module 'papi-shared-types' {
     'paratextBibleSendReceive.openSyncStatus': () => Promise<string | undefined>;
 
     /**
+     * Opens the Send/Receive web view and returns its WebView id
+     *
+     * @returns WebView id for the Send/Receive WebView or `undefined` if not created
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.openSendReceive': () => Promise<string | undefined>;
+
+    /**
      * Returns the current {@link SyncState} so a consumer can seed its sync status on mount rather
      * than waiting for the next `paratextBibleSendReceive.onSyncStateChanged` event — which, for a
      * sync already in progress, has already fired and will not fire again until that sync ends.
@@ -477,9 +588,8 @@ declare module 'papi-shared-types' {
      * rejection as the final answer.
      *
      * @returns The current {@link SyncState}. Its `syncingProjectIds` may be ABSENT: a Paratext 10
-     *   Studio build predating that field answers without it, so treat missing as "the syncing
-     *   projects are unknown" rather than as "nothing is syncing" — `isSyncing` is what answers the
-     *   latter.
+     *   build predating that field answers without it, so treat missing as "the syncing projects
+     *   are unknown" rather than as "nothing is syncing" — `isSyncing` is what answers the latter.
      * @throws `PlatformUnimplementedException` when the Send/Receive extension is not part of this
      *   build, which is the case for public Platform.Bible.
      * @experimental This command is unstable and may change or disappear without notice
@@ -495,8 +605,7 @@ declare module 'papi-shared-types' {
      * {@link CommandHandlers['paratextBibleSendReceive.getAutoSyncBlocking']} and unlike most
      * Send/Receive commands, it is registered by core's own `SyncActivityNotifierService` rather
      * than the extension, so it is answered on plain Platform.Bible too — always an idle snapshot
-     * there, since only the Paratext 10 Studio patch carries the run bracket that reports
-     * activity.
+     * there, since only the Paratext 10 patch carries the run bracket that reports activity.
      *
      * An in-memory read; cheap enough to call on mount and on each state change. The realistic
      * failure mode is a cold-start race: if the dotnet process has not registered the command
@@ -504,7 +613,11 @@ declare module 'papi-shared-types' {
      * on failure rather than reading a rejection as "no sync is running", and should retry rather
      * than treat one rejection as the final answer.
      *
-     * @returns The current {@link SyncActivitySnapshot}
+     * @returns The current {@link SyncActivitySnapshot}. Its `outcome`, when present, describes the
+     *   most recently completed run even though that run ended before this call — which is what
+     *   lets a consumer that seeds late still report how it went. ABSENT is never a verdict; see
+     *   {@link SyncActivitySnapshot.outcome}. Core's own implementation runs no syncs, so it always
+     *   answers without one.
      * @experimental This command is unstable and may change or disappear without notice
      */
     'paratextBibleSendReceive.getSyncActivity': () => Promise<SyncActivitySnapshot>;
@@ -532,23 +645,64 @@ declare module 'papi-shared-types' {
     'paratextBibleSendReceive.commitDaily': (projectId: string) => Promise<void>;
 
     /**
-     * Syncs projects: sends/receives each project, then reads each project's connected resources
-     * and projects (one level deep — connections of connections are not included) and
-     * sends/receives connected translation projects or DBL-updates connected resources as needed.
-     * Unknown project IDs are skipped. Deduplication is handled internally.
+     * Syncs projects: sends/receives the given projects, then handles connected resources and
+     * projects for the project(s) this call settles on: connected translation projects are
+     * sent/received, connected resources are DBL-updated. Connections are followed one level only —
+     * connections of connections are not included. Unknown project IDs are skipped.
      *
      * This signature matches this repository's C# stub (`String[]? projectIds`, no return value),
-     * which core itself calls (e.g. the startup sync passes `undefined` to mean "sync all"). The
-     * Send/Receive extension's own declaration also returns the S/R results; core does not consume
-     * them.
+     * which core itself calls with `undefined` — see the cases below for what that actually syncs.
+     * The Send/Receive extension's own declaration also returns the S/R results; core does not
+     * consume them. Callers MUST NOT assume every shared project is present locally once this
+     * resolves, no matter which form `projectIds` took.
      *
-     * @param projectIds IDs of the projects to sync. If omitted, all shared projects that are
-     *   already present locally (i.e., not new) are synced. If provided, only projects already
-     *   present locally are synced; new projects (not yet received) and unknown IDs are skipped.
+     * @param projectIds IDs of the projects to sync. For the omitted/`undefined` forms below, pass
+     *   `undefined` explicitly (`syncProjects(undefined)`): a call with no arguments sends no
+     *   params, and the dotnet implementation, which gives `projectIds` no default, rejects it.
+     *   This declaration types the parameter as required for that reason.
+     *
+     *   - If provided, each given ID is synced regardless of whether it is already present locally — a
+     *       `new` (not yet downloaded) project among them is downloaded, not skipped, though an
+     *       implementation may still exclude a given id for reasons outside the caller's control
+     *       (e.g., an unsupported project version, or the project being otherwise ineligible).
+     *   - If `undefined` and at least one shared project the account knows about is already present
+     *       locally (not new), every locally-present shared project is synced; new projects are
+     *       left alone.
+     *   - If `undefined` and no shared project the account knows about is present locally yet (whether
+     *       a genuine first sync, or every previously-local project has since gone missing from
+     *       disk), an implementation is expected to try to make at least one project available for
+     *       the current user to work in, if the account has one — but may stop short of downloading
+     *       every shared project in the account, trading completeness for performance.
+     *   - An empty array is a no-op.
+     *
+     * @param suppressProgressNotification When `true`, the dotnet process does not show its
+     *   persistent in-progress toast (the one carrying Cancel) for this sync. Its other
+     *   notifications, such as failure and role-change toasts, still show: a caller that passes
+     *   this may raise no Send/Receive claim, so those toasts are its only failure surface.
+     *   Narrower than `sendReceiveProjects`' `suppressNotification`, which also hides the failure
+     *   and role-change toasts. Defaults to `false`.
+     *
+     *   Pass it only when the caller knows the interface mode is `'simple'`: the toolbar sync
+     *   indicator is then the sync's persistent surface, and the toast as well would give one sync
+     *   two cancellable surfaces. Do not pass it in Power mode (the toast is that mode's only
+     *   persistent surface), when the mode is unknown or its read failed (the indicator may not be
+     *   mounted, and two surfaces beat none), or while something covers the indicator.
+     *
+     *   Callers omit the argument rather than passing `false` or `undefined`, and this declaration
+     *   types it `true` so neither compiles: an implementation that predates this parameter rejects
+     *   a two-argument call, and `undefined` serializes to `null`, which does not bind to the
+     *   dotnet `bool`. The current callers are listed in `adr-sync-surface-per-interface-mode`
+     *   (`.context/standards/Architecture-Decisions.md`).
      * @throws `PlatformUnimplementedException` if not running in an application that implements
-     *   this command (e.g., Paratext 10 Studio)
+     *   this command (e.g., Paratext 10)
+     * @throws When another Send/Receive is already in progress — rejects fail-fast rather than
+     *   queuing behind it — and for ordinary failure conditions such as an unregistered user or a
+     *   lost server connection.
      */
-    'paratextBibleSendReceive.syncProjects': (projectIds?: string[]) => Promise<void>;
+    'paratextBibleSendReceive.syncProjects': (
+      projectIds: string[] | undefined,
+      suppressProgressNotification?: true,
+    ) => Promise<void>;
     /**
      * Runs the Send/Receive sync scheduled for a session boundary ("On startup/shutdown") for the
      * projects the user scheduled for that boundary. The extension owns the schedule, running the
@@ -573,7 +727,7 @@ declare module 'papi-shared-types' {
      * them.
      *
      * @throws `PlatformUnimplementedException` if not running in an application that implements
-     *   this command (e.g., Paratext 10 Studio)
+     *   this command (e.g., Paratext 10)
      */
     'paratextBibleSendReceive.syncOpenProjects': () => Promise<void>;
 
@@ -588,7 +742,7 @@ declare module 'papi-shared-types' {
      *   implementation that silently ignored an id-less cancel would leave that caller's UI
      *   reporting a cancel it never performed. Core's toolbar sync popover is such a caller.
      * @throws `PlatformUnimplementedException` if not running in an application that implements
-     *   this command (e.g., Paratext 10 Studio)
+     *   this command (e.g., Paratext 10)
      */
     'paratextBibleSendReceive.cancelSync': (notificationId?: string | number) => Promise<void>;
 
@@ -615,7 +769,7 @@ declare module 'papi-shared-types' {
      *   attempt may not have been made at all (e.g. the request was refused while a sync was in
      *   progress), and a later retry can succeed
      * @throws `PlatformUnimplementedException` if not running in an application that implements
-     *   this command (e.g., Paratext 10 Studio)
+     *   this command (e.g., Paratext 10)
      * @experimental This command is unstable and may change or disappear without notice
      */
     'paratextBibleSendReceive.breakSyncLock': (
@@ -629,16 +783,31 @@ declare module 'papi-shared-types' {
      *
      * Note: this command is served from the dotnet process. Unlike most Send/Receive commands it is
      * registered by core's own `SendReceiveBlockNotifierService` rather than the extension, so it
-     * is answered on plain Platform.Bible too (always not-blocking there — only Paratext 10 Studio
-     * arms the gate). The realistic failure mode is a cold-start race: if the dotnet process has
-     * not registered the command within main's retry budget (~9s), the request rejects — callers
-     * should keep their fail-safe not-blocking default, and there is no re-query until PT-4265
-     * lands.
+     * is answered on plain Platform.Bible too (always not-blocking there — only Paratext 10 arms
+     * the gate). The realistic failure mode is a cold-start race: if the dotnet process has not
+     * registered the command within main's retry budget (~9s), the request rejects — callers should
+     * keep their fail-safe not-blocking default, and there is no re-query until PT-4265 lands.
      *
      * @returns The write gate's current snapshot
      * @experimental This command is unstable and may change or disappear without notice
      */
     'paratextBibleSendReceive.getAutoSyncBlocking': () => Promise<SyncWriteLockSnapshot>;
+
+    /**
+     * Returns the current {@link UnsyncedChangesSnapshot} so a consumer can seed on mount rather
+     * than waiting for the next `paratextBibleSendReceive.onUnsyncedChangesChanged` event. Served
+     * from the dotnet process (registered by core's `UnsyncedChangesNotifierService`); a cold-start
+     * rejection must be retried, not read as "nothing is unsynced".
+     *
+     * `toReceive` is filled only by builds that implement the server lookup (e.g., Paratext 10),
+     * which refresh it every few minutes and after each sync, so it can lag the server, and by
+     * longer than that while the server cannot be reached. In public Platform.Bible it is always
+     * empty.
+     *
+     * @returns The current {@link UnsyncedChangesSnapshot}
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.getUnsyncedChanges': () => Promise<UnsyncedChangesSnapshot>;
   }
 
   export interface NetworkEvents {
@@ -649,7 +818,7 @@ declare module 'papi-shared-types' {
     /**
      * Emitted by the dotnet process whenever the S/R write gate arms or disarms, carrying the
      * gate's full current {@link SyncWriteLockSnapshot}. Fires for ALL sync types (manual +
-     * scheduled + session). The gate only ever arms in Paratext 10 Studio builds — never in plain
+     * scheduled + session). The gate only ever arms in Paratext 10 builds — never in plain
      * Platform.Bible, where the only emission is a single not-blocking baseline snapshot each time
      * the backend (re)starts (every build emits that baseline).
      *
@@ -665,16 +834,36 @@ declare module 'papi-shared-types' {
      *
      * Registered by core's own `SyncActivityNotifierService`, so EVERY build emits it — an idle
      * baseline once per backend (re)start, exactly like `onSyncWriteLockChanged`. Only Paratext 10
-     * Studio builds carry the run bracket that reports real activity, so in public Platform.Bible
-     * the baseline is all a subscriber ever hears.
+     * builds carry the run bracket that reports real activity, so in public Platform.Bible the
+     * baseline is all a subscriber ever hears.
      *
      * That baseline fires ONCE PER BACKEND START, not once per subscriber, and this event carries
      * no replay: a subscriber that starts mid-sync has already missed it, and the next thing it
      * hears is the CLOSING snapshot. A consumer that needs to be correct from the moment it starts
      * must seed from `paratextBibleSendReceive.getSyncActivity` rather than subscribing alone.
      *
+     * The snapshot that closes a run carries that run's `outcome` on a build that reports one. The
+     * next event is the one opening the following run, which carries none — so a consumer wanting
+     * to know how the last run went reads it from the closing event or a later `getSyncActivity`
+     * call, and never reads the absence on an opening event as a verdict. See
+     * {@link SyncActivitySnapshot.outcome}.
+     *
      * @experimental This event is unstable and may change or disappear without notice
      */
     'paratextBibleSendReceive.onSyncActivityChanged': SyncActivitySnapshot;
+    /**
+     * Emitted by the dotnet process whenever either list of out-of-step projects changes, carrying
+     * the full current {@link UnsyncedChangesSnapshot}. Also emitted once as a baseline per backend
+     * (re)start; no replay, so a consumer seeds from
+     * `paratextBibleSendReceive.getUnsyncedChanges`.
+     *
+     * `toReceive` is filled only by builds that implement the server lookup (e.g., Paratext 10),
+     * which refresh it every few minutes and after each sync; a change on the server therefore
+     * reaches subscribers on that cadence rather than the moment it is pushed. In public
+     * Platform.Bible it is always empty.
+     *
+     * @experimental This event is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.onUnsyncedChangesChanged': UnsyncedChangesSnapshot;
   }
 }

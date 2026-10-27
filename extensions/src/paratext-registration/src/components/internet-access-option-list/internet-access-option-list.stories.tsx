@@ -26,41 +26,36 @@ type Story = StoryObj<typeof InternetAccessOptionList>;
 function createDecorator(initialValue: InternetUse) {
   return function Decorator(
     Story: (update?: { args: Partial<InternetAccessOptionListProps> }) => ReactElement,
+    { args }: { args: InternetAccessOptionListProps },
   ) {
     const [value, setValue] = useState<InternetUse>(initialValue);
-    return <Story args={{ value, onChange: setValue }} />;
+    // Args passed to <Story> replace the story's args rather than merging into them, so spread the
+    // resolved ones back in — otherwise `localizedStrings` and `disabled` arrive undefined.
+    return <Story args={{ ...args, value, onChange: setValue }} />;
   };
 }
 
-/** Option 1 (Unrestricted) selected — active row, description text visible. */
+/** Option 1 (Unrestricted) selected — descriptions open from each option's info button. */
 export const Unrestricted: Story = {
   decorators: [createDecorator('Enabled')],
 };
 
 /** Option 2 selected — "Disable access to some Bible translation services". */
 export const DisabledAccess: Story = {
-  decorators: [createDecorator('VpnRequired')],
+  decorators: [createDecorator('Disabled')],
 };
 
 /**
- * A coming-soon value is the current setting (e.g., from a PT9 migration). The row renders
- * selected-but-disabled; the user cannot interact with it.
+ * A not-yet-available value is the current setting — `InternetSettings.xml` is seeded once from a
+ * co-installed Paratext 9 on first launch, so it can name an option this app does not implement
+ * yet. The row renders selected-but-disabled and a banner says why nothing acts on it.
  */
-export const ComingSoonSelected: Story = {
-  decorators: [createDecorator('Disabled')],
+export const UnavailableOptionSelected: Story = {
+  decorators: [createDecorator('ProxyOnly')],
 };
 
 /** All rows non-interactive — simulates the loading or saving state. */
 export const FormDisabled: Story = {
-  decorators: [createDecorator('VpnRequired')],
+  decorators: [createDecorator('Disabled')],
   args: { disabled: true },
-};
-
-/**
- * Footer note suppressed for space-constrained hosts such as the first-run wizard step. The "Coming
- * soon" badges still mark the unavailable options.
- */
-export const WithoutFooter: Story = {
-  decorators: [createDecorator('VpnRequired')],
-  args: { showFooter: false },
 };

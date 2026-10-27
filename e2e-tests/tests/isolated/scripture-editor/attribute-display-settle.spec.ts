@@ -18,11 +18,11 @@
  *   instead of freezing, and the edit survives a save/reload round-trip.
  * - Typing the NAMED form of a marker's default attribute (`|lemma="gloss"` on `\w`, whose default
  *   attribute is `lemma`) settles to the PT9-simplified bare collapsed form (`|gloss`).
- * - Cycling the SAME editor to the formatted/hidden view (`platformScriptureEditor.changeView`, the
- *   view-cycling affordance also used to reach Simple mode's view) hides the intact span's
- *   attribute bytes and all marker glyphs while keeping word content visible — proving the hiding
- *   is real (not a vacuous check against content that was never there). Bytes the closer-deletion
- *   scenario degraded to literal content stay visible there, because they ARE content now.
+ * - Switching the SAME editor to Preview (`platformScriptureEditor.changeView`), the formatted
+ *   rendering that is also Simple mode's one view, hides the intact span's attribute bytes and all
+ *   marker glyphs while keeping word content visible — proving the hiding is real (not a vacuous
+ *   check against content that was never there). Bytes the closer-deletion scenario degraded to
+ *   literal content stay visible there, because they ARE content now.
  *
  * ONE test() per spec file on purpose: the isolated fixture is test-scoped, and a SECOND Electron
  * instance launched against the shared webpack renderer dev server has a documented failure mode
@@ -33,9 +33,10 @@
  * Runs against an isolated project root, so the only project is the bundled sample WEB (installed
  * by the C# backend into the empty root): `npm run test:e2e:isolated scripture-editor`.
  */
-import { FrameLocator, Locator } from '@playwright/test';
+import { FrameLocator } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
+  clickBeforeGlyph,
   makeSampleProjectEditable,
   navigateToolbarBcv,
   openEditableScriptureEditorForProject,
@@ -50,19 +51,6 @@ test.use({
   interfaceMode: 'power',
   electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
 });
-
-/**
- * Click the very start of `glyph`'s rendered text (the boundary immediately BEFORE it) — the
- * insertion point a user would click to type new content right before a marker glyph. A plain
- * `.click()` lands mid-glyph at an unpredictable offset; clicking just inside the left edge (x: 1)
- * is the reliable way to place the caret at a specific structural boundary in a contentEditable
- * without counting characters (glyph text length varies with `+`-nesting).
- */
-async function clickBeforeGlyph(glyph: Locator): Promise<void> {
-  const box = await glyph.boundingBox();
-  if (!box) throw new Error('Glyph has no bounding box (not visible/attached)');
-  await glyph.click({ position: { x: 1, y: box.height / 2 } });
-}
 
 test.describe('scripture editor attribute display', () => {
   test('char-span attribute bytes display and settle in Standard view and hide in Simple view', async ({
@@ -161,19 +149,13 @@ test.describe('scripture editor attribute display', () => {
     });
 
     await test.step('the Simple-view rendering hides the intact span attribute bytes', async () => {
-      // The view-cycling affordance (`platformScriptureEditor.changeView`) is the same command
-      // Simple mode's view is pinned to: power mode cycles standard -> markers -> formatted, and
-      // 'formatted' resolves to markerMode 'hidden' regardless of `platform.interfaceMode` — the
-      // exact rendering path formatted-default-simple-mode.spec.ts pins for Simple-mode users.
-      // Cycling the SAME instance (rather than a fresh simple-mode Electron instance) keeps this
-      // check against the real edited content above instead of an empty, vacuous chapter.
-      await sendPapiCommandWhenRegistered('platformScriptureEditor.changeView', editorId);
-      // Wait for the intermediate 'markers' (visible) step to actually land before firing the
-      // second cycle command — otherwise a second command dispatched before the first React state
-      // update flushes would read stale state and fail to advance past 'markers'.
-      await expect(editorFrame.locator('.editor-input.marker-visible')).toBeAttached({
-        timeout: 20_000,
-      });
+      // `platformScriptureEditor.changeView` toggles Power mode between Standard view and Preview.
+      // Preview is the formatted rendering — read-only in Power, which this read-only check does
+      // not mind — and 'formatted' resolves to markerMode 'hidden' regardless of
+      // `platform.interfaceMode`: the exact rendering path formatted-default-simple-mode.spec.ts
+      // pins for Simple-mode users. Switching the SAME instance (rather than a fresh simple-mode
+      // Electron instance) keeps this check against the real edited content above instead of an
+      // empty, vacuous chapter.
       await sendPapiCommandWhenRegistered('platformScriptureEditor.changeView', editorId);
 
       const formattedInput = editorFrame.locator('.editor-input.marker-hidden');

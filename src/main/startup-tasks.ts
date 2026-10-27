@@ -9,6 +9,10 @@ import { logger } from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
 import { settingsService } from '@shared/services/settings.service';
 import {
+  getAutomaticSyncConsent,
+  WITHHELD_SYNC_CONSENT_REASONS,
+} from '@main/first-run-consent.util';
+import {
   RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE,
   type ScheduledSessionSyncResult,
   type SessionSyncBoundary,
@@ -140,26 +144,32 @@ export interface StartupTasksSignals {
  * - One of {@link ScheduledSessionSyncResult} — the command ran and reported that result;
  * - `'skipped-stale'` — the startup moment went stale before the command registered, so the trigger
  *   was dropped rather than fired late onto an active editor;
+ * - `'skipped-mode-changed'` — before a retry, the interface mode was no longer `'power'` or could
+ *   not be read, so the Power-only trigger was dropped;
  * - `'aborted'` — the app began quitting before the command registered.
  */
-type StartupSyncTriggerOutcome = ScheduledSessionSyncResult | 'skipped-stale' | 'aborted';
+type StartupSyncTriggerOutcome =
+  | ScheduledSessionSyncResult
+  | 'skipped-stale'
+  | 'skipped-mode-changed'
+  | 'aborted';
 
 /**
  * Runs initialization tasks (currently: triggering an initial project sync) shortly after the app
  * finishes starting up.
  *
  * In Simple mode: waits (bounded) for this workspace's scripture project data provider factories to
- * be registered and answering — see {@link waitForScriptureWorkspaceReady} — then requests a sync of
- * all locally-known shared projects so the user sees the latest content as soon as they open the
- * app. The wait exists because this sync saturates the .NET data provider and would otherwise
- * starve the very factory registration the project picker waits on, leaving the picker locked while
- * the rest of the UI looks loaded. On an exhausted readiness budget the sync still fires — it is
- * delayed, never suppressed. The two exceptions are shutdown and a windowless app: a quit aborts
- * the wait, and a wait that outlives a macOS last-window close (see
- * {@link StartupTasksSignals.readinessAbortSignal}) is not allowed to fire into a resident app with
- * no windows (see {@link StartupTasksSignals.canFireStartupSync}). All errors are swallowed — the
- * S/R extension may not be installed (e.g. Platform.Bible), the command may not yet be registered,
- * or the sync may fail. Startup must never be blocked or visibly affected by this.
+ * be registered and answering — see {@link waitForScriptureWorkspaceReady} — then requests a sync
+ * via `paratextBibleSendReceive.syncProjects`'s no-ID form, which will typically enable the user to
+ * see content as soon as they open the app. The wait exists because this sync saturates the .NET
+ * data provider and would otherwise starve the very factory registration the project picker waits
+ * on, leaving the picker locked while the rest of the UI looks loaded. On an exhausted readiness
+ * budget the sync still fires — it is delayed, never suppressed. The two exceptions are shutdown
+ * and a windowless app: a quit aborts the wait, and a wait that outlives a macOS last-window close
+ * (see {@link StartupTasksSignals.readinessAbortSignal}) is not allowed to fire into a resident app
+ * with no windows (see {@link StartupTasksSignals.canFireStartupSync}). All errors are swallowed —
+ * the S/R extension may not be installed (e.g. Platform.Bible), the command may not yet be
+ * registered, or the sync may fail. Startup must never be blocked or visibly affected by this.
  *
  * In Power mode: requests a sync of just the projects scheduled "On startup/shutdown" via the S/R
  * extension's `runScheduledSessionSync` command. Same error-swallowing contract as Simple mode — if
@@ -167,10 +177,10 @@ type StartupSyncTriggerOutcome = ScheduledSessionSyncResult | 'skipped-stale' | 
  * is a logged no-op, never a crash or a blocked startup.
  *
  * If the interface-mode setting can't be read: skips the automatic startup sync entirely and warns,
- * rather than falling through to Simple mode's "sync everything". The read can fail under the same
+ * rather than falling through to Simple mode's broad no-ID sync. The read can fail under the same
  * slow-cold-boot conditions the Power retry budget exists for, and Simple's no-ID `syncProjects`
- * would S/R every locally-known shared project — overriding a Power user's schedule. Mirrors the
- * symmetric gating in {@link performShutdownTasks}.
+ * could run account-wide — overriding a Power user's schedule. Mirrors the symmetric gating in
+ * {@link performShutdownTasks}.
  */
 export async function performStartupTasks(signals?: StartupTasksSignals): Promise<void> {
   try {
@@ -183,11 +193,11 @@ export async function performStartupTasks(signals?: StartupTasksSignals): Promis
 async function performStartupTasksInternal(signals?: StartupTasksSignals): Promise<void> {
   logger.debug('performStartupTasks invoked');
 
-  // An unreadable mode must NOT fall through to Simple mode's "sync everything": the read can fail
+  // An unreadable mode must NOT fall through to Simple mode's broad no-ID sync: the read can fail
   // under exactly the slow-cold-boot conditions the Power retry budget exists to tolerate, and
-  // Simple's no-ID `syncProjects` fires an S/R of every locally-known shared project, overriding a
-  // Power user's schedule and syncing projects they deliberately excluded. When we can't tell the
-  // mode, the safe default is to skip the automatic startup sync this session and warn.
+  // Simple's no-ID `syncProjects` could run account-wide, overriding a Power user's schedule and
+  // syncing projects they deliberately excluded. When we can't tell the mode, the safe default is to
+  // skip the automatic startup sync this session and warn.
   let interfaceMode: SettingTypes['platform.interfaceMode'] | undefined;
   try {
     interfaceMode = await settingsService.get('platform.interfaceMode');
@@ -212,7 +222,7 @@ async function performStartupTasksInternal(signals?: StartupTasksSignals): Promi
 
   const gatesBeforeWait = await evaluateSimpleModeSyncGates();
   if (!gatesBeforeWait.run) {
-    logger.debug(`Startup sync skipped: ${gatesBeforeWait.reason}`);
+    logger[gatesBeforeWait.logLevel](`Startup sync skipped: ${gatesBeforeWait.reason}`);
     return;
   }
 
@@ -262,7 +272,9 @@ async function performStartupTasksInternal(signals?: StartupTasksSignals): Promi
   // above exists to prevent, just triggered by elapsed time instead of a read failure.
   const gatesAfterWait = await evaluateSimpleModeSyncGates();
   if (!gatesAfterWait.run) {
-    logger.debug(`Startup sync skipped after the readiness wait: ${gatesAfterWait.reason}`);
+    logger[gatesAfterWait.logLevel](
+      `Startup sync skipped after the readiness wait: ${gatesAfterWait.reason}`,
+    );
     return;
   }
 
@@ -277,14 +289,23 @@ async function performStartupTasksInternal(signals?: StartupTasksSignals): Promi
     return;
   }
 
-  // Simple mode: sync all locally-known shared projects (no project IDs = "sync all" per the
-  // C# `String[]? projectIds` contract). The C# S/R command registers asynchronously during
-  // startup; `sendCommand` will wait (with retry on missing handler) until it's available or
-  // times out. `undefined` as the single arg serializes as `null` in the JSON-RPC params array
-  // — matching the "sync all" sentinel on the C# side.
+  // Simple mode: `undefined` is the C# `String[]? projectIds` contract's "no explicit IDs" sentinel
+  // (serializes as `null` in the JSON-RPC params array). See `syncProjects`'s own TSDoc for exactly
+  // what that syncs — it is not always every locally-known project. The C# S/R command registers
+  // asynchronously during startup; `sendCommand` will wait (with retry on missing handler) until
+  // it's available or times out.
+  //
+  // `true` suppresses the dotnet progress toast: this branch only runs once the mode is known to be
+  // 'simple' (re-checked after the readiness wait), where the toolbar sync indicator is this sync's
+  // persistent surface.
+  //
+  // Mode change mid-sync: intentionally not handled. The flag is fixed for the run, and the
+  // indicator mounts only in Simple mode, so switching to Power while this runs leaves it with no
+  // progress surface until it ends (failure toasts are not suppressed). Accepted in
+  // `adr-sync-surface-per-interface-mode`; reconciling it needs a renderer or signal change.
   logger.debug('Startup sync starting');
   try {
-    await commandService.sendCommand('paratextBibleSendReceive.syncProjects', undefined);
+    await commandService.sendCommand('paratextBibleSendReceive.syncProjects', undefined, true);
     logger.debug('Startup sync complete');
   } catch (e) {
     logger.warn(
@@ -293,13 +314,19 @@ async function performStartupTasksInternal(signals?: StartupTasksSignals): Promi
   }
 }
 
-/** What {@link evaluateSimpleModeSyncGates} decided, and why when it decided not to run. */
-type SimpleModeSyncGateResult = { run: true } | { run: false; reason: string };
+/**
+ * What {@link evaluateSimpleModeSyncGates} decided — and when it decided not to run, why and at
+ * which level to report it. `logLevel` is `'info'` for a withheld consent so that skip survives the
+ * packaged builds' info log level, where support reads it to explain a session that did not sync.
+ */
+type SimpleModeSyncGateResult =
+  | { run: true }
+  | { run: false; reason: string; logLevel: 'debug' | 'info' };
 
 /**
- * Evaluates the three settings gates that must all pass before the Simple-mode startup sync fires:
- * `platform.interfaceMode` must still be `'simple'`, `platform.firstRunComplete` must be `true`,
- * and `platform.syncOnStartup` must not be `false`.
+ * Evaluates the three gates that must all pass before the Simple-mode startup sync fires:
+ * `platform.interfaceMode` must still be `'simple'`, the first-run sync consent gate must grant
+ * consent (see {@link getAutomaticSyncConsent}), and `platform.syncOnStartup` must not be `false`.
  *
  * Called twice by {@link performStartupTasksInternal} — once before the readiness wait and again
  * immediately after it, since that wait can park for up to the readiness budget (120 s) and any of
@@ -310,14 +337,14 @@ type SimpleModeSyncGateResult = { run: true } | { run: false; reason: string };
  *
  * Preserves today's exact per-setting semantics:
  *
- * - An unreadable `platform.interfaceMode` never falls through to "sync everything": the read can
- *   fail under the same slow-cold-boot conditions the Power retry budget exists to tolerate, and
- *   Simple's no-ID `syncProjects` would S/R every locally-known shared project, overriding a Power
- *   user's schedule. Logged as a warning (production-visible even in packaged builds).
+ * - An unreadable `platform.interfaceMode` never falls through to Simple's broad no-ID sync: the read
+ *   can fail under the same slow-cold-boot conditions the Power retry budget exists to tolerate,
+ *   and Simple's no-ID `syncProjects` could run account-wide, overriding a Power user's schedule.
+ *   Logged as a warning (production-visible even in packaged builds).
  * - A mode that has moved away from `'simple'` (e.g. to `'power'`, mid-wait) is also `run: false` —
  *   this function only ever green-lights the Simple-mode sync.
- * - An unreadable or `false` `platform.firstRunComplete` skips (consent-safe: a fresh user must not
- *   sync before consenting, and an unreadable flag defaults to NOT syncing).
+ * - Withheld consent skips, and fails closed: an unanswered wizard, an unreadable completion flag,
+ *   and a "Don't sync yet" earlier in this session all mean NOT syncing.
  * - `platform.syncOnStartup === false` skips (the user explicitly opted out). An unreadable flag
  *   defaults to PROCEEDING with sync instead (consent-safe the other way: a read failure should not
  *   silently suppress a sync the user never actually declined). Logged as a warning.
@@ -345,26 +372,17 @@ async function evaluateSimpleModeSyncGates(): Promise<SimpleModeSyncGateResult> 
   } catch (e) {
     const reason = `could not read platform.interfaceMode: ${getErrorMessage(e)}`;
     logger.warn(`Startup sync: ${reason}`);
-    return { run: false, reason };
+    return { run: false, reason, logLevel: 'debug' };
   }
   if (interfaceMode !== 'simple')
-    return { run: false, reason: 'interface mode is no longer simple' };
+    return { run: false, reason: 'interface mode is no longer simple', logLevel: 'debug' };
 
-  // First-run gate: skip auto-sync until the simple-mode wizard completes, so a fresh user never
-  // syncs before consenting. On an unreadable flag, default to NOT syncing (consent-safe).
-  let firstRunComplete = false;
-  try {
-    firstRunComplete = (await settingsService.get('platform.firstRunComplete')) === true;
-  } catch (e) {
-    logger.warn(
-      `Could not read platform.firstRunComplete; skipping startup sync: ${getErrorMessage(e)}`,
-    );
-  }
-  if (!firstRunComplete) return { run: false, reason: 'first run not complete' };
+  const consent = await getAutomaticSyncConsent();
+  if (consent !== 'granted')
+    return { run: false, reason: WITHHELD_SYNC_CONSENT_REASONS[consent], logLevel: 'info' };
 
-  // Sync-consent gate: if the user chose "Skip automatic sync" on the sync-consent step, honor that
-  // permanently. On an unreadable flag, default to syncing (consent-safe: the user likely never
-  // explicitly skipped — a read failure here should not silently suppress a legitimate sync).
+  // Startup-sync preference: honor `platform.syncOnStartup === false`. On an unreadable flag,
+  // default to syncing — a read failure should not suppress a sync the user never turned off.
   let syncDisabled = false;
   try {
     syncDisabled = (await settingsService.get('platform.syncOnStartup')) === false;
@@ -373,7 +391,8 @@ async function evaluateSimpleModeSyncGates(): Promise<SimpleModeSyncGateResult> 
       `Could not read platform.syncOnStartup; proceeding with sync: ${getErrorMessage(e)}`,
     );
   }
-  if (syncDisabled) return { run: false, reason: 'platform.syncOnStartup is false' };
+  if (syncDisabled)
+    return { run: false, reason: 'platform.syncOnStartup is false', logLevel: 'debug' };
 
   return { run: true };
 }
@@ -432,6 +451,9 @@ async function performPowerModeStartupSync(signals?: StartupTasksSignals): Promi
         'Power-mode startup sync skipped: startup no longer fresh; a late trigger would block an active editor',
       );
       break;
+    case 'skipped-mode-changed':
+      logger.debug('Power-mode startup sync skipped: no longer in Power mode');
+      break;
     case 'aborted':
       logger.debug('Power-mode startup sync aborted: app is quitting');
       break;
@@ -457,6 +479,21 @@ async function performPowerModeStartupSync(signals?: StartupTasksSignals): Promi
  */
 function isRetryableBootRaceError(error: unknown): boolean {
   return isJsonRpcMethodNotFoundError(error) || isRequestTimedOutError(error);
+}
+
+/**
+ * Whether `platform.interfaceMode` still reads `'power'`. A failed read warns and answers `false`,
+ * so an unreadable mode never lets the Power-only sync fire.
+ */
+async function isStillPowerMode(): Promise<boolean> {
+  try {
+    return (await settingsService.get('platform.interfaceMode')) === 'power';
+  } catch (e) {
+    logger.warn(
+      `Could not read platform.interfaceMode; skipping the Power-mode startup sync: ${getErrorMessage(e)}`,
+    );
+    return false;
+  }
 }
 
 /**
@@ -487,9 +524,9 @@ function isRetryableBootRaceError(error: unknown): boolean {
  * first its self-trigger starves the same factory.
  *
  * Returns a {@link StartupSyncTriggerOutcome} for the cases the caller logs as non-failures (the
- * command ran and reported a result, the startup went stale, or the app is quitting), and throws
- * for a genuine failure (a non-retryable handler error, or the budget exhausted with the command
- * never registering) so the caller can warn with the right cause.
+ * command ran and reported a result, the startup went stale, the user left Power mode, or the app
+ * is quitting), and throws for a genuine failure (a non-retryable handler error, or the budget
+ * exhausted with the command never registering) so the caller can warn with the right cause.
  *
  * Uses a monotonic `performance.now()` deadline rather than wall-clock `Date.now()`: this runs
  * during OS cold boot, exactly when the wall clock gets stepped (fresh boot / dual-boot RTC skew /
@@ -515,6 +552,13 @@ async function requestSessionSyncWithBootRetry(
       windowInteractiveMs >= STARTUP_SYNC_FRESHNESS_WINDOW_MS
     )
       return 'skipped-stale';
+
+    // Re-read the mode before each retry: the caller read it once before the first attempt, and the
+    // user can switch modes while this loop waits. This sync runs with the dotnet progress toast,
+    // so firing it in Simple mode would put a second cancellable surface beside the toolbar
+    // indicator. An unreadable mode skips too, as the caller's first read does.
+    // eslint-disable-next-line no-await-in-loop
+    if (attempt > 0 && !(await isStillPowerMode())) return 'skipped-mode-changed';
 
     attempt += 1;
     try {

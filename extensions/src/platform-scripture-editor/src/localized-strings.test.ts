@@ -1,19 +1,37 @@
-import { readFileSync } from 'fs';
+import { existsSync, readdirSync, readFileSync } from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
 
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
+import { INSERT_CONTEXT_MENU_STRING_KEYS } from './platform-scripture-editor.web-view.utils';
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.const';
 import { REMOVE_CHARACTER_MARKER_STRING_KEYS } from './character-marker-bar/use-remove-character-marker.hook';
 import { BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS } from './book-not-available-view.const';
 import { EMPTY_CHAPTER_VIEW_STRING_KEYS } from './empty-chapter-view.const';
+import { NO_PROJECT_VIEW_CONTRIBUTED_STRING_KEYS } from './no-project-view.const';
 import { RESOURCE_CELL_STRING_KEYS } from './scripture-text-grid/resource-cell.const';
+import { RESOURCE_COLLECTION_OPTIONS_STRING_KEYS } from './resource-collection-options/resource-collection-options.types';
 import { MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.const';
 import { RESOURCE_PANEL_STRING_KEYS } from './resource-text-panel.const';
 import { VIEW_OPTIONS_NOTICE_STRING_KEYS } from './scripture-text-grid/view-options-notice.utils';
+import { TEAM_LAYOUT_BUTTON_STRING_KEYS } from './team-layout-button.component';
+import { STRUCTURE_PROTECTION_BUTTON_STRING_KEYS } from './structure-protection-button.component';
+import { HIDDEN_CONTENT_DELETE_STRING_KEYS } from './hidden-content-delete-confirm.utils';
+import { TWO_STEP_DELETE_MESSAGE_STRING_KEYS } from './two-step-delete-tooltip/two-step-delete-tooltip.utils';
+import {
+  paragraphMarkerNameKey,
+  PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
+  selectableParagraphMarkers,
+} from './platform-scripture-editor.utils';
+import editorMenus from '../contributions/menus.json';
+// An explicit relative import: `extensions/` has its own tsconfig with no `@node/*` path alias
+import { DEV_ONLY_EXTENSION_NAMES } from '../../../../src/node/utils/locale-assets.test-utils';
 
 type LocalizedStringsFile = {
-  metadata?: Record<string, { fallbackKey?: string }>;
+  metadata?: Record<
+    string,
+    { fallbackKey?: string; deprecationInfo?: { date: string; message: string } }
+  >;
   localizedStrings: Record<string, Record<string, string>>;
 };
 
@@ -130,10 +148,11 @@ describe.each(CHARACTER_MARKER_CONTROL_FORMAT_KEYS)(
   },
 );
 
-// The one notification string the removal action can show. The commit-message and sync-blocked
-// keys in that list are excluded here: `%versionHistoryCommit_*%` is en-only across the whole file
-// (its insert-footnote and insert-cross-reference siblings are too), and the sync-blocked key is
-// already shipped and paired.
+// The one notification string the removal action owns. The commit-message keys in that list are
+// excluded here: `%versionHistoryCommit_*%` is en-only across the whole file (its insert-footnote
+// and insert-cross-reference siblings are too). The sync-blocked key is not in
+// `REMOVE_CHARACTER_MARKER_STRING_KEYS` at all (see the hook's TSDoc); its parity is checked by
+// the sync edit-blocked block below.
 const REMOVE_CHARACTER_MARKER_PARITY_KEYS = REMOVE_CHARACTER_MARKER_STRING_KEYS.filter(
   (key) => key === '%webView_platformScriptureEditor_error_removeCharacterMarkerFailed%',
 );
@@ -153,6 +172,26 @@ describe('character marker removal notifications', () => {
     });
   });
 });
+
+// The notification shown when an edit is rejected because an automatic sync is in progress. The key
+// falls back to the old Send/Receive key, so a dropped `es` value would silently show the
+// old wording; this block is what notices.
+describe.each(['%webView_platformScriptureEditor_error_syncEditBlocked_2%'])(
+  'sync edit-blocked notification %s',
+  (key) => {
+    it('has an English label', () => {
+      expect(localizedStrings.en[key]).toBeTruthy();
+    });
+
+    it('has a Spanish label', () => {
+      expect(localizedStrings.es[key]).toBeTruthy();
+    });
+
+    it('Spanish label differs from English', () => {
+      expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+    });
+  },
+);
 
 // Same guard for the book-not-available zero-state. This one matters more than most: the string family
 // it replaced (`%webView_platformScriptureEditor_error_bookNotFoundProject%`) already shipped with a
@@ -211,19 +250,48 @@ describe('retired book-not-found-in-project string', () => {
   });
 });
 
+// The read-only Preview notice replaced the Markers-view notice, whose wording describes a different
+// view. A locale that has the old translation but not the new one must show the English message
+// rather than the Markers sentence, so the message key has no fallback. The dismiss label means the
+// same thing in both views, so it keeps its fallback.
+describe('read-only Preview notice strings', () => {
+  it('the message key has no fallback: the Markers wording would be wrong for Preview', () => {
+    expect(
+      metadata?.['%platformScriptureEditor_previewView_readonly_message_format%']?.fallbackKey,
+    ).toBeUndefined();
+  });
+
+  it('the dismiss key falls back to the identical Markers-era string', () => {
+    expect(metadata?.['%platformScriptureEditor_previewView_readonly_dismiss%']?.fallbackKey).toBe(
+      '%platformScriptureEditor_markersView_readonly_dismiss%',
+    );
+  });
+
+  it.each(['en', 'es'])('the message key has its own value in %s', (locale) => {
+    expect(
+      localizedStrings[locale]['%platformScriptureEditor_previewView_readonly_message_format%'],
+    ).toBeTruthy();
+  });
+});
+
 // The resource panels' strings come in matched `bibleTexts_` / `commentaries_` pairs plus a set
 // shared by both tabs, and the model text panel's in a single set. Driven off the exported key
 // lists — `RESOURCE_PANEL_STRING_KEYS` folds the typed pairs in, so every key either panel renders
 // is covered — so that an en-only addition, or a dropped `es` value, fails here without anyone
 // remembering to edit this file.
 //
-// A couple of keys legitimately appear in both frozen lists, because both panels render them. Each
-// list is right to declare what its own surface uses, so the de-duplication belongs here: without
-// it a failure on a shared key reports twice, under two different owners, and the file's
-// one-block-per-surface structure stops meaning anything. The model text block below owns them.
-const MODEL_TEXT_PANEL_KEY_SET = new Set<string>(MODEL_TEXT_PANEL_STRING_KEYS);
+// A few keys legitimately appear in more than one frozen list, because more than one surface
+// renders them: some are shared with the model text panel, and the team/user group headings and
+// team lock with View Options. Each list is right to declare what its own surface uses, so the
+// de-duplication belongs here: without it a failure on a shared key reports twice, under two
+// different owners, and the file's one-block-per-surface structure stops meaning anything. The
+// model text and View Options blocks below own them.
+const KEYS_OWNED_ELSEWHERE = new Set<string>([
+  ...MODEL_TEXT_PANEL_STRING_KEYS,
+  ...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
+]);
 const RESOURCE_PANEL_ONLY_STRING_KEYS = RESOURCE_PANEL_STRING_KEYS.filter(
-  (key) => !MODEL_TEXT_PANEL_KEY_SET.has(key),
+  (key) => !KEYS_OWNED_ELSEWHERE.has(key),
 );
 
 describe.each([...RESOURCE_PANEL_ONLY_STRING_KEYS])('resource panel label %s', (key) => {
@@ -254,6 +322,49 @@ describe.each([...MODEL_TEXT_PANEL_STRING_KEYS])('model text panel label %s', (k
   });
 });
 
+// The header's accessible name is the text's own name plus what the button does, so every locale
+// must keep the slot. Losing it would announce "– change model text" with no hint of which text.
+describe.each(['en', 'es'])('model text header change-text name in %s', (locale) => {
+  it('keeps the {textName} slot', () => {
+    const value = localizedStrings[locale]['%webView_modelTextPanel_changeText_ariaLabel%'];
+    expect(value).toBeTruthy();
+    expect(value).toContain('{textName}');
+  });
+});
+
+// These shipped keys explain the model text alone, a narrower meaning than the empty state's Base
+// and Model explanation, so they keep their values and are retired rather than reworded
+// (Localization-Guide.md, "Existing Strings Are Immutable").
+describe('retired model-text-only empty state strings', () => {
+  const retiredKeys = [
+    '%webView_modelTextPanel_emptyState_prompt%',
+    '%webView_modelTextPanel_emptyState_moreInfo_body%',
+  ];
+
+  it.each(retiredKeys)('%s is no longer requested by the panel', (key) => {
+    expect(MODEL_TEXT_PANEL_STRING_KEYS).not.toContain(key);
+  });
+
+  it.each(retiredKeys)('%s carries a deprecation notice', (key) => {
+    expect(metadata?.[key]?.deprecationInfo?.message).toMatch(/\S/);
+  });
+
+  it('keeps the shipped English and Spanish values', () => {
+    expect(localizedStrings.en['%webView_modelTextPanel_emptyState_prompt%']).toBe(
+      'No model text selected. Pick one to display a reference translation alongside your project.',
+    );
+    expect(localizedStrings.en['%webView_modelTextPanel_emptyState_moreInfo_body%']).toBe(
+      "The model text is the text you are translating from (your reference/source). If you are not the project admin you can choose one, but your admin will usually choose it, and the admin's choice is what's displayed. If you will be the only person on this project, you'll need to choose it yourself.",
+    );
+    expect(localizedStrings.es['%webView_modelTextPanel_emptyState_prompt%']).toBe(
+      'Ningún texto modelo seleccionado. Elija uno para mostrar una traducción de referencia junto a su proyecto.',
+    );
+    expect(localizedStrings.es['%webView_modelTextPanel_emptyState_moreInfo_body%']).toBe(
+      'El texto modelo es el texto desde el cual usted traduce (su referencia o fuente). Si no es el administrador del proyecto, puede elegir uno, pero normalmente lo elegirá su administrador, y se muestra la elección del administrador. Si usted será la única persona en este proyecto, deberá elegirlo usted mismo.',
+    );
+  });
+});
+
 // The Scripture Text Grid cell's status and action labels, likewise driven off the component's own
 // exported key list.
 describe.each([...RESOURCE_CELL_STRING_KEYS])('resource cell label %s', (key) => {
@@ -267,6 +378,97 @@ describe.each([...RESOURCE_CELL_STRING_KEYS])('resource cell label %s', (key) =>
 
   it('Spanish label differs from English', () => {
     expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+// The Text Collection cell's zoom items and "⋮" button use these four keys, so they are requested
+// by the cell and must carry no deprecation notice. Shipped keys are immutable, so their values are
+// pinned as shipped.
+describe('Text Collection per-resource zoom strings', () => {
+  const zoomKeys = [
+    '%webView_scriptureTextGrid_cell_zoomIn%',
+    '%webView_scriptureTextGrid_cell_zoomOut%',
+    '%webView_scriptureTextGrid_cell_resetZoom%',
+    '%webView_scriptureTextGrid_cell_zoomOptions%',
+  ];
+
+  it.each(zoomKeys)('%s is requested by the cell and is not marked deprecated', (key) => {
+    expect(RESOURCE_CELL_STRING_KEYS).toContain(key);
+    expect(metadata?.[key]?.deprecationInfo).toBeUndefined();
+  });
+
+  it('reads deprecation notices from this file at all', () => {
+    // Positive control for the absence above: a key that is retired does carry one.
+    expect(
+      metadata?.['%webView_platformScriptureEditor_structureProtection_unlockStructureForProject%']
+        ?.deprecationInfo,
+    ).toBeDefined();
+  });
+
+  it('keeps the shipped English and Spanish values', () => {
+    expect(localizedStrings.en['%webView_scriptureTextGrid_cell_zoomIn%']).toBe('Zoom in');
+    expect(localizedStrings.en['%webView_scriptureTextGrid_cell_zoomOut%']).toBe('Zoom out');
+    expect(localizedStrings.en['%webView_scriptureTextGrid_cell_resetZoom%']).toBe('Zoom reset');
+    expect(localizedStrings.en['%webView_scriptureTextGrid_cell_zoomOptions%']).toBe(
+      'Zoom options for {resourceName}',
+    );
+    expect(localizedStrings.es['%webView_scriptureTextGrid_cell_zoomIn%']).toBe('Acercar');
+    expect(localizedStrings.es['%webView_scriptureTextGrid_cell_zoomOut%']).toBe('Alejar');
+    expect(localizedStrings.es['%webView_scriptureTextGrid_cell_resetZoom%']).toBe(
+      'Restablecer zoom',
+    );
+    expect(localizedStrings.es['%webView_scriptureTextGrid_cell_zoomOptions%']).toBe(
+      'Opciones de zoom para {resourceName}',
+    );
+  });
+});
+
+// Every label in the View Options panel: the VIEW toggle, the TEXTS list, and its buttons. Covered
+// for the same reason as the cell labels above — nothing else checks that a key added here reaches
+// both shipped languages.
+describe.each([...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS])('View Options label %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+// The hint under a disabled Chapter toggle falls back to the "coming soon" key it replaces, so a
+// dropped value would silently bring back a promised delivery date nobody has set. The View Options
+// label tests above catch a dropped value; this checks that the value itself makes no such promise.
+describe('View Options chapter hint', () => {
+  const key = '%webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%';
+
+  it.each(['en', 'es'])('has a %s string that does not promise a delivery date', (locale) => {
+    expect(localizedStrings[locale][key]).not.toMatch(/coming soon|próximamente|pronto/i);
+  });
+});
+
+describe('retired "coming soon" View Options strings', () => {
+  it('no longer requests the "coming soon" chapter hint', () => {
+    expect(RESOURCE_COLLECTION_OPTIONS_STRING_KEYS).not.toContain(
+      '%webView_scriptureTextGrid_viewOptions_chapterComingSoon%',
+    );
+  });
+
+  it('marks the chapter hint key as replaced by the not-yet-available hint', () => {
+    expect(
+      metadata?.['%webView_scriptureTextGrid_viewOptions_chapterComingSoon%']?.deprecationInfo
+        ?.message,
+    ).toContain('%webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%');
+  });
+
+  it('marks the unused "coming soon" key as having no replacement', () => {
+    expect(
+      metadata?.['%webView_scriptureTextGrid_viewOptions_comingSoon%']?.deprecationInfo?.message,
+    ).toContain('No replacement key');
   });
 });
 
@@ -289,6 +491,317 @@ describe.each([...VIEW_OPTIONS_NOTICE_STRING_KEYS])('view options notice %s', (k
 // The editor's blank-chapter zero state, whose message, button label, and disabled tooltip are the
 // only strings a reader sees when a chapter has no content at all.
 describe.each([...EMPTY_CHAPTER_VIEW_STRING_KEYS])('empty chapter view label %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+// The two notices a refused save can raise: one saying the editor's chapter marker disagreed with
+// the chapter it belongs to and was put back, one saying the backend refused the save for a reason
+// the editor cannot name. Both are ordinary user-facing toasts, so both carry the `es` parity every
+// other notification key in this file has — the `%versionHistoryCommit_*%` keys are en-only because
+// they are commit messages rather than UI text, which is not a precedent these can borrow.
+const SAVE_NOTIFICATION_KEYS = [
+  '%webView_platformScriptureEditor_error_chapterMarkerCorrected_format%',
+  '%webView_platformScriptureEditor_error_saveFailed_format%',
+];
+
+describe.each(SAVE_NOTIFICATION_KEYS)('save notification %s', (key) => {
+  it('has an English message', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish message', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish message differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+// The notices comment insertion sends. They are inline in the web view, which exports no key list,
+// so they are listed here. The unresolved-selection notice exists so a failure the user did not
+// cause is never reported as a problem with what they selected.
+describe.each([
+  '%webView_platformScriptureEditor_error_noTextSelected%',
+  '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
+  '%webView_platformScriptureEditor_error_selectionNotResolved%',
+  '%webView_platformScriptureEditor_warning_pendingCommentTextChanged%',
+])('comment insertion notice %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+// What the editor shows when it has no project, including the guidance for a user who has no
+// projects at all. For that user this is the only text on screen, so it has to exist in every
+// shipped language.
+describe.each([...NO_PROJECT_VIEW_CONTRIBUTED_STRING_KEYS])('no project view label %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+// The toolbar button that opens the team layout dialog. Its label names the dialog, so it has to
+// stay in step with the dialog's own title in the platform shell's locale assets.
+describe.each([...TEAM_LAYOUT_BUTTON_STRING_KEYS])('team layout button label %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+// The correction notice names the project AND the chapter through placeholders, so those slots have
+// to survive any later edit to the string in either locale. The chapter slots matter as much as the
+// project one: a repair carried by the chapter-switch flush describes the chapter the user just
+// left, so a message that dropped them would point the reader at whatever chapter is on screen
+// instead.
+describe.each(['en', 'es'])('chapter marker correction notification in %s', (locale) => {
+  const chapterMarkerCorrectedKey =
+    '%webView_platformScriptureEditor_error_chapterMarkerCorrected_format%';
+
+  it.each(['{projectName}', '{book}', '{chapter}'])('keeps the %s slot', (placeholder) => {
+    expect(localizedStrings[locale][chapterMarkerCorrectedKey]).toContain(placeholder);
+  });
+});
+
+// The generic save-failure notice has to say which project stopped saving, so the {projectName}
+// slot must survive any later edit to the string, and it must not leak the backend's own wording —
+// that stays in the log.
+describe.each(['en', 'es'])('save failed notification in %s', (locale) => {
+  it('keeps the {projectName} slot', () => {
+    expect(
+      localizedStrings[locale]['%webView_platformScriptureEditor_error_saveFailed_format%'],
+    ).toContain('{projectName}');
+  });
+});
+
+// The "press again to delete" hint shown on the first press of a two-step delete, one per armed kind.
+describe.each([...TWO_STEP_DELETE_MESSAGE_STRING_KEYS])('two-step delete hint %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+// The personal structure-protection lock button in the editor tab header: its state tooltips, its
+// disabled tooltips, and its aria-label.
+describe.each([...STRUCTURE_PROTECTION_BUTTON_STRING_KEYS])(
+  'structure protection label %s',
+  (key) => {
+    it('has an English label', () => {
+      expect(localizedStrings.en[key]).toBeTruthy();
+    });
+
+    it('has a Spanish label', () => {
+      expect(localizedStrings.es[key]).toBeTruthy();
+    });
+
+    it('Spanish label differs from English', () => {
+      expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+    });
+  },
+);
+
+// The confirmation shown before an edit removes content the view does not show: its title, prompt,
+// and buttons.
+describe.each([...HIDDEN_CONTENT_DELETE_STRING_KEYS])('hidden content delete label %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+// The prompt names the hidden content through `{markers}`; a translation that drops it would stop
+// saying what is about to be deleted.
+it.each(['en', 'es'] as const)('hidden content delete prompt keeps {markers} in %s', (locale) => {
+  expect(
+    localizedStrings[locale]['%webView_platformScriptureEditor_hiddenContentDelete_prompt%'],
+  ).toContain('{markers}');
+});
+
+// Markers whose Khmer label is a legitimate exception to the differs-from-English check: `h1`,
+// `h2`, `h3` are deprecated markers not worth translating (Crowdin itself leaves them in English);
+// `d`, `sp`, `sts`, `usfm` have no Khmer translation in Crowdin and no other corpus entry (marker
+// name, description, or paired-marker template) safe to derive one from, so they stay in English
+// too.
+const KM_MARKER_DESCRIPTION_EXCEPTIONS: readonly string[] = [
+  'd',
+  'h1',
+  'h2',
+  'h3',
+  'sp',
+  'sts',
+  'usfm',
+];
+
+// The paragraph-style switcher's per-marker descriptions: one for every marker the switcher offers,
+// plus the two display-only markers named in PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS. Driven off the same
+// derived marker list the switcher and gutter tooltip both use, so a marker added to `usfmMarkers`
+// is covered here without anyone editing this file. Checked in all six shipped locales, not just
+// en/es, since these keys live only in this extension's own contributions file.
+describe.each([...selectableParagraphMarkers, ...PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS])(
+  'paragraph marker description %s',
+  (marker) => {
+    const key = paragraphMarkerNameKey(marker);
+
+    it('has an English label', () => {
+      expect(localizedStrings.en[key]).toBeTruthy();
+    });
+
+    it('has a Spanish label', () => {
+      expect(localizedStrings.es[key]).toBeTruthy();
+    });
+
+    it('Spanish label differs from English', () => {
+      expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+    });
+
+    it('has a French label', () => {
+      expect(localizedStrings.fr[key]).toBeTruthy();
+    });
+
+    it('French label differs from English', () => {
+      expect(localizedStrings.fr[key]).not.toBe(localizedStrings.en[key]);
+    });
+
+    it('has a Khmer label', () => {
+      expect(localizedStrings.km[key]).toBeTruthy();
+    });
+
+    if (!KM_MARKER_DESCRIPTION_EXCEPTIONS.includes(marker)) {
+      it('Khmer label differs from English', () => {
+        expect(localizedStrings.km[key]).not.toBe(localizedStrings.en[key]);
+      });
+    }
+
+    it('has a Simplified Chinese label', () => {
+      expect(localizedStrings['zh-hans'][key]).toBeTruthy();
+    });
+
+    it('Simplified Chinese label differs from English', () => {
+      expect(localizedStrings['zh-hans'][key]).not.toBe(localizedStrings.en[key]);
+    });
+
+    it('has a Traditional Chinese label', () => {
+      expect(localizedStrings['zh-hant'][key]).toBeTruthy();
+    });
+
+    it('Traditional Chinese label differs from English', () => {
+      expect(localizedStrings['zh-hant'][key]).not.toBe(localizedStrings.en[key]);
+    });
+  },
+);
+
+/** Every localization key defined for `locale` anywhere the app loads strings from. */
+function allKeys(locale: 'en' | 'es'): Set<string> {
+  const extensionsDir = path.resolve(__dirname, '../..');
+  const keys = new Set<string>();
+  readdirSync(extensionsDir, { withFileTypes: true }).forEach((entry) => {
+    if (!entry.isDirectory()) return;
+    const manifestPath = path.resolve(extensionsDir, entry.name, 'manifest.json');
+    if (existsSync(manifestPath)) {
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+      // A key reachable only in noisy dev mode renders as its raw `%key%` for everyone else
+      if (manifest.name && DEV_ONLY_EXTENSION_NAMES.includes(manifest.name)) return;
+    }
+    const stringsFilePath = path.resolve(
+      extensionsDir,
+      entry.name,
+      'contributions/localizedStrings.json',
+    );
+    if (!existsSync(stringsFilePath)) return;
+    const strings =
+      JSON.parse(readFileSync(stringsFilePath, 'utf8')).localizedStrings?.[locale] ?? {};
+    Object.keys(strings).forEach((key) => keys.add(key));
+  });
+  const core = JSON.parse(
+    readFileSync(path.resolve(__dirname, `../../../../assets/localization/${locale}.json`), 'utf8'),
+  );
+  Object.keys(core).forEach((key) => keys.add(key));
+  return keys;
+}
+
+/**
+ * Every localize key the editor's top menu shows: column and item labels, plus item tooltips, which
+ * resolve through the same `%key%` mechanism as labels.
+ */
+function menuLocalizeKeys(): string[] {
+  const { topMenu } = editorMenus.webViewMenus['platformScriptureEditor.react'];
+  const keys: unknown[] = [
+    ...Object.values(topMenu.columns).map((column) => column.label),
+    ...topMenu.items.flatMap((item) => [item.label, 'tooltip' in item ? item.tooltip : undefined]),
+  ];
+  return [
+    ...new Set(keys.filter((key): key is string => typeof key === 'string' && /^%.*%$/.test(key))),
+  ];
+}
+
+// The editor's Project menu draws its column and item labels and item tooltips from keys that must
+// be defined somewhere the app loads strings from: this extension's own contribution, another
+// shipped extension's (e.g. the Comments item's label lives with legacyCommentManager), or the
+// platform shell's core locale assets. Driven off the menu document itself, so a label or tooltip
+// added to the menu is covered here without anyone remembering to update this file.
+describe.each(['en', 'es'] as const)('editor Project menu labels in %s', (locale) => {
+  const keys = menuLocalizeKeys();
+  it.each(keys)('%s is defined', (key) => {
+    expect(allKeys(locale).has(key)).toBe(true);
+  });
+});
+
+// The editor context menu's insert items, driven off createInsertContextMenuItems's own exported
+// key list so a title it can produce is always covered here, in both directions: a key the builder
+// asks for and this file drops would render a blank row with the parity test in
+// platform-scripture-editor.web-view.utils.test.ts still green (it only ever sees the STUB strings
+// it builds its own titles from), and a Spanish value left equal to English would pass every other
+// check silently.
+describe.each([...INSERT_CONTEXT_MENU_STRING_KEYS])('insert context-menu label %s', (key) => {
   it('has an English label', () => {
     expect(localizedStrings.en[key]).toBeTruthy();
   });

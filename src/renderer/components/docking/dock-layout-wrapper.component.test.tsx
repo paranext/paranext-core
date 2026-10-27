@@ -47,12 +47,13 @@ describe('DockLayoutWrapper', () => {
     expect(props.dropMode).toBeUndefined();
   });
 
-  it('supplies groups with tabLocked in simple mode', () => {
+  it('supplies groups with tabLocked and disableDock in simple mode', () => {
     vi.mocked(useIsPowerMode).mockReturnValue(false);
     render(<DockLayoutWrapper loadTab={vi.fn()} saveTab={vi.fn()} onLayoutChange={vi.fn()} />);
     const props = mockDockLayoutProps.mock.calls[0][0];
     // 'card platform-bible' is TAB_GROUP from positioning util
     expect(props.groups['card platform-bible'].tabLocked).toBe(true);
+    expect(props.groups['card platform-bible'].disableDock).toBe(true);
     expect(props.groups['card platform-bible'].panelExtra).toBeUndefined();
   });
 });

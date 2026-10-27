@@ -6,7 +6,8 @@ import { beforeAll, describe, expect, test, vi } from 'vitest';
 import '@testing-library/jest-dom';
 import RecentSearches from './recent-searches.component';
 
-// Radix measures its content on mount; jsdom ships neither ResizeObserver nor these methods.
+// Radix measures its content on mount, and jsdom ships no ResizeObserver. The hasPointerCapture /
+// scrollIntoView shims it also needs are installed repo-wide by vitest.setup.ts.
 class NoopResizeObserver implements ResizeObserver {
   // Keep an internal record of observed targets so the no-op methods touch `this` and don't trip
   // @typescript-eslint/class-methods-use-this. No test inspects this state.
@@ -28,9 +29,6 @@ class NoopResizeObserver implements ResizeObserver {
 beforeAll(() => {
   if (typeof globalThis.ResizeObserver === 'undefined') {
     globalThis.ResizeObserver = NoopResizeObserver;
-  }
-  if (typeof Element.prototype.scrollIntoView !== 'function') {
-    Element.prototype.scrollIntoView = () => {};
   }
 });
 

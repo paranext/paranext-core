@@ -295,7 +295,10 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
     it('colors the empty-verse ellipsis with the token directly plus a hex fallback', () => {
       expect(css).toMatch(
         rule(
-          ['.psc-gutter-markers .verse.psc-empty-text::after'],
+          [
+            '.psc-gutter-markers .verse.psc-empty-text::after',
+            '.psc-gutter-markers .verse.psc-empty-text-active::after',
+          ],
           'color: var(--muted-foreground, #6b7280);',
         ),
       );
@@ -328,7 +331,9 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
     // suite asserting only its own copy's rules, a fix (the RTL/bidi gutter isolation, the
     // ::after outline) can land in one copy and silently miss the other. The shipping suite
     // carries the same three pins, so a fix landing in one copy fails the other's suite until it
-    // is forwarded.
+    // is forwarded. The gutter indent-compensation block is covered structurally instead: the
+    // extension's usj-nodes-scss-coverage.test.ts derives it from each copy's base rules and
+    // compares the two copies' results, so no pin is needed for it here.
     it('isolates gutter marker text as LTR (RTL glyph-offset fix)', () => {
       expect(css).toMatch(
         rule(
@@ -343,6 +348,67 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
     it('renders the active-text outline via ::after, never ::before (book-code collision)', () => {
       expect(css).toMatch(/\.psc-active-focus \.psc-active-text::after\s*\{/);
       expect(declarations).not.toMatch(/\.psc-active-focus \.psc-active-text::before/);
+    });
+    describe('empty-verse caret', () => {
+      // The caret rules only show in layout, so what is pinned is that each load-bearing
+      // declaration stays on exactly the selector list the editor renders for. A rule is matched
+      // from its start, so a declaration in some other rule ending in the same selector can't pass.
+      const rules = css.replace(/\/\*[\s\S]*?\*\//g, '');
+      const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const exactRule = (selectors: string[], declaration: string) =>
+        new RegExp(
+          `(?:^|\\}|;)\\s*${selectors.map(escapeRegExp).join(',\\s*')}\\s*\\{[^}]*${escapeRegExp(declaration)}`,
+        );
+      const activeVerse = '.psc-gutter-markers .verse:not(.marker).psc-empty-text-active';
+      const host = `${activeVerse} + [data-caret-host]`;
+
+      it('sizes the ellipsis box from one variable', () => {
+        expect(rules).toContain('--psc-empty-verse-ellipsis-width: 18px;');
+        const box = [
+          '.psc-gutter-markers .verse:not(.marker).psc-empty-text::after',
+          `${activeVerse}::after`,
+        ];
+        expect(rules).toMatch(exactRule(box, 'display: inline-block;'));
+        expect(rules).toMatch(
+          exactRule(box, 'inline-size: var(--psc-empty-verse-ellipsis-width);'),
+        );
+      });
+
+      it('draws the ellipsis for both empty-verse classes', () => {
+        expect(rules).toMatch(
+          exactRule(
+            [
+              '.psc-gutter-markers .verse.psc-empty-text::after',
+              '.psc-gutter-markers .verse.psc-empty-text-active::after',
+            ],
+            "content: '…';",
+          ),
+        );
+      });
+
+      it("hides only the cursor's empty-verse ellipsis, keeping its box", () => {
+        expect(rules).toMatch(exactRule([`${activeVerse}::after`], 'color: transparent;'));
+        expect(rules).toMatch(exactRule([`${activeVerse}::after`], 'forced-color-adjust: none;'));
+      });
+
+      it('pulls the caret host back over the hidden ellipsis by the same width', () => {
+        expect(rules).toMatch(
+          exactRule(
+            [host],
+            'margin-inline-start: calc(-1 * var(--psc-empty-verse-ellipsis-width));',
+          ),
+        );
+        expect(rules).toMatch(
+          exactRule([host], 'margin-inline-end: var(--psc-empty-verse-ellipsis-width);'),
+        );
+      });
+
+      it('keeps a caret host after any verse from adding a line break', () => {
+        expect(rules).toMatch(exactRule(['.verse + [data-caret-host]'], 'text-wrap-mode: nowrap;'));
+        expect(rules).toMatch(
+          exactRule(['.verse + [data-caret-host]::after'], "content: '\\2060';"),
+        );
+      });
     });
     it('does not override text-align in the RTL gutter rule (Chrome/Firefox bidi paint quirk)', () => {
       const rtlGutter = declarations.match(

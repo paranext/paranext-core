@@ -31,7 +31,8 @@ import {
 
 // jsdom does not implement ResizeObserver; platform-bible-react's ErDictionaryFilteredList +
 // BreadcrumbBar both wire ResizeObservers. A no-op stub keeps the render path from throwing.
-// jsdom also lacks PointerEvent capture APIs and scrollIntoView — Radix uses both internally.
+// jsdom also lacks the PointerEvent capture APIs Radix uses internally; hasPointerCapture (and
+// scrollIntoView) are shimmed repo-wide in vitest.setup.ts, so only the other two are stubbed here.
 beforeAll(() => {
   if (typeof globalThis.ResizeObserver === 'undefined') {
     const stubResizeObserver = vi.fn(() => ({
@@ -45,17 +46,11 @@ beforeAll(() => {
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     globalThis.ResizeObserver = stubResizeObserver as unknown as typeof ResizeObserver;
   }
-  if (!HTMLElement.prototype.hasPointerCapture) {
-    HTMLElement.prototype.hasPointerCapture = vi.fn(() => false);
-  }
   if (!HTMLElement.prototype.setPointerCapture) {
     HTMLElement.prototype.setPointerCapture = vi.fn();
   }
   if (!HTMLElement.prototype.releasePointerCapture) {
     HTMLElement.prototype.releasePointerCapture = vi.fn();
-  }
-  if (!HTMLElement.prototype.scrollIntoView) {
-    HTMLElement.prototype.scrollIntoView = vi.fn();
   }
 });
 

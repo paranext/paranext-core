@@ -76,7 +76,14 @@ export interface TourProps {
   open: boolean;
   /** Called when the user finishes the last step (Done). */
   onDone: () => void;
-  /** Called when the user dismisses the tour (Skip button or Escape). */
+  /**
+   * Called when the user dismisses the tour (Skip button or Escape).
+   *
+   * Destroying an open tour is a third close path, and it deliberately reports nothing: callers
+   * persist a permanent "tour done" flag from here, so a teardown that routed through `onSkip`
+   * would spend a tour the user never finished. Keep any auto-dismissal (e.g. the no-targets skip)
+   * in an effect _body_, never in a cleanup function.
+   */
   onSkip: () => void;
   /** Resolved values for {@link TOUR_STRING_KEYS}. Absent keys fall back to English. */
   localizedStrings?: TourLocalizedStrings;
@@ -197,13 +204,15 @@ function computeCardPosition(
  * transparent "hole" over the target) that dims the page except around the current target element,
  * and positions a step card beside it.
  *
- * Navigated with Back / Next / Skip / Done; Escape dismisses (calls `onSkip`). Steps whose target
- * selector is not found in the DOM — or resolves to a zero-size element — when the tour opens are
- * skipped, so an absent target degrades gracefully instead of killing the overlay. A step whose
- * target disappears _after_ the tour opens is dropped the same way when it becomes current. If that
- * leaves nothing to spotlight, `onSkip` is called so the caller is never left with an open tour
- * that renders nothing. Returns `null` when `open` is false or the current step is not yet
- * measured.
+ * Navigated with Back / Next / Skip / Done; Escape dismisses (calls `onSkip`). Destroying an open
+ * tour is a third, callback-free close path — supported, and relied on by callers that stand the
+ * tour down rather than closing it (see {@link TourProps.onSkip}); it restores focus the same way an
+ * `open` flip does. Steps whose target selector is not found in the DOM — or resolves to a
+ * zero-size element — when the tour opens are skipped, so an absent target degrades gracefully
+ * instead of killing the overlay. A step whose target disappears _after_ the tour opens is dropped
+ * the same way when it becomes current. If that leaves nothing to spotlight, `onSkip` is called so
+ * the caller is never left with an open tour that renders nothing. Renders nothing when `open` is
+ * false or the current step is not yet measured.
  */
 export function Tour({ steps, open, onDone, onSkip, localizedStrings }: TourProps) {
   const backLabel = localizedStrings?.['%firstRun_button_back%'] ?? 'Back';
@@ -358,6 +367,9 @@ export function Tour({ steps, open, onDone, onSkip, localizedStrings }: TourProp
   // one disappeared while it was open. Report it as a dismissal so the caller can close the tour
   // and record that it ran; otherwise `open` stays true forever behind an overlay that renders
   // nothing and fires no callback.
+  // TODO(PT-4621): This is not a dismissal, and callers cannot tell the two apart — `onSkip`
+  // persists a permanent cross-window flag, so an unavailable tour is spent as if the user had
+  // declined it. Give the callback a reason instead.
   useEffect(() => {
     if (open && stepsResolved && visibleSteps.length === 0) onSkipRef.current();
   }, [open, stepsResolved, visibleSteps.length]);
@@ -370,18 +382,20 @@ export function Tour({ steps, open, onDone, onSkip, localizedStrings }: TourProp
     if (measured) setCardHeight((prev) => (prev !== measured ? measured : prev));
   }, [open, stepIndex, isCardRendered]);
 
-  // Save focus on open; restore it on close.
+  // Save focus on open; restore it on close. The restore lives in the cleanup rather than in an
+  // `open: false` branch because destroying an open tour runs cleanups and no effect bodies: a
+  // branch would cover the `open` flip and silently drop focus on `<body>` whenever the tour is
+  // unmounted while open, leaving whatever mounts next to rescue it.
   useEffect(() => {
-    if (open) {
-      savedFocusRef.current = document.activeElement ?? undefined;
-    } else if (
-      savedFocusRef.current instanceof HTMLElement ||
-      savedFocusRef.current instanceof SVGElement
-    ) {
-      // Guard against the element being removed from the DOM while the tour was open.
-      if (savedFocusRef.current.isConnected) savedFocusRef.current.focus();
+    if (!open) return undefined;
+    savedFocusRef.current = document.activeElement ?? undefined;
+    return () => {
+      const savedFocus = savedFocusRef.current;
       savedFocusRef.current = undefined;
-    }
+      if (!(savedFocus instanceof HTMLElement) && !(savedFocus instanceof SVGElement)) return;
+      // Guard against the element being removed from the DOM while the tour was open.
+      if (savedFocus.isConnected) savedFocus.focus();
+    };
   }, [open]);
 
   // Move focus to the primary action when the step changes or the card first mounts
@@ -458,9 +472,7 @@ export function Tour({ steps, open, onDone, onSkip, localizedStrings }: TourProp
     return () => document.removeEventListener('keydown', trapFocus, true);
   }, [open, currentStep, isCardRendered]);
 
-  // React component must return null to render nothing.
-  // eslint-disable-next-line no-null/no-null
-  if (!open || !currentStep || !targetRect) return null;
+  if (!open || !currentStep || !targetRect) return undefined;
 
   const physicalSide = resolvePhysicalSide(currentStep.side ?? 'bottom');
   const cardPos = computeCardPosition(targetRect, physicalSide, cardHeight);

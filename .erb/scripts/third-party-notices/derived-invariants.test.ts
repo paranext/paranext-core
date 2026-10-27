@@ -3,12 +3,20 @@ import * as path from 'path';
 import { describe, expect, it, vi } from 'vitest';
 import { REQUIRED_BUNDLES } from './shipping-set';
 import {
+  ELECTRON_BUILDER,
   assertCopiedPlatformLibrariesRecorded,
   assertCopiedPlatformLibraryIdsAllowed,
   assertSnapStagePackagesClassified,
 } from './main';
 import { RIDS, copiedPlatformLibraryStems, readDirectPackageReferences } from './nuget-set';
 import { STATIC_TREES, WHOLESALE_COPIED_EXTENSIONS } from './static-assets';
+import {
+  assertExternalExtensionsRecorded,
+  externalExtensionFolders,
+  externalExtensionNames,
+} from './external-extensions';
+import { assertProductMatchesPackaging, readPackagingConfig } from './product';
+import { assertSeparateProgramsRecorded } from './separate-programs';
 
 const REPO = path.resolve(__dirname, '..', '..', '..');
 
@@ -373,6 +381,56 @@ describe('every copied platform library names terms the corpus can reproduce', (
   });
 });
 
+describe('this repository ships none of the downstream-product instruments', () => {
+  // The three instruments the downstream overlay drives are all OFF here, and each is off by being
+  // EMPTY rather than by being absent from the code path - so a value that arrives in the committed
+  // policy by accident (a merge, a copied entry, a rebase) changes what this repository's own
+  // document says about itself. Checked against the real policy and the real packaging config
+  // because that pair is what a build reads; asserting the shapes alone would pass on either one
+  // having moved.
+  const policy = JSON.parse(fs.readFileSync(path.join(__dirname, 'notices-policy.json'), 'utf8'));
+  const config = readPackagingConfig(ELECTRON_BUILDER);
+
+  it('declares no product block, so the document keeps its reference wording', () => {
+    expect(policy.product).toBeUndefined();
+  });
+
+  it('records no separate programs and no external extensions', () => {
+    expect(policy.separatePrograms).toEqual({});
+    expect(policy.externalExtensions).toEqual({});
+  });
+
+  it('maps no folder other than its own extensions/dist into ./extensions', () => {
+    expect(externalExtensionFolders(config)).toEqual([]);
+  });
+
+  // Every argument DERIVED from the real pair, never spelled as the literal this repository
+  // happens to produce. A literal `[]` for the packed names would read as the same assertion and
+  // not be one: over an empty list and an empty table, `assertExternalExtensionsRecorded` runs
+  // `[].filter` and `Object.entries({}).forEach`, so its entire body could be deleted and this
+  // would still pass. The same holds for `assertSeparateProgramsRecorded` over an empty table -
+  // which is why the guards' own falsifiability lives in their unit tests, and what this case is
+  // for is the pair on disk actually satisfying them.
+  it('accepts the shipped policy against the shipped packaging config', () => {
+    expect(() =>
+      assertExternalExtensionsRecorded(
+        externalExtensionNames(REPO, config),
+        policy.externalExtensions || {},
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertSeparateProgramsRecorded(
+        REPO,
+        policy.separatePrograms || {},
+        new Set([...policy.allowed, ...policy.copyleft]),
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertProductMatchesPackaging(policy.product, config, 'electron-builder.json5'),
+    ).not.toThrow();
+  });
+});
+
 describe('the two Microsoft compatibility shims contribute nothing to the derived closure', () => {
   // LICENSING.md records the determination: neither package's assembly reaches the publish output,
   // so neither may contribute one - a package that DID would carry the pre-MIT "Excluded License"
@@ -415,9 +473,10 @@ describe('the two Microsoft compatibility shims contribute nothing to the derive
 });
 
 describe('the Terms of Service document is spelled the same in all three places', () => {
-  // Three independent spellings of one filename, with nothing tying them together: `main.ts` opens
-  // it, `electron-builder.json5` packs it into `resources/`, and `release/app/package.json` declares
-  // the application licensed under it. `resolveLicenseDisplay` maps that declaration to a display
+  // Three independent spellings of one filename, with nothing tying them together:
+  // `terms-of-service-window.ts` opens it, `electron-builder.json5` packs it into `resources/`, and
+  // `release/app/package.json` declares the application licensed under it. `resolveLicenseDisplay`
+  // maps that declaration to a display
   // string by prefix and discards the filename, so a rename passes every other test in the tree
   // while leaving the About dialog opening a file that is not there.
   const NAME_FROM_MANIFEST = /"license"\s*:\s*"SEE LICENSE IN ([^"]+)"/;
@@ -439,8 +498,81 @@ describe('the Terms of Service document is spelled the same in all three places'
     expect(builder).toContain(`'./${declared}'`);
   });
 
+  it("records that name in release/app's lockfile", () => {
+    // npm copies the root package's `license` into `packages[""]` of the lockfile and rewrites it
+    // on install, so a rename that misses the lockfile passes every test here and fails CI's
+    // changed-files check after the build instead.
+    const lockfile: unknown = JSON.parse(
+      fs.readFileSync(path.join(REPO, 'release', 'app', 'package-lock.json'), 'utf8'),
+    );
+    /** A property of an unknown value, narrowed rather than asserted */
+    const field = (value: unknown, key: string): unknown =>
+      value && typeof value === 'object' && key in value ? value[key] : undefined;
+    expect(field(field(field(lockfile, 'packages'), ''), 'license')).toBe(
+      `SEE LICENSE IN ${declared}`,
+    );
+  });
+
   it('opens that name from the main process', () => {
-    const main = fs.readFileSync(path.join(REPO, 'src', 'main', 'main.ts'), 'utf8');
-    expect(main).toContain(`TERMS_OF_SERVICE_FILE_NAME = '${declared}'`);
+    const opener = fs.readFileSync(
+      path.join(REPO, 'src', 'main', 'terms-of-service-window.ts'),
+      'utf8',
+    );
+    expect(opener).toContain(`TERMS_OF_SERVICE_FILE_NAME = '${declared}'`);
+  });
+});
+
+describe('the Terms of Service document keeps the properties its window relies on', () => {
+  // The window shows this document and nothing else: `terms-of-service-window.ts` denies every
+  // window-open and prevents every navigation, handing the URL to main's `openExternal` instead,
+  // which admits only `https:`, `mailto:` and the application's own scheme. The document is
+  // hand-regenerated and prettier-ignored, so a dropped CSP or a reintroduced `http://` link would
+  // surface as a link that silently does nothing when a reader clicks it - the file's own header
+  // comment asks a regenerator to keep both, and this is what holds them to it.
+  //
+  // Derived from the manifest's filename, like the block above, so a rename cannot leave this
+  // checking a document the application no longer ships.
+  const NAME_FROM_MANIFEST = /"license"\s*:\s*"SEE LICENSE IN ([^"]+)"/;
+  const manifest = fs.readFileSync(path.join(REPO, 'release', 'app', 'package.json'), 'utf8');
+  const declared = NAME_FROM_MANIFEST.exec(manifest)?.[1];
+  // Thrown rather than defaulted to `''`: this runs at describe scope, so `path.join(REPO, '')` is
+  // the repository directory and `readFileSync` on it fails the whole FILE with an EISDIR at
+  // collection - one assertion's worth of drift taking out every test here, with a message about
+  // the wrong thing. If the manifest stops declaring a license the block above is what says so.
+  if (!declared) throw new Error('release/app/package.json declares no "SEE LICENSE IN <file>"');
+  const document = fs.readFileSync(path.join(REPO, declared), 'utf8');
+
+  /**
+   * Every `href` the document carries, however it is quoted.
+   *
+   * Deliberately broader than the schemes under test: it matches the attribute rather than the
+   * values expected to be there, so a link spelled in a way this file has not seen before is a
+   * failure to look at rather than a line the pattern skips. It does not match an unquoted
+   * attribute value, which the generated document does not produce.
+   */
+  const hrefs = [...document.matchAll(/href\s*=\s*["']([^"']*)["']/gi)].map((match) => match[1]);
+
+  it('carries links at all, so the cases below are not passing on an empty set', () => {
+    expect(hrefs.length).toBeGreaterThan(0);
+  });
+
+  it('declares a Content-Security-Policy that denies every default source', () => {
+    expect(document).toMatch(/<meta[^>]+http-equiv\s*=\s*["']Content-Security-Policy["'][^>]*>/i);
+    expect(document).toContain("default-src 'none'");
+    // Both halves of the policy the document's own header asks a regenerator to keep. `default-src
+    // 'none'` blocks the inline <style> too, so a regeneration that emitted the first directive
+    // alone would pass every other assertion here and ship this document as unstyled black-on-white
+    // text in a 900px window - with no console the reader can see.
+    expect(document).toContain("style-src 'unsafe-inline'");
+  });
+
+  it('leaves the application only through a scheme openExternal admits', () => {
+    // A fragment stays in the document - Electron fires no `will-navigate` for a same-document
+    // navigation - so a table of contents remains open to the document's authors. Anything else,
+    // including a relative path to another file, is a link this window cannot follow.
+    const unreachable = hrefs.filter(
+      (href) => !/^https:\/\//i.test(href) && !/^mailto:/i.test(href) && !href.startsWith('#'),
+    );
+    expect(unreachable).toEqual([]);
   });
 });

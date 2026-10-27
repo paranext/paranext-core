@@ -7,7 +7,8 @@ import { MarkerMenuItem } from 'platform-bible-react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { CharacterMarkerControl } from './character-marker-control.component';
 
-// cmdk instantiates a ResizeObserver and schedules scrollTo/scrollIntoView; jsdom ships none.
+// cmdk instantiates a ResizeObserver and schedules scrollTo; jsdom ships neither. scrollIntoView
+// is shimmed repo-wide in vitest.setup.ts.
 class NoopResizeObserver implements ResizeObserver {
   private readonly targets = new Set<Element>();
 
@@ -31,9 +32,6 @@ beforeAll(() => {
   if (typeof Element.prototype.scrollTo !== 'function') {
     Element.prototype.scrollTo = () => {};
   }
-  if (typeof Element.prototype.scrollIntoView !== 'function') {
-    Element.prototype.scrollIntoView = () => {};
-  }
 });
 
 const STRINGS = {
@@ -46,8 +44,7 @@ const STRINGS = {
   '%webView_platformScriptureEditor_characterMarkerControl_label_format%':
     '{marker} - {description}',
   '%markerMenu_searchPlaceholder_character%': 'Search to change character style.',
-  '%webView_platformScriptureEditor_syncEditBlocked_banner%':
-    'Editing paused — Send/Receive in progress',
+  '%webView_platformScriptureEditor_syncEditBlocked_banner_2%': 'Editing paused — sync in progress',
   '%markerMenu_searchPlaceholder%': 'Type a style or search.',
 };
 
@@ -151,7 +148,7 @@ describe('CharacterMarkerControl — disabled states', () => {
 
     expect(screen.getByRole('button')).toBeDisabled();
     // The wrapper carries the explanation because a disabled button cannot host its own tooltip.
-    expect(screen.getByLabelText('Editing paused — Send/Receive in progress')).toBeInTheDocument();
+    expect(screen.getByLabelText('Editing paused — sync in progress')).toBeInTheDocument();
   });
 
   it('disables the button with the no-markers tooltip when the item list is empty', () => {

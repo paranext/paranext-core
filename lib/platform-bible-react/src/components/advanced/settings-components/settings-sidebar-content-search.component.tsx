@@ -1,4 +1,5 @@
 import { SidebarInset, SidebarProvider } from '@/components/shadcn-ui/sidebar';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { PropsWithChildren } from 'react';
 import { SearchBar } from '@/components/basics/search-bar.component';
 import { SettingsSidebar, SettingsSidebarProps } from './settings-sidebar.component';
@@ -21,16 +22,14 @@ export type SettingsSidebarContentSearchProps = SettingsSidebarProps &
  */
 export function SettingsSidebarContentSearch({
   id,
-  extensionLabels,
-  projectInfo,
   children,
-  handleSelectSidebarItem,
-  selectedSidebarItem,
   searchValue,
   onSearch,
-  extensionsSidebarGroupLabel,
-  projectsSidebarGroupLabel,
-  buttonPlaceholderText,
+  className,
+  // Everything else on this type comes from `SettingsSidebarProps`, so forward it wholesale: a
+  // prop added to the sidebar reaches it without a matching edit here. `id` is destructured out
+  // because it belongs to the SidebarProvider below, not to the sidebar.
+  ...sidebarProps
 }: SettingsSidebarContentSearchProps) {
   return (
     <div className="tw:box-border tw:flex tw:h-full tw:flex-col">
@@ -47,14 +46,8 @@ export function SettingsSidebarContentSearch({
         className="tw:h-full tw:flex-1 tw:gap-4 tw:overflow-auto tw:border-t"
       >
         <SettingsSidebar
-          className="tw:w-1/2 tw:min-w-[140px] tw:max-w-[220px] tw:border-e"
-          extensionLabels={extensionLabels}
-          projectInfo={projectInfo}
-          handleSelectSidebarItem={handleSelectSidebarItem}
-          selectedSidebarItem={selectedSidebarItem}
-          extensionsSidebarGroupLabel={extensionsSidebarGroupLabel}
-          projectsSidebarGroupLabel={projectsSidebarGroupLabel}
-          buttonPlaceholderText={buttonPlaceholderText}
+          className={cn('tw:w-1/2 tw:min-w-[140px] tw:max-w-[220px] tw:border-e', className)}
+          {...sidebarProps}
         />
         <SidebarInset className="tw:min-w-[215px]">{children}</SidebarInset>
       </SidebarProvider>

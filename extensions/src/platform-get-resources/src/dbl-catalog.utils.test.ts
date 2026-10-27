@@ -80,6 +80,14 @@ describe('resolveDblCatalog', () => {
 
     await expect(resolveDblCatalog(provider)).rejects.toThrow('the backend blew up');
   });
+
+  it('rejects when a configured provider delivers an empty catalog', async () => {
+    const provider = makeProvider({ getDblResources: vi.fn(async () => []) });
+
+    await expect(resolveDblCatalog(provider)).rejects.toThrow(
+      'The DBL resource catalog fetch returned no compatible resources',
+    );
+  });
 });
 
 describe('shouldStopBackgroundFetch', () => {
@@ -95,6 +103,10 @@ describe('shouldStopBackgroundFetch', () => {
 
   it('keeps retrying while the provider has merely not registered yet', () => {
     expect(shouldStopBackgroundFetch({ status: 'unavailable', reason: 'notReady' })).toBe(false);
+  });
+
+  it('stops after an attempt that threw', () => {
+    expect(shouldStopBackgroundFetch(undefined)).toBe(true);
   });
 });
 

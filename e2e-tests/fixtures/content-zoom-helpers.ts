@@ -1,0 +1,458 @@
+/**
+ * Helpers shared by the content-zoom e2e specs: the wheel gesture, the memory-setting reader, the
+ * indicator/zoom-area selectors, and the text measurements they share.
+ */
+import { type Frame, type Locator, type Page, expect } from '@playwright/test';
+import { CONTENT_ZOOM_COMMANDS, readFactor, sendCommandWithId } from './scripture-editor-helpers';
+
+/**
+ * Setting key the memory-key-shape assertions read directly
+ * (`src/renderer/services/web-view-content-zoom.service.ts`).
+ */
+export const CONTENT_ZOOM_MEMORY_SETTING = 'platform.webViewContentZoomMemory';
+
+/**
+ * The `id` the platform's zoom indicator badge is created with
+ * (`web-view-content-zoom.bootstrap-script.ts`).
+ */
+export const INDICATOR_SELECTOR = '#platform-content-zoom-indicator';
+
+/**
+ * Ctrl+wheel over the center of `box` (main-frame-relative coordinates, as {@link areaBox} returns).
+ * `deltaY: -120` zooms in, `+120` zooms out (`web-view-content-zoom.bootstrap-script.ts`'s
+ * `onWheel`: `e.deltaY < 0` is zoom-in). Does not itself wait for the effect — callers poll the
+ * resulting factor, never a bare timeout, since geometry inside a zoomed frame moves and a fixed
+ * wait would race the debounced write.
+ */
+export async function ctrlWheel(
+  page: Page,
+  box: { x: number; y: number; width: number; height: number },
+  deltaY: number,
+): Promise<void> {
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.keyboard.down('Control');
+  await page.mouse.wheel(0, deltaY);
+  await page.keyboard.up('Control');
+}
+
+/** Reads the `platform.webViewContentZoomMemory` setting straight from the renderer. */
+export async function readContentZoomMemory(page: Page): Promise<Record<string, number>> {
+  return page.evaluate((settingKey) => {
+    // The renderer exposes `papi` on `globalThis`, untyped here (same pattern as
+    // scripture-text-grid-zoom.spec.ts's afterEach cleanup).
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const win = window as unknown as {
+      papi: { settings: { get: (key: string) => Promise<Record<string, number>> } };
+    };
+    return win.papi.settings.get(settingKey);
+  }, CONTENT_ZOOM_MEMORY_SETTING);
+}
+
+/** Indicator text with whitespace stripped, so the narrow no-break space before `%` doesn't matter. */
+export async function readIndicatorText(frame: Frame): Promise<string | undefined> {
+  const text = await frame.locator(INDICATOR_SELECTOR).textContent();
+  return text?.replace(/\s/gu, '');
+}
+
+/**
+ * A box to aim a pointer gesture at one zoom area: the first element marked with that area id
+ * (several elements may share one id), clipped to the web view's frame so its center lies on screen
+ * even when the marked text is taller than the pane. Main-frame-relative.
+ */
+export async function areaBox(
+  frame: Frame,
+  areaId: string,
+): Promise<{ x: number; y: number; width: number; height: number }> {
+  return onScreenBox(
+    frame,
+    frame.locator(`[data-platform-content-zoom-root="${areaId}"]`).first(),
+    `Zoom area "${areaId}"`,
+  );
+}
+
+/**
+ * `element`'s box clipped to the web view's frame, so a gesture aimed at its center lands on screen
+ * even when the element is taller than the pane (a whole chapter of text is). An unclipped center
+ * can lie below the window, where the pointer reaches no element at all. Main-frame-relative;
+ * `description` names the element in the errors.
+ */
+export async function onScreenBox(
+  frame: Frame,
+  element: Locator,
+  description: string,
+): Promise<{ x: number; y: number; width: number; height: number }> {
+  const box = await element.boundingBox();
+  if (!box) throw new Error(`${description} has no bounding box`);
+  const pane = await frameBox(frame);
+  const left = Math.max(box.x, pane.x);
+  const top = Math.max(box.y, pane.y);
+  const right = Math.min(box.x + box.width, pane.x + pane.width);
+  const bottom = Math.min(box.y + box.height, pane.y + pane.height);
+  if (right <= left || bottom <= top) throw new Error(`${description} is not on screen`);
+  return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
+/**
+ * Rendered line height of the first visible text inside `element`, in the frame's (zoomed) pixels:
+ * the height of a temporary inline-block probe placed right after that text, which inherits the
+ * `line-height` that applies to it. Under CSS `zoom` z a single line grows by z, whereas a block of
+ * wrapped text also loses width to the zoom, wraps onto ~z× as many lines, and grows by ~z² — so a
+ * zoom-ratio assertion measures a line, never the block. The glyph box (a `Range` rect over a
+ * character) is no substitute: Chromium rounds the font's ascent and descent to whole pixels at
+ * each effective font size, so it does not scale exactly with z (14px Google Sans gives 18, 28px
+ * gives 35, not 36). The same rounding returns under `line-height: normal`, so an exact ratio needs
+ * text with an explicit `line-height`.
+ */
+export async function firstLineBoxHeight(element: Locator): Promise<number> {
+  return element.evaluate((root) => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (/\S/u.test(node.textContent ?? '') && node instanceof Text) {
+        // Inserted and removed within this synchronous call, so it is never painted and React never
+        // renders over it. Placed directly after the text node so it sits in the text's own inline
+        // formatting context and inherits the line-height that applies to it.
+        const probe = document.createElement('span');
+        probe.style.display = 'inline-block';
+        probe.textContent = 'x';
+        node.after(probe);
+        try {
+          const { height } = probe.getBoundingClientRect();
+          if (height > 0) return height;
+        } finally {
+          probe.remove();
+        }
+      }
+    }
+    throw new Error('No rendered text inside the element');
+  });
+}
+
+/**
+ * Steps one area to `target` through the zoom commands, polling the area's factor after each step
+ * (a step lands after a debounced write, so a bare loop would race it). `areaId` is `'main'` or a
+ * named area; `readFactor` takes `''` for `main`.
+ */
+export async function zoomAreaTo(
+  page: Page,
+  frame: Frame,
+  webViewId: string,
+  areaId: string,
+  target: number,
+): Promise<void> {
+  const factorKey = areaId === 'main' ? '' : areaId;
+  await sendCommandWithId(page, CONTENT_ZOOM_COMMANDS.reset, webViewId, areaId);
+  await expect.poll(() => readFactor(frame, factorKey)).toBe(1);
+  let current = 1;
+  // Sequential zoom steps: each step's write must land (confirmed by the poll) before the next
+  // command is sent, or the loop would race a debounced write.
+  /* eslint-disable no-await-in-loop */
+  while (Math.abs(current - target) > 0.001) {
+    const stepIn = target > current;
+    // Each command changes the level by exactly one 10 % step; see `adjustZoomFactor`.
+    await sendCommandWithId(
+      page,
+      stepIn ? CONTENT_ZOOM_COMMANDS.in : CONTENT_ZOOM_COMMANDS.out,
+      webViewId,
+      areaId,
+    );
+    current = Math.round((current + (stepIn ? 0.1 : -0.1)) * 10) / 10;
+    const expected = current;
+    await expect.poll(() => readFactor(frame, factorKey)).toBe(expected);
+  }
+  /* eslint-enable no-await-in-loop */
+}
+
+/**
+ * Waits until the finite animations on `popup` and its descendants have finished. A pop-up that has
+ * just opened runs a short scale-in animation, and `boundingBox()` includes that transform, so a
+ * box read before it ends is smaller than the settled one. Infinite animations (a spinner inside
+ * the pop-up) never finish and are not waited for.
+ */
+export async function waitForPopupAnimations(popup: Locator): Promise<void> {
+  await popup.evaluate(async (element) => {
+    await Promise.all(
+      element
+        .getAnimations({ subtree: true })
+        .filter((animation) => animation.effect?.getComputedTiming().endTime !== Infinity)
+        // A canceled animation rejects `finished`; it no longer transforms the box either.
+        .map((animation) => animation.finished.catch(() => undefined)),
+    );
+  });
+}
+
+/** Largest gap, in pixels, between a pop-up and its trigger that still counts as "beside" it. */
+const POPUP_TRIGGER_MAX_GAP_PX = 24;
+
+/** A main-frame-relative box, as Playwright's `boundingBox()` returns it. */
+export type PageBox = { x: number; y: number; width: number; height: number };
+
+/** A frame's own box, main-frame-relative. Throws when the frame has none. */
+export async function frameBox(frame: Frame): Promise<PageBox> {
+  const box = await (await frame.frameElement()).boundingBox();
+  if (!box) throw new Error('Frame has no box');
+  return box;
+}
+
+/**
+ * A pop-up trigger's main-frame box: the element's own box when `trigger` is a `Locator`, or the
+ * box already given directly when it is no element of its own (a text caret or selection). Throws
+ * when there is no box.
+ */
+export async function triggerBox(trigger: Locator | PageBox): Promise<PageBox> {
+  const box = 'boundingBox' in trigger ? await trigger.boundingBox() : trigger;
+  if (!box) throw new Error('Trigger has no box');
+  return box;
+}
+
+/**
+ * Asserts an open pop-up sits beside its trigger (touching or within
+ * {@link POPUP_TRIGGER_MAX_GAP_PX} on one axis and overlapping on the other, without covering the
+ * trigger), lies fully inside the web view's frame, and holds its content without overflowing.
+ * `trigger` is an element, or a main-frame-relative box for a trigger that is no element of its own
+ * (a text caret or selection). Waits for the pop-up's open animation first, so the boxes compared
+ * are its settled ones.
+ */
+export async function expectPopupBesideTriggerAndInsideFrame(
+  frame: Frame,
+  popup: Locator,
+  trigger: Locator | PageBox,
+): Promise<void> {
+  await waitForPopupAnimations(popup);
+  const frameRect = await frameBox(frame);
+  const popupBox = await popup.boundingBox();
+  const triggerRect = await triggerBox(trigger);
+  if (!popupBox) throw new Error('Pop-up has no box');
+  const gapY = Math.max(
+    popupBox.y - (triggerRect.y + triggerRect.height),
+    triggerRect.y - (popupBox.y + popupBox.height),
+  );
+  const gapX = Math.max(
+    popupBox.x - (triggerRect.x + triggerRect.width),
+    triggerRect.x - (popupBox.x + popupBox.width),
+  );
+  const tolerance = 1;
+  const boxes = `pop-up ${JSON.stringify(popupBox)}, trigger ${JSON.stringify(triggerRect)}, frame ${JSON.stringify(frameRect)}`;
+  const separation = Math.max(gapX, gapY);
+  // Beside = separated on at most one axis, by a small gap, and never covering the trigger.
+  expect(Math.min(gapX, gapY), `separated on one axis only: ${boxes}`).toBeLessThanOrEqual(
+    tolerance,
+  );
+  // Two boxes intersect exactly when both gaps are negative, so the larger gap must not be.
+  expect(separation, `not covering the trigger: ${boxes}`).toBeGreaterThanOrEqual(-tolerance);
+  expect(separation, `close to the trigger: ${boxes}`).toBeLessThanOrEqual(
+    POPUP_TRIGGER_MAX_GAP_PX,
+  );
+  expect(popupBox.x, `inside the frame: ${boxes}`).toBeGreaterThanOrEqual(frameRect.x - tolerance);
+  expect(popupBox.y, `inside the frame: ${boxes}`).toBeGreaterThanOrEqual(frameRect.y - tolerance);
+  expect(popupBox.x + popupBox.width, `inside the frame: ${boxes}`).toBeLessThanOrEqual(
+    frameRect.x + frameRect.width + tolerance,
+  );
+  expect(popupBox.y + popupBox.height, `inside the frame: ${boxes}`).toBeLessThanOrEqual(
+    frameRect.y + frameRect.height + tolerance,
+  );
+  // The box alone is not enough: content that cannot shrink to a capped box paints past its edges
+  // while the box itself looks fine. Its own scroll size must fit its client size (both in its own
+  // CSS pixels, so the zoom factor cancels out). Never sideways; vertically only when the box is a
+  // scroll box, where taller content scrolls inside it instead of painting past it.
+  const overflow = await popup.evaluate((element) => ({
+    scrollWidth: element.scrollWidth,
+    clientWidth: element.clientWidth,
+    scrollHeight: element.scrollHeight,
+    clientHeight: element.clientHeight,
+    scrollsVertically: ['auto', 'scroll'].includes(getComputedStyle(element).overflowY),
+  }));
+  expect(
+    overflow.scrollWidth,
+    `content fits sideways (scroll ${overflow.scrollWidth}, client ${overflow.clientWidth}): ${boxes}`,
+  ).toBeLessThanOrEqual(overflow.clientWidth + tolerance);
+  if (!overflow.scrollsVertically)
+    expect(
+      overflow.scrollHeight,
+      `content fits vertically in a pop-up that does not scroll (scroll ${overflow.scrollHeight}, client ${overflow.clientHeight}): ${boxes}`,
+    ).toBeLessThanOrEqual(overflow.clientHeight + tolerance);
+}
+
+/**
+ * The in-text caller that opens the footnote editor popover (`.immutable-note-caller > button`,
+ * shared with cross-references). Scoped to `data-note-kind="footnote"` so it lands on a real
+ * footnote — the sample WEB project's Jonah 1 carries footnote callers at verses 1, 6 and 9
+ * (`c-sharp/assets/WEB/32JONengWEBUS.SFM`), and the specs using it navigate to Jonah 1:1.
+ */
+export const TEXT_NOTE_CALLER_SELECTOR =
+  '.note[data-note-kind="footnote"] .immutable-note-caller > button';
+
+/**
+ * The main text editor's container. `.first()`: an open footnote popover renders a second
+ * `.editor-container` of its own (portaled after the main one), so the bare selector is ambiguous
+ * while it is open.
+ */
+function mainEditorContainer(frame: Frame): Locator {
+  return frame.locator('.editor-container').first();
+}
+
+/**
+ * Scrolls the main text to `to`, or by `by`, and returns its scroll position before and after, the
+ * scroll container's main-frame-relative box, and how far that container can scroll at all
+ * (`maxScroll`). The text scrolls in its nearest scrollable ancestor (inside the footnotes layout),
+ * not in the pane's outer `overflow-auto` wrapper, which never overflows. Called with neither, it
+ * only reads.
+ */
+export async function scrollText(
+  frame: Frame,
+  target: { to?: number; by?: number },
+): Promise<{
+  before: number;
+  after: number;
+  box: PageBox;
+  maxScroll: number;
+}> {
+  const editorFrameBox = await frameBox(frame);
+  const result = await mainEditorContainer(frame).evaluate((element, { to, by }) => {
+    let node: Element | null = element;
+    while (node) {
+      const { overflowY } = getComputedStyle(node);
+      if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight)
+        break;
+      node = node.parentElement;
+    }
+    if (!node) throw new Error('The main text has no scrollable ancestor');
+    const before = node.scrollTop;
+    if (to !== undefined) node.scrollTop = to;
+    else if (by !== undefined) node.scrollTop = before + by;
+    const rect = node.getBoundingClientRect();
+    return {
+      before,
+      after: node.scrollTop,
+      box: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
+      maxScroll: node.scrollHeight - node.clientHeight,
+    };
+  }, target);
+  return {
+    ...result,
+    box: { ...result.box, x: result.box.x + editorFrameBox.x, y: result.box.y + editorFrameBox.y },
+  };
+}
+
+/**
+ * Scrolls the main text by `delta` (negative scrolls back up) while a pop-up is open, and checks
+ * the scroll really moved and left `trigger` visible, so a following "still beside its trigger"
+ * check is meaningful. Returns the distance scrolled.
+ */
+export async function scrollTextKeepingVisible(
+  frame: Frame,
+  delta: number,
+  trigger: Locator | PageBox,
+): Promise<number> {
+  const { before, after, box: scrollerBox } = await scrollText(frame, { by: delta });
+  const moved = after - before;
+  expect(Math.abs(moved)).toBeGreaterThanOrEqual(Math.abs(delta) / 2);
+  expect(Math.sign(moved)).toBe(Math.sign(delta));
+  const triggerRect = await triggerBox(trigger);
+  // A pre-scroll box (a caret) is shifted by the distance scrolled.
+  const top = 'boundingBox' in trigger ? triggerRect.y : triggerRect.y - moved;
+  expect(top).toBeGreaterThanOrEqual(scrollerBox.y);
+  expect(top + triggerRect.height).toBeLessThanOrEqual(scrollerBox.y + scrollerBox.height);
+  return moved;
+}
+
+/**
+ * Distance below the top of the main text's scroll container at which
+ * {@link scrollTriggerNearPaneTop} parks a pop-up's trigger before the pop-up opens. At 200 % a
+ * pop-up like the comment editor is about half the pane tall, so a trigger left mid-pane has room
+ * for it neither above nor below, and the pop-up falls back to covering its own line — real
+ * behavior in a pane that short, but not what a "sits beside its trigger" check is about. Near the
+ * top of the pane, the whole pane height is below the trigger, with room to spare for the scroll
+ * that follows.
+ */
+const TRIGGER_TOP_MARGIN_PX = 40;
+
+/**
+ * Scrolls the main text as near as it goes to putting `trigger`'s box {@link TRIGGER_TOP_MARGIN_PX}
+ * below the top of the text's scroll container, and returns the box it has there. The room a pop-up
+ * opened on that trigger then has is the pane's, rather than whatever the preceding steps left the
+ * text scrolled to.
+ *
+ * Landing higher than that margin is fine and needs no scroll: a trigger already near the top of
+ * the pane has the whole pane below it. So the check is a range, not a target — scrolling up is
+ * clamped at the top of the text, and demanding an exact offset would fail there instead of
+ * accepting the room it asked for. Below the pane's top edge, on the other hand, the trigger is
+ * scrolled out of sight.
+ *
+ * Scrolling down clamps too, at the bottom of the text, and then the trigger stays lower than the
+ * margin — so the margin is allowed exactly the distance the scroll came up short by, and the
+ * scroll itself is held to moving every pixel that was available. A scroll that simply did not take
+ * effect fails on that, rather than buying itself room here. The shortfall only ever arises where
+ * it costs nothing: the text comes up short only when the chapter barely overflows the pane, which
+ * is the unzoomed case, where a pop-up is a fraction of the pane's height and has room below a
+ * trigger wherever it sits. At the zoom levels the callers check, the chapter is several
+ * pane-heights tall and the full margin is demanded.
+ */
+export async function scrollTriggerNearPaneTop(frame: Frame, trigger: PageBox): Promise<PageBox> {
+  const { box: scroller, before: scrollTop, maxScroll } = await scrollText(frame, {});
+  const requested = Math.round(trigger.y - scroller.y - TRIGGER_TOP_MARGIN_PX);
+  const available = Math.min(Math.max(scrollTop + requested, 0), maxScroll) - scrollTop;
+  const { before, after } = await scrollText(frame, { by: requested });
+  // Sub-pixel: scrollTop is fractional while scrollHeight and clientHeight are whole pixels.
+  expect(Math.abs(after - before - available), 'the text scrolled as far as it can').toBeLessThan(
+    1,
+  );
+  const scrolled = { ...trigger, y: trigger.y - (after - before) };
+  const belowPaneTop = scrolled.y - scroller.y;
+  expect(belowPaneTop, 'trigger inside the pane').toBeGreaterThanOrEqual(0);
+  expect(
+    belowPaneTop,
+    'trigger as near the top of the pane as the text scrolls',
+  ).toBeLessThanOrEqual(TRIGGER_TOP_MARGIN_PX + 2 + Math.max(requested - available, 0));
+  return scrolled;
+}
+
+/** The text caret's (or the text selection's) box, main-frame-relative. */
+export async function readCaretBox(frame: Frame): Promise<PageBox> {
+  const editorFrameBox = await frameBox(frame);
+  const caret = await frame.evaluate(() => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return undefined;
+    const rect = selection.getRangeAt(0).getBoundingClientRect();
+    return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
+  });
+  if (!caret) throw new Error('No text caret');
+  return { ...caret, x: caret.x + editorFrameBox.x, y: caret.y + editorFrameBox.y };
+}
+
+/**
+ * {@link expectPopupBesideTriggerAndInsideFrame}, retried until it holds: a pop-up that has just
+ * opened is still being positioned, so its first boxes are not its settled ones. A pop-up that
+ * never settles beside its trigger still fails. Once this returns, the pop-up's open animation has
+ * ended and its size can be measured.
+ */
+export async function expectSettledBeside(
+  frame: Frame,
+  popup: Locator,
+  trigger: Locator | PageBox,
+): Promise<void> {
+  await expect(async () => expectPopupBesideTriggerAndInsideFrame(frame, popup, trigger)).toPass({
+    timeout: 5_000,
+  });
+}
+
+/** A locator's main-frame box; throws when it has none. */
+export async function boxOf(locator: Locator): Promise<PageBox> {
+  const box = await locator.boundingBox();
+  if (!box) throw new Error('Element has no box');
+  return box;
+}
+
+/**
+ * Closes a dock tab by web view id and waits for its title to disappear. `data-web-view-id` is on
+ * `.platform-tab-title` (`platform-tab-title.component.tsx`), not on rc-dock's own `.dock-tab`, so
+ * the close button is found through the title's `.dock-tab` ancestor. The click is dispatched
+ * rather than performed: on a crowded tab strip the button can sit outside the visible area, and
+ * rc-dock's `.dock-tab-hit-area` overlays the same region, so a real click can report it as not
+ * actionable.
+ */
+export async function closeDockTab(page: Page, webViewId: string): Promise<void> {
+  const tabTitle = page.locator(`.platform-tab-title[data-web-view-id="${webViewId}"]`);
+  const dockTab = tabTitle.locator('xpath=ancestor::*[contains(@class,"dock-tab")][1]');
+  await dockTab.locator('.dock-tab-close-btn').dispatchEvent('click');
+  await expect(tabTitle).toBeHidden({ timeout: 10_000 });
+}

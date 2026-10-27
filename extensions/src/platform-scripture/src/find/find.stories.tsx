@@ -250,6 +250,8 @@ type HarnessConfig = {
   scope?: Scope;
   /** Initial selected books for the `selectedBooks` scope. */
   selectedBookIds?: string[];
+  /** The current scripture reference the `book`/`chapter` scopes resolve to. Defaults to GEN 1:1. */
+  verseRef?: SerializedVerseRef;
   /** The find-job status the status bar reflects (fixed-state stories only). */
   searchStatus?: FindJobStatus;
   /** Percent complete for an in-progress search. */
@@ -324,9 +326,10 @@ function FindHarness({ config }: { config: HarnessConfig }) {
   // eslint-disable-next-line no-null/no-null
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  const configVerseRef = config.verseRef;
   const verseRef = useMemo<SerializedVerseRef>(
-    () => ({ book: 'GEN', chapterNum: 1, verseNum: 1 }),
-    [],
+    () => configVerseRef ?? { book: 'GEN', chapterNum: 1, verseNum: 1 },
+    [configVerseRef],
   );
 
   const baseResults = useMemo<HidableFindResult[]>(() => {
@@ -477,11 +480,14 @@ function FindHarness({ config }: { config: HarnessConfig }) {
   }, []);
 
   const numberOfHiddenResults = hiddenKeys.size + committedKeys.size;
-  // Shares find.utils.ts's isFindQueryValid with the webview so the two can't silently diverge —
-  // this exact divergence (the harness's own copy dropped the empty-term check) shipped once
-  // already (see PT-4343 review) and made the NoBooksSelected story pass despite testing the wrong
-  // rule.
-  const isSearchQueryValid = isFindQueryValid({ searchTerm, scope, selectedBookIds });
+  // Shares find.utils.ts's isFindQueryValid with the webview so the two can't silently diverge: a
+  // harness with its own copy of the rule can make a story pass while testing a different rule.
+  const isSearchQueryValid = isFindQueryValid({
+    searchTerm,
+    scope,
+    selectedBookIds,
+    currentBookId: verseRef.book,
+  });
   const liveSearchStatus: FindJobStatus | undefined = isSearchQueryValid
     ? completedStatus
     : undefined;
@@ -691,6 +697,19 @@ export const NoBooksSelected: Story = {
 };
 
 /**
+ * The current reference sits in extra material (a glossary), which the `Current book` and `Current
+ * chapter` scopes resolve to and Find cannot search. Both scopes are disabled in the scope selector
+ * with an explanation, and the results area shows a placeholder naming the two ways out — choose
+ * books to search, or move to a Scripture book — rather than the generic "select a book" wording,
+ * which would point at a picker that never offers extra material.
+ */
+export const CurrentReferenceInExtraMaterial: Story = {
+  decorators: [
+    createDecorator({ scope: 'book', verseRef: { book: 'GLO', chapterNum: 1, verseNum: 1 } }),
+  ],
+};
+
+/**
  * The find-job poll stalled (e.g. the data provider dropped during an extended idle period) and
  * gave up after several seconds of retries — the status bar shows an error instead of leaving the
  * last-seen progress bar frozen with no feedback.
@@ -750,9 +769,13 @@ export const NarrowPanelClipsScopeSummary: Story = {
     const canvas = within(canvasElement);
 
     await step('The panel does not scroll horizontally', async () => {
-      const panel = canvas.getByTestId('find-panel');
+      // Measured on the Find root, not on this wrapper. The root is a scroll container, and a scroll
+      // container's overflow never reaches its ancestors' scrollWidth, so on the wrapper this could
+      // never fail.
+      const root = canvas.getByTestId('find-panel').firstElementChild;
+      if (!(root instanceof HTMLElement)) throw new Error('The Find root did not render');
       // The regression: scrollWidth exceeding clientWidth IS the horizontal scrollbar.
-      await expect(panel.scrollWidth).toBeLessThanOrEqual(panel.clientWidth);
+      await expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth);
     });
 
     await step('The scope summary is the element that gives, by clipping', async () => {
@@ -767,7 +790,7 @@ export const NarrowPanelClipsScopeSummary: Story = {
       description: {
         story:
           'The scope trigger must clip its summary rather than widen the row. Asserted by ' +
-          "comparing the panel's scrollWidth against its clientWidth in a 260px column. Runs " +
+          "comparing the Find root's scrollWidth against its clientWidth in a 260px column. Runs " +
           'in the Interactions panel, not in CI — bundled-extension stories have no vitest ' +
           'browser project.',
       },
