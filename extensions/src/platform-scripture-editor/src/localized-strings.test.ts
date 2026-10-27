@@ -17,6 +17,7 @@ import { VIEW_OPTIONS_NOTICE_STRING_KEYS } from './scripture-text-grid/view-opti
 import { TEAM_LAYOUT_BUTTON_STRING_KEYS } from './team-layout-button.component';
 import { STRUCTURE_PROTECTION_BUTTON_STRING_KEYS } from './structure-protection-button.component';
 import { HIDDEN_CONTENT_DELETE_STRING_KEYS } from './hidden-content-delete-confirm.utils';
+import { TWO_STEP_DELETE_MESSAGE_STRING_KEYS } from './two-step-delete-tooltip/two-step-delete-tooltip.utils';
 import {
   paragraphMarkerNameKey,
   PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
@@ -575,6 +576,21 @@ describe.each(['en', 'es'])('save failed notification in %s', (locale) => {
     expect(
       localizedStrings[locale]['%webView_platformScriptureEditor_error_saveFailed_format%'],
     ).toContain('{projectName}');
+  });
+});
+
+// The "press again to delete" hint shown on the first press of a two-step delete, one per armed kind.
+describe.each([...TWO_STEP_DELETE_MESSAGE_STRING_KEYS])('two-step delete hint %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
   });
 });
 
