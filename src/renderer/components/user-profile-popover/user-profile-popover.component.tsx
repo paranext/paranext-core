@@ -72,11 +72,9 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%userProfile_registrationNeeded%',
   '%userProfile_networkSettings_3%',
   '%userProfile_server_badge_development%',
-  '%userProfile_server_badge_production%',
   '%userProfile_server_badge_qualityAssurance%',
   '%userProfile_server_badge_test%',
   '%userProfile_server_tooltip_development%',
-  '%userProfile_server_tooltip_production%',
   '%userProfile_server_tooltip_qualityAssurance%',
   '%userProfile_server_tooltip_test%',
   '%userProfile_language%',
@@ -87,23 +85,26 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
 ];
 
 /**
- * Maps each server environment to its badge label and tooltip localize keys, so the "Internet &
- * connectivity" row can show which server `ParatextData.dll` currently targets.
+ * Maps each non-Production server environment to its badge label and tooltip localize keys, so the
+ * "Internet connectivity" row can show which server `ParatextData.dll` currently targets.
+ * `Production` deliberately maps to `undefined` rather than being left out of the record: a normal
+ * user is always on Production and must never see this indicator (UX review on PT-4647), and
+ * keeping `Production` as an explicit key means a future `ServerType` addition still has to be
+ * accounted for here instead of silently falling through.
  *
- * In most cases, probably only the Production label need be translated into non-English locales —
- * it's the only badge most normal users ever see, while the other three target a dev/support
- * audience who will recognize terse English environment names regardless of interface language;
- * translating them risks adding confusion rather than clarity. This reasoning might not hold in all
- * cases (e.g., non-Roman scripts), so they are available for localization as needed. The tooltips
- * carry the real, localized explanation for anyone (including a non-English-speaking user who ends
- * up on a non-Production server) who needs to understand what's going on, so all four tooltips
- * should normally be translated.
+ * The other servers target a dev/support audience who will generally recognize terse English
+ * environment names regardless of interface language, so translating their labels risks adding
+ * confusion rather than clarity; that reasoning might not hold in all cases (e.g., non-Roman
+ * scripts), so they remain available for localization as needed. The tooltips carry the real,
+ * localized explanation for anyone (including a non-English-speaking user who ends up on a
+ * non-Production server) who needs to understand what's going on, so they should normally be
+ * translated.
  */
-const SERVER_BADGE_KEYS: Record<ServerType, { label: LocalizeKey; tooltip: LocalizeKey }> = {
-  Production: {
-    label: '%userProfile_server_badge_production%',
-    tooltip: '%userProfile_server_tooltip_production%',
-  },
+const SERVER_BADGE_KEYS: Record<
+  ServerType,
+  { label: LocalizeKey; tooltip: LocalizeKey } | undefined
+> = {
+  Production: undefined,
   QualityAssurance: {
     label: '%userProfile_server_badge_qualityAssurance%',
     tooltip: '%userProfile_server_tooltip_qualityAssurance%',
@@ -215,6 +216,9 @@ function NetworkSettingsRow({
     isLoadingInternetSettings || isPlatformError(internetSettings)
       ? undefined
       : internetSettings.selectedServer;
+  // `undefined` both while the server is unknown and when it's Production — Production never gets a
+  // badge (see `SERVER_BADGE_KEYS`).
+  const serverBadge = selectedServer === undefined ? undefined : SERVER_BADGE_KEYS[selectedServer];
 
   return (
     <div className="tw:relative tw:flex tw:w-full tw:items-center">
@@ -238,7 +242,7 @@ function NetworkSettingsRow({
         <Wifi className="tw:size-3.5" />
         {localizedStrings['%userProfile_networkSettings_3%']}
       </Button>
-      {selectedServer !== undefined && (
+      {serverBadge !== undefined && (
         // A sibling of the Button, not a child: a focusable element nested inside another
         // interactive element fails the axe `nested-interactive` rule and folds the badge
         // text into the button's accessible name. Absolutely positioned over the row's right
@@ -270,13 +274,11 @@ function NetworkSettingsRow({
                   }
                 }}
               >
-                {localizedStrings[SERVER_BADGE_KEYS[selectedServer].label]}
+                {localizedStrings[serverBadge.label]}
               </Badge>
             </TooltipTrigger>
             <TooltipContent>
-              <p className="tw:font-light">
-                {localizedStrings[SERVER_BADGE_KEYS[selectedServer].tooltip]}
-              </p>
+              <p className="tw:font-light">{localizedStrings[serverBadge.tooltip]}</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>

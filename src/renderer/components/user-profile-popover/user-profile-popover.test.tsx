@@ -109,7 +109,10 @@ const mockState: MockState = {
   shouldMatchSystem: false,
   setShouldMatchSystem: mockSetter(),
   internetSettingsProviderAvailable: true,
-  internetSettings: { selectedServer: 'Production' },
+  // Not 'Production': the badge never renders for that server (see "UserProfilePopover server
+  // badge"), and several unrelated tests below (recovery/remount) assert the badge DOES render
+  // using this default.
+  internetSettings: { selectedServer: 'Development' },
 };
 
 const setMockSetting = <K extends keyof MockState>(key: K, value: MockState[K]) => {
@@ -139,11 +142,9 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%userProfile_profileAndRegistration_2%': 'Registration information row',
       '%userProfile_networkSettings_3%': 'Internet connectivity row',
       '%userProfile_server_badge_development%': 'Development badge text',
-      '%userProfile_server_badge_production%': 'Production badge text',
       '%userProfile_server_badge_qualityAssurance%': 'QA badge text',
       '%userProfile_server_badge_test%': 'Test badge text',
       '%userProfile_server_tooltip_development%': 'Development server tooltip',
-      '%userProfile_server_tooltip_production%': 'Production server tooltip',
       '%userProfile_server_tooltip_qualityAssurance%': 'QA server tooltip',
       '%userProfile_server_tooltip_test%': 'Test server tooltip',
       '%userProfile_language%': 'UI language',
@@ -252,7 +253,7 @@ beforeEach(() => {
   setMockSetting('shouldMatchSystem', false);
   setMockSetting('setShouldMatchSystem', mockSetter());
   setMockSetting('internetSettingsProviderAvailable', true);
-  setMockSetting('internetSettings', { selectedServer: 'Production' });
+  setMockSetting('internetSettings', { selectedServer: 'Development' });
   vi.mocked(sendCommand).mockClear();
   vi.mocked(logger.warn).mockClear();
   vi.mocked(offerRestartAfterInterfaceLanguageChange).mockClear();
@@ -508,12 +509,15 @@ describe('UserProfilePopover action rows', () => {
 });
 
 describe('UserProfilePopover server badge', () => {
+  test('never renders the badge when the selected server is Production', async () => {
+    setMockSetting('internetSettings', { selectedServer: 'Production' });
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    await screen.findByTestId('user-profile-action-network');
+    expect(screen.queryByTestId('user-profile-server-badge')).not.toBeInTheDocument();
+  });
+
   test.each<{ server: ServerType; label: string; tooltip: string }>([
-    {
-      server: 'Production',
-      label: 'Production badge text',
-      tooltip: 'Production server tooltip',
-    },
     { server: 'QualityAssurance', label: 'QA badge text', tooltip: 'QA server tooltip' },
     {
       server: 'Development',
