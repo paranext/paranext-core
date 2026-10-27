@@ -258,6 +258,15 @@ declare module 'paratext-bible-send-receive' {
     errors?: string[];
   };
 
+  /**
+   * Event payload emitted by the `paratextBibleSendReceive.onDidRequestProjectSelection` network
+   * event
+   */
+  export type ProjectSelectionRequestEvent = {
+    /** Projects just ticked in the sync projects dialog's saved selection */
+    projectIds: string[];
+  };
+
   /** Event payload emitted by the `paratextBibleSendReceive.onSyncStateChanged` network event */
   export type SyncProgressEvent = {
     /**
@@ -312,6 +321,12 @@ declare module 'paratext-bible-send-receive' {
      * PREVIOUS sync, so labelling an in-progress sync with it names the wrong projects.
      */
     lastRequestedProjectIds: string[];
+    /**
+     * The latest completed result for each project synced through this extension's wrappers this
+     * session. Syncs core runs directly (startup, project switch) are not included. Keyed by
+     * `normalizeProjectId(projectId)`; a fresh object is built on every `getSyncState` call.
+     */
+    lastResultByProjectId: Record<string, ResultInfo>;
     /**
      * Project ids of the sync(s) running RIGHT NOW. Empty exactly when `isSyncing` is `false`.
      * Overlapping syncs are unioned.
@@ -449,6 +464,7 @@ declare module 'paratext-bible-send-receive' {
 
 declare module 'papi-shared-types' {
   import type {
+    ProjectSelectionRequestEvent,
     ResultsData,
     SyncActivitySnapshot,
     SyncProgressDetail,
@@ -516,12 +532,17 @@ declare module 'papi-shared-types' {
     'paratextBibleSendReceive.openSyncStatus': () => Promise<string | undefined>;
 
     /**
-     * Opens the Send/Receive web view and returns its WebView id
+     * Opens the Send/Receive web view (or fronts the open one) with the active project ticked in
+     * the sync projects dialog
      *
-     * @returns WebView id for the Send/Receive WebView or `undefined` if not created
+     * @param projectIdsToSelect Projects to tick instead of the active project. Unsupported
+     *   projects are skipped
+     * @returns WebView id for the S/R WebView or `undefined` if not created
      * @experimental This command is unstable and may change or disappear without notice
      */
-    'paratextBibleSendReceive.openSendReceive': () => Promise<string | undefined>;
+    'paratextBibleSendReceive.openSendReceive': (
+      projectIdsToSelect?: string[],
+    ) => Promise<string | undefined>;
 
     /**
      * Returns the current {@link SyncState} so a consumer can seed its sync status on mount rather
@@ -755,6 +776,11 @@ declare module 'papi-shared-types' {
   }
 
   export interface NetworkEvents {
+    /**
+     * Fired after `openSendReceive` ticks a project in the saved selection, so an open dialog can
+     * sort it to the top
+     */
+    'paratextBibleSendReceive.onDidRequestProjectSelection': ProjectSelectionRequestEvent;
     /** Emitted whenever a sync starts or ends */
     'paratextBibleSendReceive.onSyncStateChanged': SyncProgressEvent;
     /** Emitted repeatedly during a sync with the current project name or reconnect status */

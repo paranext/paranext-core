@@ -8559,6 +8559,35 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   arbitrary, inherited from PT-1561.
 - **Source:** PT-4421; resubscribe-storm and burst behavior measured during review of this change.
 
+## adr-sba-not-syncable-from-dialog-or-home: Study Bible Additions projects cannot be synced from the sync projects dialog or Home
+
+- **Date:** 2026-10-27
+- **Status:** Accepted. Supersedes the "must stay syncable" parts of `adr-unsupported-project-reason`.
+- **Context:** `adr-unsupported-project-reason` kept Study Bible Additions (SBA) projects selectable
+  and syncable in Send/Receive lists. UX decided otherwise in PT-4704's Definition of Done item 11
+  (2026-10-27): users cannot open an SBA project, so offering to sync it from the places that
+  present it as a normal project is inconsistent.
+- **Decision:**
+  - **Sync projects dialog:** SBA rows stay visible and greyed out with the unsupported reason, but
+    cannot be ticked. The All, Edited and New shortcuts skip them, saved ticks for them are pruned,
+    and submit filters them out.
+  - **Home:** Sync and Get are disabled for an SBA project.
+  - **Scheduled and automatic syncs are deliberately left alone.** A Power user's existing SBA
+    schedule keeps running. Simple mode cannot open an SBA project, so the sync run on a project
+    switch never targets one.
+- **Alternatives:**
+  - Keep SBA selectable and syncable everywhere (the previous decision) — rejected by UX.
+  - Block SBA in the C# sync entry points too — not chosen: it would also stop existing schedules,
+    which the decision deliberately leaves running.
+- **Consequences:**
+  - Every new surface that offers to sync a project from a list or from Home must treat a project
+    with an `unsupportedReason` as not syncable. Scheduled, automatic and server-side paths are not
+    gated by this.
+  - `ScrTextExtensions.GetOpenBlockedReason` still never blocks `GetParatextProject`, so a schedule
+    or a direct command can still sync an SBA project.
+- **Source:** PT-4704, Definition of Done item 11; design in
+  `.context/designs/2026-10-27-sync-consistency-design.md`.
+
 ## adr-scroll-group-hosted-in-main: The scroll group service is hosted in main, and each renderer keeps a predicting cache
 
 - **Date:** 2026-08-07
@@ -10447,7 +10476,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Context:** Study Bible Additions (SBA) projects are enumerated with every other Scripture project
   (`LocalParatextProjects.GetAllProjectDetails`), but Platform.Bible cannot open their Scripture
   content. The PO wants them visible but disabled where users open projects, with the reason, and a
-  placeholder if one is opened anyway. They must stay syncable.
+  placeholder if one is opened anyway. They must stay syncable. **Superseded in part by
+  `adr-sba-not-syncable-from-dialog-or-home`:** "must stay syncable" no longer holds for the sync
+  projects dialog or Home's Sync/Get.
 - **Decision:**
   - **One source of the reason.** C# computes a generic localize key in
     `ScrTextExtensions.GetOpenBlockedReason` (a `ScrText` overload, and an `Enum<ProjectType>`
@@ -10513,7 +10544,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     instead of disabling, cannot explain why, and removes data access other features use.
   - Returning a `Paratext.Data.UnsupportedReason` from `MigrateProjectIfNeeded`
     (`PlatformScrTextCollection`) — rejected: ScrTextCollection then drops the project everywhere,
-    including Send/Receive rosters, which must show it selectable and syncable.
+    including Send/Receive rosters, which must show it selectable and syncable. (Rosters still show
+    it; "selectable and syncable" is superseded by `adr-sba-not-syncable-from-dialog-or-home`.)
   - A read-only computed project setting — rejected: `projectDataProviders.get()` already fans out to
     `getMetadataForProject()` the same way, saving nothing and adding a settings API contract.
   - A default filter in `getMetadataForAllProjects` — rejected: it would hide unsupported projects
@@ -10527,7 +10559,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Consequences:**
   - A new unsupported project type needs one C# line in `GetOpenBlockedReason` and one localize key
     in `en.json` and `es.json`. Every new list for picking or opening a project must hide or disable
-    such projects; Send/Receive lists keep them. The rule is in `Paranext-Core-Patterns.md`
+    such projects; Send/Receive lists keep them visible, though no longer selectable (superseded by
+    `adr-sba-not-syncable-from-dialog-or-home`). The rule is in `Paranext-Core-Patterns.md`
     ("Projects that cannot be opened").
   - While an SBA is being synced, a write to it reports `SR_EDIT_BLOCKED` before the reason.
   - **Pending in other repos (as of 2026-09-29):** Studio's Send/Receive service does not yet fill
