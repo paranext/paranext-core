@@ -169,9 +169,8 @@ export function ResourceCollectionOptions({
     );
   };
 
-  // `bottom` is not only what the user picked: it also holds admin rows not in the Text Collection
-  // and downloaded resources nobody listed, hence "User resources" rather than a word claiming a
-  // choice.
+  // `bottom` is not only what the user picked: it can also hold downloaded resources nobody listed,
+  // hence "User resources" rather than a word claiming a choice.
   const userRows = (
     <>
       {bottom.map(renderRow)}

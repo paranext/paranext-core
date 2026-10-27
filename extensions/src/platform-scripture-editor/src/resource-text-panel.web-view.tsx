@@ -548,6 +548,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
       readiness={readiness}
       dblResources={dblResources}
       isCatalogUnavailable={hasCatalogError}
+      // Only Simple mode has team resources, so Power lists every row together.
       isGrouped={!isPowerMode}
       onRetryCatalog={refetchCatalog}
       scrRef={scrRef}
