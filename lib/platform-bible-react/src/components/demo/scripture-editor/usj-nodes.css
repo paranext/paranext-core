@@ -14,7 +14,9 @@
      instead of the editor library's literal reds.
    - The table-cell box border binds to `var(--foreground, #000000)` instead of the source's
      literal black, so it stays visible against a dark app theme.
-   - The source's four `local()`-only Charis SIL `@font-face` rules are dropped. */
+   - The source's four `local()`-only Charis SIL `@font-face` rules are dropped.
+   The empty-verse caret rules (`.psc-empty-text-active`, `[data-caret-host]`) come from
+   scripture-editors#34, unmerged when copied. */
 
 /* stylelint-disable */
 
@@ -2778,10 +2780,10 @@ span.read img {
   font-style: italic;
   font-weight: normal;
 }
-/* A fixed-width box with the glyph centered in it, rather than the glyph's own width: the hidden
-   ellipsis below is cancelled by a margin of exactly this width. The box also extends the I-beam
-   cursor across the spacing on either side of the glyph. Not for a `.marker` verse (markerMode
-   "visible"), whose ::after is the verse number itself. */
+/* A fixed-width box with the glyph centered in it, rather than the glyph's own width: the caret
+   host's margin below cancels a hidden ellipsis by exactly this width. The box also extends the
+   I-beam cursor across the spacing on either side of the glyph. Not for a `.marker` verse
+   (markerMode "visible"), whose ::after is the verse number itself. */
 .psc-gutter-markers .verse:not(.marker).psc-empty-text::after,
 .psc-gutter-markers .verse:not(.marker).psc-empty-text-active::after {
   display: inline-block;
@@ -2789,27 +2791,31 @@ span.read img {
   text-align: center;
 }
 
-/* The empty verse the cursor is in (ActiveTextPlugin) hides its ellipsis but keeps it in place, so
-   placing the cursor there changes neither the line's width nor where it can wrap. The caret host
-   that follows the verse number (EmptyVerseCaretGuardPlugin) is pulled back over the hidden
-   ellipsis by a margin of its width, and pushes what follows forward by the same amount: it takes
-   no room of its own, and the caret it holds is drawn right after the number, where typed text
-   will go. The host's zero-width space is a line-break opportunity, which a run of empty verses
-   otherwise has none of, so the host doesn't wrap and ends in a word joiner: that keeps the break
-   inside the host, where it is not allowed. (`text-wrap-mode` rather than `white-space`, which
-   would also make a typed space a no-break space.) Scoped to hidden markers, where the verse
-   number is an ImmutableVerseNode decorator and the text that follows an empty one can only be its
-   host. Forced colors would otherwise paint the hidden ellipsis. */
+/* The empty verse holding the cursor (ActiveTextPlugin) hides its ellipsis but keeps its box, so
+   the line's width and wrap points don't change. */
 .psc-gutter-markers .verse:not(.marker).psc-empty-text-active::after {
   color: transparent;
+  /* Otherwise forced-colors mode repaints the hidden ellipsis. */
   forced-color-adjust: none;
 }
-.psc-gutter-markers.marker-hidden .verse.psc-empty-text-active + [data-lexical-text] {
+/* The caret host after that verse's number (EmptyVerseCaretGuardPlugin) takes no room: a negative
+   margin pulls it back over the hidden ellipsis, so its caret is drawn right after the number, and
+   an equal end margin keeps the line's width. The host is the verse's next sibling, marked by its
+   own attribute (CARET_HOST_ATTRIBUTE), so real text after the verse never matches. In an RTL
+   paragraph whose text around the verse is Latin, bidi lays the host out LTR and the margins act on
+   the wrong side, drawing the caret after the next verse's number. */
+.psc-gutter-markers .verse:not(.marker).psc-empty-text-active + [data-caret-host] {
   margin-inline-start: calc(-1 * var(--psc-empty-verse-ellipsis-width));
   margin-inline-end: var(--psc-empty-verse-ellipsis-width);
+}
+/* In every view, a caret host after a verse adds no line break. A run of empty verses has no break
+   opportunity, and the host's zero-width space would add one. The trailing word joiner moves it
+   inside the host, where nowrap forbids it. Each of the two is needed on its own.
+   (`text-wrap-mode`, not `white-space`, which would also make a typed space a no-break space.) */
+.verse + [data-caret-host] {
   text-wrap-mode: nowrap;
 }
-.psc-gutter-markers.marker-hidden .verse.psc-empty-text-active + [data-lexical-text]::after {
+.verse + [data-caret-host]::after {
   content: '\2060';
 }
 
