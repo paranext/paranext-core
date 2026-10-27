@@ -211,6 +211,7 @@ import {
   formatEditorTitle,
   generateParagraphMenuListItems,
   getNextViewTypeInCycle,
+  getSimpleModeRootClassNames,
   hasDisplayableParagraphMarkerTitle,
   isChapterBlank,
   isMissingBookError,
@@ -1681,9 +1682,10 @@ function PlatformScriptureEditor({
   );
 
   // `undefined` means isProjectEditable/canUserEditScripture are still genuinely resolving (not
-  // latched — see isCanUserEditScriptureUnresolved above). The title effect below skips its update
-  // in that case instead of pushing a title, so the previously-persisted title stays showing.
-  const isReadOnlyForTitle = useMemo(
+  // latched — see isCanUserEditScriptureUnresolved above). Two consumers wait it out: the title
+  // effect below skips its update instead of pushing a title, so the previously-persisted title
+  // stays showing, and the root's Simple-mode classes leave the character-marker tint off.
+  const resolvedIsDurablyReadOnly = useMemo(
     () =>
       isProjectEditableLoading || isCanUserEditScriptureUnresolved ? undefined : isDurablyReadOnly,
     [isProjectEditableLoading, isCanUserEditScriptureUnresolved, isDurablyReadOnly],
@@ -1730,13 +1732,13 @@ function PlatformScriptureEditor({
       if (
         unformattedTitle === NO_UPDATE_TITLE ||
         projectName === defaultProjectName ||
-        isReadOnlyForTitle === undefined
+        resolvedIsDurablyReadOnly === undefined
       )
         return NO_UPDATE_TITLE;
       const updatedTitle = await formatEditorTitle(
         unformattedTitle,
         projectId,
-        isReadOnlyForTitle,
+        resolvedIsDurablyReadOnly,
         async () => projectName,
         papi.localization.getLocalizedStrings,
       );
@@ -1745,7 +1747,7 @@ function PlatformScriptureEditor({
       if (updatedTitle === title) return NO_UPDATE_TITLE;
 
       return updatedTitle;
-    }, [isReadOnlyForTitle, title, projectId, projectName, unformattedTitle]),
+    }, [resolvedIsDurablyReadOnly, title, projectId, projectName, unformattedTitle]),
     NO_UPDATE_TITLE,
   );
 
@@ -5442,13 +5444,23 @@ function PlatformScriptureEditor({
 
   return (
     <div
-      className={`tw:flex tw:flex-col tw:h-screen${isPowerMode ? '' : ' editor-container-simple'}`}
+      className={[
+        'tw:flex tw:flex-col tw:h-screen',
+        ...getSimpleModeRootClassNames({
+          isPowerMode,
+          isInterfaceModeLoading,
+          isDurablyReadOnly: resolvedIsDurablyReadOnly,
+        }),
+      ].join(' ')}
     >
       <TabToolbar
         onSelectProjectMenuItem={menuCommandHandler}
         onSelectViewInfoMenuItem={menuCommandHandler}
         projectMenuData={webViewMenu.topMenu}
-        className={`scripture-editor-tab-nav tw:z-10${isPowerMode ? '' : ' scripture-editor-tab-nav-simple'}`}
+        className={[
+          'scripture-editor-tab-nav tw:z-10',
+          ...(isPowerMode ? [] : ['scripture-editor-tab-nav-simple']),
+        ].join(' ')}
         startAreaChildren={
           <>
             {bcvControls}
