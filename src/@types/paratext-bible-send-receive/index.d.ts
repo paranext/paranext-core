@@ -688,13 +688,15 @@ declare module 'papi-shared-types' {
       boundary: 'startup' | 'shutdown',
     ) => Promise<'synced' | 'failed' | 'skipped'>;
     /**
-     * Gets all open webview project IDs and calls `paratextBibleSendReceive.syncProjects` with
-     * them.
+     * Gets all open webview project IDs (or exactly `projectIds` when given) and calls
+     * `paratextBibleSendReceive.syncProjects` with them.
      *
+     * @param projectIds Sync only these projects (deduplicated) instead of the open editors'
+     *   projects
      * @throws `PlatformUnimplementedException` if not running in an application that implements
      *   this command (e.g., Paratext 10)
      */
-    'paratextBibleSendReceive.syncOpenProjects': () => Promise<void>;
+    'paratextBibleSendReceive.syncOpenProjects': (projectIds?: string[]) => Promise<void>;
 
     /**
      * Cancels an in-progress sync operation if one is running. The process will finish dealing with
