@@ -167,8 +167,8 @@
    - The subdued grays for `.unknown-block`/`.unknown-inline` and the empty-verse ellipsis are
      written with literal `rgba()` / a plain `var(--muted-foreground, <hex>)` instead of the
      source's `hsl(var(--muted-foreground, 215 16% 65%) / alpha)`.
-   - `.verse-selected` and the armed-verse blink bind to this repo's `--destructive` theme token
-     instead of the editor library's literal reds.
+   - `.verse-selected`, the armed paragraph marker (`.para-merge-armed`) and the armed-verse blink
+     bind to this repo's `--destructive` theme token instead of the editor library's literal reds.
    - The table-cell box border binds to `var(--foreground, #000000)` instead of the source's
      literal black, so it stays visible against a dark app theme.
    - The source's four `local()`-only Charis SIL `@font-face` rules are dropped. */
@@ -2749,6 +2749,42 @@
   .verse-delete-armed .verse-selected {
     animation: none;
     box-shadow: 0 2px 0 -1px var(--destructive); /* static glow underline — still signals "armed" */
+  }
+}
+
+/* Gutter marker of a paragraph armed for the two-step merge: the same destructive colour, tint and
+   blink as an armed verse marker, drawn behind the marker's text alone from the bounds
+   StructureKeyboardPlugin publishes (the whole marker box without them). `para-merge-armed` is on
+   the marker only while the merge is armed, so the blink needs no `verse-delete-armed` gate. */
+.psc-gutter-markers .para > .marker.para-merge-armed:not(.verse):not(.chapter):first-child {
+  color: var(--destructive);
+  isolation: isolate;
+}
+.psc-gutter-markers .para > .marker.para-merge-armed:not(.verse):not(.chapter):first-child::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--para-merge-armed-text-left, 0px) - 3px);
+  width: calc(var(--para-merge-armed-text-width, 100%) + 6px);
+  z-index: -1;
+  pointer-events: none;
+  background-color: color-mix(in srgb, var(--destructive) 15%, transparent);
+  border-radius: 4px;
+  animation: verse-armed-glow 1.06s steps(1) infinite;
+}
+.dark
+  .psc-gutter-markers
+  .para
+  > .marker.para-merge-armed:not(.verse):not(.chapter):first-child::before {
+  background-color: color-mix(in oklab, var(--destructive) 20%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .psc-gutter-markers
+    .para
+    > .marker.para-merge-armed:not(.verse):not(.chapter):first-child::before {
+    animation: none;
+    box-shadow: 0 2px 0 -1px var(--destructive);
   }
 }
 
