@@ -282,13 +282,18 @@ export interface EditingSessionActivityInput {
    * Set when the open note session is the footnotes pane's row editor; `undefined` for the popover.
    * The row editor applies each edit to the text as it is made, as the Scripture editor itself
    * does, so it holds incoming updates back on the Scripture editor's terms: only while focus is in
-   * the pane and a note was edited there within {@link EDITOR_OWNERSHIP_WINDOW_MS}. The popover
-   * applies nothing until Save, so its session holds them back until it closes or goes stale.
+   * the pane and the view was edited within {@link EDITOR_OWNERSHIP_WINDOW_MS}. The popover applies
+   * nothing until Save, so its session holds them back until it closes or goes stale.
    */
   paneSession?: {
     /** Whether DOM focus is inside the footnotes pane. */
     hasFocus: boolean;
-    /** `Date.now()` of the last edit made in the pane's row editor, or `undefined` if none was. */
+    /**
+     * `Date.now()` of the last edit made in this view — in the Scripture text or the pane's row
+     * editor — or `undefined` if none was. One stamp for both, so a footnote just inserted from the
+     * text (which puts the caret in its row before anything is typed there) or a row clicked right
+     * after typing in the text is held for the rest of the window.
+     */
     lastEditAtMs: number | undefined;
   };
 }
@@ -327,9 +332,9 @@ export interface EditingSessionActivityInput {
  * palette on unrelated keys. An automatic Send/Receive dismisses the palette before it writes, so
  * that particular collision is closed; other external writers can still be overwritten.
  *
- * A pane session is never reported stale: it stops holding updates back once the user stops editing
- * in it (see {@link EditingSessionActivityInput.paneSession}), and the update it then lets through
- * ends the session itself.
+ * A pane session is never reported stale: it stops holding updates back once nothing in the view
+ * has been edited for the window (see {@link EditingSessionActivityInput.paneSession}), and the
+ * update it then lets through ends the session itself.
  *
  * @returns `isActive` — whether any live session should keep deferring incoming PDP updates;
  *   `isNoteSessionStale` — whether an open note session exceeded the bound (the caller must clear
