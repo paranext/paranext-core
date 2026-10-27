@@ -58,6 +58,7 @@ const PICK_BIBLE_TEXTS = 'Pick Bible texts…';
 const SELECTING = 'Selecting resource…';
 const TEAM_RESOURCES = 'Team resources';
 const USER_RESOURCES = 'User resources';
+const OTHER_RESOURCES = 'Other resources';
 const TEAM_RESOURCE_LOCK = 'Shared by your team';
 const TEAM_RESOURCES_CAPTION = 'Only a project administrator can remove these.';
 
@@ -82,9 +83,10 @@ const STRINGS = {
   '%webView_resourcePanel_textUnavailable%': TEXT_UNAVAILABLE,
   '%webView_resourcePanel_bibleTexts_bookNotAvailable%': BIBLE_TEXT_MISSING_BOOK,
   '%webView_resourcePanel_commentaries_bookNotAvailable%': COMMENTARY_MISSING_BOOK,
-  '%webView_resourcePanel_teamResources%': TEAM_RESOURCES,
-  '%webView_resourcePanel_userResources%': USER_RESOURCES,
-  '%webView_resourcePanel_teamResourceLock%': TEAM_RESOURCE_LOCK,
+  '%webView_scriptureTextGrid_viewOptions_teamResourcesHeader%': TEAM_RESOURCES,
+  '%webView_scriptureTextGrid_viewOptions_userResourcesHeader%': USER_RESOURCES,
+  '%webView_resourcePanel_otherResources%': OTHER_RESOURCES,
+  '%webView_scriptureTextGrid_viewOptions_teamSharedLock%': TEAM_RESOURCE_LOCK,
   '%webView_resourcePanel_teamResourcesCaption%': TEAM_RESOURCES_CAPTION,
 };
 
@@ -175,6 +177,7 @@ function makeProps(overrides: Partial<ResourceTextPanelProps> = {}): ResourceTex
     selectedRef: WEB_ROW,
     readiness: 'configured',
     dblResources: [INSTALLED_RESOURCE],
+    isCatalogUnavailable: false,
     onRetryCatalog: vi.fn(),
     scrRef: MAT_1_1,
     onScrRefChange: vi.fn(),
@@ -504,7 +507,14 @@ describe("ResourceTextPanel team resources and the user's own", () => {
     return user;
   }
 
-  it("groups the team's resources above the user's own, downloaded ones included", async () => {
+  /** The names of the rows in `group`, in order. */
+  function rowNames(group: HTMLElement) {
+    return within(group)
+      .getAllByRole('menuitemcheckbox')
+      .map((item) => item.textContent);
+  }
+
+  it("groups the team's resources, then the user's own, then other installed ones", async () => {
     renderPanel({
       filteredResources: [TEAM_WEB, USER_KJV, DOWNLOADED_ASV],
       selectedRef: USER_KJV,
@@ -514,20 +524,32 @@ describe("ResourceTextPanel team resources and the user's own", () => {
 
     const teamGroup = screen.getByRole('group', { name: TEAM_RESOURCES });
     const userGroup = screen.getByRole('group', { name: USER_RESOURCES });
-    expect(
-      within(teamGroup)
-        .getAllByRole('menuitemcheckbox')
-        .map((item) => item.textContent),
-    ).toEqual([expect.stringMatching(/^WEB/)]);
-    expect(
-      within(userGroup)
-        .getAllByRole('menuitemcheckbox')
-        .map((item) => item.textContent),
-    ).toEqual([expect.stringMatching(/^KJV/), expect.stringMatching(/^ASV/)]);
+    const otherGroup = screen.getByRole('group', { name: OTHER_RESOURCES });
+    expect(rowNames(teamGroup)).toEqual([expect.stringMatching(/^WEB/)]);
+    expect(rowNames(userGroup)).toEqual([expect.stringMatching(/^KJV/)]);
+    expect(rowNames(otherGroup)).toEqual([expect.stringMatching(/^ASV/)]);
     expect(comesAfter(teamGroup, userGroup)).toBe(true);
+    expect(comesAfter(userGroup, otherGroup)).toBe(true);
   });
 
-  it('keeps a single unlabeled list when the team shared nothing for this tab', async () => {
+  it.each([
+    ["the user's own", [USER_KJV]],
+    ['other installed', [DOWNLOADED_ASV]],
+  ])('keeps a single unlabeled list when every row is %s', async (_, filteredResources) => {
+    renderPanel({ filteredResources, selectedRef: filteredResources[0], dblResources: ALL_TEXTS });
+    await openSelector(/KJV|ASV/);
+
+    // Positive control: the rows themselves are on screen, so the absent headings are a real answer.
+    expect(screen.getAllByRole('menuitemcheckbox')).toHaveLength(1);
+    expect(screen.queryByRole('group')).toBeNull();
+    expect(screen.queryByText(TEAM_RESOURCES)).toBeNull();
+    expect(screen.queryByText(USER_RESOURCES)).toBeNull();
+    expect(screen.queryByText(OTHER_RESOURCES)).toBeNull();
+    expect(screen.queryByRole('img', { name: TEAM_RESOURCE_LOCK })).toBeNull();
+    expect(screen.queryByText(TEAM_RESOURCES_CAPTION)).toBeNull();
+  });
+
+  it("labels the user's own and other installed resources apart when the team shared nothing", async () => {
     renderPanel({
       filteredResources: [USER_KJV, DOWNLOADED_ASV],
       selectedRef: USER_KJV,
@@ -535,13 +557,67 @@ describe("ResourceTextPanel team resources and the user's own", () => {
     });
     await openSelector(/KJV/);
 
-    // Positive control: the rows themselves are on screen, so the absent headings are a real answer.
-    expect(screen.getAllByRole('menuitemcheckbox')).toHaveLength(2);
-    expect(screen.queryByRole('group')).toBeNull();
+    expect(rowNames(screen.getByRole('group', { name: USER_RESOURCES }))).toEqual([
+      expect.stringMatching(/^KJV/),
+    ]);
+    expect(rowNames(screen.getByRole('group', { name: OTHER_RESOURCES }))).toEqual([
+      expect.stringMatching(/^ASV/),
+    ]);
     expect(screen.queryByText(TEAM_RESOURCES)).toBeNull();
-    expect(screen.queryByText(USER_RESOURCES)).toBeNull();
-    expect(screen.queryByRole('img', { name: TEAM_RESOURCE_LOCK })).toBeNull();
     expect(screen.queryByText(TEAM_RESOURCES_CAPTION)).toBeNull();
+    // One between the two groups and one above "Download resources…": none above the first group.
+    expect(screen.getAllByRole('separator')).toHaveLength(2);
+  });
+
+  it('labels no group that has no rows', async () => {
+    renderPanel({
+      filteredResources: [TEAM_WEB, DOWNLOADED_ASV],
+      selectedRef: TEAM_WEB,
+      dblResources: ALL_TEXTS,
+    });
+    await openSelector(/WEB/);
+
+    // Positive controls: the groups that do have rows are labeled.
+    expect(screen.getByRole('group', { name: TEAM_RESOURCES })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: OTHER_RESOURCES })).toBeInTheDocument();
+    expect(screen.queryByText(USER_RESOURCES)).toBeNull();
+  });
+
+  describe('while the catalog is unavailable', () => {
+    it("lists the user's own and other installed resources as one unlabeled list", async () => {
+      renderPanel({
+        filteredResources: [USER_KJV, DOWNLOADED_ASV],
+        selectedRef: USER_KJV,
+        dblResources: ALL_TEXTS,
+        isCatalogUnavailable: true,
+      });
+      await openSelector(/KJV/);
+
+      // Positive control: both rows are on screen, so the absent headings are a real answer.
+      expect(screen.getAllByRole('menuitemcheckbox')).toHaveLength(2);
+      expect(screen.queryByRole('group')).toBeNull();
+      expect(screen.queryByText(USER_RESOURCES)).toBeNull();
+      expect(screen.queryByText(OTHER_RESOURCES)).toBeNull();
+    });
+
+    it("lists them together under the user's heading below the team's", async () => {
+      renderPanel({
+        filteredResources: [TEAM_WEB, USER_KJV, DOWNLOADED_ASV],
+        selectedRef: USER_KJV,
+        dblResources: ALL_TEXTS,
+        isCatalogUnavailable: true,
+      });
+      await openSelector(/KJV/);
+
+      expect(rowNames(screen.getByRole('group', { name: TEAM_RESOURCES }))).toEqual([
+        expect.stringMatching(/^WEB/),
+      ]);
+      expect(rowNames(screen.getByRole('group', { name: USER_RESOURCES }))).toEqual([
+        expect.stringMatching(/^KJV/),
+        expect.stringMatching(/^ASV/),
+      ]);
+      expect(screen.queryByText(OTHER_RESOURCES)).toBeNull();
+    });
   });
 
   it("labels only the team group when every row is the team's", async () => {
@@ -550,7 +626,8 @@ describe("ResourceTextPanel team resources and the user's own", () => {
 
     expect(screen.getByRole('group', { name: TEAM_RESOURCES })).toBeInTheDocument();
     expect(screen.queryByText(USER_RESOURCES)).toBeNull();
-    // Only the one above "Download resources…": no separator for a user group that isn't there.
+    expect(screen.queryByText(OTHER_RESOURCES)).toBeNull();
+    // Only the one above "Download resources…": no separator for groups that aren't there.
     expect(screen.getAllByRole('separator')).toHaveLength(1);
   });
 
@@ -566,9 +643,13 @@ describe("ResourceTextPanel team resources and the user's own", () => {
       'menuitemcheckbox',
     );
     expect(within(teamItem).getByRole('img', { name: TEAM_RESOURCE_LOCK })).toBeInTheDocument();
-    within(screen.getByRole('group', { name: USER_RESOURCES }))
-      .getAllByRole('menuitemcheckbox')
-      .forEach((item) => expect(within(item).queryByRole('img')).toBeNull());
+    [USER_RESOURCES, OTHER_RESOURCES].forEach((groupName) => {
+      const items = within(screen.getByRole('group', { name: groupName })).getAllByRole(
+        'menuitemcheckbox',
+      );
+      expect(items).toHaveLength(1);
+      items.forEach((item) => expect(within(item).queryByRole('img')).toBeNull());
+    });
   });
 
   it('says once, under the team heading, that only an administrator can remove those rows', async () => {
@@ -598,6 +679,7 @@ describe("ResourceTextPanel team resources and the user's own", () => {
       'WEB - World English Bible',
     );
     expect(name).toHaveAttribute('title', 'WEB - World English Bible');
+    // jsdom computes no layout, so the class is the only observable stand-in for the ellipsis.
     expect(name).toHaveClass('tw:truncate');
   });
 

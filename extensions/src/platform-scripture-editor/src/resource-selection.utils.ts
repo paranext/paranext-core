@@ -154,19 +154,34 @@ export function isTeamPickerResource(row: PickerResource): boolean {
 }
 
 /**
- * Split picker rows into the team's — those the project administrator put in the team layout — and
- * the user's own, which includes downloaded resources nobody referenced. Each half keeps the order
- * it had in `rows`. A team row is one {@link isTeamPickerResource} accepts.
+ * Split picker rows into the team's (`source === 'admin'`), the user's own (`'user'`), and other
+ * resources installed on this computer that neither list names (`'downloaded'`), often downloaded
+ * for another project. Each group keeps the order its rows had in `rows`.
+ *
+ * While the catalog is unavailable, `other` is empty and its rows go in `user`, in their original
+ * order: without the catalog every DBL reference resolves as a plain download (see
+ * `buildPickerResources`), so a separate group would make the user's own resources look removed. So
+ * `user` can then hold `downloaded` rows; anything deciding what the user may remove must check
+ * each row's `source`, not its group.
  *
  * @param rows The rows to split
- * @returns The team's rows and the user's rows
+ * @param options.isCatalogUnavailable Whether the DBL catalog failed to load
+ * @returns The team's rows, the user's rows and the other rows
  */
-export function splitPickerResourcesBySource(rows: PickerResource[]): {
+export function splitPickerResourcesBySource(
+  rows: PickerResource[],
+  { isCatalogUnavailable }: { isCatalogUnavailable: boolean },
+): {
   team: PickerResource[];
   user: PickerResource[];
+  other: PickerResource[];
 } {
+  const team = rows.filter(isTeamPickerResource);
+  if (isCatalogUnavailable)
+    return { team, user: rows.filter((row) => !isTeamPickerResource(row)), other: [] };
   return {
-    team: rows.filter(isTeamPickerResource),
-    user: rows.filter((row) => !isTeamPickerResource(row)),
+    team,
+    user: rows.filter((row) => row.source === 'user'),
+    other: rows.filter((row) => row.source === 'downloaded'),
   };
 }

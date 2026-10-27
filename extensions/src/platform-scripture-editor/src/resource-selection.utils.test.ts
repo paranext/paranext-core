@@ -168,34 +168,39 @@ describe('splitPickerResourcesBySource', () => {
     ...dblRow(id),
     source,
   });
+  const names = (rows: PickerResource[]) => rows.map((r) => r.reference.name);
+  // Interleaved so that a split which sorted, or which kept only the first run of each source,
+  // would come out in a different order.
+  const rows = [
+    row('a', 'admin'),
+    row('b', 'user'),
+    row('c', 'downloaded'),
+    row('d', 'admin'),
+    row('e', 'downloaded'),
+    row('f', 'user'),
+  ];
 
-  it("puts the team's rows in one group and everything else in the other, keeping their order", () => {
-    // Interleaved so that a split which sorted, or which kept only the first run of each source,
-    // would come out in a different order.
-    const rows = [
-      row('a', 'admin'),
-      row('b', 'user'),
-      row('c', 'admin'),
-      row('d', 'downloaded'),
-      row('e', 'user'),
-    ];
+  it("puts the team's, the user's and other installed rows in their own groups, keeping their order", () => {
+    const { team, user, other } = splitPickerResourcesBySource(rows, {
+      isCatalogUnavailable: false,
+    });
 
-    const { team, user } = splitPickerResourcesBySource(rows);
-
-    expect(team.map((r) => r.reference.name)).toEqual(['a', 'c']);
-    expect(user.map((r) => r.reference.name)).toEqual(['b', 'd', 'e']);
+    expect(names(team)).toEqual(['a', 'd']);
+    expect(names(user)).toEqual(['b', 'f']);
+    expect(names(other)).toEqual(['c', 'e']);
   });
 
-  it('returns no team rows when the team shared nothing', () => {
-    const { team, user } = splitPickerResourcesBySource([row('b', 'user'), row('d', 'downloaded')]);
+  it("lists the user's and other installed rows together, in their order, while the catalog is unavailable", () => {
+    const { team, user, other } = splitPickerResourcesBySource(rows, {
+      isCatalogUnavailable: true,
+    });
 
-    expect(team).toEqual([]);
-    expect(user).toHaveLength(2);
+    expect(names(team)).toEqual(['a', 'd']);
+    expect(names(user)).toEqual(['b', 'c', 'e', 'f']);
+    expect(other).toEqual([]);
   });
 
-  // TODO(PT-4853): decide removability from `source === 'user'`, never from "not the team's": while
-  // the catalog is down, this team resource reads as a downloaded one.
-  it("files an installed team resource under the user's rows while the catalog is unavailable", () => {
+  it("keeps an installed team resource with the user's rows while the catalog is unavailable", () => {
     // Without the catalog the team's DBL reference cannot be resolved, so it is dropped and the
     // project installed from it comes back as a plain downloaded row.
     const teamReference: EffectiveResourceReference = {
@@ -205,13 +210,16 @@ describe('splitPickerResourcesBySource', () => {
       source: 'admin',
     };
     const downloaded = { projectId: 'proj-web', name: 'WEB', language: 'English' };
-    const rows = buildPickerResources([teamReference], [downloaded], []);
+    const pickerRows = buildPickerResources([teamReference], [downloaded], []);
 
-    const { team, user } = splitPickerResourcesBySource(rows);
+    const { team, user, other } = splitPickerResourcesBySource(pickerRows, {
+      isCatalogUnavailable: true,
+    });
 
     expect(team).toEqual([]);
     expect(user).toEqual([
       expect.objectContaining({ source: 'downloaded', projectId: 'proj-web' }),
     ]);
+    expect(other).toEqual([]);
   });
 });
