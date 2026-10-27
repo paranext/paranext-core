@@ -3153,47 +3153,11 @@ export type ChapterScaffoldInsertOutcome =
   | { status: 'failed'; error: string };
 
 /**
- * Paragraph markers that may stand before a book's `\c 1`: the running header, table of contents,
- * main titles, introduction (every introduction marker begins with `i`), remarks, and the `\cl`
- * that labels every chapter. Not `\mte`: the editor's stylesheet places it after a `\c`, so the
- * editor starts chapter 1 above it.
- */
-const FRONT_MATTER_PARA_MARKER = /^(?:h\d?|toca?\d?|mt\d?|i[a-z]+\d?|ide|rem|sts|usfm|cl)$/;
-
-function containsText(content: MarkerContent[] | undefined): boolean {
-  return (content ?? []).some((item) =>
-    typeof item === 'string' ? item.trim() !== '' : containsText(item.content),
-  );
-}
-
-/**
- * Whether a chapter-1 document holds chapter text — text anywhere but the `\id` line and the front
- * matter — as a book typed or imported without verse markers does. {@link isChapterBlank} looks for
- * chapter and verse markers only, so it calls such a chapter blank.
- *
- * Anything not recognized as front matter counts as chapter text. Erring that way leaves chapter 1
- * with no verses, which a Simple-mode user can't add while structure is locked; erring the other
- * way moves the text into the last verse.
- *
- * @param usj The chapter-1 USJ, as the `platformScripture.USJ_Chapter` PDP delivers it.
- */
-export function hasChapterText(usj: Usj): boolean {
-  return usj.content.some((item) => {
-    if (typeof item === 'string') return item.trim() !== '';
-    if (item.type === 'book') return false;
-    if (item.type === 'para' && item.marker && FRONT_MATTER_PARA_MARKER.test(item.marker))
-      return false;
-    return containsText(item.content);
-  });
-}
-
-/**
  * Inserts a blank chapter's `\c` marker and its empty verses. Chapter 1's document also holds the
- * book's `\id` line and front matter, so only the editor can place `\c 1` after them; a later
- * chapter's scaffold goes at the start of its document.
- *
- * Chapter 1 gets no verses when it already holds text (see {@link hasChapterText}): the editor puts
- * them above that text, so all of it would land in the last verse.
+ * book's `\id` line and front matter, so only the editor can place `\c 1` after them, and only it
+ * knows where chapter content starts: it leaves the verses out when that content already holds text
+ * or a verse, as a book typed or imported without chapter markers does. A later chapter's scaffold
+ * goes at the start of its document.
  *
  * Catches what the editor throws (`insertFirstChapter` does for a read-only editor or one with no
  * scripture reference) and reports it as `'failed'`: an error thrown in a web view's click handler
@@ -3202,20 +3166,16 @@ export function hasChapterText(usj: Usj): boolean {
  * @param editor The editor to insert into, or nothing while it is not mounted.
  * @param chapterNum The blank chapter to add.
  * @param lastVerse The chapter's last verse number, from `getEndVerse(book, chapterNum)`.
- * @param chapterUsj The chapter's saved USJ, which the editor is showing.
  */
 export function insertChapterScaffold(
   editor: Pick<EditorRef, 'applyUpdate' | 'insertFirstChapter'> | null | undefined,
   chapterNum: number,
   lastVerse: number,
-  chapterUsj: Usj,
 ): ChapterScaffoldInsertOutcome {
   if (!editor) return { status: 'no-editor' };
   try {
-    if (chapterNum === 1) {
-      const verseCount = hasChapterText(chapterUsj) ? 0 : lastVerse;
-      return { status: editor.insertFirstChapter(verseCount) ? 'inserted' : 'refused' };
-    }
+    if (chapterNum === 1)
+      return { status: editor.insertFirstChapter(lastVerse) ? 'inserted' : 'refused' };
     editor.applyUpdate(buildChapterScaffoldOps(chapterNum, lastVerse), 'local');
     return { status: 'inserted' };
   } catch (error) {

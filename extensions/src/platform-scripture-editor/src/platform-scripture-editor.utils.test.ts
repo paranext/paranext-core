@@ -8,7 +8,6 @@ import type { EditorRef, SelectionRange, ViewOptions } from '@eten-tech-foundati
 import {
   USJ_TYPE,
   USJ_VERSION,
-  type MarkerContent,
   type MarkerObject,
   type Usj,
 } from '@eten-tech-foundation/scripture-utilities';
@@ -56,7 +55,6 @@ import {
   toScriptureEditorInfos,
   isBlankChapterOnScreen,
   isChapterBlank,
-  hasChapterText,
   buildChapterScaffoldOps,
   canAddChapterNumber,
   bookHoldsChapters,
@@ -4505,73 +4503,13 @@ describe('buildChapterScaffoldOps', () => {
   });
 });
 
-describe('hasChapterText', () => {
-  const frontMatter: MarkerContent[] = [
-    { type: 'book', marker: 'id', code: 'JON', content: ['Jonah draft'] },
-    { type: 'para', marker: 'h', content: ['Jonah'] },
-    { type: 'para', marker: 'toc1', content: ['The Book of Jonah'] },
-    { type: 'para', marker: 'mt1', content: ['Jonah'] },
-    { type: 'para', marker: 'is1', content: ['Introduction'] },
-    { type: 'para', marker: 'ip', content: ['Jonah tells of a reluctant prophet.'] },
-  ];
-
-  function chapterOne(...content: MarkerContent[]): Usj {
-    return { type: USJ_TYPE, version: USJ_VERSION, content: [...frontMatter, ...content] };
-  }
-
-  it('finds no chapter text in a book that holds only its `\\id` line and front matter', () => {
-    expect(hasChapterText(chapterOne())).toBe(false);
-  });
-
-  it('finds no chapter text in an empty paragraph', () => {
-    expect(hasChapterText(chapterOne({ type: 'para', marker: 'p', content: ['  '] }))).toBe(false);
-  });
-
-  it('finds the text of a paragraph that has no verse markers', () => {
-    expect(
-      hasChapterText(chapterOne({ type: 'para', marker: 'p', content: ['Now the word came.'] })),
-    ).toBe(true);
-  });
-
-  it('finds text nested inside a character marker', () => {
-    const para: MarkerContent = {
-      type: 'para',
-      marker: 'q1',
-      content: [{ type: 'char', marker: 'nd', content: ['LORD'] }],
-    };
-    expect(hasChapterText(chapterOne(para))).toBe(true);
-  });
-
-  it('counts a heading as chapter text, since a paragraph it does not know is not front matter', () => {
-    expect(
-      hasChapterText(chapterOne({ type: 'para', marker: 's1', content: ['Jonah flees'] })),
-    ).toBe(true);
-  });
-
-  it('counts an ending title as chapter text, since the editor starts chapter 1 above it', () => {
-    expect(hasChapterText(chapterOne({ type: 'para', marker: 'mte', content: ['Jonah'] }))).toBe(
-      true,
-    );
-  });
-
-  it('finds text in no paragraph at all', () => {
-    expect(hasChapterText(chapterOne('Now the word came.'))).toBe(true);
-  });
-});
-
 describe('insertChapterScaffold', () => {
-  const blankChapterOne: Usj = {
-    type: USJ_TYPE,
-    version: USJ_VERSION,
-    content: [{ type: 'book', marker: 'id', code: 'JON' }],
-  };
-
   function makeEditor(isFirstChapterInserted = true) {
     return { applyUpdate: vi.fn(), insertFirstChapter: vi.fn(() => isFirstChapterInserted) };
   }
 
   it('inserts nothing while the editor is not mounted', () => {
-    expect(insertChapterScaffold(undefined, 2, 10, blankChapterOne)).toEqual({
+    expect(insertChapterScaffold(undefined, 2, 10)).toEqual({
       status: 'no-editor',
     });
   });
@@ -4579,29 +4517,13 @@ describe('insertChapterScaffold', () => {
   it("routes chapter 1 to insertFirstChapter with the chapter's verse count", () => {
     const editor = makeEditor();
 
-    expect(insertChapterScaffold(editor, 1, 17, blankChapterOne)).toEqual({ status: 'inserted' });
+    expect(insertChapterScaffold(editor, 1, 17)).toEqual({ status: 'inserted' });
     expect(editor.insertFirstChapter).toHaveBeenCalledWith(17);
     expect(editor.applyUpdate).not.toHaveBeenCalled();
   });
 
-  it('adds no verses to a chapter 1 that already holds text, so the text stays out of the last verse', () => {
-    const editor = makeEditor();
-    const unmarkedChapterOne: Usj = {
-      ...blankChapterOne,
-      content: [
-        ...blankChapterOne.content,
-        { type: 'para', marker: 'p', content: ['Now the word came.'] },
-      ],
-    };
-
-    expect(insertChapterScaffold(editor, 1, 17, unmarkedChapterOne)).toEqual({
-      status: 'inserted',
-    });
-    expect(editor.insertFirstChapter).toHaveBeenCalledWith(0);
-  });
-
   it('reports chapter 1 as refused when the editor refuses it', () => {
-    expect(insertChapterScaffold(makeEditor(false), 1, 17, blankChapterOne)).toEqual({
+    expect(insertChapterScaffold(makeEditor(false), 1, 17)).toEqual({
       status: 'refused',
     });
   });
@@ -4612,7 +4534,7 @@ describe('insertChapterScaffold', () => {
       throw new Error('Cannot insert a chapter in readonly mode');
     });
 
-    expect(insertChapterScaffold(editor, 1, 17, blankChapterOne)).toEqual({
+    expect(insertChapterScaffold(editor, 1, 17)).toEqual({
       status: 'failed',
       error: 'Cannot insert a chapter in readonly mode',
     });
@@ -4621,7 +4543,7 @@ describe('insertChapterScaffold', () => {
   it('inserts a later chapter as a local scaffold update at the start of its document', () => {
     const editor = makeEditor();
 
-    expect(insertChapterScaffold(editor, 2, 10, blankChapterOne)).toEqual({ status: 'inserted' });
+    expect(insertChapterScaffold(editor, 2, 10)).toEqual({ status: 'inserted' });
     expect(editor.applyUpdate).toHaveBeenCalledWith(buildChapterScaffoldOps(2, 10), 'local');
     expect(editor.insertFirstChapter).not.toHaveBeenCalled();
   });
@@ -4632,7 +4554,7 @@ describe('insertChapterScaffold', () => {
       throw new Error('apply failed');
     });
 
-    expect(insertChapterScaffold(editor, 2, 10, blankChapterOne)).toEqual({
+    expect(insertChapterScaffold(editor, 2, 10)).toEqual({
       status: 'failed',
       error: 'apply failed',
     });

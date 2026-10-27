@@ -3478,12 +3478,7 @@ function PlatformScriptureEditor({
     // not. The editor is staged from the revision `dev-packages.json` pins, so it can change with
     // no version diff here at all, and no test here or upstream covers undo for this path —
     // re-check it by hand whenever that revision moves.
-    const insert = insertChapterScaffold(
-      editorRef.current,
-      scrRef.chapterNum,
-      lastVerse,
-      usjFromPdp ?? defaultUsj,
-    );
+    const insert = insertChapterScaffold(editorRef.current, scrRef.chapterNum, lastVerse);
     if (insert.status !== 'inserted') {
       logger.warn(
         `handleAddChapterNumber: no chapter added to ${scrRef.book} ${scrRef.chapterNum} (${insert.status === 'failed' ? insert.error : insert.status})`,
@@ -3497,7 +3492,6 @@ function PlatformScriptureEditor({
     scrRef.book,
     scrRef.chapterNum,
     lastVerse,
-    usjFromPdp,
     isAddChapterNumberProtected,
     notifyStructureProtected,
     localizedStrings,
