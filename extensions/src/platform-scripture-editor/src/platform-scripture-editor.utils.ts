@@ -2035,8 +2035,8 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
 // #region Project-Switch Sync
 
 /**
- * Fire-and-forget helper that syncs the incoming project first, then the outgoing one. Each sync is
- * independently error-isolated so a failure in one doesn't block the other. Called after a
+ * Fire-and-forget helper that flushes the outgoing project, then syncs the incoming one. Each sync
+ * is independently error-isolated so a failure in one doesn't block the other. Called after a
  * Simple-mode replace-tab project switch, and by `finalizeProjectSwitch` after a Power -> Simple
  * mode switch — by which time the user may be back in Power mode.
  *
@@ -2044,6 +2044,13 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
  * connected resources and translation partners (deep sync). Uses the shallower
  * `paratextBibleSendReceive.sendReceiveProjects` for the outgoing project because we only need to
  * flush any local edits — a full deep sync is unnecessary on the way out.
+ *
+ * The incoming project syncs LAST because these are two separate backend runs and the sync
+ * indicator reports the most recent one. Whichever runs last is the verdict the user is shown, and
+ * the project they just switched to — the one on screen — is what that verdict should describe. A
+ * failure flushing the outgoing project reaches the user only through its own failure toast (see
+ * below), not the indicator; see `adr-sync-activity-outcome-is-coarse` in
+ * `.context/standards/Architecture-Decisions.md`.
  *
  * The outgoing sync is skipped only for a published resource (see `isProjectPublished`), which
  * holds nothing the user wrote. A translation project with editing switched off still syncs: its
@@ -2098,6 +2105,18 @@ export async function syncOnProjectSwitch(
     }
   }
 
+  if (outgoingProjectId && !(await isProjectPublished(papi, outgoingProjectId))) {
+    try {
+      await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [
+        outgoingProjectId,
+      ]);
+    } catch (e) {
+      papi.logger.warn(
+        `Project-switch sync: outgoing sync for ${outgoingProjectId} failed: ${getErrorMessage(e)}`,
+      );
+    }
+  }
+
   try {
     // Mode change mid-sync: intentionally not handled. The flag is fixed for the run, and the
     // toolbar indicator mounts only in Simple mode, so switching to Power while a suppressed sync
@@ -2113,18 +2132,6 @@ export async function syncOnProjectSwitch(
     papi.logger.warn(
       `Project-switch sync: incoming sync for ${incomingProjectId} failed: ${getErrorMessage(e)}`,
     );
-  }
-
-  if (outgoingProjectId && !(await isProjectPublished(papi, outgoingProjectId))) {
-    try {
-      await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [
-        outgoingProjectId,
-      ]);
-    } catch (e) {
-      papi.logger.warn(
-        `Project-switch sync: outgoing sync for ${outgoingProjectId} failed: ${getErrorMessage(e)}`,
-      );
-    }
   }
 }
 

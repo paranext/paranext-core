@@ -4,10 +4,8 @@ import { DEFAULT_STEP_COMPONENTS, FirstRunShell } from './first-run-shell.compon
 // Deep relative (not aliased) so the story drives the webpack-aliased renderer-hooks mock: the shell
 // embeds the real LanguageStep, whose PAPI hooks would otherwise return raw keys / English-only in
 // Storybook. Opting in renders real English chrome and a realistic multi-language picker.
-import {
-  resetFirstRunLanguageMock,
-  setFirstRunLanguageMock,
-} from '../../../../.storybook/mocks/first-run-language-mock-channel';
+import { withFirstRunLanguage } from '../../../../.storybook/mocks/first-run-language-mock-channel';
+import { withInternetSettings } from '../../../../.storybook/mocks/internet-settings-mock-channel';
 
 const SETUP_LANGUAGES: Record<string, LanguageInfo> = {
   en: { autonym: 'English' },
@@ -19,13 +17,12 @@ const meta: Meta<typeof FirstRunShell> = {
   title: 'First run/FirstRunShell',
   component: FirstRunShell,
   tags: ['autodocs', 'test'],
-  beforeEach: () => {
-    setFirstRunLanguageMock({
+  decorators: [
+    withFirstRunLanguage({
       interfaceLanguage: ['en'],
       setupLanguages: SETUP_LANGUAGES,
-    });
-    return resetFirstRunLanguageMock;
-  },
+    }),
+  ],
 };
 export default meta;
 
@@ -39,7 +36,13 @@ export const Language: Story = { args: { entryStep: 'language' } };
 export const CopiedFromParatext9: Story = {
   args: { entryStep: 'language', registrationValidAtStart: true, registrationPreexisting: true },
 };
-export const InternetSettings: Story = { args: { entryStep: 'internetSettings' } };
+// The step reads a data provider that has no PAPI backend in Storybook, so without standing one in
+// it shows its "provider hasn't registered yet" spinner and Next never enables. The step's own
+// states live in `steps/internet-settings-step.stories.tsx`; the shell needs it to render at all.
+export const InternetSettings: Story = {
+  args: { entryStep: 'internetSettings' },
+  decorators: [withInternetSettings()],
+};
 export const Identify: Story = { args: { entryStep: 'identify' } };
 export const SyncConsent: Story = { args: { entryStep: 'syncConsent' } };
 // Without injected event sources SyncProgressStep subscribes to live S/R network events, which have
