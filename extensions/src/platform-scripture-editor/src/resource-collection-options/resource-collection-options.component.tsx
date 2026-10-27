@@ -151,8 +151,8 @@ export function ResourceCollectionOptions({
           </Button>
         )}
         {/* Lock marks the team's rows (the top section), which can't be removed.
-            Gated on isAdminLocked, NOT !isUserRemovable: opted-out admin rows in the bottom section
-            are also non-removable but are not currently shared, so they get no lock. `role="img"`
+            Gated on isAdminLocked, NOT !isUserRemovable: downloaded rows in the bottom section
+            are also non-removable but are not the team's, so they get no lock. `role="img"`
             makes the label reliably announced even while the icon is visually hover-revealed. */}
         {row.isAdminLocked && (
           <span

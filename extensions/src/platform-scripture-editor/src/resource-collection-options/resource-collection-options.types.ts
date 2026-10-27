@@ -105,7 +105,7 @@ export interface ResourceCollectionOptionsProps {
   isChapterEnabled?: boolean;
   /** The team's rows (top section): checkable, never removable. */
   top: ViewOptionsTextEntry[];
-  /** User + opted-out-admin rows (bottom section): hover-✕ only where `isUserRemovable`. */
+  /** The user's own and downloaded rows (bottom section): hover-✕ only where `isUserRemovable`. */
   bottom: ViewOptionsTextEntry[];
   /** Display names of resources currently installing (shown as "Installing {name}…" rows). */
   installingResourceNames?: string[];
