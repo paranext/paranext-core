@@ -7,7 +7,6 @@ import {
   useProjectDataProvider,
   useProjectSetting,
   useScrollGroupScrRef,
-  useSetting,
 } from '@papi/frontend/react';
 import { useTabIconSelection, type TabIconUrls } from 'platform-bible-react';
 import {
@@ -35,6 +34,7 @@ import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
 import { useIsOnline } from './use-is-online.hook';
+import { useIsPowerMode } from './use-is-power-mode.hook';
 import {
   getResourceReferenceRowId,
   isDblResourceReference,
@@ -115,14 +115,8 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
 
   // #region Tab icon (Simple mode only — Power mode keeps this tab text-only, as today)
 
-  const [interfaceModePossiblyError] = useSetting('platform.interfaceMode', 'simple');
-  const isPowerMode = useMemo(() => {
-    if (isPlatformError(interfaceModePossiblyError)) {
-      logger.warn(`Error getting interface mode: ${getErrorMessage(interfaceModePossiblyError)}`);
-      return false;
-    }
-    return interfaceModePossiblyError === 'power';
-  }, [interfaceModePossiblyError]);
+  // Undefined until the setting loads; the tab icon and tooltip treat that as Simple.
+  const isPowerMode = useIsPowerMode();
 
   const [isDarkTheme, setIsDarkTheme] = useState(false);
   useEffect(() => {
@@ -548,8 +542,10 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
       readiness={readiness}
       dblResources={dblResources}
       isCatalogUnavailable={hasCatalogError}
-      // Only Simple mode has team resources, so Power lists every row together.
-      isGrouped={!isPowerMode}
+      // Only Simple mode has team resources, so Power lists every row together. Undefined (still
+      // loading) lists them together too, so a Power session never shows the grouping, even for a
+      // frame.
+      isGrouped={isPowerMode === false}
       onRetryCatalog={refetchCatalog}
       scrRef={scrRef}
       onScrRefChange={setScrRef}

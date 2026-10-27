@@ -46,8 +46,8 @@ const {
   realUsePromise: { current: undefined as unknown },
   mockUseScrollGroupScrRef: vi.fn(),
   copyrightNoticesByProject: new Map<string, unknown>(),
-  /** What `platform.interfaceMode` reads as. */
-  interfaceMode: { current: 'simple' },
+  /** What `platform.interfaceMode` reads as, and whether that read is still in flight. */
+  interfaceMode: { current: 'simple', isLoading: false },
 }));
 
 // @papi/frontend — papi default export used for themes subscription and commands
@@ -112,7 +112,7 @@ vi.mock('@papi/frontend/react', () => ({
       ];
     return ['ltr', false];
   }),
-  useSetting: vi.fn(() => [interfaceMode.current, false]),
+  useSetting: vi.fn(() => [interfaceMode.current, vi.fn(), vi.fn(), interfaceMode.isLoading]),
   useDialogCallback: vi.fn(() => vi.fn()),
   usePromise: vi.fn(() => [undefined, false]),
   useScrollGroupScrRef: (...args: unknown[]) => mockUseScrollGroupScrRef(...args),
@@ -380,6 +380,7 @@ beforeEach(() => {
   resetPanelHooks();
   copyrightNoticesByProject.clear();
   interfaceMode.current = 'simple';
+  interfaceMode.isLoading = false;
 });
 
 afterEach(() => {
@@ -1113,5 +1114,18 @@ describe('ResourceTextPanel — interface mode', () => {
     expect(capturedResourceTextPanelProps.mock.lastCall?.[0]).toEqual(
       expect.objectContaining({ isGrouped }),
     );
+  });
+
+  // The setting reads as its 'simple' default while it loads, so a Power session must not take
+  // that as Simple, even for a frame.
+  it('does not group the selector while the interface mode is still loading', () => {
+    interfaceMode.isLoading = true;
+    renderWithRows([DOWNLOADED_ROW]);
+
+    expect(capturedResourceTextPanelProps).toHaveBeenCalled();
+    const groupedPerRender = capturedResourceTextPanelProps.mock.calls.map(
+      ([props]) => props.isGrouped,
+    );
+    expect(groupedPerRender.every((isGrouped) => isGrouped === false)).toBe(true);
   });
 });
