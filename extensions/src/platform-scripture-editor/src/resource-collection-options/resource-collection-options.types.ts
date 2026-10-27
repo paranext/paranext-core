@@ -103,7 +103,7 @@ export interface ResourceCollectionOptionsProps {
    * enabled once chapter rendering exists.
    */
   isChapterEnabled?: boolean;
-  /** Admin-shared rows (top section): checkbox reflects the per-user overlay; never removable. */
+  /** The team's rows (top section): checkable, never removable. */
   top: ViewOptionsTextEntry[];
   /** User + opted-out-admin rows (bottom section): hover-✕ only where `isUserRemovable`. */
   bottom: ViewOptionsTextEntry[];
