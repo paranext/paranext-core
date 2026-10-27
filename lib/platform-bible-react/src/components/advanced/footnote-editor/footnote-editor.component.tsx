@@ -17,7 +17,6 @@ import {
   MarkerMenuItem as EditorMarkerMenuItem,
   SelectionRange,
   StateChangeSnapshot,
-  toUsfmNbspSpelling,
 } from '@eten-tech-foundation/platform-editor';
 import { Copy } from 'lucide-react';
 import {
@@ -55,7 +54,6 @@ import {
   deepEqual,
   getErrorMessage,
   isPlatformError,
-  truncateToCopyLimit,
   type PaletteItem,
 } from 'platform-bible-utils';
 import type { PaletteDriver, PaletteKeyForwarding } from 'platform-bible-utils/experimental';
@@ -80,7 +78,11 @@ import { FootnoteTypeDropdown } from './footnote-type-dropdown.component';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
 import { isEditorContextMenuOpenFor } from '../editor-context-menu.util';
 import { MarkerMenu } from '../marker-menu.component';
-import { generateInlineMarkerMenuListItems, isUnclosedNoteOp } from './footnote-editor.utils';
+import {
+  generateInlineMarkerMenuListItems,
+  getWholeNoteSelection,
+  isUnclosedNoteOp,
+} from './footnote-editor.utils';
 import { FootnoteCaretPosition } from '../footnotes/footnotes.types';
 
 /**
@@ -1113,21 +1115,40 @@ export default function FootnoteEditor({
     }
   }, [scrRef.book, scrRef.chapterNum]);
 
-  const handleCopy = async () => {
-    const editorInput = editorParentRef.current?.getElementsByClassName('editor-input')[0];
-    if (!editorInput?.textContent) return;
-    // The Copy button honors the same copy limit as a copy from the editor itself, and writes a
-    // no-break space the way the project spells it rather than as the editor displays it.
-    const text = truncateToCopyLimit(
-      toUsfmNbspSpelling(editorInput.textContent, editorOptions.view),
-      editorOptions.copyLimit,
-    );
-    if (!text) return;
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch (error) {
-      console.warn(`Could not copy the footnote to the clipboard: ${getErrorMessage(error)}`);
-    }
+  /**
+   * Copies the whole note through the editor's own copy, so the clipboard gets what Ctrl+C on the
+   * note puts there: its USFM, with each space the editor displays as a no-break space written as a
+   * space and a stored no-break space as the project spells it, cut to the copy limit the way the
+   * editor cuts any copy (a note that does not fit whole copies nothing).
+   *
+   * The copy works on the editor's selection, so the note is selected for it and the user's
+   * selection is put back afterwards — all in this one handler: the editor commits the three
+   * selection changes as one, so the caret never visibly leaves where it was and a marker edit
+   * pending under it is not settled by a departure. When focus left the editor for the click,
+   * Lexical may have dropped the selection; the one captured as focus left is then what the user
+   * last saw, and the note's own text is the last resort, as {@link restoreSelectionIfLost} chooses.
+   * The copy moves DOM focus into the editor, so focus goes back to whatever held it — the Copy
+   * button itself after a click.
+   */
+  const handleCopy = () => {
+    const editor = editorRef.current;
+    const wholeNote = getWholeNoteSelection(editor?.getUsj());
+    if (!editor || !wholeNote) return;
+    const ownerDocument = editorParentRef.current?.ownerDocument ?? document;
+    const { activeElement: focusedBefore } = ownerDocument;
+    const selectionBefore = editor.getSelection() ?? lastFocusOutSelectionRef.current;
+    editor.setSelection(wholeNote);
+    editor.copy();
+    if (selectionBefore) editor.setSelection(selectionBefore);
+    else editor.selectNote(0);
+    // Reading the selection back commits the queued selection update now (it answers against the
+    // document `getUsj` would return), and that commit is what moves DOM focus into the editor, so
+    // focus can only be handed back after it.
+    editor.getSelection();
+    if (ownerDocument.activeElement === focusedBefore) return;
+    if (focusedBefore instanceof HTMLElement && focusedBefore !== ownerDocument.body)
+      focusedBefore.focus({ preventScroll: true });
+    else if (ownerDocument.activeElement instanceof HTMLElement) ownerDocument.activeElement.blur();
   };
 
   const handleCallerChange = useCallback(

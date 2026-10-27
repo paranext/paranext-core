@@ -1,4 +1,10 @@
-import { DeltaOp, EditorRef, isInsertEmbedOpOfType } from '@eten-tech-foundation/platform-editor';
+import {
+  DeltaOp,
+  EditorRef,
+  isInsertEmbedOpOfType,
+  SelectionRange,
+} from '@eten-tech-foundation/platform-editor';
+import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { LanguageStrings, usfmMarkers } from 'platform-bible-utils';
 import { MutableRefObject } from 'react';
 import { MarkerMenuItem } from '../marker-menu.component';
@@ -69,4 +75,24 @@ export function isUnclosedNoteOp(op: DeltaOp | undefined): boolean {
   // `closed` rides on the embed as an unknown attribute; the embed's type does not declare it.
   const { note } = op.insert;
   return !!note && 'closed' in note && note.closed === 'false';
+}
+
+/**
+ * The selection over the whole note a footnote editor's document holds: from in front of its
+ * opening marker to just past its closing marker. The note is the first child of the editor's one
+ * wrapper paragraph; anything after it is text that is leaving the note, not part of it. For a note
+ * with no closing marker, the editor resolves the same end to the end of the note's content.
+ *
+ * @param usj The footnote editor's document (`EditorRef.getUsj`)
+ * @returns The selection, or `undefined` when the document holds no note
+ */
+export function getWholeNoteSelection(usj: Usj | undefined): SelectionRange | undefined {
+  const wrapper = usj?.content[0];
+  const note = typeof wrapper === 'object' ? wrapper.content?.[0] : undefined;
+  if (typeof note !== 'object' || note.type !== 'note' || !note.marker) return undefined;
+  const jsonPath = '$.content[0].content[0]';
+  return {
+    start: { jsonPath },
+    end: { jsonPath, closingMarkerOffset: `\\${note.marker}*`.length },
+  };
 }
