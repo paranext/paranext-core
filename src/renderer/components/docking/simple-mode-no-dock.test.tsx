@@ -82,7 +82,9 @@ afterEach(() => {
 // stops tab bars being hit-tested during a drag; jsdom does no hit-testing, so that half is covered
 // by `e2e-tests/tests/isolated/docking/simple-mode-no-dock.spec.ts`.
 describe('dragging over a docked panel', () => {
-  it('Power mode offers drop squares for a dragged float (control)', () => {
+  // Power mode renders edge drops (`dropMode='edge'`), not this layer; this checks only that the
+  // Power-mode group config lets rc-dock offer a drop, so the Simple-mode cases can fail.
+  it('the Power-mode group config offers drop squares for a dragged float (config control)', () => {
     const { target } = createDockedPanels(TAB_GROUP);
     const float = createFloatPanel(TAB_GROUP);
     createDragState({ panel: float, tabGroup: float.group });

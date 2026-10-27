@@ -7,27 +7,43 @@
 // dock-layout-wrapper.component.scss and are never touched by this file.
 
 // #region SIMPLE-MODE DROP BLOCK //////////////////////////////////////
-// Blocking single-tab drags in simple mode's resources column (`.dock-style-resources`, the one
-// simple-mode column that keeps a visible, interactive tab bar) turned out to need a JS-level fix,
-// not CSS: `tabLocked: true` on the tab group only blocks a dragged tab's
-// DockDropLayer/DockDropEdge paths (panel edge/middle drops), and disabling pointer-events on
-// `.dock-tab-hit-area` (an earlier attempt here) didn't work either — that hit-area is a CHILD of
-// the tab's actual drag-registered element (rc-dock's `.drag-initiator`, added by `DragDropDiv`),
-// so making only the child non-interactive still leaves the parent `.drag-initiator` itself as a
-// fully valid drag source and drop target; pointer hit-testing simply resolves to the parent
-// underneath. The real fix (both same-column reorder and cross-column move) is the `drag-ignore`
-// class rc-dock's own `DragDropDiv.onPointerDown` checks for, applied in simple mode by
-// `platform-tab-title.component`.
+// A single-tab drag in the resources column (`.dock-style-resources`, the one simple-mode column
+// with a visible tab bar) is stopped where it starts: `platform-tab-title.component` marks the tab
+// title `drag-ignore`, which rc-dock's `DragDropDiv.onPointerDown` checks on the pressed element.
+// `tabLocked: true` is not enough on its own, because it only gates a dragged tab's
+// DockDropLayer/DockDropEdge drops. Nor is `pointer-events: none` on `.dock-tab-hit-area`: that
+// hit-area is a child of the tab's drag element (rc-dock's `.drag-initiator`), so hit-testing
+// resolves to the `.drag-initiator` underneath, which is still a drag source and a drop target.
 //
 // Whole-group drops are blocked in CSS. No drag docks anything in simple mode (see `getGroups`),
 // but a float dragged by its tab bar carries its whole tab group, which rc-dock would still drop
 // onto a same-group tab in another tab bar, merging two floats. rc-dock picks drop targets with
 // `elementFromPoint`, which skips `pointer-events: none`, so tab bars leave hit-testing while
 // `<body>` has `dock-dragging`. That is every drag here, divider drags included: a drop target
-// later added to a simple-mode tab bar needs this rule narrowed.
+// later added to a simple-mode tab bar needs this rule narrowed. A drag cannot leave `dock-dragging`
+// behind by being released over a web view: rc-dock's own `body.dock-dragging iframe` rule takes
+// iframes out of hit-testing too, so the document always receives the `mouseup`.
 [data-interface-mode='simple'].dock-dragging .dock-bar,
 [data-interface-mode='simple'].dock-dragging .dock-bar * {
   pointer-events: none;
+}
+
+// The resources column is docked for good, so its tab bar must not start a drag at all. A press on
+// the bar's empty part lands on rc-tabs' own elements (`.dock-nav-wrap`, `.dock-nav-list`, ...),
+// which this app does not render and so cannot mark `drag-ignore`; the press bubbles to the bar's
+// `DragDropDiv`, which would drag the whole column. Taking the bar out of hit-testing sends the
+// press to the `.dock-panel` beneath, which starts no drag. What stays hit-testable is each tab's
+// `.dock-tab-btn`, which the tab's own drag element fills and which handles the tab's click itself,
+// and the overflow menu button. Not the whole `.dock-tab`: it is taller than its button, and a press
+// on that edge would drag the column too. Only outside a drag, so the rule above still covers them
+// during one.
+.dock-panel.dock-style-resources .dock-bar {
+  pointer-events: none;
+}
+
+body:not(.dock-dragging) .dock-panel.dock-style-resources .dock-bar .dock-tab-btn,
+body:not(.dock-dragging) .dock-panel.dock-style-resources .dock-bar .dock-nav-operations {
+  pointer-events: auto;
 }
 // #endregion SIMPLE-MODE DROP BLOCK ///////////////////////////////////
 
@@ -47,12 +63,6 @@
 // rc-dock fades the source tab to 30% opacity during drag (tabs.less `.dock-tab.dragging`).
 // Suppress that so the tab doesn't appear to react to drag attempts.
 .dock-panel.dock-style-resources .dock-tab.dragging {
-  opacity: 1;
-}
-
-// The same for the whole column (rc-dock's `.dock-panel.dragging`), dragged by the empty part of
-// its tab bar: that drag can drop nowhere (see DROP BLOCK above).
-.dock-panel.dock-style-resources.dragging {
   opacity: 1;
 }
 

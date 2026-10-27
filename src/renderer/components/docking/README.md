@@ -78,8 +78,11 @@ group, or undocks anything. Each rc-dock drop path has its own guard:
   bar while `<body>` carries `dock-dragging`, so rc-dock's hit test never lands on one.
 - **Undocking**: every group sets `floatable: false`, so no float drop square is ever offered.
 
-The Resources column can still be dragged by the empty part of its tab bar; that drag drops nowhere,
-and the stylesheet keeps rc-dock from fading the column while it lasts.
+The docked Resources column cannot be dragged at all. Pressing its tab title starts no drag (the
+title is marked `drag-ignore`), and the stylesheet takes the rest of its tab bar out of hit-testing,
+apart from each tab's `.dock-tab-btn` and the overflow button, so a press there lands on the panel
+beneath, which starts no drag. A drag that starts on a tab's padding still begins, but it can drop
+nowhere.
 
 `disableDock` only gates drag-and-drop; code that places tabs with `dockMove` is unaffected. Covered
 by `simple-mode-no-dock.test.tsx` and the `docking` e2e subset (`simple-mode-no-dock.spec.ts`).
@@ -129,9 +132,10 @@ Check each of these when upgrading rc-dock or rc-tabs, then run the docking unit
 `npm run test:e2e:isolated docking`.
 
 - **DOM classes:** `.dock-panel` (and its `data-dockid`), `.dock-bar`, `.dock-nav`, `.dock-nav-wrap`,
-  `.dock-nav-list`, `.dock-tab`, `.dock-tab-hit-area`, `.dock-extra-content` (where
-  `TabGroup.panelExtra` renders), `.dock-nav-operations` / `.dock-nav-operations-hidden` (rc-tabs
-  keeps the idle overflow box in the DOM), `.dock-style-<token>` group classes (`groupClassNames`),
+  `.dock-nav-list`, `.dock-tab`, `.dock-tab-btn` (rc-tabs' tab button, which the tab's drag element
+  fills exactly), `.dock-tab-hit-area`, `.dock-extra-content` (where `TabGroup.panelExtra` renders),
+  `.dock-nav-operations` / `.dock-nav-operations-hidden` (rc-tabs keeps the idle overflow box in the
+  DOM), `.dock-style-<token>` group classes (`groupClassNames`),
   `body > .dragging-layer`, `.dock-layout > .dock-drop-indicator`, `.dock-drop-edge`,
   `.dock-drop-square`, and `body.dock-dragging` (set for the length of every drag).
 - **APIs:** `DragDropDiv` (`getRef`, `onDragOverT`/`onDragLeaveT`/`onDropT`; `reject()` lets the

@@ -1,13 +1,14 @@
 /**
- * Simple mode never docks or undocks anything by dragging, end to end with rc-dock's real drag
- * manager. A floating panel can still be moved by its tab bar.
+ * Simple mode never docks, undocks, merges or reorders anything by dragging, end to end with
+ * rc-dock's real drag manager. A floating panel can still be moved by its tab bar; the docked
+ * Resources column cannot be dragged at all.
  *
- * A drop target is picked by rc-dock hit-testing the element under the pointer, and one of the
- * guards is a stylesheet rule that only takes effect there, so only a real drag in a real window
- * can show it. Each "nothing was offered" check first proves the drag started
+ * Both drag sources and drop targets are picked by hit-testing the element under the pointer, and
+ * the guards are stylesheet rules that only take effect there, so only a real drag in a real window
+ * can show them. Each "nothing was offered" check first proves the drag started
  * (`body.dock-dragging`) and, over a column, reached it (`dock-panel-dropping`), so it cannot pass
  * because the gesture did nothing. The Power-mode tests are the controls: there, the same gestures
- * are offered a drop.
+ * start a drag and are offered a drop.
  *
  * ## How to run
  *
@@ -52,7 +53,7 @@ const WINDOW_SIZE = { width: 1920, height: 1080 };
  */
 const SHARED_TEST_OPTIONS = {
   seedSettings: { 'platform.firstRunComplete': true },
-  electronLaunchOptions: { envOverrides: { DEV_NOISY: 'false' } },
+  electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
   windowSize: WINDOW_SIZE,
 };
 
@@ -77,6 +78,37 @@ async function expectNoDropOfferOver(page: Page, columnId: string): Promise<void
   );
   await expect(page.locator(DROP_OFFERS), `drop offered over ${columnId}`).toHaveCount(0);
   await expect(page.locator(DROP_INDICATOR), `drop indicator over ${columnId}`).toBeHidden();
+}
+
+/**
+ * The points in `panelId`'s tab bar where a press reaches the bar's own drag element, which drags
+ * the whole tab group. Scans the bar every 2px. A press on a tab reaches the tab's own drag element
+ * instead, and one on the overflow button opens its menu, so neither counts. Each point comes with
+ * the class of the element hit there, to make a failure readable.
+ */
+async function barPointsThatDragTheGroup(
+  page: Page,
+  panelId: string,
+): Promise<{ point: Point; hit: string }[]> {
+  return page.evaluate((selector) => {
+    const bar = document.querySelector(`${selector} .dock-bar`);
+    if (!bar) throw new Error(`no tab bar in ${selector}`);
+    const rect = bar.getBoundingClientRect();
+    const found: { point: { x: number; y: number }; hit: string }[] = [];
+    for (let y = Math.ceil(rect.top) + 1; y < rect.bottom - 1; y += 2) {
+      for (let x = Math.ceil(rect.left) + 1; x < rect.right - 1; x += 2) {
+        const hit = document.elementFromPoint(x, y);
+        if (
+          hit &&
+          bar.contains(hit) &&
+          !hit.closest('.dock-nav-operations') &&
+          !hit.closest('.dock-tab .drag-initiator')
+        )
+          found.push({ point: { x, y }, hit: hit.className.toString() });
+      }
+    }
+    return found;
+  }, panelSelector(panelId));
 }
 
 /**
@@ -182,19 +214,31 @@ test.describe('Simple mode: dragging never changes what is docked', () => {
     expect(await tabCountOf(page, aboutId)).toBe(1);
   });
 
-  test('the Resources column dragged by its tab bar is neither docked elsewhere nor floated', async ({
-    mainPage: page,
-  }) => {
+  test('the Resources column cannot be dragged by its tab bar', async ({ mainPage: page }) => {
     const columnsBefore = await waitForSimpleColumns(page);
     const resources = panelLocator(page, SIMPLE_PANEL_ID_RESOURCES);
 
-    await startDragAt(page, await emptyBarPoint(page, SIMPLE_PANEL_ID_RESOURCES));
+    // Nowhere in the bar does a press reach the bar's own drag element; the Power-mode control
+    // shows the scan finds such points when there are some
+    expect(await barPointsThatDragTheGroup(page, SIMPLE_PANEL_ID_RESOURCES)).toEqual([]);
+
+    // And pressing past the last tab, then moving as a drag would, starts no drag
+    const bar = await resources.locator('.dock-bar').boundingBox();
+    const lastTab = await resources.locator('.dock-bar .dock-tab').last().boundingBox();
+    if (!bar || !lastTab) throw new Error('the Resources tab bar has no box');
+    const grab = { x: lastTab.x + lastTab.width + 8, y: bar.y + bar.height / 2 };
+    expect(grab.x, 'the Resources tab bar has empty space past its tabs').toBeLessThan(
+      bar.x + bar.width - 2,
+    );
+    await page.mouse.move(grab.x, grab.y);
+    await page.mouse.down();
     try {
-      await expect(resources).toContainClass('dragging');
-      // rc-dock fades a dragged panel; a drag that can drop nowhere should not look like one
-      await expect(resources).toHaveCSS('opacity', '1');
-      await expectNoDropOfferOver(page, SIMPLE_PANEL_ID_PROJECT);
-      await expectNoDropOfferOver(page, SIMPLE_PANEL_ID_MODEL_TEXT);
+      await page.mouse.move(grab.x - 200, grab.y + 200, { steps: 10 });
+      // Nothing changes when no drag starts, so there is no state to wait on. Give rc-dock time to
+      // start one if it would; it marks `<body>` within a few pixels of movement.
+      await page.waitForTimeout(500);
+      await expect(page.locator('body')).not.toContainClass('dock-dragging');
+      await expect(resources).not.toContainClass('dragging');
     } finally {
       await page.mouse.up();
     }
@@ -202,9 +246,38 @@ test.describe('Simple mode: dragging never changes what is docked', () => {
     expect(await floatPanelIds(page)).toEqual([]);
     expect(await readSimpleColumns(page)).toEqual(columnsBefore);
   });
+
+  test('a Resources tab dragged by its padding onto a sibling tab is not reordered', async ({
+    mainPage: page,
+  }) => {
+    const columnsBefore = await waitForSimpleColumns(page);
+    const resources = panelLocator(page, SIMPLE_PANEL_ID_RESOURCES);
+    const sibling = await resources.locator('.dock-bar .dock-tab').nth(1).boundingBox();
+    if (!sibling) throw new Error('the Resources column has no second tab');
+
+    await startDragAt(page, await tabPaddingPoint(page, SIMPLE_PANEL_ID_RESOURCES, 0));
+    try {
+      // A drag of that one tab, not of the whole column. rc-dock marks the parent of the tab's drag
+      // element, rc-tabs' `.dock-tab-btn`.
+      await expect(resources.locator('.dock-bar .dock-tab-btn').first()).toContainClass('dragging');
+      await expect(resources).not.toContainClass('dragging');
+      // Past the sibling's midpoint, where rc-dock would drop the tab after it. rc-dock accepts a
+      // same-group tab there whatever `tabLocked` says; only the stylesheet stops it.
+      await page.mouse.move(sibling.x + sibling.width * 0.75, sibling.y + sibling.height / 2, {
+        steps: 10,
+      });
+      await page.waitForTimeout(500);
+      await expect(page.locator(DROP_INDICATOR)).toBeHidden();
+      await expect(page.locator(DROP_OFFERS)).toHaveCount(0);
+    } finally {
+      await page.mouse.up();
+    }
+
+    expect(await readSimpleColumns(page)).toEqual(columnsBefore);
+  });
 });
 
-test.describe('Power mode (control): the same drags are offered a drop', () => {
+test.describe('Power mode (control): the same drags are allowed', () => {
   test.use({ interfaceMode: 'power' });
 
   test('a float dragged by its tab bar over a docked panel is offered a drop', async ({
@@ -225,6 +298,31 @@ test.describe('Power mode (control): the same drags are offered a drop', () => {
       await expect(page.locator(DROP_OFFERS).first()).toBeAttached({ timeout: 5_000 });
     } finally {
       // Escape first, so the release cancels the drag instead of docking the float
+      await page.keyboard.press('Escape');
+      await page.mouse.up();
+    }
+  });
+
+  test('a docked panel can be dragged by the empty part of its tab bar', async ({
+    mainPage: page,
+  }) => {
+    // The bar is in the layout before its tab has rendered, so wait for points to press on
+    let dockedPanelId: string | undefined;
+    let points: { point: Point; hit: string }[] = [];
+    await expect(async () => {
+      dockedPanelId = (await readBars(page))[0]?.panelId;
+      if (!dockedPanelId) throw new Error('no docked panel');
+      points = await barPointsThatDragTheGroup(page, dockedPanelId);
+      expect(points.length, 'points in the tab bar that drag the whole tab group').toBeGreaterThan(
+        0,
+      );
+    }).toPass({ timeout: 60_000 });
+    if (!dockedPanelId) throw new Error('no docked panel');
+
+    await startDragAt(page, points[0].point);
+    try {
+      await expect(panelLocator(page, dockedPanelId)).toContainClass('dragging');
+    } finally {
       await page.keyboard.press('Escape');
       await page.mouse.up();
     }
