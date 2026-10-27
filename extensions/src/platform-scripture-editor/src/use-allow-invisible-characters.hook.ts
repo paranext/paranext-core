@@ -1,7 +1,7 @@
 import { logger } from '@papi/frontend';
 import { useProjectSetting } from '@papi/frontend/react';
 import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 
 /** What is known of a project's `platformScripture.allowInvisibleCharacters`. */
 export interface AllowInvisibleCharactersSetting {
@@ -34,13 +34,15 @@ export function useAllowInvisibleCharacters(
     'platformScripture.allowInvisibleCharacters',
     false,
   );
+  useEffect(() => {
+    if (!isPlatformError(valuePossiblyError)) return;
+    logger.warn(
+      `Error getting whether the project allows invisible characters: ${getErrorMessage(valuePossiblyError)}`,
+    );
+  }, [valuePossiblyError]);
   return useMemo(() => {
-    if (isPlatformError(valuePossiblyError)) {
-      logger.warn(
-        `Error getting whether the project allows invisible characters: ${getErrorMessage(valuePossiblyError)}`,
-      );
+    if (isPlatformError(valuePossiblyError))
       return { value: undefined, isLoading: false, isUnreadable: true };
-    }
     if (isLoading) return { value: undefined, isLoading: true, isUnreadable: false };
     return { value: valuePossiblyError, isLoading: false, isUnreadable: false };
   }, [valuePossiblyError, isLoading]);

@@ -410,8 +410,8 @@ const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availabl
 /**
  * Stands in for the chapter until the PDP delivers it. "3.0" because that is the version
  * ParatextData serves, and this web view reads the editor's documents with a 3.0 markers map that
- * warns on any other version. The editor reports the version of the document it was handed, so
- * while it shows this placeholder it reports 3.0, like every chapter.
+ * warns on any other version. The editor itself is never handed this placeholder (a spinner shows
+ * instead); the footnotes pane and the blank-chapter check read it until the chapter arrives.
  */
 const defaultUsj: Usj = {
   type: USJ_TYPE,
