@@ -260,39 +260,47 @@ describe('getViewOptionsTexts', () => {
       isUserRemovable: false,
     },
     {
-      label: 'admin unflagged but overlay present → bottom (past-admin), not locked, not removable',
+      label: 'admin unflagged but overlay present → top, checked, locked',
       sources: () =>
         makeSources({
           adminReferenced: list([project('a')]),
           overlay: { a: true },
         }),
-      section: 'bottom' as const,
+      section: 'top' as const,
       checked: true,
-      isAdminLocked: false,
+      isAdminLocked: true,
       isUserRemovable: false,
     },
     {
-      label: 'admin flag false, no overlay → bottom, unchecked, not locked, not removable',
+      label: 'admin unflagged, no overlay, not in user list → top, unchecked, locked',
+      sources: () => makeSources({ adminReferenced: list([project('a')]), overlay: {} }),
+      section: 'top' as const,
+      checked: false,
+      isAdminLocked: true,
+      isUserRemovable: false,
+    },
+    {
+      label: 'admin flag false, no overlay → top, unchecked, locked',
       sources: () =>
         makeSources({
           adminReferenced: list([project('a', { isInTextCollection: false })]),
           overlay: {},
         }),
-      section: 'bottom' as const,
+      section: 'top' as const,
       checked: false,
-      isAdminLocked: false,
+      isAdminLocked: true,
       isUserRemovable: false,
     },
     {
-      label: 'admin flag false, overlay true → bottom, checked, not locked, not removable',
+      label: 'admin flag false, overlay true → top, checked, locked',
       sources: () =>
         makeSources({
           adminReferenced: list([project('a', { isInTextCollection: false })]),
           overlay: { a: true },
         }),
-      section: 'bottom' as const,
+      section: 'top' as const,
       checked: true,
-      isAdminLocked: false,
+      isAdminLocked: true,
       isUserRemovable: false,
     },
     {
@@ -400,15 +408,27 @@ describe('getViewOptionsTexts', () => {
     },
   );
 
-  it("lists the admin's selection before the user-added resources the admin also references", () => {
+  it("lists the team's rows in referenced-list order, whoever else lists them", () => {
     const { top } = getViewOptionsTexts(
       makeSources({
-        adminReferenced: list([project('x'), project('a', { isInTextCollection: true })]),
+        adminReferenced: list([
+          project('x'),
+          project('a', { isInTextCollection: true }),
+          project('n'),
+          project('f', { isInTextCollection: false }),
+        ]),
         userReferenced: list([project('x', { isInTextCollectionForUser: true })]),
         overlay: {},
       }),
     );
-    expect(top.map((entry) => entry.reference.id)).toEqual(['a', 'x']);
+    expect(top.map((entry) => entry.reference.id)).toEqual(['x', 'a', 'n', 'f']);
+  });
+
+  it('lists a referenced id once, even when the referenced list names it twice', () => {
+    const { top } = getViewOptionsTexts(
+      makeSources({ adminReferenced: list([project('a'), project('a')]) }),
+    );
+    expect(top.map((entry) => entry.reference.id)).toEqual(['a']);
   });
 
   it('stamps longName from the resolver onto rows', () => {
@@ -569,6 +589,17 @@ describe('setUserDisplay', () => {
     const { overlay, userReferenced } = setUserDisplay('a', true, sources);
     expect(overlay).toEqual({ a: true }); // admin-owned (flag is set), so it writes the overlay
     expect(userReferenced.items).toEqual([]);
+  });
+
+  // View Options lists such a resource as the team's, unchecked; checking it must reach the grid.
+  it('shows an unflagged team resource in the grid once the user checks it', () => {
+    const sources = makeSources({ adminReferenced: list([project('n')]), overlay: {} });
+    const { overlay, userReferenced } = setUserDisplay('n', true, sources);
+    expect(overlay).toEqual({ n: true });
+    expect(userReferenced.items).toEqual([]);
+    expect(ids(getScriptureTextGridContents({ ...sources, overlay, userReferenced }))).toEqual([
+      'n',
+    ]);
   });
 
   it('is a no-op for an orphan overlay id that is in no list', () => {

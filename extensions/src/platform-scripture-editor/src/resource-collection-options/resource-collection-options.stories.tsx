@@ -49,7 +49,8 @@ const USER_ROWS: ViewOptionsTextEntry[] = [
     isAdminLocked: false,
     isUserRemovable: true,
   },
-  // An admin-owned resource the user opted out of — sits in the bottom section but is NOT removable.
+  // A resource downloaded on this computer that neither list names — in the bottom section but NOT
+  // removable.
   {
     reference: dblRef('kjv', 'KJV'),
     checked: false,

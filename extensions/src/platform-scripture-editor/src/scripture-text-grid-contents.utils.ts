@@ -52,8 +52,7 @@ export type ViewOptionsTextEntry = {
   isAdminLocked: boolean;
   /**
    * `true` only for user-list entries the admin's referenced list does not name — the only rows
-   * that show a remove (hover-X) affordance; `false` for every admin-owned or team row (top or
-   * bottom), which can be unchecked but never removed.
+   * that show a remove (hover-X) affordance; `false` for the team's rows and for downloaded rows.
    */
   isUserRemovable: boolean;
   /**
@@ -166,19 +165,32 @@ export function getScriptureTextGridContents(sources: TextCollectionSources): Bi
 }
 
 /**
+ * The checkbox state of a team row: the overlay or admin flag for an admin-owned entry, else the
+ * user's own flag when the user listed it too, else unchecked.
+ */
+function isTeamRowChecked(
+  overlay: TextCollectionOverlay,
+  adminOwned: AdminOwnedEntry | undefined,
+  userItem: BibleTextReference | undefined,
+): boolean {
+  if (adminOwned) return isAdminEntryShown(overlay, adminOwned);
+  return userItem?.isInTextCollectionForUser === true;
+}
+
+/**
  * Splits the View Options TEXTS list into two ordered sections:
  *
- * - `top` — the team's: the admin's current selection (`isInTextCollection === true`), followed by
- *   the user's own list entries that the admin's referenced list also names. Always visible and
- *   locked from removal (`isAdminLocked: true`); the user may only uncheck to hide from the grid.
- *   The second kind is the team's because the Bible texts dropdown lists the resource as the
- *   team's, so the two agree on who can remove it.
- * - `bottom` — resources the user can freely toggle and remove (`isAdminLocked: false`): other
- *   admin-owned entries (opted out, or shown before) followed by the rest of the user's own list.
+ * - `top` — the team's: every Bible text the admin's referenced list names, in that list's order,
+ *   whether or not the admin put it in the Text Collection and whether or not the user also listed
+ *   it. This matches the Bible texts dropdown, which lists all of them as the team's. Locked from
+ *   removal (`isAdminLocked: true`); the user may only check or uncheck to show or hide it in the
+ *   grid.
+ * - `bottom` — the rest of the user's own list, which the user can toggle and remove, in user-list
+ *   order.
  *
- * Checkbox state comes from the overlay for admin-owned entries and from
- * `isInTextCollectionForUser` for the user's own entries. An admin-owned id never also appears as a
- * user entry (admin precedence).
+ * A team row's checkbox comes from the overlay for an admin-owned entry (see
+ * {@link getAdminOwnedEntries}), else from the user's `isInTextCollectionForUser` when the user
+ * listed it too, else unchecked. {@link setUserDisplay} writes to the same place.
  *
  * @param sources Data sources for the current project.
  * @param resolveLongName Optional resolver that maps an entry's reference to its long name for
@@ -195,37 +207,41 @@ export function getViewOptionsTexts(
   options?: { downloaded: DownloadedResource[]; dblResources: DblResourceData[] },
 ): { top: ViewOptionsTextEntry[]; bottom: ViewOptionsTextEntry[] } {
   const { adminReferenced, userReferenced, overlay } = sources;
-  const adminOwned = getAdminOwnedEntries(adminReferenced, overlay);
+  const adminOwnedById = new Map(
+    getAdminOwnedEntries(adminReferenced, overlay).map((entry) => [entry.reference.id, entry]),
+  );
+  const userItems = userReferenced.items.filter(
+    (item) => isProjectReference(item) || isDblResourceReference(item),
+  );
   const top: ViewOptionsTextEntry[] = [];
   const bottom: ViewOptionsTextEntry[] = [];
-  const adminIds = new Set<string>();
-  const adminReferencedIds = new Set(
-    adminReferenced.items.map(getBibleTextId).filter((id) => id !== undefined),
-  );
+  const teamIds = new Set<string>();
 
-  adminOwned.forEach((entry) => {
-    adminIds.add(entry.reference.id);
-    const longName = resolveLongName?.(entry.reference);
-    const row: ViewOptionsTextEntry = {
-      reference: entry.reference,
-      checked: isAdminEntryShown(overlay, entry),
-      isAdminLocked: entry.adminFlagged,
+  adminReferenced.items.forEach((item) => {
+    if (!isProjectReference(item) && !isDblResourceReference(item)) return;
+    if (teamIds.has(item.id)) return;
+    teamIds.add(item.id);
+    const adminOwned = adminOwnedById.get(item.id);
+    const userItem = userItems.find((userEntry) => userEntry.id === item.id);
+    const reference = adminOwned?.reference ?? userItem ?? item;
+    const longName = resolveLongName?.(reference);
+    top.push({
+      reference,
+      checked: isTeamRowChecked(overlay, adminOwned, userItem),
+      isAdminLocked: true,
       isUserRemovable: false,
       ...(longName ? { longName } : {}),
-    };
-    (entry.adminFlagged ? top : bottom).push(row);
+    });
   });
 
-  userReferenced.items.forEach((item) => {
-    if (!isProjectReference(item) && !isDblResourceReference(item)) return;
-    if (adminIds.has(item.id)) return; // admin-owned ids are rendered by the loop above
+  userItems.forEach((item) => {
+    if (teamIds.has(item.id)) return; // the team's rows are listed above
     const longName = resolveLongName?.(item);
-    const isTeamShared = adminReferencedIds.has(item.id);
-    (isTeamShared ? top : bottom).push({
+    bottom.push({
       reference: item,
       checked: item.isInTextCollectionForUser === true,
-      isAdminLocked: isTeamShared,
-      isUserRemovable: !isTeamShared,
+      isAdminLocked: false,
+      isUserRemovable: true,
       ...(longName ? { longName } : {}),
     });
   });
@@ -260,21 +276,27 @@ export function getViewOptionsTexts(
 /**
  * Records the user's shown/hidden choice for a resource, returning the next state (callers
  * persist). Routes by ownership: an admin-owned entry writes the per-user overlay (the admin's flag
- * is untouched); a user-list entry writes that item's `isInTextCollectionForUser`. Unknown ids are
- * a no-op.
+ * is untouched); a user-list entry writes that item's `isInTextCollectionForUser`; any other id the
+ * admin's referenced list names writes the overlay, which makes it admin-owned from then on. Ids in
+ * neither list are a no-op.
  */
 export function setUserDisplay(
   resourceId: string,
   shown: boolean,
   sources: TextCollectionSources,
 ): { userReferenced: ResourceReferenceList; overlay: TextCollectionOverlay } {
-  const { userReferenced, overlay } = sources;
+  const { adminReferenced, userReferenced, overlay } = sources;
 
   if (isAdminOwnedId(resourceId, sources))
     return { userReferenced, overlay: { ...overlay, [resourceId]: shown } };
 
   const index = userReferenced.items.findIndex((item) => getBibleTextId(item) === resourceId);
-  if (index < 0) return { userReferenced, overlay };
+  if (index < 0) {
+    const isReferenced = adminReferenced.items.some((item) => getBibleTextId(item) === resourceId);
+    return isReferenced
+      ? { userReferenced, overlay: { ...overlay, [resourceId]: shown } }
+      : { userReferenced, overlay };
+  }
 
   const items = userReferenced.items.map((item, itemIndex) =>
     itemIndex === index ? { ...item, isInTextCollectionForUser: shown } : item,

@@ -163,12 +163,12 @@ describe('ResourceCollectionOptions — TEXTS list', () => {
     renderComponent({
       bottom: [
         row('u1', 'My Text', { isUserRemovable: true }),
-        row('a2', 'Opted-out Admin', { isUserRemovable: false }),
+        row('a2', 'Downloaded Text', { isUserRemovable: false }),
       ],
     });
     expect(screen.getByRole('button', { name: 'Remove My Text from list' })).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: 'Remove Opted-out Admin from list' }),
+      screen.queryByRole('button', { name: 'Remove Downloaded Text from list' }),
     ).not.toBeInTheDocument();
   });
 
@@ -399,14 +399,14 @@ describe('ResourceCollectionOptions locked-admin indicator', () => {
     expect(screen.getByLabelText('Remove My NIV from list')).toBeInTheDocument();
   });
 
-  it('shows neither a lock nor a remove control on an opted-out admin row', () => {
-    // Opted-out admin entries land in the bottom section: not shared (isAdminLocked false) and not
-    // user-removable. They must show no lock (not currently shared) and no remove (✕) control.
+  it('shows neither a lock nor a remove control on a downloaded row', () => {
+    // Downloaded rows land in the bottom section: not the team's (isAdminLocked false) and not
+    // user-removable. They must show no lock and no remove (✕) control.
     renderComponent({
-      bottom: [row('a2', 'Opted-out Admin', { isAdminLocked: false, isUserRemovable: false })],
+      bottom: [row('a2', 'Downloaded Text', { isAdminLocked: false, isUserRemovable: false })],
     });
     expect(screen.queryByLabelText('Shared by your team')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Remove Opted-out Admin from list')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Remove Downloaded Text from list')).not.toBeInTheDocument();
   });
 
   it('the lock is not a focusable/tab-stop button', () => {
