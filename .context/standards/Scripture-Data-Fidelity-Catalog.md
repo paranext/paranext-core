@@ -24,15 +24,12 @@ issue, but **this file is the authoritative copy**.
 
 ## Verdicts not yet ruled on by TJ
 
-As of 2026-10-27 every `accept` in this catalog carries TJ's ruling and date, except UV-2 (below).
-Still waiting on TJ:
+As of 2026-10-27 every `accept` in this catalog carries TJ's ruling and date. Still waiting on TJ:
 
 - **Ratifying the ADR** `adr-editor-nbsp-spelling-follows-project-setting` (Proposed): U+001A, which
   Paratext text can never hold, drawn as a blank the width of a space (row AI-1).
 - **O-12**: whether an author's literal `~` in an attribute value must survive a Standard-view
   settle (`needs-decision`; candidate fix and alternative in the row).
-- **UV-2** carries an `accept` ("no loss; the version is deliberately not derived from `\usfm`") with
-  no TJ ruling or date recorded.
 
 Nothing else is unruled.
 
@@ -224,7 +221,7 @@ Every load, first-save, at-rest, locality and undo assertion passes in all three
 | ID | Layer | Finding | Status |
 | --- | --- | --- | --- |
 | UV-1 | L2/L0 | = F-5. ParatextData serves `<usx version="3.0">` while the editor pipeline emitted 3.1 and core forced 3.0 back with three shims | **FIXED** — the version is preserved end to end (paranext-core#2922, scripture-editors#29); `Usj.version` is `string`; the three shims and the `usxVersion` option are deleted |
-| UV-2 | L3 | A `\usfm` header line loses nothing: usfm.sty defines `\usfm` as an ordinary paragraph marker, so ParatextData writes `<para style="usfm">3.0</para>` (never the `<usfm>` element) and it round-trips byte for byte, independent of the stamp. The root `version` is always "3.0" whatever the header says (3.0, 3.1, 2.4), and relabelling the root to "3.1" writes the same USFM. Under a stylesheet that does not define `\usfm` the header is an unknown marker and a save joins it onto the `\id` line (same family as S-1; real stylesheets define it) | **accept** — no loss. The version is deliberately NOT derived from `\usfm`: the stamp is ParatextData's converter version, not the document's declared one. Pinned by `UsfmVersionMarkerRoundTripCaptureTests.cs` and `usx-to-usj.test.ts` "the \usfm version header" |
+| UV-2 | L3 | A `\usfm` header line loses nothing: usfm.sty defines `\usfm` as an ordinary paragraph marker, so ParatextData writes `<para style="usfm">3.0</para>` (never the `<usfm>` element) and it round-trips byte for byte, independent of the stamp. The root `version` is always "3.0" whatever the header says (3.0, 3.1, 2.4), for project UsfmVersion 2 and 3 alike, and relabelling the root to "3.1" writes the same USFM. Under a stylesheet that does not define `\usfm` the header is an unknown marker and a save joins it onto the `\id` line (same family as S-1; real stylesheets define it) | **accept** (TJ, 2026-10-27) — no loss. The version is deliberately NOT derived from `\usfm`: the stamp is ParatextData's converter version, not the document's declared one. ParatextData 9.6 derives the stamp from the project's UsfmVersion setting (3.1 → "3.1"), still never from the header; revisit at that upgrade. Pinned by `UsfmVersionMarkerRoundTripCaptureTests.cs` and `usx-to-usj.test.ts` "the \usfm version header"; upgrade steps in `Usfm31NestingTripwireTests` checklist item 11 |
 | UV-3 | L2/L0 | Residual 3.0 assumptions to revisit at the ParatextData 3.1 upgrade: `UsjReaderWriter` throws on a non-3.0 USJ without a markers map (the editor web view reads with `USFM_MARKERS_MAP_PARATEXT_3_0`); the web view's loading placeholder `defaultUsj` is pinned to "3.0" | **recorded** — `Usfm31NestingTripwireTests` checklist item 11 |
 
 ## Accepted load-time normalizations (automatic edits on load, by design)

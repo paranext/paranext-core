@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
+using Paratext.Data.ProjectSettingsAccess;
 using SIL.Scripture;
 
 namespace TestParanextDataProvider.Projects
@@ -18,10 +19,16 @@ namespace TestParanextDataProvider.Projects
     /// round-trips back to the same <c>\usfm</c> line byte for byte.
     ///
     /// The root <c>&lt;usx version&gt;</c> is NOT derived from the header: it is always
-    /// <c>UsfmToUsx.UsxVersionNumber</c> ("3.0"), whatever the header says or whether there is one —
-    /// on the verse read path (<see cref="ParatextProjectDataProvider.GetVerseUsx"/>) too.
-    /// The header is document data and the stamp is converter metadata; the two are independent
-    /// here, and Platform.Bible's TypeScript pipeline preserves each one as it was served.
+    /// <c>UsfmToUsx.UsxVersionNumber</c> ("3.0"), whatever the header says or whether there is one,
+    /// for every project UsfmVersion setting this ParatextData has (2 and 3) — on the verse read
+    /// path (<see cref="ParatextProjectDataProvider.GetVerseUsx"/>) too. The header is document data
+    /// and the stamp is converter metadata; the two are independent here, and Platform.Bible's
+    /// TypeScript pipeline preserves each one as it was served.
+    ///
+    /// The expected "3.0" holds only because neither project setting reachable on this ParatextData
+    /// maps to anything else. Paratext 9.6 derives the stamp from the project's UsfmVersion setting
+    /// (3.1 → "3.1"), so the ParatextData upgrade must add a 3.1-setting case here — see checklist
+    /// item 11 of <see cref="Usfm31NestingTripwireTests"/>.
     /// </summary>
     [ExcludeFromCodeCoverage]
     internal class UsfmVersionMarkerRoundTripCaptureTests : PapiTestBase
@@ -53,11 +60,18 @@ namespace TestParanextDataProvider.Projects
         private DummyParatextProjectDataProvider CreateProvider() =>
             new(PdpName, Client, _projectDetails, ParatextProjects);
 
-        [TestCase("3.0", TestName = "UsfmHeader_3_0")]
-        [TestCase("3.1", TestName = "UsfmHeader_3_1")]
-        [TestCase("2.4", TestName = "UsfmHeader_2_4")]
-        public void UsfmHeader_IsAParagraph_AndDoesNotSetTheUsxVersion(string headerVersion)
+        [TestCase("3.0", UsfmVersionOption.Version3, TestName = "UsfmHeader_3_0_Project3")]
+        [TestCase("3.1", UsfmVersionOption.Version3, TestName = "UsfmHeader_3_1_Project3")]
+        [TestCase("2.4", UsfmVersionOption.Version3, TestName = "UsfmHeader_2_4_Project3")]
+        [TestCase("3.0", UsfmVersionOption.Version2, TestName = "UsfmHeader_3_0_Project2")]
+        [TestCase("3.1", UsfmVersionOption.Version2, TestName = "UsfmHeader_3_1_Project2")]
+        [TestCase("2.4", UsfmVersionOption.Version2, TestName = "UsfmHeader_2_4_Project2")]
+        public void UsfmHeader_IsAParagraph_AndDoesNotSetTheUsxVersion(
+            string headerVersion,
+            UsfmVersionOption projectUsfmVersion
+        )
         {
+            _scrText.Settings.UsfmVersion = projectUsfmVersion;
             _scrText.PutText(
                 BookNum,
                 0,
@@ -82,7 +96,8 @@ namespace TestParanextDataProvider.Projects
             Assert.That(
                 chapterUsx,
                 Does.StartWith("<usx version=\"3.0\">"),
-                "The USX version is UsfmToUsx.UsxVersionNumber, not the \\usfm header's version."
+                "Both project UsfmVersion settings this ParatextData has stamp \"3.0\", and the "
+                    + "\\usfm header's version has no effect on it."
             );
             Assert.That(provider.GetBookUsx(verseRef), Does.StartWith("<usx version=\"3.0\">"));
             Assert.That(

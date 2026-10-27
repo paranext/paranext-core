@@ -6,7 +6,8 @@ namespace TestParanextDataProvider
     /// Upgrade tripwire for USFM 3.1 inline-marker nesting semantics.
     ///
     /// <para>
-    /// The referenced ParatextData (9.5.0.22) supports only USFM 2 and 3.0: its
+    /// The 9.5 ParatextData this tripwire was written against (9.5.0.24 as of 2026-10-27, the
+    /// <c>ParatextPackageVersion</c> in ParanextDataProvider.csproj) supports only USFM 2 and 3.0: its
     /// <c>UsfmVersionOption</c> enum ends at <c>Version3</c>, and a project migrated to USFM 3.1
     /// in Paratext 9.6+ sets <c>MinParatextDataVersion 9.6.1.1</c>, which locks it out of this
     /// ParatextData entirely. So today Platform.Bible only ever opens USFM &lt;= 3.0 text, and the
@@ -90,26 +91,44 @@ namespace TestParanextDataProvider
     ///    upgraded ParatextData distinguishes generated refs (USFM 3.1 defines <c>\ref</c>),
     ///    revisit emitting real <c>ref</c>-type USX (see the decision comment in
     ///    ConvertUsfmToUsx).
-    /// 11. USX/USJ version: preserved end to end, never derived. This ParatextData stamps every
-    ///    USX <c>version="3.0"</c> (<c>UsfmToUsx.UsxVersionNumber</c>, a static constant, even for
-    ///    USFM 2 projects), and the TypeScript pipeline carries whatever it is served: scripture-
-    ///    utilities' <c>usxStringToUsj</c> keeps the root <c>version</c>, the editor reports the
-    ///    version of the USJ it was handed on every USJ it produces, and <c>usjToUsxString</c>
-    ///    writes the USJ's own version back — so the extender PDPE's <c>setBookUSJ</c> /
-    ///    <c>setChapterUSJ</c> write the version the getters read, with no TypeScript-side constant.
-    ///    The version is NOT derived from a <c>\usfm</c> header: usfm.sty defines <c>\usfm</c> as an
-    ///    ordinary paragraph marker, so it round-trips as <c>&lt;para style="usfm"&gt;</c> (never
-    ///    USX's <c>&lt;usfm&gt;</c> element, which <c>UsxFragmenter</c> ignores) and is independent of
-    ///    the stamp (UsfmVersionMarkerRoundTripCaptureTests pins both). <c>ConvertUsxToUsfm</c> never
-    ///    reads the stamp, so it is inert on this PDP's own write path; Paratext 9's plugin API does
-    ///    reject a mismatch (ProjectWrapper.cs:477, against <c>UsfmToUsx.UsxVersionNumber</c>). On
-    ///    upgrade: confirm what the upgraded <c>UsfmToUsx</c> stamps for a 3.1 project (expected
-    ///    "3.1", which then flows through unchanged), and audit the TypeScript readers that still
-    ///    assume 3.0 — <c>UsjReaderWriter</c> (platform-bible-utils) throws on a non-3.0 USJ unless
-    ///    given a markers map, the editor web view reads with <c>USFM_MARKERS_MAP_PARATEXT_3_0</c>
-    ///    (which warns on any other version), and the web view's loading placeholder
-    ///    <c>defaultUsj</c> is pinned to "3.0" — each must pick its markers map (and the
-    ///    placeholder its version) from the document's version.
+    /// 11. USX/USJ version (catalog rows UV-2 and UV-3 in
+    ///    .context/standards/Scripture-Data-Fidelity-Catalog.md): preserved end to end, never
+    ///    derived from the document. This ParatextData stamps every USX <c>version="3.0"</c>
+    ///    (<c>UsfmToUsx.UsxVersionNumber</c>, a static constant, even for USFM 2 projects), and the
+    ///    TypeScript pipeline carries whatever it is served: scripture-utilities'
+    ///    <c>usxStringToUsj</c> keeps the root <c>version</c>, the editor reports the version of the
+    ///    USJ it was handed on every USJ it produces, and <c>usjToUsxString</c> writes the USJ's own
+    ///    version back — so the extender PDPE's <c>setBookUSJ</c> / <c>setChapterUSJ</c> write the
+    ///    version the getters read, with no TypeScript-side constant. The version is NOT derived
+    ///    from a <c>\usfm</c> header: usfm.sty defines <c>\usfm</c> as an ordinary paragraph marker,
+    ///    so it round-trips as <c>&lt;para style="usfm"&gt;</c> (never USX's <c>&lt;usfm&gt;</c>
+    ///    element, which <c>UsxFragmenter</c> ignores) and is independent of the stamp
+    ///    (UsfmVersionMarkerRoundTripCaptureTests pins both, for project UsfmVersion 2 and 3).
+    ///    <c>ConvertUsxToUsfm</c> never reads the stamp, so it is inert on this PDP's own write path;
+    ///    Paratext 9's plugin API does reject a mismatch (<c>ProjectWrapper.PutUSX</c>,
+    ///    ParatextData/Plugins/ProjectWrapper.cs). On upgrade, Paratext 9.6 removes the
+    ///    <c>UsfmToUsx.UsxVersionNumber</c> constant: <c>UsfmToUsx.GetUsfmVersionForScrText</c>
+    ///    (ParatextData/UsfmToUsx.cs) derives the stamp from the project's UsfmVersion SETTING
+    ///    (Version2 or Version3 → "3.0", Version3_1 → "3.1"; still never from the <c>\usfm</c>
+    ///    header), <c>RunConverter</c> uses it whenever the caller passes no explicit
+    ///    <c>versionNumber</c> (PT10's <c>ConvertUsfmToUsx</c> and <c>GetVerseUsx</c> pass none), and
+    ///    ProjectWrapper's mismatch check compares against it. So on upgrade:
+    ///    (a) <c>ParatextProjectDataProvider.GetVerseUsx</c> builds its own <c>&lt;usx&gt;</c>
+    ///    wrapper from <c>UsfmToUsx.UsxVersionNumber</c>; switch it to
+    ///    <c>UsfmToUsx.GetUsfmVersionForScrText(scrText)</c> so a verse stays stamped like its
+    ///    chapter and book.
+    ///    (b) In UsfmVersionMarkerRoundTripCaptureTests, add <c>UsfmHeader_IsAParagraph_…</c> cases
+    ///    for a project whose UsfmVersion setting is <c>Version3_1</c>, expecting
+    ///    <c>version="3.1"</c> on the chapter, book and verse paths for EVERY header value (3.0, 3.1,
+    ///    2.4) — the header must still have no effect — and keep the Version2/Version3 cases at
+    ///    "3.0". Re-check that the save-path tests still round-trip a 3.1 project's USX, then update
+    ///    catalog row UV-2 to say the stamp follows the project setting.
+    ///    (c) Audit the TypeScript readers that still assume 3.0 (catalog row UV-3) —
+    ///    <c>UsjReaderWriter</c> (platform-bible-utils) throws on a non-3.0 USJ unless given a markers
+    ///    map, the editor web view reads with <c>USFM_MARKERS_MAP_PARATEXT_3_0</c> (which warns on
+    ///    any other version), and the web view's loading placeholder <c>defaultUsj</c> is pinned to
+    ///    "3.0" — each must pick its markers map (and the placeholder its version) from the
+    ///    document's version.
     /// </para>
     ///
     /// <para>
