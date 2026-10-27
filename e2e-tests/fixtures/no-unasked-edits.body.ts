@@ -240,14 +240,32 @@ interface ChapterCase {
   localEdits: LocalEdit[];
 }
 
+/**
+ * The text before and after a {@link TextPoint}'s caret. Throws unless the point has exactly one
+ * `|`, so a point whose text contains a `|` of its own (an attribute separator) fails loudly
+ * instead of putting the caret in the wrong place.
+ */
+function splitPoint(point: TextPoint): [string, string] {
+  const parts = point.split('|');
+  if (parts.length !== 2)
+    throw new Error(`${JSON.stringify(point)} must contain exactly one | marking the caret`);
+  return [parts[0], parts[1]];
+}
+
+/** `point`, once {@link splitPoint} has confirmed it has exactly one caret. */
+function checkedPoint(point: TextPoint): TextPoint {
+  splitPoint(point);
+  return point;
+}
+
 /** The `|`-free text of a {@link TextPoint}. */
 function pointText(point: TextPoint): string {
-  return point.replace('|', '');
+  return splitPoint(point).join('');
 }
 
 /** `point`'s text with `inserted` at its caret. */
 function insertAtPoint(point: TextPoint, inserted: string): string {
-  return point.replace('|', inserted);
+  return splitPoint(point).join(inserted);
 }
 
 /**
@@ -259,7 +277,7 @@ function usfmBetween(unitText: string, from: TextPoint, to: TextPoint): string {
   const end = unitText.indexOf(pointText(to));
   if (start < 0 || end < 0)
     throw new Error(`Range ${from} … ${to} does not lie in ${JSON.stringify(unitText)}`);
-  return unitText.slice(start + from.indexOf('|'), end + to.indexOf('|'));
+  return unitText.slice(start + splitPoint(from)[0].length, end + splitPoint(to)[0].length);
 }
 
 /**
@@ -271,9 +289,10 @@ function usfmBetween(unitText: string, from: TextPoint, to: TextPoint): string {
 async function selectInEditor(editorInput: Locator, from: TextPoint, to: TextPoint = from) {
   await editorInput.evaluate(
     (root, points) => {
+      // Runs in the page, so it cannot call `splitPoint`; the points were checked by it below.
       const locate = (point: string) => {
         const caret = point.indexOf('|');
-        const text = point.replace('|', '');
+        const text = point.split('|').join('');
         const hits: Array<{ node: Text; offset: number }> = [];
         const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
         for (let node = walker.nextNode(); node; node = walker.nextNode()) {
@@ -300,7 +319,7 @@ async function selectInEditor(editorInput: Locator, from: TextPoint, to: TextPoi
         .getSelection()
         ?.setBaseAndExtent(start.node, start.offset, end.node, end.offset);
     },
-    { from, to },
+    { from: checkedPoint(from), to: checkedPoint(to) },
   );
   await editorInput.page().waitForTimeout(SELECTION_ADOPTED_MS);
 }
