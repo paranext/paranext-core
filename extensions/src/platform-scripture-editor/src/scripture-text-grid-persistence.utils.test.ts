@@ -8,6 +8,7 @@ import {
   persistUserAddition,
   persistUserDisplay,
   persistUserRemoval,
+  removeFromUserTextConnections,
   type UserResourceWriter,
 } from './scripture-text-grid-persistence.utils';
 
@@ -137,5 +138,75 @@ describe('persistCellOrder', () => {
     const writer = makeWriter();
     await persistCellOrder(writer, ['a', 'b']);
     expect(writer.setCellOrder).toHaveBeenCalledWith(['a', 'b']);
+  });
+});
+
+/** A user list of DBL references with the given ids. */
+function makeDblUserList(ids: string[]): ResourceReferenceList {
+  return {
+    dataVersion: '1.0.0',
+    items: ids.map((id) => ({ type: 'dblResource' as const, name: `name-${id}`, id })),
+  };
+}
+
+describe('removeFromUserTextConnections', () => {
+  it("writes the user's list without the given ids", async () => {
+    const setUserList = vi.fn().mockResolvedValue(undefined);
+    const result = await removeFromUserTextConnections(
+      ['uid-a'],
+      async () => makeDblUserList(['uid-a', 'uid-b']),
+      setUserList,
+    );
+    expect(result).toBe('removed');
+    expect(setUserList).toHaveBeenCalledWith(
+      expect.objectContaining({
+        items: [{ type: 'dblResource', name: 'name-uid-b', id: 'uid-b' }],
+      }),
+    );
+  });
+
+  it('removes every copy the list stores the resource under', async () => {
+    const setUserList = vi.fn().mockResolvedValue(undefined);
+    await removeFromUserTextConnections(
+      ['uid-a', 'proj-a'],
+      async () => ({
+        dataVersion: '1.0.0',
+        items: [
+          { type: 'dblResource', name: 'A', id: 'uid-a' },
+          { type: 'project', name: 'A', id: 'proj-a' },
+          { type: 'dblResource', name: 'B', id: 'uid-b' },
+        ],
+      }),
+      setUserList,
+    );
+    expect(setUserList).toHaveBeenCalledWith(
+      expect.objectContaining({ items: [{ type: 'dblResource', name: 'B', id: 'uid-b' }] }),
+    );
+  });
+
+  it('reports a resource already off the list, and writes nothing', async () => {
+    const setUserList = vi.fn();
+    const result = await removeFromUserTextConnections(
+      ['uid-a'],
+      async () => makeDblUserList(['uid-b']),
+      setUserList,
+    );
+    expect(result).toBe('alreadyGone');
+    expect(setUserList).not.toHaveBeenCalled();
+  });
+
+  it('reports a list it could not read, and writes nothing', async () => {
+    const setUserList = vi.fn();
+    expect(await removeFromUserTextConnections(['uid-a'], async () => undefined, setUserList)).toBe(
+      'listUnavailable',
+    );
+    expect(setUserList).not.toHaveBeenCalled();
+  });
+
+  it('rejects when the write fails', async () => {
+    const setUserList = vi.fn().mockRejectedValue(new Error('could not write'));
+    await expect(
+      removeFromUserTextConnections(['uid-a'], async () => makeDblUserList(['uid-a']), setUserList),
+    ).rejects.toThrow('could not write');
   });
 });

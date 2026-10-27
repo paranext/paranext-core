@@ -28,6 +28,13 @@ export type DblResourceCatalogState = {
    * that is an answer, and no retry can improve on it.
    */
   hasCatalogError: boolean;
+  /**
+   * Whether the last fetch to finish delivered a DBL catalog, so DBL references can be resolved.
+   * False before the first answer, after a failure, and for an installation with no DBL
+   * credentials. Unlike `hasCatalogError`, it keeps its value through a refetch until the next
+   * answer arrives, which is when `dblResources` changes too.
+   */
+  hasDblCatalog: boolean;
   /** Re-runs the fetch, clearing any previous error. */
   refetchCatalog: () => void;
 };
@@ -58,6 +65,7 @@ export type DblResourceCatalogState = {
 export function useDblResourceCatalog(): DblResourceCatalogState {
   const [fetchResources, setFetchResources] = useState(true);
   const [hasCatalogError, setHasCatalogError] = useState(false);
+  const [hasDblCatalog, setHasDblCatalog] = useState(false);
 
   // `usePromise`'s own currency flag guards only its `setValue`/`setIsLoading` — a superseded
   // factory invocation still runs to completion and still writes state we own. Overlapping fetches
@@ -106,7 +114,10 @@ export function useDblResourceCatalog(): DblResourceCatalogState {
         logger.warn(
           `Failed to load the DBL resource catalog: ${getErrorMessage(dblResult.reason)}`,
         );
-        if (generation === fetchGenerationRef.current) setHasCatalogError(true);
+        if (generation === fetchGenerationRef.current) {
+          setHasCatalogError(true);
+          setHasDblCatalog(false);
+        }
 
         return localNonDblResources;
       }
@@ -118,12 +129,17 @@ export function useDblResourceCatalog(): DblResourceCatalogState {
       // still coming and a retry genuinely works. Either way the locally-installed rows loaded fine
       // and are the only resources such a user has, so they are kept.
       if (dblResult.value.status !== 'available') {
-        if (generation === fetchGenerationRef.current)
+        if (generation === fetchGenerationRef.current) {
           setHasCatalogError(dblResult.value.reason === 'notReady');
+          setHasDblCatalog(false);
+        }
         return localNonDblResources;
       }
 
-      if (generation === fetchGenerationRef.current) setHasCatalogError(false);
+      if (generation === fetchGenerationRef.current) {
+        setHasCatalogError(false);
+        setHasDblCatalog(true);
+      }
 
       return [...dblResult.value.resources, ...localNonDblResources];
     }, [fetchResources]),
@@ -147,6 +163,7 @@ export function useDblResourceCatalog(): DblResourceCatalogState {
     isCatalogReady:
       !isLoadingResources && resourcesPossiblyUndefined !== undefined && !hasCatalogError,
     hasCatalogError,
+    hasDblCatalog,
     refetchCatalog,
   };
 }

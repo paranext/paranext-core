@@ -5,7 +5,9 @@ import * as React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import type { DblResourceData } from 'platform-bible-utils';
-import type { WebViewProps } from '@papi/core';
+import type { DialogTypes, WebViewProps } from '@papi/core';
+import papi from '@papi/frontend';
+import { useDialogCallback } from '@papi/frontend/react';
 import { usePromise } from 'platform-bible-react';
 import { useDialogCallback } from '@papi/frontend/react';
 import { NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY } from 'platform-bible-utils/experimental';
@@ -63,6 +65,7 @@ vi.mock('@papi/frontend', () => ({
         projectInterfaces: ['platformScripture.USJ_Chapter', 'platformScripture.CopyLimit'],
       })),
     },
+    notifications: { send: vi.fn() },
   },
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
@@ -79,6 +82,7 @@ vi.mock('@papi/frontend/react', () => ({
       '%webView_resourcePanel_installedButUnavailable%': "Installed, but couldn't be opened.",
       '%webView_resourcePanel_retry%': 'Try again',
       '%webView_resourcePanel_downloadResources%': 'Download resources',
+      '%webView_resourcePanel_resourceRemoved%': '{resourceName} was removed from your list.',
       '%webView_resourcePanel_bibleTexts_emptyState_moreInfo%': 'More info',
       '%webView_resourcePanel_bibleTexts_emptyState_lessInfo%': 'Less info',
       '%webView_resourcePanel_bibleTexts_emptyState_moreInfo_body%': 'Bible texts detail here.',
@@ -203,7 +207,10 @@ vi.mock('./use-is-online.hook', () => ({
   default: vi.fn(() => true),
 }));
 
-vi.mock('./select-dbl-resource', () => ({
+// Only the add is stubbed: it installs, which these tests cannot do. The id lookups and the removal
+// are this panel's own logic run against the mocked settings provider, so they stay real.
+vi.mock('./select-dbl-resource', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./select-dbl-resource')>()),
   selectTextConnection: vi.fn(),
 }));
 
@@ -1335,5 +1342,258 @@ describe('ResourceTextPanel — interface mode', () => {
       ([props]) => props.isGrouped,
     );
     expect(groupedPerRender.every((isGrouped) => isGrouped === false)).toBe(true);
+  });
+});
+
+describe('ResourceTextPanel — removing a resource in the picker', () => {
+  type PickerOptions = DialogTypes['platform.resourcePicker']['options'];
+  type PickerResolve = (
+    resource: DblResourceData | undefined,
+    dialogType: string,
+    options: PickerOptions,
+  ) => void;
+
+  const catalogRow = (dblEntryUid: string, projectId: string): DblResourceData => ({
+    dblEntryUid,
+    displayName: dblEntryUid,
+    fullName: dblEntryUid,
+    bestLanguageName: 'English',
+    type: 'ScriptureResource',
+    size: 1,
+    installed: true,
+    updateAvailable: false,
+    projectId,
+  });
+  const TEAM = catalogRow('team-uid', 'team-project');
+  const MINE = catalogRow('mine-uid', 'mine-project');
+  const OTHER = catalogRow('other-uid', 'other-project');
+
+  const row = (
+    resource: DblResourceData,
+    source: PickerResource['source'],
+    id = resource.dblEntryUid,
+  ): PickerResource => ({
+    reference: { type: 'dblResource', name: resource.displayName, id },
+    source,
+    isAdminLocked: false,
+    type: 'ScriptureResource',
+    installed: true,
+    projectId: resource.projectId,
+  });
+  // The team's uid is stored upper-cased, as some sources spell it.
+  const ROWS = [row(TEAM, 'admin', 'TEAM-UID'), row(MINE, 'user'), row(OTHER, 'downloaded')];
+
+  const catalogState = (hasDblCatalog: boolean) => ({
+    dblResources: hasDblCatalog ? [TEAM, MINE, OTHER] : [],
+    isLoadingResources: false,
+    isCatalogReady: true,
+    hasCatalogError: false,
+    hasDblCatalog,
+    refetchCatalog: vi.fn(),
+  });
+
+  /**
+   * Renders the panel and returns what it last handed `useDialogCallback` for the resource picker,
+   * plus a way to re-render with other picker rows.
+   */
+  function renderWithPicker(props: Partial<WebViewProps> = {}) {
+    let options: PickerOptions | undefined;
+    let resolve: PickerResolve | undefined;
+    vi.mocked(useDialogCallback).mockImplementation(
+      // The mock stands in for every overload; these tests read only the picker's arguments.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (_type: any, hookOptions: any, resolveCallback: any) => {
+        options = hookOptions;
+        resolve = resolveCallback;
+        return vi.fn();
+      },
+    );
+    mockUseEffectiveResourceReferenceList.mockReturnValue({
+      status: 'ready',
+      list: { dataVersion: '1.1.0', items: [] },
+    });
+    mockUseDblResourceCatalog.mockReturnValue(catalogState(true));
+    mockUseResourcePickerResources.mockReturnValue([ROWS, false]);
+    const ResourceTextPanel = getResourceTextPanel();
+    const view = render(<ResourceTextPanel {...makeProps(props)} />);
+    const current = () => {
+      if (!options || !resolve) throw new Error('the panel did not set up the resource picker');
+      return { options, resolve };
+    };
+    return {
+      ...current(),
+      rerender: () => {
+        view.rerender(<ResourceTextPanel {...makeProps(props)} />);
+        return current();
+      },
+    };
+  }
+
+  /** The user's list as the settings provider holds it; returns the provider's setter. */
+  function mockUserList(items: { type: 'dblResource'; name: string; id: string }[]) {
+    const setUserReferencedProjectsAndResources = vi.fn(async () => true);
+    mockUseProjectDataProvider.mockReturnValue({
+      getUserReferencedProjectsAndResources: vi.fn(async () => ({ dataVersion: '1.1.0', items })),
+      setUserReferencedProjectsAndResources,
+    });
+    return setUserReferencedProjectsAndResources;
+  }
+
+  it("offers the team's resources locked and the user's own as removable, as the catalog spells them", () => {
+    mockUserList([]);
+    const { options } = renderWithPicker();
+    expect(options.selectedResourceIds).toEqual(['team-uid', 'mine-uid']);
+    expect(options.teamResourceIds).toEqual(['team-uid']);
+    expect(options.allowDeselect).toBe(true);
+  });
+
+  it('offers nothing to remove with no project open', () => {
+    mockUserList([]);
+    const { options } = renderWithPicker({ projectId: undefined });
+    expect(options.allowDeselect).toBe(false);
+    expect(options.teamResourceIds).toBeUndefined();
+  });
+
+  // Team resources exist only in Simple.
+  it('keeps the picker as it was in Power: one selected section, nothing to remove', () => {
+    interfaceMode.current = 'power';
+    mockUserList([]);
+    const { options } = renderWithPicker();
+    // Positive control: the selected ids are still sent, so the missing split is a real answer.
+    expect(options.selectedResourceIds).toEqual(['team-uid', 'mine-uid']);
+    expect(options.teamResourceIds).toBeUndefined();
+    expect(options.allowDeselect).toBe(false);
+  });
+
+  // Until the mode is known it might be Power, which has no team resources.
+  it('keeps the picker as it was until the interface mode is known', () => {
+    interfaceMode.isLoading = true;
+    mockUserList([]);
+    const { options } = renderWithPicker();
+    // Positive control: the selected ids are still sent, so the missing split is a real answer.
+    expect(options.selectedResourceIds).toEqual(['team-uid', 'mine-uid']);
+    expect(options.teamResourceIds).toBeUndefined();
+    expect(options.allowDeselect).toBe(false);
+  });
+
+  // Until the provider arrives there is nowhere to write a removal, so offering one would close
+  // the dialog and change nothing.
+  it('offers nothing to remove until the settings provider arrives', () => {
+    mockUseProjectDataProvider.mockReturnValue(undefined);
+    const { options } = renderWithPicker();
+    expect(options.allowDeselect).toBe(false);
+  });
+
+  it("removes a picked selected resource from the user's list, leaving the rest", async () => {
+    const setUserList = mockUserList([
+      { type: 'dblResource', name: 'mine', id: 'mine-uid' },
+      { type: 'dblResource', name: 'keep', id: 'keep-uid' },
+    ]);
+    const { options, resolve } = renderWithPicker();
+
+    resolve(MINE, 'platform.resourcePicker', options);
+
+    await waitFor(() =>
+      expect(setUserList).toHaveBeenCalledWith(
+        expect.objectContaining({
+          items: [{ type: 'dblResource', name: 'keep', id: 'keep-uid' }],
+        }),
+      ),
+    );
+    const { selectTextConnection } = await import('./select-dbl-resource');
+    expect(selectTextConnection).not.toHaveBeenCalled();
+    // The dialog has closed and the resource may still be on screen, so the change is announced.
+    expect(papi.notifications.send).toHaveBeenCalledWith({
+      message: 'mine-uid was removed from your list.',
+      severity: 'info',
+    });
+  });
+
+  it('adds a resource the picker listed as installed, even if it joined the list while open', async () => {
+    const setUserList = mockUserList([{ type: 'dblResource', name: 'other', id: 'other-uid' }]);
+    const { options: optionsAtOpen, rerender } = renderWithPicker();
+    // While the dialog is open, the resource reaches the user's list from elsewhere.
+    mockUseResourcePickerResources.mockReturnValue([
+      [row(TEAM, 'admin', 'TEAM-UID'), row(MINE, 'user'), row(OTHER, 'user')],
+      false,
+    ]);
+    const { options: optionsNow, resolve } = rerender();
+    // Positive control: the panel now counts it as the user's, so only the open-time options
+    // keep this an add.
+    expect(optionsNow.selectedResourceIds).toContain('other-uid');
+
+    resolve(OTHER, 'platform.resourcePicker', optionsAtOpen);
+
+    const { selectTextConnection } = await import('./select-dbl-resource');
+    await waitFor(() => expect(selectTextConnection).toHaveBeenCalled());
+    expect(setUserList).not.toHaveBeenCalled();
+  });
+
+  it('says so when the removal could not be saved', async () => {
+    const setUserList = mockUserList([{ type: 'dblResource', name: 'mine', id: 'mine-uid' }]);
+    setUserList.mockRejectedValue(new Error('the settings could not be written'));
+    const { options, resolve } = renderWithPicker();
+
+    resolve(MINE, 'platform.resourcePicker', options);
+
+    await waitFor(() =>
+      expect(papi.notifications.send).toHaveBeenCalledWith({
+        message: '%webView_resourcePanel_removeFailed%',
+        severity: 'error',
+      }),
+    );
+  });
+
+  // Another tab removed it while the dialog was open: what the user asked for already holds.
+  it('treats a resource already off the list as removed', async () => {
+    const setUserList = mockUserList([]);
+    const { options, resolve } = renderWithPicker();
+
+    resolve(MINE, 'platform.resourcePicker', options);
+
+    await waitFor(() =>
+      expect(papi.notifications.send).toHaveBeenCalledWith({
+        message: 'mine-uid was removed from your list.',
+        severity: 'info',
+      }),
+    );
+    expect(setUserList).not.toHaveBeenCalled();
+    expect(papi.notifications.send).not.toHaveBeenCalledWith(
+      expect.objectContaining({ severity: 'error' }),
+    );
+  });
+
+  // The dialog has already closed, so a removal that could not happen must not pass silently.
+  it('says so when the list could not be read', async () => {
+    const setUserReferencedProjectsAndResources = vi.fn(async () => true);
+    mockUseProjectDataProvider.mockReturnValue({
+      getUserReferencedProjectsAndResources: vi.fn(async () => undefined),
+      setUserReferencedProjectsAndResources,
+    });
+    const { options, resolve } = renderWithPicker();
+
+    resolve(MINE, 'platform.resourcePicker', options);
+
+    await waitFor(() =>
+      expect(papi.notifications.send).toHaveBeenCalledWith({
+        message: '%webView_resourcePanel_removeFailed%',
+        severity: 'error',
+      }),
+    );
+    expect(setUserReferencedProjectsAndResources).not.toHaveBeenCalled();
+  });
+
+  it('groups the dropdown by source only while there is a DBL catalog', () => {
+    mockUserList([]);
+    const { rerender } = renderWithPicker();
+    expect(capturedResourceTextPanelProps).toHaveBeenLastCalledWith(
+      expect.objectContaining({ isCatalogUnavailable: false }),
+    );
+
+    mockUseDblResourceCatalog.mockReturnValue(catalogState(false));
+    rerender();
+    expect(capturedResourceTextPanelProps).toHaveBeenLastCalledWith(
+      expect.objectContaining({ isCatalogUnavailable: true }),
+    );
   });
 });

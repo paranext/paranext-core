@@ -18,6 +18,7 @@ import papi, { logger } from '@papi/frontend';
 // rule cannot model this Vitest-specific hoisting requirement.
 // eslint-disable-next-line import/first
 import {
+  getPickerDialogSelection,
   indexDblResourcesByUid,
   matchesDownloaded,
   buildPickerResources,
@@ -415,5 +416,84 @@ describe('fetchDownloadedResources', () => {
     expect(result).toEqual([
       { projectId: 'proj-unnamed', name: 'proj-unnamed', fullName: undefined, language: '' },
     ]);
+  });
+});
+
+describe('getPickerDialogSelection', () => {
+  const row = (dblEntryUid: string, projectId: string): DblResourceData => ({
+    dblEntryUid,
+    displayName: dblEntryUid,
+    fullName: dblEntryUid,
+    bestLanguageName: 'English',
+    type: 'ScriptureResource',
+    size: 1,
+    installed: true,
+    updateAvailable: false,
+    projectId,
+  });
+  const WEB = row('uid-web', 'proj-web');
+  const KJV = row('uid-kjv', 'proj-kjv');
+  // A locally-installed non-DBL resource: its project id stands in for a uid.
+  const LOCAL = row('VULGP83', 'VULGP83');
+  const CATALOG = [WEB, KJV, LOCAL];
+  const dbl = (id: string) => ({ type: 'dblResource' as const, name: id, id });
+  const project = (id: string) => ({ type: 'project' as const, name: id, id });
+
+  it('spells a DBL reference the way the catalog spells its entry', () => {
+    expect(getPickerDialogSelection([], [dbl('UID-WEB')], CATALOG).selectedResourceIds).toEqual([
+      'uid-web',
+    ]);
+  });
+
+  it('names a DBL resource referenced by its project by its DBL entry', () => {
+    expect(
+      getPickerDialogSelection([], [project('proj-web')], CATALOG).selectedResourceIds,
+    ).toEqual(['uid-web']);
+  });
+
+  it('names a locally-installed non-DBL resource by its project id', () => {
+    expect(getPickerDialogSelection([], [project('VULGP83')], CATALOG).selectedResourceIds).toEqual(
+      ['VULGP83'],
+    );
+  });
+
+  // `uid-web` is a prefix of `uid-web-2`'s project, so it also "covers" it; the row that IS that
+  // project must win.
+  it('resolves a project by the row that is that project before one that only covers it', () => {
+    const catalog = [WEB, row('uid-web-2', 'uid-web-2-proj')];
+    expect(
+      getPickerDialogSelection([], [project('uid-web-2-proj')], catalog).selectedResourceIds,
+    ).toEqual(['uid-web-2']);
+  });
+
+  it('keeps the reference id when the catalog has no row for it', () => {
+    expect(
+      getPickerDialogSelection([], [dbl('uid-missing'), project('some-project')], CATALOG)
+        .selectedResourceIds,
+    ).toEqual(['uid-missing', 'some-project']);
+  });
+
+  it('skips references that name no DBL entry or project', () => {
+    expect(
+      getPickerDialogSelection([{ type: 'xmlResource', name: 'X' }], [], CATALOG)
+        .selectedResourceIds,
+    ).toEqual([]);
+  });
+
+  it('lists the locked ids first, and locks a resource that is in both lists', () => {
+    const selection = getPickerDialogSelection(
+      [dbl('uid-web')],
+      [dbl('uid-kjv'), dbl('uid-web')],
+      CATALOG,
+    );
+    expect(selection.selectedResourceIds).toEqual(['uid-web', 'uid-kjv']);
+    expect(selection.teamResourceIds).toEqual(['uid-web']);
+    expect([...selection.listIdsByRemovableId.keys()]).toEqual(['uid-kjv']);
+  });
+
+  it('maps a removable id to every id the user list stores it under', () => {
+    const selection = getPickerDialogSelection([], [dbl('UID-WEB'), project('proj-web')], CATALOG);
+    expect(selection.selectedResourceIds).toEqual(['uid-web']);
+    expect(selection.listIdsByRemovableId.get('uid-web')).toEqual(['UID-WEB', 'proj-web']);
   });
 });

@@ -71,3 +71,36 @@ export function persistUserAddition(
 export function persistCellOrder(writer: UserResourceWriter, order: string[]): Promise<unknown> {
   return writer.setCellOrder(order);
 }
+
+/**
+ * What {@link removeFromUserTextConnections} did: `removed` wrote the list without the resources;
+ * `alreadyGone` found none of them on it, which is the outcome the user asked for, typically
+ * because another tab removed them while the picker was open; `listUnavailable` could not read the
+ * list.
+ */
+export type UserListRemovalResult = 'removed' | 'alreadyGone' | 'listUnavailable';
+
+/**
+ * Removes resources from the current user's personal text connections by the ids the list stores
+ * them under, through {@link removeFromUserResources} as the Text Collection's ✕ does. It lives here
+ * rather than beside `selectTextConnection` because that module is also loaded by the extension
+ * host, which cannot load this one's imports. They stay installed, and the project-level (shared)
+ * settings are never written here.
+ *
+ * @param listIds The ids to remove, as in `PickerDialogSelection.listIdsByRemovableId`
+ * @param getUserTextConnections Function to retrieve the local user's text connections
+ * @param setUserTextConnections Function to set the local user's text connections
+ * @returns See {@link UserListRemovalResult}. A failed write rejects.
+ */
+export async function removeFromUserTextConnections(
+  listIds: string[],
+  getUserTextConnections: () => Promise<ResourceReferenceList | undefined>,
+  setUserTextConnections: (list: ResourceReferenceList) => Promise<unknown>,
+): Promise<UserListRemovalResult> {
+  const userList = await getUserTextConnections();
+  if (!userList) return 'listUnavailable';
+  const nextList = listIds.reduce((list, id) => removeFromUserResources(id, list), userList);
+  if (nextList === userList) return 'alreadyGone';
+  await setUserTextConnections(nextList);
+  return 'removed';
+}

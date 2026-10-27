@@ -1,5 +1,5 @@
-import type { WebViewProps } from '@papi/core';
-import { logger } from '@papi/frontend';
+import type { DialogTypes, WebViewProps } from '@papi/core';
+import papi, { logger } from '@papi/frontend';
 import {
   useDataProvider,
   useDialogCallback,
@@ -22,7 +22,7 @@ import { useChapterUsjWithCopyLimit } from './copy-limit/use-chapter-usj-with-co
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { useResourcePickerResources } from './use-resource-picker-resources.hook';
-import type { PickerResource } from './downloaded-resources.utils';
+import { getPickerDialogSelection, type PickerResource } from './downloaded-resources.utils';
 import {
   canPublishResourcePanelProjectIds,
   getResourcePanelReadiness,
@@ -41,13 +41,19 @@ import {
 } from './resource-reference.utils';
 import {
   findSelectedRow,
+  isTeamPickerResource,
   matchesSelectedResourceId,
   resolveResourceSelection,
   type ResourceSelectionResolution,
 } from './resource-selection.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
+import { resolveLocalizedString } from './scripture-text-grid/view-options-notice.utils';
 import { resolveResourcePanelStringKeys } from './resource-panel-strings.utils';
-import { selectTextConnection } from './select-dbl-resource';
+import { isRemovalPick, selectTextConnection } from './select-dbl-resource';
+import {
+  removeFromUserTextConnections,
+  type UserListRemovalResult,
+} from './scripture-text-grid-persistence.utils';
 import { ResourceTextPanel } from './resource-text-panel.component';
 import { RESOURCE_PANEL_STRING_KEYS } from './resource-text-panel.const';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
@@ -56,6 +62,11 @@ import { ProjectCopyrightNotice } from './copyright-notice/project-copyright-not
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
+// Sent as a notification, which localizes it, rather than rendered here.
+const REMOVE_FAILED_KEY = '%webView_resourcePanel_removeFailed%';
+// Formatted here with the resource's name before it is sent, so it is fetched with the others.
+const RESOURCE_REMOVED_KEY = '%webView_resourcePanel_resourceRemoved%';
+
 // Built once at module scope, not inline in the `useLocalizedStrings` call. The hook's key array
 // must keep a stable identity across renders — a fresh array every render re-runs its lookup — and
 // `RESOURCE_PANEL_STRING_KEYS` is a frozen readonly tuple, so it is spread into a mutable
@@ -63,6 +74,7 @@ const DEFAULT_TEXT_DIRECTION = 'ltr';
 const ALL_STRING_KEYS: LocalizeKey[] = [
   ...RESOURCE_PANEL_STRING_KEYS,
   ...COPYRIGHT_NOTICE_STRING_KEYS,
+  RESOURCE_REMOVED_KEY,
 ];
 
 // This panel offers locally-downloaded resources alongside the ones already in the text
@@ -109,6 +121,9 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
 
   // Undefined until the setting loads; the tab icon and tooltip treat that as Simple.
   const isPowerMode = useIsPowerMode();
+  // The resource picker waits for a confirmed Simple before it shows team resources or offers
+  // removing.
+  const isSimpleMode = isPowerMode === false;
 
   // #endregion
 
@@ -125,7 +140,8 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   );
 
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
-  const { dblResources, isCatalogReady, hasCatalogError, refetchCatalog } = useDblResourceCatalog();
+  const { dblResources, isCatalogReady, hasCatalogError, hasDblCatalog, refetchCatalog } =
+    useDblResourceCatalog();
   const [pickerResources, arePickerResourcesLoading] = useResourcePickerResources(
     projectId,
     RESOURCE_PICKER_OPTIONS,
@@ -448,20 +464,60 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
 
   // #region Resource picker dialog
 
-  // The IDs the Resource Picker shows as already INCLUDED. Rows sourced from `downloaded` are
-  // installed locally but not in the text collection, so they belong in the picker's INSTALLED
-  // section instead. Drawn from every picker row rather than the type-filtered ones so a resource
-  // of another type that is in the text collection (a commentary alongside Bible texts) is not
-  // re-offered as INSTALLED. That is also why the pick belongs here rather than in the panel: the
-  // panel sees only its type-filtered rows.
-  const currentFilteredDblIds = useMemo(() => {
-    return (pickerResources ?? []).flatMap((r) => {
-      if (r.source === 'downloaded') return [];
-      const { reference } = r;
-      if (isDblResourceReference(reference) || isProjectReference(reference)) return [reference.id];
-      return [];
-    });
-  }, [pickerResources]);
+  // The IDs the Resource Picker shows as already selected: the team's, which it locks, and the
+  // user's own, which it lets the user remove. Rows sourced from `downloaded` are installed locally
+  // but in neither list, so they belong in the picker's INSTALLED section instead. Drawn from every
+  // picker row rather than the type-filtered ones so a resource of another type in the user's list
+  // (a commentary alongside Bible texts) is not re-offered as INSTALLED. That is also why the pick
+  // belongs here rather than in the panel: the panel sees only its type-filtered rows.
+  const pickerSelection = useMemo(() => {
+    const rows = pickerResources ?? [];
+    return getPickerDialogSelection(
+      rows.filter(isTeamPickerResource).map((row) => row.reference),
+      rows.filter((row) => row.source === 'user').map((row) => row.reference),
+      dblResources,
+    );
+  }, [pickerResources, dblResources]);
+
+  // The dialog has closed, and a resource still installed stays on screen, so say what changed.
+  const notifyResourceRemoved = useCallback(
+    (resource: DblResourceData) => {
+      const template = resolveLocalizedString(localizedStrings, RESOURCE_REMOVED_KEY);
+      if (!template) return;
+      papi.notifications.send({
+        message: formatReplacementString(template, { resourceName: resource.displayName }),
+        severity: 'info',
+      });
+    },
+    [localizedStrings],
+  );
+
+  // Leaves the resource installed; only the user's own list for this project changes, which the
+  // Text Collection reads too. When it was the one on screen, the selection logic above keeps it
+  // there while it is installed and falls back to the next resource once it leaves the list.
+  const handleResourceRemove = useCallback(
+    async (resource: DblResourceData) => {
+      const listIds = pickerSelection.listIdsByRemovableId.get(resource.dblEntryUid) ?? [];
+      let result: UserListRemovalResult | undefined;
+      try {
+        result = await removeFromUserTextConnections(
+          listIds,
+          getUserResourceTexts,
+          setUserResourceTexts,
+        );
+      } catch (e) {
+        logger.warn(`Failed to remove ${resource.dblEntryUid}: ${getErrorMessage(e)}`);
+      }
+      if (result === 'removed' || result === 'alreadyGone') {
+        notifyResourceRemoved(resource);
+        return;
+      }
+      if (result === 'listUnavailable')
+        logger.warn(`Could not remove ${resource.dblEntryUid}: the user's list is not loaded`);
+      papi.notifications.send({ message: REMOVE_FAILED_KEY, severity: 'error' });
+    },
+    [pickerSelection, getUserResourceTexts, setUserResourceTexts, notifyResourceRemoved],
+  );
 
   const handleResourceSelect = useCallback(
     async (resource: DblResourceData) => {
@@ -511,17 +567,34 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   const showResourcePicker = useDialogCallback(
     'platform.resourcePicker',
     useMemo(
-      () => ({ resourceType, selectedResourceIds: currentFilteredDblIds, isModal: true }),
-      [resourceType, currentFilteredDblIds],
+      () => ({
+        resourceType,
+        selectedResourceIds: pickerSelection.selectedResourceIds,
+        // Team resources exist only in Simple, so Power keeps the picker's single "Included"
+        // section. With no project there is no list of the user's to remove anything from, and
+        // until its settings provider arrives there is no way to write one.
+        teamResourceIds: projectId && isSimpleMode ? pickerSelection.teamResourceIds : undefined,
+        allowDeselect: !!projectId && isSimpleMode && !!textConnectionsProvider,
+        isModal: true,
+      }),
+      [resourceType, pickerSelection, projectId, isSimpleMode, textConnectionsProvider],
     ),
     useCallback(
-      (resource: DblResourceData | undefined) => {
+      (
+        resource: DblResourceData | undefined,
+        _dialogType: string,
+        options: DialogTypes['platform.resourcePicker']['options'],
+      ) => {
         if (!resource) return;
+        if (isRemovalPick(resource, options)) {
+          handleResourceRemove(resource);
+          return;
+        }
         handleResourceSelect(resource).catch((e) =>
           logger.error(`Resource selection failed: ${getErrorMessage(e)}`),
         );
       },
-      [handleResourceSelect],
+      [handleResourceSelect, handleResourceRemove],
     ),
   );
 
@@ -536,11 +609,11 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
       selectedRef={selectedRef}
       readiness={readiness}
       dblResources={dblResources}
-      isCatalogUnavailable={hasCatalogError}
+      isCatalogUnavailable={!hasDblCatalog}
       // Only Simple mode has team resources, so Power lists every row together. Undefined (still
       // loading) lists them together too, so a Power session never shows the grouping, even for a
       // frame.
-      isGrouped={isPowerMode === false}
+      isGrouped={isSimpleMode}
       onRetryCatalog={refetchCatalog}
       scrRef={scrRef}
       onScrRefChange={setScrRef}

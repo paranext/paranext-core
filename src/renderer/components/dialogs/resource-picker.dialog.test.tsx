@@ -54,7 +54,14 @@ function mockCommands(
   );
 }
 
-function renderWrapper(options: { disableRestrictedModelTexts?: boolean } = {}) {
+function renderWrapper(
+  options: {
+    disableRestrictedModelTexts?: boolean;
+    selectedResourceIds?: string[];
+    teamResourceIds?: string[];
+    allowDeselect?: boolean;
+  } = {},
+) {
   const submitDialog = vi.fn();
   render(
     <Dialog open>
@@ -183,6 +190,34 @@ describe('ResourcePickerDialogWrapper', () => {
       expect(screen.getByText('%resourcePicker_no_results%')).toBeInTheDocument(),
     );
     expect(screen.queryByText('%resourcePicker_load_error%')).not.toBeInTheDocument();
+  });
+
+  it("passes the caller's locked resources and deselect choice through to the picker", async () => {
+    const resource = (dblEntryUid: string, displayName: string) => ({
+      dblEntryUid,
+      displayName,
+      fullName: displayName,
+      bestLanguageName: 'English',
+      type: 'ScriptureResource',
+      size: 1,
+      installed: true,
+      updateAvailable: false,
+      projectId: `prj-${dblEntryUid}`,
+    });
+    mockCommands(async () => ({
+      status: 'available',
+      resources: [resource('team-1', 'TEAM'), resource('user-1', 'MINE')],
+    }));
+
+    const { submitDialog } = renderWrapper({
+      selectedResourceIds: ['team-1', 'user-1'],
+      teamResourceIds: ['team-1'],
+      allowDeselect: true,
+    });
+
+    expect(await screen.findByText('%resourcePicker_section_team%')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'MINE' }));
+    expect(submitDialog).toHaveBeenCalledWith(expect.objectContaining({ dblEntryUid: 'user-1' }));
   });
 
   describe('restricted model texts', () => {
