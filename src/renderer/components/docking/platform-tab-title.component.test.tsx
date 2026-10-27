@@ -674,7 +674,7 @@ describe('PlatformTabTitle icon rendering', () => {
 
     expect(icon).toHaveClass('tab-menu-icon-monochrome');
     expect(icon.style.getPropertyValue('--tab-icon-mask')).toBe('url("a.svg")');
-    expect(icon.style.backgroundImage).toBe('none');
+    expect(icon.style.backgroundImage).toBe('');
   });
 
   it('paints a non-monochrome icon as a background image', () => {

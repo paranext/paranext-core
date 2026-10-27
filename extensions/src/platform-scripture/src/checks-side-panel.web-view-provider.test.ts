@@ -68,7 +68,7 @@ describe('ChecksSidePanelWebViewProvider', () => {
       options,
     );
 
+    expect(result?.isClosable).toBe(true);
     expect(result?.iconUrl).toBeUndefined();
-    expect(result?.isIconMonochrome).toBeUndefined();
   });
 });

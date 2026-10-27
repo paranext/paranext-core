@@ -109,9 +109,10 @@ type WebViewDefinitionBase = {
    * theme and the tab's selection state without the WebView having to swap images. Leave unset for
    * a full-colour icon.
    *
-   * Ignored when there is no `iconUrl`. Changing `iconUrl` to a different url through
-   * `updateWebViewDefinition` without also setting this clears it, so a later full-colour icon is
-   * never drawn as a single-colour shape.
+   * Ignored when there is no `iconUrl`. Set this whenever you set `iconUrl`. Changing or removing
+   * `iconUrl` through `updateWebViewDefinition` without also setting this clears it, so a later
+   * full-colour icon set that way isn't drawn as a single-colour shape. Nothing clears it on other
+   * paths, such as a provider returning a saved definition with a new `iconUrl`.
    */
   isIconMonochrome?: boolean;
   /**
@@ -502,7 +503,8 @@ export type WebViewDefinitionUpdatableProperties = Pick<
 
 /**
  * WebViewDefinition properties for updating a WebView that is already displayed. Any unspecified
- * properties will stay the same
+ * properties will stay the same, except that changing `iconUrl` clears
+ * {@link WebViewDefinitionBase.isIconMonochrome} unless this also sets it
  */
 // To allow more properties to be updated, add them in
 // `web-view.service.ts` -> `getUpdatablePropertiesFromWebViewDefinition`
@@ -631,7 +633,8 @@ export type GetSavedWebViewDefinition = () => SavedWebViewDefinition | undefined
  * Updates this WebView with the specified properties
  *
  * _＠param_ `updateInfo` properties to update on the WebView. Any unspecified properties will stay
- * the same
+ * the same, except that changing `iconUrl` clears `isIconMonochrome` unless `updateInfo` also sets
+ * it
  *
  * _＠param_ `shouldBringToFront` If true, the tab will be brought to the front and unobscured by
  * other tabs. Defaults to `false`

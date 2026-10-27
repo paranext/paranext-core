@@ -64,8 +64,10 @@
 }
 
 // A single-colour icon is drawn as its shape filled with the tab's text colour, so it follows the
-// theme and selection state. `--tab-icon-mask` is set inline by `PlatformTabTitle`.
+// theme and selection state. `--tab-icon-mask` is set inline by `PlatformTabTitle`. Comes after
+// `.tab-menu-icon` so its `background-image` replaces the default logo.
 .tab-menu-icon-monochrome {
+  background-image: none;
   background-color: currentColor;
   mask-image: var(--tab-icon-mask);
   mask-size: 100%;

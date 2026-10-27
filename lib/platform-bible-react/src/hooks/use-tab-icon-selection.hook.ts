@@ -3,18 +3,16 @@ import { useViewVisibility } from './use-view-visibility.hook';
 /**
  * The four tab-icon variants, as static asset URLs (e.g. `papi-extension://` URLs).
  *
- * @deprecated Point `iconUrl` at one single-colour icon and set `isIconMonochrome: true` on the web
- *   view definition instead. The platform then draws the icon in the tab's text colour, so it
- *   follows the theme and selection state, including on tabs that have never been opened.
+ * @deprecated 2026-10-26 — Set `isIconMonochrome: true` beside a single-colour `iconUrl` instead.
  */
 export type TabIconUrls = {
   /** Dark theme (any selection). */
   dark: string;
   /**
-   * Light theme, tab selected (white). Unused by `pickTabIconUrl` today: every current host keeps
-   * the active tab's header on a plain light background (never a dark/tinted one), so a white icon
-   * would be invisible there. Kept in the type for a future host that does give the selected tab a
-   * dark background and needs a contrasting icon.
+   * Light theme, tab selected (white). Unused by `pickTabIconUrl`: every host when these were
+   * deprecated kept the active tab's header on a plain light background (never a dark/tinted one),
+   * so a white icon would be invisible there. Kept in the type for a future host that does give the
+   * selected tab a dark background and needs a contrasting icon.
    */
   lightSelected: string;
   /** Light theme, tab not selected (near-black). Also used for the selected state — see above. */
@@ -25,15 +23,13 @@ export type TabIconUrls = {
 
 /**
  * Picks the tab icon URL. In dark theme the icon is always the dark variant. In light theme it's
- * the near-black variant regardless of selection — every current host keeps the active tab's header
- * on a plain light background rather than a dark/tinted one (see
+ * the near-black variant regardless of selection — every host when these were deprecated kept the
+ * active tab's header on a plain light background rather than a dark/tinted one (see
  * `dock-layout-wrapper.simple-mode.scss`'s "SIMPLE-MODE TAB SELECTION LOOK" region), so a selected
  * tab needs the same contrast as an unselected one — a mid-slate fallback is used when the selected
  * state is unknown (`undefined`).
  *
- * @deprecated Point `iconUrl` at one single-colour icon and set `isIconMonochrome: true` on the web
- *   view definition instead. The platform then draws the icon in the tab's text colour, so it
- *   follows the theme and selection state, including on tabs that have never been opened.
+ * @deprecated 2026-10-26 — Set `isIconMonochrome: true` beside a single-colour `iconUrl` instead.
  */
 export function pickTabIconUrl(
   isDarkTheme: boolean,
@@ -63,9 +59,7 @@ export function pickTabIconUrl(
  * Callers own the theme subscription themselves (e.g. `papi.themes.subscribeCurrentTheme`) and pass
  * the resulting `isDarkTheme` in — this hook has no PAPI dependency.
  *
- * @deprecated Point `iconUrl` at one single-colour icon and set `isIconMonochrome: true` on the web
- *   view definition instead. The platform then draws the icon in the tab's text colour, so it
- *   follows the theme and selection state, including on tabs that have never been opened.
+ * @deprecated 2026-10-26 — Set `isIconMonochrome: true` beside a single-colour `iconUrl` instead.
  * @param isDarkTheme Whether the current theme is dark.
  * @param tabIconUrls The four icon variant URLs for this tab.
  * @returns The icon URL to pass to `updateWebViewDefinition({ iconUrl })`.

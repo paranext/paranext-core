@@ -112,7 +112,7 @@ describe('reference panel provider tab icon', () => {
       'nonce-1',
     );
 
+    expect(built?.isClosable).toBe(true);
     expect(built?.iconUrl).toBeUndefined();
-    expect(built?.isIconMonochrome).toBeUndefined();
   });
 });

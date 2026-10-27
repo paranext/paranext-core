@@ -15,7 +15,7 @@ export type FindWebViewFields = {
   projectId: string | undefined;
   isClosable: boolean;
   iconUrl: string | undefined;
-  isIconMonochrome: boolean | undefined;
+  isIconMonochrome: boolean;
   scrollGroupScrRef: ScrollGroupScrRef | undefined;
   state: WebViewDefinition['state'];
 };
@@ -74,10 +74,10 @@ export function buildFindWebViewFields(
     // Without an icon here, Simple mode's icon-only collapse (which hides the label) falls back to
     // the generic app logo hard-coded in platform-tab-title.component.scss, so the tab would lose
     // every trace of its identity. Power mode keeps this tab text-labeled with the default logo,
-    // matching the resource panels, and drops any saved icon since it may name an asset that no
-    // longer exists.
+    // matching the resource panels, and drops any saved icon so a Simple-mode icon doesn't carry
+    // over into Power mode. The flag is ignored without an icon.
     iconUrl: isSimpleMode ? FIND_ICON_URL : undefined,
-    isIconMonochrome: isSimpleMode ? true : undefined,
+    isIconMonochrome: true,
     scrollGroupScrRef: resolveFindScrollGroupScrRef(interfaceMode, savedWebView, options),
     state: buildFindWebViewState(savedWebView, options),
   };

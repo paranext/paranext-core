@@ -1,10 +1,10 @@
 ---
 title: Extension Development Guide
 description: Extension anatomy, lifecycle, PAPI usage, WebViews, and contribution points for Platform.Bible.
-version: 1.1.8
+version: 1.1.9
 status: active
 created: 2026-03-04
-last_updated: 2026-10-20
+last_updated: 2026-10-26
 ---
 
 # Extension Development Guide
@@ -404,12 +404,13 @@ view, so it refuses to guess instead: an open that would create fails, while a p
 ### Tab Icons
 
 A tab icon is painted as a static image, so an SVG's `currentColor` can't follow the theme. For a
-single-colour icon, set `isIconMonochrome: true` beside `iconUrl` in the provider's `getWebView`:
-the platform then draws the icon's shape in the tab's text colour, so it follows the theme and the
-selection state, including on tabs that have never been opened. Don't ship light/dark variants or
-swap `iconUrl` from the web view (`useTabIconSelection` and `pickTabIconUrl` are deprecated). Leave
-the flag unset for a full-colour icon. Changing `iconUrl` to a different url through
-`updateWebViewDefinition` without restating the flag clears it. See `adr-theme-tinted-tab-icons` in
+single-colour icon, set `isIconMonochrome: true` beside `iconUrl` in the definition your provider
+returns: the platform then draws the icon's shape in the tab's text colour, so it follows the theme
+and the selection state, including on tabs that have never been opened. Don't ship light/dark
+variants or swap `iconUrl` from the web view (`useTabIconSelection` and `pickTabIconUrl` are
+deprecated). Leave the flag unset for a full-colour icon, and set it whenever you set `iconUrl`:
+changing or removing `iconUrl` through `updateWebViewDefinition` without restating the flag clears
+it, but nothing clears it when a provider returns a saved definition with a new `iconUrl`. See `adr-theme-tinted-tab-icons` in
 [Architecture-Decisions.md](Architecture-Decisions.md).
 
 ### Content Zoom (experimental)

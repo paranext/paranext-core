@@ -50,7 +50,6 @@ describe('buildFindWebViewFields', () => {
 
       expect(fields.isClosable).toBe(true);
       expect(fields.iconUrl).toBeUndefined();
-      expect(fields.isIconMonochrome).toBeUndefined();
     });
 
     it('sets the tooltip in both modes and leaves the redundancy for the renderer to suppress', () => {

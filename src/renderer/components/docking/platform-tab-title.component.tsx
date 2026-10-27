@@ -389,13 +389,11 @@ const handleMoveTabToNewWindow = async (webViewIdToMove: WebViewId) => {
 function getTabIconStyle(
   iconUrl: string | undefined,
   isIconMasked: boolean,
-): CSSProperties | undefined {
+): (CSSProperties & Record<`--${string}`, string>) | undefined {
   if (!iconUrl) return undefined;
   const cssIconUrl = `url("${iconUrl}")`;
   if (!isIconMasked) return { backgroundImage: cssIconUrl };
-  // CSS custom properties (--*) are not in CSSProperties, so the masked style needs an assertion
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return { backgroundImage: 'none', '--tab-icon-mask': cssIconUrl } as CSSProperties;
+  return { '--tab-icon-mask': cssIconUrl };
 }
 
 /**
