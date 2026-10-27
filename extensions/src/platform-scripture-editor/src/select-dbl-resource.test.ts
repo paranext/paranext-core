@@ -1,7 +1,13 @@
 import type { ResourceReferenceList } from 'platform-scripture';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { DEFAULT_RESOURCE_REFERENCE_LIST } from './resource-reference-list.const';
-import { selectTextConnection } from './select-dbl-resource';
+import {
+  getScriptureTextGridContents,
+  getViewOptionsTexts,
+  removeFromUserResources,
+  type TextCollectionSources,
+} from './scripture-text-grid-contents.utils';
+import { isRemovalPick, selectTextConnection } from './select-dbl-resource';
 
 const RESOURCE_A = {
   dblEntryUid: 'uid-a',
@@ -287,5 +293,60 @@ describe('selectDblResource', () => {
       expect(setUserList).toHaveBeenCalled();
       expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'uid-b' }));
     });
+  });
+});
+
+describe('isRemovalPick', () => {
+  const OPTIONS = { selectedResourceIds: ['uid-a', 'uid-b'], teamResourceIds: ['uid-b'] };
+
+  it('reads a selected, unlocked resource as a removal', () => {
+    expect(isRemovalPick(RESOURCE_A, OPTIONS)).toBe(true);
+  });
+
+  it('reads a resource the dialog did not list as selected as an add', () => {
+    expect(isRemovalPick(RESOURCE_LOCAL, OPTIONS)).toBe(false);
+  });
+
+  it('never reads a locked resource as a removal', () => {
+    expect(isRemovalPick(RESOURCE_B, OPTIONS)).toBe(false);
+  });
+
+  // The dialog lists a resource as selected only on an exact match, so a differently cased id put
+  // it under "Installed", and picking it there is an add.
+  it('matches ids exactly, as the dialog does', () => {
+    expect(isRemovalPick({ ...RESOURCE_A, dblEntryUid: 'UID-A' }, OPTIONS)).toBe(false);
+  });
+});
+
+describe('removing a resource, then adding it back from Bible texts', () => {
+  it('keeps it listed in the Text Collection but off the grid', async () => {
+    const sources: TextCollectionSources = {
+      adminReferenced: { dataVersion: '1.1.0', items: [] },
+      userReferenced: {
+        dataVersion: '1.1.0',
+        items: [{ type: 'dblResource', name: 'A', id: 'uid-a', isInTextCollectionForUser: true }],
+      },
+      overlay: {},
+      order: [],
+    };
+    let userList = removeFromUserResources('uid-a', sources.userReferenced);
+    expect(getViewOptionsTexts({ ...sources, userReferenced: userList }).bottom).toEqual([]);
+
+    await selectTextConnection(
+      RESOURCE_A,
+      async () => userList,
+      async (list) => {
+        userList = list;
+      },
+    );
+
+    const readded = { ...sources, userReferenced: userList };
+    expect(getScriptureTextGridContents(readded)).toEqual([]);
+    expect(getViewOptionsTexts(readded).bottom).toEqual([
+      expect.objectContaining({
+        reference: expect.objectContaining({ id: 'uid-a' }),
+        checked: false,
+      }),
+    ]);
   });
 });

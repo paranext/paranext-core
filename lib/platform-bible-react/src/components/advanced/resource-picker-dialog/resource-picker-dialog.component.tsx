@@ -33,7 +33,13 @@ import {
 export const RESOURCE_PICKER_DIALOG_STRING_KEYS = Object.freeze([
   '%resourcePicker_title%',
   '%resourcePicker_description%',
+  '%resourcePicker_description_withRemove%',
   '%resourcePicker_section_already_selected%',
+  '%resourcePicker_section_team%',
+  '%resourcePicker_section_team_caption%',
+  '%resourcePicker_section_user%',
+  '%resourcePicker_section_user_caption%',
+  '%resourcePicker_teamLock%',
   '%resourcePicker_section_installed%',
   '%resourcePicker_section_available_to_download%',
   '%resourcePicker_no_results%',
@@ -114,12 +120,27 @@ export interface ResourcePickerDialogProps {
   allowSelectingInstalled?: boolean;
   /** IDs of resources already selected in the calling panel */
   selectedResourceIds?: string[];
+  /**
+   * IDs among `selectedResourceIds` that belong to the team: the resources a project administrator
+   * shared, which the user cannot deselect. An ID that is not also in `selectedResourceIds` is
+   * ignored.
+   *
+   * When provided, the selected rows are listed in two sections instead of one "Included" section:
+   * "Team resources", each marked with a lock and never selectable, and "User resources", which
+   * `allowDeselect` makes selectable. When omitted, every selected row is listed under "Included".
+   * IDs are compared exactly, as `selectedResourceIds` are.
+   */
+  teamResourceIds?: string[];
   /** Localized strings — use RESOURCE_PICKER_DIALOG_STRING_KEYS with useLocalizedStrings */
   localizedStrings: ResourcePickerDialogLocalizedStrings;
   /**
    * When true, clicking an "Already Selected" row calls `onSelect` just like any other row, letting
    * the caller treat it as a deselect. Defaults to false (Already Selected rows stay
    * non-interactive, showing only a checkmark) to preserve existing consumers' behavior.
+   *
+   * A pick is a deselect exactly when `selectedResourceIds` contains its `dblEntryUid`, compared
+   * exactly, as the sections are built. A caller that compares any other way can read an add as a
+   * removal.
    */
   allowDeselect?: boolean;
   /**
@@ -222,21 +243,31 @@ function DisabledResourceRow({ resource, reason }: { resource: DblResourceData; 
  * Component to list filtered resources entries for one of the resource picker sections. Optionally
  * allows clicking and selecting when `onSelect` is not undefined for the cases that the resource
  * can be picked and is not already picked.
+ *
+ * `indicator` fills the fixed-width slot at the start of each row, and `indicatorLabel` is what a
+ * screen reader hears for it — the section label when omitted. A `caption` under the heading also
+ * describes each selectable row, so it can say what picking one does.
  */
 function ResourceSection({
   label,
+  caption,
   resources,
   onSelect,
-  showCheckmark,
+  indicator,
+  indicatorLabel,
   getDisabledReason,
 }: {
   label: string;
+  caption?: string;
   resources: DblResourceData[];
   onSelect?: (resource: DblResourceData) => void;
-  showCheckmark?: boolean;
+  indicator?: 'check' | 'lock';
+  indicatorLabel?: string;
   getDisabledReason?: (resource: DblResourceData) => string | undefined;
 }) {
+  const captionId = useId();
   if (resources.length === 0) return undefined;
+  const IndicatorIcon = indicator === 'lock' ? Lock : Check;
   return (
     <>
       <TableRow className="tw:border-0 tw:hover:bg-transparent">
@@ -246,6 +277,17 @@ function ResourceSection({
           </Label>
         </TableCell>
       </TableRow>
+      {caption && (
+        <TableRow className="tw:border-0 tw:hover:bg-transparent">
+          <TableCell
+            id={captionId}
+            colSpan={4}
+            className="tw:border-0 tw:pt-0 tw:pb-1 tw:text-xs tw:whitespace-normal tw:text-muted-foreground"
+          >
+            {caption}
+          </TableCell>
+        </TableRow>
+      )}
       {resources.map((r) => {
         const disabledReason = getDisabledReason?.(r);
         if (disabledReason)
@@ -253,11 +295,16 @@ function ResourceSection({
         return (
           <TableRow
             key={r.dblEntryUid}
+            // A row that cannot be picked still takes the pointer, so the hover label on a
+            // truncated name stays reachable (see `.claude/rules/ux/picker-row-layout.md`).
             className={
-              onSelect ? 'tw:cursor-pointer tw:border-0' : 'tw:pointer-events-none tw:border-0'
+              onSelect
+                ? 'tw:cursor-pointer tw:border-0'
+                : 'tw:cursor-default tw:border-0 tw:hover:bg-transparent'
             }
             role={onSelect ? 'button' : undefined}
             aria-label={onSelect ? r.displayName : undefined}
+            aria-describedby={onSelect && caption ? captionId : undefined}
             onClick={onSelect ? () => onSelect(r) : undefined}
             onKeyDown={
               onSelect
@@ -274,10 +321,10 @@ function ResourceSection({
                 is a hard width the column cannot grow past, and the base 8px start padding leaves the
                 14px glyph too little room to sit in. The two have to be read together. */}
             <TableCell className="tw:border-0 tw:px-1 tw:py-1">
-              {showCheckmark && (
+              {indicator && (
                 <>
-                  <Check className="tw:h-3.5 tw:w-3.5" aria-hidden />
-                  <span className="tw:sr-only">{label}</span>
+                  <IndicatorIcon className="tw:h-3.5 tw:w-3.5" aria-hidden />
+                  <span className="tw:sr-only">{indicatorLabel ?? label}</span>
                 </>
               )}
             </TableCell>
@@ -374,6 +421,7 @@ export default function ResourcePickerDialog({
   areDownloadsUnavailable,
   resourceType,
   selectedResourceIds,
+  teamResourceIds,
   notice,
   allowSelectingInstalled = true,
   localizedStrings,
@@ -458,6 +506,18 @@ export default function ResourcePickerDialog({
     [filteredResources, selectedResourceIds],
   );
 
+  // Split only when the caller says which selected rows are the team's; otherwise every selected row
+  // stays under the one "Included" section.
+  const isSelectionSplit = teamResourceIds !== undefined;
+  const teamSelected = useMemo(
+    () => alreadySelected.filter((r) => teamResourceIds?.includes(r.dblEntryUid)),
+    [alreadySelected, teamResourceIds],
+  );
+  const userSelected = useMemo(
+    () => alreadySelected.filter((r) => !teamResourceIds?.includes(r.dblEntryUid)),
+    [alreadySelected, teamResourceIds],
+  );
+
   const installed = useMemo(
     () =>
       filteredResources.filter((r) => r.installed && !selectedResourceIds?.includes(r.dblEntryUid)),
@@ -478,7 +538,20 @@ export default function ResourcePickerDialog({
     alreadySelected.length === 0 && installed.length === 0 && toDownload.length === 0;
 
   const titleText = localizeString(localizedStrings, '%resourcePicker_title%');
-  const descriptionText = localizeString(localizedStrings, '%resourcePicker_description%');
+  // Only a split list names removing: there, the user's own selected rows are the ones they can
+  // remove, and the description tells them so.
+  // Counted before the user's filters, so the description does not change as they search.
+  const canRemoveOwn =
+    isSelectionSplit &&
+    !!allowDeselect &&
+    typeScopedResources.some(
+      (r) =>
+        selectedResourceIds?.includes(r.dblEntryUid) && !teamResourceIds?.includes(r.dblEntryUid),
+    );
+  const descriptionText = localizeString(
+    localizedStrings,
+    canRemoveOwn ? '%resourcePicker_description_withRemove%' : '%resourcePicker_description%',
+  );
   const searchPlaceholder = localizeString(localizedStrings, '%resourcePicker_search_placeholder%');
   const anyLanguageText = localizeString(localizedStrings, '%resourcePicker_language_filter_any%');
   const languageSearchPlaceholder = localizeString(
@@ -493,6 +566,11 @@ export default function ResourcePickerDialog({
     localizedStrings,
     '%resourcePicker_section_already_selected%',
   );
+  const teamLabel = localizeString(localizedStrings, '%resourcePicker_section_team%');
+  const teamCaption = localizeString(localizedStrings, '%resourcePicker_section_team_caption%');
+  const teamLockLabel = localizeString(localizedStrings, '%resourcePicker_teamLock%');
+  const userLabel = localizeString(localizedStrings, '%resourcePicker_section_user%');
+  const userCaption = localizeString(localizedStrings, '%resourcePicker_section_user_caption%');
   const installedLabel = localizeString(localizedStrings, '%resourcePicker_section_installed%');
   const toDownloadLabel = localizeString(
     localizedStrings,
@@ -711,12 +789,33 @@ export default function ResourcePickerDialog({
                 <col className="tw:w-1/6" />
               </colgroup>
               <TableBody>
-                <ResourceSection
-                  label={alreadySelectedLabel}
-                  resources={alreadySelected}
-                  onSelect={allowDeselect ? onSelect : undefined}
-                  showCheckmark
-                />
+                {isSelectionSplit ? (
+                  <>
+                    {/* The lock takes the check mark's place rather than sitting beside it: the
+                        indicator column holds one glyph. */}
+                    <ResourceSection
+                      label={teamLabel}
+                      caption={teamCaption}
+                      resources={teamSelected}
+                      indicator="lock"
+                      indicatorLabel={teamLockLabel}
+                    />
+                    <ResourceSection
+                      label={userLabel}
+                      caption={canRemoveOwn ? userCaption : undefined}
+                      resources={userSelected}
+                      onSelect={allowDeselect ? onSelect : undefined}
+                      indicator="check"
+                    />
+                  </>
+                ) : (
+                  <ResourceSection
+                    label={alreadySelectedLabel}
+                    resources={alreadySelected}
+                    onSelect={allowDeselect ? onSelect : undefined}
+                    indicator="check"
+                  />
+                )}
                 <ResourceSection
                   label={installedLabel}
                   resources={installed}

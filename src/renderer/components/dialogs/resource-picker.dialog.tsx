@@ -46,6 +46,8 @@ function getCatalogRows(catalog: DblResourceCatalog | undefined): DblResourceDat
 function ResourcePickerDialogWrapper({
   resourceType,
   selectedResourceIds,
+  teamResourceIds,
+  allowDeselect,
   notice,
   allowSelectingInstalled,
   disableRestrictedModelTexts,
@@ -160,6 +162,8 @@ function ResourcePickerDialogWrapper({
       areDownloadsUnavailable={areDownloadsUnavailable}
       resourceType={resourceType}
       selectedResourceIds={selectedResourceIds}
+      teamResourceIds={teamResourceIds}
+      allowDeselect={allowDeselect}
       localizedStrings={localizedStrings}
       notice={combinedNotice}
       allowSelectingInstalled={allowSelectingInstalled}

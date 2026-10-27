@@ -17,7 +17,15 @@ const STRINGS: ResourcePickerDialogLocalizedStrings = {
   '%resourcePicker_title%': 'Resource picker',
   '%resourcePicker_description%':
     "Choose a resource to add. Picking one downloads it if it isn't already installed.",
+  '%resourcePicker_description_withRemove%':
+    "Choose a resource to add, or one of your own to remove it from your list. Adding one downloads it if it isn't already installed.",
   '%resourcePicker_section_already_selected%': 'Included',
+  '%resourcePicker_section_team%': 'Team resources',
+  '%resourcePicker_section_team_caption%': 'Only a project administrator can remove these.',
+  '%resourcePicker_section_user%': 'User resources',
+  '%resourcePicker_section_user_caption%':
+    'Select one to remove it from your list on every tab. It stays installed.',
+  '%resourcePicker_teamLock%': 'Shared by your team',
   '%resourcePicker_section_installed%': 'Installed',
   '%resourcePicker_section_available_to_download%': 'Available to download',
   '%resourcePicker_no_results%': 'No results found',
@@ -274,6 +282,57 @@ export const LongNamesDoNotScrollHorizontallyWhenNarrow: Story = {
   },
   play: async ({ canvasElement }) => expectNoHorizontalScroll(canvasElement),
 };
+
+/**
+ * A panel's picker, where the selected resources are split by who can remove them: the team's,
+ * locked, and the user's own, which a click removes from the user's list. NIV is the team's here.
+ */
+export const WithTeamAndUserResources: Story = {
+  args: {
+    teamResourceIds: ['selected-1'],
+    allowDeselect: true,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText('Team resources')).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'RVR60' })).toBeVisible();
+    // The team row is not a control at all, so there is nothing to activate.
+    await expect(canvas.queryByRole('button', { name: /NIV/ })).toBeNull();
+  },
+};
+
+/**
+ * The split without removal: the team's resources locked and the user's own listed, but not
+ * selectable. The Text Collection opens the picker this way when it has nowhere to write a
+ * removal.
+ */
+export const WithTeamAndUserResourcesNotRemovable: Story = {
+  args: {
+    teamResourceIds: ['selected-1'],
+  },
+};
+
+/**
+ * A long-named team resource in a narrow dialog. The lock sits in the same fixed-width slot as the
+ * check mark, so the row truncates instead of scrolling — see `LongNamesDoNotScrollHorizontally`.
+ */
+export const LongTeamResourceWhenNarrow: Story = {
+  decorators: [
+    (Story) => (
+      <div className="tw:flex tw:min-h-0 tw:w-[320px] tw:flex-col">
+        <Story />
+      </div>
+    ),
+  ],
+  args: {
+    allResources: [LONG_NAME_RESOURCE],
+    selectedResourceIds: [LONG_NAME_RESOURCE.dblEntryUid],
+    teamResourceIds: [LONG_NAME_RESOURCE.dblEntryUid],
+    allowDeselect: true,
+  },
+  play: async ({ canvasElement }) => expectNoHorizontalScroll(canvasElement),
+};
+
 /**
  * A catalogue-sized language spread (~130 languages, a handful installed). Open the language filter
  * here to see the scrolling, the installed-first ordering, and the per-language counts — the other

@@ -70,10 +70,14 @@ export function ResourceCollectionOptions({
   const headingIdPrefix = useId();
   const teamHeadingId = `${headingIdPrefix}-team`;
   const userHeadingId = `${headingIdPrefix}-user`;
+  const removeHintId = `${headingIdPrefix}-remove-hint`;
   // A group's heading shows only over rows. Installing rows belong with the user's own, so they
   // alone are enough for its heading.
   const hasTeamRows = top.length > 0;
   const hasUserRows = bottom.length > 0 || installingResourceNames.length > 0;
+  // The ✕ removes from the list every tab reads, which the row alone cannot say; the checkbox is
+  // how to hide a text from this grid only.
+  const hasRemoveHint = !disabled && bottom.some((row) => row.isUserRemovable);
 
   // Shown only when interactive (`!disabled`): while disabled we show `disabledMessage` (no
   // project) or nothing (brief load), so this never double-messages or fires prematurely.
@@ -146,6 +150,7 @@ export function ResourceCollectionOptions({
               localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.removeFromList),
               { resourceName: name },
             )}
+            aria-describedby={hasRemoveHint ? removeHintId : undefined}
             className="tw:shrink-0 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:focus-visible:opacity-100"
             onClick={() => onRemoveFromList(id)}
           >
@@ -279,6 +284,11 @@ export function ResourceCollectionOptions({
             {top.map(renderRow)}
             {userRows}
           </>
+        )}
+        {hasRemoveHint && (
+          <p id={removeHintId} className="tw:pt-1 tw:text-xs tw:text-muted-foreground">
+            {localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.removeFromListHint)}
+          </p>
         )}
       </section>
 

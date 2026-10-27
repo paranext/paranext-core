@@ -96,7 +96,10 @@ type ResourceSelectorDropdownProps = {
   filteredResources: PickerResource[];
   selectedRef: PickerResource | undefined;
   dblResources: DblResourceData[];
-  /** Whether the DBL catalog failed to load. See `splitPickerResourcesBySource`. */
+  /**
+   * Whether there is no DBL catalog: still loading, failed, or no DBL credentials. See
+   * `splitPickerResourcesBySource`.
+   */
   isCatalogUnavailable: boolean;
   /** When `false`, the rows are one list with no headings, caption or locks */
   isGrouped: boolean;
@@ -281,9 +284,9 @@ export type ResourceTextPanelProps = {
   /** All DBL resources — used to label the selector rows. */
   dblResources: DblResourceData[];
   /**
-   * Whether the DBL catalog failed to load. The selector then lists the user's own and other
-   * installed resources together, since without the catalog the user's DBL references resolve as
-   * plain downloads.
+   * Whether there is no DBL catalog: still loading, failed, or no DBL credentials. The selector
+   * then lists the user's own and other installed resources together, since without the catalog the
+   * user's DBL references resolve as plain downloads.
    */
   isCatalogUnavailable: boolean;
   /**
