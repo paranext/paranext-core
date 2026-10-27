@@ -206,6 +206,7 @@ import { useProjectStylesheet } from './use-project-stylesheet.hook';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import {
   availableScrollGroupIds,
+  bookHoldsChapters,
   canAddChapterNumber,
   correctEditorUsjVersion,
   decideNoteCallerClickAction,
@@ -5387,7 +5388,8 @@ function PlatformScriptureEditor({
             showButton={
               !isReadOnlyEffective &&
               lastVersesInCurrentBook !== undefined &&
-              canAddChapterNumber(lastVerse)
+              canAddChapterNumber(lastVerse) &&
+              bookHoldsChapters(scrRef.book)
             }
             onAddChapterNumber={handleAddChapterNumber}
             announcementKey={`${projectId}:${scrRef.book} ${scrRef.chapterNum}`}

@@ -146,10 +146,14 @@ import './platform-scripture-editor.web-view';
 // ---------------------------------------------------------------------------
 
 /**
- * WebViewProps for an editor tab whose saved state carries `unsupportedReason`, plus any other
- * saved `state`. A key it does not carry reads as its default.
+ * WebViewProps for an editor tab on chapter 1 of `book` whose saved state carries
+ * `unsupportedReason`, plus any other saved `state`. A key it does not carry reads as its default.
  */
-function makeProps(unsupportedReason: string, state: Record<string, unknown> = {}): WebViewProps {
+function makeProps(
+  unsupportedReason: string,
+  state: Record<string, unknown> = {},
+  book = 'GEN',
+): WebViewProps {
   // The object literal only provides the minimum props needed for testing — the double cast
   // avoids satisfying every optional field of WebViewProps.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -168,7 +172,7 @@ function makeProps(unsupportedReason: string, state: Record<string, unknown> = {
       },
     ),
     useWebViewScrollGroupScrRef: vi.fn(() => [
-      { book: 'GEN', chapterNum: 1, verseNum: 1, versificationStr: 'English' },
+      { book, chapterNum: 1, verseNum: 1, versificationStr: 'English' },
       vi.fn(),
       undefined,
       vi.fn(),
@@ -338,19 +342,24 @@ describe('Scripture editor "Add chapter number" on an empty book', () => {
     return insertFirstChapter;
   }
 
-  async function renderEmptyGenesis() {
+  /** Opens chapter 1 of `book`, which holds only its `\id` line. */
+  async function renderEmptyBook(book: string) {
     chapterUsjValue.current = {
       type: 'USJ',
       version: '3.1',
-      content: [{ type: 'book', marker: 'id', code: 'GEN' }],
+      content: [{ type: 'book', marker: 'id', code: book }],
     };
     projectDataProviders.set('platformScripture.Versification', {
       getFinalVerseNumbersInBook: async () => [0, 31],
     });
     const EditorWebView = getEditorWebView();
     await act(async () => {
-      render(<EditorWebView {...makeProps('', { isReadOnly: false })} />);
+      render(<EditorWebView {...makeProps('', { isReadOnly: false }, book)} />);
     });
+  }
+
+  async function renderEmptyGenesis() {
+    await renderEmptyBook('GEN');
     return screen.getByRole('button', { name: ADD_CHAPTER_NUMBER_KEY });
   }
 
@@ -376,6 +385,15 @@ describe('Scripture editor "Add chapter number" on an empty book', () => {
     expect(insertFirstChapter).toHaveBeenCalledTimes(1);
     expect(insertFirstChapter).toHaveBeenCalledWith(31);
     expect(mockNotifyEditActionBlocked).not.toHaveBeenCalled();
+  });
+
+  it('offers no chapter number in a peripheral book, which never holds chapters', async () => {
+    // The versification gives a peripheral book chapters and verses, so only the book stops it.
+    await renderEmptyBook('FRT');
+
+    // Positive control: the empty-chapter view is up, so the missing button is not vacuous.
+    expect(screen.getByText(EMPTY_CHAPTER_VIEW_KEYS.MESSAGE_KEY)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: ADD_CHAPTER_NUMBER_KEY })).not.toBeInTheDocument();
   });
 
   /** Turns the administrator's team lock on, for a user who may or may not lift it. */

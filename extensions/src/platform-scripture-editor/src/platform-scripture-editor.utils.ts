@@ -49,7 +49,7 @@ import {
   UsjReaderWriter,
   UsjTextContentLocation,
 } from 'platform-bible-utils';
-import { SerializedVerseRef } from '@sillsdev/scripture';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import type { ScriptureEditorViewType, ScriptureRange } from 'platform-scripture-editor';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import type { UnsyncedChangesSnapshot } from 'paratext-bible-send-receive';
@@ -3068,6 +3068,22 @@ export function buildChapterScaffoldOps(chapterNum: number, lastVerseNum: number
  */
 export function canAddChapterNumber(lastVerse: number): boolean {
   return lastVerse > 0;
+}
+
+/**
+ * Whether a book holds chapters, so the "Add Chapter Number" button can be offered in it. A
+ * peripheral book (FRT, INT, BAK, OTH, CNC, GLO, TDX, NDX) never does, and the editor refuses `\c`
+ * in one, though the versification gives it chapters and verses. The Extra books (XXA–XXG) hold
+ * chapters like any other book. The book and chapter control draws the same line.
+ *
+ * Upper-cases the id first: `Canon.isExtraMaterial` matches its id list case-sensitively, so a
+ * lowercase id would read as a book that holds chapters.
+ *
+ * @param bookId The book id, e.g. from the current scripture reference.
+ */
+export function bookHoldsChapters(bookId: string): boolean {
+  const upperBookId = bookId.toUpperCase();
+  return !Canon.isExtraMaterial(upperBookId) || Canon.extraBooks().includes(upperBookId);
 }
 
 /**

@@ -59,6 +59,7 @@ import {
   hasChapterText,
   buildChapterScaffoldOps,
   canAddChapterNumber,
+  bookHoldsChapters,
   shouldProtectAddChapterNumber,
   insertChapterScaffold,
   resolveAddChapterNumberClick,
@@ -4669,6 +4670,23 @@ describe('canAddChapterNumber', () => {
 
   it('returns true when the chapter has at least one verse', () => {
     expect(canAddChapterNumber(1)).toBe(true);
+  });
+});
+
+describe('bookHoldsChapters', () => {
+  it.each(['FRT', 'INT', 'BAK', 'OTH', 'CNC', 'GLO', 'TDX', 'NDX'])(
+    'offers no chapters in the peripheral book %s',
+    (bookId) => {
+      expect(bookHoldsChapters(bookId)).toBe(false);
+    },
+  );
+
+  it.each(['GEN', 'MAT', 'TOB', 'XXA', 'XXG'])('offers chapters in %s', (bookId) => {
+    expect(bookHoldsChapters(bookId)).toBe(true);
+  });
+
+  it('recognizes a peripheral book whatever its case', () => {
+    expect(bookHoldsChapters('frt')).toBe(false);
   });
 });
 
