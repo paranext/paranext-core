@@ -3793,6 +3793,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `'protected'` claims Enter as a paragraph insert before the note's `\fp` handling can run. The main
   text keeps the project's protection mode.
 - **Source:** PT-4846.
+- **Amended 2026-10-26 (PT-4777):** Partly superseded by `adr-power-preview-read-only-formatted`.
+  Power's Formatted view is now the read-only Preview and uses the pane note model too: a caller
+  click there navigates to the note in the footnotes pane instead of opening a popover. The
+  Markers view is shown nowhere. So every view the editor shows uses the pane note model, and
+  `usesPaneNoteModel` answers by the view type alone (`isPowerMode` no longer changes the answer);
+  while `platform.interfaceMode` is still loading only Standard view counts, as before.
 
 ## adr-footnote-unclosed-note-edited-in-place: In Standard view an unclosed note is edited in place in the text, and in the footnotes pane too
 
@@ -7143,6 +7149,36 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   completed first run before the wizard asked for a choice are not asked again. E2E fixtures that
   can launch in Power mode pin the flag `true`, so the panel does not open mid-suite.
 - **Source:** PT-4590 (paranext-core #2905 review).
+
+## adr-power-preview-read-only-formatted: Power mode's Preview is the formatted view made read-only
+
+- **Date:** 2026-10-22
+- **Status:** Accepted
+- **Context:** The editor offers Standard view (editable, with visible paragraph markers) and, in
+  Power mode, a Preview (the formatted view) that must not accept edits. Simple mode has no Preview,
+  and the Markers view is shown nowhere, yet saved web view state can still hold `'formatted'` or
+  `'markers'` as its `viewType`. Whether the
+  same saved value is editable therefore depends on the interface mode, which a plain mapping from
+  view type to editability cannot express.
+- **Decision:** Power's Preview is the formatted view made read-only. The saved value stays
+  `'formatted'`; its editability depends on `platform.interfaceMode`, so one saved value is the
+  editable Simple view in Simple mode and the read-only Preview in Power mode. A saved `'markers'` is
+  mapped to Standard view when it is read. Every view the editor shows (Standard view, Preview and
+  Simple's formatted view) uses the footnotes-pane note model; in the read-only Preview a caller
+  click navigates to its note in the pane. `showsReadOnlyPreview` (is the text read-only) and
+  `usesPaneNoteModel` (does the view use the pane note model, the one predicate
+  `adr-footnote-pane-editing-in-simple-mode` introduced) in
+  `extensions/src/platform-scripture-editor/src/platform-scripture-editor.utils.ts` are the single
+  sources for those two questions; callers ask them instead of comparing view types or interface
+  modes themselves.
+- **Alternatives:** **Rename the saved value to `'preview'`** — rejected: it needs a migration of
+  saved state and gives users nothing. **A view-type to editable map** — rejected: it cannot
+  express a value whose editability depends on the interface mode. **Delete `'markers'` from the
+  type** — rejected: values already saved would be left untyped at the read boundary.
+- **Consequences:** No saved-state migration. Every read of a saved view goes through the mapping,
+  and a new view-dependent behavior must be added to one of the two helpers (or a sibling) rather
+  than checked inline, or Simple and Power will drift apart.
+- **Source:** PT-4777.
 
 ## adr-primary-window-owns-app-lifetime: The primary window's close decides whether the app quits; the role stays a role
 

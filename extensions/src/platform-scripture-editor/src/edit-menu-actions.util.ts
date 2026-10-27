@@ -77,7 +77,7 @@ export type EditMenuBlockState = {
   isReadOnly: boolean;
   /**
    * Whether it is read-only for a reason a finished Send/Receive does not clear (no permission,
-   * project not editable, markers view)
+   * project not editable, Preview in Power mode)
    */
   isDurablyReadOnly: boolean;
   /** Whether an automatic Send/Receive is blocking edits right now */

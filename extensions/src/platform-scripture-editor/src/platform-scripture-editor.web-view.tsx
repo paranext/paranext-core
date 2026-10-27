@@ -215,8 +215,8 @@ import {
   findEditorUsjNotes,
   formatEditorTitle,
   generateParagraphMenuListItems,
-  getNextViewTypeInCycle,
   getSimpleModeRootClassNames,
+  getViewTypeToSave,
   hasDisplayableParagraphMarkerTitle,
   isChapterBlank,
   isMissingBookError,
@@ -231,7 +231,9 @@ import {
   resolveFootnotesPaneViewOptions,
   resolveNoteEditingSurface,
   resolveNoteVerseRef,
-  resolveViewTypeForInterfaceMode,
+  getDisplayedViewType,
+  PersistedViewType,
+  VIEW_TYPE_UNSET,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   selectableParagraphMarkers,
   selectCommentThreadInPanelSafe,
@@ -253,6 +255,7 @@ import { MARKER_MENU_POPOVER_WIDTH_CLASSES } from './marker-menu-popover.const';
 import {
   CONTEXT_MENU_ACTION_TO_NOTE_KIND,
   createInsertContextMenuItems,
+  deriveReadOnlyFlags,
   flushRowEditsThenSave,
   forgetCaretSnapshotIfParaMarkerSelected,
   isEditorContextMenuOpen,
@@ -277,7 +280,11 @@ import { TwoStepDeleteTooltipOverlay } from './two-step-delete-tooltip/two-step-
 import { CharacterMarkerBarOverlay } from './character-marker-bar/character-marker-bar-overlay.component';
 import { CharacterMarkerBar } from './character-marker-bar/character-marker-bar.component';
 import { REMOVE_CHARACTER_MARKER_STRING_KEYS } from './character-marker-bar/use-remove-character-marker.hook';
-import { shouldRoutePaletteKey } from './palette-key-routing.util';
+import {
+  INLINE_MARKERS_MENU_TRIGGER,
+  shouldOpenInlineMarkersMenu,
+  shouldRoutePaletteKey,
+} from './palette-key-routing.util';
 import {
   commitVersionHistorySnapshot,
   EDIT_ACTION_BLOCKED_KEY,
@@ -440,17 +447,7 @@ const defaultProjectName = '';
  */
 const NO_UPDATE_TITLE = '__do_not_update_title_not_for_use__';
 
-/**
- * Sentinel that is never a real {@link ScriptureEditorViewType}, used as the `defaultValue` in a
- * one-off `globalThis.getWebViewState('viewType', ...)` probe (see the
- * `hadPersistedViewTypeAtMount` computation below) to detect whether `viewType` was ever explicitly
- * persisted for this web view.
- */
-const VIEW_TYPE_UNSET = '__view_type_unset_not_a_real_view_type__';
-
 const defaultTextDirection = 'ltr';
-
-const defaultMarkersMenuTrigger = '\\';
 
 /**
  * Logs a marker-palette open failure, EXCEPT the routine one: a newer palette request replacing an
@@ -524,17 +521,9 @@ const getViewOptionsForType = (
     return getViewOptions(STANDARD_VIEW_MODE) ?? getDefaultViewOptions();
   }
   // Power users get to choose their own view options, so don't force the paragraph-structure
-  // preset on them. The markers tweaks below predate this and are required to keep the read-only
-  // markers view working.
-  if (isPowerMode) {
-    const base = getDefaultViewOptions();
-    if (viewType === 'markers') return { ...base, markerMode: 'visible', noteMode: 'expanded' };
-    return base;
-  }
-  const paragraphStructure =
-    getViewOptions(PARAGRAPH_STRUCTURE_VIEW_MODE) ?? getDefaultViewOptions();
-  if (viewType === 'markers') return { ...paragraphStructure, noteMode: 'expanded' };
-  return paragraphStructure;
+  // preset on them.
+  if (isPowerMode) return getDefaultViewOptions();
+  return getViewOptions(PARAGRAPH_STRUCTURE_VIEW_MODE) ?? getDefaultViewOptions();
 };
 
 /**
@@ -801,7 +790,7 @@ function PlatformScriptureEditor({
   );
 
   // `platform.interfaceMode` is read here (rather than down by its other consumers, `bcvControls`
-  // etc.) because the `viewType` state below needs `isPowerMode` for its default value.
+  // etc.) because the displayed `viewType` and the correction effect below need `isPowerMode`.
   const [interfaceModePossiblyError, , , isInterfaceModeLoading] = useSetting(
     'platform.interfaceMode',
     'simple',
@@ -824,26 +813,22 @@ function PlatformScriptureEditor({
    *
    * We need this because `useSetting`'s `isLoading` starts `true` on every mount (see
    * `create-use-data-hook.util.ts`), so `isPowerMode` is guaranteed `false` on this component's
-   * very first render regardless of the real, eventually-resolved setting value. `useWebViewState`
-   * captures its default into local state via a lazy initializer that runs only once, so a stale
-   * 'formatted' default captured on that first render will not self-correct once `isPowerMode`
-   * later resolves `true` -- it would otherwise be stuck at 'formatted' for the life of this
-   * webview instance. The correction effect below uses this flag only as a fast-path short-circuit;
-   * because it is a mount-time snapshot that can go stale (the user could persist a choice between
-   * mount and `platform.interfaceMode` resolving), the effect re-probes the store fresh at fire
-   * time and that fresh probe is the decider.
+   * very first render regardless of the real, eventually-resolved setting value. The correction
+   * effect below therefore waits for the mode to resolve, then persists 'standard' once for a
+   * never-saved Power tab so the choice is saved for later reloads. It uses this flag only as a
+   * fast-path short-circuit; because it is a mount-time snapshot that can go stale (the user could
+   * persist a choice between mount and `platform.interfaceMode` resolving), the effect re-probes
+   * the store fresh at fire time and that fresh probe is the decider.
    */
   const [hadPersistedViewTypeAtMount] = useState(
     () => globalThis.getWebViewState('viewType', VIEW_TYPE_UNSET) !== VIEW_TYPE_UNSET,
   );
 
-  const [persistedViewType, setViewType] = useWebViewState<ScriptureEditorViewType>(
+  // `useWebViewState` only reads this default when nothing is persisted and never writes it, so
+  // `VIEW_TYPE_UNSET` never reaches the store; only `setViewType` persists a value.
+  const [persistedViewType, setViewType] = useWebViewState<PersistedViewType>(
     'viewType',
-    // Saved-state views never flip -- `useWebViewState` only reads this default when nothing is
-    // persisted yet. A first-ever-open power-mode view may still render one or more frames as
-    // 'formatted' before `platform.interfaceMode` resolves (see evidence above); the effect below
-    // corrects that once resolution completes, without ever touching a saved value.
-    isPowerMode ? 'standard' : 'formatted',
+    VIEW_TYPE_UNSET,
   );
 
   /**
@@ -872,27 +857,21 @@ function PlatformScriptureEditor({
     }
     hasAppliedInitialPowerDefaultRef.current = true;
     // This write is intentionally sticky: it persists 'standard', so future reloads of this web
-    // view see a persisted value and skip this whole correction dance.
+    // view see a persisted value and skip this whole correction dance. The displayed `viewType`
+    // below already shows Standard view, so the write does not change what is on screen.
     setViewType('standard');
   }, [hadPersistedViewTypeAtMount, isInterfaceModeLoading, isPowerMode, setViewType]);
 
-  // Standard and markers views must never be shown in simple mode: simple mode pairs with structure
-  // protection, which intentionally blocks the paragraph-marker edits standard view's editing
-  // affordances are built around, and it offers no way out of the read-only markers view (see
-  // `resolveViewTypeForInterfaceMode`). This covers both a 'standard' or 'markers' persisted during
-  // a power-mode session loading while the app is in simple mode and a live
-  // `platform.interfaceMode` flip to simple while such a web view is open.
-  // The coercion is DERIVED for display, never written back: persisting it would destroy the
-  // user's choice permanently — flipping back to power mode could not restore it, because the
-  // one-shot power-default correction above is gated on `hadPersistedViewTypeAtMount` and its
-  // fresh re-probe would then find the persisted 'formatted'. Every consumer below reads this
-  // effective value; only an explicit user action (`setViewType` via cycling or
-  // `changeScriptureView`) writes the store. Waits for `platform.interfaceMode` to resolve
-  // because `isPowerMode` is always `false` while the setting loads — coercing then would hide a
-  // power user's persisted standard view on every mount's first frames.
-  const viewType = isInterfaceModeLoading
-    ? persistedViewType
-    : resolveViewTypeForInterfaceMode(persistedViewType, isPowerMode);
+  // The view the editor shows (see `getDisplayedViewType`). It is DERIVED for display and never
+  // written back, so a saved choice that Simple mode shows differently is left alone. Every
+  // consumer below reads this effective value; only an explicit user action (`setViewType` via
+  // toggling or `setScriptureView`) or the correction effect writes the store. It waits for
+  // `platform.interfaceMode` to resolve because `isPowerMode` is always `false` while the setting
+  // loads. The editor is read-only while the mode loads (see `isReadOnlyEffective`).
+  const viewType = useMemo<ScriptureEditorViewType>(
+    () => getDisplayedViewType({ persistedViewType, isPowerMode, isInterfaceModeLoading }),
+    [isInterfaceModeLoading, isPowerMode, persistedViewType],
+  );
 
   const [unformattedTitle] = useWebViewState<string | undefined>(
     'unformattedTitle',
@@ -1425,26 +1404,28 @@ function PlatformScriptureEditor({
     [crossRefCallersSetting],
   );
 
-  /**
-   * Whether the editor is effectively read-only, considering the isReadOnly flag, the project's
-   * `platform.isEditable` setting, the user's Scripture-edit permission, sync-blocked state, and
-   * view type. The markers-view clause is the one placeholder piece here: once editing is allowed
-   * in markers view, that clause can be dropped, but the rest of this combination stays.
-   *
-   * Fails CLOSED (read-only) while `isProjectEditable`/`canUserEditScripture` are genuinely still
-   * resolving — see `isCanUserEditScriptureUnresolved` above — rather than relying on their
-   * fail-open default values during that window: a briefly-writable editor is worse than a
-   * briefly-read-only one.
-   */
-  const isReadOnlyEffective = useMemo(
+  // The three read-only flags; what each one means (fail-closed while loading, durable excludes the
+  // transient sync block, undefined title flag while resolving) is documented on
+  // `deriveReadOnlyFlags`. `viewType` is the displayed view type.
+  // `isReadOnlyForTitle` is read as `resolvedIsDurablyReadOnly`: the title effect and the root's
+  // Simple-mode classes both wait for it to resolve.
+  const {
+    isReadOnlyEffective,
+    isDurablyReadOnly,
+    isReadOnlyForTitle: resolvedIsDurablyReadOnly,
+  } = useMemo(
     () =>
-      isReadOnly ||
-      isProjectEditableLoading ||
-      !isProjectEditable ||
-      isCanUserEditScriptureUnresolved ||
-      !canUserEditScripture ||
-      isSyncBlocked ||
-      (viewType === 'markers' && localStorage.getItem('dev-editableMarkersView') !== 'true'),
+      deriveReadOnlyFlags({
+        isReadOnly,
+        isProjectEditableLoading,
+        isProjectEditable,
+        isCanUserEditScriptureUnresolved,
+        canUserEditScripture,
+        isSyncBlocked,
+        isInterfaceModeLoading,
+        viewType,
+        isPowerMode,
+      }),
     [
       isReadOnly,
       isProjectEditableLoading,
@@ -1452,7 +1433,9 @@ function PlatformScriptureEditor({
       isCanUserEditScriptureUnresolved,
       canUserEditScripture,
       isSyncBlocked,
+      isInterfaceModeLoading,
       viewType,
+      isPowerMode,
     ],
   );
 
@@ -1476,7 +1459,8 @@ function PlatformScriptureEditor({
   }, [isReadOnlyEffective, dismissPaletteSessionIfOpen, webViewId]);
 
   /**
-   * Whether this view uses the footnotes-pane note model (Standard view, or Simple's Formatted
+   * Whether this view uses the footnotes-pane note model (every view the editor shows once
+   * `platform.interfaceMode` has loaded: Standard view, Power's Preview and Simple's Formatted
    * view): notes are edited in the pane, picking one moves the text to it, and its caller is
    * highlighted. See `usesPaneNoteModel`.
    */
@@ -1674,37 +1658,14 @@ function PlatformScriptureEditor({
     ],
   );
 
-  // The "durable" reasons the editor is read-only — excludes isSyncBlocked, a transient freeze
-  // during an automatic Send/Receive, not a real read-only state. Used for the title instead of
-  // isReadOnlyEffective so the tab doesn't relabel "(Read-only)" and back on every scheduled sync;
-  // SyncBlockedBanner already communicates that transient state.
-  const isDurablyReadOnly = useMemo(
-    () =>
-      isReadOnly ||
-      !isProjectEditable ||
-      !canUserEditScripture ||
-      (viewType === 'markers' && localStorage.getItem('dev-editableMarkersView') !== 'true'),
-    [isReadOnly, isProjectEditable, canUserEditScripture, viewType],
-  );
-
-  // `undefined` means isProjectEditable/canUserEditScripture are still genuinely resolving (not
-  // latched — see isCanUserEditScriptureUnresolved above). Two consumers wait it out: the title
-  // effect below skips its update instead of pushing a title, so the previously-persisted title
-  // stays showing, and the root's Simple-mode classes leave the character-marker tint off.
-  const resolvedIsDurablyReadOnly = useMemo(
-    () =>
-      isProjectEditableLoading || isCanUserEditScriptureUnresolved ? undefined : isDurablyReadOnly,
-    [isProjectEditableLoading, isCanUserEditScriptureUnresolved, isDurablyReadOnly],
-  );
-
   /**
    * Why the "Manage books" action on the book-not-available zero-state cannot be taken right now,
    * or `undefined` when it can.
    *
-   * Deliberately NOT derived from `isReadOnlyEffective`, which folds in `viewType === 'markers'`
+   * Deliberately NOT derived from `isReadOnlyEffective`, which folds in the read-only Preview
    * because the editor CANVAS is not editable in that view. Manage Books is a separate floating
    * dialog, and its ability to create a book does not depend on which view the editor is showing —
-   * so gating on the effective flag disabled an action that would have worked fine. Only the two
+   * so gating on the effective flag would disable an action that works fine. Only the two
    * conditions that genuinely prevent adding a book are listed, checked in the order in which the
    * user can do something about them: a read-only project is a standing state they must get
    * changed, while a sync is transient and about to end on its own.
@@ -2238,25 +2199,16 @@ function PlatformScriptureEditor({
           setDecorations(updatedDecorations);
           break;
         }
-        case 'changeScriptureView': {
-          // Cycle through the available views for QA (a temporary affordance, to be replaced by
-          // the polished power-default view + menu). The cycle is mode-aware: simple mode has only
-          // the formatted view, so there it changes nothing and the view type saved in Power stays
-          // (see `getNextViewTypeInCycle` for the full cycle semantics and why it switches on
-          // `viewType` rather than `viewOptions.markerMode`).
-          const nextViewType = getNextViewTypeInCycle(viewType, isPowerMode);
+        case 'changeScriptureView':
+        case 'setScriptureView': {
+          // `changeScriptureView` toggles Standard view and Preview in Power; `setScriptureView`
+          // saves the requested view type as is. A Power tab's saved choice is left alone by
+          // Simple, which shows only the formatted view.
+          const nextViewType = getViewTypeToSave(editorMessage, { viewType, isPowerMode });
           if (nextViewType) {
             endPaneNoteEdit();
             setViewType(nextViewType);
           }
-          break;
-        }
-        case 'setScriptureView': {
-          // The request is persisted as is. Standard and markers views are Power-only, so outside
-          // Power the displayed `viewType` above coerces it to formatted while the saved choice
-          // survives a switch back to Power.
-          endPaneNoteEdit();
-          setViewType(editorMessage.viewType);
           break;
         }
         case 'undo': {
@@ -2875,10 +2827,10 @@ function PlatformScriptureEditor({
     [getSelectionBeforePointerPress],
   );
 
-  // Listen for the marker menu trigger to open the marker menu, for F7 (footnotes), Ctrl+Shift+R
-  // (Basic checks) and Ctrl+T / Ctrl+Shift+T (insert a footnote/cross-reference) in every view, and
-  // for Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert a comment at the
-  // selection
+  // Listen for the marker menu trigger to open the marker menu, for F7 (footnotes), Ctrl+E (toggle
+  // Standard view and Preview, Power only), Ctrl+Shift+R (Basic checks) and Ctrl+T / Ctrl+Shift+T
+  // (insert a footnote/cross-reference) in every view, and for Cmd+Alt+M (macOS) or Ctrl+Alt+M /
+  // Ctrl+Shift+N (Windows/Linux) to insert a comment at the selection
   useEffect(() => {
     /**
      * Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux). Read by BOTH listeners below:
@@ -2905,8 +2857,8 @@ function PlatformScriptureEditor({
     // characters, Space, Arrow/Enter/Escape/Backspace) additionally stopPropagations so Lexical
     // never processes it — under the ACTIVE palette nothing of the palette's may land in the
     // document. Keys the table declines (IME composition, pure modifiers, chords, resumed-typing
-    // dismissals) still propagate. The legacy non-standard-view interception stays in the
-    // bubble-phase `handleKeyDown` below, unchanged.
+    // dismissals) still propagate. The non-standard-view interception (the inline marker menu)
+    // lives in the bubble-phase `handleKeyDown` below.
     const handleStandardViewTriggers = (event: KeyboardEvent) => {
       // Never intercept IME composition keys: an Enter (or `\`) that confirms or feeds a
       // CJK/complex-script candidate arrives with `isComposing` (keyCode 229) and must reach
@@ -2950,7 +2902,7 @@ function PlatformScriptureEditor({
         }
 
         // Everything below runs only with no open session — the `if (session)` above returns.
-        if (event.key === defaultMarkersMenuTrigger) {
+        if (event.key === INLINE_MARKERS_MENU_TRIGGER) {
           // The editor's own right-click menu is up: CLAIMED, not merely declined. See
           // `isEditorContextMenuOpen` for why, and why Enter below stands down the other way.
           if (isEditorContextMenuOpen(editorContainerRef.current)) {
@@ -2995,12 +2947,16 @@ function PlatformScriptureEditor({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       // Shows the marker menu if it isn't already being shown and if the editor is currently selected
+      // and editable: its items insert markers, which a read-only editor refuses
       if (currentSelectionRef.current) {
         if (
-          !showMarkersMenu &&
-          editorRef.current?.isFocused() &&
-          viewType !== 'standard' &&
-          event.key === defaultMarkersMenuTrigger
+          shouldOpenInlineMarkersMenu({
+            key: event.key,
+            isMenuShown: showMarkersMenu,
+            isEditorFocused: !!editorRef.current?.isFocused(),
+            isReadOnly: isReadOnlyEffective,
+            viewType,
+          })
         ) {
           event.preventDefault();
           // Swallowed while the editor's right-click menu is up rather than opening a second popup
@@ -3032,6 +2988,8 @@ function PlatformScriptureEditor({
             // FootnoteEditor/CommentEditor popovers (which have their own `.editor-input`) have focus
             isEditorFocused: !!editorRef.current?.isFocused(),
             isPowerMode,
+            // Open, not focused: the popover stays open when focus returns to the text
+            isCommentEditorOpen: showCommentEditor,
           })
         )
           return;
@@ -3082,6 +3040,7 @@ function PlatformScriptureEditor({
     isMac,
     isReadOnlyEffective,
     isPowerMode,
+    showCommentEditor,
     webViewId,
     viewType,
     styleInfo,
@@ -4462,7 +4421,7 @@ function PlatformScriptureEditor({
         onNoteEdit={onFootnoteEditorNoteEdit}
         scrRef={scrRef}
         editorOptions={paneFootnoteEditorOptions}
-        defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}
+        defaultMarkerMenuTrigger={INLINE_MARKERS_MENU_TRIGGER}
         localizedStrings={localizedStrings}
         parentEditorRef={editorRef}
         markerPalette={footnoteMarkerPalette}
@@ -5738,7 +5697,7 @@ function PlatformScriptureEditor({
             onNoteEdit={onFootnoteEditorNoteEdit}
             scrRef={scrRef}
             editorOptions={editorOptionsWithCopyLimit}
-            defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}
+            defaultMarkerMenuTrigger={INLINE_MARKERS_MENU_TRIGGER}
             localizedStrings={localizedStrings}
             parentEditorRef={editorRef}
             markerPalette={footnoteMarkerPalette}
