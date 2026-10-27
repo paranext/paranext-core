@@ -1689,7 +1689,7 @@ export interface UseMarkerPaletteFocusOutCaptureOptions {
 	/** The element containing this editor's `.editor-input`. Scopes the capture to THIS editor. */
 	containerRef: React$1.RefObject<HTMLElement | null>;
 	/** The editor whose selection and content are read. */
-	editorRef: React$1.RefObject<EditorRef | null>;
+	editorRef: React$1.RefObject<Pick<EditorRef, "getSelection" | "getSelectedParaMarker" | "getUsj"> | null>;
 	/** Receives the last live selection, for the restore every session end performs. */
 	selectionRef: React$1.MutableRefObject<SelectionRange | undefined>;
 	/** Receives the change-guard baseline, taken only while a palette session is open. */
@@ -1715,7 +1715,10 @@ export interface UseMarkerPaletteFocusOutCaptureOptions {
  * restore from it when they find the live selection gone.
  *
  * Only overwrites when the selection is readable: if it is already gone at `focusout`, the previous
- * capture is the best remaining approximation.
+ * capture is the best remaining approximation. A selected paragraph marker is the exception: it has
+ * no text range, and the previous capture is a caret the user has since left, so restoring it would
+ * move the selection to another paragraph. The capture is cleared instead — a marker cannot be
+ * re-selected from a capture, and while it stays selected nothing needs restoring.
  *
  * The baseline is taken at the same moment and for the same reason — it has to describe the editor
  * as THIS session's palette took focus, which is exactly now. Scoped to this editor's own
@@ -1852,7 +1855,7 @@ export declare function BaseOrModelTextExplanation({ localizedStrings, className
  * SYNC WARNING: Keep this alias identical to `InternetUse` in
  * extensions/src/paratext-registration/src/types/paratext-registration.d.ts and the matching C#
  * enum. Structural typing makes them mutually assignable today, but divergence (e.g. C# adding a
- * new value) will silently break the wizard step's prop wiring. Update this alias whenever the
+ * new value) will silently break the settings panel's prop wiring. Update this alias whenever the
  * authoritative type changes.
  *
  * @experimental This export is unstable and may change shape or disappear without notice
@@ -1863,9 +1866,9 @@ export type InternetUse = "Enabled" | "VpnRequired" | "Disabled" | "ProxyOnly";
  *
  * `InternetSettings.xml` is seeded once from a co-installed Paratext 9 on first launch (the two
  * apps keep separate copies thereafter), so a stored value may name an option this app does not
- * implement yet (the "Coming soon" rows). Such a value is shown selected and called out in a banner
- * rather than silently replaced — callers that gate on a usable selection (the first-run wizard's
- * Next button) should refuse to advance until this returns true.
+ * implement yet (the rows marked not yet available). Such a value is shown selected and called out
+ * in a banner rather than swapped for another row. (The data provider replaces a stored
+ * `VpnRequired` with `Disabled` at startup, so in practice this is `ProxyOnly`.)
  *
  * @experimental This export is unstable and may change shape or disappear without notice
  */
@@ -1881,13 +1884,13 @@ export type InternetAccessOptionListProps = {
 	 * that needs the user to make an explicit choice rather than accept the stored value.
 	 */
 	value: InternetUse | undefined;
-	/** Called when the user selects an active (non-coming-soon) option. */
+	/** Called when the user selects an active (available) option. */
 	onChange: (value: InternetUse) => void;
 	/** When true, all rows are non-interactive (loading or saving in progress). */
 	disabled: boolean;
 };
 /**
- * The five internet-access options as radio rows. Each row's description sits behind an info icon
+ * The internet-access options as radio rows. Each row's description sits behind an info icon
  * button, revealed as a tooltip on hover or keyboard focus.
  *
  * The descriptions run to two sentences — longer than `Guidelines/Tooltips` allows a tooltip on a
@@ -1942,6 +1945,35 @@ export type ShortcutKeysProps = {
  * @experimental This component is unstable and may change or disappear without notice
  */
 export declare function ShortcutKeys({ hint }: ShortcutKeysProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Names (lucide kebab-case) of the icons `LucideIcon` can render
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const LUCIDE_ICON_NAMES: readonly string[];
+/** @experimental This export is unstable and may change shape or disappear without notice */
+export type LucideIconProps = {
+	/**
+	 * Lucide icon name in kebab-case, e.g. `refresh-cw`. Must be one of {@link LUCIDE_ICON_NAMES}.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	name: string;
+	/**
+	 * Extra classes for the svg, appended to the default 16px size
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	className?: string;
+};
+/**
+ * Renders a lucide icon by name. The svg strokes with `currentColor`, so it follows the text colour
+ * of its surroundings (theme, hover, selected and disabled states). Renders nothing for a name that
+ * is not in {@link LUCIDE_ICON_NAMES}.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function LucideIcon({ name, className }: LucideIconProps): import("react/jsx-runtime").JSX.Element | undefined;
 
 export {
 	ALL_BOOK_IDS,

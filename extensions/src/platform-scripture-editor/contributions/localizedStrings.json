@@ -135,6 +135,8 @@
       "%platformScriptureEditor_dialog_openScriptureEditor_title%": "Open Scripture Editor",
       "%platformScriptureEditor_markersView_readonly_dismiss%": "Don't show again today",
       "%platformScriptureEditor_markersView_readonly_message_format%": "The markers view for {projectName} is read-only.",
+      "%platformScriptureEditor_previewView_readonly_dismiss%": "Don't show again today",
+      "%platformScriptureEditor_previewView_readonly_message_format%": "Preview of {projectName} is read-only. To edit, switch to Standard view.",
       "%platformScriptureEditor_sharedLayout_applyNow%": "Apply now",
       "%platformScriptureEditor_sharedLayout_newLayoutAvailable%": "An admin shared a new layout for this project",
       "%settings_platformScriptureEditor_enableScriptureTextGrid_description%": "Show the scripture text grid view for viewing multiple resources side by side.",
@@ -241,18 +243,21 @@
       "%webView_platformScriptureEditor_insertFootnoteAtSelection%": "Insert footnote",
       "%webView_platformScriptureEditor_markersInventory%": "Inventory: Markers...",
       "%webView_platformScriptureEditor_openChecks%": "Open Checks...",
+      "%webView_platformScriptureEditor_openChecks_2%": "Basic checks",
       "%webView_platformScriptureEditor_openChecksSidePanel%": "Open Checks Side Panel",
       "%webView_platformScriptureEditor_openFind%": "Find",
       "%webView_platformScriptureEditor_options%": "Options",
       "%webView_platformScriptureEditor_paragraphSelection_ariaLabel%": "Paragraph style",
       "%webView_platformScriptureEditor_paragraphSelection_protectedTooltip%": "Structure is locked. Paragraph format cannot be changed.",
       "%webView_platformScriptureEditor_paste%": "Paste",
+      "%webView_platformScriptureEditor_preview%": "Preview",
       "%webView_platformScriptureEditor_publisherInfo%": "Publisher Info",
       "%webView_platformScriptureEditor_punctuationInventory%": "Inventory: Punctuation...",
       "%webView_platformScriptureEditor_qualityChecks%": "Quality checks",
       "%webView_platformScriptureEditor_redo%": "Redo",
       "%webView_platformScriptureEditor_repeatedWordsInventory%": "Inventory: Repeated Words...",
       "%webView_platformScriptureEditor_resetZoomToDefault%": "Zoom reset",
+      "%webView_platformScriptureEditor_resetZoomToDefault_2%": "Zoom 100%",
       "%webView_platformScriptureEditor_shareLayout_ariaLabel%": "Share layout with team",
       "%webView_platformScriptureEditor_showBibleTextsPanel%": "Bible texts",
       "%webView_platformScriptureEditor_showCheckResults%": "Show Check Results...",
@@ -261,6 +266,7 @@
       "%webView_platformScriptureEditor_showDictionaryPanel%": "Dictionary",
       "%webView_platformScriptureEditor_showFootnotes%": "Show footnotes",
       "%webView_platformScriptureEditor_showTextCollectionPanel%": "Text collection",
+      "%webView_platformScriptureEditor_standardView%": "Standard view",
       "%webView_platformScriptureEditor_structureProtection_ariaLabel%": "Toggle structure protection",
       "%webView_platformScriptureEditor_structureProtection_errorLoading%": "Structure protection state unavailable",
       "%webView_platformScriptureEditor_structureProtection_lockStructure%": "Lock structure",
@@ -285,7 +291,11 @@
       "%webView_platformScriptureEditor_title_readonly_indicator%": "(Read-only)",
       "%webView_platformScriptureEditor_title_readonly_no_project%": "Resource Viewer",
       "%webView_platformScriptureEditor_tools%": "Tools",
+      "%webView_platformScriptureEditor_toolsAndResources%": "Tools and resources",
       "%webView_platformScriptureEditor_twoStepDelete_deleteSelection%": "Press {key} again to delete selection",
+      "%webView_platformScriptureEditor_twoStepDelete_joinNextParagraph%": "Press {key} again to join the next paragraph to this one",
+      "%webView_platformScriptureEditor_twoStepDelete_joinPreviousParagraph%": "Press {key} again to join this paragraph to the previous one",
+      "%webView_platformScriptureEditor_twoStepDelete_removeEmptyParagraph%": "Press {key} again to remove the empty paragraph",
       "%webView_platformScriptureEditor_twoStepDelete_removeVerseNumber%": "Press {key} again to remove verse marker",
       "%webView_platformScriptureEditor_undo%": "Undo",
       "%webView_platformScriptureEditor_view%": "View",
@@ -313,9 +323,11 @@
       "%webView_resourcePanel_installing%": "Installing resource…",
       "%webView_resourcePanel_loading%": "Loading…",
       "%webView_resourcePanel_noProject%": "No project selected.",
+      "%webView_resourcePanel_otherResources%": "Other resources",
       "%webView_resourcePanel_retry%": "Try again",
       "%webView_resourcePanel_selecting%": "Selecting resource…",
       "%webView_resourcePanel_settingsUnavailable%": "Couldn't load your resources. They will appear once they're available.",
+      "%webView_resourcePanel_teamResourcesCaption%": "Only a project administrator can remove these.",
       "%webView_resourcePanel_textUnavailable%": "This text could not be loaded.",
       "%webView_scriptureTextGrid_aria_chapterContextClosed%": "Chapter view closed",
       "%webView_scriptureTextGrid_aria_chapterContextOpened%": "Chapter view opened for {resourceReference}",
@@ -346,6 +358,7 @@
       "%webView_scriptureTextGrid_viewOptions_adminSharedLock%": "Shared by administrator",
       "%webView_scriptureTextGrid_viewOptions_chapter%": "Chapter",
       "%webView_scriptureTextGrid_viewOptions_chapterComingSoon%": "Chapter view coming soon",
+      "%webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%": "Chapter view is not yet available.",
       "%webView_scriptureTextGrid_viewOptions_comingSoon%": "Coming soon",
       "%webView_scriptureTextGrid_viewOptions_downloadedNoProject%": "Resource downloaded. Select a project to add it to a text collection.",
       "%webView_scriptureTextGrid_viewOptions_emptyState_prompt%": "No texts added yet. Use {getResourcesLabel} to add them.",
@@ -358,7 +371,10 @@
       "%webView_scriptureTextGrid_viewOptions_settingsUnavailable%": "Couldn't load your texts.",
       "%webView_scriptureTextGrid_viewOptions_pickerNoProjectNotice%": "No project is selected, so a resource you choose here will be downloaded to this computer but not added to a text collection.",
       "%webView_scriptureTextGrid_viewOptions_removeFromList%": "Remove {resourceName} from list",
+      "%webView_scriptureTextGrid_viewOptions_teamResourcesHeader%": "Team resources",
+      "%webView_scriptureTextGrid_viewOptions_teamSharedLock%": "Shared by your team",
       "%webView_scriptureTextGrid_viewOptions_textsHeader%": "Texts",
+      "%webView_scriptureTextGrid_viewOptions_userResourcesHeader%": "User resources",
       "%webView_scriptureTextGrid_viewOptions_verse%": "Verse",
       "%webView_scriptureTextGrid_viewOptions_viewHeader%": "View",
       "%webView_selectDblResource_installFailed%": "Failed to install resource. Please try again."
@@ -498,6 +514,8 @@
       "%platformScriptureEditor_dialog_openScriptureEditor_title%": "Abrir el editor de Escrituras",
       "%platformScriptureEditor_markersView_readonly_dismiss%": "No mostrar de nuevo hoy",
       "%platformScriptureEditor_markersView_readonly_message_format%": "La vista de marcadores para {projectName} es de solo lectura.",
+      "%platformScriptureEditor_previewView_readonly_dismiss%": "No mostrar de nuevo hoy",
+      "%platformScriptureEditor_previewView_readonly_message_format%": "La vista previa de {projectName} es de solo lectura. Para editar, cambie a la vista estándar.",
       "%platformScriptureEditor_sharedLayout_applyNow%": "Aplicar ahora",
       "%platformScriptureEditor_sharedLayout_newLayoutAvailable%": "Un administrador compartió un nuevo diseño para este proyecto",
       "%settings_platformScriptureEditor_enableScriptureTextGrid_description%": "Mostrar la vista de cuadrícula de textos bíblicos para ver varios recursos en paralelo.",
@@ -600,18 +618,21 @@
       "%webView_platformScriptureEditor_insertFootnoteAtSelection%": "Insertar nota al pie",
       "%webView_platformScriptureEditor_markersInventory%": "Inventario: Marcadores...",
       "%webView_platformScriptureEditor_openChecks%": "Abrir verificaciones...",
+      "%webView_platformScriptureEditor_openChecks_2%": "Verificaciones básicas",
       "%webView_platformScriptureEditor_openChecksSidePanel%": "Abrir el panel lateral de verificaciones",
       "%webView_platformScriptureEditor_openFind%": "Buscar",
       "%webView_platformScriptureEditor_options%": "Opciones",
       "%webView_platformScriptureEditor_paragraphSelection_ariaLabel%": "Estilo de párrafo",
       "%webView_platformScriptureEditor_paragraphSelection_protectedTooltip%": "La estructura está bloqueada. El formato de párrafo no se puede cambiar.",
       "%webView_platformScriptureEditor_paste%": "Pegar",
+      "%webView_platformScriptureEditor_preview%": "Vista previa",
       "%webView_platformScriptureEditor_publisherInfo%": "Información del editor",
       "%webView_platformScriptureEditor_punctuationInventory%": "Inventario: Puntuación...",
       "%webView_platformScriptureEditor_qualityChecks%": "Verificaciones de calidad",
       "%webView_platformScriptureEditor_redo%": "Rehacer",
       "%webView_platformScriptureEditor_repeatedWordsInventory%": "Inventario: Palabras repetidas...",
       "%webView_platformScriptureEditor_resetZoomToDefault%": "Restablecer el zoom al valor predeterminado",
+      "%webView_platformScriptureEditor_resetZoomToDefault_2%": "Zoom 100%",
       "%webView_platformScriptureEditor_shareLayout_ariaLabel%": "Compartir diseño con el equipo",
       "%webView_platformScriptureEditor_showBibleTextsPanel%": "Textos bíblicos",
       "%webView_platformScriptureEditor_showCheckResults%": "Mostrar resultados de verificación...",
@@ -620,6 +641,7 @@
       "%webView_platformScriptureEditor_showDictionaryPanel%": "Diccionario",
       "%webView_platformScriptureEditor_showFootnotes%": "Mostrar notas al pie",
       "%webView_platformScriptureEditor_showTextCollectionPanel%": "Colección de textos",
+      "%webView_platformScriptureEditor_standardView%": "Vista estándar",
       "%webView_platformScriptureEditor_structureProtection_ariaLabel%": "Alternar protección de estructura",
       "%webView_platformScriptureEditor_structureProtection_errorLoading%": "Estado de protección de estructura no disponible",
       "%webView_platformScriptureEditor_structureProtection_lockStructure%": "Bloquear estructura",
@@ -644,7 +666,11 @@
       "%webView_platformScriptureEditor_title_readonly_indicator%": "(solo lectura)",
       "%webView_platformScriptureEditor_title_readonly_no_project%": "Visor de recursos",
       "%webView_platformScriptureEditor_tools%": "Herramientas",
+      "%webView_platformScriptureEditor_toolsAndResources%": "Herramientas y recursos",
       "%webView_platformScriptureEditor_twoStepDelete_deleteSelection%": "Presione {key} de nuevo para eliminar lo seleccionado",
+      "%webView_platformScriptureEditor_twoStepDelete_joinNextParagraph%": "Presione {key} de nuevo para unir el párrafo siguiente a este",
+      "%webView_platformScriptureEditor_twoStepDelete_joinPreviousParagraph%": "Presione {key} de nuevo para unir este párrafo al anterior",
+      "%webView_platformScriptureEditor_twoStepDelete_removeEmptyParagraph%": "Presione {key} de nuevo para eliminar el párrafo vacío",
       "%webView_platformScriptureEditor_twoStepDelete_removeVerseNumber%": "Presione {key} de nuevo para borrar este número de versículo",
       "%webView_platformScriptureEditor_undo%": "Deshacer",
       "%webView_platformScriptureEditor_view%": "Ver",
@@ -672,9 +698,11 @@
       "%webView_resourcePanel_installing%": "Instalando recurso…",
       "%webView_resourcePanel_loading%": "Cargando…",
       "%webView_resourcePanel_noProject%": "Ningún proyecto seleccionado.",
+      "%webView_resourcePanel_otherResources%": "Otros recursos",
       "%webView_resourcePanel_retry%": "Reintentar",
       "%webView_resourcePanel_selecting%": "Seleccionando recurso…",
       "%webView_resourcePanel_settingsUnavailable%": "No se pudieron cargar tus recursos. Aparecerán cuando estén disponibles.",
+      "%webView_resourcePanel_teamResourcesCaption%": "Solo un administrador del proyecto puede quitarlos.",
       "%webView_resourcePanel_textUnavailable%": "No se pudo cargar este texto.",
       "%webView_scriptureTextGrid_aria_chapterContextClosed%": "Vista de capítulo cerrada",
       "%webView_scriptureTextGrid_aria_chapterContextOpened%": "Vista de capítulo abierta mostrando {resourceReference}",
@@ -705,6 +733,7 @@
       "%webView_scriptureTextGrid_viewOptions_adminSharedLock%": "Compartido por el administrador",
       "%webView_scriptureTextGrid_viewOptions_chapter%": "Capítulo",
       "%webView_scriptureTextGrid_viewOptions_chapterComingSoon%": "La vista de capítulo estará disponible pronto",
+      "%webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%": "La vista de capítulo aún no está disponible.",
       "%webView_scriptureTextGrid_viewOptions_comingSoon%": "Próximamente",
       "%webView_scriptureTextGrid_viewOptions_downloadedNoProject%": "Recurso descargado. Seleccione un proyecto para agregarlo a una colección de textos.",
       "%webView_scriptureTextGrid_viewOptions_emptyState_prompt%": "Aún no se han añadido textos. Use {getResourcesLabel} para añadirlos.",
@@ -717,7 +746,10 @@
       "%webView_scriptureTextGrid_viewOptions_settingsUnavailable%": "No se pudieron cargar sus textos.",
       "%webView_scriptureTextGrid_viewOptions_pickerNoProjectNotice%": "No hay ningún proyecto seleccionado, así que el recurso que elija aquí se descargará a esta computadora, pero no se agregará a una colección de textos.",
       "%webView_scriptureTextGrid_viewOptions_removeFromList%": "Quitar {resourceName} de la lista",
+      "%webView_scriptureTextGrid_viewOptions_teamResourcesHeader%": "Recursos del equipo",
+      "%webView_scriptureTextGrid_viewOptions_teamSharedLock%": "Compartido por su equipo",
       "%webView_scriptureTextGrid_viewOptions_textsHeader%": "Textos",
+      "%webView_scriptureTextGrid_viewOptions_userResourcesHeader%": "Sus recursos",
       "%webView_scriptureTextGrid_viewOptions_verse%": "Versículo",
       "%webView_scriptureTextGrid_viewOptions_viewHeader%": "Vista",
       "%webView_selectDblResource_installFailed%": "No se pudo instalar el recurso. Vuelva a intentarlo."
@@ -1232,6 +1264,21 @@
     }
   },
   "metadata": {
+    "%platformScriptureEditor_markersView_readonly_dismiss%": {
+      "deprecationInfo": {
+        "date": "2026-10-22",
+        "message": "Superseded by %platformScriptureEditor_previewView_readonly_dismiss%."
+      }
+    },
+    "%platformScriptureEditor_previewView_readonly_dismiss%": {
+      "fallbackKey": "%platformScriptureEditor_markersView_readonly_dismiss%"
+    },
+    "%platformScriptureEditor_markersView_readonly_message_format%": {
+      "deprecationInfo": {
+        "date": "2026-10-22",
+        "message": "Superseded by %platformScriptureEditor_previewView_readonly_message_format%."
+      }
+    },
     "%webView_footnoteList_header%": {
       "fallbackKey": "%Paratext.ProjectMenu.ProjectPropertiesForm.showInFootnotes.HeaderText%"
     },
@@ -1271,13 +1318,53 @@
     "%webView_platformScriptureEditor_insert%": {
       "fallbackKey": "%Paratext.EditMenu.ListForm.insertToolStripMenuItem.Text%"
     },
+    "%webView_platformScriptureEditor_insertEndnoteAtSelection%": {
+      "fallbackKey": "%ScriptureEditorControl_21%"
+    },
     "%webView_platformScriptureEditor_openChecks%": {
-      "fallbackKey": "%webView_platformScriptureEditor_openChecksSidePanel%"
+      "fallbackKey": "%webView_platformScriptureEditor_openChecksSidePanel%",
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "Relabeled to \"Basic checks\". The new key is %webView_platformScriptureEditor_openChecks_2%."
+      }
+    },
+    "%webView_platformScriptureEditor_openChecks_2%": {
+      "fallbackKey": "%Paratext.ProjectProgress.ProgressPlanEditorForm.grpBasicChecks.Text%"
+    },
+    "%webView_platformScriptureEditor_options%": {
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "The editor menu column is now called \"View\". The new key is %webView_platformScriptureEditor_view%."
+      }
+    },
+    "%webView_platformScriptureEditor_preview%": {
+      "fallbackKey": "%ScriptureView.Preview%"
+    },
+    "%webView_platformScriptureEditor_resetZoomToDefault%": {
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "Relabeled to \"Zoom 100%\". The new key is %webView_platformScriptureEditor_resetZoomToDefault_2%."
+      }
+    },
+    "%webView_platformScriptureEditor_resetZoomToDefault_2%": {
+      "fallbackKey": "%webView_platformScriptureEditor_resetZoomToDefault%"
+    },
+    "%webView_platformScriptureEditor_qualityChecks%": {
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "The Simple editor menu no longer has a Quality checks section. Retired with no replacement key."
+      }
     },
     "%webView_platformScriptureEditor_shareLayout_ariaLabel%": {
       "deprecationInfo": {
         "date": "2026-09-21",
         "message": "The toolbar button that opens this dialog was renamed from \"Share layout with team\" to \"Team layout\". The new key is %webView_platformScriptureEditor_teamLayout_ariaLabel%."
+      }
+    },
+    "%webView_platformScriptureEditor_showCommentsPanel%": {
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "The Simple editor menu now shares the Comments label with the Power menu. The new key is %webView_legacyCommentManager_openComments_2%."
       }
     },
     "%webView_platformScriptureEditor_structureProtection_lockStructure%": {
@@ -1321,6 +1408,37 @@
     },
     "%webView_platformScriptureEditor_syncEditBlocked_banner_2%": {
       "fallbackKey": "%webView_platformScriptureEditor_syncEditBlocked_banner%"
+    },
+    "%webView_scriptureTextGrid_viewOptions_adminSharedLock%": {
+      "deprecationInfo": {
+        "date": "2026-10-26",
+        "message": "The lock now sits under a \"Team resources\" heading and reads as the team's choice, like the Bible texts dropdown's lock. The new key is %webView_scriptureTextGrid_viewOptions_teamSharedLock%."
+      }
+    },
+    "%webView_scriptureTextGrid_viewOptions_chapterComingSoon%": {
+      "deprecationInfo": {
+        "date": "2026-10-23",
+        "message": "Said \"coming soon\", which promises a delivery date nobody has set. The new key is %webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%."
+      }
+    },
+    "%webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%": {
+      "fallbackKey": "%webView_scriptureTextGrid_viewOptions_chapterComingSoon%",
+      "notes": "Hint shown under the View Options toggle group when the Chapter view option is shown but does not work yet. The user cannot turn it on. \"Available\" means \"can be used\", not \"in stock\" or \"not busy\"."
+    },
+    "%webView_scriptureTextGrid_viewOptions_comingSoon%": {
+      "deprecationInfo": {
+        "date": "2026-10-23",
+        "message": "Not used. \"Coming soon\" promises a delivery date nobody has set; a disabled feature says it is not yet available instead (see %webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%). No replacement key."
+      }
+    },
+    "%webView_platformScriptureEditor_zoom%": {
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "The Zoom items moved into the View section of the editor menu, so there is no Zoom heading. Retired with no replacement key."
+      }
+    },
+    "%webView_scriptureTextGrid_viewOptions_teamSharedLock%": {
+      "fallbackKey": "%webView_scriptureTextGrid_viewOptions_adminSharedLock%"
     }
   }
 }

@@ -40,6 +40,7 @@ import {
   LanguageStrings,
   LocalizeKey,
   normalizeProjectId,
+  retryUntil,
   serialize,
   Unsubscriber,
   USFM_MARKERS_MAP_PARATEXT_3_0,
@@ -51,6 +52,8 @@ import {
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { ScriptureEditorViewType, ScriptureRange } from 'platform-scripture-editor';
 import type { SharedProjectsInfo } from 'platform-scripture';
+import type { UnsyncedChangesSnapshot } from 'paratext-bible-send-receive';
+import type { InternetUse } from 'paratext-registration';
 import type { SettingTypes } from 'papi-shared-types';
 import type { MutableRefObject } from 'react';
 // import type ONLY: this module is reachable from main.ts (the extension host), and any RUNTIME
@@ -79,13 +82,16 @@ export const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptu
 const PDP_FACTORY_OBJECT_TYPE = 'pdpFactory';
 
 /**
- * Resolves the view type the editor is allowed to show under the current `platform.interfaceMode`.
- * Standard view is a power-mode-only surface: its PT9-parity editing affordances (the `\`/Enter
- * marker palettes, paragraph-marker editing) assume paragraph markers can be edited, but simple
- * mode pairs with structure protection, which intentionally blocks paragraph-marker edits — so a
- * simple-mode user must never land in standard view (e.g. via a `viewType` persisted during a
- * power-mode session). Coerces 'standard' to 'formatted' (the simple-mode default view) when not in
- * power mode; every other combination passes through unchanged.
+ * Resolves the view type the editor shows under the current `platform.interfaceMode`. Standard view
+ * is a Power-mode-only surface, and the Markers view is shown nowhere.
+ *
+ * Simple mode's editor offers one view, the Formatted "Preview", and has no menu or shortcut to
+ * leave another view. So a view type persisted during a power-mode session must not be shown in
+ * simple mode: outside Power, 'standard' and 'markers' resolve to 'formatted' (the editable Simple
+ * view). In Power, a saved 'markers' is a value from earlier versions and is shown as Standard
+ * view; 'standard' and 'formatted' pass through unchanged. The result is for display only: callers
+ * must not write it back to the persisted view type, so returning to power mode restores the user's
+ * choice.
  *
  * @param viewType The current (requested or persisted) view type
  * @param isPowerMode Whether `platform.interfaceMode` is 'power'
@@ -95,32 +101,153 @@ export function resolveViewTypeForInterfaceMode(
   viewType: ScriptureEditorViewType,
   isPowerMode: boolean,
 ): ScriptureEditorViewType {
-  if (viewType === 'standard' && !isPowerMode) return 'formatted';
-  return viewType;
+  if (!isPowerMode) return 'formatted';
+  return viewType === 'markers' ? 'standard' : viewType;
 }
 
 /**
- * Computes the next view type for the view-cycling affordance (the `changeScriptureView` command).
- * Power mode cycles formatted -> standard -> markers -> formatted; simple mode skips 'standard'
- * entirely (see {@link resolveViewTypeForInterfaceMode}), cycling formatted <-> markers.
+ * Sentinel that is never a real {@link ScriptureEditorViewType}. It is the `defaultValue` of the web
+ * view's `viewType` state, so a value equal to it means no view type has been saved for the web
+ * view. `useWebViewState` only reads its default when nothing is persisted and never writes it, so
+ * this value never reaches the store.
+ */
+export const VIEW_TYPE_UNSET = '__view_type_unset_not_a_real_view_type__' as const;
+
+/** The persisted `viewType` state: a saved view type, or {@link VIEW_TYPE_UNSET}. */
+export type PersistedViewType = ScriptureEditorViewType | typeof VIEW_TYPE_UNSET;
+
+/**
+ * Derives the view the editor shows from the persisted view type. The result is for display only
+ * and is never written back.
  *
- * Cycles on the view type rather than `ViewOptions.markerMode`: in non-power mode both 'formatted'
- * and 'markers' resolve to markerMode 'hidden' (the non-power markers view overrides only
- * noteMode), so a markerMode-based cycle would orphan 'formatted'.
+ * While `platform.interfaceMode` loads, `isPowerMode` is always `false`, so coercing then would
+ * hide a Power user's saved Standard view: the persisted value is shown as is, or the formatted
+ * view when nothing is saved. Once the mode is known, a never-saved Power tab shows Standard view
+ * (the Power default) and everything else goes through {@link resolveViewTypeForInterfaceMode}.
  *
- * @param viewType The current view type (resolved for mode first, so a lingering 'standard' in
- *   simple mode advances as if it were already coerced)
+ * @param input.persistedViewType The persisted view type, or {@link VIEW_TYPE_UNSET}
+ * @param input.isPowerMode Whether `platform.interfaceMode` is 'power'
+ * @param input.isInterfaceModeLoading Whether `platform.interfaceMode` has not resolved yet
+ * @returns The view type that should actually be shown
+ */
+export function getDisplayedViewType({
+  persistedViewType,
+  isPowerMode,
+  isInterfaceModeLoading,
+}: {
+  persistedViewType: PersistedViewType;
+  isPowerMode: boolean;
+  isInterfaceModeLoading: boolean;
+}): ScriptureEditorViewType {
+  if (persistedViewType === VIEW_TYPE_UNSET) {
+    return isPowerMode && !isInterfaceModeLoading ? 'standard' : 'formatted';
+  }
+  if (isInterfaceModeLoading) return persistedViewType;
+  return resolveViewTypeForInterfaceMode(persistedViewType, isPowerMode);
+}
+
+/** Narrows an untyped saved value to a {@link ScriptureEditorViewType}. */
+function isScriptureEditorViewType(viewType: unknown): viewType is ScriptureEditorViewType {
+  return viewType === 'formatted' || viewType === 'standard' || viewType === 'markers';
+}
+
+/**
+ * The Simple-mode marker classes for the Scripture editor's root element (see `_simple-mode.scss`).
+ * `character-marker-indicators` turns on the tint and hover line for character markers with no
+ * visible style.
+ *
+ * The character-marker indicator warns against typing inside a marker, so it is on only where the
+ * text can be typed into, and stays off until that is known: `isPowerMode` reads `false` while the
+ * interface mode loads, and the edit-permission reads default to editable while they load.
+ *
+ * Pass the durable read-only state, not `isReadOnlyEffective`: that also covers the brief freeze
+ * during an automatic Send/Receive, and would flicker the tint on every scheduled sync.
+ *
+ * @param options.isDurablyReadOnly `undefined` while edit permissions are still resolving
+ */
+export function getSimpleModeRootClassNames({
+  isPowerMode,
+  isInterfaceModeLoading,
+  isDurablyReadOnly,
+}: {
+  isPowerMode: boolean;
+  isInterfaceModeLoading: boolean;
+  isDurablyReadOnly: boolean | undefined;
+}): string[] {
+  if (isPowerMode) return [];
+  if (isInterfaceModeLoading || isDurablyReadOnly !== false) return ['editor-container-simple'];
+  return ['editor-container-simple', 'character-marker-indicators'];
+}
+
+/**
+ * Whether a saved view type makes the editor show Preview, the read-only formatted view. Preview is
+ * read-only only in Power; outside Power 'formatted' is the editable Simple view.
+ *
+ * @param viewType The view type saved in the web view's state (untyped there)
  * @param isPowerMode Whether `platform.interfaceMode` is 'power'
- * @returns The next view type in the mode-appropriate cycle
+ */
+export function showsReadOnlyPreview(viewType: unknown, isPowerMode: boolean): boolean {
+  return (
+    isPowerMode &&
+    isScriptureEditorViewType(viewType) &&
+    resolveViewTypeForInterfaceMode(viewType, isPowerMode) === 'formatted'
+  );
+}
+
+/**
+ * The view type each direct view-setting command shows. "Preview" is the user-facing name of the
+ * `'formatted'` view type.
+ */
+export const VIEW_TYPE_FOR_SET_VIEW_COMMAND = {
+  'platformScriptureEditor.setViewStandard': 'standard',
+  'platformScriptureEditor.setViewPreview': 'formatted',
+} as const satisfies Record<string, ScriptureEditorViewType>;
+
+/**
+ * Computes the next view type for the view-toggling affordance (the `changeScriptureView` command).
+ * Power mode toggles between Standard view and Preview; a saved 'markers' value goes to Standard
+ * view. Simple mode has a single view (see {@link resolveViewTypeForInterfaceMode}), so there is
+ * nothing to change to, and returning nothing keeps a view type saved in Power from being
+ * overwritten.
+ *
+ * @param viewType The current view type
+ * @param isPowerMode Whether `platform.interfaceMode` is 'power'
+ * @returns The other view type in Power, or `undefined` in simple mode, where the caller must leave
+ *   the saved view type alone
  */
 export function getNextViewTypeInCycle(
   viewType: ScriptureEditorViewType,
   isPowerMode: boolean,
-): ScriptureEditorViewType {
-  const current = resolveViewTypeForInterfaceMode(viewType, isPowerMode);
-  if (current === 'formatted') return isPowerMode ? 'standard' : 'markers';
-  if (current === 'standard') return 'markers';
-  return 'formatted';
+): ScriptureEditorViewType | undefined {
+  if (!isPowerMode) return undefined;
+  return viewType === 'standard' ? 'formatted' : 'standard';
+}
+
+/** The two editor messages that can change the saved view type. */
+export type ViewChangeMessage =
+  | { method: 'changeScriptureView' }
+  | { method: 'setScriptureView'; viewType: ScriptureEditorViewType };
+
+/**
+ * Decides which view type, if any, a view-changing message should save.
+ *
+ * `changeScriptureView` toggles per {@link getNextViewTypeInCycle}; in Simple mode there is nothing
+ * to toggle to, so nothing is saved. `setScriptureView` saves the requested view type exactly as
+ * given and is never coerced by the interface mode: the displayed view type is derived from the
+ * saved one by {@link resolveViewTypeForInterfaceMode}, and persisting that coercion (for example
+ * while `platform.interfaceMode` is still loading and reads as not Power) would overwrite the
+ * user's Power choice.
+ *
+ * @param message The view-changing message received
+ * @param context The current view type and whether `platform.interfaceMode` is 'power'
+ * @returns The view type to save, or `undefined` when the saved view type must be left alone
+ */
+export function getViewTypeToSave(
+  message: ViewChangeMessage,
+  context: { viewType: ScriptureEditorViewType; isPowerMode: boolean },
+): ScriptureEditorViewType | undefined {
+  if (message.method === 'setScriptureView') return message.viewType;
+  return getNextViewTypeInCycle(context.viewType, context.isPowerMode);
 }
 
 /**
@@ -385,22 +512,24 @@ export function validateCommentSelection(
 /**
  * Decides whether a view uses the footnotes-pane note model, PT9's: notes are edited in place in
  * the footnotes pane, picking a note moves the text to it, and the picked note's caller is
- * highlighted. Standard view uses it, and so does Simple mode's Formatted view, which edits notes
- * exactly as Standard view does while its own text keeps hiding markers. Power mode's Formatted and
- * Markers views keep the popover model, and so does Simple's Markers view, which is read-only and
- * shows its notes expanded in the text.
+ * highlighted. Every view the editor shows uses it: Standard view, Power's Preview (the read-only
+ * Formatted view, where a note caller still jumps to its note in the pane) and Simple mode's
+ * Formatted view, which edits notes exactly as Standard view does while its own text keeps hiding
+ * markers. Only a 'markers' view type keeps the popover model, and the editor never displays one
+ * once `platform.interfaceMode` has loaded (see {@link resolveViewTypeForInterfaceMode}).
  *
- * While `platform.interfaceMode` is still loading, `isPowerMode` reads `false` whatever the mode
- * really is, so only Standard view counts then: a Power user never briefly gets Simple's answer.
+ * The answer does not depend on `isPowerMode`; the option stays so every call site passes the same
+ * view facts. While `platform.interfaceMode` is still loading, the displayed view type is the
+ * unresolved saved one, so only Standard view counts then.
  *
- * @param options.viewType The scripture editor's current view type
- * @param options.isPowerMode Whether `platform.interfaceMode` is 'power'
+ * @param options.viewType The scripture editor's current (displayed) view type
+ * @param options.isPowerMode Whether `platform.interfaceMode` is 'power'; does not affect the
+ *   answer
  * @param options.isInterfaceModeLoading Whether `platform.interfaceMode` is still loading
  * @returns Whether the view uses the footnotes-pane note model
  */
 export function usesPaneNoteModel({
   viewType,
-  isPowerMode,
   isInterfaceModeLoading,
 }: {
   viewType: ScriptureEditorViewType;
@@ -408,7 +537,7 @@ export function usesPaneNoteModel({
   isInterfaceModeLoading: boolean;
 }): boolean {
   if (viewType === 'standard') return true;
-  return !isInterfaceModeLoading && !isPowerMode && viewType === 'formatted';
+  return !isInterfaceModeLoading && viewType === 'formatted';
 }
 
 /**
@@ -1252,7 +1381,9 @@ export function getParagraphMarkerTitle(
  *   focus-out selection capture, both of which live in web-view-only code this
  *   extension-host-reachable module may not import (see the note at the bottom of this file).
  *   Omitting it leaves the retag exposed to the lost-caret failure, so callers that can lose focus
- *   to the menu should always pass it.
+ *   to the menu should always pass it. It must leave a selected paragraph marker alone:
+ *   `formatPara` retags that paragraph directly, and a caret restored over it would send the retag
+ *   to the caret's paragraph instead.
  * @param isChapterLoading Reports whether another chapter is loading, during which the editor still
  *   shows the chapter being left and an edit would be dropped. A pick does nothing while it returns
  *   `true`. Omitting it never blocks.
@@ -1286,10 +1417,15 @@ export function generateParagraphMenuListItems(
           notifyStructureProtected();
           return;
         }
+        // Re-picking a selected marker's own marker (a second Enter on the menu the editor opened,
+        // which highlights that row) must change nothing. `formatPara` would still rewrite the
+        // marker and leave an undo step that does nothing, so skip it. Only for a selected marker:
+        // with a range selection, the same pick retags the other paragraphs the range covers.
+        if (editorRef.current?.getSelectedParaMarker() === marker) return;
         // Restore the caret BEFORE applying, exactly as the `\` and Enter marker palettes do
         // before their applies: this menu opens in a popover that takes focus off the editor
         // input, so by the time an item is picked the live selection may already be gone, and
-        // `formatPara` refuses when there is no selection.
+        // `formatPara` refuses when there is neither a selection nor a selected paragraph marker.
         restoreSelection?.();
         editorRef.current?.formatPara(marker);
       },
@@ -1899,8 +2035,8 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
 // #region Project-Switch Sync
 
 /**
- * Fire-and-forget helper that syncs the incoming project first, then the outgoing one. Each sync is
- * independently error-isolated so a failure in one doesn't block the other. Called after a
+ * Fire-and-forget helper that flushes the outgoing project, then syncs the incoming one. Each sync
+ * is independently error-isolated so a failure in one doesn't block the other. Called after a
  * Simple-mode replace-tab project switch, and by `finalizeProjectSwitch` after a Power -> Simple
  * mode switch — by which time the user may be back in Power mode.
  *
@@ -1908,6 +2044,13 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
  * connected resources and translation partners (deep sync). Uses the shallower
  * `paratextBibleSendReceive.sendReceiveProjects` for the outgoing project because we only need to
  * flush any local edits — a full deep sync is unnecessary on the way out.
+ *
+ * The incoming project syncs LAST because these are two separate backend runs and the sync
+ * indicator reports the most recent one. Whichever runs last is the verdict the user is shown, and
+ * the project they just switched to — the one on screen — is what that verdict should describe. A
+ * failure flushing the outgoing project reaches the user only through its own failure toast (see
+ * below), not the indicator; see `adr-sync-activity-outcome-is-coarse` in
+ * `.context/standards/Architecture-Decisions.md`.
  *
  * The outgoing sync is skipped only for a published resource (see `isProjectPublished`), which
  * holds nothing the user wrote. A translation project with editing switched off still syncs: its
@@ -1962,6 +2105,18 @@ export async function syncOnProjectSwitch(
     }
   }
 
+  if (outgoingProjectId && !(await isProjectPublished(papi, outgoingProjectId))) {
+    try {
+      await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [
+        outgoingProjectId,
+      ]);
+    } catch (e) {
+      papi.logger.warn(
+        `Project-switch sync: outgoing sync for ${outgoingProjectId} failed: ${getErrorMessage(e)}`,
+      );
+    }
+  }
+
   try {
     // Mode change mid-sync: intentionally not handled. The flag is fixed for the run, and the
     // toolbar indicator mounts only in Simple mode, so switching to Power while a suppressed sync
@@ -1978,17 +2133,309 @@ export async function syncOnProjectSwitch(
       `Project-switch sync: incoming sync for ${incomingProjectId} failed: ${getErrorMessage(e)}`,
     );
   }
+}
 
-  if (outgoingProjectId && !(await isProjectPublished(papi, outgoingProjectId))) {
+/**
+ * How long {@link waitForUnsentChanges} keeps listening, once no sync is running, for a project to
+ * be reported as holding changes to send. Well past the backend's debounce after a project's last
+ * write plus its repository check, so an edit whose save was still on its way when the wait began
+ * is still seen.
+ */
+export const UNSENT_CHANGES_GRACE_MS = 10_000;
+
+/**
+ * Upper bound on how long {@link waitForUnsentChanges} waits for a running sync, and the recheck
+ * after it, to finish before giving up without an answer. Long, because a sync can take minutes.
+ */
+export const UNSENT_CHANGES_SYNC_WAIT_MS = 10 * 60_000;
+
+/** Attempts to read the unsynced-changes snapshot. A cold-start rejection must be retried. */
+const UNSYNCED_CHANGES_SEED_ATTEMPTS = 5;
+const UNSYNCED_CHANGES_SEED_RETRY_MS = 1_000;
+
+/**
+ * Checks only the fields {@link waitForUnsentChanges} reads. The renderer and Home keep guards of
+ * their own, which this extension cannot import.
+ */
+function isUnsyncedChangesSnapshot(value: unknown): value is UnsyncedChangesSnapshot {
+  if (typeof value !== 'object' || !value) return false;
+  if (!('toSend' in value) || !Array.isArray(value.toSend)) return false;
+  return value.toSend.every(isString);
+}
+
+/**
+ * Whether a project holds local changes this user's next Send/Receive would send, read from the
+ * backend's `paratextBibleSendReceive.onUnsyncedChangesChanged` signal.
+ *
+ * One read is not enough: the backend checks a project a short while after its last write, and
+ * while a sync is running (`isRechecking`) the list may predate it, still naming projects that sync
+ * is sending. So this ignores the list while a sync is running; once none is, it answers `true` as
+ * soon as a snapshot lists the project, or `false` after {@link UNSENT_CHANGES_GRACE_MS} without
+ * one. Callers should not block on it.
+ *
+ * @param papi Backend PAPI instance.
+ * @param projectId The project to ask about.
+ * @returns `true` if the project has changes to send, `false` if it has none, or `undefined` if no
+ *   snapshot could be read or a running sync did not finish within
+ *   {@link UNSENT_CHANGES_SYNC_WAIT_MS}.
+ */
+export async function waitForUnsentChanges(
+  papi: typeof PapiBackend,
+  projectId: string,
+): Promise<boolean | undefined> {
+  const normalizedProjectId = normalizeProjectId(projectId);
+  return new Promise((resolve) => {
+    let isAnswered = false;
+    let hasReceivedEvent = false;
+    let graceTimer: ReturnType<typeof setTimeout> | undefined;
+    let settleTimer: ReturnType<typeof setTimeout> | undefined;
+    let unsubscribe: Unsubscriber | undefined;
+
+    const answer = (hasUnsentChanges: boolean | undefined) => {
+      if (isAnswered) return;
+      isAnswered = true;
+      clearTimeout(graceTimer);
+      clearTimeout(settleTimer);
+      unsubscribe?.();
+      resolve(hasUnsentChanges);
+    };
+
+    settleTimer = setTimeout(() => {
+      papi.logger.warn(
+        `Could not tell whether ${projectId} has changes to send: a sync was still running after ${UNSENT_CHANGES_SYNC_WAIT_MS}ms`,
+      );
+      answer(undefined);
+    }, UNSENT_CHANGES_SYNC_WAIT_MS);
+
+    const consider = (snapshot: unknown) => {
+      if (!isUnsyncedChangesSnapshot(snapshot)) {
+        papi.logger.warn('The unsynced-changes snapshot had an unexpected shape; ignoring it');
+        return;
+      }
+      if (snapshot.isRechecking === true) {
+        clearTimeout(graceTimer);
+        graceTimer = undefined;
+        return;
+      }
+      if (snapshot.toSend.some((id) => normalizeProjectId(id) === normalizedProjectId)) {
+        answer(true);
+        return;
+      }
+      graceTimer ??= setTimeout(() => answer(false), UNSENT_CHANGES_GRACE_MS);
+    };
+
+    // Subscribed before the seed is read, so no change can land between the two unseen
     try {
-      await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [
-        outgoingProjectId,
-      ]);
+      unsubscribe = papi.network.getNetworkEvent(
+        'paratextBibleSendReceive.onUnsyncedChangesChanged',
+      )((snapshot) => {
+        if (isUnsyncedChangesSnapshot(snapshot)) hasReceivedEvent = true;
+        consider(snapshot);
+      });
     } catch (e) {
       papi.logger.warn(
-        `Project-switch sync: outgoing sync for ${outgoingProjectId} failed: ${getErrorMessage(e)}`,
+        `Could not tell whether ${projectId} has changes to send: could not subscribe to the unsynced-changes signal: ${getErrorMessage(e)}`,
       );
+      answer(undefined);
+      return;
     }
+
+    let lastSeedError: unknown;
+    const readSeed = async (): Promise<UnsyncedChangesSnapshot | undefined> => {
+      try {
+        const snapshot = await papi.commands.sendCommand(
+          'paratextBibleSendReceive.getUnsyncedChanges',
+        );
+        if (isUnsyncedChangesSnapshot(snapshot)) return snapshot;
+        lastSeedError = new Error('the unsynced-changes snapshot had an unexpected shape');
+      } catch (e) {
+        lastSeedError = e;
+      }
+      return undefined;
+    };
+
+    (async () => {
+      const seed = await retryUntil(
+        readSeed,
+        (snapshot) => snapshot !== undefined || isAnswered || hasReceivedEvent,
+        { maxAttempts: UNSYNCED_CHANGES_SEED_ATTEMPTS, delayMs: UNSYNCED_CHANGES_SEED_RETRY_MS },
+      );
+      // An event that arrived meanwhile is newer than the seed
+      if (isAnswered || hasReceivedEvent) return;
+      if (seed) {
+        consider(seed);
+        return;
+      }
+      papi.logger.warn(
+        `Could not tell whether ${projectId} has changes to send: ${getErrorMessage(lastSeedError)}`,
+      );
+      answer(undefined);
+    })();
+  });
+}
+
+/**
+ * Projects whose switch-to-Power sync is still deciding whether to send, by normalized id. A second
+ * switch for the same project joins the first instead of deciding separately: both would see the
+ * same snapshot and start two overlapping syncs, which the backend refuses.
+ */
+const projectIdsDecidingSyncOnSwitchToPower = new Set<string>();
+
+/**
+ * After a switch from Simple to Power mode, sends what was typed in Simple. Send/receives the
+ * project only when {@link waitForUnsentChanges} answers `true`, since a sync with nothing to send
+ * would show notifications for no reason. No `suppressNotification`, so Power mode's progress and
+ * failure toasts show. Never rejects.
+ *
+ * Skipped when:
+ *
+ * - The user chose "Don't sync yet" this session (`deferred`), the first-run flag cannot be read
+ *   (`unreadable`), or the consent request rejects. Asked before and after the wait for unsent
+ *   changes, so a decline during the wait still counts. An `unconfirmed` answer does NOT skip it: a
+ *   user who started in Power mode never sees the wizard that records consent. See
+ *   `adr-switch-to-power-sends-unsent-changes`.
+ * - The mode no longer reads `'power'` when the sync would start: the switch back to Simple makes its
+ *   own (consent-gated) sync decision, and anything still unsent goes on the next switch to Power.
+ * - The saved internet setting turns Send/Receive off (`VpnRequired` or `Disabled`). Whether the
+ *   machine is actually online cannot be known without trying, so offline is left to the sync's own
+ *   failure notification.
+ * - An earlier switch-to-Power sync of the same project is still deciding; it covers this one.
+ *
+ * @param papi Backend PAPI instance.
+ * @param projectId The project the Simple-mode Scripture Editor was showing.
+ */
+export async function syncOnSwitchToPower(
+  papi: typeof PapiBackend,
+  projectId: string,
+): Promise<void> {
+  // Any PAPI client can send the command, so the argument is checked rather than trusted
+  if (!isString(projectId)) {
+    papi.logger.warn('Switch-to-Power sync: ignoring a project id that is not a string');
+    return;
+  }
+  const normalizedProjectId = normalizeProjectId(projectId);
+  if (projectIdsDecidingSyncOnSwitchToPower.has(normalizedProjectId)) {
+    papi.logger.info(
+      `Switch-to-Power sync of ${projectId} is already deciding; not starting another`,
+    );
+    return;
+  }
+
+  projectIdsDecidingSyncOnSwitchToPower.add(normalizedProjectId);
+  let shouldSync: boolean;
+  try {
+    shouldSync = await shouldSyncOnSwitchToPower(papi, projectId);
+  } finally {
+    projectIdsDecidingSyncOnSwitchToPower.delete(normalizedProjectId);
+  }
+  if (!shouldSync) return;
+
+  try {
+    await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [projectId]);
+  } catch (e) {
+    papi.logger.warn(`Switch-to-Power sync of ${projectId} failed: ${getErrorMessage(e)}`);
+  }
+}
+
+/**
+ * The first-run sync consent gate's answer when it lets the switch-to-Power sync run, or
+ * `undefined` (logged) when it does not. Only `granted` and `unconfirmed` let it run, so an answer
+ * this does not know fails closed.
+ */
+async function getSwitchToPowerSyncConsent(
+  papi: typeof PapiBackend,
+): Promise<'granted' | 'unconfirmed' | undefined> {
+  let consent;
+  try {
+    consent = await papi.commands.sendCommand('platform.getAutomaticSyncConsent');
+  } catch (e) {
+    papi.logger.warn(
+      `Switch-to-Power sync: could not check first-run sync consent (${getErrorMessage(e)}); skipping sync`,
+    );
+    return undefined;
+  }
+  if (consent === 'granted' || consent === 'unconfirmed') return consent;
+  papi.logger.info(`Switch-to-Power sync skipped: first-run sync consent is ${consent}`);
+  return undefined;
+}
+
+/**
+ * The checks {@link syncOnSwitchToPower} makes before it syncs: consent, unsent changes, the mode,
+ * the internet setting, and consent again. Logs why it answers `false`.
+ */
+async function shouldSyncOnSwitchToPower(
+  papi: typeof PapiBackend,
+  projectId: string,
+): Promise<boolean> {
+  if (!(await getSwitchToPowerSyncConsent(papi))) return false;
+
+  const hasUnsentChanges = await waitForUnsentChanges(papi, projectId);
+  if (hasUnsentChanges !== true) {
+    // Logged, not shown, even when it could not tell: the switch itself succeeded, the edits stay
+    // on disk for the next sync, and like every other automatic sync's skip there is nothing the
+    // user could act on. A sync that runs and fails does show its failure notification.
+    papi.logger.info(
+      `Switch-to-Power sync skipped: ${hasUnsentChanges === false ? 'no' : 'could not tell whether there are'} changes to send in ${projectId}`,
+    );
+    return false;
+  }
+
+  let interfaceMode: SettingTypes['platform.interfaceMode'] | undefined;
+  try {
+    interfaceMode = await papi.settings.get('platform.interfaceMode');
+  } catch (e) {
+    papi.logger.warn(
+      `Switch-to-Power sync: could not read platform.interfaceMode (${getErrorMessage(e)}); skipping sync of ${projectId}`,
+    );
+    return false;
+  }
+  if (interfaceMode !== 'power') {
+    papi.logger.info(
+      `Switch-to-Power sync of ${projectId} skipped: the interface mode is ${interfaceMode} now, and that switch decides its own sync`,
+    );
+    return false;
+  }
+
+  const internetUse = await readPermittedInternetUse(papi);
+  if (internetUse === 'VpnRequired' || internetUse === 'Disabled') {
+    papi.logger.info(
+      `Switch-to-Power sync of ${projectId} skipped: the internet setting is ${internetUse}, which turns Send/Receive off`,
+    );
+    return false;
+  }
+
+  // Asked again because the wait above can last minutes, and "Don't sync yet" chosen meanwhile
+  // must still stop this sync
+  const consent = await getSwitchToPowerSyncConsent(papi);
+  if (!consent) return false;
+  // Logged at info because every other automatic sync would skip here, so a support log must show
+  // why this one ran
+  if (consent !== 'granted')
+    papi.logger.info(
+      `Switch-to-Power sync of ${projectId}: first-run sync consent is ${consent}, which does not stop this sync`,
+    );
+  return true;
+}
+
+/**
+ * The saved internet setting, or `undefined` when it cannot be read. Blocked values mirror the
+ * backend's `InternetServicesGate.IsBlocked`, which enforces them on every Send/Receive; this check
+ * only spares a sync that gate would refuse. So an unreadable setting lets the sync go ahead.
+ */
+async function readPermittedInternetUse(
+  papi: typeof PapiBackend,
+): Promise<InternetUse | undefined> {
+  try {
+    const provider = await papi.dataProviders.get(
+      'paratextRegistration.internetSettingsDataProvider',
+    );
+    if (!provider) throw new Error('the internet settings data provider is not available');
+    return (await provider.getInternetSettings(undefined)).permittedInternetUse;
+  } catch (e) {
+    papi.logger.warn(
+      `Switch-to-Power sync: could not read the internet setting (${getErrorMessage(e)}); leaving it to Send/Receive`,
+    );
+    return undefined;
   }
 }
 
@@ -2960,7 +3407,8 @@ export async function buildScriptureTextGridWebView(
     projectId,
     content: webViewContent.content,
     styles: webViewContent.styles,
-    iconUrl: 'papi-extension://platformScriptureEditor/assets/library.svg',
+    // Drawn in the tab's text colour so it follows the theme, in both modes
+    iconName: 'library',
     scrollGroupScrRef: interfaceMode === 'simple' ? 0 : savedWebView.scrollGroupScrRef,
   };
 }

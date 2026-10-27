@@ -129,6 +129,9 @@ async function openFindPanel(mainPage: Page): Promise<Frame> {
   await expect(hamburger).toBeVisible({ timeout: 15_000 });
   await hamburger.click();
 
+  // Power's Find item sits inside the Edit ▸ submenu, so open the submenu first.
+  await editorFrame.getByRole('menuitem', { name: /^edit/i }).click();
+
   // The item's accessible name is its label "Find" (%webView_platformScriptureEditor_openFind%)
   // followed by a keyboard shortcut hint, so the match cannot be anchored to the end of the name.
   // The trailing `(\s|$)` rules out only a longer single word, e.g. "Finder"; a sibling item whose
@@ -293,7 +296,10 @@ test.describe('Replace mode', () => {
     await switchToReplaceMode(frame);
 
     await expect(frame.locator('#replace-term')).toBeVisible();
-    await expect(frame.getByRole('button', { name: /^replace all$/i })).toBeVisible();
+    await expect(headerReplaceButton(frame)).toBeVisible();
+    // Replace All is switched off (IS_REPLACE_ALL_ENABLED in find.web-view.tsx) because it cannot be
+    // undone.
+    await expect(frame.getByRole('button', { name: /^replace all$/i })).toHaveCount(0);
 
     await closeFindPanel(mainPage);
   });
@@ -449,7 +455,10 @@ test.describe('Replace operations', () => {
   // The assertion below requires the PLURAL toast. A single replacement renders a different string
   // ("Replaced 1 occurrence") from a multiple one ("Replaced {count} occurrences"), so demanding
   // the plural is what makes a Replace All that acted on the focused result alone fail here.
-  test('replaces every visible result from Replace All', async ({ mainPage }) => {
+  //
+  // Skipped while Find hides Replace All (IS_REPLACE_ALL_ENABLED in find.web-view.tsx); un-skip it
+  // when that switch is turned back on.
+  test.skip('replaces every visible result from Replace All', async ({ mainPage }) => {
     const frame = await openFindPanel(mainPage);
 
     // Baseline occurrences of the replacement word already in the project: the three single-replace

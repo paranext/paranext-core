@@ -56,6 +56,11 @@ const BLANK_CHAPTER = 'This chapter is empty in this resource.';
 const TEXT_UNAVAILABLE = 'This text could not be loaded.';
 const PICK_BIBLE_TEXTS = 'Pick Bible texts…';
 const SELECTING = 'Selecting resource…';
+const TEAM_RESOURCES = 'Team resources';
+const USER_RESOURCES = 'User resources';
+const OTHER_RESOURCES = 'Other resources';
+const TEAM_RESOURCE_LOCK = 'Shared by your team';
+const TEAM_RESOURCES_CAPTION = 'Only a project administrator can remove these.';
 
 const STRINGS = {
   '%webView_platformScriptureEditor_emptyChapter_messageResource%': BLANK_CHAPTER,
@@ -78,6 +83,11 @@ const STRINGS = {
   '%webView_resourcePanel_textUnavailable%': TEXT_UNAVAILABLE,
   '%webView_resourcePanel_bibleTexts_bookNotAvailable%': BIBLE_TEXT_MISSING_BOOK,
   '%webView_resourcePanel_commentaries_bookNotAvailable%': COMMENTARY_MISSING_BOOK,
+  '%webView_scriptureTextGrid_viewOptions_teamResourcesHeader%': TEAM_RESOURCES,
+  '%webView_scriptureTextGrid_viewOptions_userResourcesHeader%': USER_RESOURCES,
+  '%webView_resourcePanel_otherResources%': OTHER_RESOURCES,
+  '%webView_scriptureTextGrid_viewOptions_teamSharedLock%': TEAM_RESOURCE_LOCK,
+  '%webView_resourcePanel_teamResourcesCaption%': TEAM_RESOURCES_CAPTION,
 };
 
 const RESOURCE_PROJECT_ID = 'project-web';
@@ -102,11 +112,17 @@ const INSTALLED_COMMENTARY: DblResourceData = {
   projectId: 'project-hbk',
 };
 
-/** The row the panel is handed for an installed, referenced DBL resource. */
-function dblRow(resource: DblResourceData): PickerResource {
+/**
+ * The row the panel is handed for an installed, referenced DBL resource. Defaults to the user's own
+ * row, so a test reaches the team-grouped dropdown only by asking for an `'admin'` row.
+ */
+function dblRow(
+  resource: DblResourceData,
+  source: PickerResource['source'] = 'user',
+): PickerResource {
   return {
     reference: { type: 'dblResource', id: resource.dblEntryUid, name: resource.displayName },
-    source: 'admin',
+    source,
     isAdminLocked: false,
     type: resource.type,
     installed: true,
@@ -161,6 +177,8 @@ function makeProps(overrides: Partial<ResourceTextPanelProps> = {}): ResourceTex
     selectedRef: WEB_ROW,
     readiness: 'configured',
     dblResources: [INSTALLED_RESOURCE],
+    isCatalogUnavailable: false,
+    isGrouped: true,
     onRetryCatalog: vi.fn(),
     scrRef: MAT_1_1,
     onScrRefChange: vi.fn(),
@@ -460,6 +478,275 @@ describe('ResourceTextPanel resource selection', () => {
     // The namespaced row id, not the bare DBL entry uid — `resolveResourceSelection` compares row
     // ids, so reporting the bare id would never match the list.
     expect(onSelectResource).toHaveBeenCalledWith('dbl:uid-hbk');
+  });
+});
+
+describe("ResourceTextPanel team resources and the user's own", () => {
+  const KJV: DblResourceData = {
+    ...INSTALLED_RESOURCE,
+    dblEntryUid: 'uid-kjv',
+    displayName: 'KJV',
+    fullName: 'King James Version',
+    projectId: 'project-kjv',
+  };
+  const ASV: DblResourceData = {
+    ...INSTALLED_RESOURCE,
+    dblEntryUid: 'uid-asv',
+    displayName: 'ASV',
+    fullName: 'American Standard Version',
+    projectId: 'project-asv',
+  };
+  const TEAM_WEB = dblRow(INSTALLED_RESOURCE, 'admin');
+  const USER_KJV = dblRow(KJV, 'user');
+  const DOWNLOADED_ASV = dblRow(ASV, 'downloaded');
+  const ALL_TEXTS = [INSTALLED_RESOURCE, KJV, ASV];
+
+  async function openSelector(selectedName: RegExp) {
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: selectedName }));
+    await screen.findByRole('menu');
+    return user;
+  }
+
+  /** The names of the rows in `group`, in order. */
+  function rowNames(group: HTMLElement) {
+    return within(group)
+      .getAllByRole('menuitemcheckbox')
+      .map((item) => item.textContent);
+  }
+
+  it("groups the team's resources, then the user's own, then other installed ones", async () => {
+    renderPanel({
+      filteredResources: [TEAM_WEB, USER_KJV, DOWNLOADED_ASV],
+      selectedRef: USER_KJV,
+      dblResources: ALL_TEXTS,
+    });
+    await openSelector(/KJV/);
+
+    const teamGroup = screen.getByRole('group', { name: TEAM_RESOURCES });
+    const userGroup = screen.getByRole('group', { name: USER_RESOURCES });
+    const otherGroup = screen.getByRole('group', { name: OTHER_RESOURCES });
+    expect(rowNames(teamGroup)).toEqual([expect.stringMatching(/^WEB/)]);
+    expect(rowNames(userGroup)).toEqual([expect.stringMatching(/^KJV/)]);
+    expect(rowNames(otherGroup)).toEqual([expect.stringMatching(/^ASV/)]);
+    expect(comesAfter(teamGroup, userGroup)).toBe(true);
+    expect(comesAfter(userGroup, otherGroup)).toBe(true);
+  });
+
+  it('lists every row as one plain list when ungrouped, with no headings, caption or locks', async () => {
+    renderPanel({
+      filteredResources: [TEAM_WEB, USER_KJV, DOWNLOADED_ASV],
+      selectedRef: USER_KJV,
+      dblResources: ALL_TEXTS,
+      isGrouped: false,
+    });
+    await openSelector(/KJV/);
+
+    // Positive control: every row is on screen, in order, so the absences are real answers.
+    expect(rowNames(screen.getByRole('menu'))).toEqual([
+      expect.stringMatching(/^WEB/),
+      expect.stringMatching(/^KJV/),
+      expect.stringMatching(/^ASV/),
+    ]);
+    expect(screen.queryByRole('group')).toBeNull();
+    expect(screen.queryByText(TEAM_RESOURCES)).toBeNull();
+    expect(screen.queryByText(USER_RESOURCES)).toBeNull();
+    expect(screen.queryByText(OTHER_RESOURCES)).toBeNull();
+    expect(screen.queryByText(TEAM_RESOURCES_CAPTION)).toBeNull();
+    expect(screen.queryByRole('img', { name: TEAM_RESOURCE_LOCK })).toBeNull();
+  });
+
+  it.each([
+    ["the user's own", [USER_KJV]],
+    ['other installed', [DOWNLOADED_ASV]],
+  ])('keeps a single unlabeled list when every row is %s', async (_, filteredResources) => {
+    renderPanel({ filteredResources, selectedRef: filteredResources[0], dblResources: ALL_TEXTS });
+    await openSelector(/KJV|ASV/);
+
+    // Positive control: the rows themselves are on screen, so the absent headings are a real answer.
+    expect(screen.getAllByRole('menuitemcheckbox')).toHaveLength(1);
+    expect(screen.queryByRole('group')).toBeNull();
+    expect(screen.queryByText(TEAM_RESOURCES)).toBeNull();
+    expect(screen.queryByText(USER_RESOURCES)).toBeNull();
+    expect(screen.queryByText(OTHER_RESOURCES)).toBeNull();
+    expect(screen.queryByRole('img', { name: TEAM_RESOURCE_LOCK })).toBeNull();
+    expect(screen.queryByText(TEAM_RESOURCES_CAPTION)).toBeNull();
+  });
+
+  it("labels the user's own and other installed resources apart when the team shared nothing", async () => {
+    renderPanel({
+      filteredResources: [USER_KJV, DOWNLOADED_ASV],
+      selectedRef: USER_KJV,
+      dblResources: ALL_TEXTS,
+    });
+    await openSelector(/KJV/);
+
+    expect(rowNames(screen.getByRole('group', { name: USER_RESOURCES }))).toEqual([
+      expect.stringMatching(/^KJV/),
+    ]);
+    expect(rowNames(screen.getByRole('group', { name: OTHER_RESOURCES }))).toEqual([
+      expect.stringMatching(/^ASV/),
+    ]);
+    expect(screen.queryByText(TEAM_RESOURCES)).toBeNull();
+    expect(screen.queryByText(TEAM_RESOURCES_CAPTION)).toBeNull();
+    // One between the two groups and one above "Download resources…": none above the first group.
+    expect(screen.getAllByRole('separator')).toHaveLength(2);
+  });
+
+  it('labels no group that has no rows', async () => {
+    renderPanel({
+      filteredResources: [TEAM_WEB, DOWNLOADED_ASV],
+      selectedRef: TEAM_WEB,
+      dblResources: ALL_TEXTS,
+    });
+    await openSelector(/WEB/);
+
+    // Positive controls: the groups that do have rows are labeled.
+    expect(screen.getByRole('group', { name: TEAM_RESOURCES })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: OTHER_RESOURCES })).toBeInTheDocument();
+    expect(screen.queryByText(USER_RESOURCES)).toBeNull();
+  });
+
+  describe('while the catalog is unavailable', () => {
+    it("lists the user's own and other installed resources as one unlabeled list", async () => {
+      renderPanel({
+        filteredResources: [USER_KJV, DOWNLOADED_ASV],
+        selectedRef: USER_KJV,
+        dblResources: ALL_TEXTS,
+        isCatalogUnavailable: true,
+      });
+      await openSelector(/KJV/);
+
+      // Positive control: both rows are on screen, so the absent headings are a real answer.
+      expect(screen.getAllByRole('menuitemcheckbox')).toHaveLength(2);
+      expect(screen.queryByRole('group')).toBeNull();
+      expect(screen.queryByText(USER_RESOURCES)).toBeNull();
+      expect(screen.queryByText(OTHER_RESOURCES)).toBeNull();
+    });
+
+    it("lists them together under the user's heading below the team's", async () => {
+      renderPanel({
+        filteredResources: [TEAM_WEB, USER_KJV, DOWNLOADED_ASV],
+        selectedRef: USER_KJV,
+        dblResources: ALL_TEXTS,
+        isCatalogUnavailable: true,
+      });
+      await openSelector(/KJV/);
+
+      expect(rowNames(screen.getByRole('group', { name: TEAM_RESOURCES }))).toEqual([
+        expect.stringMatching(/^WEB/),
+      ]);
+      expect(rowNames(screen.getByRole('group', { name: USER_RESOURCES }))).toEqual([
+        expect.stringMatching(/^KJV/),
+        expect.stringMatching(/^ASV/),
+      ]);
+      expect(screen.queryByText(OTHER_RESOURCES)).toBeNull();
+    });
+  });
+
+  it("labels only the team group when every row is the team's", async () => {
+    renderPanel({ filteredResources: [TEAM_WEB], selectedRef: TEAM_WEB });
+    await openSelector(/WEB/);
+
+    expect(screen.getByRole('group', { name: TEAM_RESOURCES })).toBeInTheDocument();
+    expect(screen.queryByText(USER_RESOURCES)).toBeNull();
+    expect(screen.queryByText(OTHER_RESOURCES)).toBeNull();
+    // Only the one above "Download resources…": no separator for groups that aren't there.
+    expect(screen.getAllByRole('separator')).toHaveLength(1);
+  });
+
+  it('marks each team resource, and only those, as one the user cannot remove', async () => {
+    renderPanel({
+      filteredResources: [TEAM_WEB, USER_KJV, DOWNLOADED_ASV],
+      selectedRef: USER_KJV,
+      dblResources: ALL_TEXTS,
+    });
+    await openSelector(/KJV/);
+
+    const teamItem = within(screen.getByRole('group', { name: TEAM_RESOURCES })).getByRole(
+      'menuitemcheckbox',
+    );
+    expect(within(teamItem).getByRole('img', { name: TEAM_RESOURCE_LOCK })).toBeInTheDocument();
+    [USER_RESOURCES, OTHER_RESOURCES].forEach((groupName) => {
+      const items = within(screen.getByRole('group', { name: groupName })).getAllByRole(
+        'menuitemcheckbox',
+      );
+      expect(items).toHaveLength(1);
+      items.forEach((item) => expect(within(item).queryByRole('img')).toBeNull());
+    });
+  });
+
+  it('says once, under the team heading, that only an administrator can remove those rows', async () => {
+    renderPanel({
+      filteredResources: [TEAM_WEB, dblRow(KJV, 'admin'), DOWNLOADED_ASV],
+      selectedRef: TEAM_WEB,
+      dblResources: ALL_TEXTS,
+    });
+    await openSelector(/WEB/);
+
+    const teamGroup = screen.getByRole('group', { name: TEAM_RESOURCES });
+    // Once for the group, not once per row: two team rows here, one caption.
+    expect(screen.getAllByText(TEAM_RESOURCES_CAPTION)).toHaveLength(1);
+    expect(within(teamGroup).getByText(TEAM_RESOURCES_CAPTION)).toBeInTheDocument();
+    expect(teamGroup).toHaveAccessibleDescription(TEAM_RESOURCES_CAPTION);
+  });
+
+  it('keeps a long name whole in its hover title, since the menu ellipsizes it', async () => {
+    renderPanel({
+      filteredResources: [TEAM_WEB, USER_KJV],
+      selectedRef: USER_KJV,
+      dblResources: ALL_TEXTS,
+    });
+    await openSelector(/KJV/);
+
+    const name = within(screen.getByRole('menuitemcheckbox', { name: /WEB/ })).getByText(
+      'WEB - World English Bible',
+    );
+    expect(name).toHaveAttribute('title', 'WEB - World English Bible');
+    // jsdom computes no layout, so the class is the only observable stand-in for the ellipsis.
+    expect(name).toHaveClass('tw:truncate');
+  });
+
+  it('reports a team resource the user chose', async () => {
+    const onSelectResource = vi.fn();
+    renderPanel({
+      filteredResources: [TEAM_WEB, USER_KJV],
+      selectedRef: USER_KJV,
+      dblResources: ALL_TEXTS,
+      onSelectResource,
+    });
+    const user = await openSelector(/KJV/);
+
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /WEB/ }));
+
+    expect(onSelectResource).toHaveBeenCalledWith('dbl:uid-web');
+  });
+
+  it('groups commentaries the same way', async () => {
+    const teamCommentary = dblRow(INSTALLED_COMMENTARY, 'admin');
+    const userCommentary = dblRow({
+      ...INSTALLED_COMMENTARY,
+      dblEntryUid: 'uid-tnn',
+      displayName: 'TNN',
+    });
+    renderPanel({
+      resourceType: 'CommentaryResource',
+      filteredResources: [teamCommentary, userCommentary],
+      selectedRef: teamCommentary,
+      dblResources: [INSTALLED_COMMENTARY],
+    });
+    await openSelector(/HBKENG/);
+
+    expect(
+      within(screen.getByRole('group', { name: TEAM_RESOURCES })).getByRole('menuitemcheckbox', {
+        name: /HBKENG/,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('group', { name: USER_RESOURCES })).getByRole('menuitemcheckbox', {
+        name: /TNN/,
+      }),
+    ).toBeInTheDocument();
   });
 });
 

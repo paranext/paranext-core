@@ -66,7 +66,7 @@ import { getInternetBlockedMessageKey } from './internet-block-notification.util
  * component.
  */
 export const GET_RESOURCES_STRING_KEYS = Object.freeze([
-  '%data_loading_error_internetAccess_disabled_2%',
+  '%data_loading_error_internetAccess_disabled_3%',
   '%general_error_title%',
   '%resources_action%',
   '%resources_actionDidNotTakeEffect%',
@@ -99,7 +99,6 @@ export const GET_RESOURCES_STRING_KEYS = Object.freeze([
   '%resources_types_searchPlaceholder%',
   '%resources_type_Scripture%',
   '%resources_type_Commentary%',
-  '%resources_type_SLR%',
   '%resources_type_unknown%',
   '%resources_update%',
 ] as const);
@@ -110,10 +109,18 @@ type GetResourcesLocalizedStrings = {
 };
 
 /**
- * The resource types Get Resources offers. It does not support Enhanced or XML resources, so it
- * neither lists them nor offers them in the type filter.
+ * The resource types Get Resources offers; it neither lists nor offers any other type. It does not
+ * support Enhanced or XML resources. Source language resources are never in the DBL catalog it
+ * lists (the C# `DblResourcesDataProvider` serves only allow-listed DBL entries, typed Scripture or
+ * Commentary), so their option could only ever show 0.
+ *
+ * TODO(PT-3940): Offer source language resources again once they can be downloaded. Their label
+ * key, `%resources_type_SLR%`, is kept in `localizedStrings.json` for that.
  */
-type OfferedResourceType = Exclude<ResourceType, 'EnhancedResource' | 'XmlResource'>;
+type OfferedResourceType = Exclude<
+  ResourceType,
+  'EnhancedResource' | 'SourceLanguageResource' | 'XmlResource'
+>;
 
 /**
  * The resource types this build offers, each with the key of its type filter label. Typed as a
@@ -124,7 +131,6 @@ type OfferedResourceType = Exclude<ResourceType, 'EnhancedResource' | 'XmlResour
 const RESOURCE_TYPE_LABEL_KEYS: Record<OfferedResourceType, GetResourcesLocalizedStringKey> = {
   ScriptureResource: '%resources_type_Scripture%',
   CommentaryResource: '%resources_type_Commentary%',
-  SourceLanguageResource: '%resources_type_SLR%',
 };
 
 function isOfferedResourceType(value: string): value is OfferedResourceType {
@@ -620,8 +626,8 @@ export function GetResources({
             </div>
             <div className="tw:flex tw:flex-col tw:gap-1">
               <Label className="tw:mb-2 tw:text-muted-foreground">{filterByText}</Label>
-              {/* The type list is three entries long, so it needs neither the scroll cue nor the
-                  sort that floats a just-picked entry to the top. */}
+              {/* The type list is only a few entries long, so it needs neither the scroll cue nor
+                  the sort that floats a just-picked entry to the top. */}
               <Filter
                 entries={typeOptions}
                 selected={selectedResourceTypes}

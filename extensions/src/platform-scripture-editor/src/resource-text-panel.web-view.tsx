@@ -1,5 +1,5 @@
 import type { WebViewProps } from '@papi/core';
-import papi, { logger } from '@papi/frontend';
+import { logger } from '@papi/frontend';
 import {
   useDataProvider,
   useDialogCallback,
@@ -7,9 +7,7 @@ import {
   useProjectDataProvider,
   useProjectSetting,
   useScrollGroupScrRef,
-  useSetting,
 } from '@papi/frontend/react';
-import { useTabIconSelection, type TabIconUrls } from 'platform-bible-react';
 import {
   DblResourceData,
   formatReplacementString,
@@ -35,6 +33,7 @@ import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
 import { useIsOnline } from './use-is-online.hook';
+import { useIsPowerMode } from './use-is-power-mode.hook';
 import {
   getResourceReferenceRowId,
   isDblResourceReference,
@@ -66,20 +65,6 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   ...COPYRIGHT_NOTICE_STRING_KEYS,
 ];
 
-const BIBLE_TEXTS_ICON_URLS: TabIconUrls = {
-  lightDefault: 'papi-extension://platformScriptureEditor/assets/book-open.svg',
-  dark: 'papi-extension://platformScriptureEditor/assets/book-open-dark.svg',
-  lightSelected: 'papi-extension://platformScriptureEditor/assets/book-open-selected.svg',
-  lightUnselected: 'papi-extension://platformScriptureEditor/assets/book-open-unselected.svg',
-};
-
-const COMMENTARIES_ICON_URLS: TabIconUrls = {
-  lightDefault: 'papi-extension://platformScriptureEditor/assets/file-text.svg',
-  dark: 'papi-extension://platformScriptureEditor/assets/file-text-dark.svg',
-  lightSelected: 'papi-extension://platformScriptureEditor/assets/file-text-selected.svg',
-  lightUnselected: 'papi-extension://platformScriptureEditor/assets/file-text-unselected.svg',
-};
-
 // This panel offers locally-downloaded resources alongside the ones already in the text
 // collection, so its rows are the union of both.
 const RESOURCE_PICKER_OPTIONS = { includeDownloaded: true } as const;
@@ -110,55 +95,20 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
     'selectedResourceId',
     undefined,
   );
+  // The resource the user last chose themselves, so a selection the panel fell back to can be told
+  // apart from one the user picked. See `resolveResourceSelection` for why a fallback must not
+  // outlive a configured resource arriving. Written also by `buildResourceTextPanelState`.
+  const [userPickedResourceId, setUserPickedResourceId] = useWebViewState<string | undefined>(
+    'userPickedResourceId',
+    undefined,
+  );
 
   // #endregion
 
-  // #region Tab icon (Simple mode only — Power mode keeps this tab text-only, as today)
+  // #region Interface mode
 
-  const [interfaceModePossiblyError] = useSetting('platform.interfaceMode', 'simple');
-  const isPowerMode = useMemo(() => {
-    if (isPlatformError(interfaceModePossiblyError)) {
-      logger.warn(`Error getting interface mode: ${getErrorMessage(interfaceModePossiblyError)}`);
-      return false;
-    }
-    return interfaceModePossiblyError === 'power';
-  }, [interfaceModePossiblyError]);
-
-  const [isDarkTheme, setIsDarkTheme] = useState(false);
-  useEffect(() => {
-    let disposed = false;
-    let unsubscribe: (() => void) | undefined;
-    papi.themes
-      .subscribeCurrentTheme(undefined, (theme) => {
-        if (!isPlatformError(theme)) setIsDarkTheme(theme.type === 'dark');
-      })
-      .then((unsub) => {
-        if (disposed) unsub();
-        else unsubscribe = unsub;
-        return undefined;
-      })
-      .catch((e) => logger.warn(`Failed to subscribe to the current theme: ${getErrorMessage(e)}`));
-    return () => {
-      disposed = true;
-      unsubscribe?.();
-    };
-  }, []);
-
-  const tabIconUrls =
-    resourceType === 'ScriptureResource' ? BIBLE_TEXTS_ICON_URLS : COMMENTARIES_ICON_URLS;
-  const tabIconUrl = useTabIconSelection(isDarkTheme, tabIconUrls);
-  useEffect(() => {
-    // Power mode: no tab icon, exactly as today. Still clear a previously-set iconUrl explicitly
-    // (rather than skipping the call) — updateWebViewDefinition's merge only touches keys present in
-    // the update object, so a present-but-undefined iconUrl writes through and removes a value a
-    // prior Simple-mode run of this same effect may have set, while omitting the key entirely would
-    // leave it stuck showing the last Simple-mode icon after switching to Power mode at runtime.
-    if (isPowerMode) {
-      updateWebViewDefinition({ iconUrl: undefined });
-      return;
-    }
-    updateWebViewDefinition({ iconUrl: tabIconUrl });
-  }, [isPowerMode, tabIconUrl, updateWebViewDefinition]);
+  // Undefined until the setting loads; the tab icon and tooltip treat that as Simple.
+  const isPowerMode = useIsPowerMode();
 
   // #endregion
 
@@ -258,9 +208,14 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   // the resource they abandoned, with nothing indicating their own earlier pick won.
   const [pendingResourceId, setPendingResourceId] = useState<string | undefined>(undefined);
 
-  // Committing a pick, holding still while one is in flight, migrating a legacy bare id and
-  // falling back when the selection leaves the list are one decision, not four effects that can
-  // disagree across renders. `resolveResourceSelection` makes it, and is tested directly.
+  // The downloaded fallback shown last. Kept in React state rather than web view state because a
+  // fallback is never persisted; holding it keeps a newly installed resource from taking its place.
+  const [heldFallbackRowId, setHeldFallbackRowId] = useState<string | undefined>(undefined);
+
+  // Committing a pick, holding still while one is in flight, migrating a legacy bare id, falling
+  // back when the selection leaves the list, and replacing a downloaded fallback once something
+  // configured is displayable are one decision, not separate effects that can disagree across
+  // renders. `resolveResourceSelection` makes it, and is tested directly.
   //
   // Resolved HERE and handed to the panel as `selectedRef`, rather than resolved by the panel and
   // reported back up: `resourceProjectId` below keys the `ChapterUSJ` subscription that produces
@@ -272,11 +227,20 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   // and never picks one by itself: there is no list of the user's texts to pick from, so a fallback
   // would put an arbitrary download on screen instead of "open a project".
   const selection: ResourceSelectionResolution = projectId
-    ? resolveResourceSelection(filteredResources, selectedResourceId, pendingResourceId)
+    ? resolveResourceSelection(filteredResources, {
+        selectedResourceId,
+        userPickedResourceId,
+        pendingResourceId,
+        heldFallbackRowId,
+        isListComplete:
+          effectiveResourcesState.status === 'ready' && !effectiveResourcesState.isUserLayerMissing,
+      })
     : {
         nextSelectedResourceId: undefined,
+        nextUserPickedResourceId: undefined,
         shouldClearPending: false,
         selectedRow: findSelectedRow(filteredResources, selectedResourceId),
+        shownFallbackRowId: undefined,
       };
   // Behind the catalog-error view nothing is on screen, so the first-row fallback must not keep a
   // chapter subscription open or become what Ctrl+F searches.
@@ -290,11 +254,36 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   const nextSelectedResourceId = isFallbackWhileCatalogFailed
     ? undefined
     : selection.nextSelectedResourceId;
+  const { nextUserPickedResourceId, shownFallbackRowId } = selection;
 
+  // The user's pick is written before the selection, so no render sees the new selection without
+  // it and takes it for a fallback (see `handleSelectResourceFromList`).
   useEffect(() => {
+    if (nextUserPickedResourceId !== undefined) setUserPickedResourceId(nextUserPickedResourceId);
     if (nextSelectedResourceId !== undefined) setSelectedResourceId(nextSelectedResourceId);
     if (selection.shouldClearPending) setPendingResourceId(undefined);
-  }, [nextSelectedResourceId, selection.shouldClearPending, setSelectedResourceId]);
+  }, [
+    nextSelectedResourceId,
+    nextUserPickedResourceId,
+    selection.shouldClearPending,
+    setSelectedResourceId,
+    setUserPickedResourceId,
+  ]);
+
+  useEffect(() => {
+    if (shownFallbackRowId !== undefined) setHeldFallbackRowId(shownFallbackRowId);
+  }, [shownFallbackRowId]);
+
+  // The pick is written before the selection so no render sees the user's pick taken for a
+  // fallback. Each web view state key comes back as its own web view update, in the order it was
+  // written, so the two setters are not applied together; keep the pick first.
+  const handleSelectResourceFromList = useCallback(
+    (resourceId: string) => {
+      setUserPickedResourceId(resourceId);
+      setSelectedResourceId(resourceId);
+    },
+    [setUserPickedResourceId, setSelectedResourceId],
+  );
 
   const [isSelecting, setIsSelecting] = useState(false);
 
@@ -547,10 +536,15 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
       selectedRef={selectedRef}
       readiness={readiness}
       dblResources={dblResources}
+      isCatalogUnavailable={hasCatalogError}
+      // Only Simple mode has team resources, so Power lists every row together. Undefined (still
+      // loading) lists them together too, so a Power session never shows the grouping, even for a
+      // frame.
+      isGrouped={isPowerMode === false}
       onRetryCatalog={refetchCatalog}
       scrRef={scrRef}
       onScrRefChange={setScrRef}
-      onSelectResource={setSelectedResourceId}
+      onSelectResource={handleSelectResourceFromList}
       usjPossiblyError={usjPossiblyError}
       isUsjLoading={isUsjLoading}
       textDirection={textDirection}

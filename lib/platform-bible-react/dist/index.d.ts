@@ -1633,9 +1633,16 @@ export interface MarkerMenuProps {
 	 * `%markerMenu_searchPlaceholder%` localized string.
 	 */
 	searchPlaceholder?: string;
+	/**
+	 * Optional marker whose row is highlighted when the menu opens, in place of the first row. Pass
+	 * the marker the selection already has, so that Enter on a freshly opened menu re-applies it
+	 * rather than picking whatever sorts first. Ignored when no selectable row has this marker, in
+	 * which case the first row is highlighted as usual. Read only on mount.
+	 */
+	defaultHighlightedMarker?: string;
 }
 /** Marker menu component to render the list of markers and a few commands in the scripture editor */
-export declare function MarkerMenu({ localizedStrings, markerMenuItems, searchRef, searchPlaceholder, }: MarkerMenuProps): import("react/jsx-runtime").JSX.Element;
+export declare function MarkerMenu({ localizedStrings, markerMenuItems, searchRef, searchPlaceholder, defaultHighlightedMarker, }: MarkerMenuProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Whether a delta op is an UNCLOSED note: one written with no closing marker (`\f` with no `\f*`),
  * which USJ marks `closed: "false"`. Such a note is edited in place in the text, as PT9 does its
@@ -2460,9 +2467,10 @@ type TabDropdownMenuProps = {
 /**
  * Dropdown menu for Platform.Bible menu data. Each column that has items is a section, divided from
  * the next by a line; columns without items are left out. Groups within a column are not
- * distinguished. Items show their tooltip on hover and their `shortcut`, if any, at the end of the
- * row. With `showSectionHeadings`, each section is headed by its column label, except a column that
- * sets `isHeaderHidden`, whose label names the section for screen readers only.
+ * distinguished, while the groups of a submenu are divided by a line. Items show their tooltip on
+ * hover and their `shortcut`, if any, at the end of the row. With `showSectionHeadings`, each
+ * section is headed by its column label, except a column that sets `isHeaderHidden`, whose label
+ * names the section for screen readers only.
  *
  * A child component can be passed in to show as an icon on the menu trigger button.
  */
@@ -2747,6 +2755,8 @@ export type UiLanguageSelectorProps = {
 	className?: string;
 	/** Optional id for the root element */
 	id?: string;
+	/** When true, the language cannot be changed. Defaults to `false`. */
+	disabled?: boolean;
 };
 /**
  * A component for selecting the user interface language and managing fallback languages. Allows
@@ -2754,7 +2764,7 @@ export type UiLanguageSelectorProps = {
  *
  * @param {UiLanguageSelectorProps} props - The props for the component.
  */
-export declare function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, id, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, id, disabled, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Immutable array of localization keys this component uses. Pass into `useLocalizedStrings` and
  * feed the result to the `localizedStrings` prop.
@@ -4602,15 +4612,19 @@ export declare function measureBox(target: Range | Element): DOMRect | undefined
  * @experimental This export is unstable and may change shape or disappear without notice
  */
 export declare function leftEdgeRect(rect: DOMRect): DOMRect;
-/** The four tab-icon variants, as static asset URLs (e.g. `papi-extension://` URLs). */
+/**
+ * The four tab-icon variants, as static asset URLs (e.g. `papi-extension://` URLs).
+ *
+ * @deprecated 2026-10-27 — Set `iconName` to a lucide icon name on the web view definition instead.
+ */
 export type TabIconUrls = {
 	/** Dark theme (any selection). */
 	dark: string;
 	/**
-	 * Light theme, tab selected (white). Unused by `pickTabIconUrl` today: every current host keeps
-	 * the active tab's header on a plain light background (never a dark/tinted one), so a white icon
-	 * would be invisible there. Kept in the type for a future host that does give the selected tab a
-	 * dark background and needs a contrasting icon.
+	 * Light theme, tab selected (white). Unused by `pickTabIconUrl`: every host when these were
+	 * deprecated kept the active tab's header on a plain light background (never a dark/tinted one),
+	 * so a white icon would be invisible there. Kept in the type for a future host that does give the
+	 * selected tab a dark background and needs a contrasting icon.
 	 */
 	lightSelected: string;
 	/** Light theme, tab not selected (near-black). Also used for the selected state — see above. */
@@ -4620,11 +4634,13 @@ export type TabIconUrls = {
 };
 /**
  * Picks the tab icon URL. In dark theme the icon is always the dark variant. In light theme it's
- * the near-black variant regardless of selection — every current host keeps the active tab's header
- * on a plain light background rather than a dark/tinted one (see
+ * the near-black variant regardless of selection — every host when these were deprecated kept the
+ * active tab's header on a plain light background rather than a dark/tinted one (see
  * `dock-layout-wrapper.simple-mode.scss`'s "SIMPLE-MODE TAB SELECTION LOOK" region), so a selected
  * tab needs the same contrast as an unselected one — a mid-slate fallback is used when the selected
  * state is unknown (`undefined`).
+ *
+ * @deprecated 2026-10-27 — Set `iconName` to a lucide icon name on the web view definition instead.
  */
 export declare function pickTabIconUrl(isDarkTheme: boolean, isTabSelected: boolean | undefined, urls: TabIconUrls): string;
 /**
@@ -4645,6 +4661,7 @@ export declare function pickTabIconUrl(isDarkTheme: boolean, isTabSelected: bool
  * Callers own the theme subscription themselves (e.g. `papi.themes.subscribeCurrentTheme`) and pass
  * the resulting `isDarkTheme` in — this hook has no PAPI dependency.
  *
+ * @deprecated 2026-10-27 — Set `iconName` to a lucide icon name on the web view definition instead.
  * @param isDarkTheme Whether the current theme is dark.
  * @param tabIconUrls The four icon variant URLs for this tab.
  * @returns The icon URL to pass to `updateWebViewDefinition({ iconUrl })`.

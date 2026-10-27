@@ -1,10 +1,10 @@
 ---
 title: Extension Development Guide
 description: Extension anatomy, lifecycle, PAPI usage, WebViews, and contribution points for Platform.Bible.
-version: 1.1.8
+version: 1.1.9
 status: active
 created: 2026-03-04
-last_updated: 2026-10-20
+last_updated: 2026-10-27
 ---
 
 # Extension Development Guide
@@ -225,9 +225,8 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
 - Failures reject with a `PlatformError`. Branch on its `code`. Its `message` is an English
   diagnostic for logs, so show users your own localized text based on the `code`:
   - `UNAUTHENTICATED`: offer `paratextRegistration.showParatextRegistration`.
-  - `FAILED_PRECONDITION`: the user's Internet & connectivity settings block it: internet access is
-    off, or "Disable access to some Bible translation services" is selected and this computer's
-    location is restricted or could not be determined.
+  - `FAILED_PRECONDITION`: the user's Internet & connectivity settings block it: "Disable access to
+    some Bible translation services" or "Block internet when in sensitive locations" is selected.
   - `UNAVAILABLE`: retry later.
   - `INVALID_ARGUMENT` or `PERMISSION_DENIED`: a configuration bug in the extension or the
     Registry. `PERMISSION_DENIED` also covers the Registry refusing to issue the token for a
@@ -400,6 +399,19 @@ view, so it refuses to guess instead: an open that would create fails, while a p
 - Use **TailwindCSS** (Tailwind v4) with the `tw:` prefix for theming
 - Use semantic color variables (e.g., `tw:bg-card`) instead of hardcoded colors
 - Support RTL/LTR layouts using logical properties (`start`/`end` instead of `left`/`right`)
+
+### Tab Icons
+
+A tab icon given by `iconUrl` is painted as a static image, so an SVG's `currentColor` can't follow
+the theme. For an icon that has a lucide equivalent, set `iconName` to its lucide name (kebab-case,
+e.g. `book-open`) in the definition your provider returns: the platform then draws it in the tab's
+text colour, so it follows the theme and the selection state, including on tabs that have never
+been opened. Don't ship light/dark variants or swap `iconUrl` from the web view
+(`useTabIconSelection` and `pickTabIconUrl` are deprecated). A known `iconName` takes precedence
+over `iconUrl`; an unknown one falls back to `iconUrl`, then to the default logo, so only use names
+listed in `LUCIDE_ICON_NAMES` (from `platform-bible-react/experimental`) and add a missing icon to
+`LUCIDE_ICON_COMPONENTS` in `lucide-icons.util.ts`. `iconName` is `@experimental`. See
+`adr-lucide-icons-by-name` in [Architecture-Decisions.md](Architecture-Decisions.md).
 
 ### Content Zoom (experimental)
 
@@ -610,3 +622,4 @@ For details, see [Merging Template Changes wiki](https://github.com/paranext/par
 | 1.1.6   | 2026-09-24 | "Content Zoom": the area `label` and the zoom scope attribute (both experimental), pointing to Component-Builder-Patterns; the Text Collection grid is the reference, with one `resource-<id>` area per resource. |
 | 1.1.7   | 2026-10-02 | Add "Saving on Teardown" under WebViews: flush in a `pagehide` listener and in the unmount cleanup; a reload unmounts the root on `unload`, after the web view's own `pagehide` listeners; a panel close or tab move runs `pagehide` too, but the root can unmount after the iframe is gone, so `pagehide` is the flush point. |
 | 1.1.8   | 2026-10-16 | "Elevated privileges": the privilege table and the `requestRegistryTokens` privilege for Paratext Registry access tokens. |
+| 1.1.9   | 2026-10-27 | Add "Tab Icons" under WebViews: tabs name a lucide icon with `iconName` instead of shipping theme variants. |

@@ -234,7 +234,7 @@ internal class RegistryAccessTokenServiceTests : PapiTestBase
     }
 
     [Test]
-    public async Task InternetTurnedOff_FailsWithFailedPreconditionWithoutCallingTheRegistry()
+    public async Task InternetDisabled_FailsWithFailedPreconditionNamingTheSetting()
     {
         _userContext.Snapshot = ValidUser(isInternetDisabled: true);
 
@@ -243,33 +243,36 @@ internal class RegistryAccessTokenServiceTests : PapiTestBase
         AssertFailure(result, PlatformErrorCodes.FailedPrecondition);
         Assert.That(
             result.Message,
-            Does.Contain("turned off").And.Not.Contain("Bible translation services")
+            Does.Contain("Disable access to some Bible translation services")
+                .And.Not.Contain("sensitive locations")
         );
         Assert.That(_tokenClient.PostCount, Is.Zero);
     }
 
-    [Test]
-    public async Task VpnRequiredInARestrictedLocation_FailsWithFailedPreconditionNamingTheSetting()
+    // The app does not implement "Block internet when in sensitive locations" yet, so a saved
+    // VpnRequired fails closed wherever the computer is, as InternetServicesGate does for
+    // Send/Receive and the DBL.
+    [TestCase(true, TestName = "VpnRequired_InARestrictedLocation_FailsWithFailedPrecondition")]
+    [TestCase(false, TestName = "VpnRequired_InAnUnrestrictedLocation_FailsWithFailedPrecondition")]
+    public async Task VpnRequired_FailsWithFailedPreconditionNamingTheSetting(
+        bool isLocationRestricted
+    )
     {
-        _userContext.Snapshot = ValidUser(isInternetDisabled: true, isVpnRequired: true);
+        _userContext.Snapshot = ValidUser(
+            isInternetDisabled: isLocationRestricted,
+            isVpnRequired: true
+        );
 
         var result = await Get();
 
         AssertFailure(result, PlatformErrorCodes.FailedPrecondition);
         Assert.That(
             result.Message,
-            Does.Contain("Disable access to some Bible translation services")
-                .And.Not.Contain("turned off")
+            Does.Contain("Block internet when in sensitive locations")
+                .And.Not.Contain("Bible translation services")
+                .And.Not.Contain("location is restricted")
         );
         Assert.That(_tokenClient.PostCount, Is.Zero);
-    }
-
-    [Test]
-    public async Task VpnRequiredInAnUnrestrictedLocation_GetsAToken()
-    {
-        _userContext.Snapshot = ValidUser(isVpnRequired: true);
-
-        Assert.That((await Get()).AccessToken, Is.EqualTo(CANARY_TOKEN));
     }
 
     [Test]

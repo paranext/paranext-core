@@ -8,6 +8,8 @@
  * the ONLY variable is `interfaceMode`, so a failure here isolates the interface-mode gating of the
  * default rather than anything about how the editor was opened.
  *
+ * It also checks that Ctrl+E, Power's Standard view and Preview toggle, changes nothing in Simple.
+ *
  * ONE test() per spec file on purpose — see standard-default-power-mode.spec.ts.
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
@@ -75,5 +77,23 @@ test.describe('scripture editor default view', () => {
     // never fire in simple mode.
     await expect(editorFrame.locator('.editor-input.marker-editable')).toHaveCount(0);
     await expect(editorFrame.locator('span.opening[data-marker]')).toHaveCount(0);
+
+    await test.step('Ctrl+E changes nothing in Simple', async () => {
+      const mainInput = editorFrame.locator('.editor-input.marker-hidden');
+      // A verse paragraph with no note, so the click moves the caret rather than opening a note.
+      await mainInput.locator('p:has(span[data-marker="v"]):not(:has(.note))').first().click();
+      await mainPage.keyboard.press('Control+e');
+      // Nothing happening has no event to wait for. In Power the same keystroke switches the view
+      // and shows the notice within a PAPI round trip, far inside this window.
+      await mainPage.waitForTimeout(2_000);
+      await expect(mainInput).toBeAttached();
+      await expect(mainInput).toHaveAttribute('contenteditable', 'true');
+      await expect(mainPage.locator('[data-sonner-toast]', { hasText: 'read-only' })).toHaveCount(
+        0,
+      );
+      // Positive control: the caret was in the text, so the keystroke reached the editor.
+      await mainPage.keyboard.type('zq');
+      await expect(mainInput).toContainText('zq');
+    });
   });
 });

@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+import { LUCIDE_ICON_NAMES } from 'platform-bible-react/experimental';
 import { ScriptureRange } from 'platform-scripture-editor';
 import type PapiBackend from '@papi/backend';
 import { newPlatformError, normalizeProjectId, UsjTextContentLocation } from 'platform-bible-utils';
 import type { SavedWebViewDefinition } from '@papi/core';
 import { MutableRefObject } from 'react';
-import type { EditorRef, ViewOptions } from '@eten-tech-foundation/platform-editor';
+import type { EditorRef, SelectionRange, ViewOptions } from '@eten-tech-foundation/platform-editor';
 import {
   USJ_TYPE,
   USJ_VERSION,
@@ -22,15 +23,25 @@ import {
   getTabTitleProjectName,
   generateParagraphMenuListItems,
   getNextViewTypeInCycle,
+  getSimpleModeRootClassNames,
   createUnsupportedProjectIdsCache,
   getProjectUnsupportedReason,
   buildScriptureEditorWebViewState,
   UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY,
   UNSUPPORTED_PROJECT_IDS_RETRY_DELAY_MS,
+  getViewTypeToSave,
+  showsReadOnlyPreview,
   openDefaultActiveProjectIfApplicable,
   resolveOpenEditorDispatch,
   resolveViewTypeForInterfaceMode,
+  getDisplayedViewType,
+  VIEW_TYPE_UNSET,
+  VIEW_TYPE_FOR_SET_VIEW_COMMAND,
   syncOnProjectSwitch,
+  syncOnSwitchToPower,
+  UNSENT_CHANGES_SYNC_WAIT_MS,
+  UNSENT_CHANGES_GRACE_MS,
+  waitForUnsentChanges,
   openOrUpdateRelatedPanels,
   updateRelatedFindPanel,
   buildScriptureTextGridWebView,
@@ -68,17 +79,29 @@ import {
   PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
   showCommentThreadForInterfaceMode,
 } from './platform-scripture-editor.utils';
+import { restoreSelectionIfLost } from './platform-scripture-editor.web-view.utils';
 
-/** Build a mock editor ref exposing spies for the methods the generators call. */
-function makeMockEditorRef() {
+/**
+ * Build a mock editor ref exposing spies for the methods the generators call. It has no text
+ * selection; pass `selectedParaMarker` to have a paragraph's gutter marker selected instead.
+ */
+function makeMockEditorRef(selectedParaMarker?: string) {
   const formatPara = vi.fn();
   const insertMarker = vi.fn();
+  const getSelectedParaMarker = vi.fn<() => string | undefined>(() => selectedParaMarker);
+  const setSelection = vi.fn();
   // Mock literal cannot satisfy the full EditorRef interface — cast for test isolation.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const ref = {
-    current: { formatPara, insertMarker },
+    current: {
+      formatPara,
+      insertMarker,
+      getSelection: () => undefined,
+      getSelectedParaMarker,
+      setSelection,
+    },
   } as unknown as MutableRefObject<EditorRef | null>;
-  return { ref, formatPara, insertMarker };
+  return { ref, formatPara, insertMarker, getSelectedParaMarker, setSelection };
 }
 
 // Sample USJ chapter data for Genesis chapter 1 with multiple verses
@@ -3001,7 +3024,7 @@ type SyncGateStub = {
   /** `platform.interfaceMode` */
   mode?: 'simple' | 'power' | typeof READ_THROWS;
   /** The `platform.getAutomaticSyncConsent` command */
-  consent?: 'granted' | 'unconfirmed' | 'deferred' | typeof READ_THROWS;
+  consent?: 'granted' | 'unconfirmed' | 'unreadable' | 'deferred' | typeof READ_THROWS;
 };
 
 /**
@@ -3051,12 +3074,12 @@ function createSyncMockPapi(gate: SyncGateStub = {}, projectKind: ProjectKind = 
 }
 
 /**
- * The sync commands `syncOnProjectSwitch` dispatches, in dispatch order: a deep sync of the
- * incoming project, then a shallower send/receive of the outgoing one.
+ * The sync commands `syncOnProjectSwitch` dispatches, in dispatch order: a shallower send/receive
+ * of the outgoing project, then a deep sync of the incoming one.
  */
 const PROJECT_SWITCH_SYNC_COMMANDS = [
-  'paratextBibleSendReceive.syncProjects',
   'paratextBibleSendReceive.sendReceiveProjects',
+  'paratextBibleSendReceive.syncProjects',
 ];
 
 describe('syncOnProjectSwitch', () => {
@@ -3102,7 +3125,10 @@ describe('syncOnProjectSwitch', () => {
     ]);
   });
 
-  it('calls syncProjects before sendReceiveProjects', async () => {
+  it('syncs the incoming project last, so its result is the one reported', async () => {
+    // These are two separate backend runs and the sync indicator reports the most recent one, so
+    // whichever runs last decides the verdict the user sees. That has to be the project they
+    // switched to rather than the one they left.
     const { papi, mockSendCommand } = createSyncMockPapi();
     const callOrder: string[] = [];
     mockSendCommand.mockImplementation(async (commandName: string) => {
@@ -3112,8 +3138,8 @@ describe('syncOnProjectSwitch', () => {
     await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
     expect(callOrder).toEqual([
-      'paratextBibleSendReceive.syncProjects',
       'paratextBibleSendReceive.sendReceiveProjects',
+      'paratextBibleSendReceive.syncProjects',
     ]);
   });
 
@@ -3127,17 +3153,20 @@ describe('syncOnProjectSwitch', () => {
     );
   });
 
-  it('still calls sendReceiveProjects when syncProjects throws', async () => {
+  it('still syncs the incoming project when the outgoing flush throws', async () => {
     const { papi, mockSendCommand } = createSyncMockPapi();
     mockSendCommand.mockImplementation(async (commandName: string) => {
-      if (commandName === 'paratextBibleSendReceive.syncProjects') throw new Error('sync failed');
+      if (commandName === 'paratextBibleSendReceive.sendReceiveProjects')
+        throw new Error('S/R failed');
     });
 
     await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
-    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
-      'proj-outgoing',
-    ]);
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'paratextBibleSendReceive.syncProjects',
+      ['proj-incoming'],
+      true,
+    );
   });
 
   it('resolves without throwing when both syncs fail', async () => {
@@ -3221,6 +3250,7 @@ describe('syncOnProjectSwitch', () => {
 
   it.each([
     ['the first-run wizard has not been answered', 'unconfirmed'],
+    ['the first-run flag cannot be read', 'unreadable'],
     ['the user chose "Don\'t sync yet" earlier this session', 'deferred'],
   ] as const)('syncs nothing while %s', async (_, consent) => {
     const { papi, mockSendCommand, mockInfo } = createSyncMockPapi({ consent });
@@ -3275,6 +3305,592 @@ describe('syncOnProjectSwitch', () => {
 });
 
 // #endregion syncOnProjectSwitch
+
+// #region syncOnSwitchToPower
+
+/** Stubbed answer meaning "no such data provider is registered". */
+const PROVIDER_MISSING = Symbol('provider missing');
+
+/** A settled snapshot listing nothing in either direction. */
+const NOTHING_UNSYNCED = { toSend: [], toReceive: [], isRechecking: false };
+
+/**
+ * The papi pieces the switch-to-Power sync touches. The unsynced-changes seed and the consent
+ * request are answered by their own mocks, so `mockSendCommand` records only the Send/Receive call;
+ * `emitUnsyncedChanges` delivers an `onUnsyncedChangesChanged` event to whoever is subscribed.
+ */
+function createSwitchToPowerMockPapi({
+  mode = 'power',
+  consent = 'granted',
+  seed = NOTHING_UNSYNCED,
+  internetUse = 'Enabled',
+}: SyncGateStub & {
+  seed?: unknown;
+  /** The saved internet setting, a missing provider, or a read that rejects */
+  internetUse?:
+    | 'Enabled'
+    | 'VpnRequired'
+    | 'Disabled'
+    | 'ProxyOnly'
+    | typeof PROVIDER_MISSING
+    | typeof READ_THROWS;
+} = {}) {
+  const { sendCommand, mockGetSetting, mockWarn, mockInfo, ...gateMocks } = createSyncGateStubs({
+    mode,
+    consent,
+  });
+  const mockGetUnsyncedChanges = vi.fn(async (): Promise<unknown> => seed);
+  const listeners = new Set<(snapshot: unknown) => void>();
+  const mockGetNetworkEvent = vi.fn(() => (listener: (snapshot: unknown) => void) => {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  });
+  const routedSendCommand = async (commandName: string, ...args: unknown[]) =>
+    commandName === 'paratextBibleSendReceive.getUnsyncedChanges'
+      ? mockGetUnsyncedChanges()
+      : sendCommand(commandName, ...args);
+  const mockGetInternetSettings = vi.fn(async () => {
+    if (internetUse === READ_THROWS) throw new Error('internet settings unavailable');
+    return { selectedServer: 'Production', permittedInternetUse: internetUse, proxyPort: 0 };
+  });
+  const mockDataProvidersGet = vi.fn(async (name: string) => {
+    if (name !== 'paratextRegistration.internetSettingsDataProvider')
+      throw new Error(`Unexpected data provider in test stub: ${name}`);
+    return internetUse === PROVIDER_MISSING
+      ? undefined
+      : { getInternetSettings: mockGetInternetSettings };
+  });
+  // Must cast since the mock only includes the papi properties used by syncOnSwitchToPower.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const papi = {
+    commands: { sendCommand: routedSendCommand },
+    network: { getNetworkEvent: mockGetNetworkEvent },
+    dataProviders: { get: mockDataProvidersGet },
+    logger: { warn: mockWarn, info: mockInfo },
+    settings: { get: mockGetSetting },
+  } as unknown as typeof PapiBackend;
+  return {
+    papi,
+    mockGetSetting,
+    mockGetInternetSettings,
+    mockWarn,
+    mockInfo,
+    mockGetUnsyncedChanges,
+    mockGetNetworkEvent,
+    emitUnsyncedChanges: (snapshot: unknown) => listeners.forEach((listener) => listener(snapshot)),
+    subscriberCount: () => listeners.size,
+    ...gateMocks,
+  };
+}
+
+/** Lets the helper's seed request settle without moving fake time on. */
+async function flushMicrotasks() {
+  await vi.advanceTimersByTimeAsync(0);
+}
+
+/** Starts a wait and records its answer, so a test can tell a pending wait from a settled one. */
+function startWaiting(papi: typeof PapiBackend, projectId: string) {
+  const wait: { isSettled: boolean; answer?: boolean } = { isSettled: false };
+  (async () => {
+    wait.answer = await waitForUnsentChanges(papi, projectId);
+    wait.isSettled = true;
+  })();
+  return wait;
+}
+
+describe('waitForUnsentChanges', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('answers true at once when the seed already lists the project, whatever its case', async () => {
+    const { papi } = createSwitchToPowerMockPapi({
+      seed: { toSend: ['PROJ-1'], toReceive: [], isRechecking: false },
+    });
+
+    // No time is advanced: a project already listed must not wait out the grace window.
+    await expect(waitForUnsentChanges(papi, 'proj-1')).resolves.toBe(true);
+  });
+
+  it('answers true when the project is listed during the grace window', async () => {
+    const { papi, emitUnsyncedChanges } = createSwitchToPowerMockPapi();
+
+    const answer = waitForUnsentChanges(papi, 'proj-1');
+    await flushMicrotasks();
+    // The edit's save and the backend's debounced check land after the switch began
+    emitUnsyncedChanges({ toSend: ['PROJ-1'], toReceive: [], isRechecking: false });
+
+    await expect(answer).resolves.toBe(true);
+  });
+
+  it('answers false once the grace window passes with the project never listed', async () => {
+    const { papi, emitUnsyncedChanges } = createSwitchToPowerMockPapi();
+    const wait = startWaiting(papi, 'proj-1');
+
+    await flushMicrotasks();
+    // Another project's changes are no reason to sync this one
+    emitUnsyncedChanges({ toSend: ['OTHER'], toReceive: [], isRechecking: false });
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS - 1);
+    expect(wait.isSettled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(wait).toEqual({ isSettled: true, answer: false });
+  });
+
+  it('waits out a running sync before deciding, then answers from what that sync left unsent', async () => {
+    const { papi, emitUnsyncedChanges } = createSwitchToPowerMockPapi({
+      seed: { toSend: [], toReceive: [], isRechecking: true },
+    });
+    const wait = startWaiting(papi, 'proj-1');
+
+    await flushMicrotasks();
+    // A sync can run far longer than the grace window; the answer is not "nothing unsent" yet
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS * 3);
+    expect(wait.isSettled).toBe(false);
+    emitUnsyncedChanges({ toSend: ['PROJ-1'], toReceive: [], isRechecking: false });
+    await flushMicrotasks();
+
+    expect(wait).toEqual({ isSettled: true, answer: true });
+  });
+
+  it('answers false after a running sync sent the project, once the grace window passes', async () => {
+    const { papi, emitUnsyncedChanges } = createSwitchToPowerMockPapi({
+      seed: { toSend: [], toReceive: [], isRechecking: true },
+    });
+    const wait = startWaiting(papi, 'proj-1');
+
+    await flushMicrotasks();
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS * 3);
+    emitUnsyncedChanges(NOTHING_UNSYNCED);
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS);
+
+    expect(wait).toEqual({ isSettled: true, answer: false });
+  });
+
+  it('does not trust a listing taken while a sync is running', async () => {
+    // A running sync parks the backend's checks, so a project it is about to send is still listed
+    const { papi, emitUnsyncedChanges } = createSwitchToPowerMockPapi({
+      seed: { toSend: ['PROJ-1'], toReceive: [], isRechecking: true },
+    });
+    const wait = startWaiting(papi, 'proj-1');
+
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS * 3);
+    expect(wait.isSettled).toBe(false);
+    emitUnsyncedChanges(NOTHING_UNSYNCED);
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS);
+
+    expect(wait).toEqual({ isSettled: true, answer: false });
+  });
+
+  it('restarts the grace window when a sync starts during it', async () => {
+    const { papi, emitUnsyncedChanges } = createSwitchToPowerMockPapi();
+    const wait = startWaiting(papi, 'proj-1');
+    await flushMicrotasks();
+
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS / 2);
+    emitUnsyncedChanges({ toSend: [], toReceive: [], isRechecking: true });
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS);
+    expect(wait.isSettled).toBe(false);
+    // Once the sync ends, a full window runs again before it answers
+    emitUnsyncedChanges(NOTHING_UNSYNCED);
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS - 1);
+    expect(wait.isSettled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(wait).toEqual({ isSettled: true, answer: false });
+  });
+
+  it('ignores a seed that resolves after a newer event arrived', async () => {
+    const { papi, emitUnsyncedChanges, mockGetUnsyncedChanges } = createSwitchToPowerMockPapi();
+    let resolveSeed: (snapshot: unknown) => void = () => {};
+    mockGetUnsyncedChanges.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSeed = resolve;
+        }),
+    );
+    const wait = startWaiting(papi, 'proj-1');
+    await flushMicrotasks();
+
+    // The event says a sync is running; the older seed must not override it
+    emitUnsyncedChanges({ toSend: [], toReceive: [], isRechecking: true });
+    resolveSeed({ toSend: ['PROJ-1'], toReceive: [], isRechecking: false });
+    await flushMicrotasks();
+
+    expect(wait.isSettled).toBe(false);
+  });
+
+  it('retries a seed of an unexpected shape like a seed that failed', async () => {
+    const { papi, mockGetUnsyncedChanges } = createSwitchToPowerMockPapi();
+    mockGetUnsyncedChanges
+      .mockResolvedValueOnce({ toSend: undefined })
+      .mockResolvedValueOnce({ toSend: ['PROJ-1'], toReceive: [], isRechecking: false });
+
+    const answer = waitForUnsentChanges(papi, 'proj-1');
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS);
+
+    await expect(answer).resolves.toBe(true);
+  });
+
+  it('answers undefined when a running sync never settles', async () => {
+    const { papi, mockWarn } = createSwitchToPowerMockPapi({
+      seed: { toSend: [], toReceive: [], isRechecking: true },
+    });
+    const wait = startWaiting(papi, 'proj-1');
+
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_SYNC_WAIT_MS - 1);
+    expect(wait.isSettled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(wait).toEqual({ isSettled: true, answer: undefined });
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('still running'));
+  });
+
+  it('retries a seed request that rejects, as on a cold start', async () => {
+    const { papi, mockGetUnsyncedChanges } = createSwitchToPowerMockPapi();
+    mockGetUnsyncedChanges
+      .mockRejectedValueOnce(new Error('not registered yet'))
+      .mockResolvedValueOnce({ toSend: ['PROJ-1'], toReceive: [], isRechecking: false });
+
+    const answer = waitForUnsentChanges(papi, 'proj-1');
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS);
+
+    await expect(answer).resolves.toBe(true);
+    expect(mockGetUnsyncedChanges).toHaveBeenCalledTimes(2);
+  });
+
+  it('answers from events when every seed request fails', async () => {
+    const { papi, mockGetUnsyncedChanges, emitUnsyncedChanges, mockWarn } =
+      createSwitchToPowerMockPapi();
+    mockGetUnsyncedChanges.mockRejectedValue(new Error('backend down'));
+    const wait = startWaiting(papi, 'proj-1');
+    await flushMicrotasks();
+
+    emitUnsyncedChanges(NOTHING_UNSYNCED);
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS);
+
+    expect(wait).toEqual({ isSettled: true, answer: false });
+    expect(mockWarn).not.toHaveBeenCalledWith(expect.stringContaining('Could not tell'));
+  });
+
+  it('answers undefined at once when it cannot subscribe to the signal', async () => {
+    const { papi, mockGetNetworkEvent, mockGetUnsyncedChanges, mockWarn } =
+      createSwitchToPowerMockPapi();
+    mockGetNetworkEvent.mockImplementation(() => {
+      throw new Error('network not ready');
+    });
+
+    // No time is advanced: nothing must be left waiting on a signal it never subscribed to
+    await expect(waitForUnsentChanges(papi, 'proj-1')).resolves.toBeUndefined();
+    expect(mockGetUnsyncedChanges).not.toHaveBeenCalled();
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('could not subscribe'));
+  });
+
+  it('answers undefined when no snapshot can be read at all', async () => {
+    const { papi, mockGetUnsyncedChanges, mockWarn } = createSwitchToPowerMockPapi();
+    mockGetUnsyncedChanges.mockRejectedValue(new Error('backend down'));
+    const wait = startWaiting(papi, 'proj-1');
+
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS);
+
+    expect(wait).toEqual({ isSettled: true, answer: undefined });
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-1'));
+  });
+
+  it('ignores a snapshot of an unexpected shape', async () => {
+    const { papi, emitUnsyncedChanges } = createSwitchToPowerMockPapi();
+    const wait = startWaiting(papi, 'proj-1');
+
+    await flushMicrotasks();
+    emitUnsyncedChanges({ toSend: 'PROJ-1' });
+    await flushMicrotasks();
+    expect(wait.isSettled).toBe(false);
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS);
+
+    expect(wait).toEqual({ isSettled: true, answer: false });
+  });
+
+  it('unsubscribes once it has answered', async () => {
+    const { papi, subscriberCount } = createSwitchToPowerMockPapi({
+      seed: { toSend: ['PROJ-1'], toReceive: [], isRechecking: false },
+    });
+
+    await waitForUnsentChanges(papi, 'proj-1');
+
+    expect(subscriberCount()).toBe(0);
+  });
+});
+
+describe('syncOnSwitchToPower', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** A seed listing `proj-1` as holding local changes to send. */
+  const PROJ_1_UNSENT = { toSend: ['PROJ-1'], toReceive: [], isRechecking: false };
+
+  it('sends and receives the project when it holds unsent changes, keeping the Power-mode toasts', async () => {
+    const { papi, mockSendCommand } = createSwitchToPowerMockPapi({ seed: PROJ_1_UNSENT });
+
+    await syncOnSwitchToPower(papi, 'proj-1');
+
+    // Exactly one argument: no `suppressNotification`, so the progress and failure toasts show
+    expect(mockSendCommand.mock.calls).toEqual([
+      ['paratextBibleSendReceive.sendReceiveProjects', ['proj-1']],
+    ]);
+  });
+
+  it('starts no sync when the project holds nothing to send', async () => {
+    const { papi, mockSendCommand, mockInfo } = createSwitchToPowerMockPapi();
+
+    const syncing = syncOnSwitchToPower(papi, 'proj-1');
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS);
+    await syncing;
+
+    expect(mockSendCommand).not.toHaveBeenCalled();
+    expect(mockInfo).toHaveBeenCalledWith(expect.stringContaining('proj-1'));
+  });
+
+  it('starts no sync when it cannot tell whether anything is unsent', async () => {
+    const { papi, mockSendCommand, mockGetUnsyncedChanges } = createSwitchToPowerMockPapi();
+    mockGetUnsyncedChanges.mockRejectedValue(new Error('backend down'));
+
+    const syncing = syncOnSwitchToPower(papi, 'proj-1');
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS);
+    await syncing;
+
+    expect(mockSendCommand).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['the user chose "Don\'t sync yet" this session', 'deferred'],
+    ['the first-run flag cannot be read (fails closed)', 'unreadable'],
+  ] as const)('syncs nothing when %s', async (_, consent) => {
+    const { papi, mockSendCommand, mockInfo } = createSwitchToPowerMockPapi({
+      consent,
+      seed: PROJ_1_UNSENT,
+    });
+
+    await syncOnSwitchToPower(papi, 'proj-1');
+
+    expect(mockSendCommand).not.toHaveBeenCalled();
+    expect(mockInfo).toHaveBeenCalledWith(
+      `Switch-to-Power sync skipped: first-run sync consent is ${consent}`,
+    );
+  });
+
+  it('syncs nothing when the user chooses "Don\'t sync yet" while it waits for unsent changes', async () => {
+    const { papi, mockSendCommand, mockGetConsent, mockInfo, emitUnsyncedChanges } =
+      createSwitchToPowerMockPapi({ consent: 'unconfirmed' });
+
+    const syncing = syncOnSwitchToPower(papi, 'proj-1');
+    await flushMicrotasks();
+    expect(mockGetConsent).toHaveBeenCalledTimes(1);
+    mockGetConsent.mockResolvedValue('deferred');
+    emitUnsyncedChanges(PROJ_1_UNSENT);
+    await syncing;
+
+    expect(mockSendCommand).not.toHaveBeenCalled();
+    expect(mockInfo).toHaveBeenCalledWith(
+      'Switch-to-Power sync skipped: first-run sync consent is deferred',
+    );
+  });
+
+  it('does not log that consent lets the sync run when there turns out to be nothing to send', async () => {
+    const { papi, mockInfo } = createSwitchToPowerMockPapi({ consent: 'unconfirmed' });
+
+    const syncing = syncOnSwitchToPower(papi, 'proj-1');
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS);
+    await syncing;
+
+    expect(mockInfo).toHaveBeenCalledWith(expect.stringContaining('no changes to send'));
+    expect(mockInfo).not.toHaveBeenCalledWith(expect.stringContaining('does not stop this sync'));
+  });
+
+  it('syncs when first-run consent is unconfirmed, as for a user who started in Power mode', async () => {
+    // Only the Simple-mode wizard records consent, and it never shows on a live switch to Simple,
+    // so a Power-native user who visits Simple reads `unconfirmed` for the whole session.
+    const { papi, mockSendCommand, mockInfo } = createSwitchToPowerMockPapi({
+      consent: 'unconfirmed',
+      seed: PROJ_1_UNSENT,
+    });
+
+    await syncOnSwitchToPower(papi, 'proj-1');
+
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
+      'proj-1',
+    ]);
+    // Every other automatic sync would skip here, so the log has to say why this one ran
+    expect(mockInfo).toHaveBeenCalledWith(expect.stringContaining('does not stop this sync'));
+  });
+
+  it('syncs nothing when the consent check rejects (fails closed)', async () => {
+    const { papi, mockSendCommand, mockWarn } = createSwitchToPowerMockPapi({
+      consent: READ_THROWS,
+      seed: PROJ_1_UNSENT,
+    });
+
+    await syncOnSwitchToPower(papi, 'proj-1');
+
+    expect(mockSendCommand).not.toHaveBeenCalled();
+    expect(mockWarn).toHaveBeenCalledWith(
+      expect.stringContaining('could not check first-run sync consent'),
+    );
+  });
+
+  it('syncs nothing when the user is back in Simple mode by the time it would start', async () => {
+    // The switch back to Simple makes its own sync decision; a second, overlapping sync would be
+    // refused by the backend.
+    const { papi, mockSendCommand } = createSwitchToPowerMockPapi({
+      mode: 'simple',
+      seed: PROJ_1_UNSENT,
+    });
+
+    await syncOnSwitchToPower(papi, 'proj-1');
+
+    expect(mockSendCommand).not.toHaveBeenCalled();
+  });
+
+  it('syncs nothing when the interface mode cannot be read', async () => {
+    const { papi, mockSendCommand } = createSwitchToPowerMockPapi({
+      mode: READ_THROWS,
+      seed: PROJ_1_UNSENT,
+    });
+
+    await syncOnSwitchToPower(papi, 'proj-1');
+
+    expect(mockSendCommand).not.toHaveBeenCalled();
+  });
+
+  it('starts one sync when a second switch arrives while the first is still deciding', async () => {
+    const { papi, mockSendCommand, emitUnsyncedChanges } = createSwitchToPowerMockPapi();
+
+    const first = syncOnSwitchToPower(papi, 'proj-1');
+    await flushMicrotasks();
+    const second = syncOnSwitchToPower(papi, 'PROJ-1');
+    await flushMicrotasks();
+    emitUnsyncedChanges(PROJ_1_UNSENT);
+    await Promise.all([first, second]);
+
+    expect(mockSendCommand.mock.calls).toEqual([
+      ['paratextBibleSendReceive.sendReceiveProjects', ['proj-1']],
+    ]);
+  });
+
+  it('decides afresh for a switch that comes after the first has finished deciding', async () => {
+    const { papi, mockSendCommand } = createSwitchToPowerMockPapi({ seed: PROJ_1_UNSENT });
+
+    await syncOnSwitchToPower(papi, 'proj-1');
+    await syncOnSwitchToPower(papi, 'proj-1');
+
+    expect(mockSendCommand).toHaveBeenCalledTimes(2);
+  });
+
+  it('reads the mode when the sync would start, not when the switch began', async () => {
+    const { papi, mockSendCommand, mockGetSetting, emitUnsyncedChanges } =
+      createSwitchToPowerMockPapi();
+
+    const syncing = syncOnSwitchToPower(papi, 'proj-1');
+    await flushMicrotasks();
+    // The user goes back to Simple while the wait is still open
+    mockGetSetting.mockResolvedValue('simple');
+    emitUnsyncedChanges(PROJ_1_UNSENT);
+    await syncing;
+
+    expect(mockSendCommand).not.toHaveBeenCalled();
+  });
+
+  it('resolves without syncing when the project id is not a string', async () => {
+    // Any PAPI client can send the command, so its argument is not guaranteed to match the type
+    const { papi, mockSendCommand, mockWarn } = createSwitchToPowerMockPapi({
+      seed: PROJ_1_UNSENT,
+    });
+
+    // Must cast to send what a malformed request would carry.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    await expect(syncOnSwitchToPower(papi, 42 as unknown as string)).resolves.toBeUndefined();
+
+    expect(mockSendCommand).not.toHaveBeenCalled();
+    expect(mockWarn).toHaveBeenCalled();
+  });
+
+  it.each(['VpnRequired', 'Disabled'] as const)(
+    'syncs nothing while the internet setting is %s, which turns Send/Receive off',
+    async (internetUse) => {
+      const { papi, mockSendCommand, mockInfo } = createSwitchToPowerMockPapi({
+        internetUse,
+        seed: PROJ_1_UNSENT,
+      });
+
+      await syncOnSwitchToPower(papi, 'proj-1');
+
+      expect(mockSendCommand).not.toHaveBeenCalled();
+      expect(mockInfo).toHaveBeenCalledWith(expect.stringContaining(internetUse));
+    },
+  );
+
+  it('syncs when the internet setting is ProxyOnly, which Send/Receive allows', async () => {
+    const { papi, mockSendCommand } = createSwitchToPowerMockPapi({
+      internetUse: 'ProxyOnly',
+      seed: PROJ_1_UNSENT,
+    });
+
+    await syncOnSwitchToPower(papi, 'proj-1');
+
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
+      'proj-1',
+    ]);
+  });
+
+  it.each([
+    ['the internet settings provider is missing', PROVIDER_MISSING],
+    ['the internet settings cannot be read', READ_THROWS],
+  ] as const)('leaves the decision to Send/Receive when %s', async (_, internetUse) => {
+    // Send/Receive enforces the setting itself, so skipping here would only drop the sync for a
+    // user whose internet is on
+    const { papi, mockSendCommand, mockWarn } = createSwitchToPowerMockPapi({
+      internetUse,
+      seed: PROJ_1_UNSENT,
+    });
+
+    await syncOnSwitchToPower(papi, 'proj-1');
+
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
+      'proj-1',
+    ]);
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('internet setting'));
+  });
+
+  it('does not read the internet setting when there is nothing to send', async () => {
+    const { papi, mockGetInternetSettings } = createSwitchToPowerMockPapi();
+
+    const syncing = syncOnSwitchToPower(papi, 'proj-1');
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS);
+    await syncing;
+
+    expect(mockGetInternetSettings).not.toHaveBeenCalled();
+  });
+
+  it('resolves and warns when the sync fails', async () => {
+    const { papi, mockSendCommand, mockWarn } = createSwitchToPowerMockPapi({
+      seed: PROJ_1_UNSENT,
+    });
+    mockSendCommand.mockRejectedValue(new Error('offline'));
+
+    await expect(syncOnSwitchToPower(papi, 'proj-1')).resolves.toBeUndefined();
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-1'));
+  });
+});
+
+// #endregion syncOnSwitchToPower
 
 // #region finalizeProjectSwitch
 
@@ -3521,6 +4137,20 @@ describe('generateParagraphMenuListItems', () => {
     expect(notify).not.toHaveBeenCalled();
   });
 
+  it("skips formatPara when the pick is the selected paragraph marker's own marker", () => {
+    const { ref, formatPara, getSelectedParaMarker } = makeMockEditorRef();
+    getSelectedParaMarker.mockReturnValue('q1');
+    const restoreSelection = vi.fn();
+    const items = generateParagraphMenuListItems(ref, {}, false, vi.fn(), restoreSelection);
+
+    items.find((item) => item.marker === 'q1')?.action?.();
+    expect(formatPara).not.toHaveBeenCalled();
+    expect(restoreSelection).not.toHaveBeenCalled();
+
+    items.find((item) => item.marker === 'p')?.action?.();
+    expect(formatPara).toHaveBeenCalledWith('p');
+  });
+
   it('while a chapter is loading: action does not call formatPara or restore the selection', () => {
     const { ref, formatPara } = makeMockEditorRef();
     const restoreSelection = vi.fn();
@@ -3622,6 +4252,25 @@ describe('generateParagraphMenuListItems', () => {
     );
   });
 
+  it('does not restore an older caret, and still calls formatPara, while a paragraph marker is selected', () => {
+    // Wired as the web view wires it: the real restore, over an editor whose gutter marker is
+    // selected. A selected marker has no text range, and the caret captured before it was selected
+    // is in another paragraph — restoring it would make `formatPara` retag that paragraph instead.
+    const olderCaret: SelectionRange = {
+      start: { jsonPath: '$.content[2].content[1]', offset: 5 },
+    };
+    const { ref, formatPara, setSelection } = makeMockEditorRef('q1');
+    const items = generateParagraphMenuListItems(ref, {}, false, vi.fn(), () =>
+      restoreSelectionIfLost(ref.current, olderCaret),
+    );
+
+    const item = items[0];
+    item.action?.();
+
+    expect(setSelection).not.toHaveBeenCalled();
+    expect(formatPara).toHaveBeenCalledWith(item.marker);
+  });
+
   it('when protected: does not restore the caret either (nothing is applied)', () => {
     const { ref, formatPara } = makeMockEditorRef();
     const restoreSelection = vi.fn();
@@ -3631,6 +4280,57 @@ describe('generateParagraphMenuListItems', () => {
 
     expect(restoreSelection).not.toHaveBeenCalled();
     expect(formatPara).not.toHaveBeenCalled();
+  });
+
+  // One position language (host Standard-View-Invariants §6): a selected paragraph marker is a
+  // node selection with no offsets, so a retag from it must reach the editor as `formatPara` alone.
+  // The host never turns the selection into a position by restoring a caret over it. Wires the real
+  // restore the web view passes in, rather than a spy, so a restore that stops honoring the marker
+  // selection fails here.
+  describe('with a paragraph marker selected', () => {
+    const lastFocusOutSelection: SelectionRange = {
+      start: { jsonPath: '$.content[2].content[0]', offset: 7 },
+    };
+
+    function makeEditorWithSelectionState(selectedParaMarker: string | undefined) {
+      const formatPara = vi.fn();
+      const setSelection = vi.fn();
+      const editor = {
+        formatPara,
+        setSelection,
+        // A USJ selection is a text range, so it reports nothing while a marker is selected — and
+        // nothing after a popover blur nulled the caret.
+        getSelection: vi.fn((): SelectionRange | undefined => undefined),
+        getSelectedParaMarker: vi.fn((): string | undefined => selectedParaMarker),
+      };
+      // Mock literal cannot satisfy the full EditorRef interface — cast for test isolation.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const ref = { current: editor } as unknown as MutableRefObject<EditorRef | null>;
+      const items = generateParagraphMenuListItems(ref, {}, false, vi.fn(), () =>
+        restoreSelectionIfLost(ref.current, lastFocusOutSelection),
+      );
+      return { items, formatPara, setSelection };
+    }
+
+    it('restores the lost caret when no marker is selected (control)', () => {
+      const { items, formatPara, setSelection } = makeEditorWithSelectionState(undefined);
+
+      items[0].action?.();
+
+      expect(setSelection).toHaveBeenCalledWith(lastFocusOutSelection);
+      expect(formatPara).toHaveBeenCalledWith(items[0].marker);
+    });
+
+    it('retags through formatPara without ever setting a selection position', () => {
+      const { items, formatPara, setSelection } = makeEditorWithSelectionState('li2');
+      const item = items.find((menuItem) => menuItem.marker === 'q1');
+
+      item?.action?.();
+
+      expect(formatPara).toHaveBeenCalledTimes(1);
+      expect(formatPara).toHaveBeenCalledWith('q1');
+      expect(setSelection).not.toHaveBeenCalled();
+    });
   });
 });
 
@@ -3847,6 +4547,31 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     surface: 'popover' as const,
     usesPaneModel: false,
   };
+
+  it('navigates a read-only Preview caller to the pane and shows a hidden pane in Power', () => {
+    const d = decideNoteCallerClickAction({
+      ...base,
+      isCollapsed: true,
+      surface: 'none',
+      usesPaneModel: true,
+      isPowerMode: true,
+      paneVisible: false,
+      paneRendered: false,
+    });
+    expect(d.action).toBe('navigate-only');
+    expect(d.showPane).toBe(true);
+    expect(d.sendPaneFocusRequest).toBe(true);
+  });
+
+  it('keeps a read-only caller inert without the pane model', () => {
+    const d = decideNoteCallerClickAction({
+      ...base,
+      isCollapsed: true,
+      surface: 'none',
+      usesPaneModel: false,
+    });
+    expect(d.action).toBe('ignore-read-only');
+  });
 
   it('opens the popover for a plain collapsed-caller click (pane hidden, no session)', () => {
     expect(decideNoteCallerClickAction({ ...base, isPowerMode: false })).toEqual({
@@ -4157,8 +4882,9 @@ describe('decideNoteSessionUpdate (a row edit must not reload the row editor)', 
 describe('usesPaneNoteModel', () => {
   it.each([
     ['standard', true, true],
-    ['formatted', true, false],
+    ['formatted', true, true],
     ['markers', true, false],
+    ['standard', false, true],
     ['formatted', false, true],
     ['markers', false, false],
   ] as const)('%s view, isPowerMode=%s → %s', (viewType, isPowerMode, expected) => {
@@ -4167,18 +4893,31 @@ describe('usesPaneNoteModel', () => {
     );
   });
 
-  it('does not apply the Simple answer while the interface mode is still loading', () => {
-    expect(
-      usesPaneNoteModel({
-        viewType: 'formatted',
-        isPowerMode: false,
-        isInterfaceModeLoading: true,
-      }),
-    ).toBe(false);
-    expect(
-      usesPaneNoteModel({ viewType: 'standard', isPowerMode: false, isInterfaceModeLoading: true }),
-    ).toBe(true);
-  });
+  it.each([[true], [false]])(
+    'counts only Standard view while the interface mode is still loading (isPowerMode=%s)',
+    (isPowerMode) => {
+      expect(
+        usesPaneNoteModel({ viewType: 'formatted', isPowerMode, isInterfaceModeLoading: true }),
+      ).toBe(false);
+      expect(
+        usesPaneNoteModel({ viewType: 'markers', isPowerMode, isInterfaceModeLoading: true }),
+      ).toBe(false);
+      expect(
+        usesPaneNoteModel({ viewType: 'standard', isPowerMode, isInterfaceModeLoading: true }),
+      ).toBe(true);
+    },
+  );
+
+  it.each([[true], [false]])(
+    'uses the pane for a saved markers view once the interface mode has loaded (isPowerMode=%s), since the editor never displays markers',
+    (isPowerMode) => {
+      const displayed = resolveViewTypeForInterfaceMode('markers', isPowerMode);
+      expect(displayed).not.toBe('markers');
+      expect(
+        usesPaneNoteModel({ viewType: displayed, isPowerMode, isInterfaceModeLoading: false }),
+      ).toBe(true);
+    },
+  );
 });
 
 describe('resolveNoteEditingSurface', () => {
@@ -4379,52 +5118,246 @@ describe('shouldPublishPaneDocument (the pane repaints only when its notes chang
   });
 });
 
-describe('resolveViewTypeForInterfaceMode (standard view is power-mode-only)', () => {
+describe('resolveViewTypeForInterfaceMode (Standard is Power-only; Markers is shown nowhere)', () => {
   it('coerces standard to formatted in simple mode', () => {
     expect(resolveViewTypeForInterfaceMode('standard', false)).toBe('formatted');
-  });
-
-  it('keeps standard in power mode', () => {
-    expect(resolveViewTypeForInterfaceMode('standard', true)).toBe('standard');
   });
 
   it('leaves formatted unchanged in simple mode', () => {
     expect(resolveViewTypeForInterfaceMode('formatted', false)).toBe('formatted');
   });
 
-  it('leaves markers unchanged in simple mode', () => {
-    expect(resolveViewTypeForInterfaceMode('markers', false)).toBe('markers');
+  it('coerces a saved markers view to formatted in simple mode', () => {
+    expect(resolveViewTypeForInterfaceMode('markers', false)).toBe('formatted');
   });
 
-  it('leaves formatted and markers unchanged in power mode', () => {
+  it('shows a saved markers view as Standard view in Power', () => {
+    expect(resolveViewTypeForInterfaceMode('markers', true)).toBe('standard');
+  });
+
+  it('leaves standard and formatted unchanged in Power', () => {
+    expect(resolveViewTypeForInterfaceMode('standard', true)).toBe('standard');
     expect(resolveViewTypeForInterfaceMode('formatted', true)).toBe('formatted');
-    expect(resolveViewTypeForInterfaceMode('markers', true)).toBe('markers');
+  });
+});
+
+describe('getSimpleModeRootClassNames', () => {
+  it('turns the character-marker indicator on for text a Simple user can type into', () => {
+    expect(
+      getSimpleModeRootClassNames({
+        isPowerMode: false,
+        isInterfaceModeLoading: false,
+        isDurablyReadOnly: false,
+      }),
+    ).toEqual(['editor-container-simple', 'character-marker-indicators']);
+  });
+
+  it('leaves the indicator off when the text cannot be typed into', () => {
+    // It warns against typing inside a marker, so read-only text has nothing to warn about.
+    expect(
+      getSimpleModeRootClassNames({
+        isPowerMode: false,
+        isInterfaceModeLoading: false,
+        isDurablyReadOnly: true,
+      }),
+    ).toEqual(['editor-container-simple']);
+  });
+
+  it('leaves the indicator off until the interface mode is known', () => {
+    // `isPowerMode` reads `false` while the setting loads, so a Power session would otherwise be
+    // tinted for a frame.
+    expect(
+      getSimpleModeRootClassNames({
+        isPowerMode: false,
+        isInterfaceModeLoading: true,
+        isDurablyReadOnly: false,
+      }),
+    ).toEqual(['editor-container-simple']);
+  });
+
+  it('leaves the indicator off until edit permissions are known', () => {
+    // The permission reads default to "editable" while they load, so a read-only project would
+    // otherwise be tinted until they resolve.
+    expect(
+      getSimpleModeRootClassNames({
+        isPowerMode: false,
+        isInterfaceModeLoading: false,
+        isDurablyReadOnly: undefined,
+      }),
+    ).toEqual(['editor-container-simple']);
+  });
+
+  it('adds no Simple-mode classes in Power mode', () => {
+    expect(
+      getSimpleModeRootClassNames({
+        isPowerMode: true,
+        isInterfaceModeLoading: false,
+        isDurablyReadOnly: false,
+      }),
+    ).toEqual([]);
+  });
+});
+
+describe('getDisplayedViewType', () => {
+  it('shows formatted while the mode loads and nothing is saved', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: VIEW_TYPE_UNSET,
+        isPowerMode: false,
+        isInterfaceModeLoading: true,
+      }),
+    ).toBe('formatted');
+  });
+
+  it('shows formatted while the mode loads and nothing is saved, even when Power is reported', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: VIEW_TYPE_UNSET,
+        isPowerMode: true,
+        isInterfaceModeLoading: true,
+      }),
+    ).toBe('formatted');
+  });
+
+  it('shows the persisted value as is while the mode loads', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: 'standard',
+        isPowerMode: false,
+        isInterfaceModeLoading: true,
+      }),
+    ).toBe('standard');
+  });
+
+  it('shows Standard view for a never-saved Power tab', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: VIEW_TYPE_UNSET,
+        isPowerMode: true,
+        isInterfaceModeLoading: false,
+      }),
+    ).toBe('standard');
+  });
+
+  it('shows a saved markers view as Standard view in Power', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: 'markers',
+        isPowerMode: true,
+        isInterfaceModeLoading: false,
+      }),
+    ).toBe('standard');
+  });
+
+  it('keeps a saved formatted view in Power', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: 'formatted',
+        isPowerMode: true,
+        isInterfaceModeLoading: false,
+      }),
+    ).toBe('formatted');
+  });
+
+  it('shows formatted in Simple when nothing is saved', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: VIEW_TYPE_UNSET,
+        isPowerMode: false,
+        isInterfaceModeLoading: false,
+      }),
+    ).toBe('formatted');
+  });
+
+  it('shows formatted in Simple for a saved standard view', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: 'standard',
+        isPowerMode: false,
+        isInterfaceModeLoading: false,
+      }),
+    ).toBe('formatted');
+  });
+});
+
+describe('direct view-setting commands', () => {
+  it('maps setViewStandard to standard and setViewPreview to formatted', () => {
+    expect(VIEW_TYPE_FOR_SET_VIEW_COMMAND['platformScriptureEditor.setViewStandard']).toBe(
+      'standard',
+    );
+    expect(VIEW_TYPE_FOR_SET_VIEW_COMMAND['platformScriptureEditor.setViewPreview']).toBe(
+      'formatted',
+    );
   });
 });
 
 describe('getNextViewTypeInCycle', () => {
-  it('cycles formatted -> standard -> markers -> formatted in power mode', () => {
+  it('toggles Standard view and Preview in Power', () => {
+    expect(getNextViewTypeInCycle('standard', true)).toBe('formatted');
     expect(getNextViewTypeInCycle('formatted', true)).toBe('standard');
-    expect(getNextViewTypeInCycle('standard', true)).toBe('markers');
-    expect(getNextViewTypeInCycle('markers', true)).toBe('formatted');
   });
 
-  it('skips standard in simple mode: formatted -> markers -> formatted', () => {
-    expect(getNextViewTypeInCycle('formatted', false)).toBe('markers');
-    expect(getNextViewTypeInCycle('markers', false)).toBe('formatted');
+  it('goes to Standard view from a markers value in Power', () => {
+    expect(getNextViewTypeInCycle('markers', true)).toBe('standard');
   });
 
-  it('moves a lingering standard view forward to markers in simple mode', () => {
-    // A persisted 'standard' can still be the current state for a moment before the web view's
-    // coercion effect runs; cycling from it must behave as if it were already coerced.
-    expect(getNextViewTypeInCycle('standard', false)).toBe('markers');
-  });
-
-  it('never yields standard in simple mode for any current view type', () => {
+  it('has nothing to change in simple mode, so a saved Power view type is never overwritten', () => {
     const allViewTypes = ['formatted', 'markers', 'standard'] as const;
     allViewTypes.forEach((current) => {
-      expect(getNextViewTypeInCycle(current, false)).not.toBe('standard');
+      expect(getNextViewTypeInCycle(current, false)).toBeUndefined();
     });
+  });
+});
+
+describe('getViewTypeToSave', () => {
+  const change = { method: 'changeScriptureView' } as const;
+
+  it('toggles Standard view and Preview for changeScriptureView in Power', () => {
+    expect(getViewTypeToSave(change, { viewType: 'standard', isPowerMode: true })).toBe(
+      'formatted',
+    );
+    expect(getViewTypeToSave(change, { viewType: 'formatted', isPowerMode: true })).toBe(
+      'standard',
+    );
+    expect(getViewTypeToSave(change, { viewType: 'markers', isPowerMode: true })).toBe('standard');
+  });
+
+  it('saves nothing for changeScriptureView in Simple, whatever the current view', () => {
+    const allViewTypes = ['formatted', 'markers', 'standard'] as const;
+    allViewTypes.forEach((viewType) => {
+      expect(getViewTypeToSave(change, { viewType, isPowerMode: false })).toBeUndefined();
+    });
+  });
+
+  it('saves the requested view type as is for setScriptureView', () => {
+    // `isPowerMode: false` is also what a still-loading interface mode reads as, so this row covers
+    // both Simple and the loading case.
+    expect(
+      getViewTypeToSave(
+        { method: 'setScriptureView', viewType: 'standard' },
+        { viewType: 'formatted', isPowerMode: false },
+      ),
+    ).toBe('standard');
+    expect(
+      getViewTypeToSave(
+        { method: 'setScriptureView', viewType: 'formatted' },
+        { viewType: 'standard', isPowerMode: true },
+      ),
+    ).toBe('formatted');
+  });
+});
+
+describe('showsReadOnlyPreview', () => {
+  it('is true for a saved formatted view in Power', () => {
+    expect(showsReadOnlyPreview('formatted', true)).toBe(true);
+  });
+
+  it.each([['standard'], ['markers'], [undefined], [42]])('is false for %s in Power', (v) => {
+    expect(showsReadOnlyPreview(v, true)).toBe(false);
+  });
+
+  it.each([['formatted'], ['standard'], ['markers']])('is false for %s outside Power', (v) => {
+    expect(showsReadOnlyPreview(v, false)).toBe(false);
   });
 });
 
@@ -4773,6 +5706,26 @@ describe('formatEditorTitle', () => {
       mockGetLocalizedStrings,
     );
     expect(title).toBe('My Project (Read-only)');
+  });
+
+  it.each([
+    ['formatted', true, 'Project (Read-only)'],
+    ['markers', true, 'Project (Editable)'],
+    ['formatted', false, 'Project (Editable)'],
+  ])('titles a saved %s view (Power: %s) as "%s"', async (viewType, isPowerMode, expected) => {
+    const stub = vi.fn().mockResolvedValue({
+      '%webView_platformScriptureEditor_title_format%': '{projectId} {editable}',
+      '%webView_platformScriptureEditor_title_readonly_indicator%': '(Read-only)',
+      '%webView_platformScriptureEditor_title_editable_indicator%': '(Editable)',
+    });
+    const title = await formatEditorTitle(
+      undefined,
+      'p1',
+      showsReadOnlyPreview(viewType, isPowerMode),
+      async () => 'Project',
+      stub,
+    );
+    expect(title).toBe(expected);
   });
 });
 
@@ -5312,6 +6265,23 @@ function savedGrid(
 }
 
 describe('buildScriptureTextGridWebView', () => {
+  it.each(['simple', 'power'] as const)(
+    'opts its icon in to theme colouring in %s mode',
+    async (interfaceMode) => {
+      const papi = createGridProviderMockPapi(interfaceMode);
+
+      const definition = await buildScriptureTextGridWebView(
+        papi,
+        savedGrid('p1'),
+        {},
+        GRID_ASSETS,
+      );
+
+      expect(definition.iconName).toBe('library');
+      expect(LUCIDE_ICON_NAMES).toContain(definition.iconName);
+    },
+  );
+
   it('binds the project a switch supplied rather than the one the tab already had', async () => {
     // The provider half of the re-point. Inverting this precedence leaves the panel on the
     // outgoing project, which is the bug this whole mechanism exists to prevent — and it is only

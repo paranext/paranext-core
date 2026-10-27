@@ -7,7 +7,9 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   Spinner,
@@ -21,8 +23,17 @@ import {
   PlatformError,
   ResourceType,
 } from 'platform-bible-utils';
-import { ChevronDown } from 'lucide-react';
-import { ComponentProps, ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
+import { ChevronDown, Lock } from 'lucide-react';
+import {
+  ComponentProps,
+  Fragment,
+  ReactNode,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+} from 'react';
 import {
   hasNewScrollTarget,
   isEchoOfPublishedScrRef,
@@ -31,6 +42,7 @@ import {
   waitForLayoutToSettle,
 } from './editor-dom.util';
 import { getRefLabel, getResourceReferenceRowId } from './resource-reference.utils';
+import { isTeamPickerResource, splitPickerResourcesBySource } from './resource-selection.utils';
 import type { PickerResource } from './downloaded-resources.utils';
 import type { ResourcePanelReadiness } from './resource-panel-readiness.utils';
 import { PanelReadinessView } from './panel-readiness-view.component';
@@ -54,6 +66,7 @@ import type {
 } from './resource-text-panel.const';
 import type { DblResourceInstallFailureReason } from './use-dbl-resource-auto-install.hook';
 import { RESOURCE_PANEL_INSTALL_FAILURE_KEYS } from './resource-text-panel.const';
+import { RESOURCE_COLLECTION_OPTIONS_KEYS } from './resource-collection-options/resource-collection-options.types';
 import { getInstallFailureMessageKey } from './install-failure-message.utils';
 
 /**
@@ -83,20 +96,95 @@ type ResourceSelectorDropdownProps = {
   filteredResources: PickerResource[];
   selectedRef: PickerResource | undefined;
   dblResources: DblResourceData[];
+  /** Whether the DBL catalog failed to load. See `splitPickerResourcesBySource`. */
+  isCatalogUnavailable: boolean;
+  /** When `false`, the rows are one list with no headings, caption or locks */
+  isGrouped: boolean;
   onSelectResource: (id: string) => void;
   /** Undefined hides the option: downloading adds to the project's list, so needs a project */
   onShowResourcePicker: (() => void) | undefined;
   downloadResourcesLabel: string;
+  /** Heading over the resources the project administrator put in the team layout */
+  teamResourcesLabel: string;
+  /** Heading over the user's own resources */
+  userResourcesLabel: string;
+  /** Heading over resources installed on this computer that neither list names */
+  otherResourcesLabel: string;
+  /** Says, once under the team heading, that only a project administrator can remove those rows */
+  teamResourcesCaption: string;
+  /** Names the lock on each team row */
+  teamResourceLockLabel: string;
 };
 
+/**
+ * The panel's resource selector. Rows are grouped as the team's, the user's own and other installed
+ * resources (see `splitPickerResourcesBySource`), each under its heading, and a group with no rows
+ * gets none. The team's come first, with a caption saying only a project administrator can remove
+ * them and a lock on each; they always get their heading, since the caption is what explains the
+ * locks. With no team rows and only one other group, the rows are one unlabeled list. Ungrouped,
+ * every row is in one unlabeled list, in the order given, with no caption or locks.
+ */
 function ResourceSelectorDropdown({
   filteredResources,
   selectedRef,
   dblResources,
+  isCatalogUnavailable,
+  isGrouped,
   onSelectResource,
   onShowResourcePicker,
   downloadResourcesLabel,
+  teamResourcesLabel,
+  userResourcesLabel,
+  otherResourcesLabel,
+  teamResourcesCaption,
+  teamResourceLockLabel,
 }: ResourceSelectorDropdownProps) {
+  const headingIdPrefix = useId();
+  const teamHeadingId = `${headingIdPrefix}-team`;
+  const teamCaptionId = `${headingIdPrefix}-team-caption`;
+  const selectedRowId = selectedRef ? getResourceReferenceRowId(selectedRef.reference) : undefined;
+  // TODO(PT-4063): order the team's rows the way the administrator pins them.
+  const { team, user, other } = splitPickerResourcesBySource(filteredResources, {
+    isCatalogUnavailable,
+  });
+  // The groups below the team's, leaving out any with no rows.
+  const nonTeamGroups = [
+    { headingId: `${headingIdPrefix}-user`, label: userResourcesLabel, rows: user },
+    { headingId: `${headingIdPrefix}-other`, label: otherResourcesLabel, rows: other },
+  ].filter((group) => group.rows.length > 0);
+  const isUnlabeled = team.length === 0 && nonTeamGroups.length <= 1;
+
+  const renderRow = (row: PickerResource) => {
+    const rowId = getResourceReferenceRowId(row.reference);
+    const label = getRefLabel(row.reference, dblResources);
+    return (
+      <DropdownMenuCheckboxItem
+        key={rowId}
+        checked={rowId === selectedRowId}
+        onCheckedChange={() => {
+          onSelectResource(rowId);
+        }}
+      >
+        {/* `dir="auto"` on the name rather than the item: `getRefLabel` returns the joined
+            short/full name as one text node, so the name needs its own direction, while the check
+            and the lock keep to the panel's side. A long name ellipsizes rather than wrapping, and
+            `title` shows it whole. */}
+        <span className="tw:min-w-0 tw:truncate" dir="auto" title={label}>
+          {label}
+        </span>
+        {isGrouped && isTeamPickerResource(row) && (
+          <span
+            role="img"
+            aria-label={teamResourceLockLabel}
+            className="tw:ms-auto tw:flex tw:shrink-0 tw:text-muted-foreground"
+          >
+            <Lock aria-hidden />
+          </span>
+        )}
+      </DropdownMenuCheckboxItem>
+    );
+  };
+
   return (
     <div className="tw:px-2 tw:py-1">
       <DropdownMenu>
@@ -114,24 +202,34 @@ function ResourceSelectorDropdown({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="tw:w-72">
-          {filteredResources.map((ref) => {
-            const refId = getResourceReferenceRowId(ref.reference);
-            return (
-              <DropdownMenuCheckboxItem
-                key={refId}
-                checked={
-                  refId ===
-                  (selectedRef ? getResourceReferenceRowId(selectedRef.reference) : undefined)
-                }
-                onCheckedChange={() => {
-                  onSelectResource(refId);
-                }}
-                dir="auto"
-              >
-                {getRefLabel(ref.reference, dblResources)}
-              </DropdownMenuCheckboxItem>
-            );
-          })}
+          {!isGrouped && filteredResources.map(renderRow)}
+          {isGrouped && isUnlabeled && nonTeamGroups[0]?.rows.map(renderRow)}
+          {isGrouped && !isUnlabeled && (
+            <>
+              {team.length > 0 && (
+                // The caption says once what the locks mean, rather than repeating it on every row.
+                <DropdownMenuGroup aria-labelledby={teamHeadingId} aria-describedby={teamCaptionId}>
+                  <DropdownMenuLabel id={teamHeadingId}>{teamResourcesLabel}</DropdownMenuLabel>
+                  <p
+                    id={teamCaptionId}
+                    className="tw:px-1.5 tw:pb-1 tw:text-xs tw:text-muted-foreground"
+                  >
+                    {teamResourcesCaption}
+                  </p>
+                  {team.map(renderRow)}
+                </DropdownMenuGroup>
+              )}
+              {nonTeamGroups.map((group, index) => (
+                <Fragment key={group.headingId}>
+                  {(team.length > 0 || index > 0) && <DropdownMenuSeparator />}
+                  <DropdownMenuGroup aria-labelledby={group.headingId}>
+                    <DropdownMenuLabel id={group.headingId}>{group.label}</DropdownMenuLabel>
+                    {group.rows.map(renderRow)}
+                  </DropdownMenuGroup>
+                </Fragment>
+              ))}
+            </>
+          )}
           {onShowResourcePicker && (
             <>
               <DropdownMenuSeparator />
@@ -182,6 +280,17 @@ export type ResourceTextPanelProps = {
   readiness: ResourcePanelReadiness;
   /** All DBL resources — used to label the selector rows. */
   dblResources: DblResourceData[];
+  /**
+   * Whether the DBL catalog failed to load. The selector then lists the user's own and other
+   * installed resources together, since without the catalog the user's DBL references resolve as
+   * plain downloads.
+   */
+  isCatalogUnavailable: boolean;
+  /**
+   * Whether the selector groups its rows as the team's, the user's own and other installed ones,
+   * with the team caption and locks. `false` in Power mode, which has no notion of team resources.
+   */
+  isGrouped: boolean;
   /** Re-runs the DBL resource catalog fetch. */
   onRetryCatalog: () => void;
   /** The reference the panel is displaying. */
@@ -267,6 +376,8 @@ export function ResourceTextPanel({
   selectedRef,
   readiness,
   dblResources,
+  isCatalogUnavailable,
+  isGrouped,
   onRetryCatalog,
   scrRef,
   onScrRefChange,
@@ -741,11 +852,30 @@ export function ResourceTextPanel({
         filteredResources={filteredResources}
         selectedRef={selectedRef}
         dblResources={dblResources}
+        isCatalogUnavailable={isCatalogUnavailable}
+        isGrouped={isGrouped}
         onSelectResource={onSelectResource}
         onShowResourcePicker={hasProject ? onShowResourcePicker : undefined}
         downloadResourcesLabel={localize(
           localizedStrings,
           '%webView_resourcePanel_downloadResources%',
+        )}
+        teamResourcesLabel={localize(
+          localizedStrings,
+          RESOURCE_COLLECTION_OPTIONS_KEYS.teamResourcesHeader,
+        )}
+        userResourcesLabel={localize(
+          localizedStrings,
+          RESOURCE_COLLECTION_OPTIONS_KEYS.userResourcesHeader,
+        )}
+        otherResourcesLabel={localize(localizedStrings, '%webView_resourcePanel_otherResources%')}
+        teamResourcesCaption={localize(
+          localizedStrings,
+          '%webView_resourcePanel_teamResourcesCaption%',
+        )}
+        teamResourceLockLabel={localize(
+          localizedStrings,
+          RESOURCE_COLLECTION_OPTIONS_KEYS.teamSharedLock,
         )}
       />
 

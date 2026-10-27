@@ -1,8 +1,53 @@
 diff --git a/node_modules/rc-dock/es/DockLayout.js b/node_modules/rc-dock/es/DockLayout.js
-index bac288d..6e25d88 100644
+index bac288d..e720db7 100644
 --- a/node_modules/rc-dock/es/DockLayout.js
 +++ b/node_modules/rc-dock/es/DockLayout.js
-@@ -258,7 +258,17 @@ export class DockLayout extends DockPortalManager {
+@@ -161,6 +161,44 @@ export class DockLayout extends DockPortalManager {
+      * @param floatPosition @inheritDoc
+      */
+     dockMove(source, target, direction, floatPosition) {
++        /**
++         * patch-package notes:
++         *
++         * A drag keeps the tab or panel object it found at drag start (`DragState.setData`), and
++         * every drop target passes that object here. Any layout change during the drag that
++         * replaces the object — `updateTab` with new tab data does, and the app calls it for tab
++         * title, flash, focus and web view state changes — leaves it stale: removing it walks its
++         * old `parent` chain and rebuilds the root box from the layout as it was at drag start, so
++         * the drop loses the tab (when docking against the root box) or duplicates it (when the
++         * destination also changed). The target can be stale the same way, since the drag manager
++         * reads a drop target's handlers when the pointer enters it, and a handler that closes over
++         * its render-time panel keeps that panel. Look both objects up by id in the current layout
++         * instead. A source that isn't in the layout keeps the object passed in, since that is
++         * also how callers add a new tab. A target given as an id is looked up the same way, so the
++         * self-drop checks below apply to it too, and the move treats it as an object target,
++         * updating it after the source is removed. rc-dock's own string branch skips that update,
++         * which duplicates a tab moved into its own group by id. An id that isn't in the layout
++         * stays a string and reaches that branch, which can't find it either, so a docking move
++         * removes the source and doesn't re-add it, as in unpatched rc-dock.
++         */
++        if (source && source.id != null) {
++            source = this.find(source.id, Algorithm.Filter.AnyTabPanel) || source;
++        }
++        const targetId = typeof target === 'string' ? target : target && target.id;
++        if (targetId != null) {
++            target = this.find(targetId, Algorithm.Filter.All) || target;
++        }
++        if (source && target && typeof target !== 'string' && direction !== 'float') {
++            // Dropped onto itself, or a whole tab group dropped next to one of its own tabs. rc-dock's
++            // own drop handlers check these by object identity, which a replaced object gets past. A
++            // float ignores the target, and a tab group's own float drop targets pass the group itself.
++            if (target.id === source.id) {
++                return;
++            }
++            if ('tabs' in source && !('tabs' in target) && !('children' in target) && target.parent && target.parent.id === source.id) {
++                return;
++            }
++        }
+         let layout = this.getLayout();
+         if (direction === 'maximize') {
+             layout = Algorithm.maximize(layout, source);
+@@ -258,7 +296,17 @@ export class DockLayout extends DockPortalManager {
                  if (!makeActive) {
                      // restore the previous activeId
                      panelData.activeId = activeId;
@@ -21,7 +66,7 @@ index bac288d..6e25d88 100644
                  }
              }
              else if (makeActive && panelData.activeId !== id) {
-@@ -316,7 +326,21 @@ export class DockLayout extends DockPortalManager {
+@@ -316,7 +364,21 @@ export class DockLayout extends DockPortalManager {
          if (dropRect) {
              if (direction === 'remove') {
                  this.setState((oldStates) => {

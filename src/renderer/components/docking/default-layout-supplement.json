@@ -2,7 +2,7 @@
   "tabs": [
     {
       "anchorWebViewType": "platformScriptureEditor.bibleTexts",
-      "insertBeforeWebViewType": "platformScripture.find",
+      "insertBeforeWebViewType": "platformLexicalTools.dictionary",
       "flagSetting": "platformScriptureEditor.enableScriptureTextGrid",
       "tab": {
         "id": "scripture-text-grid-tab",

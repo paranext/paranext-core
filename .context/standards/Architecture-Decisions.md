@@ -3793,6 +3793,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `'protected'` claims Enter as a paragraph insert before the note's `\fp` handling can run. The main
   text keeps the project's protection mode.
 - **Source:** PT-4846.
+- **Amended 2026-10-26 (PT-4777):** Partly superseded by `adr-power-preview-read-only-formatted`.
+  Power's Formatted view is now the read-only Preview and uses the pane note model too: a caller
+  click there navigates to the note in the footnotes pane instead of opening a popover. The
+  Markers view is shown nowhere. So every view the editor shows uses the pane note model, and
+  `usesPaneNoteModel` answers by the view type alone (`isPowerMode` no longer changes the answer);
+  while `platform.interfaceMode` is still loading only Standard view counts, as before.
 
 ## adr-footnote-unclosed-note-edited-in-place: In Standard view an unclosed note is edited in place in the text, and in the footnotes pane too
 
@@ -4156,6 +4162,78 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   (`2026-09-02-pt-4286-mode-switch-spec.md`); amends nothing in
   `adr-primary-window-owns-app-lifetime`, which it depends on for the primary role.
 
+## adr-interface-scaling-is-per-window-zoom: Interface scaling is set by each window's page once the window has painted or is shown, on Chromium's temporary zoom, not per-host zoom
+
+- **Date:** 2026-09-25
+- **Status:** Accepted
+- **Context:** `platform.zoomFactor` used to be applied with `webContents.setZoomFactor`, which
+  Chromium stores per host. A page with no host, like the packaged app's `file://` page, is stored
+  under its full URL, query included. Since `adr-scroll-group-hosted-in-main` and
+  `adr-theme-hosted-in-main` the renderer rewrites that query whenever its scroll group or theme
+  changes, so the stored zoom stops matching the page. The next time the browser re-sends the page's
+  display settings — a resize (maximize, restore, a drag), docking DevTools, a display or DPI
+  change — the window repaints at 100 % while the setting still says otherwise. Dev mode loads
+  from `http://localhost:1212`, whose host never changes, so it never shows the problem. Electron
+  also persists per-host zoom in the profile's `Preferences` file.
+- **Decision:** Main sends the setting to each window's page over `INTERFACE_SCALING_CHANNEL`
+  (`src/shared/data/interface-scaling.model.ts`), and the preload sets it with
+  `webFrame.setZoomFactor`. A zoom set from the page is Chromium's temporary zoom: keyed by the
+  page's frame host rather than its URL, and never persisted. A plain reload keeps the frame host
+  and its zoom; a crash reload replaces it. Nothing sets any zoom on a hidden window before it has
+  painted: its first document gets the setting at `ready-to-show`. A shown window does not wait
+  for that: it takes the setting at every `did-finish-load`, and so does a hidden one once it has
+  painted or been shown. A change reaches the windows that have painted or are shown
+  (`createInterfaceScaling` in `src/main/interface-scaling.util.ts`). One subscription to the
+  setting, taken again whenever the settings provider is announced, feeds every window. It does not
+  deliver the current value first, since each window reads the setting when a document loads.
+  - **Why a shown window does not wait:** `ready-to-show` is the page's first visually non-empty
+    layout (`OnFirstNonEmptyLayout` in Electron's `electron_api_web_contents.cc`), and a window
+    covered by other windows is occluded, so its page is hidden and does not lay out. Every window
+    someone asks for is created shown (`planWindowActivation`), and one that opens behind another
+    app's window has no `ready-to-show` until it is uncovered. Measured on Electron 39.8.8 on
+    Windows: a covered shown window had none for as long as it stayed covered, and with occlusion
+    tracking off it had one every time. Waiting for it showed the first frame at 100 % at the moment
+    the window was uncovered, while a shown window that took the setting at load while still covered
+    showed the setting once uncovered, in bare Electron (under CPU load too) and the packaged app.
+- **Alternatives:** (a) Reapply the zoom on every main-frame `did-navigate-in-page`: rejected,
+  because it was measured to persist one `Preferences` entry per distinct URL, and each URL carries
+  serialized scroll-group and theme state, so a zoomed user would grow the profile with every verse
+  move. (b) Move the reload seed from the URL to `sessionStorage`: rejected as a second seed source,
+  which `adr-theme-hosted-in-main` and `Paranext-Core-Patterns.md` rule out, and zoom would stay
+  URL-keyed. (c) Serve the packaged renderer from a custom protocol with a host: rejected, because
+  the CSP, asset-path and web-view origin changes are far out of proportion. (d)
+  `webPreferences.zoomFactor`: measured not to survive the rewrite. (e) Set any zoom on a hidden
+  window before its first frame: rejected, because every variant measured can stop that frame, so
+  `ready-to-show` never fires and main never reveals a window nobody asked for. The page setting its
+  zoom while the preload runs did so in every bare-Electron run. The page setting it at
+  `DOMContentLoaded` did so in the smoke suite with another app window open, and together with a
+  main-side apply at `dom-ready` it did so in the real app (isolated
+  `web-view-move-between-windows.spec.ts` failed every run). Main's own `setZoomFactor` at
+  `did-finish-load`, which the app long used, did so intermittently under load. (f) Seed the zoom
+  on the window's URL, like the theme and scroll group, so the first frame is at the setting:
+  deferred as the bigger change, and it would still have to wait for the first frame.
+- **Consequences:** Zoom no longer depends on the URL, so the URL-seed design stays free to rewrite
+  the query, and main writes no per-URL zoom to the profile. Electron's own docs describe zoom as
+  same-origin and suggest distinct URLs for per-window zoom, which is exactly what breaks here; the
+  temporary-zoom behavior was measured on Electron 39.8.8 and is not documented.
+  `e2e-tests/tests/smoke/interface-scaling.spec.ts` reproduces the failure with a control window, for
+  windows both shown and hidden at creation, and requires `ready-to-show` of the hidden ones.
+  - **First frame:** a window's first document renders at its starting zoom until it takes the
+    setting: a hidden window's at `ready-to-show`, a shown window's at `did-finish-load`, which can
+    come after its first frames, and a crash-reloaded one's at `did-finish-load`. The starting zoom
+    is 100 % in the packaged app; in dev mode it is the zoom Chromium stored for `localhost`, which
+    main no longer updates. For a hidden window this is a change: main reveals it at its own
+    `ready-to-show`, before the setting reaches the page, so its first visible frame is at the
+    starting zoom, where it used to take the setting at `did-finish-load`, before being shown.
+    Follow-up: PT-4889, which weighs (f) against showing the window only after it takes the zoom.
+  - **Stale entries:** existing profiles keep whatever per-URL entries they had, and nothing
+    overwrites them any more. A packaged window whose launch URL happens to match one starts at that
+    zoom until it takes the setting.
+  - **Known gap:** main's settings service keeps its first provider, so after an extension-host
+    restart the re-taken subscription fails and zoom changes stop reaching open windows until the
+    app restarts. That predates this decision and belongs to the settings service (PT-4807).
+- **Source:** PT-4798.
+
 ## adr-internet-services-gate: Platform.Bible gates Send/Receive and DBL access on the saved internet setting
 
 - **Date:** 2026-09-24
@@ -4200,8 +4278,102 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   setting governs ParatextData-backed services only — network use by the Node and Chromium
   processes (extension host, renderers) is not covered. Automatic syncs that hit the gate fail the
   way other automatic-sync failures do: logged, with no user-facing error.
+- **Amended 2026-10-22 (PT-4893):** "Disable access to some Bible translation services" now saves
+  `Disabled`, the alternative rejected above, and `VpnRequired` returns to its Paratext 9 meaning
+  as the not-yet-available "sensitive locations" option — see
+  `adr-internet-use-options-follow-pt9-values`. The first rejection reason no longer holds: Platform.Bible
+  copies `InternetSettings.xml` from Paratext 9 once and keeps its own copy after that
+  (`PlatformParatextInfo`), so a co-installed Paratext 9 never reads what this app saves. Startup
+  now migrates a saved `VpnRequired` to `Disabled`. The gate itself is unchanged and still refuses
+  on both values, so an unsupported `VpnRequired` fails closed if that migration fails.
 - **Source:** PT-4590. ParatextData's internals above were read from decompiled ParatextData
   9.5.0.24, which this repo consumes as a binary package.
+
+## adr-internet-use-options-follow-pt9-values: Each internet-access option saves the ParatextData value that means the same thing in Paratext 9
+
+- **Date:** 2026-10-22
+- **Status:** Accepted
+- **Context:** Under `adr-internet-services-gate`, "Disable access to some Bible translation
+  services" saved `VpnRequired`, and the gate made that value block Send/Receive and the DBL
+  everywhere. In Paratext 9, `VpnRequired` blocks only where the machine's location is flagged as
+  sensitive, so a value carried over from Paratext 9 changed meaning on the way in. It also left
+  the "Block internet when in sensitive locations" option with no value of its own.
+- **Decision:** `InternetAccessOptionList` (`lib/platform-bible-react`) maps each row to the value
+  with its Paratext 9 meaning. "Disable access to some Bible translation services" saves
+  `Disabled`. `VpnRequired` is the "Block internet when in sensitive locations" row, still Coming
+  soon. The label keeps "some" because `Disabled` stops only ParatextData's internet use; the app's
+  Node and Chromium processes keep theirs, and its description says so. Once the app can block its
+  own internet use too, this option becomes "Disable all Internet access". The first-run wizard
+  does not offer the list: "Disable access…" leaves a new user with only the bundled sample
+  project, which suits the settings as a temporary choice but not onboarding. Instead the wizard
+  tells every user that Paratext 10 uses the internet and should only be used outside sensitive
+  countries, and asks them to choose "Use Paratext 10 with internet access", which saves `Enabled`
+  and moves on, or "Close Paratext 10", which saves nothing, so the next launch asks again. The
+  wording claims no more than the app does: the app may already have used the internet before
+  this step, and the setting governs only ParatextData. When Paratext 9's own setting is
+  `Disabled`, `VpnRequired` or `ProxyOnly`, the wizard first says, with Paratext 9's label, that
+  Paratext 10 cannot use it yet. It reads that setting read-only from the newest Paratext 8 or 9
+  folder (`paratextRegistration.getParatext9InternetUse`), not from Platform.Bible's copy. On every
+  startup, before anything reads
+  the internet settings, `InternetSettingsDataProvider.MigrateVpnRequiredToDisabled` saves
+  `Disabled` in place of a saved `VpnRequired`, since the app does not implement `VpnRequired` and
+  `Disabled` is the most restrictive option it offers. A saved `VpnRequired` cannot tell a user who
+  chose "Disable access…" under the PT-4590 mapping from ParatextData's first-run default or a
+  value carried over from Paratext 9, so every one is migrated. This writes the
+  `InternetSettings.xml` in Platform.Bible's folder, never Paratext 9's: `PlatformParatextInfo`
+  pins ParatextData to that folder and only ever reads Paratext 9's. It runs every startup because
+  ParatextData saves `VpnRequired` when nothing is stored, and a re-seed from Paratext 9 can bring
+  it back. `InternetServicesGate` still blocks `VpnRequired`, and `RegistryAccessTokenService`
+  refuses tokens for it in every location without looking the location up, so Send/Receive, the
+  DBL and extensions' Registry tokens fail closed if the migration fails. `ProxyOnly`, the other
+  not-yet-available value, is neither migrated nor gated: ParatextData honors the proxy carried over
+  from Paratext 9.
+- **Alternatives:** **Keep `VpnRequired` behind "Disable access…"** (the PT-4590 mapping) —
+  rejected: it gives a Paratext 9 value a meaning only Platform.Bible uses, and leaves the
+  sensitive-locations option nothing to save. **Migrate only the users who chose "Disable
+  access…"** — not possible: `platform.internetUseChoiceAsked` is also set when Power mode only
+  asked, and a choice made in the Internet & connectivity settings does not set it. **Leave
+  `VpnRequired` saved and show it under the unsupported-value banner** — rejected: everyone who
+  chose "Disable access…" would be told their setting is unsupported, and nearly every first run
+  starts from that value. **Stop gating `VpnRequired` and let ParatextData resolve it by
+  location** — rejected while the sensitive-locations option is unimplemented: an unsupported
+  setting should fail closed, not quietly turn these services on. **Offer the option list in the
+  wizard** — rejected: "Disable access…" during onboarding leaves the user unable to get any
+  project but the bundled sample, and the sensitive-locations and proxy options do not work yet.
+  **Give "Disable access…" a value of its own, so `Disabled` can mean "Disable all"** — rejected:
+  `InternetUse` is ParatextData's enum, so the new value would have to be stored outside it and
+  translated back to `Disabled` for ParatextData. **Keep a not-yet-available "Disable all
+  Internet access" row for a saved `Disabled`, and record in a hidden setting when the user chose "Disable
+  access…" instead** — rejected: every writer of the value would have to keep that second record in
+  step, and onboarding no longer offers "Disable access…". **Name the Paratext 9 setting from
+  Platform.Bible's copy** — rejected: startup has already changed a carried-over `VpnRequired` to
+  `Disabled`, and a new user's copy holds ParatextData's default, so both would read as "Disable
+  all Internet use".
+- **Consequences:** Every saved `VpnRequired` becomes `Disabled`. That includes ParatextData's
+  first-run default and Paratext 9 users who chose "sensitive locations". The gate already kept
+  Send/Receive and the DBL off for all of them; `Disabled` also stops ParatextData's other internet
+  uses, which is what it means in Paratext 9. Two of those change for users outside sensitive
+  locations: extensions' Registry access tokens are refused (`RegistryAccessTokenService`), and
+  writing systems are no longer looked up in the SLDR (`PlatformScrTextCollection`). Registration
+  itself is checked offline and is unaffected. Nobody is told: Simple-mode users who finished first
+  run before it asked for a choice are not asked again (`adr-power-mode-internet-use-prompt`), and
+  the stricter behavior is the safer one. Every first-run user has to allow unrestricted access to
+  finish onboarding, or close the app; a user who needs to block access chooses "Disable access…"
+  in the Internet & connectivity settings afterwards. A Paratext 9 user who chose "Disable all
+  Internet use" sees that value there as "Disable access…", whose description says Paratext may
+  still connect to other internet services. The migration keeps `Disabled` rather than
+  `VpnRequired` saved until the user chooses, so ParatextData neither looks up the computer's
+  location nor uses the internet in the meantime, including for a user who closes the app at the
+  wizard (decided 2026-10-23; see the PT-4893 comments). Power mode, which never shows the wizard,
+  still only opens the settings once (`adr-power-mode-internet-use-prompt`). The
+  Paratext 9 copy of the setting is untouched, so Paratext 9 keeps its location-dependent behavior.
+  Every Platform.Bible build on the account shares the migrated file, so a build from before this
+  change shows `Disabled` as its unsupported "Disable all Internet access" row, and choosing
+  "Disable access…" there saves `VpnRequired`, which the next launch of this build migrates again.
+  Revisit the migration when the sensitive-locations option is built (PT-4900), since `VpnRequired`
+  will then be a value to keep, while files that older builds saved for "Disable access…" will
+  still hold it.
+- **Source:** PT-4893; reverses the option-to-value mapping chosen in PT-4590.
 
 ## adr-launch-token-withdrawn: A launch token is required to deliver launch parameters to an already-open web view — WITHDRAWN
 
@@ -4314,6 +4486,39 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   content-based-guard test exercises, then delete the content-based branch and that guard's
   now-redundant test in one deliberate commit.
 - **Source:** PR #2425
+
+## adr-leaked-emudhra-certificates-blocked-in-app: The app blocks the leaked eMudhra intermediate certificates itself until Electron is upgraded
+
+- **Date:** 2026-10-27
+- **Status:** Accepted (temporary; superseded once PT-3111 upgrades Electron)
+- **Context:** In October 2026 the private keys of eight eMudhra intermediate certificates (16
+  certificates, including Sectigo `AAA Certificate Services` cross-signs) became recoverable by
+  anyone (https://emudhra.we-have-a-problem.com/). Operating systems and browsers blocked them, but
+  Electron 39.8.8 trusts them in both its Node.js and Chromium network layers, and Electron 39 gets
+  no fix (the first patched releases are 42.11.16, 43.8.1 and 44.9.1). The discovery came days
+  before the code freeze for the 9 November 2026 release (PT-4912).
+- **Decision:** Block them inside the app and stay on Electron 39.
+  `src/node/utils/leaked-certificates.util.ts` drops every root a leaked intermediate can chain to
+  from Node.js's default trusted roots at startup in the main process and the extension host,
+  including roots the OS store or `NODE_EXTRA_CA_CERTS` can add.
+  `src/main/services/leaked-certificate-check.util.ts` registers a certificate verify proc on the
+  default session that refuses any chain, sent or built, whose certificates carry one of the eight
+  leaked public keys. This creates two rules nothing enforces:
+  - every Electron session or partition the app uses must call `registerLeakedCertificateCheck`
+    (including `electron-updater`'s own partition if the updater is turned on);
+  - every Node.js process or worker thread that makes network requests must call
+    `distrustLeakedCertificateRootsInNode`, because the trust change applies only to the calling
+    thread.
+- **Alternatives:** Upgrading Electron to 42.11.16 or later before the freeze was rejected as too
+  large a jump (three major versions and a new Node.js major) to test in time. Shipping as-is, and
+  disclosing the exposure in the release notes, was rejected.
+- **Consequences:** Known gaps: the .NET data provider relies on the OS trust store, so an
+  unpatched system still accepts the leaked certificates there (PT-4913); processes extensions
+  start with `createProcess.fork` and worker threads are not covered (none makes network requests
+  today). Distrusting whole roots also refuses legitimate sites that chain to them; none of the
+  sites the app uses does. Remove both modules, and retire this entry, when PT-3111 upgrades
+  Electron to a release that blocks the certificates itself.
+- **Source:** PR #2938
 
 ## adr-library-string-keys-ship-in-shell-assets: `platform-bible-react` string-key values ship in the platform shell's locale assets by default
 
@@ -4645,6 +4850,42 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4514; `electron-log@5.4.1` `src/node/transports/file/File.js` (`writeLine`,
   `nextAsyncWrite`) and `src/node/transports/file/index.js` (`sync`, `writeAsync`).
 
+## adr-lucide-icons-by-name: Menu items and web-view tabs name a lucide icon instead of pointing at an image file
+
+- **Date:** 2026-10-20
+- **Status:** Accepted
+- **Context:** Menu items could only show an icon through `iconPathBefore` / `iconPathAfter`, which
+  `MenuItemIcon` (`lib/platform-bible-react/src/components/advanced/menus/menu-icon.component.tsx`)
+  renders as an `<img>`. An `<img>` cannot inherit `currentColor`, so such an icon does not follow
+  the dark theme or the hover, selected and disabled text colours, and every icon needs a
+  theme-specific file. Web-view tab icons have the same problem (`iconUrl`, with extensions
+  swapping files per theme).
+- **Decision:** Icons are named, not pathed. `MenuItemBase` (so both command and submenu items)
+  gains optional `iconNameBefore` / `iconNameAfter` lucide kebab-case names, and web-view
+  definitions gain a matching optional icon name. `LucideIcon` in `platform-bible-react` resolves
+  a name through a curated map of named `lucide-react` imports (`LUCIDE_ICON_NAMES` lists the
+  keys) and renders an svg that strokes with `currentColor`; a bare `LucideIcon` given an unknown
+  name renders nothing. When a name and a path are both set, a known name wins; an unknown name
+  falls back to the path (`MenuItemIcon` for menus, `PlatformTabTitle` for tabs). The path fields
+  keep working unchanged.
+- **Alternatives:**
+  - *SVG files tinted through a CSS mask.* Works for arbitrary files, but needs a mask per icon,
+    gives no per-icon stroke control, and keeps one asset per icon to ship.
+  - *`lucide-react/dynamic`.* Resolves any name at runtime, but its type declarations and per-icon
+    lazy chunks would be bundled into the checked-in `platform-bible-react` dist (the vite config
+    marks only exact package names external), and an unknown name would fail at runtime instead
+    of being absent from a list.
+  - *The full `icons` map from `lucide-react`.* Pulls every icon into the dist for the sake of a
+    few dozen.
+- **Consequences:** Adding an icon means adding it to `LUCIDE_ICON_COMPONENTS` in
+  `lucide-icons.util.ts`; a menu or tab that names an icon outside the map shows its path or URL
+  icon instead, or none if it has no path. The macOS native menubar ignores
+  icons, as it did the path fields. The new fields are `@experimental`. An extension that puts
+  `iconNameBefore` / `iconNameAfter` in its `menus.json` needs a core that has them: the menu
+  schema allows no unknown properties, so an older core rejects that whole menu document and the
+  extension's items disappear. A web-view definition's icon name is not schema-checked, so an older
+  core ignores it and keeps showing `iconUrl`.
+
 ## adr-main-orchestrates-real-windows: Multi-window uses real BrowserWindows orchestrated by main, not rc-dock's windowbox
 
 - **Date:** 2026-08-11
@@ -4679,6 +4920,44 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   hardening if such layouts recur.
 - **Source:** windowbox spike record and patch (PRD folder, `2026-08-11-pt-4281-windowbox-spike.patch`,
   design doc § spike); multi-window epic architecture discussion.
+
+## adr-marker-menu-close-focus-follows-the-opener: A pick from the paragraph menu returns focus to the text; a dismissal returns it to whatever opened the menu
+
+- **Date:** 2026-10-23
+- **Status:** Accepted. The dismissal rule is a product call that UX may still change.
+- **Context:** The editor toolbar's paragraph-style menu (`ParagraphStyleTrigger`,
+  `extensions/src/platform-scripture-editor/src/paragraph-style-trigger.component.tsx`) opens two
+  ways: from its button, or from the editor, with Enter or Alt+Down on a selected paragraph marker
+  (`onParaMarkerMenuRequest`, through `useParagraphMenuOpenState`). The dismissal guideline
+  (`dismissal-patterns.mdx`, "Restore focus on close") says to return focus to the opener, which is
+  Radix's default. But a menu the editor opened has no button behind it, and after a pick the next
+  keystroke belongs in the text, where the selected marker is live again for the next key. The
+  character-marker control beside it (`CharacterMarkerControl`) opens only from its button and
+  returns focus to the editor on every close, pick and Escape alike. The footnote type dropdown
+  keeps Radix's return to its trigger (Standard-View-Invariants §4).
+- **Decision:** For the paragraph menu:
+  - A pick returns focus to the editor, through `returnFocusToScriptureText`. That restores the
+    caret first and does nothing when this web view's document does not have focus.
+  - A dismissal (Escape, or clicking the button again) returns focus to whatever opened the menu:
+    the editor if the editor opened it, the button if the button did. If the button cannot take
+    focus any more, because structure protection disabled it or the trigger unmounted, focus goes
+    to the editor.
+  - A close caused by an outside interaction leaves focus where the user put it.
+
+  The character-marker control is unchanged and returns focus to the editor on every close.
+- **Alternatives:**
+  - Always the editor, as the character-marker control does. Rejected for the paragraph menu
+    because Escape from a menu the button opened then puts focus somewhere the user did not start,
+    against the guideline.
+  - Always the opener (Radix's default). Rejected because after a pick the user would have to get
+    back into the text before typing on. Radix also skips its own return after a pointer-down on
+    the trigger, which it counts as an outside interaction, so the trigger refocuses itself
+    explicitly.
+- **Consequences:** The two toolbar marker controls now differ on Escape from a menu their button
+  opened: the paragraph menu returns to its button, the character-marker menu to the editor.
+  Whether the character-marker control should follow the opener rule too is open for UX; revisit
+  this entry when UX settles one rule for both. `dismissal-patterns.mdx` notes the exception. The
+  behavior is pinned by `paragraph-style-trigger.component.test.tsx`.
 
 ## adr-marker-palettes-take-real-focus: Standard-view marker palettes hold real keyboard focus in the overlay; the editor stays editable
 
@@ -4829,9 +5108,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Consequences:** A few items are declared twice (once per mode), so a command change must touch
   both copies; `menu-data.service-host.scripture-editor-menu.test.ts` pins both modes by command id
   and order, and checks that a command served in both modes carries the same label in each, so a
-  missed, reordered or relabelled copy fails there. Simple's Tools order is pinned to the
-  third-column tab order (`shipped-simple-layout-order.test.ts`), so adding a third-column tab (e.g.
-  Dictionary) fails that test until a Tools item exists. Hiding a Power-only item without re-adding
+  missed, reordered or relabelled copy fails there. Every third-column tab must have a Simple Tools
+  item (`shipped-simple-layout-order.test.ts`; the menu's own order is the design's, not the
+  column's), so adding a third-column tab fails that test until a Tools item exists. *(Amended
+  2026-10-27: the Tools items must now list the third-column tabs in the column's order, which
+  PT-4864's design sets as resources first, then tools. The same test fails if either one is
+  reordered without the other.)* Hiding a
+  Power-only item without re-adding
   it to a Simple column removes its only entry point: Simple now has no menu route at all to the
   four Inventories, Markers Checklist, or Open Checks. That follows the v0 Simple design, which has
   no quality tools in the Project menu; UX has not yet confirmed it. Auto-show footnote pane
@@ -6928,6 +7211,36 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   can launch in Power mode pin the flag `true`, so the panel does not open mid-suite.
 - **Source:** PT-4590 (paranext-core #2905 review).
 
+## adr-power-preview-read-only-formatted: Power mode's Preview is the formatted view made read-only
+
+- **Date:** 2026-10-22
+- **Status:** Accepted
+- **Context:** The editor offers Standard view (editable, with visible paragraph markers) and, in
+  Power mode, a Preview (the formatted view) that must not accept edits. Simple mode has no Preview,
+  and the Markers view is shown nowhere, yet saved web view state can still hold `'formatted'` or
+  `'markers'` as its `viewType`. Whether the
+  same saved value is editable therefore depends on the interface mode, which a plain mapping from
+  view type to editability cannot express.
+- **Decision:** Power's Preview is the formatted view made read-only. The saved value stays
+  `'formatted'`; its editability depends on `platform.interfaceMode`, so one saved value is the
+  editable Simple view in Simple mode and the read-only Preview in Power mode. A saved `'markers'` is
+  mapped to Standard view when it is read. Every view the editor shows (Standard view, Preview and
+  Simple's formatted view) uses the footnotes-pane note model; in the read-only Preview a caller
+  click navigates to its note in the pane. `showsReadOnlyPreview` (is the text read-only) and
+  `usesPaneNoteModel` (does the view use the pane note model, the one predicate
+  `adr-footnote-pane-editing-in-simple-mode` introduced) in
+  `extensions/src/platform-scripture-editor/src/platform-scripture-editor.utils.ts` are the single
+  sources for those two questions; callers ask them instead of comparing view types or interface
+  modes themselves.
+- **Alternatives:** **Rename the saved value to `'preview'`** — rejected: it needs a migration of
+  saved state and gives users nothing. **A view-type to editable map** — rejected: it cannot
+  express a value whose editability depends on the interface mode. **Delete `'markers'` from the
+  type** — rejected: values already saved would be left untyped at the read boundary.
+- **Consequences:** No saved-state migration. Every read of a saved view goes through the mapping,
+  and a new view-dependent behavior must be added to one of the two helpers (or a sibling) rather
+  than checked inline, or Simple and Power will drift apart.
+- **Source:** PT-4777.
+
 ## adr-primary-window-owns-app-lifetime: The primary window's close decides whether the app quits; the role stays a role
 
 - **Date:** 2026-08-27
@@ -7260,13 +7573,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   project both consumers hold costs two fan-outs. They differ in shape (the scroll-group cache is
   pull-driven and re-read on every conversion; the hook's is push-driven and consulted on join or
   by its retry timer), so a shared cache would have to carry the retry policy of the push-driven
-  consumer. Worth doing when a third consumer appears. (e) **Heal from network events instead of a
-  timer** — `use-project-picker-data.hook.ts` already does this for the same failure mode,
-  refetching on `platform.onDidChangeProjects` and on `object:onDidCreateNetworkObject` filtered
-  to PDP factories, debounced. It costs nothing while idle and heals in about 200 ms. Not chosen
-  for the hook: three more network subscriptions against one timer, and the events miss a C#
-  factory that starts serving an id without a new factory registering. Remains the right shape
-  for a consumer that must heal fast.
+  consumer. Worth doing when a third consumer appears; as of 2026-10-27 tracked on PT-4935.
+  (e) **Heal from network events instead of a timer** — `use-project-picker-data.hook.ts` already
+  does this for the same failure mode, refetching on `platform.onDidChangeProjects` and on
+  `object:onDidCreateNetworkObject` filtered to PDP factories, debounced. It costs nothing while
+  idle and heals in about 200 ms. Not chosen for the hook: three more network subscriptions against
+  one timer, and the events miss a C# factory that starts serving an id without a new factory
+  registering. Remains the right shape for a consumer that must heal fast.
 - **Consequences:** Reviewers should flag `projectDataProviders.get`, `getMetadataForProject`, or
   `getMetadataForAllProjects` inside a React effect, a subscription callback, or any loop whose
   trigger can fire repeatedly, and ask how the caller bounds it. A project whose lookup,
@@ -7279,12 +7592,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   open loses its books from the list mid-interaction, accepted over showing books that cannot be
   navigated to. A subscription that dies without reporting a failure (a provider whose network
   object is disposed by an extension host restart while the subscription stays registered
-  locally) is not covered by the timer; as of 2026-09-24 it is tracked on PT-4592.
-  The flap sources that exposed this are tracked as PT-4592 (a panel republishing its navigable
-  project ids while its reference list resolves transiently empty) and PT-4743 (one installed
-  resource yielding two picker rows under two project id spellings). Revisit rule (2) if a
-  platform-level in-flight de-duplication lands. Rule (1) is restated for agents in
-  `.claude/rules/architecture/provider-lookups-fan-out.md`.
+  locally) is not covered by the timer; as of 2026-10-27 it is tracked on PT-4934, not yet
+  confirmed in a running app. The flap sources that exposed this were PT-4592 (a panel
+  republishing its navigable project ids while its reference list resolves transiently empty;
+  since #2928 the resource it falls back to then is no longer saved, so the declared ids recover
+  with the list, but they still change while the list is incomplete) and PT-4743 (one installed
+  resource yielding two picker rows under two project id spellings; open as of 2026-10-27).
+  Revisit rule (2) if a platform-level in-flight de-duplication lands. Rule (1) is restated for
+  agents in `.claude/rules/architecture/provider-lookups-fan-out.md`.
 
 ## adr-pt9-interlinear-selected-reads: Publish the size limit and allow callers to select individual files or all at once
 
@@ -7660,6 +7975,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   them because a web view can drive it. Revisit when PT-4750 lands (throw codes instead of
   returning them), when the WebSocket authenticates its clients (and remove the `Origin` stopgap
   then), or if a consent prompt becomes necessary.
+- **Amended 2026-10-22 (PT-4893):** "Disable access to some Bible translation services" now saves
+  `Disabled`, so tokens are refused for it in every location. A saved `VpnRequired`, the
+  not-yet-available "Block internet when in sensitive locations" option, is refused in every
+  location too, so it fails closed as it does in `InternetServicesGate`, and the snapshot does not
+  look up the location for it, so a slow lookup cannot turn the refusal into `UNAVAILABLE`. See
+  `adr-internet-use-options-follow-pt9-values`.
 - **Source:** PT-4865 (design spec attached there).
 
 ## adr-renderer-crash-reload-is-user-driven-and-uncapped: React-level crash recovery is one user-driven reload with no budget, unlike the process-level path
@@ -8370,6 +8691,78 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   back on the reference it opened on — which for a restored Scripture editor is the extra chapter
   load the seed exists to avoid. The theme service is hosted the same way in `adr-theme-hosted-in-main`.
 - **Source:** PT-4275 epic (multi-window architecture plan §6).
+- **Amended 2026-09-25 (`adr-interface-scaling-is-per-window-zoom`):** because this rewrites the
+  window's URL for as long as it is open, nothing may be keyed by that URL. Chromium keys a
+  `file://` page's zoom by it, so interface scaling uses a zoom that is not keyed by URL.
+
+## adr-settings-contribution-read-only-flag: A setting is made read-only in the Settings tab by an `isReadOnly` contribution flag, alongside `isHidden`
+
+- **Date:** 2026-10-23
+- **Status:** Accepted
+- **Context:** Product asked that all of the Scripture Project Settings be visible but not editable
+  in the Settings tab, and that several whole settings groups disappear from it. Contributions
+  could already set `isHidden` on a setting, but nothing could mark one read-only, and a group whose
+  settings were all hidden still rendered as an empty card under its own sidebar entry.
+- **Decision:** `SettingBase` (`lib/platform-bible-utils/src/extension-contributions/settings.model.ts`)
+  gains an optional `isReadOnly` next to `isHidden`, for both user and project settings. The
+  Settings tab renders a read-only text field with the native `readOnly` attribute, so its whole
+  value can still be focused, selected and scrolled; switches, steppers and selects have no
+  read-only state and are disabled. This is separate from the `disabled` prop that blocks a
+  project's settings during an automatic Send/Receive. The flag only affects the Settings tab:
+  extensions can still change the value. The Settings tab also removes `isHidden` settings once at
+  load, then any group and sidebar entry left empty, so hiding a whole group is done by hiding each
+  of its settings.
+- **Alternatives:** Disabling the Scripture Project Settings group by name in the renderer was
+  smaller but couples core's Settings tab to one extension, and every later request would add
+  another special case. Removing a contribution to hide its group would leave its settings with no
+  registered default or validator, which breaks the extension that still reads them. A group-level
+  `isReadOnly`/`isHidden` would cover settings added to the group later, but it was deferred: a
+  per-setting flag keeps the option of one editable setting in an otherwise read-only group, and
+  no request needs the group-wide rule yet.
+- **Consequences:** An extension can make any of its own settings read-only or hide a whole group
+  from JSON alone. A setting whose read-only state depends on other values (e.g.
+  `platform.isEditable` while `platform.isPublished`) still needs renderer logic; a static flag
+  cannot express it.
+- **Source:** PT-4646.
+
+## adr-settings-locks-from-computed-project-settings: The Settings tab locks a project's settings from computed, hidden project settings
+
+- **Date:** 2026-10-26
+- **Status:** Accepted
+- **Context:** Some project settings may be changed only in some projects or by some users: none of
+  a published project's, not a registered project's short or full name (Paratext changes those only
+  through the registry), and not the primary language unless the user administers the project. The
+  Settings tab lives in core and reaches a project only through `platform.base`, whose only
+  project-specific reads are settings, so it could not tell whether a project was registered or
+  whether the user administered it. The static `isReadOnly` flag
+  (`adr-settings-contribution-read-only-flag`) cannot express a lock that depends on the project or
+  the user.
+- **Decision:** The Paratext project data provider computes two hidden, read-only project settings,
+  `platform.isRegistered` and `platform.isCurrentUserAdministrator` (`Permissions.AmAdministrator`),
+  alongside the existing computed `platform.isPublished`. "Registered" uses ParatextData's own test,
+  the one behind `ProjectWrapper.IsRegistered`: the project's license is Normal or Publishable.
+  `ScrText.IsProjectShared` is not used, because a project can have a permissions file without
+  being registered. `SetProjectSetting` rejects the writes those facts lock, so no caller can bypass
+  the tab. The Settings tab reads the three once per project (`useProjectSettingLocks`), and a pure
+  function (`getSettingLock`) decides from them, plus `isReadOnly`, whether each setting is locked
+  and what to say. A published project gets one notice above all its settings; a registered
+  project's names and a non-administrator's language get a visible line under the control, which
+  is also its `aria-describedby`. While the facts load, every project setting is read-only; an
+  unreadable fact locks the names or the language, but not the whole project.
+- **Alternatives:** A new `platform.base` method listing the settings the user may not change was
+  more general, but would widen an interface every project data provider shares. A
+  `canUser*()` method like `canUserEditScripture` would have to live on a Paratext-specific
+  interface the core Settings tab does not use. Rejecting the writes in C# alone was smallest, but
+  left editable fields that fail only after the user types. Explaining a lock in a tooltip over the
+  control was dropped: a disabled control cannot be hovered or focused, so keyboard and touch users
+  never saw why.
+- **Consequences:** A per-user fact is now exposed as a project setting, so
+  `platform.isCurrentUserAdministrator` answers differently for different users of one project.
+  Project data providers that implement neither setting get the declared defaults (not registered,
+  administered by the current user), which leaves their settings unlocked as before. A new
+  conditional lock adds a case to `getSettingLock` and, if it needs a fact the tab cannot read yet,
+  another computed setting.
+- **Source:** PT-4646.
 
 ## adr-shard-discovery-by-type: Service routers discover shards by network-object type, not by rebuilding the scoped name
 
@@ -8658,6 +9051,57 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   the dock logs a warning and falls back to its default placement, which can add a pane on top of a
   column. The next on-demand third-column tool should reuse this shape and its panel-id constant.
 - **Source:** PT-4534 (review of #2847).
+
+## adr-simple-mode-accepts-no-dock-drops: In Simple mode no drag changes what is docked; floats stay movable
+
+- **Date:** 2026-10-26
+- **Status:** Accepted
+- **Context:** Simple mode's layout is fixed, and its groups set `tabLocked`. But rc-dock honors
+  `tabLocked` only when a single tab is dragged (`DockPanel.render`), and dragging a floating panel
+  by the empty part of its tab bar drags the whole tab group. So a float could be docked onto any
+  column through rc-dock's drop squares, or merged into another float through a same-group tab
+  header (`TabCache.onDragOver`), which ignores `tabLocked` altogether.
+- **Decision:** In Simple mode, dragging never docks or undocks anything; a floating panel can still
+  be moved by its tab bar. One guard per rc-dock drop path:
+  - `disableDock` on every Simple group (`getGroups`) turns off `DockDropLayer`'s squares over a
+    panel for any drag from those groups. It is rc-dock's own option and gates drag-and-drop only.
+    Programmatic `dockMove` is unaffected.
+  - A Simple-only rule in `dock-layout-wrapper.simple-mode.scss` sets `pointer-events: none` on
+    every tab bar while `<body>` carries rc-dock's `dock-dragging`. rc-dock finds drop targets with
+    `elementFromPoint`, so no tab header can take the drop.
+  - The existing `floatable: false` keeps anything from being undocked. It is part of the same rule.
+  - The docked Resources column's tab bar starts no whole-column drag: the same stylesheet keeps
+    the bar out of hit-testing apart from each tab's `.dock-tab-btn` and the overflow button. The
+    rest of the bar, including the edge of each `.dock-tab` around its button, is rc-tabs' own
+    markup, which the app cannot mark `drag-ignore` (rc-dock checks that class only on the pressed
+    element).
+- **Alternatives:**
+  - Patch rc-dock so `tabLocked` also gates whole-group drags. Rejected: that is documented
+    behavior, not a bug, and rc-dock is patched only for bugs
+    (`adr-tab-bar-drop-zone-app-side-target`).
+  - Put a temporary `panelLock` on the dragged float from a drag-state listener, which makes
+    `TabCache` reject it. Rejected: it mutates rc-dock's live layout data mid-drag, and `panelLock`
+    also changes how rc-dock removes empty panels.
+  - Give each float its own group. Rejected: an unregistered group falls back to rc-dock's floatable
+    default group.
+  - Stop floats being dragged at all. Rejected: a float could then never be moved off whatever it
+    covers.
+  - Block the Resources column's empty-tab-bar drag with `drag-ignore`, as the tab titles are.
+    Rejected: rc-dock checks the class only on the pressed element, and that part of the bar is
+    rc-tabs' markup, so it would take a patch or DOM mutation of rc-tabs' elements.
+- **Consequences:**
+  - The CSS rule applies to every rc-dock drag in Simple mode, column-divider drags included. A drop
+    target added to a Simple-mode tab bar later would never receive a drop until the rule is
+    narrowed.
+  - A tab drag that starts on a tab's padding, which `drag-ignore` does not cover, still begins, but
+    it can no longer drop anywhere: rc-dock's `TabCache.onDragOver` would accept a same-group tab
+    whatever `tabLocked` says, so only the CSS rule stops a reorder (pinned by the e2e spec).
+  - jsdom cannot hit-test, so the tab-bar guard is covered only by the `docking` e2e subset
+    (`simple-mode-no-dock.spec.ts`).
+  - If rc-dock ever left `dock-dragging` on `<body>` after a drag ended, Simple-mode tab bars would
+    stop taking clicks. Every web view's content already would, through rc-dock's own
+    `body.dock-dragging iframe` rule, so this adds no new way to fail.
+- **Source:** PT-4848.
 
 ## adr-simple-mode-column-minimums: Simple-mode column minimums are derived from the window minimum, dividers included
 
@@ -9170,6 +9614,179 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   ScrTag's `Raw*` reads (an authored `\FirstLineIndent 0` serializes as 0, distinct from absent),
   which matters because project CSS is layered over a base sheet.
 - **Source:** PT-4187 standard-view branch (core #2565 ∥ scripture-editors #545).
+
+## adr-switch-to-power-sends-unsent-changes: A switch from Simple to Power sends the Simple project's unsent changes, decided from the settled unsynced-changes signal
+
+- **Date:** 2026-10-23
+- **Status:** Accepted
+- **Context:** PT-4826. A switch from Power to Simple syncs the project it opens
+  (`finalizeProjectSwitch` → `syncOnProjectSwitch`), but a switch from Simple to Power only reloaded
+  the dock layout, so whatever was typed in Simple stayed unsent. Product wants a sync on this switch
+  only when the project has local changes to send, with the usual progress and failure
+  notifications, and without the switch waiting for it. PT-4827 will make the Power → Simple sync
+  conditional too, and both directions are to share one "does this project need a sync?" check.
+- **Decision:** The renderer's `platform.interfaceMode` subscription (`web-view.service-shard.ts`)
+  reads the project of this window's Simple-mode Scripture Editor tab (`simpleEditorTabIds`) before
+  the Power layout replaces it, and once that layout has loaded, if no newer switch has started,
+  sends `platformScriptureEditor.syncOnSwitchToPower` without awaiting it. That command
+  (`syncOnSwitchToPower` in `platform-scripture-editor.utils.ts`) asks `waitForUnsentChanges` whether
+  the project is in `UnsyncedChangesSnapshot.toSend`, re-reads the mode, checks the saved internet
+  setting, asks for consent again, and runs `sendReceiveProjects([projectId])` with no
+  `suppressNotification`, so Power mode's progress and failure toasts show
+  (`adr-sync-surface-per-interface-mode`).
+
+  **Internet:** the sync is skipped when the saved setting is `VpnRequired` or `Disabled`, the values
+  `InternetServicesGate` refuses (`adr-internet-services-gate`), so a user who turned Send/Receive
+  off is not shown a failed sync on every switch. That gate still enforces the setting, so an
+  unreadable setting lets the sync go ahead. Whether the machine is online cannot be known without
+  trying, so being offline is left to the sync's own failure notification.
+
+  `waitForUnsentChanges` is the shared check. One read of the signal is not enough: the backend
+  checks a project a debounce after its last write, and the editor's save of the last keystrokes is
+  itself asynchronous, so "type, then switch" routinely reads a snapshot from before the edit. It
+  subscribes to `paratextBibleSendReceive.onUnsyncedChangesChanged`, then seeds from
+  `getUnsyncedChanges`, and ignores the list while a snapshot says `isRechecking`: during a sync the
+  backend parks its checks, so the list still names projects that sync is sending, and the sync's
+  own result is authoritative once it ends (the write gate blocks edits to a project being synced).
+  With no sync running, it answers `true` as soon as a snapshot lists the project, or `false` after a
+  grace window (`UNSENT_CHANGES_GRACE_MS`). A second switch of the same project while the first is
+  still deciding joins it rather than deciding, and syncing, separately.
+
+  **Consent:** unlike the other syncs that ask the gate, `unconfirmed` does not stop this one. Only
+  the Simple-mode wizard records consent, and it is resolved at app mount, never on a live switch to
+  Simple, so a user who started in Power mode reads `unconfirmed` for the whole session — and this
+  sync runs in Power mode, which has no consent step. Every other answer still stops it: `deferred`
+  ("Don't sync yet" this session), `unreadable` (the first-run flag could not be read), and a
+  rejected request. It asks before the wait for unsent changes and again just before it syncs,
+  since the wait can last minutes and a decline during it must still count.
+
+  A Power-mode project switch (`syncOnProjectSwitch`) does not ask the gate at all, so it still
+  syncs after "Don't sync yet" while this trigger does not. That difference is deliberate: the
+  decline was given in the Simple-mode wizard, and this sync sends work typed in Simple mode, while
+  a Power-mode project switch is Power mode's own behavior, which that consent never governed.
+- **Alternatives:** **Trigger from the main process's mode-switch orchestration** — rejected: by the
+  time main reacts, the renderer is already replacing the Simple layout, so main cannot reliably ask
+  which project the Simple editor showed. **Fall back to the last-opened-project cache** — rejected:
+  it is one key for the whole application, and a window left in Simple mode by a close that failed
+  during the switch to Simple never loaded the Simple layout, so the fallback would sync the primary
+  window's project twice. **A new C# "check this project now" command** — rejected: it still could
+  not see a save that has not reached the backend yet (the editor's save and the check travel
+  different connections), so it would need the grace window anyway, and it needed a per-project
+  completion signal threaded through `UnsyncedChangesTracker`'s claim and park model. **Read the
+  snapshot once** — rejected for the freshness reason above. **`syncProjects` instead of
+  `sendReceiveProjects`** — rejected: the point is to send local edits, as the outgoing half of a
+  project switch and the window-close sync do; the deep sync's connected resources and partners are
+  not this switch's job. **The strict consent gate** — rejected for the Power-native user above.
+- **Consequences:** A switch with nothing to send settles after the grace window, which nobody waits
+  for. Committed-but-unsent work is visible to the signal only when the Paratext 10 last-synced-tip
+  record covers the project (`adr-unsynced-changes-signal-is-backend-read`), so an edit the editor's
+  daily commit already committed, on a project with no record yet (an upgraded installation before
+  that project's first successful sync), starts no sync — accepted. A sync that another trigger
+  starts between the check and this one makes the backend refuse this one; that is logged and not
+  retried. Only the project the Simple editor shows at the switch is considered: if the user
+  switched projects inside Simple mode first, and that switch's own sync was skipped (consent not
+  `granted`) or failed, the earlier project's changes stay unsent until that project's next sync.
+  They are committed locally, not lost. Covering every project shown since Simple mode was entered
+  would need this command to take a list and send them in one `sendReceiveProjects`, because the
+  backend refuses overlapping syncs — accepted for now. Right after launch the backend checks every
+  project once, one at a time, and `isRechecking` does not cover that scan, so a project it has not
+  reached yet reads as having nothing to send: a switch within seconds of launch can miss changes
+  left from an earlier session if nothing was typed this session. They go with the project's next
+  sync. Widening `isRechecking` to the scan would change a flag the sync status indicator also
+  reads, so it is left alone. Whether the sync locks the editor, and what the user sees offline, are
+  decided by the Send/Receive implementation, not by this trigger; as of 2026-10-23 both are
+  verified only by hand in a Paratext 10 build.
+- **Source:** PT-4826.
+
+## adr-sync-activity-outcome-is-coarse: The all-paths sync-activity signal reports a coarse outcome, not per-project results
+
+- **Date:** 2026-09-11
+- **Status:** Accepted
+- **Context:** Two sync signals exist and, before this decision, neither answered "how did the last
+  sync go" for every sync path. `getSyncState` / `onSyncStateChanged` carries a per-project
+  `resultStatus` but sees only syncs that claim through the Send/Receive extension's wrappers.
+  `getSyncActivity` / `onSyncActivityChanged` (`SyncActivityState`, `SyncActivityNotifierService`),
+  derived from the C# sync run marker, sees every path — including the Simple-mode startup sync
+  (`main/startup-tasks.ts`) and the picker's `syncOnProjectSwitch`, which call the dotnet commands
+  directly — but carried only `{ isSyncing, projectIds }`. Those paths therefore completed with no
+  observable outcome, and `useSyncStatus` could only report `unknown` when one ended.
+  `adr-toolbar-sync-status-is-local` names this gap and calls a semaphore-derived signal "the proper
+  general fix"; that signal exists, and PT-4569 adds the missing verdict to it (the companion
+  Paratext 10 Studio sub-task, PT-4570, populates it).
+- **Decision:** Add an optional coarse `outcome` — `'succeeded' | 'failed'` — to the activity
+  snapshot (C# `SyncOutcome?` on `SyncActivityState`; TS `SyncActivitySnapshot.outcome`). It
+  describes the most recently completed run in the backend process: absent while a run is in
+  progress, set on the snapshot that closes a run, and kept on every later snapshot and
+  `getSyncActivity` read until the next run opens. A cancelled run reports `failed`. Absent means
+  "this build cannot say" — a build predating the field, no run completed yet, or a run in flight —
+  and no consumer may read it as either verdict. The field is optional in core's seam declaration,
+  as `SyncState.syncingProjectIds` was, so core merges ahead of the Studio build that populates it.
+  In the renderer, `readSyncActivitySnapshot` (`sync-activity-service.ts`) reads it field by field —
+  an unrecognized value is logged and dropped while `isSyncing` and `projectIds` still apply — the
+  store drops it whenever `isSyncing` is true. Where both signals carry a verdict, `useSyncStatus`
+  ORDERS them rather than guessing between them: the snapshot carries `completedAt` (C#
+  `DateTimeOffset?`) beside the outcome, compared against the claim's own
+  `lastResults.sendReceiveDate`, and whichever is dated later is shown. The backend dates a run later
+  than any earlier run's results, and never later than the claim's results for that same run, so a
+  tie keeps the claim's verdict; that recognizes the
+  claim's own run when the indicator mounts after it ended, and keeps one run from getting two
+  verdicts. Dates are consulted before whether the hook saw the claim join the run, because that
+  record can be wrong: a claimless run opening while the claim's end-of-sync read is still in flight
+  is recorded as seen. Where the two are not both dated, the outcome answers when a sync the claim
+  never saw ends (`isClaimVerdictStale`), replacing the `unknown` that branch reported, and when the
+  claim has reached no verdict of its own (`idle`/`unknown`); otherwise the claim's richer
+  per-project verdict stands. A run ending is detected during render rather than in an effect, so
+  the ending and its verdict land in one commit — the commit between them would otherwise render and
+  announce the claim's earlier verdict, and report a cancelled sync as a failure. A verdict about a
+  sync the claim's results do not describe has no per-project detail behind it — the details web
+  view describes the last CLAIMED sync — so the popover withholds its "View sync details" link for
+  one, including the `unknown` a sync the claim never saw ends in on a build reporting no outcome.
+  And the picker syncs the project being switched TO last
+  (`syncOnProjectSwitch`), because these are two backend runs and the indicator reports the most
+  recent, so the verdict the user is shown describes the project now on screen.
+- **Alternatives:** **A per-project result map** — rejected: the detail already has a home in
+  `SyncState.lastResults` and the sync status web view, and this signal's job is coverage, not
+  detail; a second copy of the results is a second place for them to drift. **A three-valued verdict
+  with `cancelled`** — rejected: the claim path reports cancellation as a non-success
+  `resultStatus`, so a distinct value here would have the two signals describe the same run
+  differently. **A boolean `succeeded`** — rejected: `false` would blur "failed" into "cannot say",
+  the one distinction this field exists to keep. **An outcome on the closing event only** —
+  rejected: a consumer that seeds after the run ended (a renderer reload) would never learn it.
+  **Keeping the outcome across later runs** — rejected: it would sit beside `isSyncing: true`
+  describing a different run. **A third positional record parameter** — rejected: it changes the
+  constructor and generated `Deconstruct` that the out-of-repo Studio patch compiles against, where
+  an `init` property does not. **Rejecting a snapshot whose outcome is unrecognized** — rejected: it
+  would discard a live `isSyncing` with it, the all-or-nothing defect
+  `adr-toolbar-sync-status-is-local` follow-up 5 records against `isValidSyncState`. **Latching
+  `hasObservedSyncRun` on a present outcome** — not done: the toolbar already mounts the indicator
+  whenever send/receive is available, and in the one case the latch would change (the extension
+  missing) the indicator would mount showing `unknown`, not the verdict. **Keeping a failure sticky
+  until a later sync of the same projects succeeds** — rejected: it would make the indicator report
+  something other than the last sync, which is a product decision about what the control means rather
+  than an accuracy fix. **Syncing both projects of a switch in one call** — not taken: one run would
+  report one verdict covering both, at the cost of a deep sync on the project being left.
+- **Consequences:** An activity-only sync now ends in `synced` or `failed` on a build that reports
+  the outcome, and still in `unknown` on one that does not. Ordering the two verdicts depends on the
+  Studio build populating `completedAt` as well as `outcome`; a build reporting neither behaves as it
+  did before, with the claim's verdict standing. This does not close
+  `adr-toolbar-sync-status-is-local` follow-up 1 (those paths still raise no claim) or the
+  overlapping sync notifications recorded there, which still fall short of reporting sync status
+  once and truthfully. Open items, unfiled unless a ticket is named:
+  1. *A watchdog re-query in flight when the closing snapshot arrives* re-applies the older "still
+     syncing" answer and drops the outcome until the next tick. Pre-existing, and `completedAt` does
+     not help: the stale answer is a live read of whether a sync is running, not a verdict to order.
+     It does keep the verdict right once the run closes again: the replayed run looks like one the
+     claim never saw, but its outcome ties the claim's results, so the claim's verdict and details
+     link stand.
+  2. *A project switch still runs two backend runs*, so the indicator reports the incoming project's
+     sync only; a failure flushing the project being left reaches the user through its own failure
+     toast. Reporting both needs one run covering both projects, which an optional flush-first
+     parameter on `syncProjects` would give without a deep sync of the project being left
+     (PT-4902).
+  3. *`first-run/steps/sync-progress.component.tsx`* could read the outcome rather than rely on its
+     recovery timeout alone, but still needs the timeout for a build that cannot say.
+  4. *"Has this user ever synced"* (PT-4327) — the outcome lasts one backend process, so answering
+     that across restarts still needs persistence.
 
 ## adr-sync-surface-per-interface-mode: Each sync gets one persistent progress surface per interface mode, chosen by its caller
 
@@ -9694,6 +10311,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   awaited — awaiting it put ten seconds in front of both process spawns.
 - **Source:** PT-4275 epic (multi-window architecture plan §6, theme half; §9.2 for the staleness it
   closes).
+- **Amended 2026-09-25 (`adr-interface-scaling-is-per-window-zoom`):** the same constraint as in
+  `adr-scroll-group-hosted-in-main`: the rewritten URL may not be a key, which is why interface
+  scaling uses a zoom that is not keyed by URL.
 
 ## adr-toolbar-shrink-measurement: Responsive toolbars measure their own width in JS, not with CSS container queries
 

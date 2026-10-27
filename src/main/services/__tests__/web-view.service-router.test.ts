@@ -1897,6 +1897,36 @@ describe('web view service router', () => {
       expect(shards[2].openSettingsTab).toHaveBeenCalledWith('project-2');
     });
 
+    test('routes openProjectSettingsForWebView by ownership, like openSettings', async () => {
+      const shards = {
+        1: windowShardWithProjects({}),
+        2: windowShardWithProjects({ 'owned-view': 'project-2' }),
+      };
+      withWindows(shards);
+      const openProjectSettingsForWebView = await getCommandHandler(
+        'platform.openProjectSettingsForWebView',
+      );
+
+      await openProjectSettingsForWebView('owned-view');
+
+      expect(shards[2].openSettingsTab).toHaveBeenCalledWith('project-2');
+      expect(shards[1].openSettingsTab).not.toHaveBeenCalled();
+    });
+
+    test('publishes openProjectSettingsForWebView as experimental and not deprecated', async () => {
+      await getCommandHandler('platform.openProjectSettingsForWebView');
+
+      const method =
+        Reflect.get(
+          Object(registrations().get('command:platform.openProjectSettingsForWebView')?.docs),
+          'method',
+        ) ?? {};
+      expect({
+        experimental: Reflect.get(method, 'x-experimental'),
+        deprecated: Reflect.get(method, 'deprecated'),
+      }).toEqual({ experimental: true, deprecated: undefined });
+    });
+
     test('follows focus for openUserSettings, which names no web view', async () => {
       // `platform.openUserSettings` opens the same tab but is declared to take no arguments, so it
       // has no owner to route by and belongs to the window the user is in. Losing this distinction

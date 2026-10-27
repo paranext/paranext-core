@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import type { DblResourceData } from 'platform-bible-utils';
+import { userEvent, within } from 'storybook/test';
 import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
 import type { PickerResource } from './downloaded-resources.utils';
 import { ResourceTextPanel } from './resource-text-panel.component';
@@ -20,13 +21,41 @@ const WEB: DblResourceData = {
   projectId: '',
 };
 
-const WEB_ROW: PickerResource = {
-  reference: { type: 'dblResource', id: WEB.dblEntryUid, name: WEB.displayName },
-  source: 'admin',
-  isAdminLocked: false,
-  type: WEB.type,
-  installed: false,
-  projectId: undefined,
+/**
+ * A row for `resource`, from `source`. Not installed, so the panel shows its selector over a
+ * spinner.
+ */
+function row(resource: DblResourceData, source: PickerResource['source']): PickerResource {
+  return {
+    reference: { type: 'dblResource', id: resource.dblEntryUid, name: resource.displayName },
+    source,
+    isAdminLocked: false,
+    type: resource.type,
+    installed: false,
+    projectId: undefined,
+  };
+}
+
+const WEB_ROW = row(WEB, 'user');
+
+const SVD: DblResourceData = {
+  ...WEB,
+  dblEntryUid: 'uid-svd',
+  displayName: 'SVD',
+  fullName: 'الكتاب المقدس ترجمة فان دايك',
+  bestLanguageName: 'Arabic',
+};
+const KJV: DblResourceData = {
+  ...WEB,
+  dblEntryUid: 'uid-kjv',
+  displayName: 'KJV',
+  fullName: 'King James Version',
+};
+const ASV: DblResourceData = {
+  ...WEB,
+  dblEntryUid: 'uid-asv',
+  displayName: 'ASV',
+  fullName: 'American Standard Version',
 };
 
 /**
@@ -47,6 +76,8 @@ const meta: Meta<typeof ResourceTextPanel> = {
     selectedRef: WEB_ROW,
     readiness: 'configured',
     dblResources: [WEB],
+    isCatalogUnavailable: false,
+    isGrouped: true,
     scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
     isUsjLoading: false,
     textDirection: 'ltr',
@@ -89,4 +120,97 @@ export const InstallFailedOffline: Story = {
  */
 export const InstalledButUnavailable: Story = {
   args: { installFailed: true, installFailureReason: 'listNotConverging', isOnline: false },
+};
+
+// The open-menu stories below opt out of autodocs: the docs page renders every story at once, so
+// every menu would open over it together.
+async function openSelector({ canvasElement }: { canvasElement: HTMLElement }) {
+  await userEvent.click(within(canvasElement).getByRole('button', { name: /WEB/ }));
+  await within(canvasElement.ownerDocument.body).findByRole('menu');
+}
+
+/**
+ * The selector when the team shared resources: theirs first, with a lock on each and a caption
+ * saying only a project administrator can remove them, then the user's own, then a resource
+ * installed on this computer that neither list names. The Arabic full name shows the lock staying
+ * on the panel's side of a right-to-left name.
+ */
+export const TeamUserAndOtherResources: Story = {
+  tags: ['!autodocs'],
+  args: {
+    filteredResources: [
+      row(WEB, 'admin'),
+      row(SVD, 'admin'),
+      row(KJV, 'user'),
+      row(ASV, 'downloaded'),
+    ],
+    selectedRef: row(WEB, 'admin'),
+    dblResources: [WEB, SVD, KJV, ASV],
+  },
+  play: openSelector,
+};
+
+/** The selector when every resource is the team's: their heading only, with no empty user group. */
+export const TeamResourcesOnly: Story = {
+  tags: ['!autodocs'],
+  args: {
+    filteredResources: [row(WEB, 'admin'), row(SVD, 'admin')],
+    selectedRef: row(WEB, 'admin'),
+    dblResources: [WEB, SVD],
+  },
+  play: openSelector,
+};
+
+/** The selector when every resource is the user's own: one list, with no headings. */
+export const UserResourcesOnly: Story = {
+  tags: ['!autodocs'],
+  args: {
+    filteredResources: [WEB_ROW, row(KJV, 'user')],
+    dblResources: [WEB, KJV],
+  },
+  play: openSelector,
+};
+
+/**
+ * The selector when the team shared nothing for this tab but other resources are installed: the
+ * user's own and the others under their own headings, with no team heading or caption.
+ */
+export const UserAndOtherResources: Story = {
+  tags: ['!autodocs'],
+  args: {
+    filteredResources: [WEB_ROW, row(KJV, 'user'), row(ASV, 'downloaded')],
+    dblResources: [WEB, KJV, ASV],
+  },
+  play: openSelector,
+};
+
+/** Power mode: every row in one list, with no headings, caption or locks. */
+export const PowerMode: Story = {
+  tags: ['!autodocs'],
+  args: {
+    filteredResources: [
+      row(WEB, 'admin'),
+      row(SVD, 'admin'),
+      row(KJV, 'user'),
+      row(ASV, 'downloaded'),
+    ],
+    selectedRef: row(WEB, 'admin'),
+    dblResources: [WEB, SVD, KJV, ASV],
+    isGrouped: false,
+  },
+  play: openSelector,
+};
+
+/**
+ * The selector while the catalog is unavailable: the user's own and other installed resources are
+ * one list, since without the catalog the user's own resolve as plain downloads.
+ */
+export const CatalogUnavailable: Story = {
+  tags: ['!autodocs'],
+  args: {
+    filteredResources: [WEB_ROW, row(ASV, 'downloaded')],
+    dblResources: [WEB, ASV],
+    isCatalogUnavailable: true,
+  },
+  play: openSelector,
 };

@@ -17,6 +17,7 @@ import { VIEW_OPTIONS_NOTICE_STRING_KEYS } from './scripture-text-grid/view-opti
 import { TEAM_LAYOUT_BUTTON_STRING_KEYS } from './team-layout-button.component';
 import { STRUCTURE_PROTECTION_BUTTON_STRING_KEYS } from './structure-protection-button.component';
 import { HIDDEN_CONTENT_DELETE_STRING_KEYS } from './hidden-content-delete-confirm.utils';
+import { TWO_STEP_DELETE_MESSAGE_STRING_KEYS } from './two-step-delete-tooltip/two-step-delete-tooltip.utils';
 import {
   paragraphMarkerNameKey,
   PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
@@ -249,19 +250,48 @@ describe('retired book-not-found-in-project string', () => {
   });
 });
 
+// The read-only Preview notice replaced the Markers-view notice, whose wording describes a different
+// view. A locale that has the old translation but not the new one must show the English message
+// rather than the Markers sentence, so the message key has no fallback. The dismiss label means the
+// same thing in both views, so it keeps its fallback.
+describe('read-only Preview notice strings', () => {
+  it('the message key has no fallback: the Markers wording would be wrong for Preview', () => {
+    expect(
+      metadata?.['%platformScriptureEditor_previewView_readonly_message_format%']?.fallbackKey,
+    ).toBeUndefined();
+  });
+
+  it('the dismiss key falls back to the identical Markers-era string', () => {
+    expect(metadata?.['%platformScriptureEditor_previewView_readonly_dismiss%']?.fallbackKey).toBe(
+      '%platformScriptureEditor_markersView_readonly_dismiss%',
+    );
+  });
+
+  it.each(['en', 'es'])('the message key has its own value in %s', (locale) => {
+    expect(
+      localizedStrings[locale]['%platformScriptureEditor_previewView_readonly_message_format%'],
+    ).toBeTruthy();
+  });
+});
+
 // The resource panels' strings come in matched `bibleTexts_` / `commentaries_` pairs plus a set
 // shared by both tabs, and the model text panel's in a single set. Driven off the exported key
 // lists — `RESOURCE_PANEL_STRING_KEYS` folds the typed pairs in, so every key either panel renders
 // is covered — so that an en-only addition, or a dropped `es` value, fails here without anyone
 // remembering to edit this file.
 //
-// A couple of keys legitimately appear in both frozen lists, because both panels render them. Each
-// list is right to declare what its own surface uses, so the de-duplication belongs here: without
-// it a failure on a shared key reports twice, under two different owners, and the file's
-// one-block-per-surface structure stops meaning anything. The model text block below owns them.
-const MODEL_TEXT_PANEL_KEY_SET = new Set<string>(MODEL_TEXT_PANEL_STRING_KEYS);
+// A few keys legitimately appear in more than one frozen list, because more than one surface
+// renders them: some are shared with the model text panel, and the team/user group headings and
+// team lock with View Options. Each list is right to declare what its own surface uses, so the
+// de-duplication belongs here: without it a failure on a shared key reports twice, under two
+// different owners, and the file's one-block-per-surface structure stops meaning anything. The
+// model text and View Options blocks below own them.
+const KEYS_OWNED_ELSEWHERE = new Set<string>([
+  ...MODEL_TEXT_PANEL_STRING_KEYS,
+  ...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
+]);
 const RESOURCE_PANEL_ONLY_STRING_KEYS = RESOURCE_PANEL_STRING_KEYS.filter(
-  (key) => !MODEL_TEXT_PANEL_KEY_SET.has(key),
+  (key) => !KEYS_OWNED_ELSEWHERE.has(key),
 );
 
 describe.each([...RESOURCE_PANEL_ONLY_STRING_KEYS])('resource panel label %s', (key) => {
@@ -410,6 +440,38 @@ describe.each([...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS])('View Options label 
   });
 });
 
+// The hint under a disabled Chapter toggle falls back to the "coming soon" key it replaces, so a
+// dropped value would silently bring back a promised delivery date nobody has set. The View Options
+// label tests above catch a dropped value; this checks that the value itself makes no such promise.
+describe('View Options chapter hint', () => {
+  const key = '%webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%';
+
+  it.each(['en', 'es'])('has a %s string that does not promise a delivery date', (locale) => {
+    expect(localizedStrings[locale][key]).not.toMatch(/coming soon|próximamente|pronto/i);
+  });
+});
+
+describe('retired "coming soon" View Options strings', () => {
+  it('no longer requests the "coming soon" chapter hint', () => {
+    expect(RESOURCE_COLLECTION_OPTIONS_STRING_KEYS).not.toContain(
+      '%webView_scriptureTextGrid_viewOptions_chapterComingSoon%',
+    );
+  });
+
+  it('marks the chapter hint key as replaced by the not-yet-available hint', () => {
+    expect(
+      metadata?.['%webView_scriptureTextGrid_viewOptions_chapterComingSoon%']?.deprecationInfo
+        ?.message,
+    ).toContain('%webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%');
+  });
+
+  it('marks the unused "coming soon" key as having no replacement', () => {
+    expect(
+      metadata?.['%webView_scriptureTextGrid_viewOptions_comingSoon%']?.deprecationInfo?.message,
+    ).toContain('No replacement key');
+  });
+});
+
 // The View Options notices, which the grid web view shows outside the panel itself — in the
 // resource picker and in a notification — so they are not covered by any panel's key list.
 describe.each([...VIEW_OPTIONS_NOTICE_STRING_KEYS])('view options notice %s', (key) => {
@@ -543,6 +605,21 @@ describe.each(['en', 'es'])('save failed notification in %s', (locale) => {
     expect(
       localizedStrings[locale]['%webView_platformScriptureEditor_error_saveFailed_format%'],
     ).toContain('{projectName}');
+  });
+});
+
+// The "press again to delete" hint shown on the first press of a two-step delete, one per armed kind.
+describe.each([...TWO_STEP_DELETE_MESSAGE_STRING_KEYS])('two-step delete hint %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
   });
 });
 

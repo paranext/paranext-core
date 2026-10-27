@@ -95,14 +95,14 @@ const meta: Meta<typeof UserProfilePopover> = {
 export default meta;
 type Story = StoryObj<typeof UserProfilePopover>;
 
-/** A validly registered user: no dot, and the trigger keeps its plain "User profile" label. */
+/** A validly registered user: no dot, and the trigger keeps its plain "User menu" label. */
 export const Registered: Story = {
   beforeEach: withRegistration(true),
 };
 
 /**
  * Registration missing or invalid — the state this feature exists for. The dot sits on the trigger,
- * and the trigger's accessible label and tooltip become "User profile — registration needed" so the
+ * and the trigger's accessible label and tooltip become "User menu — registration needed" so the
  * signal is never carried by color alone.
  */
 export const RegistrationNeeded: Story = {
@@ -112,7 +112,7 @@ export const RegistrationNeeded: Story = {
 /**
  * The same invalid registration with the popover opened, so the rest of the reminder is visible:
  * the header's "Registration needed" line beneath the name and email, and a matching dot on the
- * "Profile & registration" row (which also carries screen-reader-only text in its accessible
+ * "Registration information" row (which also carries screen-reader-only text in its accessible
  * name).
  */
 export const RegistrationNeededPopoverOpen: Story = {

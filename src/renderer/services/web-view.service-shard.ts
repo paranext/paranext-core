@@ -1538,6 +1538,11 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
           // the `loadLayout()` call in `registerDockLayout`, so it reflects the real mode by the
           // time this fires.
           if (newMode === currentInterfaceMode) return;
+          // Read before the Power layout replaces the Simple one below
+          const simpleProjectIdToSync =
+            currentInterfaceMode === 'simple' && newMode === 'power'
+              ? getSimpleEditorProjectId()
+              : undefined;
           // Update the cache synchronously with the notification so any `saveLayout` racing the
           // switch reads the new mode immediately (before `loadLayout`'s own read resolves).
           currentInterfaceMode = newMode;
@@ -1551,6 +1556,9 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
           const generation = startNewSwitchGeneration();
           if (newMode === 'simple') await handleSwitchToSimpleMode(generation);
           else await loadLayoutWithWarning(generation);
+          // A switch back to Simple that superseded this one makes its own sync decision
+          if (simpleProjectIdToSync && generation === switchGeneration)
+            syncOnSwitchToPower(simpleProjectIdToSync);
         },
         { retrieveDataImmediately: false },
       );
@@ -2062,6 +2070,41 @@ function finalizeProjectSwitch(projectId: string): void {
   });
 }
 
+/**
+ * The project the Simple-mode Scripture Editor in this window is showing, or `undefined` when this
+ * window has no such tab. Every tab of the Simple layout is bound to that one project.
+ *
+ * Read from the dock, never from `getLastOpenedProject`: that cache is one key for the whole
+ * application, and a window left in Simple mode by a close that failed during the switch to Simple
+ * never loaded the Simple layout — reading the cache there would sync the primary window's project
+ * a second time.
+ */
+function getSimpleEditorProjectId(): string | undefined {
+  try {
+    return getDockLayoutSync()
+      .getAllWebViewDefinitions()
+      .find((definition) => simpleEditorTabIds.has(definition.id))?.projectId;
+  } catch (err) {
+    logger.warn(
+      `Could not read which project the Simple-mode Scripture Editor is showing, so nothing typed in Simple mode is synced on the switch to Power mode: ${getErrorMessage(err)}`,
+    );
+    return undefined;
+  }
+}
+
+/**
+ * Asks the Scripture Editor extension to send what was typed in Simple mode, now that the user has
+ * switched to Power mode. Fire-and-forget, after the Power layout has loaded: the switch must not
+ * wait on a send/receive, and the command decides for itself whether there is anything to send.
+ */
+function syncOnSwitchToPower(projectId: string): void {
+  sendCommand('platformScriptureEditor.syncOnSwitchToPower', projectId).catch((err: unknown) => {
+    logger.warn(
+      `Failed to sync project ${projectId} after the switch to Power mode: ${getErrorMessage(err)}`,
+    );
+  });
+}
+
 // #endregion Dock layouts
 
 // #region Tabs
@@ -2134,6 +2177,7 @@ export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo {
     tabTitle,
     tabTooltip,
     tabIconUrl,
+    tabIconName,
     content,
     minWidth,
     minHeight,

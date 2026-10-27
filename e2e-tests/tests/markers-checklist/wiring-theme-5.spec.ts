@@ -36,10 +36,15 @@
 import path from 'path';
 import type { FrameLocator, Locator, Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/cdp.fixture';
-import { waitForAppReady } from '../../fixtures/helpers';
+import {
+  sendOpenMarkersChecklistCommand,
+  waitForAppReady,
+  waitForOpenWebViewIdByType,
+} from '../../fixtures/helpers';
 
-// Markers Checklist is opened from the scripture editor's hamburger menu, which hides it in Simple
-// mode. Open Checks is reachable from that menu in both modes.
+// The suite's layout is written for Power mode, and the editor menu hides the Markers Checklist item
+// in both modes, so the checklist is opened by command. So is the Checks side panel: Basic checks
+// is hidden in both modes too.
 test.use({ requiredInterfaceMode: 'power' });
 
 // ---------------------------------------------------------------------------
@@ -102,22 +107,18 @@ async function openDefaultProject(page: Page): Promise<void> {
 }
 
 /**
- * Open the Markers Checklist web view via the scripture editor's hamburger menu. No-op if the tab
- * is already open (clicks back to activate it instead).
+ * Open the Markers Checklist web view by sending its command with the open scripture editor's web
+ * view id (see `sendOpenMarkersChecklistCommand`); the editor's menu hides the item in both
+ * interface modes. No-op if the tab is already open (clicks back to activate it instead).
  */
-async function openMarkersChecklistViaToolsMenu(page: Page): Promise<void> {
+async function openMarkersChecklistByCommand(page: Page): Promise<void> {
   const existing = page.locator('.dock-tab').filter({ hasText: WEBVIEW_IFRAME_TITLE_RE });
   if ((await existing.count()) > 0) {
     await existing.first().click();
     return;
   }
 
-  const editorFrame = page.frameLocator(`iframe[title*="${PROJECT_NAME}" i][title*="Editable" i]`);
-  await editorFrame.locator("button[aria-label='Project']").first().click();
-  await editorFrame
-    .getByRole('menuitem', { name: /Markers Checklist/i })
-    .first()
-    .click();
+  await sendOpenMarkersChecklistCommand(page);
 
   await expect(page.locator('.dock-tab').filter({ hasText: WEBVIEW_IFRAME_TITLE_RE })).toBeVisible({
     timeout: 15_000,
@@ -187,7 +188,7 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
   test('Test 1: first-launch seed defaults to scope="chapter" with current book/chapter', async ({
     mainPage,
   }) => {
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
     await waitForDataTableSettled(frame);
 
@@ -211,7 +212,7 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
   test('Test 2: scope auto-follow — editor navigation updates the verse-range trigger label', async ({
     mainPage,
   }) => {
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
     await waitForDataTableSettled(frame);
 
@@ -308,7 +309,7 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
   // — picker interaction skipped, OK commits whatever the dialog seeds with. The point of 4a
   // is the OK→commit path, not specific BCV values.
   test('Test 4a: range mode — OK commits and trigger shows the range', async ({ mainPage }) => {
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
     await waitForDataTableSettled(frame);
 
@@ -371,7 +372,7 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
   test('Test 4b: range mode — Cancel/Escape discards, trigger label unchanged', async ({
     mainPage,
   }) => {
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
     await waitForDataTableSettled(frame);
 
@@ -431,7 +432,7 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
   test('Test 5: clicking a row goto link broadcasts the ref and focuses the editor tab', async ({
     mainPage,
   }) => {
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
     await waitForDataTableSettled(frame);
 
@@ -471,7 +472,7 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
   }) => {
     // Open the markers-checklist FIRST so we can close the editor without losing the dock-tab
     // for the checklist itself.
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
     await waitForDataTableSettled(frame);
 
@@ -520,7 +521,7 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
   test('Test 7: changing the primary project via ProjectSelector retargets the checklist', async ({
     mainPage,
   }) => {
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
     await waitForDataTableSettled(frame);
 
@@ -578,21 +579,25 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
   // ═══════════════════════════════════════════════════════════════════════
   // The checks-side-panel uses `useOpenProjectTabs` and `handleSelectProject` (Task 14) to focus
   // an existing editor tab instead of opening a duplicate when the user re-selects a project
-  // that already has an editor open. Navigation: scripture editor → hamburger → "Open Checks...".
+  // that already has an editor open. Navigation: the checks side panel is opened by command for the
+  // editor, since its "Basic checks" menu item is hidden in both modes.
   test('Test 8: re-selecting an open project in checks-side-panel focuses the editor tab without duplicating it', async ({
     mainPage,
   }) => {
-    // The default project (`wgPIDGIN`) editor is already open from `beforeEach`. Open the
-    // checks side panel from the editor's hamburger menu — same pattern as
-    // `openMarkersChecklistViaToolsMenu`, just a different menu item.
-    const editorFrame = mainPage.frameLocator(
-      `iframe[title*="${PROJECT_NAME}" i][title*="Editable" i]`,
+    // The default project (`wgPIDGIN`) editor is already open from `beforeEach`. Open the checks
+    // side panel for it — the same command the hidden menu item runs.
+    const editorWebViewId = await waitForOpenWebViewIdByType(
+      mainPage,
+      'platformScriptureEditor.react',
     );
-    await editorFrame.locator("button[aria-label='Project']").first().click();
-    await editorFrame
-      .getByRole('menuitem', { name: /Open Checks/i })
-      .first()
-      .click();
+    await mainPage.evaluate(async (webViewId) => {
+      // The renderer exposes `papi` on `window` without a declared type in the e2e project.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const win = window as unknown as {
+        papi: { commands: { sendCommand: (command: string, id: string) => Promise<unknown> } };
+      };
+      await win.papi.commands.sendCommand('platformScripture.openChecksSidePanel', webViewId);
+    }, editorWebViewId);
 
     // The side panel mounts as a docked panel to the right; its iframe title is "Checks".
     const sidePanelFrame = mainPage.frameLocator('iframe[title*="Checks" i]');
@@ -661,7 +666,7 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
   test('Test 9: sticky toolbar triggers stay at top of the iframe when the data table scrolls', async ({
     mainPage,
   }) => {
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
     await waitForDataTableSettled(frame);
 
@@ -703,7 +708,7 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
   test('Test 10: Hide-Matches is disabled when columnCount === 1 and enabled with a comparative text', async ({
     mainPage,
   }) => {
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
     await waitForDataTableSettled(frame);
 

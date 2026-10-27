@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Paranext.DataProvider.Users;
 using Paratext.Data;
 
 namespace Paranext.DataProvider.ParatextUtils;
@@ -35,13 +36,15 @@ internal sealed class PlatformParatextInfo : ParatextInfo
     /// </summary>
     internal static readonly string[] SEEDED_FILE_NAMES =
     [
-        "RegistrationInfo.xml",
-        "InternetSettings.xml",
+        REGISTRATION_FILE_NAME,
+        INTERNET_SETTINGS_FILE_NAME,
         "ReleaseStage.txt",
         "PTXprintPath.txt",
     ];
 
     private const string REGISTRATION_FILE_NAME = "RegistrationInfo.xml";
+
+    private const string INTERNET_SETTINGS_FILE_NAME = "InternetSettings.xml";
 
     /// <summary>
     /// Written next to the seeded files, holding the name of the Paratext 9 folder they came from.
@@ -233,7 +236,7 @@ internal sealed class PlatformParatextInfo : ParatextInfo
     /// </summary>
     private void SeedFromParatext9()
     {
-        var source = FindParatext9SeedFolder();
+        var source = FindNewestParatext8Or9Folder(REGISTRATION_FILE_NAME);
         if (source == null)
             return;
 
@@ -254,7 +257,11 @@ internal sealed class PlatformParatextInfo : ParatextInfo
         );
     }
 
-    private string? FindParatext9SeedFolder()
+    /// <summary>
+    /// The newest Paratext 8/9 app-data folder that holds <paramref name="requiredFileName"/>, or
+    /// null when there is none.
+    /// </summary>
+    private string? FindNewestParatext8Or9Folder(string requiredFileName)
     {
         if (!Directory.Exists(LocalAppDataRoot))
             return null;
@@ -266,7 +273,7 @@ internal sealed class PlatformParatextInfo : ParatextInfo
             )
             .Where(candidate =>
                 candidate.match.Success
-                && File.Exists(Path.Combine(candidate.directory, REGISTRATION_FILE_NAME))
+                && File.Exists(Path.Combine(candidate.directory, requiredFileName))
             )
             // Newest Paratext version first.
             .OrderByDescending(candidate =>
@@ -275,6 +282,35 @@ internal sealed class PlatformParatextInfo : ParatextInfo
             )
             .Select(candidate => candidate.directory)
             .FirstOrDefault();
+    }
+
+    /// <summary>
+    /// The internet use Paratext 9 currently has saved, read from the newest Paratext 8/9 app-data
+    /// folder that has an <c>InternetSettings.xml</c>. Null when Paratext 9 has none or its value
+    /// cannot be read.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not Platform.Bible's own copy: startup replaces a saved
+    /// <see cref="InternetUse.VpnRequired"/> there, and a new user's copy holds ParatextData's
+    /// default. Only reads Paratext 9's folder, and does not resolve or seed Platform.Bible's. Never
+    /// throws: a file-system failure is logged and reads as null.
+    /// </remarks>
+    internal InternetUse? ReadParatext9InternetUse()
+    {
+        try
+        {
+            var folder = FindNewestParatext8Or9Folder(INTERNET_SETTINGS_FILE_NAME);
+            if (folder == null)
+                return null;
+            return InternetSettingsLogic.ParsePermittedInternetUse(
+                File.ReadAllText(Path.Combine(folder, INTERNET_SETTINGS_FILE_NAME))
+            );
+        }
+        catch (Exception e) when (IsFileSystemFailure(e))
+        {
+            Console.WriteLine($"Could not read Paratext 9's internet settings: {e.Message}");
+            return null;
+        }
     }
 
     private static bool IsFileSystemFailure(Exception e) =>
