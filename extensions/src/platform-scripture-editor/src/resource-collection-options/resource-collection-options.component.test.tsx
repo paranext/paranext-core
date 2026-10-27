@@ -46,6 +46,8 @@ STRINGS['%webView_scriptureTextGrid_viewOptions_getResources%'] = 'Get resources
 STRINGS['%webView_scriptureTextGrid_viewOptions_teamSharedLock%'] = 'Shared by your team';
 STRINGS['%webView_scriptureTextGrid_viewOptions_removeFromList%'] =
   'Remove {resourceName} from list';
+STRINGS['%webView_scriptureTextGrid_viewOptions_removeFromListHint%'] =
+  'Removing a text takes it off your list on every tab.';
 STRINGS['%webView_scriptureTextGrid_viewOptions_installing%'] = 'Installing {resourceName}…';
 STRINGS['%webView_scriptureTextGrid_viewOptions_emptyState_prompt%'] =
   'No texts added yet. Use {getResourcesLabel} to add them.';
@@ -191,6 +193,24 @@ describe('ResourceCollectionOptions — TEXTS list', () => {
   it('shows an "Installing {name}…" row for pending installs', () => {
     renderComponent({ installingResourceNames: ['New Resource'] });
     expect(screen.getByText('Installing New Resource…')).toBeInTheDocument();
+  });
+
+  // The ✕ removes from the list the Bible texts and Commentaries tabs read too, which nothing on
+  // the row says.
+  it('says what removing does, and describes each remove control with it', () => {
+    renderComponent({ bottom: [row('u1', 'My Text', { isUserRemovable: true })] });
+    expect(
+      screen.getByRole('button', { name: 'Remove My Text from list' }),
+    ).toHaveAccessibleDescription('Removing a text takes it off your list on every tab.');
+  });
+
+  it('says nothing about removing when no row can be removed', () => {
+    renderComponent({ top: [row('a1', 'Admin Text', { isAdminLocked: true })] });
+    // Positive control: the list rendered, so the missing hint is a real answer.
+    expect(screen.getByRole('checkbox', { name: 'Admin Text' })).toBeInTheDocument();
+    expect(
+      screen.queryByText('Removing a text takes it off your list on every tab.'),
+    ).not.toBeInTheDocument();
   });
 });
 

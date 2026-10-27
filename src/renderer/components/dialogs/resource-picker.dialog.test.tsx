@@ -54,7 +54,14 @@ function mockCommands(
   );
 }
 
-function renderWrapper(options: { disableRestrictedModelTexts?: boolean } = {}) {
+function renderWrapper(
+  options: {
+    disableRestrictedModelTexts?: boolean;
+    selectedResourceIds?: string[];
+    teamResourceIds?: string[];
+    allowRemove?: boolean;
+  } = {},
+) {
   const submitDialog = vi.fn();
   render(
     <Dialog open>
@@ -185,6 +192,38 @@ describe('ResourcePickerDialogWrapper', () => {
     expect(screen.queryByText('%resourcePicker_load_error%')).not.toBeInTheDocument();
   });
 
+  it("passes the caller's locked resources through, and returns a removal as one", async () => {
+    const resource = (dblEntryUid: string, displayName: string) => ({
+      dblEntryUid,
+      displayName,
+      fullName: displayName,
+      bestLanguageName: 'English',
+      type: 'ScriptureResource',
+      size: 1,
+      installed: true,
+      updateAvailable: false,
+      projectId: `prj-${dblEntryUid}`,
+    });
+    mockCommands(async () => ({
+      status: 'available',
+      resources: [resource('team-1', 'TEAM'), resource('user-1', 'MINE')],
+    }));
+
+    const { submitDialog } = renderWrapper({
+      selectedResourceIds: ['team-1', 'user-1'],
+      teamResourceIds: ['team-1'],
+      allowRemove: true,
+    });
+
+    expect(await screen.findByText('%resourcePicker_section_team%')).toBeInTheDocument();
+    // The only remove button is the user's own row's; the team's row is locked.
+    fireEvent.click(screen.getByRole('button', { name: '%resourcePicker_removeFromList%' }));
+    expect(submitDialog).toHaveBeenCalledWith({
+      resource: expect.objectContaining({ dblEntryUid: 'user-1' }),
+      action: 'remove',
+    });
+  });
+
   describe('restricted model texts', () => {
     const restrictedText = {
       dblEntryUid: '71c6eab17ae5b667',
@@ -272,7 +311,10 @@ describe('ResourcePickerDialogWrapper', () => {
 
       fireEvent.click(await findRow('NIV11'));
 
-      expect(submitDialog).toHaveBeenCalledWith(expect.objectContaining({ displayName: 'NIV11' }));
+      expect(submitDialog).toHaveBeenCalledWith({
+        resource: expect.objectContaining({ displayName: 'NIV11' }),
+        action: 'add',
+      });
     });
   });
 });

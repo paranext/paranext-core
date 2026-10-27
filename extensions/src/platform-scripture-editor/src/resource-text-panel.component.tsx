@@ -96,7 +96,10 @@ type ResourceSelectorDropdownProps = {
   filteredResources: PickerResource[];
   selectedRef: PickerResource | undefined;
   dblResources: DblResourceData[];
-  /** Whether the DBL catalog failed to load. See `splitPickerResourcesBySource`. */
+  /**
+   * Whether a DBL catalog is expected but not here: still loading, or failed. See
+   * `splitPickerResourcesBySource`.
+   */
   isCatalogUnavailable: boolean;
   /** When `false`, the rows are one list with no headings, caption or locks */
   isGrouped: boolean;
@@ -281,9 +284,11 @@ export type ResourceTextPanelProps = {
   /** All DBL resources — used to label the selector rows. */
   dblResources: DblResourceData[];
   /**
-   * Whether the DBL catalog failed to load. The selector then lists the user's own and other
-   * installed resources together, since without the catalog the user's DBL references resolve as
-   * plain downloads.
+   * Whether a DBL catalog is expected but not here: still loading, or failed. The selector then
+   * lists the user's own and other installed resources together, since without the catalog the
+   * user's DBL references resolve as plain downloads. An installation with no DBL credentials keeps
+   * the groups: it will never have a catalog, and merging them would leave a resource the user
+   * removed listed as one of theirs.
    */
   isCatalogUnavailable: boolean;
   /**

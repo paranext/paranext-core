@@ -168,14 +168,17 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     [textConnectionsProvider],
   );
 
+  // Opened without `allowRemove`, so every pick is an add.
   const showResourcePicker = useCallback(
-    (selectedResourceIds: string[]) =>
-      papi.dialogs.showDialog('platform.resourcePicker', {
-        selectedResourceIds,
-        isModal: true,
-        resourceType: 'ScriptureResource',
-        disableRestrictedModelTexts: true,
-      }),
+    async (selectedResourceIds: string[]) =>
+      (
+        await papi.dialogs.showDialog('platform.resourcePicker', {
+          selectedResourceIds,
+          isModal: true,
+          resourceType: 'ScriptureResource',
+          disableRestrictedModelTexts: true,
+        })
+      )?.resource,
     [],
   );
 
