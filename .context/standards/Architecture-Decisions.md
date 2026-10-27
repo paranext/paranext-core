@@ -8989,6 +8989,57 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   column. The next on-demand third-column tool should reuse this shape and its panel-id constant.
 - **Source:** PT-4534 (review of #2847).
 
+## adr-simple-mode-accepts-no-dock-drops: In Simple mode no drag changes what is docked; floats stay movable
+
+- **Date:** 2026-10-26
+- **Status:** Accepted
+- **Context:** Simple mode's layout is fixed, and its groups set `tabLocked`. But rc-dock honors
+  `tabLocked` only when a single tab is dragged (`DockPanel.render`), and dragging a floating panel
+  by the empty part of its tab bar drags the whole tab group. So a float could be docked onto any
+  column through rc-dock's drop squares, or merged into another float through a same-group tab
+  header (`TabCache.onDragOver`), which ignores `tabLocked` altogether.
+- **Decision:** In Simple mode, dragging never docks or undocks anything; a floating panel can still
+  be moved by its tab bar. One guard per rc-dock drop path:
+  - `disableDock` on every Simple group (`getGroups`) turns off `DockDropLayer`'s squares over a
+    panel for any drag from those groups. It is rc-dock's own option and gates drag-and-drop only.
+    Programmatic `dockMove` is unaffected.
+  - A Simple-only rule in `dock-layout-wrapper.simple-mode.scss` sets `pointer-events: none` on
+    every tab bar while `<body>` carries rc-dock's `dock-dragging`. rc-dock finds drop targets with
+    `elementFromPoint`, so no tab header can take the drop.
+  - The existing `floatable: false` keeps anything from being undocked. It is part of the same rule.
+  - The docked Resources column's tab bar starts no whole-column drag: the same stylesheet keeps
+    the bar out of hit-testing apart from each tab's `.dock-tab-btn` and the overflow button. The
+    rest of the bar, including the edge of each `.dock-tab` around its button, is rc-tabs' own
+    markup, which the app cannot mark `drag-ignore` (rc-dock checks that class only on the pressed
+    element).
+- **Alternatives:**
+  - Patch rc-dock so `tabLocked` also gates whole-group drags. Rejected: that is documented
+    behavior, not a bug, and rc-dock is patched only for bugs
+    (`adr-tab-bar-drop-zone-app-side-target`).
+  - Put a temporary `panelLock` on the dragged float from a drag-state listener, which makes
+    `TabCache` reject it. Rejected: it mutates rc-dock's live layout data mid-drag, and `panelLock`
+    also changes how rc-dock removes empty panels.
+  - Give each float its own group. Rejected: an unregistered group falls back to rc-dock's floatable
+    default group.
+  - Stop floats being dragged at all. Rejected: a float could then never be moved off whatever it
+    covers.
+  - Block the Resources column's empty-tab-bar drag with `drag-ignore`, as the tab titles are.
+    Rejected: rc-dock checks the class only on the pressed element, and that part of the bar is
+    rc-tabs' markup, so it would take a patch or DOM mutation of rc-tabs' elements.
+- **Consequences:**
+  - The CSS rule applies to every rc-dock drag in Simple mode, column-divider drags included. A drop
+    target added to a Simple-mode tab bar later would never receive a drop until the rule is
+    narrowed.
+  - A tab drag that starts on a tab's padding, which `drag-ignore` does not cover, still begins, but
+    it can no longer drop anywhere: rc-dock's `TabCache.onDragOver` would accept a same-group tab
+    whatever `tabLocked` says, so only the CSS rule stops a reorder (pinned by the e2e spec).
+  - jsdom cannot hit-test, so the tab-bar guard is covered only by the `docking` e2e subset
+    (`simple-mode-no-dock.spec.ts`).
+  - If rc-dock ever left `dock-dragging` on `<body>` after a drag ended, Simple-mode tab bars would
+    stop taking clicks. Every web view's content already would, through rc-dock's own
+    `body.dock-dragging iframe` rule, so this adds no new way to fail.
+- **Source:** PT-4848.
+
 ## adr-simple-mode-column-minimums: Simple-mode column minimums are derived from the window minimum, dividers included
 
 - **Date:** 2026-08-19

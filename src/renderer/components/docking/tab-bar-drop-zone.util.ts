@@ -14,10 +14,11 @@ function isLastTabOfPanel(tab: TabData, panel: PanelData): boolean {
  * or `undefined` when the drop should be rejected.
  *
  * Mirrors the parts of two existing rc-dock call sites that apply to this app's own group
- * configuration — every group here sets `floatable: false` and never sets `disableDock` (see
- * `getGroups` in `platform-dock-layout-positioning.util.ts`) — rather than inventing new rules.
- * Both call sites also branch on `floatable: 'singleTab'`, and the second on `disableDock`; neither
- * branch is replicated here, since no group this app registers can trigger them:
+ * configuration — every group here sets `floatable: false`, and only Simple mode's groups set
+ * `disableDock` (see `getGroups` in `platform-dock-layout-positioning.util.ts`) — rather than
+ * inventing new rules. Both call sites also branch on `floatable: 'singleTab'`, and the second on
+ * `disableDock`; neither branch is replicated here, since no group this zone serves can trigger
+ * them: the zone renders only in Power mode, whose group sets neither.
  *
  * - `TabCache.onDragOver` (`node_modules/rc-dock/src/DockTabs.tsx`) for a single-tab drag: same
  *   `group` only. On top of that, a tab that already is the last tab of `targetPanel` is rejected:

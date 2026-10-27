@@ -127,8 +127,10 @@ const lockedGroupOptions: TabGroup = {
   maximizable: false,
   floatable: false,
   animated: false,
-  // Docking disabled: locking tabs prevents drag-to-create-new-panel.
+  // Docking disabled: locking tabs prevents drag-to-create-new-panel, and `disableDock` removes the
+  // drop squares a dragged whole tab group would otherwise be offered.
   tabLocked: true,
+  disableDock: true,
   moreIcon: createElement(ChevronsUpDown),
 };
 
