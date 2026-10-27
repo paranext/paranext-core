@@ -261,7 +261,7 @@ describe('_simple-mode.scss', () => {
       const hovered = hoverRule();
       const hoverColor = declarationValue(hovered, 'text-decoration-color');
 
-      expect(declarationValue(resting, 'text-decoration-line')).toMatch(/\bunderline\b/);
+      expect(declarationValue(resting, 'text-decoration-line')).toBe('underline');
       expect(declarationValue(resting, 'text-decoration-color')).toBe('transparent');
       expect(hoverColor).toBeDefined();
       expect(hoverColor).not.toBe('transparent');

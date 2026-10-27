@@ -57,20 +57,16 @@ const SCR_REF: SerializedVerseRef = { book: 'GEN', chapterNum: 11, verseNum: 26 
 // Stable identity: Editorial reconciles its whole config when `options` changes.
 const EDITOR_OPTIONS = { isReadonly: true, hasExternalUI: true, view: getDefaultViewOptions() };
 
-type LineStyle = 'underline' | 'underline overline';
-
 type CharacterMarkerIndicatorsProps = {
   /** Whether the text can be typed into; the indicator is on only when it can. */
   isTextEditable: boolean;
-  /** The hover line: `underline` ships, and `underline overline` is the alternative. */
-  lineStyle: LineStyle;
 };
 
 /**
  * The real Scripture editor with the Simple-mode rules from `_simple-mode.scss`. Hover a tinted
  * word: the line appears after half a second.
  */
-function CharacterMarkerIndicators({ isTextEditable, lineStyle }: CharacterMarkerIndicatorsProps) {
+function CharacterMarkerIndicators({ isTextEditable }: CharacterMarkerIndicatorsProps) {
   return (
     <div
       className={getSimpleModeRootClassNames({
@@ -79,15 +75,6 @@ function CharacterMarkerIndicators({ isTextEditable, lineStyle }: CharacterMarke
         isDurablyReadOnly: !isTextEditable,
       }).join(' ')}
     >
-      {lineStyle === 'underline overline' && (
-        // Previews the one-word change in `_simple-mode.scss`. Same selector weight as the real
-        // rule, so it wins by coming later. `\w` is the only invisible marker in this text.
-        <style>
-          {
-            '.editor-container-simple.character-marker-indicators .usfm_w { text-decoration-line: underline overline; }'
-          }
-        </style>
-      )}
       <Editorial defaultUsj={GENESIS_11_USJ} scrRef={SCR_REF} options={EDITOR_OPTIONS} />
     </div>
   );
@@ -97,10 +84,7 @@ const meta: Meta<typeof CharacterMarkerIndicators> = {
   title: 'Bundled Extensions/platform-scripture-editor/CharacterMarkerIndicators',
   component: CharacterMarkerIndicators,
   tags: ['autodocs'],
-  args: { isTextEditable: true, lineStyle: 'underline' },
-  argTypes: {
-    lineStyle: { control: 'inline-radio', options: ['underline', 'underline overline'] },
-  },
+  args: { isTextEditable: true },
   // The editor mounts asynchronously; wait for its text so a snapshot never catches it half-drawn.
   play: async ({ canvasElement }) => {
     await waitFor(() => expect(canvasElement.querySelector('.usfm_w')).not.toBeNull());
@@ -112,9 +96,6 @@ type Story = StoryObj<typeof CharacterMarkerIndicators>;
 
 /** What Simple shows on text the user can type into: `\w` is tinted, `\nd` and `\bd` are not. */
 export const Default: Story = {};
-
-/** The alternative hover line: underline plus overline. */
-export const UnderlinePlusOverline: Story = { args: { lineStyle: 'underline overline' } };
 
 /** Text that cannot be typed into: no tint and no hover line. Power mode looks the same. */
 export const ReadOnly: Story = { args: { isTextEditable: false } };

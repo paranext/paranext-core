@@ -130,8 +130,8 @@
 //
 // The hover line is always drawn but transparent; only the hover rule carries the delay, so the
 // line appears late and fades out at once. Chromium also paints it in the selection's text color
-// while the text is selected. For underline plus overline, change `text-decoration-line` to
-// `underline overline`.
+// while the text is selected. No overline: at this line height it sits just under the line above
+// and reads as underlining that text instead.
 /* stylelint-disable selector-class-pattern -- `usfm_<marker>` is the editor library's class name */
 .editor-container-simple.character-marker-indicators
   :is(
