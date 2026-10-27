@@ -125,6 +125,9 @@ public static class Program
             // Initializes the versioning manager
             VersioningManager.Initialize();
 
+            // Before the project scan below reads the effective internet status
+            InternetSettingsDataProvider.MigrateVpnRequiredToDisabled();
+
             SettingsService.Initialize(papi);
             var paratextFactory = new ParatextProjectDataProviderFactory(papi, paratextProjects);
             var paratextPublishedFactory = new ParatextPublishedProjectDataProviderFactory(

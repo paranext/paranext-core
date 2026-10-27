@@ -59,8 +59,8 @@ import { useCallback, useEffect, useState } from 'react';
 import './user-profile-popover.component.css';
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
-  '%toolbar_userProfile_label%',
-  '%toolbar_userProfile_label_registrationNeeded%',
+  '%toolbar_userProfile_label_2%',
+  '%toolbar_userProfile_label_registrationNeeded_2%',
   '%userProfile_header_defaultName%',
   '%userProfile_header_notRegistered%',
   '%userProfile_interfaceMode_simple_label%',
@@ -68,9 +68,9 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%userProfile_interfaceMode_power_label%',
   '%userProfile_interfaceMode_power_labelWithPreview%',
   '%userProfile_interfaceMode_power_description_2%',
-  '%userProfile_profileAndRegistration%',
+  '%userProfile_profileAndRegistration_2%',
   '%userProfile_registrationNeeded%',
-  '%userProfile_networkSettings_2%',
+  '%userProfile_networkSettings_3%',
   '%userProfile_server_badge_development%',
   '%userProfile_server_badge_production%',
   '%userProfile_server_badge_qualityAssurance%',
@@ -176,7 +176,7 @@ function ReminderDot({ testId, className }: { testId: string; className?: string
       aria-hidden="true"
       className={cn(
         // `shrink-0` is in the base because callers place the dot in a flex row beside text (e.g.
-        // the toolbar trigger, the "Profile & registration" row), where a fixed 8px circle must
+        // the toolbar trigger, the "Registration information" row), where a fixed 8px circle must
         // never be the item that gives.
         'tw:size-2 tw:shrink-0 tw:rounded-full tw:bg-primary',
         // Raw class, not a `tw:forced-colors:` utility — that variant emits no CSS in this build
@@ -189,7 +189,7 @@ function ReminderDot({ testId, className }: { testId: string; className?: string
 }
 
 /**
- * The "Internet & connectivity" row, including its server badge.
+ * The "Internet connectivity" row, including its server badge.
  *
  * Isolated into its own component so the parent can force a fresh mount (via the `key` it supplies)
  * once `paratextRegistration.internetSettingsDataProvider` registers, if that happens after this
@@ -236,7 +236,7 @@ function NetworkSettingsRow({
         data-testid="user-profile-action-network"
       >
         <Wifi className="tw:size-3.5" />
-        {localizedStrings['%userProfile_networkSettings_2%']}
+        {localizedStrings['%userProfile_networkSettings_3%']}
       </Button>
       {selectedServer !== undefined && (
         // A sibling of the Button, not a child: a focusable element nested inside another
@@ -295,8 +295,8 @@ function NetworkSettingsRow({
  * users should read the gaps as "not built yet" rather than as bugs.
  *
  * When the user's Paratext registration is missing or invalid, an unobtrusive reminder dot appears
- * on the toolbar trigger and on the "Profile & registration" row. The dot is never the only signal:
- * the trigger's accessible label and tooltip change to match, and the popover row carries
+ * on the toolbar trigger and on the "Registration information" row. The dot is never the only
+ * signal: the trigger's accessible label and tooltip change to match, and the popover row carries
  * screen-reader-only text.
  */
 export function UserProfilePopover() {
@@ -311,8 +311,8 @@ export function UserProfilePopover() {
   // registration is bad.
   const showRegistrationReminder = registrationValidity === 'invalid';
   const userProfileLabel = showRegistrationReminder
-    ? localizedStrings['%toolbar_userProfile_label_registrationNeeded%']
-    : localizedStrings['%toolbar_userProfile_label%'];
+    ? localizedStrings['%toolbar_userProfile_label_registrationNeeded_2%']
+    : localizedStrings['%toolbar_userProfile_label_2%'];
 
   const [safeInterfaceMode, setInterfaceMode] = useInterfaceMode();
 
@@ -520,7 +520,10 @@ export function UserProfilePopover() {
                 aria-label={userProfileLabel}
                 data-testid="user-profile-popover-trigger"
               >
-                <CircleUserRound />
+                {/* Power accents the icon so the interface mode reads from the toolbar alone. */}
+                <CircleUserRound
+                  className={cn(safeInterfaceMode === 'power' && 'tw:text-primary')}
+                />
                 {showRegistrationReminder && (
                   // `end-1` (not `right-1`) so the dot mirrors in RTL. The ring separates the dot
                   // from the icon it overlaps, so it has to match whatever is behind it: the ghost
@@ -647,7 +650,7 @@ export function UserProfilePopover() {
             data-testid="user-profile-action-registration"
           >
             <User className="tw:size-3.5" />
-            {localizedStrings['%userProfile_profileAndRegistration%']}
+            {localizedStrings['%userProfile_profileAndRegistration_2%']}
             {showRegistrationReminder && (
               <>
                 <ReminderDot testId="user-profile-action-registration-dot" className="tw:ms-auto" />

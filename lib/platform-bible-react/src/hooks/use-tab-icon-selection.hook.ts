@@ -1,14 +1,18 @@
 import { useViewVisibility } from './use-view-visibility.hook';
 
-/** The four tab-icon variants, as static asset URLs (e.g. `papi-extension://` URLs). */
+/**
+ * The four tab-icon variants, as static asset URLs (e.g. `papi-extension://` URLs).
+ *
+ * @deprecated 2026-10-27 — Set `iconName` to a lucide icon name on the web view definition instead.
+ */
 export type TabIconUrls = {
   /** Dark theme (any selection). */
   dark: string;
   /**
-   * Light theme, tab selected (white). Unused by `pickTabIconUrl` today: every current host keeps
-   * the active tab's header on a plain light background (never a dark/tinted one), so a white icon
-   * would be invisible there. Kept in the type for a future host that does give the selected tab a
-   * dark background and needs a contrasting icon.
+   * Light theme, tab selected (white). Unused by `pickTabIconUrl`: every host when these were
+   * deprecated kept the active tab's header on a plain light background (never a dark/tinted one),
+   * so a white icon would be invisible there. Kept in the type for a future host that does give the
+   * selected tab a dark background and needs a contrasting icon.
    */
   lightSelected: string;
   /** Light theme, tab not selected (near-black). Also used for the selected state — see above. */
@@ -19,11 +23,13 @@ export type TabIconUrls = {
 
 /**
  * Picks the tab icon URL. In dark theme the icon is always the dark variant. In light theme it's
- * the near-black variant regardless of selection — every current host keeps the active tab's header
- * on a plain light background rather than a dark/tinted one (see
+ * the near-black variant regardless of selection — every host when these were deprecated kept the
+ * active tab's header on a plain light background rather than a dark/tinted one (see
  * `dock-layout-wrapper.simple-mode.scss`'s "SIMPLE-MODE TAB SELECTION LOOK" region), so a selected
  * tab needs the same contrast as an unselected one — a mid-slate fallback is used when the selected
  * state is unknown (`undefined`).
+ *
+ * @deprecated 2026-10-27 — Set `iconName` to a lucide icon name on the web view definition instead.
  */
 export function pickTabIconUrl(
   isDarkTheme: boolean,
@@ -53,6 +59,7 @@ export function pickTabIconUrl(
  * Callers own the theme subscription themselves (e.g. `papi.themes.subscribeCurrentTheme`) and pass
  * the resulting `isDarkTheme` in — this hook has no PAPI dependency.
  *
+ * @deprecated 2026-10-27 — Set `iconName` to a lucide icon name on the web view definition instead.
  * @param isDarkTheme Whether the current theme is dark.
  * @param tabIconUrls The four icon variant URLs for this tab.
  * @returns The icon URL to pass to `updateWebViewDefinition({ iconUrl })`.

@@ -11,7 +11,7 @@ import { buildInternetSettingsWebViewState } from './internet-settings-web-view-
 
 export const internetSettingsWebViewType = 'paratextRegistration.internetSettingsView';
 
-const titleKey = '%internetSettings_webView_title%';
+const titleKey = '%internetSettings_webView_title_3%';
 const tooltipKey = '%internetSettings_webView_tooltip%';
 
 export interface InternetSettingsWebViewOptions extends OpenWebViewOptions {

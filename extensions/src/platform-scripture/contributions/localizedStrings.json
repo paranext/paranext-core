@@ -1,5 +1,15 @@
 {
   "metadata": {
+    "%manageBooks_bookNames_notYetAvailable%": {
+      "deprecationInfo": {
+        "date": "2026-10-23",
+        "message": "Said \"coming soon\", which promises a delivery date nobody has set. The new key is %manageBooks_bookNames_notYetAvailable_2%."
+      }
+    },
+    "%manageBooks_bookNames_notYetAvailable_2%": {
+      "fallbackKey": "%manageBooks_bookNames_notYetAvailable%",
+      "notes": "Tooltip on a Manage Books sidebar row that is shown but does not work yet. The user cannot turn it on. \"Available\" means \"can be used\", not \"in stock\" or \"not busy\". Name the feature: in a narrow window the row shows only an icon, so this tooltip is its only visible text."
+    },
     "%manageBooks_delete_confirmBodyAllShared%": {
       "deprecationInfo": {
         "date": "2026-10-13",
@@ -17,6 +27,26 @@
     },
     "%manageBooks_delete_confirmBodySharedSendReceive_2%": {
       "fallbackKey": "%manageBooks_delete_confirmBodySharedSendReceive%"
+    },
+    "%manageBooks_progressTracking_notYetAvailable%": {
+      "deprecationInfo": {
+        "date": "2026-10-23",
+        "message": "Said \"coming soon\", which promises a delivery date nobody has set. The new key is %manageBooks_progressTracking_notYetAvailable_2%."
+      }
+    },
+    "%manageBooks_progressTracking_notYetAvailable_2%": {
+      "fallbackKey": "%manageBooks_progressTracking_notYetAvailable%",
+      "notes": "Tooltip on a Manage Books sidebar row that is shown but does not work yet. The user cannot turn it on. \"Available\" means \"can be used\", not \"in stock\" or \"not busy\". Name the feature: in a narrow window the row shows only an icon, so this tooltip is its only visible text."
+    },
+    "%manageBooks_view_disabledStub_notYetAvailable%": {
+      "deprecationInfo": {
+        "date": "2026-10-23",
+        "message": "Said \"coming soon\", which promises a delivery date nobody has set. The new key is %manageBooks_view_disabledStub_notYetAvailable_2%."
+      }
+    },
+    "%manageBooks_view_disabledStub_notYetAvailable_2%": {
+      "fallbackKey": "%manageBooks_view_disabledStub_notYetAvailable%",
+      "notes": "Tooltip on a Manage Books toolbar button (Project canons, Registry, Compare versions) that is shown but does not work yet. The user cannot turn it on. \"Available\" means \"can be used\", not \"in stock\" or \"not busy\"."
     },
     "%webView_find_allBooks%": {
       "fallbackKey": "%comment_filter_scope_all_books%"
@@ -323,9 +353,11 @@
       "%manageBooks_progressTracking_label%": "Progress tracking",
       "%manageBooks_progressTracking_subtitle%": "Start, stop, and review tracking",
       "%manageBooks_progressTracking_notYetAvailable%": "Progress tracking is not yet available — coming soon.",
+      "%manageBooks_progressTracking_notYetAvailable_2%": "Progress tracking is not yet available.",
       "%manageBooks_bookNames_label%": "Book names",
       "%manageBooks_bookNames_subtitle%": "Edit short and long book names (TOC1–3)",
       "%manageBooks_bookNames_notYetAvailable%": "Book names editing is not yet available — coming soon.",
+      "%manageBooks_bookNames_notYetAvailable_2%": "Book names editing is not yet available.",
       "%manageBooks_copy_confirmBodyWithBooks_one%": "1 book already exists in {0}: {1}",
       "%manageBooks_copy_confirmBodyWithBooks_other%": "{0} books already exist in {1}: {2}",
       "%manageBooks_copy_confirmCancel%": "Cancel",
@@ -496,6 +528,7 @@
       "%manageBooks_versification_vulgate%": "Vulgate",
       "%manageBooks_view_compareVersions_label%": "Compare versions…",
       "%manageBooks_view_disabledStub_notYetAvailable%": "Not yet available — coming soon",
+      "%manageBooks_view_disabledStub_notYetAvailable_2%": "Not yet available",
       "%manageBooks_view_openProjectCanons%": "Project canons…",
       "%manageBooks_view_openRegistry%": "Registry",
       "%manageBooks_view_openScrRefSettings%": "Scripture reference settings…",
@@ -1086,6 +1119,7 @@
       "%markersChecklist_menu_openTool%": "Lista de verificación de marcadores…",
       "%manageBooks_openMenuItem%": "Administrar libros",
       "%manageBooks_view_disabledStub_notYetAvailable%": "Aún no disponible — próximamente",
+      "%manageBooks_view_disabledStub_notYetAvailable_2%": "Aún no disponible",
       "%manageBooks_grid_canonGroup_DC%": "Deuterocanónicos",
       "%manageBooks_grid_canonGroup_Extra%": "Extras",
       "%manageBooks_grid_canonGroup_NT%": "Nuevo Testamento",

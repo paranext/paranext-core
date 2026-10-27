@@ -92,13 +92,14 @@ test.describe('Scripture Text Grid — View Options panel', () => {
     // in the test locale).
     await viewOptionsButton(grid).click();
 
-    // VIEW toggle: Verse is the active option; Chapter is now enabled (its renderer shipped), so
-    // the "Coming soon" hint is gone.
+    // VIEW toggle: Verse is the active option; Chapter is enabled, so no "not yet available" hint
+    // renders.
     const verse = verseViewOption(grid);
     const chapter = chapterViewOption(grid);
     await expect(verse).toBeVisible({ timeout: 15_000 });
     await expect(verse).toHaveAttribute('data-state', 'on');
     await expect(chapter).toBeEnabled();
+    await expect(grid.getByText('Chapter view is not yet available')).toHaveCount(0);
     await expect(grid.getByText('Coming soon')).toHaveCount(0);
 
     // TEXTS section header and the Get Resources button are always present (the list itself is empty

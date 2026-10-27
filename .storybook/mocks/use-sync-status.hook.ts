@@ -36,6 +36,7 @@ export type { SyncStatus, SyncingProject, SyncStatusInfo, UnsyncedDirection, Uns
 const IDLE: SyncStatusInfo = Object.freeze({
   status: 'idle',
   syncingProjects: Object.freeze([]),
+  isVerdictFromBackendOnly: false,
   unsyncedProjects: Object.freeze([]),
 });
 

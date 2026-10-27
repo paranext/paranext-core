@@ -12,9 +12,7 @@ import {
   sonner,
   usePromise,
   useRunWhenVisible,
-  useTabIconSelection,
   useViewVisibility,
-  type TabIconUrls,
 } from 'platform-bible-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -75,7 +73,6 @@ import {
 import { useBcvSyncScroll } from './use-bcv-sync-scroll.hook';
 import { useCommentDrafts } from './use-comment-drafts.hook';
 import { useFrozenPresetThreadIds } from './use-frozen-preset-thread-ids.hook';
-import { COMMENT_LIST_PANEL_WEB_VIEW_TYPE } from './comment-list-panel.utils';
 import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
 import { gateCommentWriteCapabilities } from './comment-list-capability-gating.util';
 
@@ -148,13 +145,6 @@ function initialUserChosenSelection(
   return { filters: { preset: stored.preset }, scopeFilter: stored.scopeFilter };
 }
 
-const COMMENT_LIST_PANEL_ICON_URLS: TabIconUrls = {
-  lightDefault: 'papi-extension://legacyCommentManager/assets/message-square.svg',
-  dark: 'papi-extension://legacyCommentManager/assets/message-square-dark.svg',
-  lightSelected: 'papi-extension://legacyCommentManager/assets/message-square-selected.svg',
-  lightUnselected: 'papi-extension://legacyCommentManager/assets/message-square-unselected.svg',
-};
-
 /**
  * Wraps a PDP method call with a null check. If the PDP is not yet available, logs a debug message
  * and returns the specified default value. This reduces repetitive null-checking boilerplate.
@@ -199,8 +189,6 @@ global.webViewComponent = function CommentListWebView({
   useWebViewScrollGroupScrRef,
   useWebViewState,
   projectId,
-  updateWebViewDefinition,
-  webViewType,
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(
     useMemo(() => {
@@ -219,46 +207,6 @@ global.webViewComponent = function CommentListWebView({
   // runtime state — the provider scrubs it to false on every rehydrate, and the driver re-flags it if
   // a sync is still in flight.
   const [isSyncBlocked] = useWebViewState<boolean>('isSyncBlocked', false);
-  // The Column 3 comment-list panel follows the active project's scroll group, so it always has a
-  // current chapter even though no editor is wired to it. Both comment-list web view types share
-  // this component, so its own `webViewType` prop distinguishes the panel — no extra state channel
-  // needed (and nothing gets serialized into persisted layouts).
-  const isCommentListPanel = webViewType === COMMENT_LIST_PANEL_WEB_VIEW_TYPE;
-
-  // #region Tab icon (Comment List panel only, both Power and Simple mode — matching Text
-  // Collection's convention; per-product-decision this tab keeps its icon in Power mode too,
-  // unlike Bible Texts/Commentaries which stay Simple-mode-only. The non-panel comment-list web
-  // view type still keeps its tab/view text-only, as today.)
-
-  const [isDarkTheme, setIsDarkTheme] = useState(false);
-  useEffect(() => {
-    let disposed = false;
-    let unsubscribe: (() => void) | undefined;
-    papi.themes
-      .subscribeCurrentTheme(undefined, (theme) => {
-        if (!isPlatformError(theme)) setIsDarkTheme(theme.type === 'dark');
-      })
-      .then((unsub) => {
-        if (disposed) unsub();
-        else unsubscribe = unsub;
-        return undefined;
-      })
-      .catch((e) => logger.warn(`Failed to subscribe to the current theme: ${getErrorMessage(e)}`));
-    return () => {
-      disposed = true;
-      unsubscribe?.();
-    };
-  }, []);
-
-  const commentListPanelIconUrl = useTabIconSelection(isDarkTheme, COMMENT_LIST_PANEL_ICON_URLS);
-  useEffect(() => {
-    // `isCommentListPanel` is fixed for this component instance's whole lifetime (derived from the
-    // webViewType prop), so there's no icon to clear when it's false — this instance never set one.
-    if (!isCommentListPanel) return;
-    updateWebViewDefinition({ iconUrl: commentListPanelIconUrl });
-  }, [isCommentListPanel, commentListPanelIconUrl, updateWebViewDefinition]);
-
-  // #endregion
 
   const editorWebViewController = useWebViewController(
     'platformScriptureEditor.react',

@@ -1,28 +1,26 @@
-import type { InternetSettings, IInternetSettingsDataProvider } from 'paratext-registration';
+import type {
+  InternetSettings,
+  InternetUse,
+  IInternetSettingsDataProvider,
+} from 'paratext-registration';
 import { Alert, AlertDescription, Button } from 'platform-bible-react';
-import {
-  InternetAccessOptionList,
-  INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
-  isSupportedInternetUse,
-} from 'platform-bible-react/experimental';
 import { useData, useDataProvider, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useDelayedFlag } from '@renderer/hooks/use-delayed-flag.hook';
-import {
-  hasSavedInternetUseChoice,
-  markInternetUseChoiceSaved,
-} from '@renderer/services/internet-use-choice-store';
+import { markInternetUseChoiceSaved } from '@renderer/services/internet-use-choice-store';
+import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import {
   noteInternetSettingsLoaded,
   noteInternetSettingsSaved,
 } from '@renderer/services/first-run-store';
 import {
+  formatReplacementString,
   getErrorMessage,
   isPlatformError,
   type LanguageStrings,
   type LocalizeKey,
 } from 'platform-bible-utils';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   DEFAULT_INTERNET_SETTINGS,
   INTERNET_SETTINGS_DATA_PROVIDER,
@@ -31,15 +29,26 @@ import type { FirstRunStepProps } from '../first-run-step-props.model';
 import { StepLoading } from '../step-loading.component';
 import { WizardStepHeading } from '../wizard-step-heading.component';
 
-// `firstRun_*` keys come from core (assets/localization), `internetSettings_*` and
-// `paratextRegistration_*` from the paratext-registration extension. Both merge in the combiner, so
-// the extension keys need no en.json entry.
+/**
+ * The Paratext 9 settings this app does not support yet, each named with Paratext 9's own label so
+ * the user recognizes it.
+ */
+const UNSUPPORTED_PARATEXT9_SETTING_KEYS: Partial<Record<InternetUse, LocalizeKey>> = {
+  Disabled: '%firstRun_step_internetSettings_paratext9Setting_Disabled%',
+  VpnRequired: '%firstRun_step_internetSettings_paratext9Setting_VpnRequired%',
+  ProxyOnly: '%firstRun_step_internetSettings_paratext9Setting_ProxyOnly%',
+};
+
+// `firstRun_*` keys come from core (assets/localization), `internetSettings_*` from the
+// paratext-registration extension. Both merge in the combiner, so the extension keys need no en.json
+// entry.
 const STRING_KEYS: LocalizeKey[] = [
   '%internetSettings_button_retry%',
   // The core wizard keys, not the extension's panel strings: these are translated in every language
-  // core ships (fr, zh-hans, zh-hant as well as en/es), and their English already reads "Internet &
-  // connectivity" — the same headline the standalone panel shows, so the two surfaces match.
-  '%firstRun_step_internetSettings_heading%',
+  // core ships (fr, zh-hans, zh-hant as well as en/es; the new heading key falls back to the older
+  // one in languages that have not translated it), and their English reads "Internet connectivity"
+  // — the same headline the standalone panel shows, so the two surfaces match.
+  '%firstRun_step_internetSettings_heading_2%',
   // Asks the user to choose, since Next waits for a choice. Shorter than the panel's subtitle: the
   // wizard has a footer to keep in view, so it drops the app-scope/Paratext-9 caveats the roomier
   // panel spells out.
@@ -47,62 +56,89 @@ const STRING_KEYS: LocalizeKey[] = [
   '%firstRun_step_internetSettings_connecting%',
   '%firstRun_step_internetSettings_loadError%',
   '%firstRun_step_internetSettings_restartNote%',
-  ...INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
+  '%firstRun_step_internetSettings_paratext9Unsupported%',
+  ...Object.values(UNSUPPORTED_PARATEXT9_SETTING_KEYS),
+  '%firstRun_step_internetSettings_sensitiveCountries%',
+  '%firstRun_step_internetSettings_useWithInternet%',
+  '%firstRun_step_internetSettings_closeApp%',
+  // Referenced via {%product_name%} in the choices and the warnings; formatReplacementString
+  // expands it.
+  '%product_name%',
 ];
 
 /**
- * Whether the wizard may move on with `permittedInternetUse` saved: only once the user has chosen
- * (see `internet-use-choice-store`), and only for an option the app actually implements.
+ * Looks up Paratext 9's own internet setting. Resolves `undefined` when Paratext 9 is not
+ * installed, its setting cannot be read, or the lookup fails: the step then just leaves out the
+ * sentence about it.
  */
-function canProceedWith(permittedInternetUse: InternetSettings['permittedInternetUse']): boolean {
-  return hasSavedInternetUseChoice() && isSupportedInternetUse(permittedInternetUse);
+async function lookUpParatext9InternetUse(): Promise<InternetUse | undefined> {
+  try {
+    const internetUse = await sendCommand('paratextRegistration.getParatext9InternetUse');
+    // "None" arrives from C# as `null`, which the declared type cannot express.
+    return internetUse ?? undefined;
+  } catch (e) {
+    logger.warn(`Could not look up the Paratext 9 internet setting: ${getErrorMessage(e)}`);
+    return undefined;
+  }
 }
 
 /**
- * Selector for the selected radio in the option list. Matches the standalone panel's focus target
- * (`internet-settings.component.tsx`).
- */
-const CHECKED_OPTION_SELECTOR = 'button[data-state="checked"]:not(:disabled)';
-
-/**
- * First-run wizard step that lets the user configure internet access before registration. Saves
- * immediately on each selection change (immediate-apply model). The settings only take effect after
- * a restart, which the Identify step performs: "Save and restart" when registering, or "Restart and
- * continue" for an existing registration when the saved settings differ from the ones this step
- * first loaded. The step says so up front, so the restart is not a surprise.
+ * First-run wizard step that asks the user to allow the app unrestricted internet access before
+ * registration, or to close it. Every other option needs a feature the app does not have yet, or
+ * leaves the user unable to get any project but the bundled sample, so onboarding offers only these
+ * two; "Disable access to some Bible translation services" stays available afterwards in the
+ * Internet & connectivity settings.
  *
- * No option is selected, and Next stays disabled, until the user picks one (see
- * `internet-use-choice-store` for why). A stored value the app cannot honor is the exception: it
- * shows selected, under the list's banner, and holds Next back the same way until it is replaced.
+ * When Paratext 9's own setting is one the app does not support yet, the step names it, so a user
+ * who relied on it knows it will not carry over. "Close <product name>" saves nothing, so the next
+ * launch asks again.
+ *
+ * The step hides the shell's Next and moves on itself once "Use <product name> with internet
+ * access" is saved. The setting takes effect after a restart, which the Identify step performs:
+ * "Save and restart" when registering, or "Restart and continue" for an existing registration when
+ * the saved settings differ from the ones this step first loaded. The step says so up front.
  *
  * Availability: `useDataProvider` returns `undefined` until the C# InternetSettingsDataProvider
  * registers, giving a natural spinner without any startup-race retry heuristics.
  */
 export function InternetSettingsStep(props: FirstRunStepProps) {
-  const { setCanProceed } = props;
+  const { onNext, setCanProceed } = props;
   const provider = useDataProvider(INTERNET_SETTINGS_DATA_PROVIDER);
   // Bumped by Retry to remount the loaded subcomponent and re-subscribe from scratch.
   const [retryCount, setRetryCount] = useState(0);
 
-  // While the provider is not yet registered, show the loading panel. Disable Next here so the
-  // wizard can't advance before settings are readable.
   const showConnectingMessage = useDelayedFlag(provider === undefined);
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
+  const [paratext9Lookup, setParatext9Lookup] = useState<Paratext9Lookup>();
 
+  // Started here rather than in the loaded subcomponent, so it overlaps the wait for the provider
+  // and Retry's remount does not repeat it.
   useEffect(() => {
-    if (provider === undefined) setCanProceed?.(false);
-  }, [provider, setCanProceed]);
+    let isCurrent = true;
+    (async () => {
+      // Never rejects: a failed lookup resolves `undefined`.
+      const internetUse = await lookUpParatext9InternetUse();
+      if (isCurrent) setParatext9Lookup({ internetUse });
+    })();
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
+
+  // Before the first paint, so the shell's Next never flashes.
+  useLayoutEffect(() => {
+    setCanProceed?.(undefined);
+  }, [setCanProceed]);
 
   return (
     // The heading wraps every state so it holds its place instead of popping in once the provider
-    // resolves. This step keeps its own layout rather than using WizardStepForm because it relies on
-    // the shell's footer, not a primary button — so it renders the shared heading directly.
+    // resolves.
     <div className="tw:flex tw:flex-col tw:gap-3">
       {/* Heading and lead-in share one wrapper so the outer gap-3 doesn't split them apart —
           same pairing the standalone dialog uses. */}
       <div>
         <WizardStepHeading>
-          {localizedStrings['%firstRun_step_internetSettings_heading%']}
+          {localizedStrings['%firstRun_step_internetSettings_heading_2%']}
         </WizardStepHeading>
         <p className="tw:text-sm tw:text-muted-foreground">
           {localizedStrings['%firstRun_step_internetSettings_body_2%']}
@@ -124,7 +160,8 @@ export function InternetSettingsStep(props: FirstRunStepProps) {
           key={retryCount}
           provider={provider}
           localizedStrings={localizedStrings}
-          setCanProceed={setCanProceed}
+          paratext9Lookup={paratext9Lookup}
+          onNext={onNext}
           onRetry={() => setRetryCount((c) => c + 1)}
         />
       )}
@@ -132,50 +169,37 @@ export function InternetSettingsStep(props: FirstRunStepProps) {
   );
 }
 
+/** What the Paratext 9 lookup found: `internetUse` is `undefined` when it found no setting. */
+type Paratext9Lookup = { internetUse: InternetUse | undefined };
+
 type LoadedProps = {
   provider: IInternetSettingsDataProvider;
   localizedStrings: LanguageStrings;
-  setCanProceed: FirstRunStepProps['setCanProceed'];
+  /** `undefined` until the Paratext 9 lookup settles. */
+  paratext9Lookup: Paratext9Lookup | undefined;
+  onNext: FirstRunStepProps['onNext'];
   onRetry: () => void;
 };
 
-/**
- * Rendered only once the provider is available. Reads via `useData` (live cross-window updates) and
- * keeps a thin local mirror so the radio responds instantly on selection (optimistic apply), while
- * the actual persist goes through `setData`.
- */
+/** Rendered only once the provider is available. */
 function InternetSettingsLoaded({
   provider,
   localizedStrings,
-  setCanProceed,
+  paratext9Lookup,
+  onNext,
   onRetry,
 }: LoadedProps) {
   const [value, setData, isLoading] = useData(provider).InternetSettings(
     undefined,
     DEFAULT_INTERNET_SETTINGS,
   );
-
-  const [settings, setSettings] = useState<InternetSettings | undefined>();
-  // Whether the list shows the internet-use choice as made. Unlike the saved choice
-  // (hasSavedInternetUseChoice), it turns on as soon as the user picks, so the row stays selected
-  // while the save is in flight; a failed save turns it back to the saved choice.
-  const [isChoiceShown, setIsChoiceShown] = useState(hasSavedInternetUseChoice);
-  const [saveError, setSaveError] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
+  const hasLookedUpParatext9 = paratext9Lookup !== undefined;
+  const [actionError, setActionError] = useState('');
+  const [isBusy, setIsBusy] = useState(false);
   const isMounted = useRef(false);
-  const optionListContainer = useRef<HTMLDivElement | undefined>(undefined);
-  // Whether focus was in the option list when the current save began. The list is disabled while
-  // saving, which drops focus from the radio the user just picked, so it is put back afterwards.
-  const shouldRefocusOptionList = useRef(false);
-  // Last value we successfully displayed, so a failed optimistic save can revert to it.
-  const lastGood = useRef<InternetSettings | undefined>(undefined);
-  // The provider value last mirrored into `settings`. `setData` does not update `value`: the saved
-  // value arrives later, through the provider's update. So mirror only a `value` not seen before —
-  // re-mirroring when a save ends would briefly put the pre-save value back.
-  const lastMirroredValue = useRef<typeof value | undefined>(undefined);
 
   // When loading, value is the default placeholder, never a PlatformError — so gate on isLoading alone.
-  const showConnectingMessage = useDelayedFlag(isLoading);
+  const showConnectingMessage = useDelayedFlag(isLoading || !hasLookedUpParatext9);
 
   useEffect(() => {
     isMounted.current = true;
@@ -184,80 +208,49 @@ function InternetSettingsLoaded({
     };
   }, []);
 
-  // Sync the local mirror from the provider value. While loading (value is still the default) or
-  // while a save is pending/failed, handleChange and the loading render own the state — defer. Once
-  // a real value is in, enable Next if the user has chosen; if the read is an error, keep Next
-  // disabled so the wizard can't advance past an unloaded step. A stored value the app cannot honor
-  // (see isSupportedInternetUse) also holds Next back: the list shows it selected under a banner,
-  // and the user has to replace it with something that will actually take effect before the wizard
-  // moves on.
   useEffect(() => {
-    if (isLoading || isSaving || saveError) return;
-    if (value === lastMirroredValue.current) return;
-    lastMirroredValue.current = value;
-    if (isPlatformError(value)) {
-      setCanProceed?.(false);
+    if (!isLoading && !isPlatformError(value)) noteInternetSettingsLoaded(value);
+  }, [value, isLoading]);
+
+  const continueWithInternetAccess = async () => {
+    if (isLoading || isPlatformError(value)) return;
+    if (!setData) {
+      // Defensive: InternetSettingsLoaded renders only once `provider` is defined, so `setData` is
+      // always defined here. Bail rather than moving on with nothing saved.
+      logger.warn('Internet settings provider unavailable; not saving the internet choice.');
       return;
     }
-    noteInternetSettingsLoaded(value);
-    setSettings(value);
-    lastGood.current = value;
-    // A choice saved by an earlier instance of this step (one the shell unmounted mid-save on Back)
-    // lands here, so the list and Next agree on it.
-    setIsChoiceShown(hasSavedInternetUseChoice());
-    setCanProceed?.(canProceedWith(value.permittedInternetUse));
-  }, [value, isLoading, isSaving, saveError, setCanProceed]);
+    const next: InternetSettings = { ...value, permittedInternetUse: 'Enabled' };
+    setActionError('');
+    setIsBusy(true);
+    try {
+      await setData(next);
+      noteInternetSettingsSaved(next);
+      markInternetUseChoiceSaved();
+      // The shell's Back stays available during the save. If the user left, this `onNext` would
+      // move the wizard on from a step they are no longer on.
+      if (!isMounted.current) return;
+      onNext();
+    } catch (err: unknown) {
+      if (!isMounted.current) return;
+      setActionError(getErrorMessage(err));
+    }
+    if (isMounted.current) setIsBusy(false);
+  };
 
-  // Put focus back on the selected radio once a save started from the option list ends — unless the
-  // user has since moved focus somewhere else.
-  useEffect(() => {
-    if (isSaving || !shouldRefocusOptionList.current) return;
-    shouldRefocusOptionList.current = false;
-    const container = optionListContainer.current;
-    const focused = document.activeElement;
-    if (!container || (focused && focused !== document.body && !container.contains(focused)))
-      return;
-    container.querySelector<HTMLElement>(CHECKED_OPTION_SELECTOR)?.focus();
-  }, [isSaving]);
-
-  const handleChange = useCallback(
-    async (next: InternetSettings, { isInternetUseChoice }: { isInternetUseChoice: boolean }) => {
-      if (isSaving) return;
-      if (!setData) {
-        // Defensive: InternetSettingsLoaded renders only once `provider` is defined, so `setData` is
-        // always defined here. Bail rather than reporting a save that never actually persisted.
-        logger.warn('Internet settings provider unavailable; ignoring selection change.');
-        return;
-      }
-      setSettings(next); // optimistic
-      if (isInternetUseChoice) setIsChoiceShown(true);
-      setSaveError('');
-      shouldRefocusOptionList.current =
-        optionListContainer.current?.contains(document.activeElement) ?? false;
-      setIsSaving(true);
-      setCanProceed?.(false);
-      try {
-        await setData(next);
-        noteInternetSettingsSaved(next);
-        if (isInternetUseChoice) markInternetUseChoiceSaved();
-        if (!isMounted.current) return;
-        lastGood.current = next;
-        setIsSaving(false);
-        // Next must reflect what was actually saved: still locked until a choice has been made,
-        // and not unlocked by a value that turns out unsupported — re-derive via `canProceedWith`
-        // rather than assuming the save that just succeeded is itself enough to unlock.
-        setCanProceed?.(canProceedWith(next.permittedInternetUse));
-      } catch (err: unknown) {
-        if (!isMounted.current) return;
-        setSettings(lastGood.current); // revert
-        setIsChoiceShown(hasSavedInternetUseChoice());
-        setIsSaving(false);
-        setSaveError(getErrorMessage(err));
-        setCanProceed?.(false);
-      }
-    },
-    [isSaving, setData, setCanProceed],
-  );
+  const closeApp = async () => {
+    setActionError('');
+    setIsBusy(true);
+    try {
+      // Resolves as soon as shutdown starts, and a started quit is not cancelled, so the choices
+      // stay disabled: a click while the app shuts down must not save anything.
+      await sendCommand('platform.quit');
+    } catch (err: unknown) {
+      if (!isMounted.current) return;
+      setActionError(getErrorMessage(err));
+      setIsBusy(false);
+    }
+  };
 
   if (isPlatformError(value)) {
     return (
@@ -274,7 +267,7 @@ function InternetSettingsLoaded({
     );
   }
 
-  if (isLoading || !settings) {
+  if (isLoading || !hasLookedUpParatext9) {
     return (
       <StepLoading
         message={
@@ -286,34 +279,50 @@ function InternetSettingsLoaded({
     );
   }
 
-  // Until the user chooses, select nothing rather than present the stored value as their choice —
-  // unless the stored value is one the app cannot honor, which the list shows selected under its
-  // banner so the user can see what was carried over.
-  const shownInternetUse =
-    isChoiceShown || !isSupportedInternetUse(settings.permittedInternetUse)
-      ? settings.permittedInternetUse
-      : undefined;
+  const paratext9InternetUse = paratext9Lookup?.internetUse;
+  const unsupportedParatext9SettingKey =
+    paratext9InternetUse && UNSUPPORTED_PARATEXT9_SETTING_KEYS[paratext9InternetUse];
 
   return (
     <div className="tw:flex tw:flex-col tw:gap-4">
-      {saveError && (
+      {/* Plain text rather than a warning banner: nothing is wrong yet, the user is being asked. */}
+      <div className="tw:flex tw:flex-col tw:gap-2 tw:text-sm">
+        {unsupportedParatext9SettingKey && (
+          <p>
+            {formatReplacementString(
+              localizedStrings['%firstRun_step_internetSettings_paratext9Unsupported%'] ?? '',
+              {
+                ...localizedStrings,
+                setting: localizedStrings[unsupportedParatext9SettingKey] ?? '',
+              },
+            )}
+          </p>
+        )}
+        <p>
+          {formatReplacementString(
+            localizedStrings['%firstRun_step_internetSettings_sensitiveCountries%'] ?? '',
+            localizedStrings,
+          )}
+        </p>
+      </div>
+      {actionError && (
         <Alert variant="destructive">
-          <AlertDescription>{saveError}</AlertDescription>
+          <AlertDescription>{actionError}</AlertDescription>
         </Alert>
       )}
-      <div
-        ref={(el) => {
-          optionListContainer.current = el ?? undefined;
-        }}
-      >
-        <InternetAccessOptionList
-          localizedStrings={localizedStrings}
-          value={shownInternetUse}
-          onChange={(v) =>
-            handleChange({ ...settings, permittedInternetUse: v }, { isInternetUseChoice: true })
-          }
-          disabled={isSaving}
-        />
+      <div className="tw:flex tw:flex-col tw:gap-2">
+        <Button onClick={continueWithInternetAccess} disabled={isBusy}>
+          {formatReplacementString(
+            localizedStrings['%firstRun_step_internetSettings_useWithInternet%'] ?? '',
+            localizedStrings,
+          )}
+        </Button>
+        <Button variant="outline" onClick={closeApp} disabled={isBusy}>
+          {formatReplacementString(
+            localizedStrings['%firstRun_step_internetSettings_closeApp%'] ?? '',
+            localizedStrings,
+          )}
+        </Button>
       </div>
     </div>
   );

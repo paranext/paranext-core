@@ -1,58 +1,45 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
-import { spyOn, restoreAllMocks } from 'storybook/test';
 import { newPlatformError } from 'platform-bible-utils';
-import * as papiHooks from '@renderer/hooks/papi-hooks';
-import {
-  markInternetUseChoiceSaved,
-  resetInternetUseChoiceForTesting,
-} from '@renderer/services/internet-use-choice-store';
 import { InternetSettingsStep } from './internet-settings-step.component';
+// Deep relative (not aliased) so the story drives the webpack-aliased mocks without pulling them
+// into tsc typecheck. Mirrors how the language step reaches its own mock channel.
+import {
+  resetCommandServiceMock,
+  setCommandServiceMock,
+} from '../../../../../.storybook/mocks/command-service-mock-channel';
+import { withInternetSettings } from '../../../../../.storybook/mocks/internet-settings-mock-channel';
 
-const MOCK_SETTINGS = {
-  permittedInternetUse: 'VpnRequired' as const,
-  selectedServer: 'Production' as const,
-  proxyPort: 0,
-};
-
-// Stands in for the resolved data-provider object; the component only forwards it to useData, which
-// is mocked here and ignores it.
-const PROVIDER = { __brand: 'internetSettingsDataProvider' };
+// The step reads its settings through `useDataProvider`/`useData`, which have no PAPI backend in
+// Storybook. Both are replaced by `.storybook/mocks/renderer-papi-hooks.tsx`, and each story names
+// what they answer through the decorator below. Spying on those exports is not an option: they
+// belong to an ES module namespace, which is not configurable, so a `spyOn` throws and Storybook
+// renders its error overlay in place of the step. Commands go through the command-service mock
+// channel for the same reason.
 
 /**
- * Point useDataProvider/useData at a chosen state, mirroring how the component consumes them.
- * `provider: undefined` simulates the provider not yet registered (the outer spinner); otherwise
- * useData yields `[value, setData, isLoading]`. Returns a cleanup that restores the spies.
+ * Answers the step's commands without the network Storybook does not have: the Paratext 9 lookup
+ * with `paratext9InternetUse`, and "Close <product name>" with nothing, so it does not quit
+ * anything. Returns a cleanup that restores the default responder.
  */
-function mockHooks(config: { provider?: unknown; value?: unknown; isLoading?: boolean } = {}) {
-  // `'provider' in config` so a story can force provider === undefined (not-yet-registered).
-  const provider = 'provider' in config ? config.provider : PROVIDER;
-  const value = config.value ?? MOCK_SETTINGS;
-  const isLoading = config.isLoading ?? false;
-  // Storybook mock stand-ins; the precise curried useDataProvider/useData types add no value here
-  // and would couple the story to internal hook shapes.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion -- Storybook mock stand-in
-  spyOn(papiHooks, 'useDataProvider').mockReturnValue(provider as never);
-  // Same rationale as the useDataProvider mock above.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion -- Storybook mock stand-in
-  spyOn(papiHooks, 'useData').mockReturnValue({
-    InternetSettings: () => [value, async () => undefined, isLoading],
-  } as never);
-  return () => restoreAllMocks();
+function mockCommands(paratext9InternetUse?: string) {
+  setCommandServiceMock((command) =>
+    command === 'paratextRegistration.getParatext9InternetUse' ? paratext9InternetUse : undefined,
+  );
+  return () => resetCommandServiceMock();
 }
 
 const meta: Meta<typeof InternetSettingsStep> = {
-  title: 'First Run/InternetSettingsStep',
+  title: 'First run/InternetSettingsStep',
   component: InternetSettingsStep,
   tags: ['autodocs', 'test'],
   args: {
     onNext: () => {},
     setCanProceed: () => {},
   },
+  // Default: provider available, settings loaded, no Paratext 9.
+  decorators: [withInternetSettings()],
   beforeEach() {
-    // Each story starts before the user has chosen, whatever was clicked in the story before it.
-    resetInternetUseChoiceForTesting();
-    // Default: provider available, settings loaded (VPN Required).
-    return mockHooks();
+    return mockCommands();
   },
 };
 export default meta;
@@ -60,56 +47,50 @@ export default meta;
 type Story = StoryObj<typeof InternetSettingsStep>;
 
 /**
- * The data provider hasn't registered yet (`useDataProvider` returns `undefined`) — the natural
- * availability signal. The spinner shows and Next is disabled; after a short delay the "Getting
- * things ready…" message appears below it.
+ * The data provider hasn't registered yet (`useDataProvider` answers `undefined`) — the natural
+ * availability signal. The spinner shows; after a short delay the "Getting things ready…" message
+ * appears below it.
  */
 export const ProviderRegistering: Story = {
-  beforeEach() {
-    return mockHooks({ provider: undefined });
-  },
+  decorators: [withInternetSettings({ isProviderRegistered: false })],
 };
 
-/** Provider registered but the first read is still in flight (`isLoading`): spinner, Next disabled. */
+/** Provider registered but the first read is still in flight (`isLoading`): spinner. */
 export const Loading: Story = {
-  beforeEach() {
-    return mockHooks({ isLoading: true });
-  },
+  decorators: [withInternetSettings({ isLoading: true })],
 };
 
 /**
- * Settings loaded with VPN Required stored, as ParatextData saves on first startup. No option is
- * selected and Next stays disabled until the user picks one, so a stored value nobody chose is not
- * presented as their choice.
+ * A new user, or a Paratext 9 user whose setting is "Allow unrestricted Internet use": the
+ * sensitive-countries warning and the two choices.
  */
 export const Default: Story = {};
 
 /**
- * The user already chose "Unrestricted" this session and came back to the step: their choice shows
- * selected and Next is enabled.
+ * A Paratext 9 user whose setting is "Disable all Internet use". The step names it as not supported
+ * yet before the two choices.
  */
-export const ChoiceAlreadyMade: Story = {
+export const Paratext9DisablesAllInternetUse: Story = {
   beforeEach() {
-    markInternetUseChoiceSaved();
-    return mockHooks({ value: { ...MOCK_SETTINGS, permittedInternetUse: 'Enabled' } });
+    return mockCommands('Disabled');
   },
 };
 
-/**
- * The stored setting names an option this app does not implement yet. `InternetSettings.xml` is
- * seeded once from a co-installed Paratext 9 on first launch, so the wizard can meet this on a
- * first run. The row stays selected under a banner, and the step holds Next shut until the user
- * picks an option that will actually take effect.
- */
-export const UnsupportedStoredValue: Story = {
+/** A Paratext 9 user whose setting is "Disable Internet use in sensitive locations". */
+export const Paratext9DisablesInSensitiveLocations: Story = {
   beforeEach() {
-    return mockHooks({ value: { ...MOCK_SETTINGS, permittedInternetUse: 'Disabled' } });
+    return mockCommands('VpnRequired');
+  },
+};
+
+/** A Paratext 9 user whose setting is "Use a proxy". */
+export const Paratext9UsesAProxy: Story = {
+  beforeEach() {
+    return mockCommands('ProxyOnly');
   },
 };
 
 /** The read failed (a `PlatformError` from the provider): friendly error alert and a Retry button. */
 export const LoadError: Story = {
-  beforeEach() {
-    return mockHooks({ value: newPlatformError('Connection refused') });
-  },
+  decorators: [withInternetSettings({ value: newPlatformError('Connection refused') })],
 };

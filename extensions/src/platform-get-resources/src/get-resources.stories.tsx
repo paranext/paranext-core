@@ -59,17 +59,6 @@ const staticResources: DblResourceData[] = [
     updateAvailable: false,
     projectId: 'project-tsk',
   },
-  {
-    dblEntryUid: 'uid-5',
-    displayName: 'SBLGNT',
-    fullName: 'SBL Greek New Testament',
-    bestLanguageName: 'Greek',
-    type: 'SourceLanguageResource',
-    size: 800,
-    installed: false,
-    updateAvailable: false,
-    projectId: 'project-sblgnt',
-  },
 ];
 
 /** A large set of resources spread across 100 distinct languages, to exercise the language filter. */
@@ -343,7 +332,7 @@ export const BlockedByInternetSettings: Story = {
   decorators: [
     createDecorator({
       onInstallOrRemoveResource: rejectingMock(
-        'Internet access is disabled in “Internet & connectivity”. Please enable it and try again. (INTERNET_SERVICES_BLOCKED)',
+        'Internet access is disabled in “Internet connectivity”. Please enable it and try again. (INTERNET_SERVICES_BLOCKED)',
       ),
     }),
   ],

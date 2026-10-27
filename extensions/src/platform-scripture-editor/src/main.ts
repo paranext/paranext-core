@@ -21,6 +21,7 @@ import {
   EditorWebViewMessage,
   OpenEditorOptions,
   PlatformScriptureEditorWebViewController,
+  ScriptureEditorViewType,
   ScriptureRangeUsjVerseRefChapterLocation,
 } from 'platform-scripture-editor';
 import { AnnotationStyleDataProviderEngine } from './annotations/annotation-style.data-provider-engine.model';
@@ -49,13 +50,16 @@ import {
   buildScriptureTextGridWebView,
   type TextCollectionPanelOptions,
   selectProjectIdsForOpenMode,
+  showsReadOnlyPreview,
   startDefaultProjectPicker,
   syncOnProjectSwitch,
+  syncOnSwitchToPower,
   toScriptureEditorInfos,
   updateRelatedChecksSidePanel,
   updateRelatedFindPanel,
+  VIEW_TYPE_FOR_SET_VIEW_COMMAND,
 } from './platform-scripture-editor.utils';
-import { MarkersViewNotifier } from './markers-view-notifier.model';
+import { ReadOnlyViewNotifier } from './read-only-view-notifier.model';
 import { SharedLayoutReceiver } from './shared-layout-receiver.model';
 import {
   BIBLE_TEXTS_PANEL_WEBVIEW_TYPE,
@@ -500,6 +504,24 @@ async function changeScriptureView(webViewId: string | undefined): Promise<void>
   await controller?.changeScriptureView();
 }
 
+async function setScriptureView(
+  webViewId: string | undefined,
+  viewType: ScriptureEditorViewType,
+): Promise<void> {
+  const controller = await getScriptureEditorController(webViewId);
+  await controller?.setScriptureView(viewType);
+}
+
+async function undoInEditor(webViewId: string | undefined): Promise<void> {
+  const controller = await getScriptureEditorController(webViewId);
+  await controller?.undo();
+}
+
+async function redoInEditor(webViewId: string | undefined): Promise<void> {
+  const controller = await getScriptureEditorController(webViewId);
+  await controller?.redo();
+}
+
 async function toggleFootnotesPane(webViewId: string | undefined): Promise<void> {
   const controller = await getScriptureEditorController(webViewId);
   await controller?.toggleFootnotesPaneVisibility();
@@ -580,10 +602,14 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
     // itself must keep its narrower "opened as Resource Viewer" tab-identity meaning (see Section 2
     // of the design spec). A lookup failure or a project that doesn't advertise
     // `platformScripture.scriptureEditPermissions` fails open here (title stays whatever
-    // isReadOnly/markers already computed), matching the same fail-open convention the webview's
+    // isReadOnly/Preview already computed), matching the same fail-open convention the webview's
     // own reactive `canUserEditScripture` signal uses — so the open-time label and the live gate
     // never disagree about which direction an error should bias.
-    let isReadOnlyForTitle = isReadOnly || savedWebViewStateUpdated.viewType === 'markers';
+    // Preview is read-only only in Power: outside Power a saved formatted view is the editable
+    // Simple view
+    let isReadOnlyForTitle =
+      isReadOnly ||
+      showsReadOnlyPreview(savedWebViewStateUpdated.viewType, interfaceMode === 'power');
     if (!isReadOnlyForTitle && projectId) {
       try {
         const scriptureEditPermissionsPdp = await papi.projectDataProviders.get(
@@ -731,6 +757,63 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
           );
         } catch (e) {
           const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running changeScriptureView! ${getErrorMessage(e)}`;
+          logger.warn(message);
+          throw new Error(message);
+        }
+      },
+      async setScriptureView(viewType) {
+        try {
+          logger.debug(
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to setScriptureView ${viewType}`,
+          );
+          if (!currentWebViewDefinition.projectId)
+            throw new Error(`webViewDefinition.projectId is empty!`);
+
+          const message: EditorWebViewMessage = {
+            method: 'setScriptureView',
+            viewType,
+          };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+        } catch (e) {
+          const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running setScriptureView! ${getErrorMessage(e)}`;
+          logger.warn(message);
+          throw new Error(message);
+        }
+      },
+      async undo() {
+        try {
+          logger.debug(
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to undo`,
+          );
+          const message: EditorWebViewMessage = { method: 'undo' };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+        } catch (e) {
+          const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running undo! ${getErrorMessage(e)}`;
+          logger.warn(message);
+          throw new Error(message);
+        }
+      },
+      async redo() {
+        try {
+          logger.debug(
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to redo`,
+          );
+          const message: EditorWebViewMessage = { method: 'redo' };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+        } catch (e) {
+          const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running redo! ${getErrorMessage(e)}`;
           logger.warn(message);
           throw new Error(message);
         }
@@ -988,7 +1071,7 @@ export function createResourceTextPanelProvider(
   webViewType: string,
   title: string,
   resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
-  defaultIconUrl: string,
+  iconName: string,
 ): IWebViewProvider {
   return {
     async getWebView(
@@ -1020,10 +1103,11 @@ export function createResourceTextPanelProvider(
         projectId,
         content: resourceTextPanelWebView,
         styles: resourceTextPanelWebViewStyles,
-        // Icon-only tab in Simple mode only — Power mode keeps showing this tab with no icon,
-        // exactly as today, since it is text-labeled there (see resource-text-panel.web-view.tsx
-        // for the live theme/selection-adaptive swap, which is likewise gated on Power mode).
-        iconUrl: interfaceMode === 'simple' ? defaultIconUrl : savedWebView.iconUrl,
+        // Icon-only tab in Simple mode, drawn in the tab's text colour so it follows the theme.
+        // Power mode labels this tab with text and shows the default logo; a saved icon is dropped
+        // since it may name an asset that no longer exists.
+        iconName: interfaceMode === 'simple' ? iconName : undefined,
+        iconUrl: undefined,
         // Also selects a resource opened elsewhere — from Home in Simple mode — when one is passed.
         state: buildResourceTextPanelState(savedWebView.state, resourceType, openWebViewOptions),
         // This webview only ever appears in the fixed 3-column simple-mode layout (Column 3) and
@@ -1038,14 +1122,14 @@ const bibleTextsPanelWebViewProvider: IWebViewProvider = createResourceTextPanel
   BIBLE_TEXTS_PANEL_WEBVIEW_TYPE,
   '%webView_resourcePanel_bibleTexts_title%',
   'ScriptureResource',
-  'papi-extension://platformScriptureEditor/assets/book-open.svg',
+  'book-open',
 );
 
 const commentariesPanelWebViewProvider: IWebViewProvider = createResourceTextPanelProvider(
   COMMENTARIES_PANEL_WEBVIEW_TYPE,
   '%webView_resourcePanel_commentaries_title%',
   'CommentaryResource',
-  'papi-extension://platformScriptureEditor/assets/file-text.svg',
+  'file-text',
 );
 
 async function openResourceText(
@@ -1236,7 +1320,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     changeScriptureView,
     {
       method: {
-        summary: 'Change the Scripture view type in the editor',
+        summary: 'Toggle the editor between Standard view and Preview (Power mode only)',
         params: [
           {
             name: 'webViewId',
@@ -1252,6 +1336,99 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
       },
     },
   );
+
+  const setViewStandardPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.setViewStandard',
+    (webViewId) =>
+      setScriptureView(
+        webViewId,
+        VIEW_TYPE_FOR_SET_VIEW_COMMAND['platformScriptureEditor.setViewStandard'],
+      ),
+    {
+      method: {
+        'x-experimental': true,
+        summary: 'Show Standard view in the editor (the Simple view outside Power mode)',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the WebView whose Scripture view is to be changed',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  const setViewPreviewPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.setViewPreview',
+    (webViewId) =>
+      setScriptureView(
+        webViewId,
+        VIEW_TYPE_FOR_SET_VIEW_COMMAND['platformScriptureEditor.setViewPreview'],
+      ),
+    {
+      method: {
+        'x-experimental': true,
+        summary:
+          'Show Preview, the read-only formatted view, in the editor (the Simple view outside Power mode)',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the WebView whose Scripture view is to be changed',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  const undoPromise = papi.commands.registerCommand('platformScriptureEditor.undo', undoInEditor, {
+    method: {
+      'x-experimental': true,
+      summary: 'Undo the last edit in the editor',
+      params: [
+        {
+          name: 'webViewId',
+          required: false,
+          summary: 'The ID of the WebView whose last edit is to be undone',
+          schema: { type: 'string' },
+        },
+      ],
+      result: {
+        name: 'return value',
+        schema: { type: 'null' },
+      },
+    },
+  });
+
+  const redoPromise = papi.commands.registerCommand('platformScriptureEditor.redo', redoInEditor, {
+    method: {
+      'x-experimental': true,
+      summary: 'Redo the last undone edit in the editor',
+      params: [
+        {
+          name: 'webViewId',
+          required: false,
+          summary: 'The ID of the WebView whose last undone edit is to be redone',
+          schema: { type: 'string' },
+        },
+      ],
+      result: {
+        name: 'return value',
+        schema: { type: 'null' },
+      },
+    },
+  });
 
   const toggleFootnotesPanePromise = papi.commands.registerCommand(
     'platformScriptureEditor.toggleFootnotes',
@@ -1557,9 +1734,36 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
+  const syncOnSwitchToPowerPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.syncOnSwitchToPower',
+    async (projectId) => {
+      // Not awaited: waiting for the answer and then the sync can outlast the caller's request
+      // timeout. The catch only backs up `syncOnSwitchToPower`'s own handling of its failures.
+      syncOnSwitchToPower(papi, projectId).catch((e) =>
+        logger.warn(`Switch-to-Power sync of ${projectId} failed: ${getErrorMessage(e)}`),
+      );
+    },
+    {
+      method: {
+        'x-experimental': true,
+        summary:
+          'Send/receive the project the Simple-mode Scripture Editor was showing, if it holds local changes to send, after a switch to Power mode',
+        params: [
+          {
+            name: 'projectId',
+            required: true,
+            summary: 'The project the Simple-mode Scripture Editor was showing',
+            schema: { type: 'string' },
+          },
+        ],
+        result: { name: 'return value', schema: { type: 'null' } },
+      },
+    },
+  );
+
   // Await the registration promises at the end so we don't hold everything else up
-  const markerNotifier = new MarkersViewNotifier(papi, context.executionToken);
-  const markerNotifierUnsubscribers = await markerNotifier.start();
+  const readOnlyViewNotifier = new ReadOnlyViewNotifier(papi, context.executionToken);
+  const readOnlyViewNotifierUnsubscribers = await readOnlyViewNotifier.start();
 
   // Resolve the feature flag (kicked off above so it overlapped the other registrations) and, only
   // if enabled, register the provider. Awaiting the flag here rather than up front keeps every
@@ -1576,6 +1780,10 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await openPlatformScriptureEditorPromise,
     await openPlatformResourceViewerPromise,
     await changeScriptureViewPromise,
+    await setViewStandardPromise,
+    await setViewPreviewPromise,
+    await undoPromise,
+    await redoPromise,
     await toggleFootnotesPanePromise,
     await changeFootnotesPaneLocationPromise,
     await insertFootnotePromise,
@@ -1604,9 +1812,10 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
       },
     },
     unsubFromDefaultProjectPicker,
-    ...markerNotifierUnsubscribers,
+    ...readOnlyViewNotifierUnsubscribers,
     await applySharedLayoutPromise,
     await finalizeProjectSwitchPromise,
+    await syncOnSwitchToPowerPromise,
     sharedLayoutReArmEmitter,
     {
       dispose: async () => {

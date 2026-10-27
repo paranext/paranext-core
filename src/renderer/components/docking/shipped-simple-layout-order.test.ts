@@ -104,10 +104,10 @@ const EDITOR_MENUS_PATH = resolve(
 const TAB_FOR_COMMAND: Record<string, string> = {
   'platformScriptureEditor.showBibleTextsPanel': 'platformScriptureEditor.bibleTexts',
   'platformScriptureEditor.showCommentariesPanel': 'platformScriptureEditor.commentaries',
-  'platformLexicalTools.openDictionary': 'platformLexicalTools.dictionary',
   'legacyCommentManager.showCommentListPanel': 'legacyCommentManager.commentListPanel',
   'platformScriptureEditor.showTextCollectionPanel': 'platformScriptureEditor.scriptureTextGrid',
   'platformScripture.openFind': 'platformScripture.find',
+  'platformLexicalTools.openDictionary': 'platformLexicalTools.dictionary',
 };
 
 type MenuItemJson = {
@@ -150,8 +150,8 @@ describe('shipped Simple-mode Column 3 order', () => {
       'platformScriptureEditor.bibleTexts',
       'platformScriptureEditor.commentaries',
       'platformLexicalTools.dictionary',
-      'legacyCommentManager.commentListPanel',
       'platformScripture.find',
+      'legacyCommentManager.commentListPanel',
     ]);
   });
 
@@ -262,26 +262,28 @@ describe('shipped Simple-mode Column 3 order', () => {
     expect(undeclared).toEqual([]);
   });
 
-  it('merging the real supplement puts Text Collection before Find', () => {
+  it('merging the real supplement puts Text Collection before Dictionary', () => {
     const merged = mergeDefaultLayoutSupplement(simpleLayout, supplementEntries, 'simple');
 
     expect(columnWebViewTypes(merged, 2)).toEqual([
       'platformScriptureEditor.bibleTexts',
       'platformScriptureEditor.commentaries',
-      'platformLexicalTools.dictionary',
-      'legacyCommentManager.commentListPanel',
       'platformScriptureEditor.scriptureTextGrid',
+      'platformLexicalTools.dictionary',
       'platformScripture.find',
+      'legacyCommentManager.commentListPanel',
     ]);
   });
 
-  it("lists the Simple Project menu's TOOLS section in the same order as the third column", () => {
+  it('lists a TOOLS item for every third-column tab, in the column order', () => {
     const merged = mergeDefaultLayoutSupplement(simpleLayout, supplementEntries, 'simple');
     const mappedTabs = simpleToolsCommands().map((command) => TAB_FOR_COMMAND[command]);
     // TAB_FOR_COMMAND[command] is undefined for an unmapped command, and a missing layout slot is
     // also undefined, so the two could compare equal below for the wrong reason. Guard each mapped
     // entry first so an unmapped command fails here instead.
     mappedTabs.forEach((tab) => expect(tab).toBeDefined());
+    // Order-sensitive on purpose: the menu lists the tools in the order the user sees their tabs, so
+    // reordering either the column or the menu must reorder the other.
     expect(mappedTabs).toEqual(columnWebViewTypes(merged, 2));
   });
 

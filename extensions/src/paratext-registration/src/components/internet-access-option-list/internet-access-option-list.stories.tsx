@@ -42,20 +42,20 @@ export const Unrestricted: Story = {
 
 /** Option 2 selected — "Disable access to some Bible translation services". */
 export const DisabledAccess: Story = {
-  decorators: [createDecorator('VpnRequired')],
+  decorators: [createDecorator('Disabled')],
 };
 
 /**
- * A coming-soon value is the current setting — `InternetSettings.xml` is seeded once from a
+ * A not-yet-available value is the current setting — `InternetSettings.xml` is seeded once from a
  * co-installed Paratext 9 on first launch, so it can name an option this app does not implement
  * yet. The row renders selected-but-disabled and a banner says why nothing acts on it.
  */
-export const ComingSoonSelected: Story = {
-  decorators: [createDecorator('Disabled')],
+export const UnavailableOptionSelected: Story = {
+  decorators: [createDecorator('ProxyOnly')],
 };
 
 /** All rows non-interactive — simulates the loading or saving state. */
 export const FormDisabled: Story = {
-  decorators: [createDecorator('VpnRequired')],
+  decorators: [createDecorator('Disabled')],
   args: { disabled: true },
 };

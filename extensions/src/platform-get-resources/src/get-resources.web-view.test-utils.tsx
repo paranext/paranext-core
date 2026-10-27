@@ -1,6 +1,6 @@
 import type { WebViewProps } from '@papi/core';
 import { render } from '@testing-library/react';
-import { useState, type ComponentType } from 'react';
+import { useCallback, useState, type ComponentType } from 'react';
 // Defines `globalThis.webViewComponent` as a side effect. Vitest hoists each test file's `vi.mock`
 // calls above all of its imports, this one included, so the web view still loads with the mocks.
 import './get-resources.web-view';
@@ -28,8 +28,11 @@ export function serveCatalogHoldingFlagRefresh(serveCatalog: () => Promise<unkno
  *
  * @param savedState Values already in the web view's state, by key, as a dialog restored with its
  *   layout would have them. A key not given starts at the web view's own default.
+ * @returns The render result, plus `webViewState`: the last value the web view wrote to each key of
+ *   its state, which is what a saved layout would keep. A key it never wrote is absent.
  */
 export function renderGetResourcesWebView(savedState: Record<string, unknown> = {}) {
+  const webViewState: Record<string, unknown> = {};
   // globalThis is a special interface; cast to read the property the web view file added at runtime.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const GetResourcesWebView = (globalThis as Record<string, unknown>)
@@ -40,8 +43,16 @@ export function renderGetResourcesWebView(savedState: Record<string, unknown> = 
     // Returns the same `[value, set, reset]` shape as the real hook, which the cast hides.
     useWebViewState: (key: string, defaultValue: unknown) => {
       const [value, setValue] = useState(savedState[key] ?? defaultValue);
-      return [value, setValue, () => setValue(defaultValue)];
+      // Stable like the real setter, so effects that depend on it do not rerun on every render.
+      const setAndRecord = useCallback(
+        (next: unknown) => {
+          webViewState[key] = next;
+          setValue(next);
+        },
+        [key],
+      );
+      return [value, setAndRecord, () => setAndRecord(defaultValue)];
     },
   } as unknown as WebViewProps;
-  return render(<GetResourcesWebView {...props} />);
+  return { ...render(<GetResourcesWebView {...props} />), webViewState };
 }

@@ -482,6 +482,9 @@ describe('performShutdownTasks', () => {
       expect(mockLoggerWarn).toHaveBeenCalledWith(
         expect.stringContaining('Could not read platform.firstRunComplete'),
       );
+      expect(mockLoggerInfo).toHaveBeenCalledWith(
+        expect.stringContaining('first-run sync consent could not be read'),
+      );
       // The gate handled the failed read itself; it never escaped to the outer catch-all.
       expect(mockLoggerError).not.toHaveBeenCalled();
     });

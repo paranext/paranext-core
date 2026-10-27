@@ -99,12 +99,13 @@ const STRINGS: Record<string, string> = {
   '%webView_scriptureTextGrid_viewOptions_viewHeader%': 'View',
   '%webView_scriptureTextGrid_viewOptions_verse%': 'Verse',
   '%webView_scriptureTextGrid_viewOptions_chapter%': 'Chapter',
-  '%webView_scriptureTextGrid_viewOptions_comingSoon%': 'Coming soon',
   '%webView_scriptureTextGrid_viewOptions_textsHeader%': 'Texts',
   '%webView_scriptureTextGrid_viewOptions_emptyState_prompt%':
     'No texts added yet. Use {getResourcesLabel} to add them.',
   '%webView_scriptureTextGrid_viewOptions_getResources%': 'Get resources…',
-  '%webView_scriptureTextGrid_viewOptions_adminSharedLock%': 'Shared by administrator',
+  '%webView_scriptureTextGrid_viewOptions_teamResourcesHeader%': 'Team resources',
+  '%webView_scriptureTextGrid_viewOptions_userResourcesHeader%': 'User resources',
+  '%webView_scriptureTextGrid_viewOptions_teamSharedLock%': 'Shared by your team',
   '%webView_scriptureTextGrid_viewOptions_removeFromList%': 'Remove {resourceName} from list',
   '%webView_scriptureTextGrid_viewOptions_installing%': 'Installing {resourceName}…',
 };
@@ -126,15 +127,15 @@ const notify = vi.fn();
  */
 let activeEditorProjectId: string | undefined;
 
+/** What `useIsPowerMode` reports: `undefined` while the setting is still loading. */
+let isPowerMode: boolean | undefined;
+
 vi.mock('@papi/frontend', () => ({
   default: {
     commands: { sendCommand: (commandName: string) => sendCommand(commandName) },
     notifications: { send: (...args: unknown[]) => notify(...args) },
     // `useTextCollectionProjectId` reads ActiveEditorProjectId off the window data provider.
     window: { dataProviderName: 'platform.windowDataProvider' },
-    // The web view swaps its tab icon on theme change; these tests never exercise that, so the
-    // subscription resolves to a no-op unsubscriber and never delivers a theme.
-    themes: { subscribeCurrentTheme: () => Promise.resolve(() => undefined) },
     // The DBL install lookup re-asks on project changes; these tests never fire one.
     network: { getNetworkEvent: () => undefined },
   },
@@ -173,6 +174,8 @@ function useRecordedSourcesHook(projectId: string | undefined) {
   sourcesHookCalls.push({ projectId, mountedFor: mountedFor.current });
   return readHookResult(projectId);
 }
+
+vi.mock('./use-is-power-mode.hook', () => ({ useIsPowerMode: () => isPowerMode }));
 
 vi.mock('./use-text-collection-sources.hook', () => ({
   useTextCollectionSources: useRecordedSourcesHook,
@@ -224,7 +227,7 @@ vi.mock('./scripture-text-grid/scripture-text-grid.component', () => ({
 }));
 
 // jsdom implements none of ResizeObserver, IntersectionObserver, matchMedia, or scrollIntoView, and
-// this render path touches all four: `useTabIconSelection` observes the body's intersection to
+// this render path touches all four: `useViewVisibility` observes the body's intersection to
 // learn whether its tab is active, and platform-bible-react's Popover/Tooltip/ToggleGroup wire
 // ResizeObservers and query media features. No-op stubs keep rendering from throwing so these tests
 // can assert on what is rendered.
@@ -381,6 +384,7 @@ beforeEach(() => {
   hookResultsByProjectId = new Map();
   fallbackHookResult = unboundResult('noSource');
   activeEditorProjectId = undefined;
+  isPowerMode = false;
   pickerResult = undefined;
   dblResourcesProvider = { installDblResource: () => Promise.resolve(true) };
   sendCommand.mockResolvedValue([]);
@@ -630,5 +634,36 @@ describe('first-open overlay initialization', () => {
     rerender(<ScriptureTextGridWebView {...makeProps({ projectId: 'projectTwo' })} />);
 
     await waitFor(() => expect(secondPdp.initializeTextCollectionOverlay).toHaveBeenCalledTimes(1));
+  });
+});
+
+// Only Simple mode has team resources; Power lists every text together. While the mode is still
+// loading the list stays plain, so a Power session never shows the team headings even briefly.
+describe('View Options team grouping', () => {
+  it.each([
+    [false, true],
+    [true, false],
+    [undefined, false],
+  ])('with isPowerMode %s, groups the texts: %s', async (powerMode, isGrouped) => {
+    isPowerMode = powerMode;
+    const sources: TextCollectionSources = {
+      adminReferenced: {
+        dataVersion: '1.1.0',
+        items: [{ type: 'project', ...ALPHA, isInTextCollection: true }],
+      },
+      userReferenced: userList(BETA),
+      overlay: {},
+      order: [],
+    };
+    fallbackHookResult = readyResult(sources, createFakeTextConnectionPdp());
+
+    await renderWebView();
+    await openViewOptions();
+
+    // Positive control: both texts are listed, so an absent heading is a real answer.
+    expect(screen.getByRole('checkbox', { name: ALPHA.name })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: BETA.name })).toBeInTheDocument();
+    expect(screen.queryAllByText('Team resources')).toHaveLength(isGrouped ? 1 : 0);
+    expect(screen.queryAllByLabelText('Shared by your team')).toHaveLength(isGrouped ? 1 : 0);
   });
 });

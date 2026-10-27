@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { LUCIDE_ICON_NAMES } from 'platform-bible-react/experimental';
 
 // `main.ts` pulls in webpack-only `?inline` imports (the web view bundle content and its CSS) that
 // only resolve under webpack, not vitest — stub them to plain strings so `main.ts` can load for
@@ -229,6 +230,20 @@ describe('platform lexical tools main.ts activation', () => {
       expect(provider).toBeDefined();
       return provider?.getWebView(savedWebView, getWebViewOptions);
     }
+
+    it.each(['simple', 'power'])(
+      'names a theme-coloured icon in %s mode',
+      async (interfaceMode) => {
+        vi.mocked(papi.settings.get).mockResolvedValueOnce(interfaceMode);
+
+        // getWebView's real return type is a large union; narrowing to the fields this test checks.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const webView = (await getCapturedWebView()) as { iconName?: string };
+
+        expect(webView.iconName).toBe('book-a');
+        expect(LUCIDE_ICON_NAMES).toContain(webView.iconName);
+      },
+    );
 
     it('falls back to Simple mode when reading the interface mode setting rejects', async () => {
       vi.mocked(papi.settings.get).mockRejectedValueOnce(new Error('settings service unavailable'));

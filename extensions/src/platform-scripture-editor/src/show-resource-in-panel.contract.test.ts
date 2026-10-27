@@ -46,7 +46,14 @@ function selectedProjectId(
   const queued = getResourceReferenceRowId(queuedReference);
   // Matched, not fallen back to: a fallback picks the first row, which could be this one by luck.
   if (!findSelectedRow(rows, queued)) return undefined;
-  return resolveResourceSelection(rows, queued, undefined).selectedRow?.projectId;
+  // `buildResourceTextPanelState` queues the id as both the selection and the user's pick.
+  return resolveResourceSelection(rows, {
+    selectedResourceId: queued,
+    userPickedResourceId: queued,
+    pendingResourceId: undefined,
+    heldFallbackRowId: undefined,
+    isListComplete: true,
+  }).selectedRow?.projectId;
 }
 
 describe('the selection queued for a resource is a row its panel lists', () => {
@@ -57,6 +64,35 @@ describe('the selection queued for a resource is a row its panel lists', () => {
 
   it('for a DBL resource whose save failed, listed among the downloaded resources', () => {
     expect(selectedProjectId(ENTRY, [], 'ScriptureResource')).toBe('byz-project');
+  });
+
+  it('for a DBL resource whose save failed, while the team list holds an installed resource', () => {
+    // A configured resource replaces a downloaded selection the user did not pick; one opened from
+    // Home was picked, so it stays on screen.
+    const teamEntry: DblResourceData = {
+      ...ENTRY,
+      dblEntryUid: 'UID-ESV',
+      displayName: 'ESV',
+      projectId: 'esv-project',
+    };
+    const rows = buildPickerResources(
+      [{ ...toResourceReference(teamEntry), source: 'admin' }],
+      [
+        { projectId: 'esv-project', name: 'ESV', language: 'en' },
+        { projectId: ENTRY.projectId, name: ENTRY.displayName, language: 'grc' },
+      ],
+      [teamEntry, ENTRY],
+    );
+    const queued = getResourceReferenceRowId(toResourceReference(ENTRY));
+    expect(
+      resolveResourceSelection(rows, {
+        selectedResourceId: queued,
+        userPickedResourceId: queued,
+        pendingResourceId: undefined,
+        heldFallbackRowId: undefined,
+        isListComplete: true,
+      }).selectedRow?.projectId,
+    ).toBe('byz-project');
   });
 
   it('for a DBL resource the team list holds with its uid in other casing', () => {

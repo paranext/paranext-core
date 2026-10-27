@@ -6,7 +6,6 @@ import { networkObjectStatusService } from '@shared/services/network-object-stat
 import { settingsService } from '@shared/services/settings.service';
 import {
   askForInternetUseChoiceIfNeeded,
-  hasSavedInternetUseChoice,
   markInternetUseChoiceSaved,
   resetInternetUseChoiceForTesting,
 } from './internet-use-choice-store';
@@ -35,7 +34,7 @@ const mockWaitForNetworkObject = vi.mocked(networkObjectStatusService.waitForNet
 /** Stubs the saved `platform.internetUseChoiceAsked` and the provider's saved internet use. */
 function stub({
   wasAsked,
-  permittedInternetUse = 'VpnRequired',
+  permittedInternetUse = 'Disabled',
 }: {
   wasAsked?: boolean;
   permittedInternetUse?: string;
@@ -63,12 +62,9 @@ beforeEach(() => {
 });
 
 describe('markInternetUseChoiceSaved', () => {
-  it('records the choice for this session and durably', () => {
-    expect(hasSavedInternetUseChoice()).toBe(false);
-
+  it('records durably that the user was asked', () => {
     markInternetUseChoiceSaved();
 
-    expect(hasSavedInternetUseChoice()).toBe(true);
     expect(mockSetSetting).toHaveBeenCalledWith('platform.internetUseChoiceAsked', true);
   });
 
@@ -82,7 +78,6 @@ describe('markInternetUseChoiceSaved', () => {
         expect.stringContaining('settings offline'),
       ),
     );
-    expect(hasSavedInternetUseChoice()).toBe(true);
   });
 });
 

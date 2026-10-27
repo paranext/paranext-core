@@ -39,7 +39,8 @@ describe('Dock Layout Component', () => {
   describe('getGroups()', () => {
     // `floatable`/`tabLocked`/`disableDock` below pin what this app's groups actually set; see
     // `resolveTabBarDropZoneSource`'s TSDoc (tab-bar-drop-zone.util.ts) for why its own gates don't
-    // replicate rc-dock's `disableDock` branch — no group registered here ever sets it.
+    // replicate rc-dock's `disableDock` branch — only Simple mode's groups set it, and the zone
+    // renders only in Power mode.
     it('power mode: returns TAB_GROUP with panelExtra and without tabLocked', () => {
       const groups = getGroups(true);
       expect(typeof groups[TAB_GROUP].panelExtra).toBe('function');
@@ -50,14 +51,14 @@ describe('Dock Layout Component', () => {
       expect(groups[TAB_GROUP].disableDock).toBeUndefined();
     });
 
-    it('simple mode: returns TAB_GROUP with tabLocked and without panelExtra', () => {
+    it('simple mode: returns TAB_GROUP with tabLocked and disableDock and without panelExtra', () => {
       const groups = getGroups(false);
       expect(groups[TAB_GROUP].tabLocked).toBe(true);
       expect(groups[TAB_GROUP].panelExtra).toBeUndefined();
       expect(groups[TAB_GROUP].maximizable).toBe(false);
       expect(groups[TAB_GROUP].floatable).toBe(false);
       expect(groups[TAB_GROUP].animated).toBe(false);
-      expect(groups[TAB_GROUP].disableDock).toBeUndefined();
+      expect(groups[TAB_GROUP].disableDock).toBe(true);
     });
 
     it('simple mode: registers HEADLESS_GROUP and TAB_GROUP_RESOURCES with locked config', () => {
@@ -67,7 +68,7 @@ describe('Dock Layout Component', () => {
         expect(groups[groupKey].panelExtra).toBeUndefined();
         expect(groups[groupKey].maximizable).toBe(false);
         expect(groups[groupKey].floatable).toBe(false);
-        expect(groups[groupKey].disableDock).toBeUndefined();
+        expect(groups[groupKey].disableDock).toBe(true);
       });
     });
 

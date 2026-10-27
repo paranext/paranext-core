@@ -41,10 +41,10 @@ import { AsyncVariable, getErrorMessage } from 'platform-bible-utils';
  *   was caught. Warned.
  * - `skipped`: nothing ran — nothing scheduled, not due, or already syncing (Power: `'skipped'`), or
  *   every window answered and nothing writable was open anywhere (Simple).
- * - `skipped-consent-unconfirmed` / `skipped-consent-deferred`: the Simple-mode consent gate withheld
- *   the sync (see {@link getAutomaticSyncConsent}) — the wizard is unanswered or its flag could not
- *   be read, or the user chose "Don't sync yet" this session. Separate from `skipped` so the log
- *   never reads a withheld sync as "nothing was open".
+ * - `skipped-consent-unconfirmed` / `skipped-consent-unreadable` / `skipped-consent-deferred`: the
+ *   Simple-mode consent gate withheld the sync (see {@link getAutomaticSyncConsent}) — the wizard is
+ *   unanswered, its flag could not be read, or the user chose "Don't sync yet" this session.
+ *   Separate from `skipped` so the log never reads a withheld sync as "nothing was open".
  * - `unreachable`: the S/R call rejected before the timeout (e.g. the command isn't registered). The
  *   failure detail was already warned inside {@link runBoundedShutdownSync}.
  * - `timed-out`: neither settled within {@link AUTO_SYNC_MAX_DURATION_MS} (also already warned there).
@@ -56,6 +56,7 @@ type ShutdownSyncOutcome =
   | 'selection-failed'
   | 'skipped'
   | 'skipped-consent-unconfirmed'
+  | 'skipped-consent-unreadable'
   | 'skipped-consent-deferred'
   | 'unreachable'
   | 'timed-out';
@@ -412,9 +413,7 @@ async function performSimpleModeShutdownSync(): Promise<void> {
   // the app open. The gate only suppresses STARTING a new one.
   const consent = await getAutomaticSyncConsent();
   if (consent !== 'granted') {
-    logShutdownSyncOutcome(
-      consent === 'deferred' ? 'skipped-consent-deferred' : 'skipped-consent-unconfirmed',
-    );
+    logShutdownSyncOutcome(`skipped-consent-${consent}`);
     return;
   }
 
@@ -565,6 +564,9 @@ function logShutdownSyncOutcome(outcome: ShutdownSyncOutcome): void {
       break;
     case 'skipped-consent-unconfirmed':
       logger.info(`Sync on shutdown skipped: ${WITHHELD_SYNC_CONSENT_REASONS.unconfirmed}`);
+      break;
+    case 'skipped-consent-unreadable':
+      logger.info(`Sync on shutdown skipped: ${WITHHELD_SYNC_CONSENT_REASONS.unreadable}`);
       break;
     case 'skipped-consent-deferred':
       logger.info(`Sync on shutdown skipped: ${WITHHELD_SYNC_CONSENT_REASONS.deferred}`);
