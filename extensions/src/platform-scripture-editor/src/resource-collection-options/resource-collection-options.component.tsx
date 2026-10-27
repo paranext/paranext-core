@@ -150,7 +150,7 @@ export function ResourceCollectionOptions({
             <X className="tw:h-4 tw:w-4" />
           </Button>
         )}
-        {/* Lock marks admin-shared rows (the admin's current selection), which can't be removed.
+        {/* Lock marks the team's rows (the top section), which can't be removed.
             Gated on isAdminLocked, NOT !isUserRemovable: opted-out admin rows in the bottom section
             are also non-removable but are not currently shared, so they get no lock. `role="img"`
             makes the label reliably announced even while the icon is visually hover-revealed. */}

@@ -366,18 +366,49 @@ describe('getViewOptionsTexts', () => {
     expect(bottom).toHaveLength(0);
   });
 
-  it('lists a user-added resource that is only an unflagged (download-only) admin entry in the bottom', () => {
-    const { top, bottom } = getViewOptionsTexts(
+  // The Bible texts dropdown lists such a resource as the team's, so View Options must not offer to
+  // remove it.
+  it.each([true, false])(
+    "lists a user-added resource the admin also references, unflagged, as the team's (user flag %s)",
+    (isInTextCollectionForUser) => {
+      const { top, bottom } = getViewOptionsTexts(
+        makeSources({
+          adminReferenced: list([project('x')]),
+          userReferenced: list([
+            project('x', { isInTextCollectionForUser }),
+            project('u', { isInTextCollectionForUser: true }),
+          ]),
+          overlay: {},
+        }),
+      );
+      expect(top).toEqual([
+        expect.objectContaining({
+          reference: expect.objectContaining({ id: 'x' }),
+          checked: isInTextCollectionForUser,
+          isAdminLocked: true,
+          isUserRemovable: false,
+        }),
+      ]);
+      // Positive control: a user entry the admin does not name stays the user's own.
+      expect(bottom).toEqual([
+        expect.objectContaining({
+          reference: expect.objectContaining({ id: 'u' }),
+          isAdminLocked: false,
+          isUserRemovable: true,
+        }),
+      ]);
+    },
+  );
+
+  it("lists the admin's selection before the user-added resources the admin also references", () => {
+    const { top } = getViewOptionsTexts(
       makeSources({
-        adminReferenced: list([project('x')]),
+        adminReferenced: list([project('x'), project('a', { isInTextCollection: true })]),
         userReferenced: list([project('x', { isInTextCollectionForUser: true })]),
         overlay: {},
       }),
     );
-    expect(top).toHaveLength(0);
-    expect(bottom.map((entry) => entry.reference.id)).toEqual(['x']);
-    expect(bottom[0].checked).toBe(true);
-    expect(bottom[0].isAdminLocked).toBe(false);
+    expect(top.map((entry) => entry.reference.id)).toEqual(['a', 'x']);
   });
 
   it('stamps longName from the resolver onto rows', () => {

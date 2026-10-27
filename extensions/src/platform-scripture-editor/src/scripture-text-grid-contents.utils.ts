@@ -46,14 +46,14 @@ export type ViewOptionsTextEntry = {
   /** Whether the row's checkbox is checked (i.e. the text shows in the grid for this user). */
   checked: boolean;
   /**
-   * `true` for admin-selected (top-section) rows: the user may uncheck them to hide the text from
-   * the grid, but the row stays in the list and has no remove (hover-X) affordance.
+   * `true` for the team's (top-section) rows: the user may uncheck them to hide the text from the
+   * grid, but the row stays in the list and has no remove (hover-X) affordance.
    */
   isAdminLocked: boolean;
   /**
-   * `true` only for genuine user-list entries — the only rows that show a remove (hover-X)
-   * affordance; `false` for every admin-owned row (top or bottom), which can be unchecked but never
-   * removed.
+   * `true` only for user-list entries the admin's referenced list does not name — the only rows
+   * that show a remove (hover-X) affordance; `false` for every admin-owned or team row (top or
+   * bottom), which can be unchecked but never removed.
    */
   isUserRemovable: boolean;
   /**
@@ -168,10 +168,13 @@ export function getScriptureTextGridContents(sources: TextCollectionSources): Bi
 /**
  * Splits the View Options TEXTS list into two ordered sections:
  *
- * - `top` — the admin's current selection (`isInTextCollection === true`). Always visible and locked
- *   from removal (`isAdminLocked: true`); the user may only uncheck to hide from the grid.
+ * - `top` — the team's: the admin's current selection (`isInTextCollection === true`), followed by
+ *   the user's own list entries that the admin's referenced list also names. Always visible and
+ *   locked from removal (`isAdminLocked: true`); the user may only uncheck to hide from the grid.
+ *   The second kind is the team's because the Bible texts dropdown lists the resource as the
+ *   team's, so the two agree on who can remove it.
  * - `bottom` — resources the user can freely toggle and remove (`isAdminLocked: false`): other
- *   admin-owned entries (opted out, or shown before) followed by the user's own list additions.
+ *   admin-owned entries (opted out, or shown before) followed by the rest of the user's own list.
  *
  * Checkbox state comes from the overlay for admin-owned entries and from
  * `isInTextCollectionForUser` for the user's own entries. An admin-owned id never also appears as a
@@ -196,6 +199,9 @@ export function getViewOptionsTexts(
   const top: ViewOptionsTextEntry[] = [];
   const bottom: ViewOptionsTextEntry[] = [];
   const adminIds = new Set<string>();
+  const adminReferencedIds = new Set(
+    adminReferenced.items.map(getBibleTextId).filter((id) => id !== undefined),
+  );
 
   adminOwned.forEach((entry) => {
     adminIds.add(entry.reference.id);
@@ -214,11 +220,12 @@ export function getViewOptionsTexts(
     if (!isProjectReference(item) && !isDblResourceReference(item)) return;
     if (adminIds.has(item.id)) return; // admin-owned ids are rendered by the loop above
     const longName = resolveLongName?.(item);
-    bottom.push({
+    const isTeamShared = adminReferencedIds.has(item.id);
+    (isTeamShared ? top : bottom).push({
       reference: item,
       checked: item.isInTextCollectionForUser === true,
-      isAdminLocked: false,
-      isUserRemovable: true,
+      isAdminLocked: isTeamShared,
+      isUserRemovable: !isTeamShared,
       ...(longName ? { longName } : {}),
     });
   });
