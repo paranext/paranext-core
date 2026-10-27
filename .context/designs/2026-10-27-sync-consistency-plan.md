@@ -42,12 +42,13 @@
 **Files:**
 - Modify: `components/send-receive-view.component.tsx`
 - Modify: `send-receive.web-view.tsx`: the prune effect (`selectedProjectIds` / `sharedProjectsInfo`) and `submitSendReceive`
-- Modify: `utils/unsupported-reasons.util.ts`: change the `UnsupportedReasons` doc ("They can still be synced") to say they can't be selected or synced from the dialog or Home
-- Create: `utils/selection.util.ts`, `utils/selection.util.test.ts`
-- Test: `components/send-receive-view.component.test.tsx` (flip any existing "stays selectable" assertions)
+- Modify: `utils/unsupported-reasons.util.ts`:
+  - change the `UnsupportedReasons` doc ("They can still be synced") to say they can't be selected or synced from the dialog or Home
+  - add the two helpers below
+- Test: `utils/unsupported-reasons.util.test.ts`, and `components/send-receive-view.component.test.tsx` (flip any existing "stays selectable" assertions)
 
 **Interfaces:**
-- Produces, in new `utils/selection.util.ts`:
+- Produces, in `utils/unsupported-reasons.util.ts`:
   - `pruneSelection(selectedIds: string[], sharedProjectsInfo: SharedProjectsInfo, unsupportedReasons: ReadonlyMap<string, unknown>): string[]`
     - Keeps only IDs present in the shared list, compared with `normalizeProjectId`.
     - Rewrites each kept ID to the shared list's own key spelling.
@@ -64,7 +65,7 @@
     - Clicking All calls `onChangeSelectedProjectIds(['abc'])`.
     - The Edited badge reads `1`.
   - Keep the row's `unsupported-project` class and its reason text, and assert both.
-- [ ] **Step 2: Write failing util tests in `utils/selection.util.test.ts`**
+- [ ] **Step 2: Write failing util tests in `utils/unsupported-reasons.util.test.ts`**
   - `pruneSelection(['abc', 'sba', 'gone'], {ABC, SBA}, reasons{SBA})` → `['ABC']`, where the shared keys are `'ABC'` and `'SBA'`.
   - `pruneSelection(['abc', 'ABC'], …)` → `['ABC']`.
   - `withoutUnsupported(['ABC', 'SBA'], reasons{SBA})` → `['ABC']`.
