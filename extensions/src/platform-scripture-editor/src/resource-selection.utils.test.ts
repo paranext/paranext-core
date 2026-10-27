@@ -311,6 +311,17 @@ describe('resolveResourceSelection', () => {
         expect(result.nextSelectedResourceId).toBeUndefined();
       });
 
+      it('gives way to the DBL resource, not a project reference listed ahead of it', () => {
+        const rows = [
+          { ...projectRow('BT'), source: 'admin' as const },
+          configuredRow('ESV'),
+          downloadedRow('WEB'),
+        ];
+        const result = resolve(rows, { selectedResourceId: 'project:WEB' });
+        expect(result.selectedRow?.projectId).toBe('proj-ESV');
+        expect(result.nextSelectedResourceId).toBe('dbl:ESV');
+      });
+
       it('is kept while the configured resource is not installed', () => {
         const rows = [notInstalledRow('team-text'), downloadedRow('WEB')];
         const result = resolve(rows, { selectedResourceId: 'project:WEB' });
@@ -328,6 +339,20 @@ describe('resolveResourceSelection', () => {
       it('gives way to a displayable configured row while a pick is in flight', () => {
         // The first row has nothing to display, so showing it would spin until the pick lands.
         const rows = [notInstalledRow('uninstalled'), configuredRow('ESV'), downloadedRow('WEB')];
+        const result = resolve(rows, {
+          selectedResourceId: 'project:WEB',
+          pendingResourceId: 'dbl:not-here-yet',
+        });
+        expect(result.selectedRow?.projectId).toBe('proj-ESV');
+        expect(result.nextSelectedResourceId).toBeUndefined();
+      });
+
+      it('gives way to the DBL resource while a pick is in flight, not a project reference ahead of it', () => {
+        const rows = [
+          { ...projectRow('BT'), source: 'admin' as const },
+          configuredRow('ESV'),
+          downloadedRow('WEB'),
+        ];
         const result = resolve(rows, {
           selectedResourceId: 'project:WEB',
           pendingResourceId: 'dbl:not-here-yet',

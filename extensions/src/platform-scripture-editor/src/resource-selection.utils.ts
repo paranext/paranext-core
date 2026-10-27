@@ -167,6 +167,9 @@ export function resolveResourceSelection(
     isListComplete &&
     replacement !== undefined;
   const selectedRow = isSuperseded ? undefined : matchedRow;
+  // The configured row to fall back to. A superseded selection gives way to `replacement` itself,
+  // so a project reference listed ahead of it cannot take its place.
+  const configuredFallback = isSuperseded ? replacement : firstUsableConfigured;
 
   // What to show, unsaved, when nothing configured is displayable: a configured row not installed
   // yet, else the downloaded row shown last, else the first row with something to display.
@@ -194,7 +197,7 @@ export function resolveResourceSelection(
         selectedRow: pendingRow,
         shownFallbackRowId: undefined,
       };
-    const heldRow = selectedRow ?? firstUsableConfigured ?? pickUnsavedFallback();
+    const heldRow = selectedRow ?? configuredFallback ?? pickUnsavedFallback();
     return {
       nextSelectedResourceId: undefined,
       nextUserPickedResourceId: undefined,
@@ -225,14 +228,14 @@ export function resolveResourceSelection(
     };
   }
 
-  if (firstUsableConfigured)
+  if (configuredFallback)
     return {
       nextSelectedResourceId: isListComplete
-        ? getResourceReferenceRowId(firstUsableConfigured.reference)
+        ? getResourceReferenceRowId(configuredFallback.reference)
         : undefined,
       nextUserPickedResourceId: undefined,
       shouldClearPending: false,
-      selectedRow: firstUsableConfigured,
+      selectedRow: configuredFallback,
       shownFallbackRowId: undefined,
     };
   // Nothing configured is displayable and the selection has left the list (or was never set), so
