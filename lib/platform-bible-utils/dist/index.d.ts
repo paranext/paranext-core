@@ -3602,8 +3602,8 @@ export type UsjReaderWriterOptions = {
 	 * - `false`: the project's USFM spells a no-break space `~`, so U+00A0 in text is written as `~`.
 	 *   The USJ text Platform.Bible gets for such a project never contains `~` (an attribute value
 	 *   can: ParatextData keeps a `~` in most attribute values as written); a `~` that is in the text
-	 *   anyway is written as `~` too, so Paratext saves it as a no-break space. A literal tilde cannot
-	 *   be represented in text.
+	 *   anyway is written as `~` too, so Paratext saves it as a no-break space. A literal tilde
+	 *   cannot be represented in text.
 	 * - `true`: `~` is an ordinary character (a literal tilde) and U+00A0 is written as itself, so the
 	 *   two stay distinct. Writing this project's USJ with `false` would turn every no-break space
 	 *   into a literal tilde when the USFM is saved.
