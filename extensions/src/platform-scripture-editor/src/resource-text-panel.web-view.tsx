@@ -135,8 +135,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   );
 
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
-  const { dblResources, isCatalogReady, hasCatalogError, isAwaitingDblCatalog, refetchCatalog } =
-    useDblResourceCatalog();
+  const { dblResources, isCatalogReady, hasCatalogError, refetchCatalog } = useDblResourceCatalog();
   const [pickerResources, arePickerResourcesLoading] = useResourcePickerResources(
     projectId,
     RESOURCE_PICKER_OPTIONS,
@@ -588,7 +587,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
       selectedRef={selectedRef}
       readiness={readiness}
       dblResources={dblResources}
-      isCatalogUnavailable={isAwaitingDblCatalog}
+      isCatalogUnavailable={hasCatalogError}
       // Only Simple mode has team resources, so Power lists every row together. Undefined (still
       // loading) lists them together too, so a Power session never shows the grouping, even for a
       // frame.

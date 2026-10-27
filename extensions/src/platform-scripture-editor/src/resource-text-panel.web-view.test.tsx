@@ -343,7 +343,6 @@ function resetPanelHooks() {
     isLoadingResources: false,
     isCatalogReady: false,
     hasCatalogError: false,
-    isAwaitingDblCatalog: true,
     refetchCatalog: vi.fn(),
   });
   mockUseResourcePickerResources.mockReturnValue([[], false]);
@@ -428,7 +427,6 @@ describe('ResourceTextPanel — failed install recovery', () => {
       isLoadingResources: false,
       isCatalogReady: true,
       hasCatalogError: false,
-      isAwaitingDblCatalog: false,
       refetchCatalog,
     });
     mockUseEffectiveResourceReferenceList.mockReturnValue({
@@ -534,7 +532,6 @@ describe('ResourceTextPanel — install against a stale catalog', () => {
         isLoadingResources: false,
         isCatalogReady: true,
         hasCatalogError: false,
-        isAwaitingDblCatalog: false,
         refetchCatalog,
       });
       const webRow = resources.find((resource) => resource.dblEntryUid === 'uid-web');
@@ -1048,7 +1045,6 @@ describe('ResourceTextPanel — no project open', () => {
         isLoadingResources: false,
         isCatalogReady: false,
         hasCatalogError: true,
-        isAwaitingDblCatalog: true,
         refetchCatalog: vi.fn(),
       });
     });
@@ -1137,7 +1133,6 @@ const FAILED_CATALOG = {
   isLoadingResources: false,
   isCatalogReady: false,
   hasCatalogError: true,
-  isAwaitingDblCatalog: true,
   refetchCatalog: vi.fn(),
 };
 
@@ -1385,12 +1380,11 @@ describe('ResourceTextPanel — removing a resource in the picker', () => {
   // The team's uid is stored upper-cased, as some sources spell it.
   const ROWS = [row(TEAM, 'admin', 'TEAM-UID'), row(MINE, 'user'), row(OTHER, 'downloaded')];
 
-  const catalogState = (isAwaitingDblCatalog: boolean) => ({
-    dblResources: isAwaitingDblCatalog ? [] : [TEAM, MINE, OTHER],
+  const catalogState = (hasCatalogError: boolean) => ({
+    dblResources: hasCatalogError ? [] : [TEAM, MINE, OTHER],
     isLoadingResources: false,
-    isCatalogReady: true,
-    hasCatalogError: false,
-    isAwaitingDblCatalog,
+    isCatalogReady: !hasCatalogError,
+    hasCatalogError,
     refetchCatalog: vi.fn(),
   });
 
@@ -1614,7 +1608,7 @@ describe('ResourceTextPanel — removing a resource in the picker', () => {
     expect(setUserReferencedProjectsAndResources).not.toHaveBeenCalled();
   });
 
-  it('merges the dropdown groups only while a DBL catalog is expected but not here', () => {
+  it('merges the dropdown groups only while the DBL catalog failed or is not ready', () => {
     mockUserList([]);
     const { rerender } = renderWithPicker();
     expect(capturedResourceTextPanelProps).toHaveBeenLastCalledWith(

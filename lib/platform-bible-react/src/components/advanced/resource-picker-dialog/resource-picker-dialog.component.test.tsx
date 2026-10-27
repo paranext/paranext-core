@@ -861,6 +861,26 @@ describe('ResourcePickerDialog team and user sections', () => {
     expect(getRow('NIV').className).not.toContain('pointer-events-none');
   });
 
+  // A row's focus ring shows on `:focus`, so a click that focused a row it cannot pick would look
+  // like a selection. `fireEvent.mouseDown` returns false when the default (focusing) is prevented.
+  it('does not let a click focus a row that cannot be picked', async () => {
+    const onRemove = vi.fn();
+    renderDialog({ teamResourceIds: TEAM_IDS, onRemove });
+    expect(fireEvent.mouseDown(getRow('NIV'))).toBe(false);
+    expect(fireEvent.mouseDown(getRow('RVR60'))).toBe(false);
+    // Positive control: a row that can be picked still takes focus from a click.
+    expect(fireEvent.mouseDown(screen.getByRole('button', { name: 'ESV' }))).toBe(true);
+
+    // The remove button sits inside a row that cannot be picked, and still gets its click.
+    await userEvent.click(screen.getByRole('button', { name: 'Remove RVR60 from your list' }));
+    expect(onRemove).toHaveBeenCalledWith(expect.objectContaining({ dblEntryUid: 'selected-2' }));
+  });
+
+  it('does not let a click focus an "Included" row that cannot be picked', () => {
+    renderDialog();
+    expect(fireEvent.mouseDown(getRow('NIV'))).toBe(false);
+  });
+
   it('removes a user row only from its remove button, described by what removing does', () => {
     const onRemove = vi.fn();
     const { onSelect } = renderDialog({ teamResourceIds: TEAM_IDS, onRemove });

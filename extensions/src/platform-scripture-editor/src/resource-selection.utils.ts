@@ -277,8 +277,8 @@ export function isTeamPickerResource(row: PickerResource): boolean {
  * each row's `source`, not its group.
  *
  * @param rows The rows to split
- * @param options.isCatalogUnavailable Whether a DBL catalog is expected but not here (loading or
- *   failed)
+ * @param options.isCatalogUnavailable Whether a DBL catalog is expected but not here (the fetch
+ *   failed, or the provider was not ready)
  * @returns The team's rows, the user's rows and the other rows
  */
 export function splitPickerResourcesBySource(

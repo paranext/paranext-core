@@ -319,6 +319,9 @@ function ResourceSection({
             aria-label={onSelect ? r.displayName : undefined}
             aria-describedby={onSelect && caption ? captionId : undefined}
             onClick={onSelect ? () => onSelect(r) : undefined}
+            // `TableRow` draws its ring on `:focus`, so a click that focused a row it cannot pick
+            // would read as a selection. Arrow keys still focus it, and the ✕ still gets its click.
+            onMouseDown={onSelect ? undefined : (e) => e.preventDefault()}
             onKeyDown={
               onSelect
                 ? (e) => {
