@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { PickerResource } from './downloaded-resources.utils';
+import type { EffectiveResourceReference } from 'platform-scripture';
+import { buildPickerResources, type PickerResource } from './downloaded-resources.utils';
 import {
   findSelectedRow,
   matchesSelectedResourceId,
@@ -179,5 +180,27 @@ describe('splitPickerResourcesBySource', () => {
 
     expect(team).toEqual([]);
     expect(user).toHaveLength(2);
+  });
+
+  // TODO(PT-4853): removal must not trust `source` alone while the catalog is down — this row is
+  // the team's resource, yet it reads as one the user could remove.
+  it("files an installed team resource under the user's rows while the catalog is unavailable", () => {
+    // Without the catalog the team's DBL reference cannot be resolved, so it is dropped and the
+    // project installed from it comes back as a plain downloaded row.
+    const teamReference: EffectiveResourceReference = {
+      type: 'dblResource',
+      name: 'WEB',
+      id: 'uid-web',
+      source: 'admin',
+    };
+    const downloaded = { projectId: 'proj-web', name: 'WEB', language: 'English' };
+    const rows = buildPickerResources([teamReference], [downloaded], []);
+
+    const { team, user } = splitPickerResourcesBySource(rows);
+
+    expect(team).toEqual([]);
+    expect(user).toEqual([
+      expect.objectContaining({ source: 'downloaded', projectId: 'proj-web' }),
+    ]);
   });
 });

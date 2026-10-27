@@ -1,13 +1,14 @@
 import {
   Button,
   Checkbox,
+  cn,
   EmptyState,
   Label,
   ToggleGroup,
   ToggleGroupItem,
 } from 'platform-bible-react';
 import { Lock, X } from 'lucide-react';
-import { useId } from 'react';
+import { ReactNode, useId } from 'react';
 import { formatReplacementString } from 'platform-bible-utils';
 import {
   RESOURCE_COLLECTION_OPTIONS_KEYS,
@@ -37,7 +38,8 @@ const localize = (
 
 /**
  * Reusable, presentational View Options inner component: a VIEW toggle (Verse / Chapter), a TEXTS
- * list (admin-shared top section + user bottom section), and a Get Resources button. It holds no
+ * list (admin-shared top section + user bottom section, headed "Team resources" and "User
+ * resources" when there are admin-shared rows), and a Get Resources button. It holds no
  * PAPI/popover/persistence state — callers pass the computed rows and callbacks — so the same
  * component renders inside the Scripture Text Grid popover and inside a resource-sharing dialog.
  *
@@ -168,8 +170,9 @@ export function ResourceCollectionOptions({
     );
   };
 
-  // `bottom` is not only what the user picked: it also holds admin rows the user opted out of and
-  // downloaded resources nobody listed, hence "User resources" rather than a word claiming a choice.
+  // `bottom` is not only what the user picked: it also holds admin rows not in the Text Collection
+  // and downloaded resources nobody listed, hence "User resources" rather than a word claiming a
+  // choice.
   const userRows = (
     <>
       {bottom.map(renderRow)}
@@ -185,6 +188,26 @@ export function ResourceCollectionOptions({
         </div>
       ))}
     </>
+  );
+
+  // A plain element rather than `Label`, which renders a `<label>` with no control to label. Regular
+  // weight, against the section headings' semibold, so the groups read as part of TEXTS.
+  const renderGroup = (
+    headingId: string,
+    headingKey: ResourceCollectionOptionsStringKey,
+    rows: ReactNode,
+    className?: string,
+  ) => (
+    <div
+      role="group"
+      aria-labelledby={headingId}
+      className={cn('tw:flex tw:flex-col tw:gap-1', className)}
+    >
+      <div id={headingId} className="tw:text-xs tw:text-muted-foreground">
+        {localize(localizedStrings, headingKey)}
+      </div>
+      {rows}
+    </div>
   );
 
   return (
@@ -239,34 +262,19 @@ export function ResourceCollectionOptions({
         {/* With no team rows the list is one unlabeled run, as when no team layout exists. */}
         {hasTeamRows ? (
           <>
-            <div
-              role="group"
-              aria-labelledby={teamHeadingId}
-              className="tw:flex tw:flex-col tw:gap-1"
-            >
-              <Label
-                id={teamHeadingId}
-                className="tw:text-xs tw:font-semibold tw:text-muted-foreground"
-              >
-                {localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.teamResourcesHeader)}
-              </Label>
-              {top.map(renderRow)}
-            </div>
-            {hasUserRows && (
-              <div
-                role="group"
-                aria-labelledby={userHeadingId}
-                className="tw:mt-2 tw:flex tw:flex-col tw:gap-1"
-              >
-                <Label
-                  id={userHeadingId}
-                  className="tw:text-xs tw:font-semibold tw:text-muted-foreground"
-                >
-                  {localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.userResourcesHeader)}
-                </Label>
-                {userRows}
-              </div>
+            {renderGroup(
+              teamHeadingId,
+              RESOURCE_COLLECTION_OPTIONS_KEYS.teamResourcesHeader,
+              top.map(renderRow),
+              'tw:mt-1',
             )}
+            {hasUserRows &&
+              renderGroup(
+                userHeadingId,
+                RESOURCE_COLLECTION_OPTIONS_KEYS.userResourcesHeader,
+                userRows,
+                'tw:mt-2',
+              )}
           </>
         ) : (
           userRows

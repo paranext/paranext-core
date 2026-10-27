@@ -588,6 +588,22 @@ describe("ResourceTextPanel team resources and the user's own", () => {
     expect(await screen.findByRole('tooltip')).toHaveTextContent(TEAM_RESOURCE_LOCK);
   });
 
+  it('does not have screen readers read the lock label twice while the tooltip is open', async () => {
+    renderPanel({
+      filteredResources: [TEAM_WEB, USER_KJV],
+      selectedRef: USER_KJV,
+      dblResources: ALL_TEXTS,
+    });
+    const user = await openSelector(/KJV/);
+    await user.keyboard('{ArrowDown}');
+    // Positive control: the tooltip is open, which is when Radix would describe the row with it.
+    await screen.findByRole('tooltip');
+
+    const teamItem = screen.getByRole('menuitemcheckbox', { name: /WEB/ });
+    expect(teamItem).toHaveAccessibleName(expect.stringContaining(TEAM_RESOURCE_LOCK));
+    expect(teamItem).not.toHaveAttribute('aria-describedby');
+  });
+
   it('reports a team resource the user chose', async () => {
     const onSelectResource = vi.fn();
     renderPanel({
