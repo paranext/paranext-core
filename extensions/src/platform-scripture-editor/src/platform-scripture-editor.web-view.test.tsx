@@ -2,9 +2,10 @@
 import '@testing-library/jest-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as React from 'react';
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import type { WebViewProps } from '@papi/core';
 import { newPlatformError } from 'platform-bible-utils';
+import { EMPTY_CHAPTER_VIEW_KEYS } from './empty-chapter-view.const';
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks — must be before any import that touches the component
@@ -16,11 +17,29 @@ const GENERIC_KEY = '%project_unsupported_generic%';
 const GENERIC_SENTENCE = "This project can't be opened.";
 const PROJECT_ID = 'PROJECT1';
 
-const { mockUseProjectData, mockUseLocalizedStrings, chapterUsjValue } = vi.hoisted(() => ({
+const {
+  mockUseProjectData,
+  mockUseLocalizedStrings,
+  mockNotifyEditActionBlocked,
+  chapterUsjValue,
+  editorHandle,
+  projectDataProviders,
+  projectSettings,
+} = vi.hoisted(() => ({
   mockUseProjectData: vi.fn(),
   mockUseLocalizedStrings: vi.fn(),
+  mockNotifyEditActionBlocked: vi.fn(),
   /** What the chapter subscription delivers instead of its default, when set. */
   chapterUsjValue: { current: undefined as unknown },
+  /** What the stubbed editor exposes through its ref; nothing, as an unmounted editor, by default. */
+  editorHandle: { current: undefined as unknown },
+  /**
+   * The project data providers `useProjectDataProvider` answers, by name; any other is unavailable.
+   * Each must keep its identity across renders, or the web view refetches on every render.
+   */
+  projectDataProviders: new Map<string, unknown>(),
+  /** Project settings that read as something other than their default, by key. */
+  projectSettings: new Map<string, unknown>(),
 }));
 
 /** What each key localizes to by default; any other key echoes itself, as an unresolved one does. */
@@ -76,9 +95,9 @@ vi.mock('@papi/frontend/react', () => ({
     return dataHooks();
   },
   useData: () => dataHooks(),
-  useProjectDataProvider: () => undefined,
-  useProjectSetting: (_projectId: unknown, _key: unknown, defaultValue: unknown) => [
-    defaultValue,
+  useProjectDataProvider: (providerName: string) => projectDataProviders.get(providerName),
+  useProjectSetting: (_projectId: unknown, key: string, defaultValue: unknown) => [
+    projectSettings.has(key) ? projectSettings.get(key) : defaultValue,
     vi.fn(),
     vi.fn(),
     false,
@@ -101,8 +120,16 @@ vi.mock('@eten-tech-foundation/platform-editor', async (importOriginal) => {
   const original = await importOriginal<typeof import('@eten-tech-foundation/platform-editor')>();
   return {
     ...original,
-    Editorial: React.forwardRef(() => <div data-testid="editorial" />),
+    Editorial: React.forwardRef((_props, ref) => {
+      React.useImperativeHandle(ref, () => editorHandle.current);
+      return <div data-testid="editorial" />;
+    }),
   };
+});
+
+vi.mock('./editor-side-effects.utils', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./editor-side-effects.utils')>();
+  return { ...original, notifyEditActionBlocked: mockNotifyEditActionBlocked };
 });
 
 // ---------------------------------------------------------------------------
@@ -118,8 +145,11 @@ import './platform-scripture-editor.web-view';
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** WebViewProps for an editor tab whose saved state carries `unsupportedReason`. */
-function makeProps(unsupportedReason: string): WebViewProps {
+/**
+ * WebViewProps for an editor tab whose saved state carries `unsupportedReason`, plus any other
+ * saved `state`. A key it does not carry reads as its default.
+ */
+function makeProps(unsupportedReason: string, state: Record<string, unknown> = {}): WebViewProps {
   // The object literal only provides the minimum props needed for testing — the double cast
   // avoids satisfying every optional field of WebViewProps.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -133,6 +163,7 @@ function makeProps(unsupportedReason: string): WebViewProps {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (key: string, defaultValue: any): [any, (val: any) => void, () => void] => {
         if (key === 'unsupportedReason') return [unsupportedReason, vi.fn(), vi.fn()];
+        if (key in state) return [state[key], vi.fn(), vi.fn()];
         return [defaultValue, vi.fn(), vi.fn()];
       },
     ),
@@ -159,7 +190,11 @@ function getEditorWebView(): React.ComponentType<WebViewProps> {
 
 beforeEach(() => {
   mockUseProjectData.mockClear();
+  mockNotifyEditActionBlocked.mockClear();
   chapterUsjValue.current = undefined;
+  editorHandle.current = undefined;
+  projectDataProviders.clear();
+  projectSettings.clear();
   mockUseLocalizedStrings.mockReset();
   mockUseLocalizedStrings.mockImplementation(localizeWith(TRANSLATIONS));
   // The web view host supplies this global; the editor reads its persisted view type through it.
@@ -280,5 +315,95 @@ describe('Scripture editor when the backend refuses the project', () => {
 
     expect(mockUseProjectData).toHaveBeenCalledWith('platformScripture.USJ_Chapter', PROJECT_ID);
     expect(screen.queryByTestId('unsupported-project-message')).not.toBeInTheDocument();
+  });
+});
+
+describe('Scripture editor "Add chapter number" on an empty book', () => {
+  const ADD_CHAPTER_NUMBER_KEY = EMPTY_CHAPTER_VIEW_KEYS.ADD_CHAPTER_NUMBER_BUTTON_KEY;
+
+  /**
+   * An editor whose `insertFirstChapter` answers `isInserted`. Every other method the web view
+   * reaches for is a no-op, so its effects run as they would against an editor showing nothing.
+   */
+  function makeEditorHandle(isInserted: boolean) {
+    const insertFirstChapter = vi.fn(() => isInserted);
+    const handle: unknown = new Proxy(
+      {},
+      {
+        get: (_target, property) =>
+          property === 'insertFirstChapter' ? insertFirstChapter : vi.fn(),
+      },
+    );
+    editorHandle.current = handle;
+    return insertFirstChapter;
+  }
+
+  async function renderEmptyGenesis() {
+    chapterUsjValue.current = {
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'book', marker: 'id', code: 'GEN' }],
+    };
+    projectDataProviders.set('platformScripture.Versification', {
+      getFinalVerseNumbersInBook: async () => [0, 31],
+    });
+    const EditorWebView = getEditorWebView();
+    await act(async () => {
+      render(<EditorWebView {...makeProps('', { isReadOnly: false })} />);
+    });
+    return screen.getByRole('button', { name: ADD_CHAPTER_NUMBER_KEY });
+  }
+
+  it('tells the user when the editor refuses the chapter, and accepts another click', async () => {
+    const insertFirstChapter = makeEditorHandle(false);
+    const button = await renderEmptyGenesis();
+
+    fireEvent.click(button);
+    fireEvent.click(button);
+
+    expect(mockNotifyEditActionBlocked).toHaveBeenCalledTimes(2);
+    // A refused insert must not leave the click marked in flight, or the second would be ignored.
+    expect(insertFirstChapter).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores a second click while the first insert is on its way to the saved chapter', async () => {
+    const insertFirstChapter = makeEditorHandle(true);
+    const button = await renderEmptyGenesis();
+
+    fireEvent.click(button);
+    fireEvent.click(button);
+
+    expect(insertFirstChapter).toHaveBeenCalledTimes(1);
+    expect(insertFirstChapter).toHaveBeenCalledWith(31);
+    expect(mockNotifyEditActionBlocked).not.toHaveBeenCalled();
+  });
+
+  /** Turns the administrator's team lock on, for a user who may or may not lift it. */
+  function lockForTeam(canUserLiftLock: boolean) {
+    projectSettings.set('platformScripture.structureProtected', true);
+    projectDataProviders.set('platformScripture.textConnectionSettings', {
+      canUserWriteProjectTextConnectionSettings: async () => canUserLiftLock,
+    });
+  }
+
+  it("keeps chapter 1 from being added under an administrator's team lock", async () => {
+    lockForTeam(false);
+    const insertFirstChapter = makeEditorHandle(true);
+    const button = await renderEmptyGenesis();
+
+    fireEvent.click(button);
+
+    expect(button).toBeDisabled();
+    expect(insertFirstChapter).not.toHaveBeenCalled();
+  });
+
+  it('lets an administrator who can lift the team lock add chapter 1 under it', async () => {
+    lockForTeam(true);
+    const insertFirstChapter = makeEditorHandle(true);
+    const button = await renderEmptyGenesis();
+
+    fireEvent.click(button);
+
+    expect(insertFirstChapter).toHaveBeenCalledWith(31);
   });
 });

@@ -1680,7 +1680,8 @@ function PlatformScriptureEditor({
   // Effective structure-protection state for this project/user, used to gate keyboard edits to
   // paragraph/verse markers in the editor (fed into EditorOptions.structureProtectionMode below). The
   // toolbar StructureProtectionButton subscribes to the same state independently.
-  const { isStructureProtected, isProtectionActive } = useStructureProtectionState(projectId);
+  const { isStructureProtected, isProtectionActive, isProtectedByAdmin, canAdminToggle } =
+    useStructureProtectionState(projectId);
 
   // Locked (by admin, personal preference, or both) always yields "protected" (hard block); Power
   // mode leaves the feature fully inactive regardless of lock state ("off"); otherwise (Simple mode,
@@ -3420,8 +3421,10 @@ function PlatformScriptureEditor({
     [scrRef.book, scrRef.chapterNum, getEndVerse],
   );
 
+  // An administrator who can toggle the team lock is not bound by it.
   const isAddChapterNumberProtected = shouldProtectAddChapterNumber(
     isStructureProtected,
+    isProtectedByAdmin && !canAdminToggle,
     scrRef.chapterNum,
   );
 
@@ -3475,7 +3478,12 @@ function PlatformScriptureEditor({
     // not. The editor is staged from the revision `dev-packages.json` pins, so it can change with
     // no version diff here at all, and no test here or upstream covers undo for this path —
     // re-check it by hand whenever that revision moves.
-    const insert = insertChapterScaffold(editorRef.current, scrRef.chapterNum, lastVerse);
+    const insert = insertChapterScaffold(
+      editorRef.current,
+      scrRef.chapterNum,
+      lastVerse,
+      usjFromPdp ?? defaultUsj,
+    );
     if (insert.status !== 'inserted') {
       logger.warn(
         `handleAddChapterNumber: no chapter added to ${scrRef.book} ${scrRef.chapterNum} (${insert.status === 'failed' ? insert.error : insert.status})`,
@@ -3489,6 +3497,7 @@ function PlatformScriptureEditor({
     scrRef.book,
     scrRef.chapterNum,
     lastVerse,
+    usjFromPdp,
     isAddChapterNumberProtected,
     notifyStructureProtected,
     localizedStrings,
@@ -4167,6 +4176,10 @@ function PlatformScriptureEditor({
               // before that edit, which the editor would take for a re-send of old text and keep
               // the refused edit on screen.
               setEditorUsj.current(usjFromPdp, { force: true });
+              // The revert takes back any chapter number still in flight, so "Add chapter number"
+              // must accept another click. Only for the chapter on screen, which owns the flag.
+              if (chapterKeyRef.current === savedChapterKey)
+                pendingScaffoldInsertRef.current = false;
             }
           } catch (innerError) {
             logger.error(

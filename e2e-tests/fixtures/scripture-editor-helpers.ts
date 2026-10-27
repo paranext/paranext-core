@@ -242,14 +242,14 @@ export async function unlockSampleProjectStructure(): Promise<void> {
 }
 
 /**
- * Calls a write method on the installed sample WEB project's data provider. Refuses to run unless
- * the app was launched with `isolatedProjectRoot: true`, for the reason
- * {@link makeSampleProjectEditable} gives.
+ * Calls a write method on the installed sample WEB project's data provider and returns what it
+ * answered. Refuses to run unless the app was launched with `isolatedProjectRoot: true`, for the
+ * reason {@link makeSampleProjectEditable} gives.
  */
-async function sendSampleProjectPdpRequest(method: string, args: unknown[]): Promise<void> {
+async function sendSampleProjectPdpRequest<T>(method: string, args: unknown[]): Promise<T> {
   requireIsolatedProjectRoot();
   const pdpId = await getSampleProjectDataProviderId();
-  await sendPapiRequestOnce<boolean>(
+  return sendPapiRequestOnce<T>(
     `object:${pdpId}.${method}`,
     args,
     WEBSOCKET_PORT,
@@ -345,14 +345,7 @@ export async function setSampleProjectBookUsfm(
   book: SampleChapterRef,
   usfm: string,
 ): Promise<void> {
-  requireIsolatedProjectRoot();
-  const pdpId = await getSampleProjectDataProviderId();
-  const isWritten = await sendPapiRequestOnce<boolean>(
-    `object:${pdpId}.setBookUSFM`,
-    [book, usfm],
-    WEBSOCKET_PORT,
-    COMMAND_TIMEOUT_MS,
-  );
+  const isWritten = await sendSampleProjectPdpRequest<boolean>('setBookUSFM', [book, usfm]);
   if (!isWritten) throw new Error(`Sample project did not accept USFM for ${book.book}`);
 }
 
