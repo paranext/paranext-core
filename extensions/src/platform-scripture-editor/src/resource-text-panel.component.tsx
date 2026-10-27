@@ -459,9 +459,10 @@ export function ResourceTextPanel({
   // Chapter 0 is front matter rather than a chapter; `isBlankChapterOnScreen` has that rationale.
   //
   // A settled read that delivered nothing counts too, and is decided HERE rather than inside
-  // `isBlankChapterOnScreen` because only this panel seeds its subscription with `undefined` — the
-  // model text panel seeds a blank USJ, so `undefined` does not carry this meaning there and the
-  // shared helper must keep answering `false` for it.
+  // `isBlankChapterOnScreen` because what a settled `undefined` means depends on the caller's seed
+  // for its data hook. This component's `usjPossiblyError` contract makes it a delivered answer; a
+  // caller that seeds a blank USJ gives `undefined` no such meaning, so the shared helper must keep
+  // answering `false` for it.
   //
   // It is a real delivered answer rather than a fault: the extender PDP returns `undefined` for a
   // falsy USX (`platform-scripture-extender-pdpe.model.ts`), deterministically, so re-reading

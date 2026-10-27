@@ -111,14 +111,15 @@ export function ResourceMessageFrame({
  * beside `EmptyState` so the sentence looks the same with or without it, as the panels that pass no
  * action (Bible texts, the main editor) need. See `adr-resource-missing-book-message`.
  *
- * For the states whose content is that sentence, with at most a plain button under it. A state
- * whose way out is a shared recovery control renders {@link ResourceMessageFrame} directly around
- * that richer body, so the control matches the one every other surface shows for the same
+ * A state whose way out is a shared recovery control renders {@link ResourceMessageFrame} directly
+ * around that richer body, so the control matches the one every other surface shows for the same
  * condition.
  *
- * `EmptyState` supplies the `role="status"` live region; the focus repair and re-announcement are
- * {@link ResourceMessageFrame}'s, which also explains why the message is not reliably announced by
- * the live region alone (closing that gap belongs to the shared primitive — PT-4416).
+ * The focus repair and re-announcement are {@link ResourceMessageFrame}'s, which also explains why
+ * the message is not reliably announced by the live region alone.
+ *
+ * TODO(PT-4416): Move the focus-based announcement from {@link ResourceMessageFrame} into
+ * `EmptyState`.
  */
 export function ResourceMessageView({
   message,

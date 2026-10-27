@@ -56,8 +56,8 @@ describe('ResourceTextUnavailable', () => {
   });
 
   it('names the failure without a control when nothing can re-drive the read', () => {
-    // The Model text panel has no re-subscribe path for this failure. An inert button in a state
-    // that withholds every other affordance is worse than no button.
+    // A caller with no way to re-drive the read passes no handler. An inert button in a state that
+    // withholds every other affordance is worse than no button.
     render(<ResourceTextUnavailable message={MESSAGE} />);
 
     expect(screen.getByRole('status')).toHaveTextContent(MESSAGE);

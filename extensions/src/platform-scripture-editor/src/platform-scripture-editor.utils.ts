@@ -3323,23 +3323,24 @@ export type ResourceContentState = 'loading' | 'bookNotAvailable' | 'failed' | '
  *   resource has not resolved to one yet.
  * @param options.usjPossiblyError The chapter USJ, a `PlatformError`, or `undefined` if none yet.
  *   Whether `undefined` can reach here at all is the caller's choice of seed for its data hook. A
- *   caller seeding `undefined` (the Bible texts panel) says "nothing has arrived" through this
- *   value directly. One seeding a blank USJ (`scripture-text-grid/resource-cell.component.tsx`)
- *   never can, because a blank USJ is neither `undefined` nor falsy, and must distinguish
- *   not-yet-arrived some other way — there, `resourceProjectId` not having resolved yet, plus the
- *   `isLoading` its own `deriveCellState` takes.
+ *   caller seeding `undefined` (e.g., the Bible texts panel) says "nothing has arrived" through
+ *   this value directly. One seeding a blank USJ (e.g.,
+ *   `scripture-text-grid/resource-cell.component.tsx`) never can, because a blank USJ is neither
+ *   `undefined` nor falsy, and must distinguish not-yet-arrived some other way — there,
+ *   `resourceProjectId` not having resolved yet, plus the `isLoading` its own `deriveCellState`
+ *   takes.
  * @param options.currentBookNum The book number the panel is currently displaying. A value of 0 or
  *   less means the panel has no book it can name, so no claim is made about one.
  * @param options.isUsjSettled Whether the chapter subscription has stopped loading. Answers "is the
  *   value in hand the CURRENT read's?", which both terminal branches need, because the data layer
  *   holds the last delivered value across a resubscription — it resets `isLoading`, never `data`.
  *
- *   Escalating out of `'loading'`: distinguishes a `undefined` that has not arrived yet from one that
- *   IS the answer — the data type's `getData` is `Usj | undefined` and the extender PDP returns
- *   `undefined` for a falsy USX, so a delivered `undefined` is reachable and would otherwise spin
- *   forever. This reports that case as `'failed'`, which is the honest answer for the only
- *   reference it can reach here — chapter 0, the book's front matter. For a real chapter the
- *   resource panel decides first that a delivered nothing is an EMPTY chapter and renders that
+ *   Escalating out of `'loading'`: distinguishes an `undefined` that has not arrived yet from one
+ *   that IS the answer — the data type's `getData` is `Usj | undefined` and the extender PDP
+ *   returns `undefined` for a falsy USX, so a delivered `undefined` is reachable and would
+ *   otherwise spin forever. This reports that case as `'failed'`, which is the honest answer for
+ *   the only reference it can reach here — chapter 0, the book's front matter. For a real chapter
+ *   the resource panel decides first that a delivered nothing is an EMPTY chapter and renders that
  *   message instead; see its `isBlankChapter`. A retry cannot change a deterministic `undefined`,
  *   so that precedence is what keeps an inert control off the state.
  *
