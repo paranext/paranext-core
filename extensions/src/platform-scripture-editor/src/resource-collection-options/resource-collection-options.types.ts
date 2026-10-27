@@ -53,9 +53,11 @@ export const RESOURCE_COLLECTION_OPTIONS_KEYS = {
   // between it and the disabled Chapter item.
   chapterNotYetAvailable: '%webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%',
   textsHeader: '%webView_scriptureTextGrid_viewOptions_textsHeader%',
+  teamResourcesHeader: '%webView_scriptureTextGrid_viewOptions_teamResourcesHeader%',
+  userResourcesHeader: '%webView_scriptureTextGrid_viewOptions_userResourcesHeader%',
   emptyTexts: '%webView_scriptureTextGrid_viewOptions_emptyState_prompt%',
   getResources: '%webView_scriptureTextGrid_viewOptions_getResources%',
-  adminSharedLock: '%webView_scriptureTextGrid_viewOptions_adminSharedLock%',
+  teamSharedLock: '%webView_scriptureTextGrid_viewOptions_teamSharedLock%',
   removeFromList: '%webView_scriptureTextGrid_viewOptions_removeFromList%',
   installing: '%webView_scriptureTextGrid_viewOptions_installing%',
 } as const;
@@ -68,9 +70,11 @@ export const RESOURCE_COLLECTION_OPTIONS_STRING_KEYS = Object.freeze([
   RESOURCE_COLLECTION_OPTIONS_KEYS.grid,
   RESOURCE_COLLECTION_OPTIONS_KEYS.chapterNotYetAvailable,
   RESOURCE_COLLECTION_OPTIONS_KEYS.textsHeader,
+  RESOURCE_COLLECTION_OPTIONS_KEYS.teamResourcesHeader,
+  RESOURCE_COLLECTION_OPTIONS_KEYS.userResourcesHeader,
   RESOURCE_COLLECTION_OPTIONS_KEYS.emptyTexts,
   RESOURCE_COLLECTION_OPTIONS_KEYS.getResources,
-  RESOURCE_COLLECTION_OPTIONS_KEYS.adminSharedLock,
+  RESOURCE_COLLECTION_OPTIONS_KEYS.teamSharedLock,
   RESOURCE_COLLECTION_OPTIONS_KEYS.removeFromList,
   RESOURCE_COLLECTION_OPTIONS_KEYS.installing,
 ] as const);
@@ -99,10 +103,16 @@ export interface ResourceCollectionOptionsProps {
    * enabled once chapter rendering exists.
    */
   isChapterEnabled?: boolean;
-  /** Admin-shared rows (top section): checkbox reflects the per-user overlay; never removable. */
+  /** The team's rows (top section): checkable, never removable. */
   top: ViewOptionsTextEntry[];
-  /** User + opted-out-admin rows (bottom section): hover-✕ only where `isUserRemovable`. */
+  /** The user's own and downloaded rows (bottom section): hover-✕ only where `isUserRemovable`. */
   bottom: ViewOptionsTextEntry[];
+  /**
+   * When `false`, `top` and `bottom` render as one list with no Team/User headings and no locks;
+   * the team's rows still have no ✕. Pass `false` in Power mode, which has no notion of team
+   * resources. Defaults to `true`.
+   */
+  isGrouped?: boolean;
   /** Display names of resources currently installing (shown as "Installing {name}…" rows). */
   installingResourceNames?: string[];
   /** Called when a row's checkbox toggles, with the resource id and the next checked state. */

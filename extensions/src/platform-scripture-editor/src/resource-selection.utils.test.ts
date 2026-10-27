@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { PickerResource } from './downloaded-resources.utils';
+import type { EffectiveResourceReference } from 'platform-scripture';
+import { buildPickerResources, type PickerResource } from './downloaded-resources.utils';
 import {
   findSelectedRow,
+  isTeamPickerResource,
   matchesSelectedResourceId,
   resolveResourceSelection,
+  splitPickerResourcesBySource,
 } from './resource-selection.utils';
 
 const dblRow = (id: string): PickerResource => ({
@@ -147,5 +150,76 @@ describe('resolveResourceSelection', () => {
     const result = resolveResourceSelection([], 'dbl:abc', undefined);
     expect(result.selectedRow).toBeUndefined();
     expect(result.nextSelectedResourceId).toBeUndefined();
+  });
+});
+
+describe('isTeamPickerResource', () => {
+  it.each([
+    ['admin', true],
+    ['user', false],
+    ['downloaded', false],
+  ] as const)("a %s row is the team's: %s", (source, expected) => {
+    expect(isTeamPickerResource({ ...dblRow('a'), source })).toBe(expected);
+  });
+});
+
+describe('splitPickerResourcesBySource', () => {
+  const row = (id: string, source: PickerResource['source']): PickerResource => ({
+    ...dblRow(id),
+    source,
+  });
+  const names = (rows: PickerResource[]) => rows.map((r) => r.reference.name);
+  // Interleaved so that a split which sorted, or which kept only the first run of each source,
+  // would come out in a different order.
+  const rows = [
+    row('a', 'admin'),
+    row('b', 'user'),
+    row('c', 'downloaded'),
+    row('d', 'admin'),
+    row('e', 'downloaded'),
+    row('f', 'user'),
+  ];
+
+  it("puts the team's, the user's and other installed rows in their own groups, keeping their order", () => {
+    const { team, user, other } = splitPickerResourcesBySource(rows, {
+      isCatalogUnavailable: false,
+    });
+
+    expect(names(team)).toEqual(['a', 'd']);
+    expect(names(user)).toEqual(['b', 'f']);
+    expect(names(other)).toEqual(['c', 'e']);
+  });
+
+  it("lists the user's and other installed rows together, in their order, while the catalog is unavailable", () => {
+    const { team, user, other } = splitPickerResourcesBySource(rows, {
+      isCatalogUnavailable: true,
+    });
+
+    expect(names(team)).toEqual(['a', 'd']);
+    expect(names(user)).toEqual(['b', 'c', 'e', 'f']);
+    expect(other).toEqual([]);
+  });
+
+  it("keeps an installed team resource with the user's rows while the catalog is unavailable", () => {
+    // Without the catalog the team's DBL reference cannot be resolved, so it is dropped and the
+    // project installed from it comes back as a plain downloaded row.
+    const teamReference: EffectiveResourceReference = {
+      type: 'dblResource',
+      name: 'WEB',
+      id: 'uid-web',
+      source: 'admin',
+    };
+    const downloaded = { projectId: 'proj-web', name: 'WEB', language: 'English' };
+    const pickerRows = buildPickerResources([teamReference], [downloaded], []);
+
+    const { team, user, other } = splitPickerResourcesBySource(pickerRows, {
+      isCatalogUnavailable: true,
+    });
+
+    expect(team).toEqual([]);
+    expect(user).toEqual([
+      expect.objectContaining({ source: 'downloaded', projectId: 'proj-web' }),
+    ]);
+    expect(other).toEqual([]);
   });
 });
