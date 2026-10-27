@@ -132,14 +132,14 @@ paratext-bible-internal-extensions checkout is on an old feature branch, and the
 **`main.ts` — `openSendReceive`**
 
 - Resolves the active project itself, so the menu item (which can't pass arguments) and the
-  Ctrl+Shift+S chord both work without changes to the core patch:
-  - read `platform.interfaceMode`;
-  - Simple: the first `platformScriptureEditor.react` web view's `projectId`
-    (`findFirstEditorWebViewDefinition` over `papi.webViews.getAllOpenWebViewDefinitions()` — the
-    same rule the renderer's project picker uses);
-  - Power: `papi.window.getFocus()` → `getWebViewIdFromFocusSubject` →
-    `papi.webViews.getOpenWebViewDefinition(id)?.projectId` (the pattern `runAppChord` uses for
-    Project settings).
+  Ctrl+Shift+S chord both work without changes to the core patch. It uses
+  `papi.window.getActiveEditorProjectId()` (window service `ActiveEditorProjectId`), which already
+  implements the rule per mode: Simple → the main Scripture editor's project; Power → the
+  Scripture-navigable tab the user most recently focused, falling back to the first open editor.
+  "Most recently focused" survives a click on the main menu. In Power it can name a resource tab;
+  a project that isn't in the shared list is pruned like any other invalid tick. The call throws
+  when no window is focused; treat that as "no active project". *(Chosen while planning, in place
+  of reading interface mode and the focus subject by hand.)*
 - Optionally accepts `projectIdsToSelect?: string[]` for other callers; when given, it is used
   instead of resolving. Update the command's type in
   `src/types/paratext-bible-send-receive.d.ts` **and** core's copy in
@@ -147,9 +147,6 @@ paratext-bible-internal-extensions checkout is on an old feature branch, and the
 - Adds the resolved project to `paratextBibleSendReceive.selectedProjectIds` (skip if already there,
   or if its metadata carries an `unsupportedReason`), then opens or fronts the web view. Writing the
   setting before opening means an already-open dialog picks the tick up through `useSetting`.
-- The builder must verify that clicking the main menu doesn't move the focus subject off the
-  active tab. If it does, resolve the project in a way that survives the menu click (for example the
-  last-focused tab).
 
 **`send-receive.web-view.tsx` / `components/send-receive-view.component.tsx`**
 
@@ -166,11 +163,10 @@ paratext-bible-internal-extensions checkout is on an old feature branch, and the
 
 - `sync-state.ts`: keep a `Map<projectId, ResultInfo>` (latest per project), merged on each
   `setResults`. Keep the existing last-run fields if other consumers need them.
-- The window targets one project: the open project, resolved the same way as Simple's active
-  project above. It re-resolves when the window opens or is fronted and when the open editor's project
-  changes (`onDidOpenWebView`/`onDidUpdateWebView`/`onDidCloseWebView`, or the scripture editor's
-  `onDidSwitchProject`). The builder chooses whether the web view or the extension backend resolves
-  it.
+- The window targets one project: the open project, read with
+  `useData(papi.window.dataProviderName).ActiveEditorProjectId(undefined, undefined)` (as
+  `find.web-view.tsx` in paranext-core does). The subscription re-targets the window on a project
+  switch with no extra event handling.
 - Render that project's stored result, or a new "no details for this project yet" string (add a
   localized-string key; don't reuse `%syncStatus_dialog_idle%`, which says no sync has run at all).
 - "Sync now" syncs the displayed project (through the same wrapper, so its result is recorded),
