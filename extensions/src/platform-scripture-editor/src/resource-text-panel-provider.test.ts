@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { LUCIDE_ICON_NAMES } from 'platform-bible-react/experimental';
 import type { SavedWebViewDefinition } from '@papi/core';
 import { createResourceTextPanelProvider } from './main';
 import type { ResourceTextPanelOptions } from './show-resource-in-panel.util';
@@ -75,12 +76,12 @@ describe('reference panel provider tab icon', () => {
     mocks.getSetting.mockResolvedValue('simple');
   });
 
-  it('opts the icon in to theme colouring in simple mode', async () => {
+  it('names a theme-coloured icon in simple mode', async () => {
     const provider = createResourceTextPanelProvider(
       'platformScriptureEditor.bibleTexts',
       'title',
       'ScriptureResource',
-      'book-open.svg',
+      'book-open',
     );
 
     const built = await provider.getWebView(
@@ -89,8 +90,9 @@ describe('reference panel provider tab icon', () => {
       'nonce-1',
     );
 
-    expect(built?.iconUrl).toBe('book-open.svg');
-    expect(built?.isIconMonochrome).toBe(true);
+    expect(built?.iconName).toBe('book-open');
+    expect(LUCIDE_ICON_NAMES).toContain('book-open');
+    expect(built?.iconUrl).toBeUndefined();
   });
 
   it('shows the default logo in power mode, dropping any saved icon', async () => {
@@ -99,20 +101,21 @@ describe('reference panel provider tab icon', () => {
       'platformScriptureEditor.commentaries',
       'title',
       'CommentaryResource',
-      'file-text.svg',
+      'file-text',
     );
 
     const built = await provider.getWebView(
       {
         ...savedPanel('platformScriptureEditor.commentaries'),
         iconUrl: 'papi-extension://platformScriptureEditor/assets/file-text-dark.svg',
-        isIconMonochrome: true,
+        iconName: 'file-text',
       },
       {},
       'nonce-1',
     );
 
     expect(built?.isClosable).toBe(true);
+    expect(built?.iconName).toBeUndefined();
     expect(built?.iconUrl).toBeUndefined();
   });
 });

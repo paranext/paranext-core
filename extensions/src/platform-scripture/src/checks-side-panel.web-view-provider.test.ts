@@ -1,7 +1,8 @@
 import type { SavedWebViewDefinition } from '@papi/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { LUCIDE_ICON_NAMES } from 'platform-bible-react/experimental';
 import {
-  CHECKS_SIDE_PANEL_ICON_URL,
+  CHECKS_SIDE_PANEL_ICON_NAME,
   ChecksSidePanelWebViewOptions,
   ChecksSidePanelWebViewProvider,
   checksSidePanelWebViewType,
@@ -53,22 +54,21 @@ describe('ChecksSidePanelWebViewProvider', () => {
 
     const result = await new ChecksSidePanelWebViewProvider().getWebView(savedWebView, options);
 
-    expect(result?.iconUrl).toBe(CHECKS_SIDE_PANEL_ICON_URL);
-    expect(result?.isIconMonochrome).toBe(true);
-    expect(CHECKS_SIDE_PANEL_ICON_URL).toBe(
-      'papi-extension://platformScripture/assets/icons/clipboard-check.svg',
-    );
+    expect(result?.iconName).toBe(CHECKS_SIDE_PANEL_ICON_NAME);
+    expect(CHECKS_SIDE_PANEL_ICON_NAME).toBe('clipboard-check');
+    expect(LUCIDE_ICON_NAMES).toContain(CHECKS_SIDE_PANEL_ICON_NAME);
   });
 
   it('shows the default logo in Power mode, dropping any saved icon', async () => {
     mocks.getSetting.mockResolvedValue('power');
 
     const result = await new ChecksSidePanelWebViewProvider().getWebView(
-      { ...savedWebView, iconUrl: 'saved-icon.svg', isIconMonochrome: true },
+      { ...savedWebView, iconUrl: 'saved-icon.svg', iconName: 'clipboard-check' },
       options,
     );
 
     expect(result?.isClosable).toBe(true);
+    expect(result?.iconName).toBeUndefined();
     expect(result?.iconUrl).toBeUndefined();
   });
 });

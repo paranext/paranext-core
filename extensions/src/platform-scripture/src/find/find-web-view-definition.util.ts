@@ -5,8 +5,8 @@ import { buildFindWebViewState, resolveFindScrollGroupScrRef } from './find-web-
 /** Localize key for the Find tab's title, used as both the tab title and the source of its tooltip. */
 export const FIND_TITLE_KEY = '%webView_find_title%';
 
-/** Lucide "Search" glyph for the tab icon, shown when Simple mode collapses tabs to icons only. */
-export const FIND_ICON_URL = 'papi-extension://platformScripture/assets/icons/search.svg';
+/** Lucide icon name for the tab icon, shown when Simple mode collapses tabs to icons only. */
+export const FIND_ICON_NAME = 'search';
 
 /** The fields the Find web view provider computes, minus the bundled `content` and `styles`. */
 export type FindWebViewFields = {
@@ -14,8 +14,8 @@ export type FindWebViewFields = {
   tooltip: string | undefined;
   projectId: string | undefined;
   isClosable: boolean;
-  iconUrl: string | undefined;
-  isIconMonochrome: boolean;
+  iconName: string | undefined;
+  iconUrl: undefined;
   scrollGroupScrRef: ScrollGroupScrRef | undefined;
   state: WebViewDefinition['state'];
 };
@@ -75,9 +75,9 @@ export function buildFindWebViewFields(
     // the generic app logo hard-coded in platform-tab-title.component.scss, so the tab would lose
     // every trace of its identity. Power mode keeps this tab text-labeled with the default logo,
     // matching the resource panels, and drops any saved icon so a Simple-mode icon doesn't carry
-    // over into Power mode. The flag is ignored without an icon.
-    iconUrl: isSimpleMode ? FIND_ICON_URL : undefined,
-    isIconMonochrome: true,
+    // over into Power mode.
+    iconName: isSimpleMode ? FIND_ICON_NAME : undefined,
+    iconUrl: undefined,
     scrollGroupScrRef: resolveFindScrollGroupScrRef(interfaceMode, savedWebView, options),
     state: buildFindWebViewState(savedWebView, options),
   };

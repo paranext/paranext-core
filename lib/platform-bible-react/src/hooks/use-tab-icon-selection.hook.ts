@@ -3,7 +3,7 @@ import { useViewVisibility } from './use-view-visibility.hook';
 /**
  * The four tab-icon variants, as static asset URLs (e.g. `papi-extension://` URLs).
  *
- * @deprecated 2026-10-26 — Set `isIconMonochrome: true` beside a single-colour `iconUrl` instead.
+ * @deprecated 2026-10-27 — Set `iconName` to a lucide icon name on the web view definition instead.
  */
 export type TabIconUrls = {
   /** Dark theme (any selection). */
@@ -29,7 +29,7 @@ export type TabIconUrls = {
  * tab needs the same contrast as an unselected one — a mid-slate fallback is used when the selected
  * state is unknown (`undefined`).
  *
- * @deprecated 2026-10-26 — Set `isIconMonochrome: true` beside a single-colour `iconUrl` instead.
+ * @deprecated 2026-10-27 — Set `iconName` to a lucide icon name on the web view definition instead.
  */
 export function pickTabIconUrl(
   isDarkTheme: boolean,
@@ -59,7 +59,7 @@ export function pickTabIconUrl(
  * Callers own the theme subscription themselves (e.g. `papi.themes.subscribeCurrentTheme`) and pass
  * the resulting `isDarkTheme` in — this hook has no PAPI dependency.
  *
- * @deprecated 2026-10-26 — Set `isIconMonochrome: true` beside a single-colour `iconUrl` instead.
+ * @deprecated 2026-10-27 — Set `iconName` to a lucide icon name on the web view definition instead.
  * @param isDarkTheme Whether the current theme is dark.
  * @param tabIconUrls The four icon variant URLs for this tab.
  * @returns The icon URL to pass to `updateWebViewDefinition({ iconUrl })`.

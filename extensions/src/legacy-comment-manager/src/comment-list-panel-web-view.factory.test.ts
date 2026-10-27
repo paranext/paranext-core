@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { LUCIDE_ICON_NAMES } from 'platform-bible-react/experimental';
 import type { SavedWebViewDefinition } from '@papi/core';
 import { CommentListPanelWebViewFactory } from './comment-list-panel-web-view.factory';
 import { COMMENT_LIST_PANEL_WEB_VIEW_TYPE } from './comment-list-panel.utils';
@@ -36,9 +37,7 @@ describe('CommentListPanelWebViewFactory tab icon', () => {
       {},
     );
 
-    expect(definition?.iconUrl).toBe(
-      'papi-extension://legacyCommentManager/assets/message-square.svg',
-    );
-    expect(definition?.isIconMonochrome).toBe(true);
+    expect(definition?.iconName).toBe('message-square');
+    expect(LUCIDE_ICON_NAMES).toContain(definition?.iconName);
   });
 });

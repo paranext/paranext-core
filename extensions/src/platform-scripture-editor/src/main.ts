@@ -1071,7 +1071,7 @@ export function createResourceTextPanelProvider(
   webViewType: string,
   title: string,
   resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
-  defaultIconUrl: string,
+  iconName: string,
 ): IWebViewProvider {
   return {
     async getWebView(
@@ -1105,9 +1105,9 @@ export function createResourceTextPanelProvider(
         styles: resourceTextPanelWebViewStyles,
         // Icon-only tab in Simple mode, drawn in the tab's text colour so it follows the theme.
         // Power mode labels this tab with text and shows the default logo; a saved icon is dropped
-        // since it may name an asset that no longer exists. The flag is ignored without an icon.
-        iconUrl: interfaceMode === 'simple' ? defaultIconUrl : undefined,
-        isIconMonochrome: true,
+        // since it may name an asset that no longer exists.
+        iconName: interfaceMode === 'simple' ? iconName : undefined,
+        iconUrl: undefined,
         // Also selects a resource opened elsewhere — from Home in Simple mode — when one is passed.
         state: buildResourceTextPanelState(savedWebView.state, resourceType, openWebViewOptions),
         // This webview only ever appears in the fixed 3-column simple-mode layout (Column 3) and
@@ -1122,14 +1122,14 @@ const bibleTextsPanelWebViewProvider: IWebViewProvider = createResourceTextPanel
   BIBLE_TEXTS_PANEL_WEBVIEW_TYPE,
   '%webView_resourcePanel_bibleTexts_title%',
   'ScriptureResource',
-  'papi-extension://platformScriptureEditor/assets/book-open.svg',
+  'book-open',
 );
 
 const commentariesPanelWebViewProvider: IWebViewProvider = createResourceTextPanelProvider(
   COMMENTARIES_PANEL_WEBVIEW_TYPE,
   '%webView_resourcePanel_commentaries_title%',
   'CommentaryResource',
-  'papi-extension://platformScriptureEditor/assets/file-text.svg',
+  'file-text',
 );
 
 async function openResourceText(

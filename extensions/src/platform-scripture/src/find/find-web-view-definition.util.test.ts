@@ -1,8 +1,9 @@
 import type { SavedWebViewDefinition } from '@papi/core';
+import { LUCIDE_ICON_NAMES } from 'platform-bible-react/experimental';
 import type { FindWebViewOptions } from '../find.web-view-provider';
 import {
   buildFindWebViewFields,
-  FIND_ICON_URL,
+  FIND_ICON_NAME,
   FIND_TITLE_KEY,
 } from './find-web-view-definition.util';
 
@@ -35,20 +36,21 @@ describe('buildFindWebViewFields', () => {
       );
 
       expect(fields.isClosable).toBe(false);
-      expect(fields.iconUrl).toBe(FIND_ICON_URL);
-      expect(fields.isIconMonochrome).toBe(true);
+      expect(fields.iconName).toBe(FIND_ICON_NAME);
+      expect(LUCIDE_ICON_NAMES).toContain(FIND_ICON_NAME);
       expect(fields.tooltip).toBe(LOCALIZED_TITLE);
     });
 
     it('leaves the tab closable and shows the default logo in power mode, dropping any saved icon', () => {
       const fields = buildFindWebViewFields(
-        savedWebView({ iconUrl: 'saved-icon.svg', isIconMonochrome: true }),
+        savedWebView({ iconUrl: 'saved-icon.svg', iconName: 'search' }),
         findOptions(),
         'power',
         LOCALIZED_TITLE,
       );
 
       expect(fields.isClosable).toBe(true);
+      expect(fields.iconName).toBeUndefined();
       expect(fields.iconUrl).toBeUndefined();
     });
 

@@ -10162,53 +10162,6 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `adr-scroll-group-hosted-in-main`: the rewritten URL may not be a key, which is why interface
   scaling uses a zoom that is not keyed by URL.
 
-## adr-theme-tinted-tab-icons: A single-colour tab icon opts in and the platform draws it in the tab's text colour
-
-- **Date:** 2026-10-26
-- **Status:** Accepted
-- **Context:** `PlatformTabTitle` paints a tab icon as a static CSS `background-image`, so an SVG
-  can't follow the theme through `currentColor`. To work around that, most Simple-mode Column 3
-  tabs shipped four SVG variants, and their web views subscribed to the theme and swapped `iconUrl`
-  (`useTabIconSelection` / `pickTabIconUrl` in `platform-bible-react`). A web view's code only runs
-  once its tab has been activated, so never-opened tabs showed the provider's static mid-slate
-  default, which read as blue in dark mode, and Find and Checks, which had one `currentColor` SVG,
-  rendered black on dark. Which tabs looked wrong depended on what the user had opened that
-  session.
-- **Decision:** A web view definition can set `isIconMonochrome: true` beside its `iconUrl`. It
-  reaches `TabInfo.isTabIconMonochrome`, and `PlatformTabTitle` then draws the icon as a CSS mask
-  (`.tab-menu-icon-monochrome`) filled with `currentColor`: the icon is always its own tab's text
-  colour, with no icon-specific colour anywhere. That makes icons correct before a tab is opened and
-  through theme switches, with no per-tab code. Providers set the opt-in, so it is present from the
-  first render. Opt-in rules: the mask applies only when both `iconUrl` and the flag are set (no
-  icon still means the default logo, unmasked), and an `updateWebViewDefinition` that changes or
-  removes `iconUrl` without restating the flag clears it
-  (`mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent`), so a full-colour icon set
-  that way isn't drawn as a silhouette. Only that update path clears it: the flag is saved with the
-  definition, so a provider that returns a saved definition with a new `iconUrl` must restate it.
-  Set the flag whenever you set `iconUrl`. Under forced colours the mask is filled with
-  `CanvasText`, since forced colours would otherwise repaint it invisible.
-- **Alternatives:**
-  - Per-tab fix: keep the variant swapping and have each provider also pick the right variant at
-    `getWebView` time from the current theme. Rejected: it fixes startup but not a mid-session theme
-    switch on never-opened tabs, since no supported API lets an extension update another tab's icon
-    and `papi.webViews.reloadWebView` would also reload opened tabs and lose their state. It also
-    keeps every tab shipping four icon files and its own theme subscription.
-  - A dedicated icon colour matching the old dark variant (`#cbd5e1`). Rejected: the only theme
-    variable with that value is the default dark theme's `--ring`, a focus-ring token rather than an
-    icon colour, and the component library's tabs and buttons let icons inherit text colour. Icons
-    are therefore whatever colour their tab's text is: in dark mode usually the near-white
-    `--foreground`, slightly brighter than the old variant, and `--primary-foreground` on a focused
-    Power-mode tab.
-  - Opt-in-free recolouring of every tab icon. Rejected: it would turn full-colour and raster icons
-    (the app logo, third-party extension PNGs) into silhouettes.
-- **Consequences:** A single-colour tab icon needs one file and one flag. The variant helpers are
-  deprecated, not deleted, because extensions in other repos may use them. A mask whose URL fails to
-  load paints nothing, rather than falling back to the logo. A tab that still swaps `iconUrl`
-  variants from its web view keeps the never-opened-tab bug, and adding the flag alone doesn't fix
-  it, because the first swap clears the flag: such a tab must opt in and delete its swap together.
-  Possible follow-up: dim unselected tab text and icons the way the component library's tabs do.
-- **Source:** PT-4864.
-
 ## adr-toolbar-shrink-measurement: Responsive toolbars measure their own width in JS, not with CSS container queries
 
 - **Date:** 2026-08-19

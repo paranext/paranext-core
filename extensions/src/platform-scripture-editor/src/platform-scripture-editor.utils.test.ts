@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+import { LUCIDE_ICON_NAMES } from 'platform-bible-react/experimental';
 import { ScriptureRange } from 'platform-scripture-editor';
 import type PapiBackend from '@papi/backend';
 import { newPlatformError, normalizeProjectId, UsjTextContentLocation } from 'platform-bible-utils';
@@ -6270,10 +6271,8 @@ describe('buildScriptureTextGridWebView', () => {
         GRID_ASSETS,
       );
 
-      expect(definition.iconUrl).toBe(
-        'papi-extension://platformScriptureEditor/assets/library.svg',
-      );
-      expect(definition.isIconMonochrome).toBe(true);
+      expect(definition.iconName).toBe('library');
+      expect(LUCIDE_ICON_NAMES).toContain(definition.iconName);
     },
   );
 
