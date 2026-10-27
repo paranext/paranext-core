@@ -536,7 +536,7 @@ function flagEntry(id: string, flagSetting?: string): DefaultLayoutSupplementEnt
 }
 
 describe('filterEnabledSupplementEntries', () => {
-  it('returns [] and reads no flags when there are no entries (the vanilla case)', async () => {
+  it('returns [] and reads no flags when there are no entries', async () => {
     const readKeys: string[] = [];
     const getFlag = async (key: string) => {
       readKeys.push(key);

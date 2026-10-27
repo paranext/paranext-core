@@ -614,6 +614,12 @@ interface PickerMocks {
    * candidate ids only passes if the picker normalizes them.
    */
   setUnsupportedIds: (ids: string[]) => void;
+  /**
+   * Marks the given project ids as published resources: their `platform.base` PDP reads
+   * `platform.isPublished` as `true`. The batched metadata lookup does not report them, as when the
+   * resources' factory has not registered yet.
+   */
+  setPublishedIds: (ids: string[]) => void;
   /** Synthesize an `object:onDidCreateNetworkObject` event for an object of this type. */
   fireNetworkObjectCreated: (objectType: string) => void;
   /** `true` once the driver has unsubscribed from `object:onDidCreateNetworkObject`. */
@@ -696,8 +702,13 @@ function createPickerMocks(): PickerMocks {
   const setCanUserEditScripture = (projectId: string, canEdit: boolean) => {
     canUserEditScriptureByProjectId.set(projectId, canEdit);
   };
+  // Published resources answer `platform.isPublished` through the project's own PDP, and are absent
+  // from the batched metadata lookup below.
+  const publishedProjectIds = new Set<string>();
   const mockProjectDataProvidersGet = vi.fn(async (_interface: string, projectId: string) => ({
     canUserEditScripture: async () => canUserEditScriptureByProjectId.get(projectId) ?? true,
+    getSetting: async (key: string) =>
+      key === 'platform.isPublished' ? publishedProjectIds.has(projectId.toUpperCase()) : undefined,
   }));
 
   // Backs the picker's unsupported-project lookup. Answers for each id it is asked about, with the
@@ -765,6 +776,9 @@ function createPickerMocks(): PickerMocks {
     },
     setUnsupportedIds: (ids: string[]) => {
       ids.forEach((id) => unsupportedProjectIds.add(id.toUpperCase()));
+    },
+    setPublishedIds: (ids: string[]) => {
+      ids.forEach((id) => publishedProjectIds.add(id.toUpperCase()));
     },
     fireNetworkObjectCreated: (objectType: string) => {
       const listener = networkEventListeners.get('object:onDidCreateNetworkObject');
@@ -2107,6 +2121,38 @@ describe('openDefaultActiveProjectIfApplicable', () => {
       'platformScriptureEditor.openScriptureEditor',
       'p1',
     );
+    expect(
+      mockSendCommand.mock.calls
+        .filter(([cmd]) => cmd === 'platformScriptureEditor.openScriptureEditor')
+        .map(([, id]) => id),
+    ).toEqual(['p1']);
+  });
+
+  it('skips a published resource in the recent projects and opens the next one', async () => {
+    // Builds whose title-bar picker offered resources recorded them as recently opened, and the
+    // picker fills the Simple editor column, which shows projects.
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      setRecentProjects,
+      setPublishedIds,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    setRecentProjects(['res', 'p1']);
+    setPublishedIds(['res']);
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'platformScriptureEditor.openScriptureEditor') return undefined;
+      throw new Error(`Unexpected command in test: ${commandName}`);
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
     expect(
       mockSendCommand.mock.calls
         .filter(([cmd]) => cmd === 'platformScriptureEditor.openScriptureEditor')

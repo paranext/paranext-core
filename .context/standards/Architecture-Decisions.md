@@ -1237,7 +1237,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Date:** 2026-08-27
 - **Status:** Accepted, amended 2026-09-18 — the Text Collection's follow gate is now decided by
   project kind (`platform.isPublished`), not editability, and the editor's gate on Find's re-point
-  is removed, so Find follows every editor-column switch.
+  is removed, so Find follows every editor-column switch. Amended 2026-10-21 — the writes a
+  followed `Editable=F` project's grid makes are checked and accepted. Amended 2026-10-27 — the
+  routes that keep a published resource out of the Simple editor column are recorded.
 - **Context:** Simple mode's Column 3 holds a fixed set of panels, pinned by
   `shipped-simple-layout-order.test.ts`. A
   project switch re-pointed three of them explicitly (`openOrUpdateRelatedPanels` sends two
@@ -1328,7 +1330,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `openOrUpdateRelatedPanels` (or, if it needs the new editor's id, beside `updateRelatedFindPanel`)
   rather than giving it a signal to infer from. Five limits of this decision are recorded
   deliberately rather than left to be re-derived *(amended 2026-09-18: two of the five are
-  superseded and two bullets are added, each marked below)*:
+  superseded and two bullets are added; amended 2026-10-21 and 2026-10-27: one more bullet each;
+  each marked below)*:
   - **Read-only resources are not followed.** `openOrUpdateRelatedPanels` takes
     `isProjectEditable` and skips the Text Collection re-point when it is false, so a published
     resource opened in the editor column does not re-point the grid at itself — a project with no
@@ -1374,7 +1377,25 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     PT-4724, which should first settle where to run that check: `default-layout-supplement.json` lists
     the Scripture Text Grid behind `platformScriptureEditor.enableScriptureTextGrid` (contributed
     default `true`), while `default-layout-supplement.model.ts` and `filterEnabledSupplementEntries`
-    describe the supplement as empty in vanilla builds.
+    describe the supplement as empty in vanilla builds. *(Answered 2026-10-21: see the next bullet.
+    Those two descriptions were wrong and are corrected.)*
+  - **Added 2026-10-21 — a followed `Editable=F` project's grid writes into it, and that is
+    accepted.** The grid runs in core: `default-layout-supplement.json` lists it behind
+    `platformScriptureEditor.enableScriptureTextGrid` (contributed default `true`), and a
+    Simple-mode run showed the tab. With the WEB sample (`Editable=F`) open, the grid bound it,
+    offered its add, remove and reorder controls, and wrote `Extensions/UserSettings-<user>.xml`
+    into WEB's folder on mount (`initializeTextCollectionOverlay`) and again when a text was added.
+    The file holds one user's view of the panel, and `Editable=F` no more stops that than it stops
+    new comments.
+  - **Added 2026-10-27 — a published resource does not normally reach the Simple editor column,
+    so `updateRelatedTextCollectionPanel`'s `isPublished` skip is a backstop.** The title-bar picker and its "More projects…" dialog leave
+    resources out (`isPickableProject` in `use-project-picker-data.hook.ts`, merged 2026-10-23 via
+    #2920), Home sends a resource to its reference tab in Simple mode (`openResource` in
+    `open-home-item.ts`), the Power→Simple switch walks past them as above, and the default project
+    picker skips them in the recently-opened list it walks (`tryOpenFromRecentlyOpened`), which
+    builds from before #2920 can still hold. Nothing on the front end stops a grid that is already
+    bound to a resource from writing into it; whether the grid, Bible Texts, Commentaries and Model
+    Text write per-user settings into a resource they are bound to is tracked on PT-4895.
   - **The re-point targets one window.** `getAllOpenWebViewDefinitions()` flattens across every
     window, so `.find()` returns whichever Text Collection comes first, not the one in the window
     that switched. If that panel already shows the target project the skip guard returns early and a
@@ -1420,7 +1441,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4423, which fixes PT-4238. *(Corrected 2026-09-18: PT-4423 hardens the Simple-mode
   re-point; PT-4238 (PR #2736) replaced the unbound grid's scroll-group fallback — see
   `adr-active-editor-project-is-a-window-data-type`.)* Amended by PT-4716: the `isPublished` follow
-  rule.
+  rule. Amended by PT-4724: the `Editable=F` check, and the default project picker's resource skip.
 
 ## adr-comment-drafts-follow-filters: An uncommitted comment draft is filtered like any other thread, unlike Paratext 9
 
