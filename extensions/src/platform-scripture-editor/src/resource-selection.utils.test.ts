@@ -161,4 +161,49 @@ describe('resolveResourceSelection', () => {
     expect(result.selectedRow?.projectId).toBe('WEB');
     expect(result.nextSelectedResourceId).toBeUndefined();
   });
+
+  it('shows a downloaded resource without persisting it when the selection has left the list', () => {
+    const rows = [notInstalledRow('configured'), downloadedRow('WEB')];
+    const result = resolveResourceSelection(rows, 'dbl:gone', undefined);
+    expect(result.selectedRow?.projectId).toBe('WEB');
+    expect(result.nextSelectedResourceId).toBeUndefined();
+  });
+
+  it('shows a displayable configured row while a pick is in flight over a superseded fallback', () => {
+    // The first row has nothing to display, so showing it would spin until the pick lands.
+    const rows = [notInstalledRow('uninstalled'), projectRow('configured'), downloadedRow('WEB')];
+    const result = resolveResourceSelection(rows, 'project:WEB', 'dbl:not-here-yet', undefined);
+    expect(result.selectedRow?.projectId).toBe('configured');
+    expect(result.nextSelectedResourceId).toBeUndefined();
+  });
+});
+
+describe('resolveResourceSelection — isDownloadedFallback', () => {
+  it('flags a downloaded resource shown because nothing configured is displayable', () => {
+    const result = resolveResourceSelection([downloadedRow('WEB')], undefined, undefined);
+    expect(result.selectedRow?.projectId).toBe('WEB');
+    expect(result.isDownloadedFallback).toBe(true);
+  });
+
+  it('flags a persisted downloaded selection the user did not pick', () => {
+    const result = resolveResourceSelection([downloadedRow('WEB')], 'project:WEB', undefined);
+    expect(result.isDownloadedFallback).toBe(true);
+  });
+
+  it('does not flag a downloaded resource the user picked', () => {
+    const result = resolveResourceSelection([downloadedRow('WEB')], 'project:WEB', undefined, true);
+    expect(result.isDownloadedFallback).toBe(false);
+  });
+
+  it('does not flag a pick of a downloaded resource as it commits', () => {
+    const result = resolveResourceSelection([downloadedRow('WEB')], undefined, 'project:WEB');
+    expect(result.isDownloadedFallback).toBe(false);
+  });
+
+  it('does not flag a configured resource the panel falls back to', () => {
+    const rows = [projectRow('configured'), downloadedRow('WEB')];
+    const result = resolveResourceSelection(rows, undefined, undefined);
+    expect(result.selectedRow?.projectId).toBe('configured');
+    expect(result.isDownloadedFallback).toBe(false);
+  });
 });

@@ -17,6 +17,12 @@ export type ResourceSelectionResolution = {
   shouldClearPending: boolean;
   /** The row to display, or `undefined` when there is nothing to show. */
   selectedRow: PickerResource | undefined;
+  /**
+   * Whether `selectedRow` is a `downloaded` row the panel fell back to rather than one the user
+   * picked. Such a row is shown but must not be offered to global navigation, since what a panel
+   * publishes there is persisted with the layout just like its selection.
+   */
+  isDownloadedFallback: boolean;
 };
 
 /**
@@ -84,7 +90,8 @@ export function resolveResourceSelection(
   const isSupersededFallback =
     matchedRow?.source === 'downloaded' && !isUserPick && firstUsableConfigured !== undefined;
   const selectedRow = isSupersededFallback ? undefined : matchedRow;
-  const displayRow = selectedRow ?? rows[0];
+  const isUnpickedDownload = (row: PickerResource | undefined) =>
+    row?.source === 'downloaded' && !isUserPick;
 
   if (pendingResourceId !== undefined) {
     const pendingRow = rows.find(
@@ -96,12 +103,15 @@ export function resolveResourceSelection(
         nextIsUserPick: true,
         shouldClearPending: true,
         selectedRow: pendingRow,
+        isDownloadedFallback: false,
       };
+    const heldRow = selectedRow ?? firstUsableConfigured ?? rows[0];
     return {
       nextSelectedResourceId: undefined,
       nextIsUserPick: undefined,
       shouldClearPending: false,
-      selectedRow: displayRow,
+      selectedRow: heldRow,
+      isDownloadedFallback: isUnpickedDownload(heldRow),
     };
   }
 
@@ -111,6 +121,7 @@ export function resolveResourceSelection(
       nextIsUserPick: undefined,
       shouldClearPending: false,
       selectedRow: undefined,
+      isDownloadedFallback: false,
     };
 
   if (selectedRow) {
@@ -120,6 +131,7 @@ export function resolveResourceSelection(
       nextIsUserPick: undefined,
       shouldClearPending: false,
       selectedRow,
+      isDownloadedFallback: isUnpickedDownload(selectedRow),
     };
   }
 
@@ -129,11 +141,16 @@ export function resolveResourceSelection(
       nextIsUserPick: false,
       shouldClearPending: false,
       selectedRow: firstUsableConfigured,
+      isDownloadedFallback: false,
     };
+  // Nothing configured is displayable and the selection has left the list (or was never set), so
+  // whatever is shown here is a fallback the user did not pick.
+  const fallbackRow = firstUsable ?? rows[0];
   return {
     nextSelectedResourceId: undefined,
     nextIsUserPick: undefined,
     shouldClearPending: false,
-    selectedRow: firstUsable ?? displayRow,
+    selectedRow: fallbackRow,
+    isDownloadedFallback: fallbackRow.source === 'downloaded',
   };
 }

@@ -7,7 +7,9 @@ import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { UseWebViewScrollGroupScrRefHook, WebViewProps } from '@papi/core';
 import { usePromise } from 'platform-bible-react';
+import { useDialogCallback } from '@papi/frontend/react';
 import type { PickerResource } from './downloaded-resources.utils';
+import { selectTextConnection } from './select-dbl-resource';
 import { resetCopyLimitLookupsBeforeEach } from './copy-limit/copy-limit.test-utils';
 
 // ---------------------------------------------------------------------------
@@ -585,6 +587,69 @@ describe('ResourceTextPanel — selection when a configured resource arrives', (
 
     await waitFor(() => expect(persisted.selectedResourceId).toBe('project:web-project-id'));
     expect(lastSelectedRef()?.projectId).toBe('web-project-id');
+  });
+
+  it('keeps a downloaded resource picked through the resource picker once a configured resource is listed', async () => {
+    vi.mocked(selectTextConnection).mockImplementation(async (...args) => {
+      const onWritten = args[4];
+      onWritten?.({ type: 'project', name: 'WEB', id: 'web-project-id' });
+    });
+    const { persisted, rerender } = renderWithWebViewState();
+    await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('web-project-id'));
+    const onPickerClosed = vi.mocked(useDialogCallback).mock.lastCall?.[2];
+    await React.act(async () => {
+      // Only the resource's identity matters here: `selectTextConnection` is mocked to report the
+      // reference it wrote, which is what the panel waits for.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      onPickerClosed?.({ dblEntryUid: 'web' } as DblResourceData, 'platform.resourcePicker', {
+        resourceType: 'ScriptureResource',
+        selectedResourceIds: [],
+        isModal: true,
+      });
+    });
+    await waitFor(() => expect(persisted.isSelectedResourceUserPick).toBe(true));
+
+    mockUseResourcePickerResources.mockReturnValue([[CONFIGURED, DOWNLOADED_WEB], false]);
+    rerender();
+
+    await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('web-project-id'));
+    expect(persisted.selectedResourceId).toBe('project:web-project-id');
+  });
+
+  describe('what the panel offers to global navigation', () => {
+    beforeEach(() => {
+      // Nothing is published until every source the displayed ids come from has loaded.
+      mockUseDblResourceCatalog.mockReturnValue({
+        dblResources: [],
+        isLoadingResources: false,
+        isCatalogReady: true,
+        hasCatalogError: false,
+        refetchCatalog: vi.fn(),
+      });
+    });
+
+    it('does not offer a downloaded resource it fell back to', async () => {
+      const { persisted, rerender } = renderWithWebViewState();
+      await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('web-project-id'));
+      expect(persisted.navigableProjectIds).toBeUndefined();
+
+      // Positive control: the same setup does publish once a configured resource is shown.
+      mockUseResourcePickerResources.mockReturnValue([[CONFIGURED, DOWNLOADED_WEB], false]);
+      rerender();
+      await waitFor(() => expect(persisted.navigableProjectIds).toEqual(['configured-project-id']));
+    });
+
+    it('offers a downloaded resource the user picked', async () => {
+      const { persisted } = renderWithWebViewState();
+      await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('web-project-id'));
+      React.act(() => {
+        capturedResourceTextPanelProps.mock.lastCall?.[0].onSelectResource(
+          'project:web-project-id',
+        );
+      });
+
+      await waitFor(() => expect(persisted.navigableProjectIds).toEqual(['web-project-id']));
+    });
   });
 });
 

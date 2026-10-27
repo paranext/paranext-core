@@ -321,10 +321,12 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   useOpenFindShortcut(webViewId, resourceProjectId);
 
   // This web view's definition `projectId` is the container project whose reference list is shown,
-  // so the displayed resource is invisible to global navigation UI unless declared here.
+  // so the displayed resource is invisible to global navigation UI unless declared here. A
+  // downloaded resource the panel fell back to is left out: the declared ids persist with the
+  // layout, so declaring it would keep offering its books after a configured resource replaces it.
   usePublishNavigableProjectIds(
     useWebViewState,
-    resourceProjectId ? [resourceProjectId] : [],
+    resourceProjectId && !selection.isDownloadedFallback ? [resourceProjectId] : [],
     canPublishResourcePanelProjectIds(
       effectiveResourcesState,
       isCatalogReady,
