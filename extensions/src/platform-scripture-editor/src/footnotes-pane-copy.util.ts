@@ -1,3 +1,4 @@
+import { logger } from '@papi/frontend';
 import { toUsfmNbspSpelling, ViewOptions } from '@eten-tech-foundation/platform-editor';
 
 const NBSP = '\u00A0';
@@ -22,10 +23,13 @@ function countNbsps(text: string): number {
  *   (`toUsfmNbspSpelling`), which the stand-in can only come from.
  *
  * The selection's own text (`Selection.toString()`) is the base, so the rows keep the line breaks
- * the browser puts between them; a `Range`'s text has none. The row editor's part of it is found by
- * counting no-break spaces: the selection is split at the row editor's boundaries, and those
- * U+00A0s of the selection's text that fall in the row editor's part, in order, become spaces. If
- * the selection's text does not hold exactly the no-break spaces its parts do, which part each
+ * the browser puts between them; a `Range`'s text has none, so the parts' texts cannot simply be
+ * joined. The row editor's part of the selection's text is found by the order of its no-break
+ * spaces: the selection is split at the row editor's boundaries, and the browser's text of a
+ * selection adds line breaks and collapses ASCII whitespace but never adds, moves or reorders a
+ * U+00A0. So when the selection's text holds as many U+00A0s as its parts do, its n-th U+00A0 is
+ * the parts' n-th, and those that come from the row editor's part become spaces. When it holds
+ * fewer — the browser left out some content, such as content that is not rendered — which part each
  * belongs to cannot be told, and every U+00A0 is left as it is.
  *
  * @param selection The page selection being copied
@@ -59,8 +63,15 @@ export function getFootnotesPaneCopyText(
 
   const nbspsBefore = countNbsps(before.toString());
   const nbspsInRowEditor = countNbsps(inRowEditor.toString());
-  if (nbspsBefore + nbspsInRowEditor + countNbsps(after.toString()) !== countNbsps(selectedText))
+  const nbspsInParts = nbspsBefore + nbspsInRowEditor + countNbsps(after.toString());
+  const nbspsInSelectedText = countNbsps(selectedText);
+  if (nbspsInParts !== nbspsInSelectedText) {
+    logger.debug(
+      `Footnotes pane copy left the row editor's display spacing as no-break spaces: the ` +
+        `selection's text holds ${nbspsInSelectedText} no-break spaces, its parts ${nbspsInParts}`,
+    );
     return toUsfmNbspSpelling(selectedText, rowEditorViewOptions);
+  }
 
   // Code units, not graphemes: a display no-break space is one code unit wherever it sits, even in
   // front of a combining mark, and the editor's own copy writes a space for it the same way.

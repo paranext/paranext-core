@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { logger } from '@papi/frontend';
 import { getEditorViewOptions } from './editor-view-options.util';
 import { getFootnotesPaneCopyText } from './footnotes-pane-copy.util';
+
+vi.mock('@papi/frontend', () => ({
+  logger: { warn: vi.fn(), debug: vi.fn(), info: vi.fn(), error: vi.fn() },
+}));
 
 const NBSP = '\u00A0';
 // Standard view with "Allow invisible characters" on holds a stored no-break space as U+001A.
@@ -39,7 +44,18 @@ function selectFrom(startNode: Node, startOffset: number, endNode: Node, endOffs
   return selection;
 }
 
+/**
+ * Has `selection` serialize as `text`. jsdom's selection text is its range's text; a browser's adds
+ * a line break between blocks, which these tests write into `text` by hand.
+ */
+function serializeAs(selection: Selection | undefined, text: string) {
+  if (!selection) throw new Error('no selection');
+  vi.spyOn(selection, 'toString').mockReturnValue(text);
+}
+
 afterEach(() => {
+  vi.restoreAllMocks();
+  vi.mocked(logger.debug).mockClear();
   window.getSelection()?.removeAllRanges();
   document.body.innerHTML = '';
 });
@@ -95,6 +111,38 @@ describe.each([
       expect(getFootnotesPaneCopyText(selection, rowEditorRoot, viewOptions)).toBe(editorUsfm);
     });
 
+    it('keeps the line breaks the browser puts between the rows', () => {
+      const { rowEditorRoot, firstRow, lastRow } = renderPane(shown);
+      const selection = selectFrom(firstRow, 0, lastRow, lastRow.childNodes.length);
+      const editorDisplay = rowEditorRoot?.textContent ?? '';
+      serializeAs(
+        selection,
+        `\\ft${NBSP}one${NBSP}two\n${editorDisplay}\n\\ft${NBSP}three${NBSP}four`,
+      );
+
+      expect(getFootnotesPaneCopyText(selection, rowEditorRoot, viewOptions)).toBe(
+        `\\ft${NBSP}one${NBSP}two\n${editorUsfm}\n\\ft${NBSP}three${NBSP}four`,
+      );
+      expect(logger.debug).not.toHaveBeenCalled();
+    });
+
+    it('converts a selection that starts and ends inside the row editor', () => {
+      const { rowEditorRoot } = renderPane(shown);
+      const editorText = rowEditorRoot?.firstChild;
+      if (!editorText?.textContent) throw new Error('row editor text missing');
+      // From `\ft` to just before `w`.
+      const selection = selectFrom(
+        editorText,
+        editorText.textContent.indexOf('\\ft'),
+        editorText,
+        editorText.textContent.indexOf('w'),
+      );
+
+      expect(getFootnotesPaneCopyText(selection, rowEditorRoot, viewOptions)).toBe(
+        `\\ft see${copied}x \\+nd L\\+nd*${copied}z  `,
+      );
+    });
+
     it('leaves a selection of read-only rows alone', () => {
       const { rowEditorRoot, firstRow } = renderPane(shown);
       const selection = selectFrom(firstRow, 0, firstRow, firstRow.childNodes.length);
@@ -105,6 +153,60 @@ describe.each([
     });
   },
 );
+
+describe("getFootnotesPaneCopyText placing the row editor's part", () => {
+  /**
+   * A pane whose rows hold more stored no-break spaces than the row editor shows display spacing,
+   * and whose row editor has two paragraphs of several text nodes each.
+   */
+  function renderUnevenPane() {
+    document.body.innerHTML =
+      `<ul>${readOnlyRow(`a${NBSP}b${NBSP}c`)}` +
+      `<li><div class="editor-input" contenteditable="true">` +
+      `<p><span>\\f +${NBSP}</span><span>\\ft${NBSP}</span>see</p>` +
+      `<p><span>\\fp${NBSP}</span>more\\f*</p>` +
+      `</div></li>${readOnlyRow(`d${NBSP}e`)}</ul>`;
+    const rowEditorRoot = document.querySelector('.editor-input') ?? undefined;
+    const [firstRow, , lastRow] = document.querySelectorAll('li');
+    const [firstParagraph, secondParagraph] = document.querySelectorAll('p');
+    return { rowEditorRoot, firstRow, lastRow, firstParagraph, secondParagraph };
+  }
+
+  it("converts the no-break spaces in the row editor's place among the selection's, not the first ones", () => {
+    const { rowEditorRoot, firstRow, lastRow } = renderUnevenPane();
+    const selection = selectFrom(firstRow, 0, lastRow, lastRow.childNodes.length);
+    serializeAs(
+      selection,
+      `\\ft${NBSP}a${NBSP}b${NBSP}c\n\\f +${NBSP}\\ft${NBSP}see\n\\fp${NBSP}more\\f*\n\\ft${NBSP}d${NBSP}e`,
+    );
+
+    expect(getFootnotesPaneCopyText(selection, rowEditorRoot, notAllowing)).toBe(
+      `\\ft${NBSP}a${NBSP}b${NBSP}c\n\\f + \\ft see\n\\fp more\\f*\n\\ft${NBSP}d${NBSP}e`,
+    );
+  });
+
+  it('converts a part of the row editor that starts and ends mid-paragraph after part of a row', () => {
+    const { rowEditorRoot, firstRow, secondParagraph } = renderUnevenPane();
+    // From `b` in the first row to the end of the second paragraph's `\fp ` span.
+    const rowText = firstRow.lastChild;
+    if (!rowText?.textContent) throw new Error('row text missing');
+    const selection = selectFrom(rowText, rowText.textContent.indexOf('b'), secondParagraph, 1);
+    serializeAs(selection, `b${NBSP}c\n\\f +${NBSP}\\ft${NBSP}see\n\\fp${NBSP}`);
+
+    expect(getFootnotesPaneCopyText(selection, rowEditorRoot, notAllowing)).toBe(
+      `b${NBSP}c\n\\f + \\ft see\n\\fp `,
+    );
+  });
+
+  it('leaves the rows of a selection that ends where the row editor starts as they are', () => {
+    const { rowEditorRoot, firstRow, firstParagraph } = renderUnevenPane();
+    const selection = selectFrom(firstRow, 0, firstParagraph, 0);
+
+    expect(getFootnotesPaneCopyText(selection, rowEditorRoot, notAllowing)).toBe(
+      `\\ft${NBSP}a${NBSP}b${NBSP}c`,
+    );
+  });
+});
 
 describe('getFootnotesPaneCopyText without a row editor to place', () => {
   it('respells only the stand-in when the pane has no row editor', () => {
@@ -123,12 +225,10 @@ describe('getFootnotesPaneCopyText without a row editor to place', () => {
     if (!selection) throw new Error('no selection');
     // A browser that serializes one no-break space out of the selection's text.
     const serialized = selection.toString().replace(NBSP, '');
-    const toString = vi.spyOn(selection, 'toString').mockReturnValue(serialized);
-    try {
-      expect(getFootnotesPaneCopyText(selection, rowEditorRoot, notAllowing)).toBe(serialized);
-    } finally {
-      toString.mockRestore();
-    }
+    serializeAs(selection, serialized);
+
+    expect(getFootnotesPaneCopyText(selection, rowEditorRoot, notAllowing)).toBe(serialized);
+    expect(logger.debug).toHaveBeenCalledTimes(1);
   });
 
   it('copies nothing from an empty selection', () => {
