@@ -18,7 +18,8 @@ namespace TestParanextDataProvider.Projects
     /// round-trips back to the same <c>\usfm</c> line byte for byte.
     ///
     /// The root <c>&lt;usx version&gt;</c> is NOT derived from the header: it is always
-    /// <c>UsfmToUsx.UsxVersionNumber</c> ("3.0"), whatever the header says or whether there is one.
+    /// <c>UsfmToUsx.UsxVersionNumber</c> ("3.0"), whatever the header says or whether there is one —
+    /// on the verse read path (<see cref="ParatextProjectDataProvider.GetVerseUsx"/>) too.
     /// The header is document data and the stamp is converter metadata; the two are independent
     /// here, and Platform.Bible's TypeScript pipeline preserves each one as it was served.
     /// </summary>
@@ -84,6 +85,11 @@ namespace TestParanextDataProvider.Projects
                 "The USX version is UsfmToUsx.UsxVersionNumber, not the \\usfm header's version."
             );
             Assert.That(provider.GetBookUsx(verseRef), Does.StartWith("<usx version=\"3.0\">"));
+            Assert.That(
+                provider.GetVerseUsx(new VerseRef(BookNum, 1, 1)),
+                Does.StartWith("<usx version=\"3.0\">"),
+                "A verse's USX is stamped with the same version as its chapter's and book's."
+            );
         }
 
         [Test]

@@ -16,7 +16,15 @@ function chapterUsx(version: string): string {
   );
 }
 
-function createEngine(servedUsx: string) {
+/**
+ * A verse as `GetVerseUsx` serves it, at `version`: the verse's own nodes, with no chapter around
+ * them.
+ */
+function verseUsx(version: string): string {
+  return `<usx version="${version}"><verse number="1" style="v" />In the beginning.</usx>`;
+}
+
+function createEngine(servedUsx: string, servedVerseUsx = servedUsx) {
   const subscribe = () => vi.fn().mockResolvedValue(() => Promise.resolve(true));
   const setBookUSX = vi.fn().mockResolvedValue(true);
   const setChapterUSX = vi.fn().mockResolvedValue(true);
@@ -34,7 +42,7 @@ function createEngine(servedUsx: string) {
       subscribeChapterUSX: subscribe(),
     },
     'platformScripture.USX_Verse': {
-      getVerseUSX: vi.fn().mockResolvedValue(servedUsx),
+      getVerseUSX: vi.fn().mockResolvedValue(servedVerseUsx),
       subscribeVerseUSX: subscribe(),
     },
   } as unknown as ScriptureExtenderOverlayPDPs;
@@ -54,7 +62,7 @@ describe('ScriptureExtenderProjectDataProviderEngine USX version', () => {
   it.each(['3.0', '3.1'])(
     'serves chapter, book and verse USJ at the version %s it read',
     async (version) => {
-      const { engine } = createEngine(chapterUsx(version));
+      const { engine } = createEngine(chapterUsx(version), verseUsx(version));
 
       expect((await engine.getChapterUSJ(VERSE_REF))?.version).toBe(version);
       expect((await engine.getBookUSJ(VERSE_REF))?.version).toBe(version);

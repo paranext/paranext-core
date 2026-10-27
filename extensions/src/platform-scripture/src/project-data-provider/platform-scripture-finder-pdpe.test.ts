@@ -2734,10 +2734,11 @@ describe('ScriptureFinderProjectDataProviderEngine replaces only the matched tex
       };
       const { getSetting } = pdps['platform.base'];
       const readSetting = vi.mocked(getSetting).getMockImplementation();
-      vi.mocked(getSetting).mockImplementation((key: string) =>
+      if (!readSetting) throw new Error('The mock PDP has no getSetting implementation');
+      vi.mocked(getSetting).mockImplementation((key) =>
         key === 'platformScripture.allowInvisibleCharacters'
           ? Promise.reject(new Error('setting unavailable'))
-          : readSetting?.(key),
+          : readSetting(key),
       );
 
       await expect(engine.replace([range], 'Mrs.')).rejects.toThrow('setting unavailable');

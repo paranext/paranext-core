@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
+import { Usj, USJ_TYPE } from '@eten-tech-foundation/scripture-utilities';
 import { render, waitFor } from '@testing-library/react';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { SearchResultsInBook } from './search-results-in-book.component';
@@ -13,8 +13,7 @@ const VERSE_REF = { book: 'MAT', chapterNum: 1, verseNum: 1 };
 const BOOK_USJ: Usj = {
   type: USJ_TYPE,
   // Paratext serves USJ 3.0, which the markers map Find uses is for
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  version: '3.0' as typeof USJ_VERSION,
+  version: '3.0',
   content: [
     { type: 'book', marker: 'id', code: 'MAT', content: [] },
     { type: 'chapter', marker: 'c', number: '1', sid: 'MAT 1' },

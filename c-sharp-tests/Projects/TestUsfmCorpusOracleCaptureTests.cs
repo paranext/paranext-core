@@ -110,7 +110,7 @@ namespace TestParanextDataProvider.Projects
 
         private void Capture(string inputPath, string bookId, int bookNum, string outputDir)
         {
-            string asTyped = ToCrLf(File.ReadAllText(inputPath));
+            string asTyped = CorpusLineEndings.ToCrLf(File.ReadAllText(inputPath));
             bool startsWithId = asTyped.TrimStart().StartsWith(@"\id ", StringComparison.Ordinal);
             Match chapterMatch = s_firstChapterRegex.Match(asTyped);
             Assert.That(chapterMatch.Success, Is.True, $"{inputPath} has no \\c line");
@@ -171,10 +171,6 @@ namespace TestParanextDataProvider.Projects
             File.WriteAllText($"{stem}.capture-report.txt", report.ToString());
             TestContext.Out.WriteLine(report.ToString());
         }
-
-        private static string ToCrLf(string text) =>
-            text.Replace("\r\n", "\n", StringComparison.Ordinal)
-                .Replace("\n", "\r\n", StringComparison.Ordinal);
 
         private static string ToLf(string text) =>
             text.Replace("\r\n", "\n", StringComparison.Ordinal);

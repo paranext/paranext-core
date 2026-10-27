@@ -1,3 +1,4 @@
+import { NBSP_STAND_IN_FONT_FAMILY } from '@eten-tech-foundation/platform-editor';
 import { readFileSync } from 'fs';
 import path from 'path';
 
@@ -25,7 +26,9 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
   // browser draws a control character as a box unless the FIRST family has a glyph for it.
   it("leads the Scripture font stack with the editor's no-break-space stand-in family", () => {
     expect(scss.replace(/\/\*[\s\S]*?\*\//g, '')).toMatch(
-      /\.usfm\.formatted-font \{[^}]*font-family: 'PlatformEditorNbspStandIn', var\(--usj-font-fallback, serif\);/,
+      new RegExp(
+        `\\.usfm\\.formatted-font \\{[^}]*font-family: '${NBSP_STAND_IN_FONT_FAMILY}', var\\(--usj-font-fallback, serif\\);`,
+      ),
     );
   });
 

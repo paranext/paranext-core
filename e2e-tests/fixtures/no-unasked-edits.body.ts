@@ -543,9 +543,10 @@ const CHAPTERS: ChapterCase[] = [
         // Hidden markers: the selection holds text only, so the opener stays and the span keeps
         // its remaining words. Standard: the selection holds the opener's glyph too, so its bytes
         // go — and only its bytes: the closer was not selected, so it stays.
-        // Standard view removing the unselected closer as well is accepted for now (TJ,
-        // 2026-10-26) and open to a UX/PO ruling (no ticket yet); Paratext 9 keeps the closer as
-        // an unmatched marker. A change that keeps the closer fails this pin; remove the pin then.
+        // Standard view removing the unselected closer as well is a known deviation from Paratext 9,
+        // which keeps the closer as an unmatched marker; its status and ruling are catalog row EV-2
+        // in `Scripture-Data-Fidelity-Catalog.md`. A change that keeps the closer fails this pin;
+        // remove the pin then.
         knownDeviation: {
           finding: 'EV-2',
           summary:

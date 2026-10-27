@@ -96,8 +96,10 @@ export interface ScheduledCaretRestore {
 }
 
 /**
- * USFM that is a line break and nothing else. A no-break space is text, though `\s` matches it: a
- * project that allows invisible characters writes it into the USFM as itself rather than as `~`.
+ * USFM that is a line break and nothing else. A no-break space is text, though `\s` matches it. It
+ * is excluded in both of its USFM spellings (`~`, and itself in a project that allows invisible
+ * characters), and each is one UTF-16 code unit, so the project's spelling changes neither this
+ * test nor any index it is applied between.
  */
 const LINE_BREAK_ONLY_REGEX = /^[^\S\n\u00A0]*\n[^\S\u00A0]*$/;
 
@@ -134,23 +136,17 @@ function canonicalLocation(usj: Usj, location: UsjDocumentLocation): UsjDocument
  * @param caret Where the editor reports the caret.
  * @param target Where the caret was placed.
  * @param bookId The book `usj` is in, for a document with no `\id` of its own.
- * @param allowInvisibleCharacters The project's `platformScripture.allowInvisibleCharacters`
- *   setting.
  */
 export function isCaretPlacedAt(
   usj: Usj,
   caret: UsjDocumentLocation,
   target: UsjDocumentLocation,
   bookId: string,
-  allowInvisibleCharacters: boolean,
 ): boolean {
   if (deepEqualAcrossIframes(canonicalLocation(usj, caret), canonicalLocation(usj, target)))
     return true;
   try {
-    const usjReaderWriter = new UsjReaderWriter(usj, {
-      markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
-      shouldAllowInvisibleCharacters: allowInvisibleCharacters,
-    });
+    const usjReaderWriter = new UsjReaderWriter(usj, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
     const indexOf = (location: UsjDocumentLocation) =>
       usjReaderWriter.usfmVerseLocationToIndexInUsfm(
         usjReaderWriter.usjDocumentLocationToUsfmVerseRefVerseLocation(location, bookId),

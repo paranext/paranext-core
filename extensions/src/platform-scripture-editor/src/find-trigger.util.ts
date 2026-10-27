@@ -1,3 +1,5 @@
+import { toUsfmNbspSpelling, ViewOptions } from '@eten-tech-foundation/platform-editor';
+
 /**
  * Normalize one candidate selection into something Find can search for, or `''` if it is not a
  * search term at all.
@@ -34,6 +36,30 @@ export function resolveFindSelectionText(
   selectionTextBeforePointerPress: string | undefined,
 ): string {
   return toSearchTerm(liveSelectionText) || toSearchTerm(selectionTextBeforePointerPress);
+}
+
+/**
+ * Choose the text the tab menu's Find item should search for: {@link resolveFindSelectionText}, with
+ * each candidate spelled as the project spells a no-break space rather than as the editor displays
+ * it, since Find searches the project's text.
+ *
+ * @param liveSelectionText Text currently selected in the editor's display, if any.
+ * @param selectionTextBeforePointerPress Text that was selected in the editor's display immediately
+ *   before the pointer press that opened the menu, if any.
+ * @param viewOptions The editor's view options, which say how the project spells a no-break space.
+ * @returns The search text, or an empty string when nothing usable is or was selected.
+ */
+export function resolveMenuFindSelectionText(
+  liveSelectionText: string | undefined,
+  selectionTextBeforePointerPress: string | undefined,
+  viewOptions: ViewOptions,
+): string {
+  const respell = (text: string | undefined) =>
+    text === undefined ? undefined : toUsfmNbspSpelling(text, viewOptions);
+  return resolveFindSelectionText(
+    respell(liveSelectionText),
+    respell(selectionTextBeforePointerPress),
+  );
 }
 
 /**

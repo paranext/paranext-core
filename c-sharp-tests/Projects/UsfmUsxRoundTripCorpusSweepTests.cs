@@ -173,7 +173,12 @@ namespace TestParanextDataProvider.Projects
 
             List<DiffHunk> actual = [];
             actual.AddRange(
-                ComputeHunks("load", ToCrLf(corpus.Chapters[chapter]), stored, TokenizeLines)
+                ComputeHunks(
+                    "load",
+                    CorpusLineEndings.ToCrLf(corpus.Chapters[chapter]),
+                    stored,
+                    TokenizeLines
+                )
             );
             actual.AddRange(ComputeHunks("trip1", stored, usfm1, TokenizeLines));
             actual.AddRange(ComputeHunks("trip2-usfm", usfm1, usfm2, TokenizeLines));
@@ -297,8 +302,6 @@ namespace TestParanextDataProvider.Projects
                 $"Fixture {fixture} has no \\id line and its file name names no book."
             );
         }
-
-        private static string ToCrLf(string text) => text.Replace("\r", "").Replace("\n", "\r\n");
 
         private static string FindRepoRoot()
         {

@@ -18,7 +18,6 @@ import {
   SetUsjOptions,
   StructureProtectionMode,
   StyleInfo,
-  toUsfmNbspSpelling,
   TypedMarkOnClick,
   TypedMarkOnRemove,
   TypedMarkRemovalCause,
@@ -183,11 +182,15 @@ import {
   SYNC_EDIT_BLOCKED_REGEX,
 } from './save-failure-report.util';
 import { withWriteInFlightGuard } from './write-in-flight-guard.util';
-import { resolveFindSelectionText } from './find-trigger.util';
+import { resolveMenuFindSelectionText } from './find-trigger.util';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useSelectionSnapshot } from './use-selection-snapshot.hook';
 import { usePauseEditing } from './use-pause-editing.hook';
 import { EditorDocumentSelector, useEditorPdpSync } from './use-editor-pdp-sync.hook';
+import {
+  getChapterForEditor,
+  useAllowInvisibleCharacters,
+} from './use-allow-invisible-characters.hook';
 import { toBookChapterKey, useScrollToRange } from './use-scroll-to-range.hook';
 import { applyEditorScrRefReport } from './editor-scr-ref-report.util';
 import { useProjectStylesheet } from './use-project-stylesheet.hook';
@@ -894,18 +897,12 @@ function PlatformScriptureEditor({
 
   // Whether the project keeps `~` (a literal tilde) and a no-break space distinct. Off, its USFM
   // spells a no-break space `~`; on, both are written as themselves. Anything here that turns this
-  // project's USJ into USFM has to spell it the project's way.
-  const [allowInvisibleCharactersPossiblyError] = useProjectSetting(
-    projectId,
-    'platformScripture.allowInvisibleCharacters',
-    false,
-  );
-  const allowInvisibleCharacters: boolean = isPlatformError(allowInvisibleCharactersPossiblyError)
-    ? false
-    : allowInvisibleCharactersPossiblyError;
-  // For callbacks that run after the render that created them, such as the caret restore's retries
-  const allowInvisibleCharactersRef = useRef(allowInvisibleCharacters);
-  allowInvisibleCharactersRef.current = allowInvisibleCharacters;
+  // project's USJ into USFM has to spell it the project's way. Never guessed: the chapter is held
+  // back from the editor until it has been read (`usjForEditor`), and a read error makes the editor
+  // read-only (`isReadOnlyEffective`). `false` below only fills the view options of an editor that
+  // either is not showing yet or cannot save.
+  const allowInvisibleCharactersSetting = useAllowInvisibleCharacters(projectId);
+  const allowInvisibleCharacters = allowInvisibleCharactersSetting.value ?? false;
 
   // The next two reactive signals gate whether the Scripture Editor is writable: whether the
   // project itself is editable (`platform.isEditable`) and whether the current user has a
@@ -1401,9 +1398,10 @@ function PlatformScriptureEditor({
 
   /**
    * Whether the editor is effectively read-only, considering the isReadOnly flag, the project's
-   * `platform.isEditable` setting, the user's Scripture-edit permission, sync-blocked state, and
-   * view type. The markers-view clause is the one placeholder piece here: once editing is allowed
-   * in markers view, that clause can be dropped, but the rest of this combination stays.
+   * `platform.isEditable` setting, the user's Scripture-edit permission, whether the project's
+   * `allowInvisibleCharacters` could be read, sync-blocked state, and view type. The markers-view
+   * clause is the one placeholder piece here: once editing is allowed in markers view, that clause
+   * can be dropped, but the rest of this combination stays.
    *
    * Fails CLOSED (read-only) while `isProjectEditable`/`canUserEditScripture` are genuinely still
    * resolving — see `isCanUserEditScriptureUnresolved` above — rather than relying on their
@@ -1417,6 +1415,7 @@ function PlatformScriptureEditor({
       !isProjectEditable ||
       isCanUserEditScriptureUnresolved ||
       !canUserEditScripture ||
+      allowInvisibleCharactersSetting.isUnreadable ||
       isSyncBlocked ||
       (viewType === 'markers' && localStorage.getItem('dev-editableMarkersView') !== 'true'),
     [
@@ -1425,6 +1424,7 @@ function PlatformScriptureEditor({
       isProjectEditable,
       isCanUserEditScriptureUnresolved,
       canUserEditScripture,
+      allowInvisibleCharactersSetting.isUnreadable,
       isSyncBlocked,
       viewType,
     ],
@@ -2775,15 +2775,15 @@ function PlatformScriptureEditor({
    * immediately re-run a search, overwriting whatever term the user already had in an open Find
    * panel.
    */
-  const getMenuFindSelectionText = useCallback(() => {
-    // Searched for as the project spells a no-break space, not as the editor displays it.
-    const respell = (text: string | undefined) =>
-      text === undefined ? undefined : toUsfmNbspSpelling(text, viewOptions);
-    return resolveFindSelectionText(
-      respell(window.getSelection()?.toString()),
-      respell(getSelectionBeforePointerPress()),
-    );
-  }, [getSelectionBeforePointerPress, viewOptions]);
+  const getMenuFindSelectionText = useCallback(
+    () =>
+      resolveMenuFindSelectionText(
+        window.getSelection()?.toString(),
+        getSelectionBeforePointerPress(),
+        viewOptions,
+      ),
+    [getSelectionBeforePointerPress, viewOptions],
+  );
 
   // Listen for the marker menu trigger to open the marker menu, for Ctrl+T / Ctrl+Shift+T to
   // insert a footnote/cross-reference, and for
@@ -3170,6 +3170,11 @@ function PlatformScriptureEditor({
 
     return [defaultUsj, !isBookMissingHere];
   }, [usjFromPdpError, usjFromPdpPossiblyError, currentBookNum, projectId]);
+
+  // The chapter as the editor may have it: withheld (the spinner shows) until the project's
+  // `allowInvisibleCharacters` has been read — see `getChapterForEditor`. Everything that mounts or
+  // fills the editor reads this rather than `usjFromPdp`, so the content arrives with the editor.
+  const usjForEditor = getChapterForEditor(usjFromPdp, allowInvisibleCharactersSetting);
 
   // A book the project simply lacks is ordinary navigation rather than a fault, so it is logged at
   // `debug`, which packaged builds drop (`global-this.model.ts` runs at `info` when packaged). That
@@ -3817,13 +3822,7 @@ function PlatformScriptureEditor({
             const selection = editorRef.current?.getSelection();
             return (
               !!selection &&
-              isCaretPlacedAt(
-                repairedUsj,
-                selection.start,
-                target.start,
-                savedChapterSelector.book,
-                allowInvisibleCharactersRef.current,
-              )
+              isCaretPlacedAt(repairedUsj, selection.start, target.start, savedChapterSelector.book)
             );
           },
           focus: () => editorRef.current?.focus(),
@@ -4710,7 +4709,7 @@ function PlatformScriptureEditor({
     return activity.isActive;
   }, [closeFootnoteEditor]);
   useEditorPdpSync({
-    usjFromPdp,
+    usjFromPdp: usjForEditor,
     documentSelector: chapterUsjSelector,
     editorRef,
     usjSentToPdp,
@@ -4725,8 +4724,8 @@ function PlatformScriptureEditor({
   // On loading the first time, scroll the selected verse into view and set focus to the editor
   useEffect(() => {
     if (
-      usjFromPdp &&
-      (usjFromPdp.content?.length ?? 0) > 0 &&
+      usjForEditor &&
+      (usjForEditor.content?.length ?? 0) > 0 &&
       !hasFirstRetrievedScripture.current
     ) {
       // Wait before scrolling to make sure there is time for the editor to load
@@ -4749,7 +4748,7 @@ function PlatformScriptureEditor({
 
     // Do nothing in destructor since we didn't do anything. TypeScript requires a returned function
     return () => {};
-  }, [usjFromPdp, scrRef, consumeRangeScrollClaimFor]);
+  }, [usjForEditor, scrRef, consumeRangeScrollClaimFor]);
 
   // Scroll the selected verse into view
   useEffect(() => {
@@ -4936,7 +4935,7 @@ function PlatformScriptureEditor({
   useEffect(() => {
     // Do not add the scripture-font class if the editor isn't rendered (see `renderEditor`)
     if (!bookExists) return;
-    if (!usjFromPdp || usjFromPdp === defaultUsj) return;
+    if (!usjForEditor || usjForEditor === defaultUsj) return;
 
     const cancelRunOnLoad = runOnFirstLoad(() => {
       const editorElement = document.querySelector('.editor-inner');
@@ -4948,7 +4947,7 @@ function PlatformScriptureEditor({
     return () => {
       cancelRunOnLoad();
     };
-  }, [bookExists, usjFromPdp]);
+  }, [bookExists, usjForEditor]);
 
   const [webViewMenuPossiblyError] = useData(papi.menuData.dataProviderName).WebViewMenu(
     SCRIPTURE_EDITOR_WEBVIEW_TYPE,
@@ -5176,7 +5175,7 @@ function PlatformScriptureEditor({
         </>
       );
     }
-    if (!usjFromPdp || usjFromPdp === defaultUsj) {
+    if (!usjForEditor || usjForEditor === defaultUsj) {
       return (
         <div className="tw:flex tw:items-center tw:justify-center tw:h-full">
           <Spinner />

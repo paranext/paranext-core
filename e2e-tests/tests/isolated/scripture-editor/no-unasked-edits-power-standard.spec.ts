@@ -7,7 +7,7 @@
  * (the isolated fixture is test-scoped).
  *
  * Runs against an isolated project root: `npm run test:e2e:isolated
- * tests/isolated/scripture-editor/no-unasked-edits-save-stability.spec.ts`.
+ * tests/isolated/scripture-editor/no-unasked-edits-power-standard.spec.ts`.
  */
 import { test } from '../../../fixtures/isolated.fixture';
 import {

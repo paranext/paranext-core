@@ -11,13 +11,13 @@ import {
   EditorRef,
   GENERATOR_NOTE_CALLER,
   getDefaultViewOptions,
-  toUsfmNbspSpelling,
   getMarkerMenuItems,
   HIDDEN_NOTE_CALLER,
   isInsertEmbedOpOfType,
   MarkerMenuItem as EditorMarkerMenuItem,
   SelectionRange,
   StateChangeSnapshot,
+  toUsfmNbspSpelling,
 } from '@eten-tech-foundation/platform-editor';
 import { Copy } from 'lucide-react';
 import {
@@ -1598,9 +1598,11 @@ export default function FootnoteEditor({
     // engine, which runs only when markers are editable. Here Enter (and Shift+Enter) would be
     // Lexical's own paragraph split / line break: the split puts the caret in the scaffolding
     // paragraph after the note, where whatever is typed next is dropped on Save (Save writes only
-    // the note). Until these views support `\fp`, Enter does nothing. Claimed in CAPTURE so
-    // Lexical's root-element listeners never see it; `beforeinput` covers the platforms and input
-    // methods that request the break without a keydown.
+    // the note). So Enter does nothing here, as the editor's own `NoteEnterGuardPlugin` also
+    // swallows Enter inside a note in these views. Claimed in CAPTURE so Lexical's root-element
+    // listeners never see it; `beforeinput` covers the platforms and input methods that request
+    // the break without a keydown.
+    // TODO(PT-4909): Let Enter insert `\fp` here once these views support it.
     const isEditorFocusedWithoutMenu = () => {
       const editorInput = getEditorInput();
       if (!editorInput || document.activeElement !== editorInput) return false;

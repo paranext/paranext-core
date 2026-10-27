@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { getOpenFindTriggerArgs, resolveFindSelectionText } from './find-trigger.util';
+import { getEditorViewOptions } from './editor-view-options.util';
+import {
+  getOpenFindTriggerArgs,
+  resolveFindSelectionText,
+  resolveMenuFindSelectionText,
+} from './find-trigger.util';
 
 describe('resolveFindSelectionText', () => {
   it('prefers the live selection', () => {
@@ -66,5 +71,35 @@ describe('getOpenFindTriggerArgs', () => {
 
   it('is a no-op (undefined) when no scripture is resolved yet', () => {
     expect(getOpenFindTriggerArgs('wv-1', undefined, 'dog')).toBeUndefined();
+  });
+});
+
+describe('resolveMenuFindSelectionText', () => {
+  // Standard view with "Allow invisible characters" on holds a stored no-break space as U+001A.
+  const STAND_IN = '\u001A';
+  const NBSP = '\u00A0';
+  const allowing = getEditorViewOptions('standard', true, true);
+  const notAllowing = getEditorViewOptions('standard', true, false);
+
+  it("respells the live selection's no-break spaces the project's way", () => {
+    expect(resolveMenuFindSelectionText(`Mr.${STAND_IN}Abraham`, undefined, allowing)).toBe(
+      `Mr.${NBSP}Abraham`,
+    );
+  });
+
+  it("respells the pre-press snapshot's no-break spaces the project's way", () => {
+    expect(resolveMenuFindSelectionText('', `Mr.${STAND_IN}Abraham `, allowing)).toBe(
+      `Mr.${NBSP}Abraham`,
+    );
+  });
+
+  it('leaves a `~` alone, whether it is a no-break space or a literal tilde', () => {
+    expect(resolveMenuFindSelectionText('Mr.~Abraham', undefined, notAllowing)).toBe('Mr.~Abraham');
+    expect(resolveMenuFindSelectionText('Mr.~Abraham', undefined, allowing)).toBe('Mr.~Abraham');
+  });
+
+  it('still normalizes as every Find trigger does', () => {
+    expect(resolveMenuFindSelectionText('grace\nand mercy', ' mercy ', allowing)).toBe('mercy');
+    expect(resolveMenuFindSelectionText(undefined, undefined, allowing)).toBe('');
   });
 });
