@@ -7534,10 +7534,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   locally) is not covered by the timer; as of 2026-10-27 it is tracked on PT-4934, not yet
   confirmed in a running app. The flap sources that exposed this were PT-4592 (a panel
   republishing its navigable project ids while its reference list resolves transiently empty;
-  fixed by #2928) and PT-4743 (one installed resource yielding two picker rows under two project
-  id spellings; open as of 2026-10-27). Revisit rule (2) if a
-  platform-level in-flight de-duplication lands. Rule (1) is restated for agents in
-  `.claude/rules/architecture/provider-lookups-fan-out.md`.
+  since #2928 the resource it falls back to then is no longer saved, so the declared ids recover
+  with the list, but they still change while the list is incomplete) and PT-4743 (one installed
+  resource yielding two picker rows under two project id spellings; open as of 2026-10-27).
+  Revisit rule (2) if a platform-level in-flight de-duplication lands. Rule (1) is restated for
+  agents in `.claude/rules/architecture/provider-lookups-fan-out.md`.
 
 ## adr-pt9-interlinear-selected-reads: Publish the size limit and allow callers to select individual files or all at once
 

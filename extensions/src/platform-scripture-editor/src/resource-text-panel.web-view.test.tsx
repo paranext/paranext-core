@@ -579,8 +579,10 @@ describe('ResourceTextPanel — install against a stale catalog', () => {
 /**
  * Renders the panel with a `useWebViewState` backed by real React state, so a selection the panel
  * persists is read back on its next render. Returns every value persisted so far, by state key.
+ *
+ * @param savedState Web view state the panel starts with, by state key
  */
-function renderWithWebViewState() {
+function renderWithWebViewState(savedState: Record<string, unknown> = {}) {
   const persisted: Record<string, unknown> = {};
   const props = makeProps({
     useWebViewState: vi.fn(
@@ -590,7 +592,7 @@ function renderWithWebViewState() {
         // Called as a hook by the panel, in the same order on every render.
         // eslint-disable-next-line react-hooks/rules-of-hooks
         const [value, setValue] = React.useState(
-          key === 'resourceType' ? 'ScriptureResource' : defaultValue,
+          key === 'resourceType' ? 'ScriptureResource' : (savedState[key] ?? defaultValue),
         );
         return [
           value,
@@ -683,7 +685,7 @@ describe('ResourceTextPanel — selection when a configured resource arrives', (
         isModal: true,
       });
     });
-    await waitFor(() => expect(persisted.isSelectedResourceUserPick).toBe(true));
+    await waitFor(() => expect(persisted.userPickedResourceId).toBe('project:web-project-id'));
 
     mockUseResourcePickerResources.mockReturnValue([[CONFIGURED, DOWNLOADED_WEB], false]);
     rerender();
@@ -704,27 +706,80 @@ describe('ResourceTextPanel — selection when a configured resource arrives', (
       });
     });
 
-    it('does not offer a downloaded resource it fell back to', async () => {
+    it('offers a downloaded resource it fell back to, and the configured one that replaces it', async () => {
+      // Find searches what the panel declares, so a resource on screen but undeclared would send
+      // Ctrl+F in this panel to some other project.
       const { persisted, rerender } = renderWithWebViewState();
-      await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('web-project-id'));
-      expect(persisted.navigableProjectIds).toBeUndefined();
+      await waitFor(() => expect(persisted.navigableProjectIds).toEqual(['web-project-id']));
 
-      // Positive control: the same setup does publish once a configured resource is shown.
       mockUseResourcePickerResources.mockReturnValue([[CONFIGURED, DOWNLOADED_WEB], false]);
       rerender();
       await waitFor(() => expect(persisted.navigableProjectIds).toEqual(['configured-project-id']));
     });
+  });
 
-    it('offers a downloaded resource the user picked', async () => {
-      const { persisted } = renderWithWebViewState();
-      await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('web-project-id'));
-      React.act(() => {
-        capturedResourceTextPanelProps.mock.lastCall?.[0].onSelectResource(
-          'project:web-project-id',
-        );
+  it('keeps showing its downloaded fallback when a resource that sorts before it is installed', async () => {
+    const DOWNLOADED_ASV: PickerResource = {
+      ...DOWNLOADED_WEB,
+      reference: { type: 'project', name: 'ASV', id: 'asv-project-id' },
+      projectId: 'asv-project-id',
+    };
+    const { persisted, rerender } = renderWithWebViewState();
+    await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('web-project-id'));
+
+    mockUseResourcePickerResources.mockReturnValue([[DOWNLOADED_ASV, DOWNLOADED_WEB], false]);
+    rerender();
+
+    expect(lastSelectedRef()?.projectId).toBe('web-project-id');
+    expect(persisted.selectedResourceId).toBeUndefined();
+  });
+
+  describe('a saved downloaded selection that is not the user’s pick', () => {
+    const CONFIGURED_DBL: PickerResource = {
+      reference: { type: 'dblResource', name: 'ESV', id: 'uid-esv' },
+      source: 'admin',
+      isAdminLocked: false,
+      type: 'ScriptureResource',
+      installed: true,
+      projectId: 'esv-project-id',
+    };
+
+    it('gives way to an installed configured DBL resource', async () => {
+      mockUseResourcePickerResources.mockReturnValue([[CONFIGURED_DBL, DOWNLOADED_WEB], false]);
+      const { persisted } = renderWithWebViewState({
+        selectedResourceId: 'project:web-project-id',
       });
 
-      await waitFor(() => expect(persisted.navigableProjectIds).toEqual(['web-project-id']));
+      await waitFor(() => expect(persisted.selectedResourceId).toBe('dbl:uid-esv'));
+      expect(lastSelectedRef()?.projectId).toBe('esv-project-id');
+    });
+
+    it('is kept while the user’s own list cannot be read', async () => {
+      // WEB may be in that list, and be listed as downloaded only until it can be read again.
+      mockUseEffectiveResourceReferenceList.mockReturnValue({
+        status: 'ready',
+        list: { dataVersion: '1.0.0', items: [] },
+        isUserLayerMissing: true,
+      });
+      mockUseResourcePickerResources.mockReturnValue([[CONFIGURED_DBL, DOWNLOADED_WEB], false]);
+      const { persisted } = renderWithWebViewState({
+        selectedResourceId: 'project:web-project-id',
+      });
+
+      await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('web-project-id'));
+      expect(persisted.selectedResourceId).toBeUndefined();
+    });
+
+    it('is kept when it was opened from Home', async () => {
+      // `buildResourceTextPanelState` records a resource opened from Home as the user's pick.
+      mockUseResourcePickerResources.mockReturnValue([[CONFIGURED_DBL, DOWNLOADED_WEB], false]);
+      const { persisted } = renderWithWebViewState({
+        selectedResourceId: 'project:web-project-id',
+        userPickedResourceId: 'project:web-project-id',
+      });
+
+      await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('web-project-id'));
+      expect(persisted.selectedResourceId).toBeUndefined();
     });
   });
 });
@@ -1083,11 +1138,8 @@ describe('ResourceTextPanel — catalog failure keeps resolved rows visible', ()
     mockUseDblResourceCatalog.mockReturnValue(FAILED_CATALOG);
     mockUseResourcePickerResources.mockReturnValue([[DOWNLOADED_ROW], false]);
 
-    // The user's own pick, since a downloaded resource the panel only fell back to is never offered
-    // to navigation, catalog or not.
     const { useWebViewState, setters } = makeTrackedWebViewState('ScriptureResource', {
       selectedResourceId: `project:${DOWNLOADED_ROW.projectId}`,
-      isSelectedResourceUserPick: true,
     });
     const ResourceTextPanel = getResourceTextPanel();
     render(<ResourceTextPanel {...makeProps({ useWebViewState })} />);

@@ -2,8 +2,30 @@ import {
   getProjectRowId,
   getResourceReferenceBareId,
   getResourceReferenceRowId,
+  isDblResourceReference,
 } from './resource-reference.utils';
 import type { PickerResource } from './downloaded-resources.utils';
+
+/** What the panel knows about its selection on this render. */
+export type ResourceSelectionInputs = {
+  /** The persisted selection, namespaced or legacy-bare */
+  selectedResourceId: string | undefined;
+  /**
+   * The id of the resource the user last chose themselves — from the dropdown, the resource picker,
+   * or by opening it from Home. The persisted selection is the user's pick only when the two name
+   * the same row; any other selection is one the panel fell back to.
+   */
+  userPickedResourceId: string | undefined;
+  /** The row id of a pick still propagating, if any */
+  pendingResourceId: string | undefined;
+  /** The row id of the downloaded fallback the panel showed last, if any (never persisted) */
+  heldFallbackRowId: string | undefined;
+  /**
+   * Whether every layer of the list has loaded. While one is missing, a row can be absent or listed
+   * as `downloaded` only for now, so nothing is replaced on that evidence.
+   */
+  isListComplete: boolean;
+};
 
 /** What the panel should do with its persisted selection on this render. */
 export type ResourceSelectionResolution = {
@@ -14,20 +36,19 @@ export type ResourceSelectionResolution = {
    */
   nextSelectedResourceId: string | undefined;
   /**
-   * Whether the selection to persist is the user's own pick, or `undefined` to leave the stored
-   * mark alone. Set whenever `nextSelectedResourceId` changes which resource is selected.
+   * The id to persist as the user's pick, or `undefined` to leave it alone. Set when a pick is
+   * committed, and when the selection the user picked is rewritten to another form of its id.
    */
-  nextIsUserPick: boolean | undefined;
+  nextUserPickedResourceId: string | undefined;
   /** Whether the in-flight pick has arrived in the list and can stop suppressing auto-correct. */
   shouldClearPending: boolean;
   /** The row to display, or `undefined` when there is nothing to show. */
   selectedRow: PickerResource | undefined;
   /**
-   * Whether `selectedRow` is a `downloaded` row the panel fell back to rather than one the user
-   * picked. Such a row is shown but must not be offered to global navigation, since what a panel
-   * publishes there is persisted with the layout just like its selection.
+   * The row id of a downloaded resource shown as a fallback without being persisted, for the panel
+   * to hold on to as `heldFallbackRowId` so the fallback does not move as rows change.
    */
-  isDownloadedFallback: boolean;
+  shownFallbackRowId: string | undefined;
 };
 
 /**
@@ -94,38 +115,72 @@ export function findSelectedRow(
  * 2. Hold still while a pick is in flight. Auto-correct must not overwrite the selection before the
  *    new resource shows up.
  * 3. Auto-correct otherwise — rewrite a legacy bare id to its namespaced form (and a selection found
- *    only by its project to its row's own id), or fall back to the first row that has something to
- *    display when the selection has left the list. A row with no `projectId` has no content, so
- *    selecting it would spin forever.
+ *    only by its project to its row's own id), or fall back when the selection has left the list.
  *
- * A fallback to a `downloaded` row (installed locally, but in neither the admin's nor the user's
- * list) is shown but never persisted, and a persisted `downloaded` selection the user did not pick
- * gives way to the first displayable configured row. Otherwise a fallback chosen while nothing was
- * configured would outlive the configuration that later arrives, since a downloaded row stays in
- * the list. A selection persisted without a user-pick mark counts as not picked by the user.
+ * A configured resource (in the admin's or the user's list) wins over a `downloaded` one (installed
+ * locally, but in neither list) the panel falls back to:
+ *
+ * - A fallback to a configured row is persisted, but only to a row that has something to display. A
+ *   row with no `projectId` has no content, so selecting it would spin forever.
+ * - A fallback to a downloaded row is shown but never persisted, since a downloaded row stays in the
+ *   list and would otherwise outlive the configuration that later arrives. It is held between
+ *   renders (see `heldFallbackRowId`), so a newly installed resource does not take its place. A
+ *   configured row that is not installed yet is shown in its place, which gets it installed.
+ * - A persisted downloaded selection that is not the user's pick — one saved by an earlier version of
+ *   the panel — gives way to an installed configured DBL resource. Not to a project reference:
+ *   TODO(PT-4896) it counts as displayable even when its project is not on this machine, and would
+ *   replace a working text with a blank editor.
+ *
+ * Nothing is replaced while `isListComplete` is false, and a selection that has left the list is
+ * then fallen back from on screen only, since it may be back once the missing layer loads.
  *
  * @param rows The panel's filtered rows
- * @param selectedResourceId The persisted selection, namespaced or legacy-bare
- * @param pendingResourceId The row id of a pick still propagating, if any
- * @param isUserPick Whether the persisted selection is the user's own pick
+ * @param inputs See {@link ResourceSelectionInputs}
  * @returns See {@link ResourceSelectionResolution}
  */
 export function resolveResourceSelection(
   rows: PickerResource[],
-  selectedResourceId: string | undefined,
-  pendingResourceId: string | undefined,
-  isUserPick?: boolean,
+  inputs: ResourceSelectionInputs,
 ): ResourceSelectionResolution {
+  const {
+    selectedResourceId,
+    userPickedResourceId,
+    pendingResourceId,
+    heldFallbackRowId,
+    isListComplete,
+  } = inputs;
+  const isConfigured = (row: PickerResource) => row.source !== 'downloaded';
   const firstUsable = rows.find((row) => row.projectId !== undefined);
   const firstUsableConfigured = rows.find(
-    (row) => row.projectId !== undefined && row.source !== 'downloaded',
+    (row) => isConfigured(row) && row.projectId !== undefined,
   );
   const matchedRow = findSelectedRow(rows, selectedResourceId);
-  const isSupersededFallback =
-    matchedRow?.source === 'downloaded' && !isUserPick && firstUsableConfigured !== undefined;
-  const selectedRow = isSupersededFallback ? undefined : matchedRow;
-  // `isUserPick` describes the persisted selection only; any other row shown is not the user's pick.
-  const isSelectionUnpickedDownload = selectedRow?.source === 'downloaded' && !isUserPick;
+  const isUserPick =
+    matchedRow !== undefined && findSelectedRow(rows, userPickedResourceId) === matchedRow;
+  const replacement = rows.find(
+    (row) =>
+      isConfigured(row) && row.projectId !== undefined && isDblResourceReference(row.reference),
+  );
+  const isSuperseded =
+    matchedRow?.source === 'downloaded' &&
+    !isUserPick &&
+    isListComplete &&
+    replacement !== undefined;
+  const selectedRow = isSuperseded ? undefined : matchedRow;
+
+  // What to show, unsaved, when nothing configured is displayable: a configured row not installed
+  // yet, else the downloaded row shown last, else the first row with something to display.
+  const pickUnsavedFallback = () =>
+    rows.find(isConfigured) ??
+    rows.find(
+      (row) =>
+        row.projectId !== undefined &&
+        getResourceReferenceRowId(row.reference) === heldFallbackRowId,
+    ) ??
+    firstUsable ??
+    rows[0];
+  const shownFallbackRowIdOf = (row: PickerResource | undefined) =>
+    row?.source === 'downloaded' ? getResourceReferenceRowId(row.reference) : undefined;
 
   if (pendingResourceId !== undefined) {
     const pendingRow = rows.find(
@@ -134,60 +189,61 @@ export function resolveResourceSelection(
     if (pendingRow)
       return {
         nextSelectedResourceId: pendingResourceId,
-        nextIsUserPick: true,
+        nextUserPickedResourceId: pendingResourceId,
         shouldClearPending: true,
         selectedRow: pendingRow,
-        isDownloadedFallback: false,
+        shownFallbackRowId: undefined,
       };
-    const heldRow = selectedRow ?? firstUsableConfigured ?? firstUsable ?? rows[0];
+    const heldRow = selectedRow ?? firstUsableConfigured ?? pickUnsavedFallback();
     return {
       nextSelectedResourceId: undefined,
-      nextIsUserPick: undefined,
+      nextUserPickedResourceId: undefined,
       shouldClearPending: false,
       selectedRow: heldRow,
-      isDownloadedFallback: selectedRow
-        ? isSelectionUnpickedDownload
-        : heldRow?.source === 'downloaded',
+      shownFallbackRowId: selectedRow ? undefined : shownFallbackRowIdOf(heldRow),
     };
   }
 
   if (rows.length === 0)
     return {
       nextSelectedResourceId: undefined,
-      nextIsUserPick: undefined,
+      nextUserPickedResourceId: undefined,
       shouldClearPending: false,
       selectedRow: undefined,
-      isDownloadedFallback: false,
+      shownFallbackRowId: undefined,
     };
 
   if (selectedRow) {
     const rowId = getResourceReferenceRowId(selectedRow.reference);
+    const isRewritten = rowId !== selectedResourceId;
     return {
-      nextSelectedResourceId: rowId === selectedResourceId ? undefined : rowId,
-      nextIsUserPick: undefined,
+      nextSelectedResourceId: isRewritten ? rowId : undefined,
+      nextUserPickedResourceId: isRewritten && isUserPick ? rowId : undefined,
       shouldClearPending: false,
       selectedRow,
-      isDownloadedFallback: isSelectionUnpickedDownload,
+      shownFallbackRowId: undefined,
     };
   }
 
   if (firstUsableConfigured)
     return {
-      nextSelectedResourceId: getResourceReferenceRowId(firstUsableConfigured.reference),
-      nextIsUserPick: false,
+      nextSelectedResourceId: isListComplete
+        ? getResourceReferenceRowId(firstUsableConfigured.reference)
+        : undefined,
+      nextUserPickedResourceId: undefined,
       shouldClearPending: false,
       selectedRow: firstUsableConfigured,
-      isDownloadedFallback: false,
+      shownFallbackRowId: undefined,
     };
   // Nothing configured is displayable and the selection has left the list (or was never set), so
   // whatever is shown here is a fallback the user did not pick. The stale id stays persisted on
   // purpose: if its resource comes back, the user's choice takes effect again.
-  const fallbackRow = firstUsable ?? rows[0];
+  const fallbackRow = pickUnsavedFallback();
   return {
     nextSelectedResourceId: undefined,
-    nextIsUserPick: undefined,
+    nextUserPickedResourceId: undefined,
     shouldClearPending: false,
     selectedRow: fallbackRow,
-    isDownloadedFallback: fallbackRow.source === 'downloaded',
+    shownFallbackRowId: shownFallbackRowIdOf(fallbackRow),
   };
 }

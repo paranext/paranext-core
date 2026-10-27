@@ -910,8 +910,24 @@ describe('buildResourceTextPanelState', () => {
       ),
     ).toEqual({
       selectedResourceId: 'dbl:uid-byz',
+      userPickedResourceId: 'dbl:uid-byz',
       other: 'kept',
       resourceType: 'CommentaryResource',
+    });
+  });
+
+  it('records the resource a reload asks for as the user’s own pick', () => {
+    // A resource opened from Home was asked for, not fallen back to, so a configured resource must
+    // not replace it — including when the show could not add it to the user's list.
+    expect(
+      buildResourceTextPanelState(
+        { selectedResourceId: 'dbl:previous', userPickedResourceId: 'dbl:older' },
+        'ScriptureResource',
+        { selectedResourceId: 'project:byz-project' },
+      ),
+    ).toMatchObject({
+      selectedResourceId: 'project:byz-project',
+      userPickedResourceId: 'project:byz-project',
     });
   });
 
