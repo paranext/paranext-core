@@ -239,7 +239,7 @@
             "group": "platformScriptureEditor.insertTextualNotes",
             "order": 1,
             "command": "platformScriptureEditor.insertCommentAtSelection",
-            "enabledWhen": "platformScriptureEditor.webView.{webViewId}.isEditable"
+            "enabledWhen": "platformScripture.project.{projectId}.canCreateComments && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
             "label": "%webView_platformScriptureEditor_insertFootnoteAtSelection%",
@@ -248,7 +248,7 @@
             "group": "platformScriptureEditor.insertTextualNotes",
             "order": 2,
             "command": "platformScriptureEditor.insertFootnoteAtSelection",
-            "enabledWhen": "platformScriptureEditor.webView.{webViewId}.isEditable"
+            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
             "label": "%webView_platformScriptureEditor_insertCrossReferenceAtSelection%",
@@ -257,7 +257,7 @@
             "group": "platformScriptureEditor.insertTextualNotes",
             "order": 3,
             "command": "platformScriptureEditor.insertCrossReferenceAtSelection",
-            "enabledWhen": "platformScriptureEditor.webView.{webViewId}.isEditable"
+            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
             "label": "%webView_platformScriptureEditor_insertEndnoteAtSelection%",
@@ -266,7 +266,7 @@
             "group": "platformScriptureEditor.insertTextualNotes",
             "order": 4,
             "command": "platformScriptureEditor.insertEndnoteAtSelection",
-            "enabledWhen": "platformScriptureEditor.webView.{webViewId}.isEditable"
+            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
             "label": "%webView_legacyCommentManager_openComments_2%",
@@ -275,7 +275,8 @@
             "iconNameBefore": "message-square",
             "group": "platformScriptureEditor.comments",
             "order": 1,
-            "command": "legacyCommentManager.openCommentList"
+            "command": "legacyCommentManager.openCommentList",
+            "enabledWhen": "!platform.project.{projectId}.isResource"
           },
           {
             "label": "%webView_platformScriptureEditor_charactersInventory%",
@@ -378,7 +379,8 @@
             "iconNameBefore": "message-square",
             "group": "platformScriptureEditor.simpleToolsPanels",
             "order": 6,
-            "command": "legacyCommentManager.showCommentListPanel"
+            "command": "legacyCommentManager.showCommentListPanel",
+            "enabledWhen": "!platform.project.{projectId}.isResource"
           }
         ]
       },
