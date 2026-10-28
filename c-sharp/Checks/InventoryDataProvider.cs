@@ -88,8 +88,10 @@ internal sealed class InventoryDataProvider(
         var dataSource = new ChecksDataSource(scrText);
         foreach (var inventoryId in InventoryFactory.GetAvailableInventoryIds())
         {
+            // Nobody asked for anything to be written to this project, so the inventories are
+            // only described here, never initialized against it where that can be avoided
             _inventoryDetailsByInventoryId[inventoryId] = new InventoryDetails(
-                InventoryFactory.CreateInventory(inventoryId, dataSource)
+                InventoryFactory.CreateInventoryToDescribe(inventoryId, dataSource)
             );
         }
 
