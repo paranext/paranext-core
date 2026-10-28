@@ -125,6 +125,11 @@ A menu item can state when it is shown, enabled or checked with three optional p
   disabled item tells the user the feature exists.
 - `checkedWhen` shows a check mark on a command item while the expression is true.
 
+**Hiding by interface mode.** `hiddenInterfaceModes` on an item still hides it in the named
+interface modes. `filterItemsForInterfaceMode` in
+`src/extension-host/services/menu-data.service-host.ts` applies it before any when-expression is
+evaluated, and it is the tool for mode-based hiding; when-expressions are for runtime facts.
+
 **Grammar.** Expressions combine context key references with `&&`, `||`, `!`, `==`, `!=` and
 parentheses; operands are single-quoted strings, numbers, `true`/`false` and keys. A key is at
 least two dot-separated segments, and a segment may be a `{templateVar}` filled in per menu. A key
@@ -137,7 +142,7 @@ parse fails safe (`when` hides, `enabledWhen` disables, `checkedWhen` unchecks).
 |---|---|---|
 | Main menu (toolbar, macOS menubar) | none | `when`, `enabledWhen`, `checkedWhen` |
 | Web view top menu | `{webViewId}`, `{webViewType}`, `{projectId}` | `when`, `enabledWhen`, `checkedWhen`, re-evaluated on every key change |
-| Web view that renders its own menu | evaluates through `useEvaluatedMenu` from `@papi/frontend/react` with the variables it chooses | same |
+| Web view that renders its own menu | `{webViewId}`, `{webViewType}`, `{projectId}` (contribution validation rejects any other); the web view evaluates through `useEvaluatedMenu` from `@papi/frontend/react`, supplying their values as a memoized object | same |
 | Web view tab menu | `{webViewId}`, `{webViewType}` | `when` only, evaluated once when the menu is read |
 | Web view overlay context menu | `{webViewId}`, `{webViewType}`, `{projectId}` | `when` only |
 
@@ -146,7 +151,8 @@ and `platform.*`; an extension uses `<extension>.project.{projectId}.*` for fact
 and `<extension>.webView.{webViewId}.*` for facts about one tab. Keys are plain facts
 (`isEditable`, `isSyncing`), never answers to "should this item show"; the expression combines them.
 Each key has exactly **one producer process**: the shared store accepts writes to a key only from
-the process that first wrote it, so two processes writing one key silently lose one writer.
+the process that first wrote it, so with two processes writing one key the second writer's writes
+are dropped (logged, not thrown).
 
 **Handlers still check.** Keyboard shortcuts and direct PAPI calls bypass menus, and a key can lag
 the state it describes, so the command handler keeps its submission-time check and its
