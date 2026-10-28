@@ -85,7 +85,11 @@ export type StoreChangeEvent = StoreEntry & {
 // Copy of the store within this process
 const localStore: Record<string, StoreEntry> = {};
 
-/** Event describing a change to a value in the shared store */
+/**
+ * Event describing a change to a value in the shared store
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
 export type SharedStoreChangeEvent = {
   key: string;
   value: unknown;
@@ -100,6 +104,8 @@ const onDidChangeStoreEmitter = new PlatformEventEmitter<SharedStoreChangeEvent>
  * Event that fires whenever any value in the shared store changes, whether the change was made in
  * this process or applied from another process. Platform-internal. Not intended for use by
  * extensions — extensions should use settings and other data providers for sharing data.
+ *
+ * @experimental This constant is unstable and may change or disappear without notice
  */
 export const onDidChangeSharedStore: PlatformEvent<SharedStoreChangeEvent> =
   onDidChangeStoreEmitter.event;
@@ -637,6 +643,7 @@ export type ContextKeySharedStoreKey = `contextKeys.${string}`;
  */
 export interface SharedStoreValues {
   [timeoutKey: RequestTimeoutSharedStoreKey]: number | undefined;
+  /** @experimental This field is unstable and may change or disappear without notice */
   [contextKey: ContextKeySharedStoreKey]: ContextKeyValue | undefined;
 }
 
