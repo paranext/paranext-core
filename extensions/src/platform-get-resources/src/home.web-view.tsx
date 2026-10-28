@@ -220,6 +220,10 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
   // Internet blocks carry their own id, shared with everywhere else that notices the same block.
   const sharedProjectErrorNotificationId = useMemo(() => newGuid(), []);
 
+  // A ref rather than the state value: state in the closure lags one render, so two clicks in the
+  // same frame would both pass a state check.
+  const isSendReceiveInFlight = useRef(false);
+
   const sendReceiveProject = async (projectId: string) => {
     if (!isSendReceiveAvailable) {
       // Say so rather than doing nothing. Availability can still be unknown when a row's Sync
@@ -233,7 +237,13 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
       return;
     }
 
+    // Last line of defence: the UI disables the other rows while a sync runs. A second command
+    // would be refused by the sync service, and its rejection would clear the first sync's
+    // progress state.
+    if (isSendReceiveInFlight.current) return;
+
     try {
+      isSendReceiveInFlight.current = true;
       setIsSendReceiveInProgress(true);
       setActiveSendReceiveProjects((prev) => [...prev, projectId]);
 
@@ -274,6 +284,8 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
       // what made a failed send/receive look like nothing happened: Home already catches this
       // callback's rejection and renders the message, but only ever saw a resolved promise.
       throw e;
+    } finally {
+      isSendReceiveInFlight.current = false;
     }
   };
 
