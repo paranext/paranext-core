@@ -160,6 +160,7 @@
       "%resources_syncFailed_title%": "Error de sincronización",
       "%resources_syncRunning_listLoads%": "Hay una sincronización en curso. Los proyectos se cargarán cuando termine.",
       "%resources_syncUnavailable%": "La sincronización no está disponible en este momento. Vuelva a intentarlo en unos instantes.",
+      "%resources_syncWaiting_reason%": "Esperar a que termine la sincronización actual",
       "%resources_type%": "Tipo",
       "%resources_types%": "Tipos",
       "%resources_types_noResults%": "No se encontraron tipos",
