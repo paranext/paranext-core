@@ -12,7 +12,12 @@ import type {
   EditorRef,
   SelectionRange,
 } from '@eten-tech-foundation/platform-editor';
-import { isBlockMarker, isLocalizeKey } from 'platform-bible-utils';
+import {
+  evaluateMenu,
+  isBlockMarker,
+  isLocalizeKey,
+  parseWhenExpression,
+} from 'platform-bible-utils';
 import {
   CONTEXT_MENU_ACTION_TO_NOTE_KIND,
   createInsertContextMenuItems,
@@ -1146,5 +1151,121 @@ describe('getEditorWebViewContextKeys', () => {
       'platformScriptureEditor.webView.wv1.isSyncBlocked': false,
       'platformScriptureEditor.webView.wv1.footnotesPaneVisible': true,
     });
+  });
+});
+
+describe('menus.json dynamic conditions', () => {
+  const menusJson = JSON.parse(
+    readFileSync(join(__dirname, '../contributions/menus.json'), 'utf8'),
+  );
+  const { topMenu } = menusJson.webViewMenus['platformScriptureEditor.react'];
+  const TEMPLATE_VARS = { webViewId: 'wv', projectId: 'p1' };
+
+  const ALL_FACTS_ON: Record<string, boolean> = {
+    'platform.project.p1.isResource': false,
+    'platform.project.p1.isEditable': true,
+    'platformScripture.project.p1.canEditScripture': true,
+    'platformScripture.project.p1.canCreateComments': true,
+    'platformScriptureEditor.webView.wv.isPreview': false,
+    'platformScriptureEditor.webView.wv.isSyncBlocked': false,
+    'platformScriptureEditor.webView.wv.footnotesPaneVisible': true,
+  };
+
+  const evaluate = (overrides: Record<string, boolean> = {}) => {
+    const facts = { ...ALL_FACTS_ON, ...overrides };
+    return evaluateMenu(topMenu, (key: string) => facts[key], TEMPLATE_VARS);
+  };
+
+  const isDisabledFn = (menu: { items: { command?: string; disabled?: boolean }[] }) => {
+    return (command: string) => {
+      const matches = menu.items.filter((item) => item.command === command);
+      expect(matches).toHaveLength(1);
+      return matches[0].disabled === true;
+    };
+  };
+
+  const INSERT_NOTE_COMMANDS = [
+    'platformScriptureEditor.insertFootnoteAtSelection',
+    'platformScriptureEditor.insertCrossReferenceAtSelection',
+    'platformScriptureEditor.insertEndnoteAtSelection',
+  ];
+  const INSERT_COMMENT_COMMAND = 'platformScriptureEditor.insertCommentAtSelection';
+  const COMMENTS_COMMANDS = [
+    'legacyCommentManager.openCommentList',
+    'legacyCommentManager.showCommentListPanel',
+  ];
+
+  it('evaluates the Insert items disabled for a read-only project and enabled for an editable one', () => {
+    const enabled = isDisabledFn(evaluate());
+    [...INSERT_NOTE_COMMANDS, INSERT_COMMENT_COMMAND].forEach((command) =>
+      expect(enabled(command)).toBe(false),
+    );
+
+    const readOnly = isDisabledFn(evaluate({ 'platform.project.p1.isEditable': false }));
+    INSERT_NOTE_COMMANDS.forEach((command) => expect(readOnly(command)).toBe(true));
+    // Comments are governed by comment permission, not the editable setting
+    expect(readOnly(INSERT_COMMENT_COMMAND)).toBe(false);
+  });
+
+  it('disables the note inserts in a preview and while sync is blocked', () => {
+    const preview = isDisabledFn(
+      evaluate({ 'platformScriptureEditor.webView.wv.isPreview': true }),
+    );
+    INSERT_NOTE_COMMANDS.forEach((command) => expect(preview(command)).toBe(true));
+    expect(preview(INSERT_COMMENT_COMMAND)).toBe(false);
+
+    const blocked = isDisabledFn(
+      evaluate({ 'platformScriptureEditor.webView.wv.isSyncBlocked': true }),
+    );
+    [...INSERT_NOTE_COMMANDS, INSERT_COMMENT_COMMAND].forEach((command) =>
+      expect(blocked(command)).toBe(true),
+    );
+  });
+
+  it('disables Insert comment without comment permission', () => {
+    const noPermission = isDisabledFn(
+      evaluate({ 'platformScripture.project.p1.canCreateComments': false }),
+    );
+    expect(noPermission(INSERT_COMMENT_COMMAND)).toBe(true);
+  });
+
+  it('disables Comments for a resource', () => {
+    const enabled = isDisabledFn(evaluate());
+    COMMENTS_COMMANDS.forEach((command) => expect(enabled(command)).toBe(false));
+
+    const resource = isDisabledFn(evaluate({ 'platform.project.p1.isResource': true }));
+    COMMENTS_COMMANDS.forEach((command) => expect(resource(command)).toBe(true));
+  });
+
+  it('checks Show footnotes from the footnotes pane fact', () => {
+    const find = (facts: Record<string, boolean>) =>
+      evaluate(facts).items.find(
+        (item: { command?: string }) => item.command === 'platformScriptureEditor.toggleFootnotes',
+      );
+    expect(find({})?.checked).toBe(true);
+    expect(
+      find({ 'platformScriptureEditor.webView.wv.footnotesPaneVisible': false })?.checked,
+    ).toBe(false);
+  });
+
+  it('parses every when-expression in the document', () => {
+    const expressions: string[] = [];
+    const collect = (node: unknown) => {
+      if (Array.isArray(node)) node.forEach(collect);
+      else if (node && typeof node === 'object')
+        Object.entries(node).forEach(([key, value]) => {
+          if (
+            (key === 'when' || key === 'enabledWhen' || key === 'checkedWhen') &&
+            typeof value === 'string'
+          )
+            expressions.push(value);
+          else collect(value);
+        });
+    };
+    collect(menusJson);
+    expect(expressions.length).toBeGreaterThanOrEqual(7);
+    expressions.forEach((expression) =>
+      expect(() => parseWhenExpression(expression)).not.toThrow(),
+    );
   });
 });
