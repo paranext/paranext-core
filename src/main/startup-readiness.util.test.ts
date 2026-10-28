@@ -1,16 +1,22 @@
+import { readFileSync } from 'fs';
+import path from 'path';
 import { vi } from 'vitest';
 import { MAX_REQUEST_ATTEMPTS, REQUEST_ATTEMPT_WAIT_TIME_MS } from '@shared/data/rpc.model';
+import { networkObjectService } from '@shared/services/network-object.service';
 import { networkObjectStatusService } from '@shared/services/network-object-status.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { logger } from '@shared/services/logger.service';
 import { type ProjectMetadata } from '@shared/models/project-metadata.model';
-import { waitForScriptureWorkspaceReady } from './startup-readiness.util';
+import { type NetworkObject, type NetworkObjectDetails } from '@shared/models/network-object.model';
+import { type IProjectDataProviderFactory } from '@shared/models/project-data-provider-factory.interface';
+import { PARATEXT_PDP_FACTORY_ID, waitForScriptureWorkspaceReady } from './startup-readiness.util';
+
+vi.mock('@shared/services/network-object.service', () => ({
+  networkObjectService: { get: vi.fn() },
+}));
 
 vi.mock('@shared/services/network-object-status.service', () => ({
-  networkObjectStatusService: {
-    waitForNetworkObject: vi.fn(),
-    getAllNetworkObjectDetails: vi.fn(),
-  },
+  networkObjectStatusService: { waitForNetworkObject: vi.fn() },
 }));
 
 vi.mock('@shared/services/project-lookup.service', () => ({
@@ -22,6 +28,7 @@ vi.mock('@shared/services/logger.service', () => ({
 }));
 
 const mockWaitForNetworkObject = vi.mocked(networkObjectStatusService.waitForNetworkObject);
+const mockNetworkObjectGet = vi.mocked(networkObjectService.get);
 const mockGetMetadata = vi.mocked(projectLookupService.getMetadataForAllProjectsWithoutRetries);
 const mockLoggerDebug = vi.mocked(logger.debug);
 
@@ -37,12 +44,23 @@ const A_PROJECT = {
 } satisfies ProjectMetadata;
 
 /** The network object details `waitForNetworkObject` resolves with when the factory is up. */
-const FACTORY_DETAILS = {
+const FACTORY_DETAILS: NetworkObjectDetails = {
   id: 'pdpf-scripture-extender',
   objectType: 'pdpFactory',
   functionNames: [],
   attributes: { projectInterfaces: ['platformScripture.USJ_Chapter'] },
 };
+
+/** A stand-in for the .NET Paratext factory proxy whose `getAvailableProjects` the test controls. */
+function paratextFactoryAnswering(
+  getAvailableProjects: IProjectDataProviderFactory['getAvailableProjects'],
+): NetworkObject<IProjectDataProviderFactory> {
+  return {
+    getAvailableProjects: vi.fn(getAvailableProjects),
+    getProjectDataProviderId: vi.fn(),
+    onDidDispose: vi.fn(),
+  };
+}
 
 /** Runs `body` with fake timers installed, restoring real timers even if it throws. */
 async function withFakeTimers(body: () => Promise<void>): Promise<void> {
@@ -76,7 +94,27 @@ beforeEach(() => {
   // below are re-established every time.
   vi.resetAllMocks();
   mockWaitForNetworkObject.mockResolvedValue(FACTORY_DETAILS);
+  // The Paratext factory is unreachable, so an empty probe answer never counts as ready unless a
+  // test says otherwise.
+  mockNetworkObjectGet.mockResolvedValue(undefined);
   mockGetMetadata.mockResolvedValue([A_PROJECT]);
+});
+
+// A mismatch would never reach the Paratext factory, so a user with no projects would wait out the
+// whole budget before the startup sync.
+describe('PARATEXT_PDP_FACTORY_ID', () => {
+  it('is the ID the C# Paratext project factory registers under', () => {
+    const readCSharp = (file: string) =>
+      readFileSync(path.resolve(__dirname, '../../c-sharp/Projects', file), 'utf-8');
+    const pdpfName = /PDPF_NAME\s*=\s*"([^"]+)"/.exec(
+      readCSharp('ParatextProjectDataProviderFactory.cs'),
+    )?.[1];
+    const idTemplate = /\$"([^"]*)\{_pdpfName\}([^"]*)"/.exec(
+      readCSharp('ProjectDataProviderFactory.cs'),
+    );
+
+    expect(PARATEXT_PDP_FACTORY_ID).toBe(`${idTemplate?.[1]}${pdpfName}${idTemplate?.[2]}`);
+  });
 });
 
 describe('waitForScriptureWorkspaceReady', () => {
@@ -440,5 +478,184 @@ describe('waitForScriptureWorkspaceReady', () => {
     expect(mockLoggerDebug).toHaveBeenCalledTimes(2);
     expect(mockLoggerDebug).toHaveBeenCalledWith(expect.stringContaining('(attempt 1)'));
     expect(mockLoggerDebug).toHaveBeenCalledWith(expect.stringContaining('(attempt 10)'));
+  });
+
+  describe('an empty probe answer', () => {
+    /**
+     * Starts the gate under fake timers and returns a getter for its result, which stays
+     * `undefined` until the gate settles — so a test can tell "settled promptly" from "still
+     * polling" without awaiting a promise that may never resolve inside the test.
+     */
+    function startTrackedGate(options: Parameters<typeof waitForScriptureWorkspaceReady>[0]) {
+      let result: Awaited<ReturnType<typeof waitForScriptureWorkspaceReady>> | undefined;
+      const readinessPromise = waitForScriptureWorkspaceReady(options).then((value) => {
+        result = value;
+        return value;
+      });
+      return { readinessPromise, getResult: () => result };
+    }
+
+    it('resolves "ready" at once when the Paratext factory, asked directly, has no projects', async () => {
+      // A workspace with genuinely no local scripture projects: the startup sync is what brings the
+      // first project, so it must not sit out the whole budget first.
+      const factory = paratextFactoryAnswering(async () => []);
+      mockNetworkObjectGet.mockResolvedValue(factory);
+      mockGetMetadata.mockResolvedValue([]);
+
+      await withFakeTimers(async () => {
+        const { readinessPromise, getResult } = startTrackedGate({ timeoutMs: 5_000 });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(getResult()).toEqual({ outcome: 'ready' });
+        await readinessPromise;
+      });
+
+      expect(mockGetMetadata).toHaveBeenCalledTimes(1);
+      expect(mockNetworkObjectGet).toHaveBeenCalledWith(PARATEXT_PDP_FACTORY_ID);
+      // Asked AFTER the empty probe, so the direct answer is at least as fresh as the probe's.
+      expect(mockGetMetadata.mock.invocationCallOrder[0]).toBeLessThan(
+        vi.mocked(factory.getAvailableProjects).mock.invocationCallOrder[0],
+      );
+      expect(mockLoggerDebug).toHaveBeenCalledWith(
+        expect.stringContaining('asked directly, has none'),
+      );
+      expect(mockLoggerDebug).not.toHaveBeenCalledWith(
+        expect.stringContaining('reports no projects yet'),
+      );
+    });
+
+    it('calls getAvailableProjects with exactly one argument, as the C# handler requires', async () => {
+      // StreamJsonRpc matches the C# `GetAvailableProjects(JsonElement _ignore)` by arity, so a
+      // zero-argument call fails with -32602 and the gate would never see an empty answer.
+      const factory = paratextFactoryAnswering(async () => []);
+      mockNetworkObjectGet.mockResolvedValue(factory);
+      mockGetMetadata.mockResolvedValue([]);
+
+      await expect(waitForScriptureWorkspaceReady({ timeoutMs: 5_000 })).resolves.toEqual({
+        outcome: 'ready',
+      });
+
+      expect(vi.mocked(factory.getAvailableProjects).mock.calls).toEqual([[{}]]);
+    });
+
+    it('never asks the Paratext factory when the probe answers non-empty', async () => {
+      await expect(waitForScriptureWorkspaceReady({ timeoutMs: 5_000 })).resolves.toEqual({
+        outcome: 'ready',
+      });
+
+      expect(mockNetworkObjectGet).not.toHaveBeenCalled();
+    });
+
+    it.each<[string, () => NetworkObject<IProjectDataProviderFactory> | undefined, string]>([
+      // The lookup service's fan-out skips a factory it cannot reach, so its empty answer proves
+      // nothing on its own.
+      ['the Paratext factory is not reachable', () => undefined, 'not reachable'],
+      [
+        'the direct call fails',
+        () =>
+          paratextFactoryAnswering(async () => {
+            throw new Error('data provider not answering');
+          }),
+        'data provider not answering',
+      ],
+      [
+        // The Scripture Extender has not layered over the Paratext projects yet.
+        'the Paratext factory has projects',
+        () => paratextFactoryAnswering(async () => [{ id: 'PROJ1', projectInterfaces: [] }]),
+        'lists 1 project',
+      ],
+    ])(
+      'keeps polling until the budget runs out when %s',
+      async (_description, makeFactory, loggedReason) => {
+        mockNetworkObjectGet.mockImplementation(async () => makeFactory());
+        mockGetMetadata.mockResolvedValue([]);
+
+        await withFakeTimers(async () => {
+          const { readinessPromise, getResult } = startTrackedGate({ timeoutMs: 5_000 });
+          await vi.advanceTimersByTimeAsync(0);
+          expect(getResult()).toBeUndefined();
+          await vi.advanceTimersByTimeAsync(5_000);
+          await expect(readinessPromise).resolves.toEqual({
+            outcome: 'timed-out',
+            detail: expect.any(String),
+          });
+        });
+
+        // More than one probe proves the gate kept polling rather than settling on the first answer.
+        expect(mockGetMetadata.mock.calls.length).toBeGreaterThan(1);
+        expect(mockLoggerDebug).toHaveBeenCalledWith(
+          expect.stringMatching(new RegExp(`${loggedReason}.*\\(attempt 1\\)`)),
+        );
+      },
+    );
+
+    it('abandons a direct call that never settles once the deadline passes, yielding "timed-out"', async () => {
+      const directAnswer = deferred<[]>();
+      mockNetworkObjectGet.mockResolvedValue(paratextFactoryAnswering(() => directAnswer.promise));
+      mockGetMetadata.mockResolvedValue([]);
+
+      await withFakeTimers(async () => {
+        const readinessPromise = waitForScriptureWorkspaceReady({ timeoutMs: 5_000 });
+        await vi.advanceTimersByTimeAsync(5_000);
+        await expect(readinessPromise).resolves.toEqual({
+          outcome: 'timed-out',
+          detail: expect.any(String),
+        });
+      });
+    });
+
+    it('resolves "aborted" when the app quits while the direct call is in flight, even though it later answers empty', async () => {
+      const abort = new AbortController();
+      const directAnswer = deferred<[]>();
+      const factory = paratextFactoryAnswering(() => directAnswer.promise);
+      mockNetworkObjectGet.mockResolvedValue(factory);
+      mockGetMetadata.mockResolvedValue([]);
+
+      const readinessPromise = waitForScriptureWorkspaceReady({ abortSignal: abort.signal });
+      await vi.waitFor(() => expect(factory.getAvailableProjects).toHaveBeenCalled());
+      abort.abort();
+      directAnswer.resolve([]);
+
+      await expect(readinessPromise).resolves.toEqual({ outcome: 'aborted' });
+    });
+
+    it('resolves "aborted" without calling the factory when the app quits while it is being reached', async () => {
+      const abort = new AbortController();
+      const reaching = deferred<NetworkObject<IProjectDataProviderFactory> | undefined>();
+      const factory = paratextFactoryAnswering(async () => []);
+      mockNetworkObjectGet.mockReturnValue(reaching.promise);
+      mockGetMetadata.mockResolvedValue([]);
+
+      const readinessPromise = waitForScriptureWorkspaceReady({ abortSignal: abort.signal });
+      await vi.waitFor(() => expect(mockNetworkObjectGet).toHaveBeenCalled());
+      abort.abort();
+      reaching.resolve(factory);
+
+      await expect(readinessPromise).resolves.toEqual({ outcome: 'aborted' });
+      expect(factory.getAvailableProjects).not.toHaveBeenCalled();
+    });
+
+    it('resolves "aborted" without calling the factory when a quit lands in the same tick as reaching it', async () => {
+      // Aborting from a `then` attached after the gate's own lands the quit just after the factory
+      // proxy has settled the race but before the gate resumes, so only a re-check before the call
+      // can avoid issuing work the quit would discard.
+      const abort = new AbortController();
+      const reaching = deferred<NetworkObject<IProjectDataProviderFactory> | undefined>();
+      const factory = paratextFactoryAnswering(async () => []);
+      mockNetworkObjectGet.mockReturnValue(reaching.promise);
+      mockGetMetadata.mockResolvedValue([]);
+
+      const readinessPromise = waitForScriptureWorkspaceReady({ abortSignal: abort.signal });
+      await vi.waitFor(() => expect(mockNetworkObjectGet).toHaveBeenCalled());
+      reaching.promise
+        .then(() => {
+          abort.abort();
+          return undefined;
+        })
+        .catch(() => undefined);
+      reaching.resolve(factory);
+
+      await expect(readinessPromise).resolves.toEqual({ outcome: 'aborted' });
+      expect(factory.getAvailableProjects).not.toHaveBeenCalled();
+    });
   });
 });

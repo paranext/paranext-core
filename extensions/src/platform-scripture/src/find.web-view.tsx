@@ -55,6 +55,7 @@ import { buildFindOptions } from './find/find-options.utils';
 import {
   applyPreserveCase,
   armBoundedWait,
+  buildReplacedAllMessage,
   callControllerSafely,
   classifyPollAttempt,
   GIVE_UP_AFTER_MS,
@@ -67,12 +68,15 @@ import {
   resolveSelectedProjectScrollGroup,
   resolveTargetEditorWebViewId,
   resolveTargetReferencePanelWebViewId,
+  selectWrittenBookSnapshots,
   shouldClearResultsForInvalidQuery,
 } from './find/find.utils';
 import { deriveFindBookLists, UNKNOWN_FIND_BOOK_LISTS } from './find/find-book-lists.utils';
 import { isExtraMaterialBookId } from './find/extra-material.utils';
 import {
+  MARKER_DELETION_ERROR,
   STRUCTURE_PROTECTED_ERROR,
+  markersDeletedBy,
   replacementContainsStructuralMarker,
 } from './find/structure-protection.util';
 import { LocalizedBookData, SearchTextType } from './find/find-types';
@@ -103,6 +107,10 @@ const WEB_VIEW_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_project_unavailableError%',
   '%webView_find_replacedOneOccurrence%',
   '%webView_find_replacedNOccurrences%',
+  '%webView_find_replacedOneOccurrenceSkippedOneResult%',
+  '%webView_find_replacedOneOccurrenceSkippedNResults%',
+  '%webView_find_replacedNOccurrencesSkippedOneResult%',
+  '%webView_find_replacedNOccurrencesSkippedNResults%',
   '%webView_find_replacementReverted%',
   '%webView_find_searchInterruptedError%',
 ];
@@ -2074,10 +2082,13 @@ global.webViewComponent = function FindWebView({
           await handleStartSearchRef.current();
         }
       } catch (error) {
-        if (getErrorMessage(error).includes(STRUCTURE_PROTECTED_ERROR)) {
+        const message = getErrorMessage(error);
+        if (message.includes(STRUCTURE_PROTECTED_ERROR)) {
           sonner(localizedStrings['%webView_find_replace_structureProtectedError%']);
+        } else if (message.includes(MARKER_DELETION_ERROR)) {
+          sonner(localizedStrings['%webView_find_replace_markerDeletionError%']);
         } else {
-          logger.error(`Error replacing result: ${getErrorMessage(error)}`);
+          logger.error(`Error replacing result: ${message}`);
         }
       } finally {
         setIsReplacing(false);
@@ -2101,6 +2112,9 @@ global.webViewComponent = function FindWebView({
   const handleReplaceAll = useCallback(async () => {
     if (isReplacing || !replacePdp || !projectId || boundProjectUnsupportedReason) return;
 
+    // Set when a batch wrote and could not be rolled back, so the catch below knows the project is
+    // still holding replacements the user never got told about.
+    let didLeaveBooksModified = false;
     setIsReplacing(true);
     try {
       // Load all remaining results before replacing so we don't miss any.
@@ -2126,8 +2140,28 @@ global.webViewComponent = function FindWebView({
       // Sync any newly loaded results into state
       if (allResults.length > resultsRef.current.length) setResults(allResults);
 
-      const visibleResultsList = allResults.filter((r) => !r.isHidden);
-      if (visibleResultsList.length === 0) return;
+      const candidateResultsList = allResults.filter((r) => !r.isHidden);
+      if (candidateResultsList.length === 0) return;
+
+      // A result whose USFM span holds markers can only be replaced by a replacement that puts them
+      // back, which a plain-text replacement never does — `replace()` refuses the whole book's
+      // batch over one such range. Skip them so the rest of the batch still goes through, and say
+      // how many were skipped rather than reporting a count that silently excludes them.
+      const visibleResultsList = candidateResultsList.filter(
+        (r) => !markersDeletedBy(r.removedMarkers ?? [], replaceTerm),
+      );
+      const skippedCount = candidateResultsList.length - visibleResultsList.length;
+      if (visibleResultsList.length === 0) {
+        sonner(
+          skippedCount === 1
+            ? localizedStrings['%webView_find_replace_skippedAllOneResult%']
+            : formatReplacementString(
+                localizedStrings['%webView_find_replace_skippedAllNResults%'],
+                { skippedCount: skippedCount.toString() },
+              ),
+        );
+        return;
+      }
 
       let isCommitSuccess = false;
       // Also commits changes to the version history
@@ -2201,18 +2235,51 @@ global.webViewComponent = function FindWebView({
         group.ranges.push({ start: r.start, end: r.end });
         group.insertions.push(Array.isArray(usfmToInsert) ? usfmToInsert[i] : usfmToInsert);
       });
-      await Promise.all(
+      // `replace()` is all-or-nothing per book, but Replace All issues one call per book. If one
+      // book's batch is refused, the books that already wrote are committed — so settle every call
+      // and roll the written books back from the snapshots before surfacing the failure. Using
+      // `Promise.all` here would jump straight to the catch, skipping the revert window below and
+      // leaving a partial cross-book write with no way to undo it.
+      const replaceOutcomes = await Promise.allSettled(
         [...bookGroupMap.values()].map(({ ranges, insertions }) =>
           replacePdp.replace(ranges, preserveCase ? insertions : insertions[0]),
         ),
       );
+      const firstReplaceRejection = replaceOutcomes.find(
+        (outcome) => outcome.status === 'rejected',
+      );
+      if (firstReplaceRejection) {
+        // Only the books whose call fulfilled were written — `replace()` is all-or-nothing per
+        // book, so a refused book still holds exactly what it held before. Writing its snapshot
+        // back would overwrite whatever someone else changed in it since the snapshot was taken,
+        // and the likeliest non-sentinel rejection is the PDP exhausting its cache-invalidation
+        // retries, which is precisely the case where someone else was editing.
+        const { writtenBookSnapshots, writtenBookIdsWithoutSnapshot } = selectWrittenBookSnapshots(
+          bookSnapshots,
+          [...bookGroupMap.keys()],
+          replaceOutcomes,
+        );
+        if (writtenBookIdsWithoutSnapshot.length > 0) {
+          didLeaveBooksModified = true;
+          logger.error(
+            `Replace all partially failed and no snapshot was available to roll back ${writtenBookIdsWithoutSnapshot.join(', ')}`,
+          );
+        }
+        if (
+          writtenBookSnapshots.size > 0 &&
+          !(usfmBookPdp && (await revertBookSnapshots(writtenBookSnapshots, usfmBookPdp)))
+        ) {
+          didLeaveBooksModified = true;
+          logger.error('Replace all partially failed and the rollback did not succeed');
+        }
+        throw firstReplaceRejection.reason;
+      }
       const count = visibleResultsList.length;
+      // One template per outcome rather than two sentences joined in code: only the translation
+      // can decide whether its language needs a period, a separator, or a different word order
+      // between the two clauses, and only it can inflect each count for its own plural rules.
       const replacedAllToastId = sonner(
-        count === 1
-          ? localizedStrings['%webView_find_replacedOneOccurrence%']
-          : formatReplacementString(localizedStrings['%webView_find_replacedNOccurrences%'], {
-              count: count.toString(),
-            }),
+        buildReplacedAllMessage(localizedStrings, count, skippedCount),
       );
 
       // Commits resulting changes from the replace to the version history
@@ -2244,9 +2311,10 @@ global.webViewComponent = function FindWebView({
       // Functional form, like every other write on the replace path: `allResults` is a snapshot from
       // before the batches were loaded, so writing it directly would resurrect whatever the results
       // have become since — including results that were deliberately emptied.
+      const replacedResultKeys = new Set(visibleResultsList);
       setResults((prev) =>
         prev.map((r) => {
-          if (r.isHidden) return r;
+          if (r.isHidden || !replacedResultKeys.has(r)) return r;
           return { ...r, isReplaced: true };
         }),
       );
@@ -2278,10 +2346,31 @@ global.webViewComponent = function FindWebView({
         await handleStartSearchRef.current();
       }
     } catch (error) {
-      if (getErrorMessage(error).includes(STRUCTURE_PROTECTED_ERROR)) {
+      const message = getErrorMessage(error);
+      if (message.includes(STRUCTURE_PROTECTED_ERROR)) {
         sonner(localizedStrings['%webView_find_replace_structureProtectedError%']);
+      } else if (message.includes(MARKER_DELETION_ERROR)) {
+        sonner(localizedStrings['%webView_find_replace_markerDeletionError%']);
       } else {
-        logger.error(`Error replacing all results: ${getErrorMessage(error)}`);
+        // The two sentinels are refusals: the project is untouched and the wording says why. Any
+        // other failure is a genuine error, and logging alone leaves the user watching a Replace
+        // All that stopped with no explanation.
+        logger.error(`Error replacing all results: ${message}`);
+        if (!didLeaveBooksModified)
+          papi.notifications.send({
+            message: localizedStrings['%webView_find_replace_failedMessage%'],
+            severity: 'error',
+          });
+      }
+      if (didLeaveBooksModified) {
+        papi.notifications.send({
+          message: localizedStrings['%webView_find_replace_rollbackFailedMessage%'],
+          severity: 'error',
+        });
+        // Those books still hold their replacements, so every offset in the result list points at
+        // text that has moved. Re-search so the list describes the project as it now stands.
+        isPostReplaceSearchRef.current = true;
+        await handleStartSearchRef.current();
       }
     } finally {
       setIsReplacing(false);

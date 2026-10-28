@@ -163,6 +163,14 @@ export const NoProjectsNoHeader: Story = {
   decorators: [],
 };
 
+/** What a new user of a packaged build sees: nothing to list, with the getting-started prompt. */
+export const NoProjects: Story = {
+  args: {
+    headerContent: <CardTitle>Home</CardTitle>,
+    onGetStarted: () => alertCommand('platform.openWindow', { url: GET_STARTED_URL }),
+  },
+};
+
 function OnlyWebProjectDecorator(Story: (update?: { args: HomeProps }) => ReactElement) {
   const onlyWebProjectList: LocalProjectInfo[] = [
     {
@@ -291,7 +299,7 @@ const UNSUPPORTED_REASON_KEY = '%project_unsupported_studyBibleAdditions%';
 
 /**
  * A project that cannot be opened (e.g. a Study Bible Additions project): its row is muted and its
- * Open action is disabled, with the reason reachable through a tooltip. Sync and Get stay enabled.
+ * Open, Sync and Get actions are all disabled, with the reason reachable through a tooltip.
  */
 function UnsupportedProjectDecorator(Story: (update?: { args: HomeProps }) => ReactElement) {
   return (
@@ -329,8 +337,8 @@ export const UnsupportedProject: Story = {
 
 /**
  * An unsupported project that is downloaded and has local edits: Sync takes the action cell's
- * button and Open moves into its ⋯ menu, where it is disabled and carries the reason as text in the
- * item.
+ * button and Open moves into its ⋯ menu. Sync is disabled with the reason in a tooltip; Open is
+ * disabled and carries the reason as text in the menu item.
  */
 function UnsupportedProjectWithLocalEditsDecorator(
   Story: (update?: { args: HomeProps }) => ReactElement,

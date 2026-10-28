@@ -152,6 +152,21 @@ function startDotnetDataProvider() {
       args = [];
     }
     options = { cwd: dotnetPath };
+  } else {
+    // Dev runs, which include the E2E tests, get the bundled sample project when no projects are
+    // found (`LocalParatextProjects.Initialize`). To try the no-projects experience, set the
+    // variable to `false` AND point PLATFORM_BIBLE_PROJECT_ROOT_FOLDER at an empty folder: the
+    // default folder already holds WEB from earlier runs. `npm run start:data` and VS Code's "Debug
+    // .NET Core" always set it to `true`. `||` so an empty value (which Windows cannot even store)
+    // means the default on every OS.
+    options = {
+      ...options,
+      env: {
+        ...process.env,
+        PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT:
+          process.env.PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT || 'true',
+      },
+    };
   }
 
   dotnet = spawn(command, args, options);

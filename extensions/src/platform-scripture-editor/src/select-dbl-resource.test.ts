@@ -1,6 +1,12 @@
 import type { ResourceReferenceList } from 'platform-scripture';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { DEFAULT_RESOURCE_REFERENCE_LIST } from './resource-reference-list.const';
+import {
+  getScriptureTextGridContents,
+  getViewOptionsTexts,
+  removeFromUserResources,
+  type TextCollectionSources,
+} from './scripture-text-grid-contents.utils';
 import { selectTextConnection } from './select-dbl-resource';
 
 const RESOURCE_A = {
@@ -287,5 +293,38 @@ describe('selectDblResource', () => {
       expect(setUserList).toHaveBeenCalled();
       expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'uid-b' }));
     });
+  });
+});
+
+describe('removing a resource, then adding it back from Bible texts', () => {
+  it('keeps it listed in the Text Collection but off the grid', async () => {
+    const sources: TextCollectionSources = {
+      adminReferenced: { dataVersion: '1.1.0', items: [] },
+      userReferenced: {
+        dataVersion: '1.1.0',
+        items: [{ type: 'dblResource', name: 'A', id: 'uid-a', isInTextCollectionForUser: true }],
+      },
+      overlay: {},
+      order: [],
+    };
+    let userList = removeFromUserResources('uid-a', sources.userReferenced);
+    expect(getViewOptionsTexts({ ...sources, userReferenced: userList }).bottom).toEqual([]);
+
+    await selectTextConnection(
+      RESOURCE_A,
+      async () => userList,
+      async (list) => {
+        userList = list;
+      },
+    );
+
+    const readded = { ...sources, userReferenced: userList };
+    expect(getScriptureTextGridContents(readded)).toEqual([]);
+    expect(getViewOptionsTexts(readded).bottom).toEqual([
+      expect.objectContaining({
+        reference: expect.objectContaining({ id: 'uid-a' }),
+        checked: false,
+      }),
+    ]);
   });
 });

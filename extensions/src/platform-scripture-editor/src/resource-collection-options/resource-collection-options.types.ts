@@ -59,6 +59,7 @@ export const RESOURCE_COLLECTION_OPTIONS_KEYS = {
   getResources: '%webView_scriptureTextGrid_viewOptions_getResources%',
   teamSharedLock: '%webView_scriptureTextGrid_viewOptions_teamSharedLock%',
   removeFromList: '%webView_scriptureTextGrid_viewOptions_removeFromList%',
+  removeFromListHint: '%webView_scriptureTextGrid_viewOptions_removeFromListHint%',
   installing: '%webView_scriptureTextGrid_viewOptions_installing%',
 } as const;
 
@@ -76,6 +77,7 @@ export const RESOURCE_COLLECTION_OPTIONS_STRING_KEYS = Object.freeze([
   RESOURCE_COLLECTION_OPTIONS_KEYS.getResources,
   RESOURCE_COLLECTION_OPTIONS_KEYS.teamSharedLock,
   RESOURCE_COLLECTION_OPTIONS_KEYS.removeFromList,
+  RESOURCE_COLLECTION_OPTIONS_KEYS.removeFromListHint,
   RESOURCE_COLLECTION_OPTIONS_KEYS.installing,
 ] as const);
 

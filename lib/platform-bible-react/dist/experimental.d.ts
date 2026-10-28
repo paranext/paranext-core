@@ -689,7 +689,14 @@ export declare function ProjectSelector(props: ProjectSelectorProps): import("re
 export declare const RESOURCE_PICKER_DIALOG_STRING_KEYS: readonly [
 	"%resourcePicker_title%",
 	"%resourcePicker_description%",
+	"%resourcePicker_description_withRemove%",
 	"%resourcePicker_section_already_selected%",
+	"%resourcePicker_section_team%",
+	"%resourcePicker_section_team_caption%",
+	"%resourcePicker_section_user%",
+	"%resourcePicker_section_user_caption%",
+	"%resourcePicker_teamLock%",
+	"%resourcePicker_removeFromList%",
 	"%resourcePicker_section_installed%",
 	"%resourcePicker_section_available_to_download%",
 	"%resourcePicker_no_results%",
@@ -763,12 +770,26 @@ export interface ResourcePickerDialogProps {
 	allowSelectingInstalled?: boolean;
 	/** IDs of resources already selected in the calling panel */
 	selectedResourceIds?: string[];
+	/**
+	 * IDs among `selectedResourceIds` that belong to the team: the resources a project administrator
+	 * shared, which the user cannot deselect. An ID that is not also in `selectedResourceIds` is
+	 * ignored.
+	 *
+	 * When provided, the selected rows are listed in two sections instead of one "Included" section:
+	 * "Team resources", each marked with a lock and never selectable, and "User resources", which
+	 * `onRemove` gives a remove button. When omitted, every selected row is listed under "Included".
+	 * IDs are compared exactly, as `selectedResourceIds` are.
+	 */
+	teamResourceIds?: string[];
 	/** Localized strings — use RESOURCE_PICKER_DIALOG_STRING_KEYS with useLocalizedStrings */
 	localizedStrings: ResourcePickerDialogLocalizedStrings;
 	/**
 	 * When true, clicking an "Already Selected" row calls `onSelect` just like any other row, letting
 	 * the caller treat it as a deselect. Defaults to false (Already Selected rows stay
 	 * non-interactive, showing only a checkmark) to preserve existing consumers' behavior.
+	 *
+	 * Applies only to the single "Included" section, so it has no effect when `teamResourceIds` is
+	 * provided; use `onRemove` there.
 	 */
 	allowDeselect?: boolean;
 	/**
@@ -782,6 +803,12 @@ export interface ResourcePickerDialogProps {
 	getDisabledReason?: (resource: DblResourceData) => string | undefined;
 	/** Called when the user clicks a resource row to select it */
 	onSelect: (resource: DblResourceData) => void;
+	/**
+	 * Called when the user presses the remove button on a row under "User resources". Those rows get
+	 * the button only when this is provided and `teamResourceIds` is too; the rest of the row is
+	 * never clickable, so a click meant to select a resource cannot remove it.
+	 */
+	onRemove?: (resource: DblResourceData) => void;
 	/**
 	 * Ref to the search input, for a host that decides where focus lands when the dialog opens.
 	 *
@@ -836,7 +863,7 @@ export declare function getResourcePickerBodyState(input: {
  *
  * @param props See {@link ResourcePickerDialogProps}
  */
-export function ResourcePickerDialog({ allResources, isResourcesLoading, hasResourcesError, onRetryResources, areDownloadsUnavailable, resourceType, selectedResourceIds, notice, allowSelectingInstalled, localizedStrings, allowDeselect, getDisabledReason, onSelect, searchInputRef: externalSearchInputRef, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
+export function ResourcePickerDialog({ allResources, isResourcesLoading, hasResourcesError, onRetryResources, areDownloadsUnavailable, resourceType, selectedResourceIds, teamResourceIds, notice, allowSelectingInstalled, localizedStrings, allowDeselect, getDisabledReason, onSelect, onRemove, searchInputRef: externalSearchInputRef, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Whether a resource belongs to the section of the catalogue currently on display. An undefined
  * `resourceType` means "no type filter", so everything matches, as does an empty array — that is
