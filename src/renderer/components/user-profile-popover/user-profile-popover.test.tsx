@@ -109,7 +109,8 @@ const mockState: MockState = {
   shouldMatchSystem: false,
   setShouldMatchSystem: mockSetter(),
   internetSettingsProviderAvailable: true,
-  internetSettings: { selectedServer: 'Production' },
+  // See beforeEach for why this is not 'Production'.
+  internetSettings: { selectedServer: 'Development' },
 };
 
 const setMockSetting = <K extends keyof MockState>(key: K, value: MockState[K]) => {
@@ -139,11 +140,9 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%userProfile_profileAndRegistration_2%': 'Registration information row',
       '%userProfile_networkSettings_3%': 'Internet connectivity row',
       '%userProfile_server_badge_development%': 'Development badge text',
-      '%userProfile_server_badge_production%': 'Production badge text',
       '%userProfile_server_badge_qualityAssurance%': 'QA badge text',
       '%userProfile_server_badge_test%': 'Test badge text',
       '%userProfile_server_tooltip_development%': 'Development server tooltip',
-      '%userProfile_server_tooltip_production%': 'Production server tooltip',
       '%userProfile_server_tooltip_qualityAssurance%': 'QA server tooltip',
       '%userProfile_server_tooltip_test%': 'Test server tooltip',
       '%userProfile_language%': 'UI language',
@@ -182,7 +181,13 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       // (PT-4417) is actually worked around, and the regression tests would pass unconditionally.
       const isProviderAvailable = dataProviderSource !== undefined;
       return [
-        isProviderAvailable ? (mockState.internetSettings ?? defaultValue) : defaultValue,
+        // Not gated on `isProviderAvailable`: the real `useData` hook keeps the last value it
+        // delivered while a resubscribe is in flight (`isLoading` goes back to `true`, but the
+        // value does not reset) — see create-use-data-hook.util.ts. Mirroring that here, instead of
+        // forcing `defaultValue` whenever the provider isn't available, is what lets a test prove
+        // the component's own `isLoadingInternetSettings ||` guard is doing the suppressing, rather
+        // than the mock accidentally returning a value that would be suppressed anyway.
+        mockState.internetSettings ?? defaultValue,
         mockSetter(),
         // Mirrors the real hook: with no data provider, the subscription never resolves and
         // `isLoading` stays `true` forever — not just until the mock state supplies a value.
@@ -252,7 +257,10 @@ beforeEach(() => {
   setMockSetting('shouldMatchSystem', false);
   setMockSetting('setShouldMatchSystem', mockSetter());
   setMockSetting('internetSettingsProviderAvailable', true);
-  setMockSetting('internetSettings', { selectedServer: 'Production' });
+  // Not 'Production', which never shows a badge (see "UserProfilePopover server badge"): the
+  // provider-registration recovery tests below ("recovers once…", "only remounts the row…") rely on
+  // a non-Production default to prove the badge actually reappears once recovery completes.
+  setMockSetting('internetSettings', { selectedServer: 'Development' });
   vi.mocked(sendCommand).mockClear();
   vi.mocked(logger.warn).mockClear();
   vi.mocked(offerRestartAfterInterfaceLanguageChange).mockClear();
@@ -508,12 +516,15 @@ describe('UserProfilePopover action rows', () => {
 });
 
 describe('UserProfilePopover server badge', () => {
+  test('never renders the badge when the selected server is Production', async () => {
+    setMockSetting('internetSettings', { selectedServer: 'Production' });
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    await screen.findByTestId('user-profile-action-network');
+    expect(screen.queryByTestId('user-profile-server-badge')).not.toBeInTheDocument();
+  });
+
   test.each<{ server: ServerType; label: string; tooltip: string }>([
-    {
-      server: 'Production',
-      label: 'Production badge text',
-      tooltip: 'Production server tooltip',
-    },
     { server: 'QualityAssurance', label: 'QA badge text', tooltip: 'QA server tooltip' },
     {
       server: 'Development',
