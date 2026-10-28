@@ -9,8 +9,9 @@
  * fixture is a published resource, so the Comments item's resource gating is covered by the C# unit
  * tests rather than here.
  *
- * ONE test() per spec file (isolated-fixture constraint — see standard-default-power-mode.spec.ts).
- * Run: `npm run test:e2e:isolated tests/isolated/dynamic-menus/`.
+ * ONE test() per spec file (isolated-fixture constraint — see
+ * scripture-editor/standard-default-power-mode.spec.ts). Run: `npm run test:e2e:isolated
+ * tests/isolated/dynamic-menus/`.
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
@@ -41,12 +42,9 @@ test.describe('Dynamic menu items', () => {
     test.slow();
 
     await waitForHomeTab(mainPage);
-    // Context keys embed the project id as the data provider publishes it, which is upper case (the
-    // form every project list hands to the UI); the fixture constant is the lower-case spelling.
-    const editorId = await openEditableScriptureEditorForProject(
-      mainPage,
-      SAMPLE_WEB_PROJECT_ID.toUpperCase(),
-    );
+    // The fixture id is lower case while context keys use the canonical upper-case id, so opening
+    // with it as-is also covers the menu's project id normalization.
+    const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
     const editorFrame = await getEditorFrame(mainPage, editorId);
     await editorFrame.locator('.editor-container').first().waitFor({ timeout: 60_000 });
 
@@ -73,6 +71,7 @@ test.describe('Dynamic menu items', () => {
         }),
       );
       // Comments stay available in a read-only project.
+      await expect(insertItem(INSERT_COMMENT_ITEM_NAME)).toBeVisible({ timeout: 10_000 });
       await expect(insertItem(INSERT_COMMENT_ITEM_NAME)).not.toHaveAttribute(
         'aria-disabled',
         'true',
