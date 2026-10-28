@@ -1162,8 +1162,9 @@ function PlatformScriptureEditor({
   );
 
   // Publish the per-tab facts the menu's `enabledWhen` / `checkedWhen` expressions read, and remove
-  // them when this web view closes. Hidden case: a hidden tab keeps publishing; the menu is only
-  // visible in the active tab, which re-evaluates against the current keys on activation.
+  // them when this web view closes. Hidden case: a hidden tab keeps publishing and its menu keeps
+  // re-evaluating on every key change (the hook subscribes regardless of visibility), so it is
+  // current whenever the tab is shown; nothing waits for activation.
   useEffect(() => {
     const keys = getEditorWebViewContextKeys(webViewId, {
       isPreview,
