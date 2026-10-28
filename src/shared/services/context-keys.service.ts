@@ -38,7 +38,9 @@ function set(key: string, value: ContextKeyValue): void {
 }
 
 function get(key: string): ContextKeyValue | undefined {
-  assertValidKey(key);
+  // Reads are lenient: an invalid key cannot have been set, so it reads as unset instead of
+  // throwing from every menu evaluation that interpolates an arbitrary template value
+  if (!isValidContextKey(key)) return undefined;
   return sharedStoreService.get(getStoreKey(key));
 }
 
