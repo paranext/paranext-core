@@ -107,6 +107,7 @@ import {
   isLocalizeKey,
   isPlatformError,
   LocalizeKey,
+  normalizeProjectId,
   serialize,
 } from 'platform-bible-utils';
 import {
@@ -5161,8 +5162,14 @@ function PlatformScriptureEditor({
     return webViewMenuPossiblyError;
   }, [webViewMenuPossiblyError]);
 
+  // Context keys embed the project id in its canonical upper-case form, so the id a tab was opened
+  // with must be normalized before it is substituted into a menu condition.
   const menuTemplateVars = useMemo(
-    () => ({ webViewId, webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId }),
+    () => ({
+      webViewId,
+      webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+      projectId: projectId ? normalizeProjectId(projectId) : undefined,
+    }),
     [webViewId, projectId],
   );
 
