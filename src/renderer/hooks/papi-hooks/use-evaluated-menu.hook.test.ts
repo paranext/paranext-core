@@ -5,12 +5,18 @@ import { PlatformEventEmitter, SingleColumnMenu } from 'platform-bible-utils';
 
 const mockContextKeyValues = new Map<string, string | number | boolean>();
 const mockOnDidChangeEmitter = new PlatformEventEmitter<{ key: string; value: unknown }>();
+const mockUnsubscribe = vi.fn();
 
 vi.mock('@shared/services/context-keys.service', () => ({
   contextKeysService: {
     get: (key: string) => mockContextKeyValues.get(key),
-    onDidChange: (callback: (event: { key: string; value: unknown }) => void) =>
-      mockOnDidChangeEmitter.event(callback),
+    onDidChange: (callback: (event: { key: string; value: unknown }) => void) => {
+      const unsubscribe = mockOnDidChangeEmitter.event(callback);
+      return () => {
+        mockUnsubscribe();
+        return unsubscribe();
+      };
+    },
   },
 }));
 
@@ -46,6 +52,7 @@ const menuData: SingleColumnMenu = {
 describe('useEvaluatedMenu', () => {
   beforeEach(() => {
     mockContextKeyValues.clear();
+    mockUnsubscribe.mockClear();
   });
 
   it('should return undefined for undefined menu data', () => {
@@ -68,5 +75,12 @@ describe('useEvaluatedMenu', () => {
       mockOnDidChangeEmitter.emit({ key: 'test.webView.wv1.visible', value: true });
     });
     expect(result.current?.items.map((item) => item.label)).toEqual(['%always%', '%conditional%']);
+  });
+
+  it('should unsubscribe from context key changes on unmount', () => {
+    const { unmount } = renderHook(() => useEvaluatedMenu(menuData, { webViewId: 'wv1' }));
+    expect(mockUnsubscribe).not.toHaveBeenCalled();
+    unmount();
+    expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
   });
 });

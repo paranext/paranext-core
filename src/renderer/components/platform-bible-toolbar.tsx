@@ -17,7 +17,7 @@ import { useProjectPickerData } from '@renderer/hooks/use-project-picker-data.ho
 import { usePendingProject } from '@renderer/hooks/use-pending-project.hook';
 import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
 import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-overlay.hook';
-import { useEvaluatedMenu } from '@renderer/hooks/use-evaluated-menu.hook';
+import { useEvaluatedMenu } from '@renderer/hooks/papi-hooks/use-evaluated-menu.hook';
 import { type ProjectItem } from '@renderer/components/projects/project-picker.component';
 import ReadOnlyIndicator from '@renderer/components/projects/read-only-indicator.component';
 import { parseProjectNameTemplate } from '@renderer/components/projects/project-name-template.util';
