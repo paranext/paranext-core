@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Paranext.DataProvider.Services;
 using Paratext.Data;
 using Paratext.Data.Users;
 
@@ -9,10 +10,47 @@ namespace Paranext.DataProvider.Users;
 /// `getParatextDataInternetSettings` / `setParatextDataInternetSettings` PAPI commands so consumers
 /// can gate on `useDataProvider` availability (no cold-start race) and receive live updates.
 /// </summary>
-internal sealed class InternetSettingsDataProvider(PapiClient papiClient)
-    : NetworkObjects.DataProvider("paratextRegistration.internetSettingsDataProvider", papiClient)
+internal sealed class InternetSettingsDataProvider : NetworkObjects.DataProvider
 {
     private const string DATA_TYPE_INTERNET_SETTINGS = "InternetSettings";
+    private const string INTERNET_SERVICES_ALLOWED_KEY = "platform.internetServicesAllowed";
+
+    private readonly ContextKeys? _contextKeys;
+
+    /// <param name="papiClient">Client used to register this data provider</param>
+    /// <param name="contextKeys">
+    /// Where the <c>platform.internetServicesAllowed</c> context key is published. Defaults to the
+    /// process-wide shared store, resolved when first published.
+    /// </param>
+    public InternetSettingsDataProvider(PapiClient papiClient, ContextKeys? contextKeys = null)
+        : base("paratextRegistration.internetSettingsDataProvider", papiClient)
+    {
+        _contextKeys = contextKeys;
+        PublishContextKeys();
+    }
+
+    /// <summary>
+    /// Publishes <c>platform.internetServicesAllowed</c>: whether the saved internet-use setting
+    /// lets Send/Receive and the DBL run. Never throws; a failure is logged.
+    /// </summary>
+    /// <remarks>
+    /// Experimental: the key set is unstable and may change or disappear without notice.
+    /// </remarks>
+    internal void PublishContextKeys()
+    {
+        try
+        {
+            var allowed = !InternetServicesGate.IsBlocked(InternetAccess.RawStatus);
+            if (_contextKeys != null)
+                _contextKeys.Set(INTERNET_SERVICES_ALLOWED_KEY, allowed);
+            else
+                ContextKeysService.Set(INTERNET_SERVICES_ALLOWED_KEY, allowed);
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"Publishing the internet context keys failed! {e}");
+        }
+    }
 
     protected override List<(string functionName, Delegate function)> GetFunctions()
     {
@@ -181,6 +219,7 @@ internal sealed class InternetSettingsDataProvider(PapiClient papiClient)
             throw new Exception($"Setting ParatextData InternetSettings failed! {e.Message}");
         }
 
+        PublishContextKeys();
         SendDataUpdateEvent(DATA_TYPE_INTERNET_SETTINGS, "updated internet settings");
         return true;
     }
