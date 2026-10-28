@@ -138,8 +138,8 @@ that no producer has published is unknown and counts as false, so a gate on a ne
 contribution loads: a malformed expression or a template variable the surface does not provide
 rejects the extension's whole `menus.json` contribution (extension-host log: 'Could not add menu
 contribution'). So is `enabledWhen` or `checkedWhen` on an item of a tab menu or overlay context
-menu, which only honor `when`. At runtime an expression that still fails to evaluate fails safe (`when` hides,
-`enabledWhen` disables, `checkedWhen` unchecks).
+menu, which only honor `when`. At runtime an expression that still fails to evaluate fails safe
+(`when` hides, `enabledWhen` disables, `checkedWhen` unchecks).
 
 **Template variables per surface.**
 
