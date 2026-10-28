@@ -9,14 +9,22 @@ import { deepClone } from '../util';
 import { ContextKeyLookup } from './context-keys.model';
 import { evaluateWhenExpression } from './when-expression';
 
-/** Menu document shapes that {@link evaluateMenu} can process */
+/**
+ * Menu document shapes that {@link evaluateMenu} can process
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
 export type EvaluatableMenu =
   | SingleColumnMenu
   | MultiColumnMenu
   | Localized<SingleColumnMenu>
   | Localized<MultiColumnMenu>;
 
-/** Callback invoked when a when-expression fails to evaluate */
+/**
+ * Callback invoked when a when-expression fails to evaluate
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
 export type WhenExpressionErrorHandler = (expression: string, error: unknown) => void;
 
 type AnyMenuItem =
@@ -45,6 +53,7 @@ type AnyMenuItem =
  *   validated at contribution load time). Failed expressions fail safe: `when` → hidden,
  *   `enabledWhen` → disabled, `checkedWhen` → unchecked
  * @returns A new menu document with expressions applied and stripped
+ * @experimental This function is unstable and may change or disappear without notice
  */
 export function evaluateMenu<T extends EvaluatableMenu>(
   menu: T,

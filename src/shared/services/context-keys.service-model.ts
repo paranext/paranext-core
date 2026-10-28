@@ -23,6 +23,14 @@ export type ContextKeyChangeEvent = {
 /** JSDOC DESTINATION contextKeysService */
 export interface IContextKeysService {
   /**
+   * Event that fires when any context key changes, whether the change was made in this process or
+   * in another one. The event's `key` is the context key without any internal storage prefix, and
+   * its `value` is `undefined` when the key was removed.
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
+  onDidChange: PlatformEvent<ContextKeyChangeEvent>;
+  /**
    * Sets or updates a context key.
    *
    * Throws if the key is not structurally valid (at least two dot-separated segments of word
@@ -58,12 +66,4 @@ export interface IContextKeysService {
    * @experimental This function is unstable and may change or disappear without notice
    */
   remove(key: string): void;
-  /**
-   * Event that fires when any context key changes, whether the change was made in this process or
-   * in another one. The event's `key` is the context key without any internal storage prefix, and
-   * its `value` is `undefined` when the key was removed.
-   *
-   * @experimental This field is unstable and may change or disappear without notice
-   */
-  onDidChange: PlatformEvent<ContextKeyChangeEvent>;
 }

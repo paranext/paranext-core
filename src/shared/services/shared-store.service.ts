@@ -624,6 +624,8 @@ export type RequestTimeoutSharedStoreKey = `platform.customNetworkTimeoutMs.${st
 /**
  * Keys for context key values (see `context-keys.service.ts`). Keys are dynamically constructed by
  * adding this prefix to the context key name.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
  */
 export type ContextKeySharedStoreKey = `contextKeys.${string}`;
 
