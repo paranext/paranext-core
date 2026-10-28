@@ -5220,7 +5220,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
 - **Formerly:** ADR-0003
 - **Date:** 2026-06-18
-- **Status:** Accepted
+- **Status:** Superseded in part by adr-menus-gate-declaratively-with-context-keys (the menu-availability half); the DataProvider-vs-NetworkObject half stays accepted.
 - **Context:** Two placement questions recur when porting a PT9 tool that mutates project data.
   (a) PT9 menu items hide/disable themselves via predicate evaluation before render
   (permission checks, project-state guards). paranext-core's menu system has **no arbitrary
@@ -5261,6 +5261,47 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** manage-books port (menu-availability deferred); keyboard-switching port (OS-keyboard
   NetworkObject → DataProvider promotion). See `Entry-Point-Guide.md` for the menu mechanics
   and `Paranext-Core-Patterns.md` for the DataProvider-vs-NetworkObject pattern.
+
+## adr-menus-gate-declaratively-with-context-keys: Menu items may be gated by when-expressions over context keys; handlers keep submission-time checks
+
+- **Date:** 2026-10-28
+- **Status:** Accepted
+- **Context:** Menu items that cannot act (Insert footnote in a read-only project, Sync on a
+  resource, Insert comment without the comment role) were clickable and failed only at submission
+  with an error, which users read as a dead click. The earlier decision
+  (`adr-menus-always-available-gate-at-submission`) kept menus always-available because the menu
+  system had no way to express a condition. A prototype added `when`/`enabledWhen`/`checkedWhen`
+  expressions that the consumer of a menu document (main menu, web view top menu, tab menu,
+  overlay context menu, the scripture editor's self-rendered toolbar) evaluates against a flat
+  store of context keys (`papi.contextKeys`, backed by the shared store). Evaluation sits with the
+  consumer, not the menu data provider, because the facts change at a rate and in processes the
+  menu data provider does not see: a producer only writes a scalar, and every surface re-evaluates
+  from its own copy of the store without a round trip.
+- **Decision:** Menu items may be gated declaratively by when-expressions over context keys, for
+  state the platform or an extension already knows reactively.
+  - Keys are plain facts (booleans and scalars such as `platform.project.{projectId}.isEditable`),
+    never pre-computed menu answers; the expression combines them.
+  - Each key has exactly one producer process, because the shared store accepts writes to a key
+    only from the process that first wrote it.
+  - Items are disabled (`enabledWhen`), not hidden (`when`), when the user could fix the cause or
+    would otherwise wonder where an item went.
+  - Command handlers keep their own guards and `PlatformError`s: keyboard shortcuts and direct
+    PAPI calls bypass menus, and a key can lag the state it describes.
+  - Overlay context menus apply visibility (`when`) only, and tab menus evaluate once when read;
+    `enabledWhen` and `checkedWhen` have no effect there.
+  - A key that no producer has published reads as unknown, which counts as false.
+- **Alternatives:** Evaluate expressions in the menu data provider (producer side): rejected, since
+  it would need every key change to travel to the provider and back to every window, and the
+  provider has no per-web-view or per-window facts. Keep gate-at-submission only: rejected, since
+  it leaves the dead clicks. Expose the shared store directly to extensions: rejected, since it
+  has no key-format rule, no namespacing convention and no typed values.
+- **Consequences:** A new public surface (`papi.contextKeys`, the `when`/`enabledWhen`/`checkedWhen`
+  menu properties, `evaluateMenu`, `useEvaluatedMenu`), all experimental. The shared store releases
+  a disconnected process's keys so a restarted producer can republish. Until a producer publishes,
+  a gate on that key reads as false, so an item gated on a positive fact is disabled for a moment
+  after startup; a gate on a negated fact is enabled for that moment. Revisit when a second
+  surface needs `enabledWhen` (overlay context menus) or when key volume becomes noticeable.
+- **Source:** PT-4805 / PT-4732; prototype spec attached to PT-4805.
 
 ## adr-mode-switch-sends-one-send-receive-for-all-closing-windows: A mode switch starts ONE send/receive covering every window it closes, not one per window
 
