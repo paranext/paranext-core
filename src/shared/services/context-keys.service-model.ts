@@ -50,7 +50,8 @@ export interface IContextKeysService {
    * network call.
    *
    * @param key The context key to read
-   * @returns The current value, or `undefined` if the key has never been set or was removed
+   * @returns The current value, or `undefined` if the key has never been set, was removed, or is
+   *   not a valid context key (unlike {@link IContextKeysService.set}, this does not throw)
    * @experimental This function is unstable and may change or disappear without notice
    */
   get(key: string): ContextKeyValue | undefined;
