@@ -2015,6 +2015,7 @@ declare module 'shared/services/shared-store.service' {
     value?: unknown;
     clock: LamportClock;
     deleted?: boolean;
+    released?: boolean;
   };
   export type StoreChangeEvent = StoreEntry & {
     key: string;
@@ -12414,7 +12415,8 @@ declare module 'shared/services/context-keys.service-model' {
      *
      * Conventions: prefix keys with your extension's name (`platform.` is reserved); give each key
      * exactly one producer. A key first set in one process can only be updated from that same process
-     * (ownership violations are logged, not thrown).
+     * until that process disconnects, which releases the key for any process to claim (ownership
+     * violations are logged, not thrown).
      *
      * @param key The context key to set, e.g. `myExtension.project.<projectId>.isEditable`
      * @param value The value to set (string, number, or boolean)

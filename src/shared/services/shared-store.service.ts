@@ -75,6 +75,9 @@ type StoreEntry = {
   // is treated as absent: reads return no value. A removed key is distinct from a key whose value
   // is `undefined`.
   deleted?: boolean;
+  // True for a removed key released because the process that wrote it disconnected. Unlike an
+  // ordinary removal, a released key is claimable by any process.
+  released?: boolean;
 };
 
 // Store change event emitted when a value is set or removed
@@ -176,9 +179,9 @@ function releaseKeysOfDisconnectedProcesses(removedMethodNames: string[]): void 
   Object.entries(localStore).forEach(([key, entry]) => {
     if (entry.deleted || !deadProcessIds.has(entry.clock.processId)) return;
     const clock = getNextClock();
-    localStore[key] = { value: undefined, clock, deleted: true };
+    localStore[key] = { value: undefined, clock, deleted: true, released: true };
     try {
-      storeChangeEmitter?.emit({ key, value: undefined, clock, deleted: true });
+      storeChangeEmitter?.emit({ key, value: undefined, clock, deleted: true, released: true });
     } catch (error) {
       logger.error(`Error releasing shared store key ${key}: ${getErrorMessage(error)}`);
     }
@@ -465,7 +468,7 @@ function set<K extends SharedStoreKeys>(key: K, value?: SharedStoreValues[K]): v
   let clonedValue: SharedStoreValues[K] | undefined;
   try {
     const currentEntry = localStore[key];
-    if (currentEntry && !currentEntry.deleted && currentEntry.clock.processId !== processId)
+    if (currentEntry && !currentEntry.released && currentEntry.clock.processId !== processId)
       throw new Error('Cannot set value from a different process than the one that created it');
     // Skip a redundant set only when there is already a live (non-removed) value equal to the new
     // one. A removed key must be re-set even if its stored value also happens to equal `value`.
@@ -521,7 +524,7 @@ function remove<K extends SharedStoreKeys>(key: K): void {
   if (!processId || !storeChangeEmitter) throw new Error('Shared store service is not initialized');
   try {
     const currentEntry = localStore[key];
-    if (currentEntry && !currentEntry.deleted && currentEntry.clock.processId !== processId)
+    if (currentEntry && !currentEntry.released && currentEntry.clock.processId !== processId)
       throw new Error('Cannot remove value from a different process than the one that created it');
     // Nothing to remove if the key is already absent or already removed.
     if (!currentEntry || currentEntry.deleted) return;

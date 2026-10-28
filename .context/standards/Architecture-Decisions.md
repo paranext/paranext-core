@@ -5284,8 +5284,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     never pre-computed menu answers; the expression combines them.
   - Each key has exactly one producer process: a TypeScript process refuses (logs, does not throw)
     a write to a key another process wrote first; the .NET store does not check, so a C# write to
-    another process's key takes it over. Either way two producers on one key race, so keep
-    exactly one.
+    another process's key takes it over. A key released after its writer disconnected is
+    claimable by any process. Either way two producers on one key race, so keep exactly one.
   - Items are disabled (`enabledWhen`), not hidden (`when`), when the user could fix the cause or
     would otherwise wonder where an item went.
   - Command handlers keep their own guards and `PlatformError`s: keyboard shortcuts and direct
