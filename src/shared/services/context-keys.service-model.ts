@@ -1,16 +1,26 @@
-import { ContextKeyValue } from 'platform-bible-utils';
+import { ContextKeyValue, PlatformEvent } from 'platform-bible-utils';
 
-/** Event emitted when a context key's value changes */
+/**
+ * Event emitted when a context key's value changes
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
 export type ContextKeyChangeEvent = {
-  /** The context key that changed (without any internal storage prefix) */
+  /**
+   * The context key that changed (without any internal storage prefix)
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
   key: string;
-  /** The new value, or `undefined` if the key was removed */
+  /**
+   * The new value, or `undefined` if the key was removed
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
   value: ContextKeyValue | undefined;
 };
 
 /** JSDOC DESTINATION contextKeysService */
-// Note: change-event subscription is deliberately not part of the public API surface; the platform
-// consumes changes internally (e.g. to re-evaluate menus). See `contextKeysService.onDidChange`.
 export interface IContextKeysService {
   /**
    * Sets or updates a context key.
@@ -24,6 +34,7 @@ export interface IContextKeysService {
    *
    * @param key The context key to set, e.g. `myExtension.project.<projectId>.isEditable`
    * @param value The value to set (string, number, or boolean)
+   * @experimental This function is unstable and may change or disappear without notice
    */
   set(key: string, value: ContextKeyValue): void;
   /**
@@ -32,6 +43,7 @@ export interface IContextKeysService {
    *
    * @param key The context key to read
    * @returns The current value, or `undefined` if the key has never been set or was removed
+   * @experimental This function is unstable and may change or disappear without notice
    */
   get(key: string): ContextKeyValue | undefined;
   /**
@@ -43,6 +55,15 @@ export interface IContextKeysService {
    * not thrown).
    *
    * @param key The context key to remove
+   * @experimental This function is unstable and may change or disappear without notice
    */
   remove(key: string): void;
+  /**
+   * Event that fires when any context key changes, whether the change was made in this process or
+   * in another one. The event's `key` is the context key without any internal storage prefix, and
+   * its `value` is `undefined` when the key was removed.
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
+  onDidChange: PlatformEvent<ContextKeyChangeEvent>;
 }
