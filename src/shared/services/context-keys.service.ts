@@ -85,12 +85,14 @@ export const contextKeysService = {
   set,
   get,
   remove,
-  /**
-   * Event that fires when any context key changes (whether changed locally or in another process).
-   * Not included in the public PAPI surface ({@link papiContextKeysService}).
-   */
+  /** Event that fires when any context key changes (whether changed locally or in another process). */
   onDidChange: onDidChangeEmitter.event,
 };
 
-/** Subset of the context keys service exposed on PAPI (both `@papi/backend` and `@papi/frontend`) */
-export const papiContextKeysService: IContextKeysService = { set, get, remove };
+/** Context keys service exposed on PAPI (both `@papi/backend` and `@papi/frontend`) */
+export const papiContextKeysService: IContextKeysService = {
+  set,
+  get,
+  remove,
+  onDidChange: onDidChangeEmitter.event,
+};
