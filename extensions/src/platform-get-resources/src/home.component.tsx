@@ -174,7 +174,9 @@ const DEFAULT_SORT_CONFIG: SortConfig = { key: 'language', direction: 'ascending
 /**
  * Removes the `JSON-RPC Request error (<code>): ` prefix the network layer puts on every backend
  * error. The prefix is transport detail that tells the user nothing; the message after it is the
- * backend's own, already localized.
+ * backend's own, already localized. The format is produced by `getJsonRpcRequestErrorMessagePrefix`
+ * in `src/shared/data/rpc.model.ts`, which an extension cannot import, so this pattern must change
+ * with it.
  */
 function withoutJsonRpcErrorPrefix(message: string): string {
   return message.replace(/^JSON-RPC Request error \(-?\d+\): /, '');
@@ -950,6 +952,7 @@ export function Home({
     const isThisProjectSyncing = activeSendReceiveProjects.includes(project.projectId);
     const isWaitingForOtherSync = isSendReceiveInProgress && !isThisProjectSyncing;
     const waitingReasonText = isWaitingForOtherSync ? syncWaitingReasonText : undefined;
+    const sendReceiveLabel = project.isLocallyAvailable ? syncText : getText;
     if (isMenuItem)
       return blockableMenuItem({
         label: getSendReceiveButtonContent(project),
@@ -963,8 +966,9 @@ export function Home({
       <Button
         disabled={isBlocked || isSendReceiveInProgress}
         aria-busy={isThisProjectSyncing}
-        // The spinner has no text, so the button keeps its name while it shows.
-        aria-label={project.isLocallyAvailable ? syncText : getText}
+        // The spinner has no text, so the button keeps its name while it shows; otherwise its
+        // visible text is the name.
+        aria-label={isThisProjectSyncing ? sendReceiveLabel : undefined}
         onClick={() => handleSendReceiveProject(project.projectId)}
       >
         {getSendReceiveButtonContent(project)}

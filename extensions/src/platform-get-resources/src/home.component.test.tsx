@@ -1903,6 +1903,32 @@ describe('Home while a sync runs', () => {
     expect(syncItem).toHaveAttribute('aria-disabled', 'true');
   });
 
+  it('shows an unsupported project its own reason, not the wait reason, while another syncs', () => {
+    const unsupportedReasonKey = '%project_unsupported_studyBibleAdditions%';
+    const unsupportedReasonText = "Study Bible Additions projects aren't supported yet.";
+    render(
+      <Home
+        headerContent={undefined}
+        localProjectsInfo={[]}
+        sharedProjectsInfo={{
+          syncingProject: sharedProject('syncingProject', 'SYN'),
+          blockedProject: {
+            ...sharedProject('blockedProject', 'BLK'),
+            unsupportedReason: unsupportedReasonKey,
+          },
+        }}
+        remoteProjectsState="loaded"
+        isSendReceiveInProgress
+        activeSendReceiveProjects={['syncingProject']}
+        onSendReceiveProject={() => {}}
+        localizedUnsupportedReasons={{ [unsupportedReasonKey]: unsupportedReasonText }}
+        localizedStringsWithLoadingState={[EN_STRINGS, false]}
+      />,
+    );
+    expect(screen.getByRole('group', { name: unsupportedReasonText })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Wait for the current sync to finish' })).toBeNull();
+  });
+
   it("gives a waiting row's Sync menu item the reason while another project syncs", async () => {
     renderHomeDuringSync({ activeSendReceiveProjects: ['syncingProject'], withLocalProject: true });
     const row = screen.getByText('LOC').closest('tr');
