@@ -33,7 +33,7 @@ import {
   getLocalizeKeysForScrollGroupIds,
   isPlatformError,
   getErrorMessage,
-  normalizeProjectId,
+  createMenuTemplateVars,
 } from 'platform-bible-utils';
 import {
   BOOK_CHAPTER_CONTROL_STRING_KEYS,
@@ -626,14 +626,8 @@ export function WebView({
     return webViewMenuPossiblyError;
   }, [id, webViewMenuPossiblyError, webViewType]);
 
-  // Context keys embed the project id in its canonical upper-case form, so the id a tab was opened
-  // with must be normalized before it is substituted into a menu condition.
   const menuTemplateVars = useMemo(
-    () => ({
-      webViewId: id,
-      webViewType,
-      projectId: projectId ? normalizeProjectId(projectId) : undefined,
-    }),
+    () => createMenuTemplateVars({ webViewId: id, webViewType, projectId }),
     [id, webViewType, projectId],
   );
   const evaluatedTopMenu = useEvaluatedMenu(webViewMenu.topMenu, menuTemplateVars);

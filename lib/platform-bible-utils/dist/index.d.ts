@@ -5482,6 +5482,20 @@ export type EvaluatableMenu = SingleColumnMenu | MultiColumnMenu | Localized<Sin
  */
 export type WhenExpressionErrorHandler = (expression: string, error: unknown) => void;
 /**
+ * Builds the template variables a surface passes to {@link evaluateMenu} for one web view. Context
+ * keys embed the canonical upper-case project id, so the id a web view was opened with is
+ * normalized before it is substituted into a `{projectId}` placeholder.
+ *
+ * @param vars The web view's id, type and (optional) project id as the web view knows them
+ * @returns Template variables with the project id normalized, or `undefined` when there is none
+ * @experimental This function is unstable and may change or disappear without notice
+ */
+export declare function createMenuTemplateVars(vars: {
+	webViewId: string;
+	webViewType: string;
+	projectId?: string;
+}): Record<string, string | undefined>;
+/**
  * Evaluates all when-expressions in a menu document against the current context key values.
  *
  * - Items whose `when` evaluates falsy are removed.
