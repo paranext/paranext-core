@@ -4,6 +4,9 @@ namespace Paranext.DataProvider.Services;
 /// Static access to context keys (see ContextKeys). All methods throw InvalidOperationException
 /// if SharedStoreService has not been initialized yet.
 /// </summary>
+/// <remarks>
+/// Experimental: this surface is unstable and may change or disappear without notice.
+/// </remarks>
 internal static class ContextKeysService
 {
     private static ContextKeys? _contextKeys;

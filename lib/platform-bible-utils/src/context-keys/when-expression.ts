@@ -1,11 +1,19 @@
 import { ContextKeyLookup, ContextKeyValue } from './context-keys.model';
 
-/** One segment of a property reference in a when-expression */
+/**
+ * One segment of a property reference in a when-expression
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
 export type WhenExpressionPropertySegment =
   | { type: 'identifier'; text: string }
   | { type: 'templateVar'; name: string };
 
-/** Parsed form of a when-expression */
+/**
+ * Parsed form of a when-expression
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
 export type WhenExpressionAst =
   | { type: 'literal'; value: ContextKeyValue }
   | { type: 'property'; segments: WhenExpressionPropertySegment[] }
@@ -167,6 +175,7 @@ const parseCache = new Map<string, WhenExpressionAst | Error>();
  * @param expression The when-expression to parse
  * @returns The parsed AST
  * @throws Error with a descriptive message if the expression is not valid
+ * @experimental This function is unstable and may change or disappear without notice
  */
 export function parseWhenExpression(expression: string): WhenExpressionAst {
   const cached = parseCache.get(expression);
@@ -215,6 +224,7 @@ function collectTemplateVarNames(ast: WhenExpressionAst, names: Set<string>): vo
  * @param expression The when-expression to inspect
  * @returns Array of unique template variable names
  * @throws Error if the expression is not valid
+ * @experimental This function is unstable and may change or disappear without notice
  */
 export function getTemplateVarNames(expression: string): string[] {
   const names = new Set<string>();
@@ -272,6 +282,7 @@ function evaluateAst(
  *   reference containing a placeholder with no value evaluates to `undefined` (falsy)
  * @returns The boolean result of the expression. `undefined`, `false`, `0`, and `''` are falsy
  * @throws Error if the expression is not valid (use load-time validation to avoid this)
+ * @experimental This function is unstable and may change or disappear without notice
  */
 export function evaluateWhenExpression(
   expression: string,

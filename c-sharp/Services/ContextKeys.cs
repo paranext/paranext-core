@@ -10,6 +10,9 @@ namespace Paranext.DataProvider.Services;
 /// dot-separated segments of word characters or hyphens; prefix keys with your component's name.
 /// A key first set in one process can only be updated from that same process.
 /// </summary>
+/// <remarks>
+/// Experimental: this surface is unstable and may change or disappear without notice.
+/// </remarks>
 internal sealed partial class ContextKeys(ISharedStore sharedStore)
 {
     private const string STORE_PREFIX = "contextKeys.";
