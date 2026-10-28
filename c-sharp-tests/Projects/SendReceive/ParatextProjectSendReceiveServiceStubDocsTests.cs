@@ -7,8 +7,8 @@ namespace TestParanextDataProvider.Projects.SendReceive
 {
     /// <summary>
     /// Registration-documentation tests for the open-source
-    /// <see cref="ParatextProjectSendReceiveService"/> stub: breakSyncLock is @experimental (see
-    /// the TS declaration), so its registration must carry experimental OpenRPC documentation
+    /// <see cref="ParatextProjectSendReceiveService"/> stub: breakSyncLock and isAvailable are @experimental
+    /// (see the TS declaration), so their registrations must carry experimental OpenRPC documentation
     /// (<c>x-experimental: true</c>) surfaced by <c>rpc.discover</c> — the same doc-assertion
     /// pattern as <c>VersificationConversionServiceTests</c>. Deliberately NOT named
     /// <c>ParatextProjectSendReceiveServiceTests</c> (or any of the per-feature
@@ -45,6 +45,42 @@ namespace TestParanextDataProvider.Projects.SendReceive
                 Is.EqualTo(new[] { "projectIds" }),
                 "documents the single projectIds parameter"
             );
+        }
+
+        [Test]
+        public async Task InitializeAsync_RegistersIsAvailableWithExperimentalDocs()
+        {
+            const string wireName = "command:paratextBibleSendReceive.isAvailable";
+            var service = new ParatextProjectSendReceiveService(
+                Client,
+                new ParatextProjectDataProviderFactory(Client, ParatextProjects),
+                new AppInfo("test", "1.0.0", "test"),
+                ParatextProjects
+            );
+
+            await service.InitializeAsync();
+
+            Assert.That(
+                Client.IsHandlerRegistered(wireName),
+                Is.True,
+                "isAvailable handler registered under its exact wire name"
+            );
+            var docs = Client.GetDocumentationFor(wireName);
+            Assert.That(docs, Is.Not.Null, "isAvailable registered with OpenRPC documentation");
+            Assert.That(docs!.Method.Experimental, Is.True, "isAvailable marked experimental");
+        }
+
+        [Test]
+        public void IsSendReceiveAvailable_OnTheStub_IsFalse()
+        {
+            var service = new ParatextProjectSendReceiveService(
+                Client,
+                new ParatextProjectDataProviderFactory(Client, ParatextProjects),
+                new AppInfo("test", "1.0.0", "test"),
+                ParatextProjects
+            );
+
+            Assert.That(service.IsSendReceiveAvailable(), Is.False);
         }
     }
 }

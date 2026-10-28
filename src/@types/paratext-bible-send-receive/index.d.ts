@@ -17,8 +17,8 @@
 // crashes an older Paratext 10 build on the missing value:
 //   * `SyncState.syncingProjectIds` — required in the upstream file above.
 //   * `SyncActivitySnapshot.projectIds` and `SyncActivitySnapshot.outcome` — no upstream declaration
-//     to diverge from yet; this whole type, `SyncOutcome`, `getSyncActivity` and
-//     `onSyncActivityChanged` are declared here ahead of the Paratext 10 patch that raises the
+//     to diverge from yet; this whole type, `SyncOutcome`, `getSyncActivity`,
+//     `onSyncActivityChanged` and `isAvailable` are declared here ahead of the Paratext 10 patch that raises the
 //     signal, the same way the write-gate seam (`getAutoSyncBlocking` /
 //     `onSyncWriteLockChanged`) is.
 //
@@ -646,6 +646,19 @@ declare module 'papi-shared-types' {
      * @experimental This command is unstable and may change or disappear without notice
      */
     'paratextBibleSendReceive.getSyncActivity': () => Promise<SyncActivitySnapshot>;
+
+    /**
+     * Whether this build can run Send/Receive. Core's own implementation answers `false`, and the
+     * Paratext 10 patch answers `true`. Like `getSyncActivity`, it is registered by core's own
+     * service, so plain Platform.Bible answers it too.
+     *
+     * A caller must treat a rejection (for example the cold-start race before the dotnet process
+     * has registered the command) as `false`.
+     *
+     * @returns `true` if this build can run Send/Receive
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.isAvailable': () => Promise<boolean>;
 
     /**
      * Commits changes in the specified project to the version history. Unless `forceCommit` is
