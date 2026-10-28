@@ -212,6 +212,11 @@ function NetworkSettingsRow({
   const [internetSettings, , isLoadingInternetSettings] = useData(
     internetSettingsProvider,
   ).InternetSettings(undefined, DEFAULT_INTERNET_SETTINGS);
+  // The explicit annotation here is load-bearing, not decorative: `internetSettings` actually
+  // resolves to `any` here (confirmed by probe — assigning it to a `string` const compiles with no
+  // error), not `InternetSettings | PlatformError`. Indexing `SERVER_BADGE_KEYS` directly with
+  // `internetSettings.selectedServer` would compile today only by accident, since an `any` value
+  // defeats the point of the Record's key type. Keep this named, annotated intermediate.
   const selectedServer: ServerType | undefined =
     isLoadingInternetSettings || isPlatformError(internetSettings)
       ? undefined
