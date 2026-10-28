@@ -1,7 +1,8 @@
 /**
  * The running app makes no edit to Scripture that the user did not ask for — the shared body of the
  * `no-unasked-edits-*` specs, one spec per editable view (isolated specs are one test() per file,
- * so each view needs its own file; the spec files only pick the view).
+ * so each view needs its own file; the spec files only pick the view), plus
+ * {@link runPreviewWritesNothing} for Power mode's read-only Preview.
  *
  * Every other fidelity test exercises one leg of the save path in isolation. This one drives the
  * whole composition in the real app — C# USFM → USX, the USX parse into the editor, the editor's
@@ -51,12 +52,14 @@ import fs from 'fs';
 import path from 'path';
 import { type ElectronApplication, type Locator, type Page } from '@playwright/test';
 import { test, expect } from './isolated.fixture';
+import { TEXT_NOTE_CALLER_SELECTOR } from './content-zoom-helpers';
 import { requireIsolatedProjectRoot, waitForAppReady } from './helpers';
 import {
   makeSampleProjectEditable,
   navigateToolbarBcv,
   openEditableScriptureEditorForProject,
   SAMPLE_WEB_PROJECT_ID,
+  sendCommandWithId,
   waitForHomeTab,
 } from './scripture-editor-helpers';
 import { unifiedUsfmDiff } from './usfm-line-diff';
@@ -70,11 +73,6 @@ export interface EditableViewCase {
   name: string;
   /** The interface mode the app is launched in. */
   interfaceMode: 'power' | 'simple';
-  /**
-   * `OpenEditorOptions.viewType` for the open command; omitted to take the interface mode's own
-   * default (Standard in Power mode, the paragraph-structure preset in Simple mode).
-   */
-  viewType?: 'formatted';
   /**
    * What the editor's root must match once the view is showing — the positive check that the run is
    * measuring the view it names, since a wrong view would pass every byte comparison too.
@@ -95,15 +93,6 @@ export const POWER_STANDARD_VIEW: EditableViewCase = {
   areMarkersText: true,
 };
 
-/** Power mode's formatted view: markers hidden, no paragraph-marker gutter. */
-export const POWER_FORMATTED_VIEW: EditableViewCase = {
-  name: 'Power mode, formatted view',
-  interfaceMode: 'power',
-  viewType: 'formatted',
-  rootSelector: '.editor-input.marker-hidden:not(.psc-gutter-markers)',
-  areMarkersText: false,
-};
-
 /** Simple mode's editable view: the paragraph-structure preset, markers hidden, a marker gutter. */
 export const SIMPLE_PARAGRAPH_STRUCTURE_VIEW: EditableViewCase = {
   name: 'Simple mode, paragraph-structure view',
@@ -112,8 +101,8 @@ export const SIMPLE_PARAGRAPH_STRUCTURE_VIEW: EditableViewCase = {
   areMarkersText: false,
 };
 
-/** The `test.use()` options a spec for `view` needs. */
-export function noUnaskedEditsTestOptions(view: EditableViewCase) {
+/** The `test.use()` options a spec for a view in `view.interfaceMode` needs. */
+export function noUnaskedEditsTestOptions(view: Pick<EditableViewCase, 'interfaceMode'>) {
   return {
     interfaceMode: view.interfaceMode,
     // Past first run, so Simple mode starts in the app rather than the setup wizard.
@@ -632,6 +621,23 @@ function installedBookPath(bookFile: string): string {
   return path.join(requireIsolatedProjectRoot(), INSTALLED_WEB_FOLDER, bookFile);
 }
 
+/**
+ * Every chapter's book file as installed, by file name. Fails unless each is the bundled copy, so
+ * the capture is the form under test and not something the app already rewrote.
+ */
+function captureInstalledBooks(): Map<string, Buffer> {
+  return new Map(
+    CHAPTERS.map((chapter) => {
+      const installed = fs.readFileSync(installedBookPath(chapter.bookFile));
+      expect(
+        installed.equals(fs.readFileSync(path.join(BUNDLED_WEB_DIR, chapter.bookFile))),
+        `${chapter.bookFile} in the isolated root should be the bundled copy`,
+      ).toBe(true);
+      return [chapter.bookFile, installed];
+    }),
+  );
+}
+
 /** `withInsertion` is `without` with exactly `inserted` added at one place, and nothing else. */
 function isSingleInsertion(withInsertion: Buffer, without: Buffer, inserted: string): boolean {
   const insertedBytes = Buffer.from(inserted, 'utf8');
@@ -987,24 +993,9 @@ export async function runNoUnaskedEdits(
   await makeSampleProjectEditable();
 
   // Capture every book file before any editor is opened.
-  const installedBooks = new Map(
-    CHAPTERS.map((chapter) => {
-      const installed = fs.readFileSync(installedBookPath(chapter.bookFile));
-      // Positive control: the capture is the bundled file, so it is the form under test and not
-      // something the app already rewrote.
-      expect(
-        installed.equals(fs.readFileSync(path.join(BUNDLED_WEB_DIR, chapter.bookFile))),
-        `${chapter.bookFile} in the isolated root should be the bundled copy`,
-      ).toBe(true);
-      return [chapter.bookFile, installed];
-    }),
-  );
+  const installedBooks = captureInstalledBooks();
 
-  const editorId = await openEditableScriptureEditorForProject(
-    mainPage,
-    SAMPLE_WEB_PROJECT_ID,
-    view.viewType ? { editorOptions: { viewType: view.viewType } } : {},
-  );
+  const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
   const editorFrame = mainPage.frameLocator(`iframe[data-web-view-id="${editorId}"]`);
   await editorFrame.locator('.editor-container').waitFor({ timeout: 60_000 });
   // `.first()`: a footnote popover renders an editor input of its own.
@@ -1058,3 +1049,297 @@ export async function runNoUnaskedEdits(
     }),
   );
 }
+
+// #region Power mode's read-only Preview
+
+/** The tab title's suffix for a read-only text (`%webView_platformScriptureEditor_title_format%`). */
+const READ_ONLY_TITLE = '(Read-only)';
+
+/** Power mode's chord that switches between Standard view and Preview (Control on macOS too). */
+const VIEW_TOGGLE_KEY = 'Control+e';
+
+/** Jonah 2, visited between Jonah 1 and Matthew 3 so the run moves by chapter as well as by book. */
+const JONAH_2 = { reference: 'Jonah 2:1', renderedText: 'the bottoms of the mountains' };
+
+/** A range the Preview run copies, and text the copy must carry so the run knows it happened. */
+interface PreviewCopy {
+  from: TextPoint;
+  to: TextPoint;
+  copied: string;
+}
+
+/** One chapter of the Preview run: {@link CHAPTERS}' chapter, and the ranges copied in it. */
+interface PreviewChapterCase {
+  chapter: ChapterCase;
+  /** Plain text first, then a range across a footnote or a character span. */
+  copies: [PreviewCopy, PreviewCopy];
+}
+
+const PREVIEW_CHAPTERS: PreviewChapterCase[] = [
+  {
+    chapter: CHAPTERS[0],
+    copies: [
+      { from: 'went down to |Joppa', to: 'found a ship| going', copied: 'Joppa, and found a ship' },
+      // 1:6, across its first footnote.
+      { from: 'call on |your God', to: 'Maybe your God|', copied: 'Maybe your God' },
+    ],
+  },
+  {
+    chapter: CHAPTERS[1],
+    copies: [
+      { from: NOTE_COPY_FROM, to: NOTE_COPY_TO, copied: 'Galilee to the Jordan' },
+      { from: WJ_COPY_FROM, to: WJ_COPY_TO, copied: 'Allow it now' },
+    ],
+  },
+];
+
+/** Every file of the installed project, by path relative to its folder. */
+type ProjectSnapshot = Map<string, { bytes: Buffer; mtimeMs: number }>;
+
+function snapshotInstalledProject(): ProjectSnapshot {
+  const projectDir = path.join(requireIsolatedProjectRoot(), INSTALLED_WEB_FOLDER);
+  const snapshot: ProjectSnapshot = new Map();
+  const walk = (dir: string) =>
+    fs.readdirSync(dir, { withFileTypes: true }).forEach((entry) => {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(fullPath);
+      else if (entry.isFile())
+        snapshot.set(path.relative(projectDir, fullPath), {
+          bytes: fs.readFileSync(fullPath),
+          mtimeMs: fs.statSync(fullPath).mtimeMs,
+        });
+    });
+  walk(projectDir);
+  return snapshot;
+}
+
+function isSameSnapshot(first: ProjectSnapshot, second: ProjectSnapshot): boolean {
+  return (
+    first.size === second.size &&
+    [...first].every(([file, { bytes, mtimeMs }]) => {
+      const other = second.get(file);
+      return !!other && other.mtimeMs === mtimeMs && other.bytes.equals(bytes);
+    })
+  );
+}
+
+/** The longest the Preview run waits for the project to go quiet before taking its baseline. */
+const PROJECT_SETTLE_TIMEOUT_MS = 60_000;
+
+/**
+ * The installed project once no file of it has changed for {@link LOAD_QUIET_MS}. The backend saves
+ * `Settings.xml` by itself around the time the app is ready (the character inventory's default
+ * characters, a recomputed `BooksPresent`) and the editable flag is a save of its own, so a
+ * baseline taken straight away can catch the project between those writes.
+ */
+async function snapshotSettledProject(page: Page): Promise<ProjectSnapshot> {
+  const deadline = Date.now() + PROJECT_SETTLE_TIMEOUT_MS;
+  let current = snapshotInstalledProject();
+  let quietSince = Date.now();
+  // Sequential polling of the folder: each snapshot decides whether to take another.
+  /* eslint-disable no-await-in-loop */
+  while (Date.now() - quietSince < LOAD_QUIET_MS) {
+    if (Date.now() > deadline)
+      throw new Error(
+        `The installed project kept changing for ${PROJECT_SETTLE_TIMEOUT_MS}ms before the editor opened`,
+      );
+    await page.waitForTimeout(250);
+    const next = snapshotInstalledProject();
+    if (!isSameSnapshot(current, next)) {
+      current = next;
+      quietSince = Date.now();
+    }
+  }
+  /* eslint-enable no-await-in-loop */
+  return current;
+}
+
+/**
+ * Soft-asserts that no file of the installed project was added, removed, rewritten or touched since
+ * `before` was taken, naming each one that was; a changed file's diff is in the message and both
+ * versions are attached to the report.
+ */
+async function expectProjectUnchanged(before: ProjectSnapshot, when: string): Promise<void> {
+  const after = snapshotInstalledProject();
+  const changes: string[] = [];
+  await Promise.all(
+    [...before].map(async ([file, { bytes, mtimeMs }]) => {
+      const now = after.get(file);
+      if (!now) changes.push(`${file}: removed`);
+      else if (!now.bytes.equals(bytes)) {
+        await attachBoth(file, bytes, now.bytes, 'before', when);
+        changes.push(`${file}: changed\n${describeByteDrift(bytes, now.bytes, 'before', when)}`);
+      } else if (now.mtimeMs !== mtimeMs)
+        changes.push(`${file}: rewritten with the same bytes (modification time moved)`);
+    }),
+  );
+  [...after.keys()]
+    .filter((file) => !before.has(file))
+    .forEach((file) => changes.push(`${file}: added`));
+  expect.soft(changes.sort().join('\n\n'), `${when} wrote to the project`).toBe('');
+}
+
+/**
+ * The Preview run's whole test body: Power mode's formatted view is a read-only Preview, and no
+ * gesture made in it — reading, navigating, scrolling, clicking, selecting, copying, opening a
+ * footnote from its caller, switching to Standard view and back, or trying to edit — writes
+ * anything to the project. After every step, every file of the installed project must have the
+ * bytes and the modification time it had before the editor opened, and the attempted edits must
+ * leave the editor's text as it was.
+ */
+export async function runPreviewWritesNothing({
+  mainPage,
+  electronApp,
+}: {
+  mainPage: Page;
+  electronApp: ElectronApplication;
+}): Promise<void> {
+  // Heavy isolated test: its own Electron instance, then several quiet waits per chapter.
+  test.setTimeout(600_000);
+
+  await waitForHomeTab(mainPage);
+  // Editable, so Preview is read-only because of the view and not because of the project.
+  await makeSampleProjectEditable();
+  captureInstalledBooks();
+  const before = await snapshotSettledProject(mainPage);
+
+  const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID, {
+    editorOptions: { viewType: 'formatted' },
+  });
+  const editorFrame = mainPage.frameLocator(`iframe[data-web-view-id="${editorId}"]`);
+  await editorFrame.locator('.editor-container').waitFor({ timeout: 60_000 });
+  // `.first()`: a footnotes pane row renders an editor input of its own.
+  const editorInput = editorFrame.locator('.editor-input').first();
+  // `data-web-view-id` is on `.platform-tab-title` (`platform-tab-title.component.tsx`).
+  const tabTitle = mainPage.locator(`.platform-tab-title[data-web-view-id="${editorId}"]`);
+  const footnotesPane = editorFrame.locator('[data-footnotes-pane]');
+  // The footnote editor popover is the one pop-up that holds an editor of its own.
+  const footnotePopover = editorFrame
+    .locator('[data-slot="popover-content"]')
+    .filter({ has: editorFrame.locator('.editor-input') });
+
+  /** The positive view check: the run is measuring Preview, read-only, and not some other view. */
+  const expectPreview = async () => {
+    await expect(editorInput).toHaveClass(/\bmarker-hidden\b/, { timeout: 20_000 });
+    await expect(editorInput).toHaveAttribute('contenteditable', 'false');
+    await expect(tabTitle).toContainText(READ_ONLY_TITLE, { timeout: 20_000 });
+  };
+  const goTo = async (reference: string, renderedText: string) => {
+    await navigateToolbarBcv(mainPage, reference);
+    await expect(editorInput).toContainText(renderedText, { timeout: 60_000 });
+  };
+  const clickText = (text: string) => editorInput.getByText(text, { exact: false }).first().click();
+
+  const runChapter = ({ chapter, copies }: PreviewChapterCase) =>
+    test.step(`Preview: ${chapter.label}`, async () => {
+      await goTo(chapter.reference, chapter.renderedText);
+      await expectPreview();
+      await mainPage.waitForTimeout(LOAD_QUIET_MS);
+      await expectProjectUnchanged(before, `opening ${chapter.reference}`);
+
+      await test.step('scrolling, clicking, selecting and copying', async () => {
+        await editorInput.hover();
+        await mainPage.mouse.wheel(0, 3_000);
+        await mainPage.waitForTimeout(SELECTION_ADOPTED_MS);
+        await mainPage.mouse.wheel(0, -3_000);
+        await clickText(chapter.renderedText);
+        await editorInput.getByText(chapter.renderedText, { exact: false }).first().dblclick();
+        // Chained, not concurrent: each copy must land on the clipboard before the next one.
+        await copies.reduce(async (previous, copy) => {
+          await previous;
+          await electronApp.evaluate(
+            ({ clipboard }, sentinel) => clipboard.writeText(sentinel),
+            CLIPBOARD_SENTINEL,
+          );
+          await selectInEditor(editorInput, copy.from, copy.to);
+          await mainPage.keyboard.press(COPY_KEY);
+          await expect
+            .poll(() => electronApp.evaluate(({ clipboard }) => clipboard.readText()), {
+              message: `copying ${copy.from} … ${copy.to} in Preview never reached the OS clipboard`,
+              timeout: 15_000,
+            })
+            .toContain(copy.copied);
+        }, Promise.resolve());
+        await mainPage.waitForTimeout(LOAD_QUIET_MS);
+        await expectProjectUnchanged(
+          before,
+          `scrolling, clicking, selecting and copying in ${chapter.reference}`,
+        );
+      });
+
+      await test.step('a footnote caller opens its note in the footnotes pane', async () => {
+        // Power mode shows the pane by itself for a chapter with notes; hide it so the caller's
+        // click is what shows it.
+        if ((await footnotesPane.count()) > 0)
+          await sendCommandWithId(mainPage, 'platformScriptureEditor.toggleFootnotes', editorId);
+        await expect(footnotesPane).toHaveCount(0, { timeout: 20_000 });
+        await editorFrame.locator(TEXT_NOTE_CALLER_SELECTOR).first().click();
+        await expect(footnotesPane).toHaveCount(1, { timeout: 20_000 });
+        await expect(footnotesPane.locator('[role="option"][aria-selected="true"]')).toHaveCount(
+          1,
+          { timeout: 20_000 },
+        );
+        await expect(footnotePopover).toHaveCount(0);
+        await sendCommandWithId(mainPage, 'platformScriptureEditor.toggleFootnotes', editorId);
+        await expect(footnotesPane).toHaveCount(0, { timeout: 20_000 });
+        await mainPage.waitForTimeout(LOAD_QUIET_MS);
+        await expectProjectUnchanged(before, `opening a footnote in ${chapter.reference}`);
+      });
+
+      await test.step('trying to edit changes nothing', async () => {
+        await clickText(chapter.renderedText);
+        const textBefore = await editorInput.textContent();
+        // Each attempt would change the text on its own if it took, so no two can cancel out.
+        await selectInEditor(editorInput, copies[1].from, copies[1].to);
+        await mainPage.keyboard.press('Delete');
+        await clickText(chapter.renderedText);
+        await mainPage.keyboard.press('Backspace');
+        await mainPage.keyboard.press('Enter');
+        await mainPage.keyboard.type(TYPED_CHARACTER);
+        await electronApp.evaluate(
+          ({ clipboard }, plain) => clipboard.writeText(plain),
+          MATTHEW_PASTED,
+        );
+        await mainPage.keyboard.press(PASTE_KEY);
+        // Past the save debounce and the PDP's write, as for a freshly opened chapter.
+        await mainPage.waitForTimeout(LOAD_QUIET_MS);
+        expect
+          .soft(
+            await editorInput.textContent(),
+            `${chapter.reference}: Delete, Backspace, Enter, typing or pasting changed Preview's text`,
+          )
+          .toBe(textBefore);
+        await expectPreview();
+        await expectProjectUnchanged(before, `trying to edit ${chapter.reference}`);
+      });
+    });
+
+  await runChapter(PREVIEW_CHAPTERS[0]);
+
+  await test.step('Preview: to Jonah 2 and back by chapter', async () => {
+    await goTo(JONAH_2.reference, JONAH_2.renderedText);
+    await goTo(PREVIEW_CHAPTERS[0].chapter.reference, PREVIEW_CHAPTERS[0].chapter.renderedText);
+    await expectPreview();
+    await mainPage.waitForTimeout(LOAD_QUIET_MS);
+    await expectProjectUnchanged(before, 'moving to Jonah 2 and back');
+  });
+
+  await runChapter(PREVIEW_CHAPTERS[1]);
+
+  await test.step('Preview: to Standard view and back', async () => {
+    const { renderedText } = PREVIEW_CHAPTERS[1].chapter;
+    await clickText(renderedText);
+    await mainPage.keyboard.press(VIEW_TOGGLE_KEY);
+    await expect(editorInput).toHaveClass(/\bmarker-editable\b/, { timeout: 20_000 });
+    await expect(editorInput).toHaveAttribute('contenteditable', 'true');
+    await mainPage.waitForTimeout(LOAD_QUIET_MS);
+    await expectProjectUnchanged(before, 'switching to Standard view');
+    await clickText(renderedText);
+    await mainPage.keyboard.press(VIEW_TOGGLE_KEY);
+    await expectPreview();
+    await mainPage.waitForTimeout(LOAD_QUIET_MS);
+    await expectProjectUnchanged(before, 'switching back to Preview');
+  });
+}
+
+// #endregion

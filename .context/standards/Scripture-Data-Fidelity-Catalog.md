@@ -204,15 +204,22 @@ paragraph's verses without the fixture's empty `sid` (pinned, rule 4, 1 row).
 
 ## Real-app findings (end-to-end, every editable view, 2026-10-23)
 
-From the shared spec body `e2e-tests/fixtures/no-unasked-edits.body.ts`, run by three specs in
+From the shared spec body `e2e-tests/fixtures/no-unasked-edits.body.ts`, run by specs in
 `e2e-tests/tests/isolated/scripture-editor/`: `no-unasked-edits-power-standard.spec.ts` (Power,
-Standard), `no-unasked-edits-power-formatted.spec.ts` (Power, formatted) and
-`no-unasked-edits-simple-paragraph-structure.spec.ts` (Simple, paragraph-structure). Per view, on
-Jonah 1 and Matthew 3: opening writes nothing; the first edit and undo equals the pinned first-save
-normalization (S-2 + E-1); at rest, edit and undo is byte-identical; eight real gestures (typing,
-plain-text paste, copy/paste of a `\wj` span and of a footnote through the OS clipboard, Delete
-over a selection into a span) change only the aimed verse and undo restores the file byte for byte.
-Every load, first-save, at-rest, locality and undo assertion passes in all three views.
+Standard), `no-unasked-edits-simple-paragraph-structure.spec.ts` (Simple, paragraph-structure) and,
+until PT-4777 (#2918) made Power's formatted view a read-only Preview, a third spec for that view.
+Per view, on Jonah 1 and Matthew 3: opening writes nothing; the first edit and undo equals the
+pinned first-save normalization (S-2 + E-1); at rest, edit and undo is byte-identical; eight real
+gestures (typing, plain-text paste, copy/paste of a `\wj` span and of a footnote through the OS
+clipboard, Delete over a selection into a span) change only the aimed verse and undo restores the
+file byte for byte. Every load, first-save, at-rest, locality and undo assertion passes in all three
+views.
+
+Power's Preview is checked by `no-unasked-edits-power-preview.spec.ts` instead: nothing done there
+writes. On Jonah 1 and Matthew 3, navigating by chapter and by book, scrolling, clicking, selecting,
+copying, opening a footnote from its caller, switching to Standard view and back, and trying to
+edit (Delete, Backspace, Enter, typing, pasting) leave every file of the project with its bytes and
+modification time, and the attempted edits leave the editor's text as it was.
 
 | ID | View(s) | Finding | Status |
 | --- | --- | --- | --- |
