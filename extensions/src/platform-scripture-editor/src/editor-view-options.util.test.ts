@@ -8,6 +8,9 @@ import type { ScriptureEditorViewType } from 'platform-scripture-editor';
 import { describe, expect, it } from 'vitest';
 import { getEditorViewOptions } from './editor-view-options.util';
 
+// 'markers' is a legacy saved value: the Markers view is no longer offered, and a tab that saved it
+// displays as Standard view in Power. While `platform.interfaceMode` loads, the saved value is
+// shown as is, so it can still reach `getEditorViewOptions`.
 const VIEW_TYPES: ScriptureEditorViewType[] = ['formatted', 'markers', 'standard'];
 
 describe('getEditorViewOptions', () => {
