@@ -270,7 +270,7 @@ export function initialize(networkService: NetworkService): Promise<void> {
             },
           );
         } catch (error) {
-          logger.warn(
+          logger.error(
             `Could not register the shared store owner marker; this process's keys will not be released if it disconnects: ${getErrorMessage(error)}`,
           );
         }
