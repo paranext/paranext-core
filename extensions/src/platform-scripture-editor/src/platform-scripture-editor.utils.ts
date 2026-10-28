@@ -3163,9 +3163,9 @@ export type ChapterScaffoldInsertOutcome =
 /**
  * Inserts a blank chapter's `\c` marker and its empty verses. Chapter 1's document also holds the
  * book's `\id` line and front matter, so only the editor can place `\c 1` after them, and only it
- * knows where chapter content starts: it leaves the verses out when that content already holds text
- * or a verse, as a book typed or imported without chapter markers does. A later chapter's scaffold
- * goes at the start of its document.
+ * knows where chapter content starts: it leaves the verses out when that content already holds
+ * anything (text, a verse, a note, a milestone or a figure), as a book typed or imported without
+ * chapter markers does. A later chapter's scaffold goes at the start of its document.
  *
  * Catches what the editor throws (`insertFirstChapter` does for a read-only editor or one with no
  * scripture reference) and reports it as `'failed'`: an error thrown in a web view's click handler
