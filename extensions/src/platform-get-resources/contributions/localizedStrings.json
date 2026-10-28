@@ -80,6 +80,7 @@
       "%resources_sync%": "Sync",
       "%resources_syncFailed_title%": "Sync failed",
       "%resources_syncUnavailable%": "Sync isn't available right now. Please try again in a moment.",
+      "%resources_syncWaiting_reason%": "Wait for the current sync to finish",
       "%resources_type%": "Type",
       "%resources_types%": "Types",
       "%resources_types_noResults%": "No types found",
