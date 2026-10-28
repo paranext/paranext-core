@@ -621,6 +621,65 @@ describe('sharedStoreService', () => {
       }
     });
 
+    it('releases a plain tombstone its disconnected owner still held, so another process can set it', async () => {
+      await initializeSharedStore(networkService);
+      remoteChange(testKey, 1, 10, 'extension-host-abc');
+      remoteChange(testKey, undefined, 11, 'extension-host-abc', true);
+      vi.mocked(mockEmitter.emit).mockClear();
+
+      disconnectHandler({ removedMethodNames: ['shared-store:owner:extension-host-abc'] });
+
+      expect(mockEmitter.emit).toHaveBeenCalledWith(
+        expect.objectContaining({ key: testKey, deleted: true, released: true }),
+      );
+      sharedStoreService.set(testKey, 7000);
+      expect(sharedStoreService.get(testKey)).toBe(7000);
+      expect(logger.error).not.toHaveBeenCalled();
+    });
+
+    it('does not re-release a key that is already released', async () => {
+      await initializeSharedStore(networkService);
+      remoteChange(testKey, undefined, 11, 'extension-host-abc', true, true);
+      vi.mocked(mockEmitter.emit).mockClear();
+
+      disconnectHandler({ removedMethodNames: ['shared-store:owner:extension-host-abc'] });
+
+      expect(mockEmitter.emit).not.toHaveBeenCalled();
+    });
+
+    it('lets a non-main process set a key whose initial snapshot entry is a released tombstone', async () => {
+      globalThis.processType = ProcessType.ExtensionHost;
+      vi.mocked(networkService.request).mockResolvedValue({
+        [testKey]: {
+          value: undefined,
+          clock: { counter: 5, processId: 'extension-host-old' },
+          deleted: true,
+          released: true,
+        },
+      });
+      await initializeSharedStore(networkService);
+
+      sharedStoreService.set(testKey, 7000);
+
+      expect(sharedStoreService.get(testKey)).toBe(7000);
+      expect(logger.error).not.toHaveBeenCalled();
+    });
+
+    it('lets another process remove a released key but refuses a foreign plain tombstone', async () => {
+      await initializeSharedStore(networkService);
+      const releasedKey = 'platform.customNetworkTimeoutMs.released';
+      remoteChange(releasedKey, undefined, 20, 'other-process', true, true);
+      sharedStoreService.set(releasedKey, 1);
+      expect(sharedStoreService.get(releasedKey)).toBe(1);
+      sharedStoreService.remove(releasedKey);
+      expect(sharedStoreService.get(releasedKey)).toBeUndefined();
+      expect(logger.error).not.toHaveBeenCalled();
+
+      remoteChange(testKey, undefined, 30, 'other-process', true);
+      sharedStoreService.remove(testKey);
+      expect(logger.error).toHaveBeenCalledTimes(1);
+    });
+
     it('does nothing on disconnect in a non-main process', async () => {
       globalThis.processType = ProcessType.ExtensionHost;
       await initializeSharedStore(networkService);
