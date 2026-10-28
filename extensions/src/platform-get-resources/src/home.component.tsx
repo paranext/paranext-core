@@ -892,17 +892,24 @@ export function Home({
     isBlocked,
     reasonText,
     isDisabled,
+    ariaLabel,
+    isBusy,
     onActivate,
   }: {
     label: ReactNode;
     isBlocked: boolean;
     reasonText: string | undefined;
     isDisabled?: boolean;
+    /** The item's name when its label has no text, such as a spinner. Otherwise omit it. */
+    ariaLabel?: string;
+    isBusy?: boolean;
     onActivate: () => void;
   }) => (
     <DropdownMenuItem
       disabled={isDisabled}
       aria-disabled={isBlocked || undefined}
+      aria-label={ariaLabel}
+      aria-busy={isBusy || undefined}
       className={cn({ 'tw:opacity-50': isBlocked })}
       onSelect={(event) => {
         if (isBlocked) {
@@ -960,6 +967,9 @@ export function Home({
         label: getSendReceiveButtonContent(project),
         isBlocked: isBlocked || isSendReceiveInProgress,
         reasonText: unsupportedReasonText ?? waitingReasonText,
+        // The spinner has no text, so the item keeps its name while it shows.
+        ariaLabel: isThisProjectSyncing ? sendReceiveLabel : undefined,
+        isBusy: isThisProjectSyncing,
         onActivate: () => handleSendReceiveProject(project.projectId),
       });
     return blockableTooltip(

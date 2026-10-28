@@ -1940,6 +1940,28 @@ describe('Home while a sync runs', () => {
     expect(syncItem).toHaveAttribute('aria-disabled', 'true');
     expect(syncItem).toHaveTextContent('Wait for the current sync to finish');
   });
+
+  async function openLocalRowMenuItem() {
+    const row = screen.getByText('LOC').closest('tr');
+    if (!row) throw new Error('Home rendered no row for the local project');
+    const ellipsisTrigger = within(row).getAllByRole('button').at(-1);
+    if (!ellipsisTrigger) throw new Error('The local project row has no buttons');
+    await userEvent.click(ellipsisTrigger);
+    return screen.findByRole('menuitem');
+  }
+
+  it("names the syncing row's Sync menu item, which shows only a spinner", async () => {
+    renderHomeDuringSync({ activeSendReceiveProjects: ['localProject'], withLocalProject: true });
+    const syncItem = await openLocalRowMenuItem();
+    expect(syncItem).toHaveAttribute('aria-disabled', 'true');
+    expect(syncItem).toHaveAccessibleName('Sync');
+  });
+
+  it("keeps the wait reason in a waiting row's menu item name", async () => {
+    renderHomeDuringSync({ activeSendReceiveProjects: ['syncingProject'], withLocalProject: true });
+    const syncItem = await openLocalRowMenuItem();
+    expect(syncItem).toHaveAccessibleName(/Sync.*Wait for the current sync to finish/s);
+  });
 });
 
 describe('Home while a sync holds the project list', () => {
