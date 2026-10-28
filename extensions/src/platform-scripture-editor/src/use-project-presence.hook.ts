@@ -8,10 +8,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 /**
  * Whether this user has any project of their own.
  *
- * - `unknown` — not settled: the lookup has not answered, failed or came back empty, or a sync is
- *   running or its state is not yet known. **Not** interchangeable with `none`.
- * - `none` — the lookup answered with no project of the user's own, and no sync is running that could
- *   bring one
+ * - `unknown` — not settled: the lookup has not answered, failed, or came back empty before an empty
+ *   answer could be trusted, or a sync is running or its state is not yet known. **Not**
+ *   interchangeable with `none`.
+ * - `none` — the lookup answered (possibly with a trusted empty answer) with no project of the user's
+ *   own, and no sync is running that could bring one
  * - `some` — the lookup answered with at least one project of the user's own
  */
 export type ProjectPresence = 'unknown' | 'none' | 'some';
@@ -30,6 +31,17 @@ const PROJECT_INTERFACE = 'platformScripture.USJ_Chapter';
  * `PDP_FACTORY_OBJECT_TYPE` is not exported to extensions, so this mirrors its value.
  */
 const PDP_FACTORY_OBJECT_TYPE = 'pdpFactory';
+
+/**
+ * Network object ID of the C# factory for the user's Paratext projects:
+ * `platform.{PDPF_NAME}-pdpf`, with `PDPF_NAME` from
+ * `c-sharp/Projects/ParatextProjectDataProviderFactory.cs`. It registers only once
+ * `LocalParatextProjects.Initialize` has scanned the projects folder, so its list is complete.
+ *
+ * The startup readiness gate (`src/main/startup-readiness.util.ts`) keeps a copy of this literal
+ * and of {@link canTrustEmptyAnswer}; keep them in step.
+ */
+export const PARATEXT_PDP_FACTORY_ID = 'platform.Paratext-pdpf';
 
 /** Collapses a burst of factory registrations (e.g. an extension reload) into one lookup. */
 export const PDP_FACTORY_REGISTRATION_DEBOUNCE_MS = 200;
@@ -66,11 +78,33 @@ const MAX_SYNC_ACTIVITY_SEED_RETRIES = 10;
 export const SYNC_ACTIVITY_RECHECK_INTERVAL_MS = 30 * 1000;
 
 /**
- * ID of the sample WEB project, which `LocalParatextProjects.Initialize` (C#) installs whenever it
- * finds no projects. Fixed by its `Settings.xml` (`c-sharp/assets/WEB/Settings.xml`); upper-cased
- * because project IDs arrive in either case.
+ * ID of the sample WEB project, which `LocalParatextProjects.Initialize` (C#) installs into an
+ * empty projects folder in development (unpackaged) runs, or when
+ * `PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT` is `true`. Fixed by its `Settings.xml`
+ * (`c-sharp/assets/WEB/Settings.xml`); upper-cased because project IDs arrive in either case.
  */
 export const SAMPLE_PROJECT_ID = '32664DC3288A28DF2E2BB75DED887FC8F17A15FB';
+
+/**
+ * Whether an empty lookup answer can be trusted to mean the user has no projects: the network
+ * objects listed just before the lookup was issued include both the C# Paratext project factory
+ * (whose list is final once registered) and a project data provider factory that layers
+ * {@link PROJECT_INTERFACE} over it (without which no project matches the lookup's filter).
+ *
+ * TODO(PT-4941): replace with the project lookup service's own rule once it has one.
+ */
+function canTrustEmptyAnswer(networkObjects: Record<string, NetworkObjectDetails>): boolean {
+  const details = Object.values(networkObjects);
+  return (
+    details.some(({ id }) => id === PARATEXT_PDP_FACTORY_ID) &&
+    details.some(
+      ({ objectType, attributes }) =>
+        objectType === PDP_FACTORY_OBJECT_TYPE &&
+        Array.isArray(attributes?.projectInterfaces) &&
+        attributes.projectInterfaces.includes(PROJECT_INTERFACE),
+    )
+  );
+}
 
 /**
  * Whether the metadata is a project of the user's own that they can open: neither a resource
@@ -113,14 +147,21 @@ function isSyncActivitySnapshot(value: unknown): value is Pick<SyncActivitySnaps
  *   up only once sync activity is known to be idle. Sync activity comes from
  *   `paratextBibleSendReceive.getSyncActivity` / `onSyncActivityChanged`, which see every sync
  *   path, but only a Paratext 10 build reports real activity; Platform.Bible always answers idle.
- * - An empty answer reads `unknown`: core installs a sample project whenever it finds none, so empty
- *   means the Paratext project factory has not answered yet. Its registration
- *   (`object:onDidCreateNetworkObject`) triggers another lookup. A user who deletes the sample
- *   mid-session also reads `unknown` until core reinstalls it on the next launch.
- * - A failed lookup reads `unknown` and is retried, a bounded number of times.
+ * - An empty answer means the user has no projects only if, just before the lookup was issued, both
+ *   the C# Paratext project factory and a factory serving {@link PROJECT_INTERFACE} were registered
+ *   (see {@link canTrustEmptyAnswer}). Before then, empty only means the factories have not answered
+ *   yet, so it reads `unknown`, and a factory registering (`object:onDidCreateNetworkObject`)
+ *   triggers another lookup.
+ * - A failed lookup reads `unknown` and is retried, a bounded number of times. So is an empty answer
+ *   when the network objects could not be listed to judge it, since no registration event may
+ *   follow.
  *
  * Live: a project arriving later in the session (`platform.onDidChangeProjects`) triggers a new
  * lookup, which replaces `none` once it answers.
+ *
+ * Uses `getMetadataForAllProjectsWithoutRetries`: the retrying variant re-asks an empty answer
+ * every second until the process is 30 seconds old, which would hold back `none` from a user with
+ * no projects. The events above already re-ask when a factory or project arrives.
  *
  * Each lookup fans out to every project data provider factory in every process, so pass `enabled:
  * false` whenever the answer is not being shown. A disabled hook makes no requests.
@@ -131,10 +172,10 @@ export function useProjectPresence({ enabled }: { enabled: boolean }): ProjectPr
   const [isSyncing, setIsSyncing] = useState<boolean | undefined>(undefined);
   const [lookupRequestCount, setLookupRequestCount] = useState(0);
   const requestLookup = useCallback(() => setLookupRequestCount((count) => count + 1), []);
-  const failedLookupCountRef = useRef(0);
+  const lookupRetryCountRef = useRef(0);
   // A new event is new information, so its lookup gets a fresh retry budget
   const requestLookupForEvent = useCallback(() => {
-    failedLookupCountRef.current = 0;
+    lookupRetryCountRef.current = 0;
     requestLookup();
   }, [requestLookup]);
   // Counts sync-activity events, so a read that was in flight when one arrived can tell it is older
@@ -147,29 +188,52 @@ export function useProjectPresence({ enabled }: { enabled: boolean }): ProjectPr
     // kept until the next lookup answers. The lookups that resume afterward get a fresh retry budget.
     if (!isIdle) {
       setLookupAnswer('unknown');
-      failedLookupCountRef.current = 0;
+      lookupRetryCountRef.current = 0;
       return undefined;
     }
     let isCurrent = true;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    const retryWithinBudget = () => {
+      if (lookupRetryCountRef.current >= MAX_LOOKUP_RETRIES) return;
+      lookupRetryCountRef.current += 1;
+      retryTimer = setTimeout(requestLookup, LOOKUP_RETRY_DELAY_MS);
+    };
     (async () => {
+      // Listed before the lookup is issued, so a factory that registers while the lookup is in
+      // flight cannot vouch for an answer it may not have contributed to. `undefined` if the
+      // network objects could not be listed.
+      let canTrustEmpty: boolean | undefined;
       try {
-        const allMetadata = await papi.projectLookup.getMetadataForAllProjects({
+        canTrustEmpty = canTrustEmptyAnswer(
+          await papi.networkObjectStatus.getAllNetworkObjectDetails(),
+        );
+      } catch (e) {
+        logger.warn(
+          `Could not list network objects to judge the project lookup: ${getErrorMessage(e)}`,
+        );
+      }
+      if (!isCurrent) return;
+      try {
+        const allMetadata = await papi.projectLookup.getMetadataForAllProjectsWithoutRetries({
           includeProjectInterfaces: [PROJECT_INTERFACE],
         });
         if (!isCurrent) return;
-        failedLookupCountRef.current = 0;
-        if (allMetadata.length === 0) setLookupAnswer('unknown');
-        else setLookupAnswer(allMetadata.some(isOwnProject) ? 'some' : 'none');
+        if (allMetadata.length > 0 || canTrustEmpty) {
+          lookupRetryCountRef.current = 0;
+          setLookupAnswer(allMetadata.some(isOwnProject) ? 'some' : 'none');
+          return;
+        }
+        setLookupAnswer('unknown');
+        // A factory still to register re-asks when it does (`object:onDidCreateNetworkObject`). A
+        // failed listing has no such event to wait for when the factories are already up, so it is
+        // retried like a failed lookup.
+        if (canTrustEmpty === undefined) retryWithinBudget();
       } catch (e) {
         // A failed lookup is not evidence either way, and the previous answer may be out of date.
         logger.warn(`Could not determine whether the user has any projects: ${getErrorMessage(e)}`);
         if (!isCurrent) return;
         setLookupAnswer('unknown');
-        if (failedLookupCountRef.current < MAX_LOOKUP_RETRIES) {
-          failedLookupCountRef.current += 1;
-          retryTimer = setTimeout(requestLookup, LOOKUP_RETRY_DELAY_MS);
-        }
+        retryWithinBudget();
       }
     })();
     return () => {

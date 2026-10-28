@@ -163,6 +163,14 @@ export const NoProjectsNoHeader: Story = {
   decorators: [],
 };
 
+/** What a new user of a packaged build sees: nothing to list, with the getting-started prompt. */
+export const NoProjects: Story = {
+  args: {
+    headerContent: <CardTitle>Home</CardTitle>,
+    onGetStarted: () => alertCommand('platform.openWindow', { url: GET_STARTED_URL }),
+  },
+};
+
 function OnlyWebProjectDecorator(Story: (update?: { args: HomeProps }) => ReactElement) {
   const onlyWebProjectList: LocalProjectInfo[] = [
     {

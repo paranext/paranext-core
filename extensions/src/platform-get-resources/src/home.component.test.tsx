@@ -529,6 +529,26 @@ describe('Home project/resource filter', () => {
     expect(screen.queryByText(GET_STARTED_DESCRIPTION)).not.toBeNull();
   });
 
+  it('shows the getting-started prompt on a Home with nothing to list', () => {
+    const GET_STARTED_DESCRIPTION = enString('%resources_getStartedDescription%');
+
+    renderHomeList({ localProjectsInfo: [] });
+
+    // A new user with no projects at all is who the prompt is for
+    expect(screen.queryByText(NOTHING_HERE)).not.toBeNull();
+    expect(screen.queryByText(GET_STARTED_DESCRIPTION)).not.toBeNull();
+  });
+
+  it('shows no getting-started prompt on an empty Home where nothing handles Get started', () => {
+    const GET_STARTED_DESCRIPTION = enString('%resources_getStartedDescription%');
+
+    renderHomeList({ localProjectsInfo: [], hasGetStartedHandler: false });
+
+    // Positive control: this is the empty state
+    expect(screen.queryByText(NOTHING_HERE)).not.toBeNull();
+    expect(screen.queryByText(GET_STARTED_DESCRIPTION)).toBeNull();
+  });
+
   it('still offers the getting-started guidance when there is nothing to filter', () => {
     renderHomeList({ initialProjectResourceFilter: 'paratextProject' });
 

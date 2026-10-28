@@ -1,10 +1,13 @@
+import { readFileSync } from 'fs';
+import path from 'path';
 import { vi } from 'vitest';
 import { MAX_REQUEST_ATTEMPTS, REQUEST_ATTEMPT_WAIT_TIME_MS } from '@shared/data/rpc.model';
 import { networkObjectStatusService } from '@shared/services/network-object-status.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { logger } from '@shared/services/logger.service';
 import { type ProjectMetadata } from '@shared/models/project-metadata.model';
-import { waitForScriptureWorkspaceReady } from './startup-readiness.util';
+import { type NetworkObjectDetails } from '@shared/models/network-object.model';
+import { PARATEXT_PDP_FACTORY_ID, waitForScriptureWorkspaceReady } from './startup-readiness.util';
 
 vi.mock('@shared/services/network-object-status.service', () => ({
   networkObjectStatusService: {
@@ -22,6 +25,9 @@ vi.mock('@shared/services/logger.service', () => ({
 }));
 
 const mockWaitForNetworkObject = vi.mocked(networkObjectStatusService.waitForNetworkObject);
+const mockGetAllNetworkObjectDetails = vi.mocked(
+  networkObjectStatusService.getAllNetworkObjectDetails,
+);
 const mockGetMetadata = vi.mocked(projectLookupService.getMetadataForAllProjectsWithoutRetries);
 const mockLoggerDebug = vi.mocked(logger.debug);
 
@@ -37,12 +43,29 @@ const A_PROJECT = {
 } satisfies ProjectMetadata;
 
 /** The network object details `waitForNetworkObject` resolves with when the factory is up. */
-const FACTORY_DETAILS = {
+const FACTORY_DETAILS: NetworkObjectDetails = {
   id: 'pdpf-scripture-extender',
   objectType: 'pdpFactory',
   functionNames: [],
   attributes: { projectInterfaces: ['platformScripture.USJ_Chapter'] },
 };
+
+/**
+ * The .NET Paratext PDP factory, which registers only after the projects folder has been scanned.
+ * Its project interfaces deliberately exclude the scripture readiness interface, so it cannot stand
+ * in for the Scripture Extender in the snapshot check.
+ */
+const PARATEXT_FACTORY_DETAILS: NetworkObjectDetails = {
+  id: 'platform.Paratext-pdpf',
+  objectType: 'pdpFactory',
+  functionNames: [],
+  attributes: { projectInterfaces: ['platform.base'] },
+};
+
+/** Builds a `getAllNetworkObjectDetails` snapshot, keyed by id as the real service keys it. */
+function snapshotOf(...details: NetworkObjectDetails[]): Record<string, NetworkObjectDetails> {
+  return Object.fromEntries(details.map((detail) => [detail.id, detail]));
+}
 
 /** Runs `body` with fake timers installed, restoring real timers even if it throws. */
 async function withFakeTimers(body: () => Promise<void>): Promise<void> {
@@ -76,7 +99,26 @@ beforeEach(() => {
   // below are re-established every time.
   vi.resetAllMocks();
   mockWaitForNetworkObject.mockResolvedValue(FACTORY_DETAILS);
+  // Nothing registered: an empty probe answer is never authoritative unless a test says otherwise.
+  mockGetAllNetworkObjectDetails.mockResolvedValue({});
   mockGetMetadata.mockResolvedValue([A_PROJECT]);
+});
+
+// A mismatch would never trust an empty answer, so a user with no projects would wait out the
+// whole budget before the startup sync.
+describe('PARATEXT_PDP_FACTORY_ID', () => {
+  it('is the ID the C# Paratext project factory registers under', () => {
+    const readCSharp = (file: string) =>
+      readFileSync(path.resolve(__dirname, '../../c-sharp/Projects', file), 'utf-8');
+    const pdpfName = /PDPF_NAME\s*=\s*"([^"]+)"/.exec(
+      readCSharp('ParatextProjectDataProviderFactory.cs'),
+    )?.[1];
+    const idTemplate = /\$"([^"]*)\{_pdpfName\}([^"]*)"/.exec(
+      readCSharp('ProjectDataProviderFactory.cs'),
+    );
+
+    expect(PARATEXT_PDP_FACTORY_ID).toBe(`${idTemplate?.[1]}${pdpfName}${idTemplate?.[2]}`);
+  });
 });
 
 describe('waitForScriptureWorkspaceReady', () => {
@@ -440,5 +482,209 @@ describe('waitForScriptureWorkspaceReady', () => {
     expect(mockLoggerDebug).toHaveBeenCalledTimes(2);
     expect(mockLoggerDebug).toHaveBeenCalledWith(expect.stringContaining('(attempt 1)'));
     expect(mockLoggerDebug).toHaveBeenCalledWith(expect.stringContaining('(attempt 10)'));
+  });
+
+  describe('an empty probe answer', () => {
+    /**
+     * Starts the gate under fake timers and returns a getter for its result, which stays
+     * `undefined` until the gate settles — so a test can tell "settled promptly" from "still
+     * polling" without awaiting a promise that may never resolve inside the test.
+     */
+    function startTrackedGate(options: Parameters<typeof waitForScriptureWorkspaceReady>[0]) {
+      let result: Awaited<ReturnType<typeof waitForScriptureWorkspaceReady>> | undefined;
+      const readinessPromise = waitForScriptureWorkspaceReady(options).then((value) => {
+        result = value;
+        return value;
+      });
+      return { readinessPromise, getResult: () => result };
+    }
+
+    it('resolves "ready" at once when both the Paratext and Scripture Extender factories were registered before the probe', async () => {
+      // A workspace with genuinely no local scripture projects: the Paratext factory registers only
+      // after scanning the projects folder, so its empty answer is final, and the startup sync is
+      // what brings the first project — it must not sit out the whole budget first.
+      mockGetAllNetworkObjectDetails.mockResolvedValue(
+        snapshotOf(PARATEXT_FACTORY_DETAILS, FACTORY_DETAILS),
+      );
+      mockGetMetadata.mockResolvedValue([]);
+
+      await withFakeTimers(async () => {
+        const { readinessPromise, getResult } = startTrackedGate({ timeoutMs: 5_000 });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(getResult()).toEqual({ outcome: 'ready' });
+        await readinessPromise;
+      });
+
+      expect(mockGetMetadata).toHaveBeenCalledTimes(1);
+      // The snapshot must be taken BEFORE the probe is issued: a factory registering after the
+      // probe went out may not have been included in that probe's answer.
+      expect(mockGetAllNetworkObjectDetails.mock.invocationCallOrder[0]).toBeLessThan(
+        mockGetMetadata.mock.invocationCallOrder[0],
+      );
+      expect(mockLoggerDebug).toHaveBeenCalledWith(
+        expect.stringContaining('no scripture projects'),
+      );
+      expect(mockLoggerDebug).not.toHaveBeenCalledWith(
+        expect.stringContaining('reports no projects yet'),
+      );
+    });
+
+    it.each<[string, () => Promise<Record<string, NetworkObjectDetails>>]>([
+      ['nothing is registered', async () => snapshotOf()],
+      ['only the Paratext factory is registered', async () => snapshotOf(PARATEXT_FACTORY_DETAILS)],
+      [
+        'only the Scripture Extender factory is registered',
+        async () => snapshotOf(FACTORY_DETAILS),
+      ],
+      [
+        'the scripture interface is on a network object that is not a PDP factory',
+        async () =>
+          snapshotOf(PARATEXT_FACTORY_DETAILS, { ...FACTORY_DETAILS, objectType: 'networkObject' }),
+      ],
+      [
+        'a PDP factory other than the Paratext one is registered alongside the Scripture Extender',
+        async () =>
+          snapshotOf(
+            { ...PARATEXT_FACTORY_DETAILS, id: 'platform.ParatextResources-pdpf' },
+            FACTORY_DETAILS,
+          ),
+      ],
+      [
+        // A failed listing proves nothing about which factories are up.
+        'the network objects cannot be listed',
+        async () => {
+          throw new Error('status service unavailable');
+        },
+      ],
+    ])(
+      'keeps polling until the budget runs out when %s',
+      async (_description, listNetworkObjects) => {
+        mockGetAllNetworkObjectDetails.mockImplementation(listNetworkObjects);
+        mockGetMetadata.mockResolvedValue([]);
+
+        await withFakeTimers(async () => {
+          const { readinessPromise, getResult } = startTrackedGate({ timeoutMs: 5_000 });
+          await vi.advanceTimersByTimeAsync(0);
+          expect(getResult()).toBeUndefined();
+          await vi.advanceTimersByTimeAsync(5_000);
+          await expect(readinessPromise).resolves.toEqual({
+            outcome: 'timed-out',
+            detail: expect.any(String),
+          });
+        });
+
+        // More than one probe proves the gate kept polling rather than settling on the first answer.
+        expect(mockGetMetadata.mock.calls.length).toBeGreaterThan(1);
+      },
+    );
+
+    it('logs a failed network object listing at debug, sampled like probe failures', async () => {
+      mockGetAllNetworkObjectDetails.mockRejectedValue(new Error('status service unavailable'));
+      mockGetMetadata.mockResolvedValue([]);
+
+      await withFakeTimers(async () => {
+        const readinessPromise = waitForScriptureWorkspaceReady({ timeoutMs: 12_000 });
+        await vi.advanceTimersByTimeAsync(12_000);
+        await readinessPromise;
+      });
+
+      // Attempts 1–10 run in the first 9s, so attempt 10 is reached; only 1 and 10 are logged.
+      const listingFailureLogs = mockLoggerDebug.mock.calls.filter(([message]) =>
+        String(message).includes('could not list network objects'),
+      );
+      expect(listingFailureLogs.map(([message]) => message)).toEqual([
+        expect.stringContaining('attempt 1,'),
+        expect.stringContaining('attempt 10,'),
+      ]);
+      expect(listingFailureLogs[0][0]).toContain('status service unavailable');
+    });
+
+    it('still resolves "ready" on a non-empty answer when the snapshot throws', async () => {
+      // The snapshot only decides what an EMPTY answer means; it must never block a real answer.
+      mockGetAllNetworkObjectDetails.mockRejectedValue(new Error('status service unavailable'));
+
+      await expect(waitForScriptureWorkspaceReady({ timeoutMs: 5_000 })).resolves.toEqual({
+        outcome: 'ready',
+      });
+    });
+
+    it('does not trust factories that registered only after the probe was issued, but the next probe may', async () => {
+      // The first probe goes out with nothing registered; both factories register while it is in
+      // flight. Its empty answer may predate them, so it must not count — the second probe, whose
+      // snapshot does include them, is the one that may settle the gate.
+      mockGetAllNetworkObjectDetails.mockResolvedValue({});
+      mockGetMetadata.mockImplementation(async () => {
+        mockGetAllNetworkObjectDetails.mockResolvedValue(
+          snapshotOf(PARATEXT_FACTORY_DETAILS, FACTORY_DETAILS),
+        );
+        return [];
+      });
+
+      await withFakeTimers(async () => {
+        const { readinessPromise, getResult } = startTrackedGate({ timeoutMs: 5_000 });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(getResult()).toBeUndefined();
+        expect(mockGetMetadata).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(REQUEST_ATTEMPT_WAIT_TIME_MS);
+        await expect(readinessPromise).resolves.toEqual({ outcome: 'ready' });
+      });
+
+      expect(mockGetMetadata).toHaveBeenCalledTimes(2);
+    });
+
+    it('resolves "aborted" without issuing the probe when the app quits while the snapshot is in flight', async () => {
+      const abort = new AbortController();
+      const snapshot = deferred<Record<string, NetworkObjectDetails>>();
+      mockGetAllNetworkObjectDetails.mockReturnValue(snapshot.promise);
+
+      const readinessPromise = waitForScriptureWorkspaceReady({ abortSignal: abort.signal });
+      await vi.waitFor(() => expect(mockGetAllNetworkObjectDetails).toHaveBeenCalled());
+      abort.abort();
+
+      await expect(readinessPromise).resolves.toEqual({ outcome: 'aborted' });
+      expect(mockGetMetadata).not.toHaveBeenCalled();
+      snapshot.resolve(snapshotOf(PARATEXT_FACTORY_DETAILS, FACTORY_DETAILS));
+    });
+
+    it('resolves "aborted" without issuing the probe when a quit lands in the same tick as the snapshot resolving', async () => {
+      // The snapshot must win the internal race for this to exercise anything. Calling `abort()`
+      // straight after `resolve()` would not do it: the abort listener settles the race
+      // synchronously, before the snapshot's `then` callbacks run. Aborting from a `then` attached
+      // AFTER the gate's own (the gate attaches its handlers before the mock call returns to the
+      // test) lands the quit just after the snapshot has settled the race, but before the gate
+      // resumes — so only a re-check after the snapshot can catch it before the fan-out is paid for.
+      const abort = new AbortController();
+      const snapshot = deferred<Record<string, NetworkObjectDetails>>();
+      mockGetAllNetworkObjectDetails.mockReturnValue(snapshot.promise);
+
+      const readinessPromise = waitForScriptureWorkspaceReady({ abortSignal: abort.signal });
+      await vi.waitFor(() => expect(mockGetAllNetworkObjectDetails).toHaveBeenCalled());
+      snapshot.promise
+        .then(() => {
+          abort.abort();
+          return undefined;
+        })
+        .catch(() => undefined);
+      snapshot.resolve(snapshotOf(PARATEXT_FACTORY_DETAILS, FACTORY_DETAILS));
+
+      await expect(readinessPromise).resolves.toEqual({ outcome: 'aborted' });
+      expect(mockGetMetadata).not.toHaveBeenCalled();
+    });
+
+    it('abandons a snapshot that never settles once the deadline passes, yielding "timed-out"', async () => {
+      // The snapshot is bounded by the same budget as everything else in the gate.
+      const snapshot = deferred<Record<string, NetworkObjectDetails>>();
+      mockGetAllNetworkObjectDetails.mockReturnValue(snapshot.promise);
+      mockGetMetadata.mockResolvedValue([]);
+
+      await withFakeTimers(async () => {
+        const readinessPromise = waitForScriptureWorkspaceReady({ timeoutMs: 5_000 });
+        await vi.advanceTimersByTimeAsync(5_000);
+        await expect(readinessPromise).resolves.toEqual({
+          outcome: 'timed-out',
+          detail: expect.any(String),
+        });
+      });
+    });
   });
 });
