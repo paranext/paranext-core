@@ -760,6 +760,63 @@ describe('when expression validation', () => {
     ).toThrow(/Unknown template variable \{webviewid\}/);
   });
 
+  function makeContributionWithSurfaceItem(
+    surface: 'defaultWebViewTabMenu' | 'defaultWebViewContextMenu',
+    extraItemProps: Record<string, string>,
+  ) {
+    return {
+      mainMenu: { columns: {}, groups: {}, items: [] },
+      defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
+      defaultWebViewContextMenu: { groups: {}, items: [] },
+      webViewMenus: {},
+      [surface]: {
+        groups: { 'ext1.group': { order: 1 } },
+        items: [
+          {
+            label: '%item%',
+            localizeNotes: '',
+            group: 'ext1.group',
+            order: 1,
+            command: 'ext1.doThing',
+            ...extraItemProps,
+          },
+        ],
+      },
+    };
+  }
+
+  it('accepts a when expression on a tab menu item', () => {
+    const combiner = new MenuDocumentCombiner(baseDocument);
+    expect(() =>
+      combiner.addOrUpdateContribution(
+        'ext1',
+        makeContributionWithSurfaceItem('defaultWebViewTabMenu', {
+          when: 'ext1.webView.{webViewId}.flag',
+        }),
+      ),
+    ).not.toThrow();
+  });
+
+  it('rejects enabledWhen on a tab menu item', () => {
+    const combiner = new MenuDocumentCombiner(baseDocument);
+    expect(() =>
+      combiner.addOrUpdateContribution(
+        'ext1',
+        makeContributionWithSurfaceItem('defaultWebViewTabMenu', { enabledWhen: 'ext1.flag' }),
+      ),
+    ).toThrow(/'%item%' in defaultWebViewTabMenu uses enabledWhen/);
+  });
+
+  it('rejects checkedWhen on a context menu item', () => {
+    const combiner = new MenuDocumentCombiner(baseDocument);
+    expect(() =>
+      combiner.addOrUpdateContribution(
+        'ext1',
+        makeContributionWithSurfaceItem('defaultWebViewContextMenu', { checkedWhen: 'ext1.flag' }),
+      ),
+    ).toThrow(/'%item%' in defaultWebViewContextMenu uses checkedWhen/);
+  });
+
   it('rejects an invalid expression in the base document (validateOutput path)', () => {
     const badBaseDocument = {
       ...baseDocument,
