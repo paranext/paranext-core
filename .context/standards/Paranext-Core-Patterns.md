@@ -1618,15 +1618,20 @@ hold for every producer:
   or number. Prefix it with the producing component (`platform.` is reserved for the platform).
 - Publish a plain fact, scoped by key construction (`<ext>.project.<projectId>.isEditable`).
 - One producer process per key. A key first written by one process can only be updated by that
-  process; the store releases a process's keys when it disconnects, so a restarted producer
-  republishes under the same key.
+  process; the store releases a TypeScript process's keys when it disconnects, so a restarted
+  producer republishes under the same key (the .NET process has no in-app restart and is not
+  tracked).
 - Publishing must never break the producer: a failed `Set` is logged and the work continues.
 - Publish when the fact becomes known and again whenever it changes. Consumers treat an unpublished
   key as false.
 
-**From C#.** Take the `ContextKeys` facade (`c-sharp/Services/ContextKeys.cs`, over `ISharedStore`)
-through the constructor, build the key string, and call `Set` on load and on every change of the
-fact. Catch and log any exception from `Set` instead of letting it reach the data provider. The
+**From C#.** Build the key string and publish through `ContextKeysService.Set`
+(`c-sharp/Services/ContextKeysService.cs`, a static wrapper over the process-wide shared store) on
+load and on every change of the fact. For unit tests, accept an optional `ContextKeys? contextKeys
+= null` constructor parameter that falls back to `ContextKeysService`, as
+`InternetSettingsDataProvider` and `ParatextProjectDataProvider` do; do not add a required
+dependency, because nothing in production constructs one. Catch and log any exception from `Set`
+instead of letting it reach the data provider. The
 typed shared-store keys in `c-sharp/Services/SharedStoreKeys.cs` mirror the TypeScript typed keys
 in `shared-store.service.ts` (the file says to keep them in sync); a change to one needs the same
 change in the other.

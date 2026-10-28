@@ -5220,7 +5220,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
 - **Formerly:** ADR-0003
 - **Date:** 2026-06-18
-- **Status:** Superseded in part by adr-menus-gate-declaratively-with-context-keys (the menu-availability half); the DataProvider-vs-NetworkObject half stays accepted.
+- **Status:** Superseded in part by adr-menus-gate-declaratively-with-context-keys (the
+  menu-availability half); the DataProvider-vs-NetworkObject half stays accepted.
 - **Context:** Two placement questions recur when porting a PT9 tool that mutates project data.
   (a) PT9 menu items hide/disable themselves via predicate evaluation before render
   (permission checks, project-state guards). paranext-core's menu system has **no arbitrary
