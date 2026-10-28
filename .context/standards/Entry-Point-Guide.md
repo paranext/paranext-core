@@ -137,7 +137,8 @@ that no producer has published is unknown and counts as false, so a gate on a ne
 (`!…isResource`) is enabled until the producer publishes. Expressions are validated when the
 contribution loads: a malformed expression or a template variable the surface does not provide
 rejects the extension's whole `menus.json` contribution (extension-host log: 'Could not add menu
-contribution'). At runtime an expression that still fails to evaluate fails safe (`when` hides,
+contribution'). So is `enabledWhen` or `checkedWhen` on an item of a tab menu or overlay context
+menu, which only honor `when`. At runtime an expression that still fails to evaluate fails safe (`when` hides,
 `enabledWhen` disables, `checkedWhen` unchecks).
 
 **Template variables per surface.**
@@ -147,8 +148,8 @@ contribution'). At runtime an expression that still fails to evaluate fails safe
 | Main menu (toolbar, macOS menubar) | none | `when`, `enabledWhen`, `checkedWhen` |
 | Web view top menu | `{webViewId}`, `{webViewType}`, `{projectId}` | `when`, `enabledWhen`, `checkedWhen`, re-evaluated on every key change |
 | Web view that renders its own menu | `{webViewId}`, `{webViewType}`, `{projectId}` (contribution validation rejects the whole contribution if any other is used); the web view evaluates through `useEvaluatedMenu` from `@papi/frontend/react`, supplying their values as a memoized object | same |
-| Web view tab menu | `{webViewId}`, `{webViewType}` | `when` only, evaluated once when the menu is read |
-| Web view overlay context menu | `{webViewId}`, `{webViewType}`, `{projectId}` | `when` only |
+| Web view tab menu | `{webViewId}`, `{webViewType}` | `when` only, evaluated once when the menu is read; `enabledWhen` and `checkedWhen` are rejected at load |
+| Web view overlay context menu | `{webViewId}`, `{webViewType}`, `{projectId}` | `when` only; `enabledWhen` and `checkedWhen` are rejected at load |
 
 **Key vocabulary.** Prefix every key with its owner. The platform uses `platform.project.{projectId}.*`
 and `platform.*`; an extension uses `<extension>.project.{projectId}.*` for facts about a project

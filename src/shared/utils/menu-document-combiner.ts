@@ -230,11 +230,24 @@ function checkWhenExpressionsOnItems(
   menuItems: DeepPartial<(MenuItemContainingCommand | MenuItemContainingSubmenu)[]> | undefined,
   allowedTemplateVars: string[],
   menuDescription: string,
+  /**
+   * True for surfaces that only evaluate `when` (tab menus and context menus): they have no way to
+   * show a disabled or checked item, so `enabledWhen` and `checkedWhen` are rejected there
+   */
+  whenOnly = false,
 ): void {
   if (!menuItems) return;
   menuItems.forEach((menuItem) => {
     if (!menuItem) return;
     WHEN_EXPRESSION_PROPERTIES.forEach((expressionProperty) => {
+      if (whenOnly && expressionProperty !== 'when') {
+        // checkedWhen only exists on command items; reading it off the union is safe
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        if ((menuItem as Partial<MenuItemContainingCommand>)[expressionProperty] !== undefined)
+          throw new Error(
+            `Menu item '${menuItem.label}' in ${menuDescription} uses ${expressionProperty}, but this menu only supports 'when'. Remove ${expressionProperty} or move the item to a menu that supports it (mainMenu or a top menu)`,
+          );
+      }
       // checkedWhen only exists on command items; reading it off the union is safe
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const expression = (menuItem as Partial<MenuItemContainingCommand>)[expressionProperty];
@@ -387,11 +400,13 @@ export class MenuDocumentCombiner extends DocumentCombiner {
       newMenus.defaultWebViewTabMenu?.items,
       TAB_MENU_TEMPLATE_VARS,
       'defaultWebViewTabMenu',
+      true,
     );
     checkWhenExpressionsOnItems(
       newMenus.defaultWebViewContextMenu?.items,
       WEB_VIEW_MENU_TEMPLATE_VARS,
       'defaultWebViewContextMenu',
+      true,
     );
     const newWebViewMenus = newMenus?.webViewMenus;
     if (!newWebViewMenus) return;
@@ -427,11 +442,13 @@ export class MenuDocumentCombiner extends DocumentCombiner {
         newWebView?.tabMenu?.items,
         TAB_MENU_TEMPLATE_VARS,
         `webViewMenus.${webViewName}.tabMenu`,
+        true,
       );
       checkWhenExpressionsOnItems(
         newWebView?.contextMenu?.items,
         WEB_VIEW_MENU_TEMPLATE_VARS,
         `webViewMenus.${webViewName}.contextMenu`,
+        true,
       );
     });
 
@@ -463,11 +480,13 @@ export class MenuDocumentCombiner extends DocumentCombiner {
       allMenus.defaultWebViewTabMenu?.items,
       TAB_MENU_TEMPLATE_VARS,
       'defaultWebViewTabMenu',
+      true,
     );
     checkWhenExpressionsOnItems(
       allMenus.defaultWebViewContextMenu.items,
       WEB_VIEW_MENU_TEMPLATE_VARS,
       'defaultWebViewContextMenu',
+      true,
     );
     Object.getOwnPropertyNames(allMenus.webViewMenus).forEach((webViewName: string) => {
       // TS doesn't allow `webViewName` above to be a ReferencedItem even though the type says it is
@@ -489,11 +508,13 @@ export class MenuDocumentCombiner extends DocumentCombiner {
         webViewMenu.tabMenu?.items,
         TAB_MENU_TEMPLATE_VARS,
         `webViewMenus.${webViewName}.tabMenu`,
+        true,
       );
       checkWhenExpressionsOnItems(
         webViewMenu.contextMenu?.items,
         WEB_VIEW_MENU_TEMPLATE_VARS,
         `webViewMenus.${webViewName}.contextMenu`,
+        true,
       );
     });
   }
