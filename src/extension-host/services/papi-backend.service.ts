@@ -35,6 +35,8 @@ import { IMenuDataService } from '@shared/services/menu-data.service-model';
 import { menuDataService } from '@shared/services/menu-data.service';
 import { IDatabaseService } from '@shared/services/database.service-model';
 import { databaseService } from '@shared/services/database.service';
+import { IContextKeysService } from '@shared/services/context-keys.service-model';
+import { papiContextKeysService } from '@shared/services/context-keys.service';
 import { IScrollGroupService } from '@shared/services/scroll-group.service-model';
 import { scrollGroupService } from '@shared/services/scroll-group.service';
 import { ILocalizationService } from '@shared/services/localization.service-model';
@@ -89,6 +91,8 @@ const papi = {
   app: appService,
   /** JSDOC DESTINATION commandService */
   commands: commandService,
+  /** JSDOC DESTINATION contextKeysService */
+  contextKeys: papiContextKeysService as IContextKeysService,
   /** JSDOC DESTINATION dataProtectionService */
   dataProtection: dataProtectionService,
   /** JSDOC DESTINATION papiWebViewService */
@@ -168,6 +172,9 @@ Object.freeze(papi.app);
 /** JSDOC DESTINATION commandService */
 export const { commands } = papi;
 Object.freeze(papi.commands);
+/** JSDOC DESTINATION contextKeysService */
+export const { contextKeys } = papi;
+Object.freeze(papi.contextKeys);
 /** JSDOC DESTINATION dataProtectionService */
 export const { dataProtection } = papi;
 Object.freeze(papi.dataProtection);

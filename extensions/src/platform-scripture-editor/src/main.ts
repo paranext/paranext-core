@@ -173,12 +173,13 @@ async function openPlatformResourceViewer(
 /**
  * Paratext 9's `UpdateInsertMenuItems` (`TextForm.cs`) shows footnote, cross-reference, and end
  * note only when the project is not a resource project and not Study Bible additions, and enables
- * them only with book text and a view that allows note insertion. Platform.Bible keeps all three
- * Insert items always available instead and gates at submission — see
- * `adr-menus-always-available-gate-at-submission` in Architecture-Decisions.md; the submission-time
- * check itself is the web view's read-only/sync-blocked guard in `insertNoteAtCurrentSelection`,
- * the one callback all three insert kinds share. The comment editor opener reaches the web view the
- * same way but is handled there by its own `insertCommentAtCurrentSelection`.
+ * them only with book text and a view that allows note insertion. Platform.Bible gates the Insert
+ * items declaratively (`enabledWhen` in menus.json) and re-checks at submission — see
+ * `adr-menus-gate-declaratively-with-context-keys` in Architecture-Decisions.md; the
+ * submission-time check is the web view's read-only/sync-blocked guard in
+ * `insertNoteAtCurrentSelection`, the one callback all three insert kinds share. The comment editor
+ * opener reaches the web view the same way but is handled there by its own
+ * `insertCommentAtCurrentSelection`.
  *
  * @param method The controller method to invoke: one of the three textual-note inserters or the
  *   comment editor opener — all take no arguments and resolve once requested.

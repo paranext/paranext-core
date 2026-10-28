@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LocalizeKey, MultiColumnMenu } from 'platform-bible-utils';
+import { Menu } from 'electron';
+import { localizationService } from '@shared/services/localization.service';
+import { menuDataService } from '@shared/services/menu-data.service';
 
 vi.mock('@shared/services/localization.service', () => ({
   localizationService: {
@@ -10,7 +13,12 @@ vi.mock('@shared/services/localization.service', () => ({
     ),
   },
 }));
-vi.mock('@shared/services/menu-data.service', () => ({ menuDataService: {} }));
+vi.mock('@shared/services/menu-data.service', () => ({
+  menuDataService: { subscribeUnlocalizedMainMenu: vi.fn() },
+}));
+vi.mock('@shared/services/context-keys.service', () => ({
+  contextKeysService: { get: vi.fn(), onDidChange: vi.fn(() => () => {}) },
+}));
 vi.mock('@shared/services/logger.service', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -24,7 +32,10 @@ vi.mock('@shared/data/platform-bible-menu.commands', () => ({ handleMenuCommand:
 
 // The module under test, imported after the mocks above are established.
 // eslint-disable-next-line import/first
-import { translatePlatformMenuItemsAndCombine } from './platform-macos-menubar.util';
+import {
+  subscribeCurrentMacosMenubar,
+  translatePlatformMenuItemsAndCombine,
+} from './platform-macos-menubar.util';
 // The module-level template the combine reads on every call; these tests assert it stays pristine.
 // eslint-disable-next-line import/first
 import { macosMenubarObject } from './platform-macos-menubar.data';
@@ -142,11 +153,86 @@ describe('translatePlatformMenuItemsAndCombine', () => {
     expect(appMenuLength()).toBe(before);
   });
 
+  it('marks a disabled submenu parent item as not enabled', async () => {
+    const combined = await translatePlatformMenuItemsAndCombine({
+      columns: { 'test.column': { label: '%mainMenu_custom%', order: 1 }, isExtensible: true },
+      groups: {
+        'test.group': { column: 'test.column', order: 1 },
+        'test.subGroup': { menuItem: 'test.parent', order: 1 },
+      },
+      items: [
+        {
+          label: '%test_parent%',
+          group: 'test.group',
+          order: 1,
+          id: 'test.parent',
+          disabled: true,
+          localizeNotes: 'Fixture submenu parent contributed by a test.',
+        },
+        {
+          label: '%test_child%',
+          group: 'test.subGroup',
+          order: 1,
+          command: 'test.command',
+          localizeNotes: 'Fixture submenu child contributed by a test.',
+        },
+      ],
+    });
+    const column = combined.find((menu) => menu.label === '%mainMenu_custom%');
+    const submenu: unknown = column?.submenu;
+    const parent = Array.isArray(submenu)
+      ? submenu.filter(isRecord).find((item) => item.label === '%test_parent%')
+      : undefined;
+    expect(parent?.enabled).toBe(false);
+    // Positive control: the parent really carries its child submenu
+    expect(Array.isArray(parent?.submenu)).toBe(true);
+  });
+
   it("keeps each zoom item's click handler callable", async () => {
     const combined = await translatePlatformMenuItemsAndCombine(
       menuWithContributedColumn('%mainMenu_file%'),
     );
     const zoomIn = viewSubmenuOf(combined).find((item) => item.id === 'contentZoomIn');
     expect(typeof zoomIn?.click).toBe('function');
+  });
+});
+
+describe('subscribeCurrentMacosMenubar', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('skips applying a rebuild that a newer rebuild overtook', async () => {
+    let onMenuChange: ((menu: MultiColumnMenu) => Promise<void>) | undefined;
+    vi.mocked(menuDataService.subscribeUnlocalizedMainMenu).mockImplementation(
+      async (_selector, callback) => {
+        // The test only ever delivers a MultiColumnMenu
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        onMenuChange = callback as (menu: MultiColumnMenu) => Promise<void>;
+        return async () => true;
+      },
+    );
+    await subscribeCurrentMacosMenubar();
+
+    // The first rebuild waits on localization; the second finishes while it waits
+    let releaseFirstLocalization: () => void = () => {};
+    vi.mocked(localizationService.getLocalizedStrings).mockImplementationOnce(
+      ({ localizeKeys }) =>
+        new Promise((resolve) => {
+          releaseFirstLocalization = () =>
+            resolve(Object.fromEntries(localizeKeys.map((key) => [key, key])));
+        }),
+    );
+    const firstRebuild = onMenuChange?.(menuWithContributedColumn('%mainMenu_first%'));
+    await onMenuChange?.(menuWithContributedColumn('%mainMenu_second%'));
+    expect(Menu.setApplicationMenu).toHaveBeenCalledTimes(1);
+
+    releaseFirstLocalization();
+    await firstRebuild;
+    expect(Menu.setApplicationMenu).toHaveBeenCalledTimes(1);
+    // The one applied menu is the newer rebuild's, not the overtaken first one
+    expect(Menu.buildFromTemplate).toHaveBeenCalledTimes(1);
+    const appliedTemplate = vi.mocked(Menu.buildFromTemplate).mock.calls[0][0];
+    const appliedLabels = appliedTemplate.map((menu) => menu.label);
+    expect(appliedLabels).toContain('%mainMenu_second%');
+    expect(appliedLabels).not.toContain('%mainMenu_first%');
   });
 });

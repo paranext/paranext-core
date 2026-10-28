@@ -1,8 +1,10 @@
 import {
   AsyncVariable,
+  ContextKeyValue,
   deepEqual,
   deserialize,
   getErrorMessage,
+  PlatformEvent,
   PlatformEventEmitter,
   serialize,
 } from 'platform-bible-utils';
@@ -16,6 +18,15 @@ const SHARED_STORE_PREFIX = 'shared-store';
  * the main process during its own initialization.
  */
 const STORE_GET_REQUEST = `${SHARED_STORE_PREFIX}:get`;
+/**
+ * Prefix of the request method every non-main process registers, suffixed with its shared store
+ * process ID. The method exists exactly as long as the process is connected, so main learns which
+ * process died from the disconnect event's removed method names and can release that process's
+ * keys.
+ *
+ * @experimental This constant is unstable and may change or disappear without notice
+ */
+export const SHARED_STORE_OWNER_METHOD_PREFIX = `${SHARED_STORE_PREFIX}:owner:`;
 /**
  * The `shared-store:change` event name. This is a multi-source network event the platform uses
  * internally; it is intentionally NOT declared in the public `MultiSourceNetworkEvents`/
@@ -64,6 +75,9 @@ type StoreEntry = {
   // is treated as absent: reads return no value. A removed key is distinct from a key whose value
   // is `undefined`.
   deleted?: boolean;
+  // True for a removed key released because the process that wrote it disconnected. Unlike an
+  // ordinary removal, a released key is claimable by any process.
+  released?: boolean;
 };
 
 // Store change event emitted when a value is set or removed
@@ -73,6 +87,31 @@ export type StoreChangeEvent = StoreEntry & {
 
 // Copy of the store within this process
 const localStore: Record<string, StoreEntry> = {};
+
+/**
+ * Event describing a change to a value in the shared store
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type SharedStoreChangeEvent = {
+  key: string;
+  value: unknown;
+};
+
+// Separate from the network emitter: locally-originated changes never re-enter through the
+// network path, so this in-process emitter is the only way for code in this process to observe
+// all changes (local and applied-remote) in one place.
+const onDidChangeStoreEmitter = new PlatformEventEmitter<SharedStoreChangeEvent>();
+
+/**
+ * Event that fires whenever any value in the shared store changes, whether the change was made in
+ * this process or applied from another process. Platform-internal. Not intended for use by
+ * extensions — extensions should use settings and other data providers for sharing data.
+ *
+ * @experimental This constant is unstable and may change or disappear without notice
+ */
+export const onDidChangeSharedStore: PlatformEvent<SharedStoreChangeEvent> =
+  onDidChangeStoreEmitter.event;
 
 /** Increments the local counter and returns a new LamportClock object */
 function getNextClock(): LamportClock {
@@ -124,6 +163,38 @@ function resetInitializationStartedSignal(): void {
   });
 }
 resetInitializationStartedSignal();
+
+/**
+ * Releases every key (live or removed) last written by a process whose owner marker method was
+ * removed, turning it into a released tombstone, so a restarted producer can claim the keys again.
+ * Runs in the main process only.
+ */
+function releaseKeysOfDisconnectedProcesses(removedMethodNames: string[]): void {
+  if (!storeChangeEmitter) return;
+  const deadProcessIds = new Set(
+    removedMethodNames
+      .filter((name) => name.startsWith(SHARED_STORE_OWNER_METHOD_PREFIX))
+      .map((name) => name.slice(SHARED_STORE_OWNER_METHOD_PREFIX.length)),
+  );
+  if (deadProcessIds.size === 0) return;
+  Object.entries(localStore).forEach(([key, entry]) => {
+    if (entry.released || !deadProcessIds.has(entry.clock.processId)) return;
+    const clock = getNextClock();
+    localStore[key] = { value: undefined, clock, deleted: true, released: true };
+    try {
+      storeChangeEmitter?.emit({ key, value: undefined, clock, deleted: true, released: true });
+    } catch (error) {
+      logger.error(`Error releasing shared store key ${key}: ${getErrorMessage(error)}`);
+    }
+    // No caller is left to see a subscriber's throw, and the rest of the dead process's keys must
+    // still be released, so isolate each subscriber failure.
+    onDidChangeStoreEmitter.emitIsolated({ key, value: undefined }, (error) =>
+      logger.error(
+        `Subscriber threw while releasing shared store key ${key}: ${getErrorMessage(error)}`,
+      ),
+    );
+  });
+}
 
 /**
  * Initialize the shared store service, setting up request handlers and event listeners. Idempotent:
@@ -181,6 +252,32 @@ export function initialize(networkService: NetworkService): Promise<void> {
   initializationPromise = (async () => {
     try {
       if (globalThis.processType !== ProcessType.Main) {
+        // Marks this process as a shared store writer: main watches for the marker's removal to
+        // release this process's keys. The .NET process registers no marker because its shared store
+        // never checks ownership and it has no in-app restart.
+        try {
+          await networkService.registerRequestHandler(
+            `${SHARED_STORE_OWNER_METHOD_PREFIX}${processId}`,
+            () => processId,
+            {
+              method: {
+                'x-experimental': true,
+                summary:
+                  'Marks this process as a shared store writer so main can release its keys when it disconnects',
+                params: [],
+                result: {
+                  name: 'return value',
+                  summary: 'The shared store process ID of this process',
+                  schema: { type: 'string' },
+                },
+              },
+            },
+          );
+        } catch (error) {
+          logger.error(
+            `Could not register the shared store owner marker; this process's keys will not be released if it disconnects: ${getErrorMessage(error)}`,
+          );
+        }
         // Outside the main process, sync the local store to the main store's data initially.
         try {
           const initial = await networkService.request<[], Record<string, StoreEntry>>(
@@ -226,6 +323,11 @@ export function initialize(networkService: NetworkService): Promise<void> {
               },
             },
           },
+        );
+        // Only the process that owns the connections can see one being lost. Subscribed here rather
+        // than at module scope because this module only references the network service by type.
+        networkService.onDidDisconnectClient(({ removedMethodNames }) =>
+          releaseKeysOfDisconnectedProcesses(removedMethodNames),
         );
       }
 
@@ -364,15 +466,16 @@ function get<K extends SharedStoreKeys>(key: K): SharedStoreValues[K] | undefine
  */
 function set<K extends SharedStoreKeys>(key: K, value?: SharedStoreValues[K]): void {
   if (!processId || !storeChangeEmitter) throw new Error('Shared store service is not initialized');
+  let clonedValue: SharedStoreValues[K] | undefined;
   try {
     const currentEntry = localStore[key];
-    if (currentEntry && currentEntry.clock.processId !== processId)
+    if (currentEntry && !currentEntry.released && currentEntry.clock.processId !== processId)
       throw new Error('Cannot set value from a different process than the one that created it');
     // Skip a redundant set only when there is already a live (non-removed) value equal to the new
     // one. A removed key must be re-set even if its stored value also happens to equal `value`.
     if (currentEntry && !currentEntry.deleted && deepEqual(currentEntry.value, value)) return;
     const clock = getNextClock();
-    const clonedValue = deserialize(serialize(value));
+    clonedValue = deserialize(serialize(value));
     localStore[key] = {
       value: clonedValue,
       clock,
@@ -384,14 +487,19 @@ function set<K extends SharedStoreKeys>(key: K, value?: SharedStoreValues[K]): v
     });
   } catch (error) {
     logger.error(`Error setting value for key ${key} in shared store:`, getErrorMessage(error));
+    return;
   }
+  // Outside the try so a throwing subscriber isn't mislabeled as a store write failure
+  onDidChangeStoreEmitter.emit({ key, value: clonedValue });
 }
 
 /** Update the local store based on an update from another process */
 function setFromRemote(key: string, entry: StoreEntry): void {
   localCounter = Math.max(localCounter, entry.clock.counter);
-  if (!localStore[key] || compareClocks(entry.clock, localStore[key].clock) > 0)
+  if (!localStore[key] || compareClocks(entry.clock, localStore[key].clock) > 0) {
     localStore[key] = entry;
+    onDidChangeStoreEmitter.emit({ key, value: entry.value });
+  }
 }
 
 /** Whether there is a live (set, not removed) value at the key in the local store. */
@@ -417,7 +525,7 @@ function remove<K extends SharedStoreKeys>(key: K): void {
   if (!processId || !storeChangeEmitter) throw new Error('Shared store service is not initialized');
   try {
     const currentEntry = localStore[key];
-    if (currentEntry && currentEntry.clock.processId !== processId)
+    if (currentEntry && !currentEntry.released && currentEntry.clock.processId !== processId)
       throw new Error('Cannot remove value from a different process than the one that created it');
     // Nothing to remove if the key is already absent or already removed.
     if (!currentEntry || currentEntry.deleted) return;
@@ -426,7 +534,10 @@ function remove<K extends SharedStoreKeys>(key: K): void {
     storeChangeEmitter.emit({ key, value: undefined, clock, deleted: true });
   } catch (error) {
     logger.error(`Error removing value for key ${key} from shared store:`, getErrorMessage(error));
+    return;
   }
+  // Outside the try so a throwing subscriber isn't mislabeled as a store write failure
+  onDidChangeStoreEmitter.emit({ key, value: undefined });
 }
 
 /**
@@ -526,6 +637,14 @@ function isInitialized(): boolean {
  */
 export type RequestTimeoutSharedStoreKey = `platform.customNetworkTimeoutMs.${string}`;
 
+/**
+ * Keys for context key values (see `context-keys.service.ts`). Keys are dynamically constructed by
+ * adding this prefix to the context key name.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type ContextKeySharedStoreKey = `contextKeys.${string}`;
+
 // Keep in sync with SharedStoreTypedKeys.cs
 /**
  * Defines the keys and types of values held in key-value pairs within the shared store service.
@@ -534,6 +653,8 @@ export type RequestTimeoutSharedStoreKey = `platform.customNetworkTimeoutMs.${st
  */
 export interface SharedStoreValues {
   [timeoutKey: RequestTimeoutSharedStoreKey]: number | undefined;
+  /** @experimental This field is unstable and may change or disappear without notice */
+  [contextKey: ContextKeySharedStoreKey]: ContextKeyValue | undefined;
 }
 
 export type SharedStoreKeys = keyof SharedStoreValues;

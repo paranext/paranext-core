@@ -25,18 +25,23 @@ import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
 import { sendCommand } from '@shared/services/command.service';
 import {
+  evaluateMenu,
   formatReplacementString,
   isLocalizeKey,
+  getErrorMessage,
   isPlatformError,
   LocalizeKey,
   newGuid,
   newPlatformError,
+  createMenuTemplateVars,
   ReferencedItem,
   ABORTED,
   FAILED_PRECONDITION,
   RESOURCE_EXHAUSTED,
 } from 'platform-bible-utils';
 import type { LanguageStrings, PlatformError } from 'platform-bible-utils';
+import { contextKeysService } from '@shared/services/context-keys.service';
+import { webViewService } from '@shared/services/web-view.service';
 import type { ReactElement } from 'react';
 import {
   CommandPaletteItem,
@@ -460,7 +465,26 @@ async function showContextMenu(
     return undefined;
   }
 
-  const items = convertContributionToContextMenuItems(webViewMenu.contextMenu);
+  // Through the shared proxy rather than the renderer's own web view service shard: the shard's
+  // import graph reaches back to this module through the frontend PAPI, which would be a cycle
+  const webViewDefinition = await webViewService.getOpenWebViewDefinition(webViewId);
+  // Overlay context menus apply `when` only (hidden items removed); `enabledWhen`/`checkedWhen` are
+  // rejected for them at load, and the OverlayContextMenuItem model does not render disabled/checked
+  // state.
+  const evaluatedContextMenu = evaluateMenu(
+    webViewMenu.contextMenu,
+    contextKeysService.get,
+    createMenuTemplateVars({
+      webViewId,
+      webViewType,
+      projectId: webViewDefinition?.projectId,
+    }),
+    (expression, error) =>
+      logger.warn(
+        `Error evaluating context menu when-expression '${expression}': ${getErrorMessage(error)}`,
+      ),
+  );
+  const items = convertContributionToContextMenuItems(evaluatedContextMenu);
 
   if (items.length === 0) {
     return undefined;

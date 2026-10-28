@@ -38,6 +38,7 @@ import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
   useData,
+  useEvaluatedMenu,
   useLocalizedStrings,
   useProjectData,
   useProjectDataProvider,
@@ -106,6 +107,7 @@ import {
   isLocalizeKey,
   isPlatformError,
   LocalizeKey,
+  createMenuTemplateVars,
   serialize,
 } from 'platform-bible-utils';
 import {
@@ -245,6 +247,7 @@ import {
   shouldProtectAddChapterNumber,
   shouldPublishPaneDocument,
   showCommentThreadForInterfaceMode,
+  showsReadOnlyPreview,
   UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY,
   usesPaneNoteModel,
 } from './platform-scripture-editor.utils';
@@ -258,6 +261,7 @@ import {
   CONTEXT_MENU_ACTION_TO_NOTE_KIND,
   createInsertContextMenuItems,
   deriveReadOnlyFlags,
+  getEditorWebViewContextKeys,
   flushRowEditsThenSave,
   forgetCaretSnapshotIfParaMarkerSelected,
   isEditorContextMenuOpen,
@@ -1151,6 +1155,36 @@ function PlatformScriptureEditor({
   useEffect(() => {
     footnotesPaneVisibleRef.current = footnotesPaneVisible;
   }, [footnotesPaneVisible]);
+
+  const isPreview = useMemo(
+    () => showsReadOnlyPreview(viewType, isPowerMode),
+    [viewType, isPowerMode],
+  );
+
+  // Publish the per-tab facts the menu's `enabledWhen` / `checkedWhen` expressions read, and remove
+  // them when this web view closes. Hidden case: a hidden tab keeps publishing and its menu keeps
+  // re-evaluating on every key change (the hook subscribes regardless of visibility), so it is
+  // current whenever the tab is shown; nothing waits for activation.
+  useEffect(() => {
+    const keys = getEditorWebViewContextKeys(webViewId, {
+      isPreview,
+      isSyncBlocked,
+      footnotesPaneVisible,
+    });
+    Object.entries(keys).forEach(([key, value]) => papi.contextKeys.set(key, value));
+  }, [webViewId, isPreview, isSyncBlocked, footnotesPaneVisible]);
+
+  useEffect(() => {
+    return () => {
+      Object.keys(
+        getEditorWebViewContextKeys(webViewId, {
+          isPreview: false,
+          isSyncBlocked: false,
+          footnotesPaneVisible: false,
+        }),
+      ).forEach((key) => papi.contextKeys.remove(key));
+    };
+  }, [webViewId]);
 
   const isPowerModeRef = useRef(isPowerMode);
 
@@ -5118,7 +5152,7 @@ function PlatformScriptureEditor({
     DEFAULT_WEBVIEW_MENU,
   );
 
-  const webViewMenu = useMemo(() => {
+  const webViewMenuRaw = useMemo(() => {
     if (isPlatformError(webViewMenuPossiblyError)) {
       logger.warn(
         `Failed to load web view menu for ${SCRIPTURE_EDITOR_WEBVIEW_TYPE}`,
@@ -5129,11 +5163,25 @@ function PlatformScriptureEditor({
     return webViewMenuPossiblyError;
   }, [webViewMenuPossiblyError]);
 
+  // Context keys embed the project id in its canonical upper-case form, so the id a tab was opened
+  // with must be normalized before it is substituted into a menu condition.
+  const menuTemplateVars = useMemo(
+    () =>
+      createMenuTemplateVars({
+        webViewId,
+        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+        projectId,
+      }),
+    [webViewId, projectId],
+  );
+
+  const evaluatedTopMenu = useEvaluatedMenu(webViewMenuRaw.topMenu, menuTemplateVars);
+
   // Menu labels are localized once for every editor, so the project name stays as the
   // `{projectName}` placeholder (for example the Sync item's "Sync {projectName}") until here.
   const projectMenuData = useMemo(
-    () => substituteProjectNameInMenu(webViewMenu.topMenu, projectName),
-    [webViewMenu.topMenu, projectName],
+    () => substituteProjectNameInMenu(evaluatedTopMenu, projectName),
+    [evaluatedTopMenu, projectName],
   );
 
   const [booksPresentPossiblyError] = useProjectSetting(

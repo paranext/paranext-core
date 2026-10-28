@@ -245,6 +245,19 @@ export {
   recencyMapFromOrderedIds,
 } from './project-selector-custom-data';
 export type { ProjectSelectorCustomDataShape } from './project-selector-custom-data';
+export type { ContextKeyValue, ContextKeyLookup } from './context-keys/context-keys.model';
+export { isValidContextKey, isValidContextKeyValue } from './context-keys/context-keys.model';
+export type {
+  WhenExpressionAst,
+  WhenExpressionPropertySegment,
+} from './context-keys/when-expression';
+export {
+  evaluateWhenExpression,
+  getTemplateVarNames,
+  parseWhenExpression,
+} from './context-keys/when-expression';
+export type { EvaluatableMenu, WhenExpressionErrorHandler } from './context-keys/evaluate-menu';
+export { createMenuTemplateVars, evaluateMenu } from './context-keys/evaluate-menu';
 export type { DblResourceData, ResourceType } from './resources.model';
 export { doesCatalogRowCoverProject } from './resources.model';
 export type {

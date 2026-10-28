@@ -95,6 +95,7 @@ vi.mock('@papi/frontend/react', () => ({
     return dataHooks();
   },
   useData: () => dataHooks(),
+  useEvaluatedMenu: (menu: unknown) => menu,
   useProjectDataProvider: (providerName: string) => projectDataProviders.get(providerName),
   useProjectSetting: (_projectId: unknown, key: string, defaultValue: unknown) => [
     projectSettings.has(key) ? projectSettings.get(key) : defaultValue,

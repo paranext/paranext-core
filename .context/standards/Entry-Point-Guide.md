@@ -115,26 +115,61 @@ For each entry point, add to `extensions/src/{ext}/contributions/menus.json`:
   `adr-menu-per-mode-layout-via-mode-gated-columns` in
   [Architecture-Decisions.md](Architecture-Decisions.md).
 
-### Menu Availability: Menus Stay Always-Available
+### Menu Availability: Gate Declaratively With Context Keys
 
-paranext-core has **no arbitrary predicate/expression gating** of menu visibility — there is no
-`enabledWhen`/`visibleWhen` equivalent, and the contribution schema cannot evaluate conditions
-before a menu item renders. The one supported declarative axis is
-`MenuItemBase.hiddenInterfaceModes` (`lib/platform-bible-utils/src/extension-contributions/menus.model.ts`,
-enforced by `filterItemsForInterfaceMode` in `src/extension-host/services/menu-data.service-host.ts`, used in production
-both by the core menu document `src/extension-host/data/menu.data.json` and by several extensions'
-`contributions/menus.json` — `grep -rn hiddenInterfaceModes` for the current sites), which hides an
-item in named interface modes. Beyond that, don't try to add a "should this menu item show?" backend command or
-conditionally suppress the contribution.
+A menu item can state when it is shown, enabled or checked with three optional properties in
+`menus.json`, each a when-expression over context keys:
 
-Instead, leave menu items **always-available** and enforce permission/state at the point of action:
-the command handler (or its C# backend) checks whether the operation is allowed at submission time
-and surfaces failures via `PlatformError` codes (`NOT_FOUND`, `PERMISSION_DENIED`,
-`FAILED_PRECONDITION`, etc.) rather than by hiding the entry point. Document the PT9
-visibility/enable rules inline in the command/backend so the rationale isn't lost.
+- `when` shows the item only while the expression is true (otherwise it is removed).
+- `enabledWhen` greys the item out while the expression is false. Prefer this over `when`: a
+  disabled item tells the user the feature exists.
+- `checkedWhen` shows a check mark on a command item while the expression is true.
 
-See `adr-menus-always-available-gate-at-submission` in `Architecture-Decisions.md` for the
-rationale and history.
+**Hiding by interface mode.** `hiddenInterfaceModes` on an item still hides it in the named
+interface modes. `filterItemsForInterfaceMode` in
+`src/extension-host/services/menu-data.service-host.ts` applies it before any when-expression is
+evaluated, and it is the tool for mode-based hiding; when-expressions are for runtime facts.
+
+**Grammar.** Expressions combine context key references with `&&`, `||`, `!`, `==`, `!=` and
+parentheses; operands are single-quoted strings, numbers, `true`/`false` and keys. A key is at
+least two dot-separated segments, and a segment may be a `{templateVar}` filled in per menu. A key
+that no producer has published is unknown and counts as false, so a gate on a negated fact
+(`!…isResource`) is enabled until the producer publishes. Expressions are validated when the
+contribution loads: a malformed expression or a template variable the surface does not provide
+rejects the extension's whole `menus.json` contribution (extension-host log: 'Could not add menu
+contribution'). So is `enabledWhen` or `checkedWhen` on an item of a tab menu or overlay context
+menu, which only honor `when`. At runtime an expression that still fails to evaluate fails safe
+(`when` hides, `enabledWhen` disables, `checkedWhen` unchecks).
+
+**Template variables per surface.**
+
+| Surface | Variables | Honors |
+|---|---|---|
+| Main menu (toolbar, macOS menubar) | none | `when`, `enabledWhen`, `checkedWhen` |
+| Web view top menu | `{webViewId}`, `{webViewType}`, `{projectId}` | `when`, `enabledWhen`, `checkedWhen`, re-evaluated on every key change |
+| Web view that renders its own menu | `{webViewId}`, `{webViewType}`, `{projectId}` (contribution validation rejects the whole contribution if any other is used); the web view evaluates through `useEvaluatedMenu` from `@papi/frontend/react`, supplying their values as a memoized object | same |
+| Web view tab menu | `{webViewId}`, `{webViewType}` | `when` only, evaluated once when the menu is read; `enabledWhen` and `checkedWhen` are rejected at load |
+| Web view overlay context menu | `{webViewId}`, `{webViewType}`, `{projectId}` | `when` only; `enabledWhen` and `checkedWhen` are rejected at load |
+
+**Key vocabulary.** Prefix every key with its owner. The platform uses `platform.project.{projectId}.*`
+and `platform.*`; an extension uses `<extension>.project.{projectId}.*` for facts about a project
+and `<extension>.webView.{webViewId}.*` for facts about one tab. `{projectId}` is substituted in its
+normalized upper-case form (`normalizeProjectId` from platform-bible-utils), the form C# publishes
+under (`ProjectMetadata.Id` is upper case), so producers must build keys from that form. Keys are plain facts
+(`isEditable`, `isSyncing`), never answers to "should this item show"; the expression combines them.
+Each key has exactly **one producer process**: a TypeScript process refuses (logs, does not throw)
+a write to a key another process wrote first; the .NET store does not check, so a C# write to
+another process's key takes it over. A key released after its writer disconnected is claimable by
+any process. Either way two producers on one key race, so keep exactly one.
+
+**Handlers still check.** Keyboard shortcuts and direct PAPI calls bypass menus, and a key can lag
+the state it describes, so the command handler keeps its submission-time check and its
+`PlatformError` (`PERMISSION_DENIED`, `FAILED_PRECONDITION`, ...). The menu gate is a courtesy to
+the user, not the enforcement.
+
+See `adr-menus-gate-declaratively-with-context-keys` in
+[Architecture-Decisions.md](Architecture-Decisions.md) for the rationale, and the Context Keys
+section of [Paranext-Core-Patterns.md](Paranext-Core-Patterns.md) for how to produce keys.
 
 When a mode needs a different *section* structure, not just fewer items, give that mode its own
 columns and gate items into them — see `adr-menu-per-mode-layout-via-mode-gated-columns`.
