@@ -68,11 +68,11 @@ export const SYNC_ACTIVITY_SEED_RETRY_DELAY_MS = 3 * 1000;
 const MAX_SYNC_ACTIVITY_SEED_RETRIES = 10;
 
 /**
- * How often to re-read the sync activity while a sync is reported as running. Both hops that
- * forward `onSyncActivityChanged` are fire-and-forget, so a lost closing event would otherwise
- * leave the answer `unknown` until the next sync. The shared hook rechecks only once a valid
- * snapshot exists, so a seed that ran out of retries is recovered by the next event, not by this
- * interval. Same interval as core's `sync-activity-service.ts` watchdog.
+ * How often to re-read the sync activity while it is not known to be idle: a sync is running, or no
+ * read has succeeded yet. Both hops that forward `onSyncActivityChanged` are fire-and-forget, so a
+ * lost closing event would otherwise leave the answer `unknown` until the next sync, and an idle
+ * app sends no event to recover a seed that ran out of retries or got a malformed reply. Same
+ * interval as core's `sync-activity-service.ts` watchdog.
  */
 export const SYNC_ACTIVITY_RECHECK_INTERVAL_MS = 30 * 1000;
 
@@ -136,7 +136,8 @@ const readSyncActivity = () =>
     throw e;
   });
 
-const isSyncRunning = (snapshot: SyncActivityValue) => snapshot.isSyncing;
+// Also while unknown: an idle app sends no event to recover a seed that ran out of retries.
+const isNotKnownIdle = (snapshot: SyncActivityValue | undefined) => snapshot?.isSyncing !== false;
 
 /**
  * Reports whether this user has any project of their own, as a tri-state that keeps "could not
@@ -176,7 +177,7 @@ export function useProjectPresence({ enabled }: { enabled: boolean }): ProjectPr
     seedRetries: MAX_SYNC_ACTIVITY_SEED_RETRIES,
     seedRetryDelayMs: SYNC_ACTIVITY_SEED_RETRY_DELAY_MS,
     recheckIntervalMs: SYNC_ACTIVITY_RECHECK_INTERVAL_MS,
-    shouldRecheck: isSyncRunning,
+    shouldRecheck: isNotKnownIdle,
     enabled,
   });
   // `undefined` until the first valid snapshot arrives: not knowing is not the same as idle

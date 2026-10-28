@@ -45,7 +45,7 @@ const readSyncActivity = () =>
     throw e;
   });
 
-const shouldRecheck = (snapshot: SyncActivityValue) => snapshot.isSyncing;
+const shouldRecheck = (snapshot: SyncActivityValue | undefined) => snapshot?.isSyncing === true;
 
 /**
  * Follows the backend sync activity, which sees every sync path. Falls back to idle whenever the

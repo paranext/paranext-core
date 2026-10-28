@@ -160,7 +160,7 @@ describe('useEventSeededState', () => {
         event: undefined,
         isValid: isSnapshot,
         recheckIntervalMs: 1000,
-        shouldRecheck: (value) => value.busy === true,
+        shouldRecheck: (value) => value?.busy === true,
       }),
     );
 
@@ -171,6 +171,35 @@ describe('useEventSeededState', () => {
     await act(() => vi.advanceTimersByTimeAsync(1000));
     expect(read).toHaveBeenCalledTimes(2);
     expect(result.current.value).toEqual({ busy: false });
+
+    await act(() => vi.advanceTimersByTimeAsync(5000));
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it('rechecks while the value is unknown when shouldRecheck asks for it, after the seed gave up', async () => {
+    const read = vi
+      .fn<() => Promise<unknown>>()
+      .mockRejectedValueOnce(new Error('down'))
+      .mockResolvedValue({ n: 1 });
+    const { result } = renderHook(() =>
+      useEventSeededState({
+        read,
+        event: undefined,
+        isValid: isSnapshot,
+        seedRetries: 0,
+        recheckIntervalMs: 1000,
+        shouldRecheck: (value) => value === undefined,
+      }),
+    );
+
+    await flush();
+    expect(result.current.hasSeedFailed).toBe(true);
+    expect(result.current.value).toBeUndefined();
+
+    await act(() => vi.advanceTimersByTimeAsync(1000));
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(result.current.value).toEqual({ n: 1 });
+    expect(result.current.hasSeedFailed).toBe(false);
 
     await act(() => vi.advanceTimersByTimeAsync(5000));
     expect(read).toHaveBeenCalledTimes(2);
@@ -189,7 +218,7 @@ describe('useEventSeededState', () => {
         event,
         isValid: isSnapshot,
         recheckIntervalMs: 1000,
-        shouldRecheck: (value) => value.busy === true,
+        shouldRecheck: (value) => value?.busy === true,
       }),
     );
 
