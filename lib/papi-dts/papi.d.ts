@@ -14106,12 +14106,24 @@ declare module 'shared/services/database.service' {
   export default databaseService;
 }
 declare module 'shared/services/context-keys.service-model' {
-  import { ContextKeyValue } from 'platform-bible-utils';
-  /** Event emitted when a context key's value changes */
+  import { ContextKeyValue, PlatformEvent } from 'platform-bible-utils';
+  /**
+   * Event emitted when a context key's value changes
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
   export type ContextKeyChangeEvent = {
-    /** The context key that changed (without any internal storage prefix) */
+    /**
+     * The context key that changed (without any internal storage prefix)
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
     key: string;
-    /** The new value, or `undefined` if the key was removed */
+    /**
+     * The new value, or `undefined` if the key was removed
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
     value: ContextKeyValue | undefined;
   };
   /**
@@ -14146,6 +14158,7 @@ declare module 'shared/services/context-keys.service-model' {
      *
      * @param key The context key to set, e.g. `myExtension.project.<projectId>.isEditable`
      * @param value The value to set (string, number, or boolean)
+     * @experimental This function is unstable and may change or disappear without notice
      */
     set(key: string, value: ContextKeyValue): void;
     /**
@@ -14154,6 +14167,7 @@ declare module 'shared/services/context-keys.service-model' {
      *
      * @param key The context key to read
      * @returns The current value, or `undefined` if the key has never been set or was removed
+     * @experimental This function is unstable and may change or disappear without notice
      */
     get(key: string): ContextKeyValue | undefined;
     /**
@@ -14165,8 +14179,17 @@ declare module 'shared/services/context-keys.service-model' {
      * not thrown).
      *
      * @param key The context key to remove
+     * @experimental This function is unstable and may change or disappear without notice
      */
     remove(key: string): void;
+    /**
+     * Event that fires when any context key changes, whether the change was made in this process or
+     * in another one. The event's `key` is the context key without any internal storage prefix, and
+     * its `value` is `undefined` when the key was removed.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    onDidChange: PlatformEvent<ContextKeyChangeEvent>;
   }
 }
 declare module 'shared/services/context-keys.service' {
@@ -14201,13 +14224,10 @@ declare module 'shared/services/context-keys.service' {
     set: typeof set;
     get: typeof get;
     remove: typeof remove;
-    /**
-     * Event that fires when any context key changes (whether changed locally or in another process).
-     * Not included in the public PAPI surface ({@link papiContextKeysService}).
-     */
+    /** Event that fires when any context key changes (whether changed locally or in another process). */
     onDidChange: import('platform-bible-utils').PlatformEvent<ContextKeyChangeEvent>;
   };
-  /** Subset of the context keys service exposed on PAPI (both `@papi/backend` and `@papi/frontend`) */
+  /** Context keys service exposed on PAPI (both `@papi/backend` and `@papi/frontend`) */
   export const papiContextKeysService: IContextKeysService;
 }
 declare module 'shared/services/scroll-group.service' {

@@ -127,7 +127,25 @@ describe('contextKeysService', () => {
     unsubscribe();
   });
 
-  it('should expose only set/get/remove on the PAPI subset', () => {
-    expect(Object.keys(papiContextKeysService).sort()).toEqual(['get', 'remove', 'set']);
+  it('exposes set/get/remove/onDidChange on the PAPI subset', () => {
+    expect(Object.keys(papiContextKeysService).sort()).toEqual([
+      'get',
+      'onDidChange',
+      'remove',
+      'set',
+    ]);
+  });
+
+  it('PAPI onDidChange fires with the unprefixed key on a remote change', () => {
+    const handler = vi.fn();
+    const unsubscribe = papiContextKeysService.onDidChange(handler);
+    const changeEventHandler = vi.mocked(mockEmitter.event).mock.calls[0][0];
+    changeEventHandler({
+      key: 'contextKeys.testExt.remoteFlag',
+      value: true,
+      clock: { counter: 50, processId: 'other-process' },
+    });
+    expect(handler).toHaveBeenCalledWith({ key: 'testExt.remoteFlag', value: true });
+    unsubscribe();
   });
 });
