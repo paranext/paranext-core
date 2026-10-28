@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act, renderHook } from '@testing-library/react';
+import { useEffect } from 'react';
 import { vi } from 'vitest';
 import { PlatformEventEmitter, SingleColumnMenu } from 'platform-bible-utils';
 
@@ -63,6 +64,17 @@ describe('useEvaluatedMenu', () => {
   it('should evaluate the menu with the provided template vars', () => {
     mockContextKeyValues.set('test.webView.wv1.visible', true);
     const { result } = renderHook(() => useEvaluatedMenu(menuData, { webViewId: 'wv1' }));
+    expect(result.current?.items.map((item) => item.label)).toEqual(['%always%', '%conditional%']);
+  });
+
+  it('should pick up a key set by an earlier effect before the hook subscribed', () => {
+    const { result } = renderHook(() => {
+      // Runs before the hook's own subscription effect, after the first render evaluated
+      useEffect(() => {
+        mockContextKeyValues.set('test.webView.wv1.visible', true);
+      }, []);
+      return useEvaluatedMenu(menuData, { webViewId: 'wv1' });
+    });
     expect(result.current?.items.map((item) => item.label)).toEqual(['%always%', '%conditional%']);
   });
 
