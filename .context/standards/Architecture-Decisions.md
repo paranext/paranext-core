@@ -1071,6 +1071,34 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   DOM selection). **Revisit** with PT-4818.
 - **Source:** PT-4608 hand QA.
 
+## adr-chapter-one-skips-only-the-personal-structure-lock: "Add chapter number" on chapter 1 passes the user's own structure lock, never the team lock
+
+- **Date:** 2026-10-27
+- **Status:** Accepted
+- **Context:** A new book holds only its `\id` line. In Simple mode the empty-chapter view's "Add
+  chapter number" button is the only way to start it, and Simple locks structure by default, which
+  disabled that button. `useStructureProtectionState` folds two locks into one
+  `isStructureProtected`: the user's own (on by default in Simple) and the team lock an
+  administrator stages in the Team layout dialog (`adr-team-lock-lives-in-the-team-layout-dialog`),
+  which binds every user without `canAdminToggle`.
+- **Decision:** `shouldProtectAddChapterNumber` (`platform-scripture-editor.utils.ts`) exempts
+  chapter 1 from the user's own lock only. The team lock disables the button on every chapter,
+  chapter 1 included, so a non-administrator under it waits for an administrator to lift it, even
+  to start a book. Whether the team lock binds comes from the hook's `isTeamLockBinding`, which
+  counts an admin setting still loading or failed to load as locked: the exemption fails closed,
+  and the toolbar's personal toggle reads the same field once loading ends. The exemption also
+  covers chapter 1 of a book that starts at a later chapter, such as a partial translation: a
+  chapter document cannot see whether later chapters exist, and adding `\c 1` there is still valid
+  USFM.
+- **Alternatives:** **Exempt chapter 1 from both locks** — the team lock is a rule an administrator
+  sets for the whole team, and nothing about starting a book makes it a weaker case than adding a
+  later chapter. **No exemption** — a Simple user could not start a new book without first turning
+  off a lock that is on by default. **Read the whole book to exempt only a
+  truly empty one** — async book-level state for a case whose result is valid USFM either way.
+- **Consequences:** Chapter 1 of a partial translation is addable under the user's own lock while
+  its blank chapter 2 is not. Chapter 2 onward (PT-1704) should start from this policy rather than
+  re-derive it.
+
 ## adr-character-marker-removal-peels-one-layer: Character-marker removal peels one nesting layer per activation; the row is labelled to match rather than looping
 
 - **Formerly:** ADR-0011
@@ -3211,6 +3239,172 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   (accelerators behind the overlay) is PT-4851 and needs main to notice a window's port dying on
   its own. The `TODO(PT-4435)` reconnect markers are re-homed on PT-4495.
 
+## adr-find-block-boundary-whitespace: Find tolerates a whitespace gap only at block boundaries, never mid-paragraph
+
+- **Date:** 2026-09-09
+- **Status:** Accepted
+- **Context:** `UsjReaderWriter.search` builds the text it searches by concatenating every USJ text
+  node with no separator, and paragraph-final whitespace is stripped during the USFM→USX conversion,
+  so a phrase copied out of the editor across a paragraph, table, or sidebar break (e.g. `of Abraham.
+  Abraham became`, which the editor renders on two lines) has no space to match in the concatenated
+  text and returns no results. The bundled WEB text reproduces this at nearly every paragraph
+  boundary, so the gap is common, not a corner case.
+- **Decision:** A whitespace run in the query may match zero characters, but only at a **break
+  boundary** — a point where two adjacent text chunks' nearest block-level ancestors differ by
+  identity. "Break" rather than "line break": the editor renders most of these as a line break, but
+  two cells in one table row sit side by side and are a boundary all the same. The block-level set is `para`, `table`, `table:row`, `table:cell`, `sidebar` — the USJ
+  spellings; the bare USX names `row` and `cell` never appear in USJ and would match nothing.
+
+  Some boundaries are deliberately excluded. **`char`-marker** boundaries (e.g. `the ` + `LORD` +
+  ` said`) render continuously and already carry their real whitespace inside a chunk. **`note`**
+  boundaries are excluded because a note nests inside a `para` in USJ, so treating it as block-level
+  would fire on entering and leaving a note the editor renders as continuous flowing text.
+  **`optbreak`** (`//`) does render a line break but is a *sibling* of the surrounding text rather
+  than an ancestor of it, so an ancestor comparison cannot see it; the same document-order flag the
+  chapter case uses would bridge it, and it is left undone because `//` is rare enough in practice
+  not to have earned the extra state. **`periph`** needs no entry at all: peripheral content is
+  itself wrapped in `para` nodes, so a join inside or between `periph` sections is already reported
+  by those paragraphs.
+
+  Two further conditions suppress a boundary that the ancestor comparison would otherwise record:
+
+  - **A chapter transition is never a boundary.** `chapter` nodes carry no `content` and cannot be a
+    text node's ancestor, so they are detected by a flag set as the document-order walk passes one.
+    The durable reason is containment, not any one consequence: `platform-bible-utils` is a library
+    with consumers of its own and cannot assume an extension's marker-deletion guard is between it
+    and a write, so the engine declines to offer a cross-chapter join at all.
+
+  - **A block of filtered-out text standing between the two chunks is never a boundary.** When
+    `markerStylesToInclude` drops a text node, the walk records that node's own nearest block
+    ancestor. At the next push, a dropped ancestor that differs from *both* neighbours means a whole
+    block was dropped from between them — a section heading, a list, a table — and the join is
+    suppressed.
+
+  That second condition is deliberately narrow, because a join made adjacent only by
+  `markerStylesToInclude` is otherwise **still** a boundary. Under *Verse text only* the notes ending a paragraph are dropped from
+  the concatenated text, but a note shares its paragraph's block ancestor, so it fails the
+  differs-from-both test and the join survives: the editor renders a line break between those two
+  paragraphs whether or not the notes were searched, and refusing it made Find miss a real break for
+  the common case of a paragraph that ends in a footnote. A heading has a block ancestor of its own,
+  so it does not survive the test — and it should not, because its text is on screen between the two
+  paragraphs, which means they are not the adjacent lines a phrase copied from the editor spans and a
+  phrase joined across them appears nowhere in the rendered document. Replace safety at a surviving
+  join is carried by the marker-deletion guard below, which counts notes, rather than by narrowing
+  what Find matches.
+
+  Mid-paragraph matching and regex mode are both unchanged — the tolerance applies only at the
+  boundary positions computed above, never to an ordinary run of whitespace inside one paragraph.
+- **Alternatives:**
+  - **Sentinel character in the searched text** (insert a synthetic marker at every break boundary
+    and let query whitespace match it). Rejected: every index in the search text's index map would
+    have to account for synthetic characters, matches starting or ending on a sentinel would need
+    trimming, and regex mode would change behavior for everyone (e.g. `.` matching the sentinel) —
+    more blast radius for the same user-visible result than filtering matches by boundary position
+    after the fact.
+  - **Global whitespace looseness** (query whitespace always optional, independent of position).
+    Rejected: it produces false positives mid-paragraph, which is the exact behavior a prior PT-3609
+    comment flagged as unexpected.
+  - **Filter in the Find PDPE** instead of in `UsjReaderWriter.search`. Rejected: `search()` is the
+    only place the block structure is still in hand — the PDPE sees offsets into a flat string and
+    would have to rebuild the USJ walk to interpret them. The seam is already there alongside
+    `markerStylesToInclude` and `normalizationForm`. The honest cost of the accepted design is that
+    the contract between the two packages is stringly-typed: the caller and `search()` agree on the
+    capture-group name via an exported `SEARCH_WHITESPACE_GROUP_PREFIX` rather than a type. A typed
+    hand-off (the caller passing group names, or a structured pattern description) would be better
+    and was not built; the prefix is anchored to `/^ws\d+$/`, which narrows the collision surface to
+    exactly the names `ws0`, `ws1`, … — a caller who picks one of those is still swallowed, so the
+    library contract is not collision-proof, only collision-unlikely.
+- **Consequences:** Because paragraph-final whitespace is stripped in conversion, boundary-spanning
+  matches become available at every paragraph boundary in every project — a broad change, not a
+  narrow one. In `web-matthew-1-and-2.usj` **all 35** block-ancestor changes have no whitespace on
+  either side (33 after chapter suppression — 2 of the 35 cross a chapter and are excluded); in
+  `web-matthew-5-section-header.usj`, 24 of 28, with no chapter crossings.
+
+  That makes Replace's exposure the main consequence, and it was worse than a "default is off"
+  reading suggests. Structure protection (`usfmChangesStructure`) is gated on
+  `computeIsStructureProtected`, which returns `false` for **every** non-Simple interface mode, and
+  `find.web-view.tsx` removes Replace from Simple mode entirely. The two together mean the structure
+  guard is **all but unreachable for Replace today**: the only interface mode that turns it on is the
+  one that does not offer Replace. It is kept and tested as a fail-safe rather than deleted, because
+  it is the PDP's own guarantee and must not depend on which modes a web view currently offers
+  Replace in. That Power mode opts out of structure protection is a deliberate pre-existing product
+  decision, so the gap is not closed here.
+
+  What is closed here is marker **deletion**, which is not an editorial-policy question:
+  `usfmDeletesMarkers` refuses any replacement that drops a structural marker or a note the
+  replacement does not put back. It runs **unconditionally**, in every interface mode. The structure
+  guard runs ahead of it only where protection is on, and the two are *sequential* rather than an
+  either/or so that the deletion guard is reached whenever the structure guard declines to fire:
+  `usfmChangesStructure` deliberately ignores notes, so a simple-mode replacement that swallows only
+  a `\f …\f*` passes it and is refused here instead. It is deliberately narrower than
+  `usfmChangesStructure` — additions and reordering stay behind the opt-in Simple-mode protection,
+  because losing a marker that was there is unrecoverable content loss whereas adding one is a
+  matter of policy.
+
+  Three marker classes had to be added for that guard to mean anything, because `isBlockMarker`
+  reports `false` for all of them: **table and sidebar markers** (`tr`, every `t[hc][rc]?#` cell
+  spelling including a `-N` column span, `esb`, `esbe`), the **paragraph markers `usfmMarkers` omits**
+  (`ph`, `ph1`–`ph3`, `p1`, `p2`, `k1`, `k2` — all typed `para` by the shared map, and all real block
+  ancestors as far as the engine is concerned), and **notes** (`f`, `fe`, `x`, plus the study-Bible
+  variants `ef`, `efe` and `ex`). The table gap also affected `extractStructuralMarkers` itself, so
+  Simple-mode structure protection was blind to a deleted `\tc2` as well; all of them now go through a
+  shared `isStructuralMarker`/`isNoteMarker` pair in `find/usfm-tokens.util.ts`.
+
+  Those helpers read the **shared markers map** (`USFM_MARKERS_MAP_3_0`) by *node type* rather than by
+  a hand-written list of names: a marker is structural when its type is `para`, `row`, `cell`,
+  `table:row` or `sidebar`, and a note when its type is `note`. A hand-written list cannot keep up
+  with the spellings the map already knows — the centred and right-aligned `thc#`/`tcc#` that the
+  repo's own canonical 3.1 fixture contains, `\ph#`/`\p#`/`\k#`, the `\efe` note — so the map that
+  has the authoritative answer is asked directly. The note-marker names the note-span scanner needs are
+  derived from the same map rather than re-listed. `isBlockMarker` itself is left alone: it is driven
+  by `usfmMarkers`, and its only other consumer (the editor's marker menu) iterates `usfmMarkers`
+  children, so its gaps cannot be reached from there.
+
+  The guard being reachable is what exposed the next problem: **every** boundary-spanning match's
+  USFM span contains the block marker that made it a boundary, so a plain-text replacement trips the
+  guard on all of them. A refusal raised after the click would make the feature ship a Replace button
+  that can only fail. So results now carry `FindResult.removedMarkers` — the guarded markers inside
+  the result's span, extracted once by the PDP when results are built — and the UI gates on them per
+  result: Replace is disabled with an explaining tooltip on a card whose markers the replacement term
+  does not put back, Replace All skips those results and reports how many it skipped, and a
+  replacement that does put the markers back (raw USFM, which Power mode's replacement field accepts)
+  is still allowed. Repairing the markers automatically was considered and deferred: it needs a
+  marker-preserving splice in `replace()` and reopens the structure-protection policy question.
+
+  Replace All also had to become recoverable. It issues one `replace()` call per book, and `replace()`
+  is all-or-nothing only *within* a book — so one refused book used to leave the others' writes
+  committed while control jumped to the error path, skipping the revert window entirely. It now uses
+  `Promise.allSettled` and rolls back from the snapshots it already captured before surfacing the
+  failure — but only the books whose own call **fulfilled**. A refused book never wrote, because
+  `replace()` is all-or-nothing within a book, so writing its snapshot back would overwrite whatever
+  changed in it since the snapshot was taken; the likeliest non-sentinel rejection is the PDP
+  exhausting its cache-invalidation retries, which is exactly the case where someone else was editing
+  that book. A book that wrote but whose snapshot could not be read cannot be rolled back at all, so
+  it is treated as a failed rollback rather than dropped. If the rollback itself fails, the two sentinel toasts are not the right answer — nothing
+  was refused on policy grounds, books are still modified, and the result list's offsets no longer
+  describe the project — so that path raises its own error notification and re-runs the search.
+
+  Remaining, documented and not fixed: when the search includes note text, a boundary **ending in a
+  footnote or cross-reference** is not bridged, because the gap is note content rather than zero
+  characters. (Under *Verse text only* the note is dropped and the boundary is bridged, as above.) **Whole-word Find** is still
+  broken at these boundaries — the concatenated text makes `Abraham.Abraham` one word-run — which is
+  the same root cause and out of scope here.
+- **Excepts:** `adr-find-tolerance-as-engine-options`
+  — that entry's "both default to off" rule; see its **Amended by** note for what is given up.
+- **Key symbols:** `UsjReaderWriter.search` / `collectSearchText` / `hasWhitespaceGapAwayFromBoundary`
+  and `BLOCK_LEVEL_NODE_TYPES` (`lib/platform-bible-utils/src/scripture/usj-reader-writer.ts`);
+  `SEARCH_WHITESPACE_GROUP_PREFIX` and `UsjSearchOptions.flexibleWhitespaceAtBlockBoundaries`
+  (`lib/platform-bible-utils/src/scripture/usj-reader-writer.model.ts`); `buildSearchRegex`
+  (`extensions/src/platform-scripture/src/find/find.utils.ts`); `isStructuralMarker` /
+  `isNoteMarker` / `collapseUsfmMarkersForDisplay`
+  (`extensions/src/platform-scripture/src/find/usfm-tokens.util.ts`); `usfmDeletesMarkers` /
+  `markersDeletedBy` (`extensions/src/platform-scripture/src/find/structure-protection.util.ts`).
+- **Source:** PT-3609, review of PR #2795. The design spec and implementation plan this work
+  started from were dropped from the branch rather than carried: they described an earlier shape of
+  the feature (the removed Verse-text-only note behavior, the pre-fix USX marker spellings, the
+  `match.index + 1` advance) and would have stood as a second, contradictory account of behavior
+  this entry already records accurately.
+
 ## adr-find-follows-editor-to-read-only: Find follows the editor onto read-only resources, with replace withheld
 
 - **Formerly:** ADR-0020
@@ -3456,6 +3650,22 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   (`PreserveConsecutiveSpacesInTextTokens`); this decision is unaffected by that, since it never
   relied on the normalization holding.
 - **Source:** PT-3408, review of PR #2715.
+
+- **Amended by:** [adr-find-block-boundary-whitespace](#adr-find-block-boundary-whitespace-find-tolerates-a-whitespace-gap-only-at-block-boundaries-never-mid-paragraph) (2026-09-09). That decision adds one tolerance
+  that is always on for a non-regex search and has no toggle: a query whitespace run may match zero
+  characters at a block boundary. It does not contradict the rule above — the query still reaches
+  the engine byte-identical, and the tolerance is still expressed as an engine option
+  (`flexibleWhitespaceAtBlockBoundaries`) rather than by rewriting what the user typed. It is an
+  exception to "both default to off": there is no third toggle, because the tolerance is licensed by
+  *position* rather than by preference.
+
+  That exception has a real cost, stated plainly rather than denied: a byte-exact non-regex search
+  is **no longer available at a block boundary**, including for a specific invisible character.
+  `SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS` contains NBSP (U+00A0) and ZWSP (U+200B), so an
+  interior NBSP or ZWSP in a plain query compiles as an optional group like any other whitespace and
+  will match where no such character exists — the very capability this entry's own
+  Consequences section singles out. That is knowingly given up: the position licensing makes the false positives rare enough
+  not to warrant a third toggle.
 
 ## adr-first-run-existing-registration-is-prefill: An existing registration prefills the first-run wizard; it never skips it
 
@@ -4374,6 +4584,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   will then be a value to keep, while files that older builds saved for "Disable access…" will
   still hold it.
 - **Source:** PT-4893; reverses the option-to-value mapping chosen in PT-4590.
+- **Amended 2026-10-27 (PT-4736):** a packaged build no longer installs the bundled sample project
+  (`adr-sample-project-dev-runs-only`), so "Disable access…" during onboarding would now leave a
+  new user with no project at all. That strengthens the reason not to offer the list in the wizard.
 
 ## adr-launch-token-withdrawn: A launch token is required to deliver launch parameters to an already-open web view — WITHDRAWN
 
@@ -5585,6 +5798,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   first-run experience. **Revisit** when the Sample project (PT-4324) lands: unless it reuses the
   sample WEB's ID, it will count as a project until this rule learns to exclude it.
 - **Source:** PT-4311 implementation (2026-09-25); the registered-user wording is PT-4442.
+- **Amended 2026-10-27 (PT-4736):** the empty-answer rule no longer holds as written. A packaged
+  build does not install the sample (`adr-sample-project-dev-runs-only`), so an empty answer reads
+  `none` when the C# Paratext factory (`platform.Paratext-pdpf`), asked directly, also reports no
+  projects, and `unknown` (retried, bounded) otherwise. The hook asks through `getMetadataForAllProjectsWithoutRetries`, since the
+  retrying lookup would hold an empty answer for its 30 s startup grace period. The sample stays
+  excluded by its ID, since dev runs still install it.
 
 ## adr-node-dom-globals-polyfill: Node processes install `@xmldom/xmldom` DOM globals; the extension host does it in a first-import side-effect module
 
@@ -8607,6 +8826,90 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   arbitrary, inherited from PT-1561.
 - **Source:** PT-4421; resubscribe-storm and burst behavior measured during review of this change.
 
+## adr-sample-project-dev-runs-only: Only dev runs install the sample WEB project, so "no projects" is a real state
+
+- **Date:** 2026-10-27
+- **Status:** Accepted
+- **Context:** `LocalParatextProjects.Initialize` (C#) installed the bundled sample WEB project
+  (`c-sharp/assets/WEB`) into every empty projects folder, in every build, so Paratext 10 Studio
+  users met a "WEB" they never asked for. Developers and the E2E suite rely on it (39 isolated spec
+  files open it by its fixed ID). Two consumers also read an empty project list as "not loaded
+  yet", which held only because the sample was always there: the editor's
+  `use-project-presence.hook.ts` and the startup sync's `startup-readiness.util.ts`.
+- **Decision:** `Initialize` installs the sample only when `PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT`
+  is `true`. Dev launchers set it: the main process for unpackaged runs
+  (`dotnet-data-provider.service.ts`), `npm run start:data`, VS Code's "Debug .NET Core", and the
+  E2E launcher (`launchElectronApp`, which pins it). A packaged build gets the sample only if its
+  environment opts in. Both consumers treat an empty answer as final only when the C# Paratext
+  factory (`platform.Paratext-pdpf`), asked directly after the empty answer, reports no projects.
+  `ProjectDataProviderFactory.InitializeAsync` awaits `StartFactoryAsync`, which scans the projects
+  folder, before it registers, so a reachable factory's answer is complete. Trusting the empty
+  answer because the right factories were listed as registered was rejected: the lookup silently
+  skips a factory it cannot reach, including inside the Scripture Extender's own fan-out.
+- **Alternatives:** **Remove the sample and its assets** — rejected: the E2E suite and developers
+  use it. **Disable it only in Studio, through its core patch** — rejected: one more hunk to carry
+  on every realignment, and packaged Platform.Bible would still get it. **Keep installing it but
+  hide it** — rejected: every surface that lists projects would need the exclusion. **Have the E2E
+  launcher copy the sample into isolated roots instead** — not chosen: it covers only E2E, and
+  `npm start` into an empty folder would lose the sample too. **Fix the two consumers later** —
+  rejected: a new Studio user with no projects would get no guidance in the empty editor and wait
+  120 s for the startup sync that brings their first project.
+- **Consequences:** A packaged build can start with no projects at all; new code must not assume
+  one exists. Every other caller of the retrying `getMetadataForAllProjects` (Home, the toolbar
+  project picker) still waits out its 30 s startup grace period on an empty answer and then logs a
+  warning, until PT-4941 makes that wait end once the project sources have loaded. Existing
+  installs keep their WEB copy. Home's "Get started" prompt, which used to key only on the sample
+  being the only item, also shows on an empty Home, so a new packaged user still gets the link to
+  the getting-started help. **Revisit** when the built-in Sample project (PT-4324) lands.
+- **Source:** PT-4736 (test team confirmed on the ticket, 2026-10-27, that they do not need WEB).
+
+## adr-sba-not-syncable-from-dialog-or-home: Study Bible Additions projects cannot be synced from the sync projects dialog or Home
+
+- **Date:** 2026-10-27
+- **Status:** Accepted. The block applies to Study Bible Additions projects until they are
+  supported (PT-4704, Definition of Done item 11). Supersedes the "must stay syncable" parts of
+  `adr-unsupported-project-reason`.
+- **Context:** `adr-unsupported-project-reason` kept Study Bible Additions (SBA) projects selectable
+  and syncable in Send/Receive lists. UX decided otherwise in PT-4704's Definition of Done item 11
+  (2026-10-27): users cannot open an SBA project, so offering to sync it from the places that
+  present it as a normal project is inconsistent.
+- **Decision:** Until Study Bible Additions projects are supported, they cannot be synced from the
+  sync projects dialog or Home:
+  - **Sync projects dialog:** SBA rows stay visible and greyed out with the unsupported reason, but
+    cannot be ticked. The All, Edited and New shortcuts skip them, saved ticks for them are pruned,
+    and submit filters them out.
+  - **Home:** Sync and Get are disabled for an SBA project.
+  - **Scheduled and automatic syncs are deliberately left alone.** A Power user's existing SBA
+    schedule keeps running. Simple mode cannot open an SBA project, so the sync run on a project
+    switch never targets one.
+- **Alternatives:**
+  - Keep SBA selectable and syncable everywhere (the previous decision) — rejected by UX.
+  - Block SBA in the C# sync entry points too — not chosen: it would also stop existing schedules,
+    which the decision deliberately leaves running.
+  - Block SBA in the manual-only commands instead of in each UI — the extension's `runManualSync`,
+    or the C# `sendReceiveProjects` handler that Home calls directly. Scheduled syncs reach
+    `SendReceiveProjectsCore` through `SyncProjectsCore`, not through that handler, so this would
+    leave schedules running. A check in the extension sees only projects already on disk, so it
+    cannot cover Get; the C# handler can tell an SBA project from its project type without a local
+    copy (`ScrTextExtensions.GetOpenBlockedReason(Enum<ProjectType>)`), so a gate there could cover
+    every manual caller. Not done: the Send/Receive service is patched in from the
+    paratext-10-studio repo, and these checks are temporary — they go once Platform.Bible can open
+    SBA projects — so a gate would protect only surfaces added before then.
+- **Consequences:**
+  - Until SBA projects are supported, a surface that offers to sync a project from a list or from
+    Home must treat an SBA project as not syncable. Write the gate to key on `unsupportedReason`, so
+    lifting the block needs no change at each surface; a surface that hard-codes SBA instead must
+    carry a comment saying so. Scheduled, automatic and server-side paths are not gated by this.
+  - As of 2026-10-28, the Send/Receive extension's "Sync <project name>" top-menu item on
+    `platformScriptureEditor.react` tabs (`paratextBibleSendReceive.sendReceiveProjectsByWebViewId`)
+    still syncs an SBA project when its placeholder tab is open, because that command does not check
+    `unsupportedReason`. This holds until SBA projects are supported or the extension hides the item
+    for a placeholder tab.
+  - `ScrTextExtensions.GetOpenBlockedReason` still never blocks `GetParatextProject`, so a schedule
+    or a direct command can still sync an SBA project.
+- **Source:** PT-4704, Definition of Done item 11; design in
+  `.context/designs/2026-10-27-sync-consistency-design.md`.
+
 ## adr-scroll-group-hosted-in-main: The scroll group service is hosted in main, and each renderer keeps a predicting cache
 
 - **Date:** 2026-08-07
@@ -9615,6 +9918,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   exactly one case — a dock reactivation brings a window back before readiness lands — which is the
   case it was added for.
 - **Source:** PT-4386.
+- **Amended 2026-10-27 (PT-4736):** phase 2 also accepts an empty probe answer as ready when the
+  C# Paratext factory (`platform.Paratext-pdpf`), asked directly after that probe, also reports no
+  projects. A packaged
+  build no longer installs the sample project (`adr-sample-project-dev-runs-only`), so a workspace
+  with no local projects is real, and it would otherwise hold the startup sync, the one that brings
+  a new user's first project, for the whole 120 s budget.
 
 ## adr-styleinfo-over-css: Project stylesheets cross the wire as structured StyleInfo, not generated CSS
 
@@ -10623,7 +10932,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Context:** Study Bible Additions (SBA) projects are enumerated with every other Scripture project
   (`LocalParatextProjects.GetAllProjectDetails`), but Platform.Bible cannot open their Scripture
   content. The PO wants them visible but disabled where users open projects, with the reason, and a
-  placeholder if one is opened anyway. They must stay syncable.
+  placeholder if one is opened anyway. They must stay syncable. **Superseded in part by
+  `adr-sba-not-syncable-from-dialog-or-home`:** "must stay syncable" no longer holds for the sync
+  projects dialog or Home's Sync/Get.
 - **Decision:**
   - **One source of the reason.** C# computes a generic localize key in
     `ScrTextExtensions.GetOpenBlockedReason` (a `ScrText` overload, and an `Enum<ProjectType>`
@@ -10689,7 +11000,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     instead of disabling, cannot explain why, and removes data access other features use.
   - Returning a `Paratext.Data.UnsupportedReason` from `MigrateProjectIfNeeded`
     (`PlatformScrTextCollection`) — rejected: ScrTextCollection then drops the project everywhere,
-    including Send/Receive rosters, which must show it selectable and syncable.
+    including Send/Receive rosters, which must show it selectable and syncable. (Rosters still show
+    it; "selectable and syncable" is superseded by `adr-sba-not-syncable-from-dialog-or-home`.)
   - A read-only computed project setting — rejected: `projectDataProviders.get()` already fans out to
     `getMetadataForProject()` the same way, saving nothing and adding a settings API contract.
   - A default filter in `getMetadataForAllProjects` — rejected: it would hide unsupported projects
@@ -10703,7 +11015,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Consequences:**
   - A new unsupported project type needs one C# line in `GetOpenBlockedReason` and one localize key
     in `en.json` and `es.json`. Every new list for picking or opening a project must hide or disable
-    such projects; Send/Receive lists keep them. The rule is in `Paranext-Core-Patterns.md`
+    such projects; Send/Receive lists keep them visible, though no longer selectable (superseded by
+    `adr-sba-not-syncable-from-dialog-or-home`). The rule is in `Paranext-Core-Patterns.md`
     ("Projects that cannot be opened").
   - While an SBA is being synced, a write to it reports `SR_EDIT_BLOCKED` before the reason.
   - **Pending in other repos (as of 2026-09-29):** Studio's Send/Receive service does not yet fill

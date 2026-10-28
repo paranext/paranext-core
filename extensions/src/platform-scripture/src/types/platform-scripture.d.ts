@@ -535,6 +535,16 @@ declare module 'platform-scripture' {
      * locations
      */
     text: string;
+    /**
+     * Markers (paragraph, verse, chapter, table, sidebar, and note markers) that lie inside this
+     * result's USFM span and would therefore be deleted by replacing it with plain text. Absent
+     * when the span contains none, which is the common case.
+     *
+     * A result that has any is one `replace()` refuses with the `MARKER_DELETION_ERROR` sentinel
+     * unless the replacement USFM puts the same markers back. Consumers should disable or skip
+     * replacement for such results rather than attempting a replacement that can only fail.
+     */
+    removedMarkers?: string[];
   };
 
   /**
@@ -763,6 +773,12 @@ declare module 'platform-scripture' {
        *   and a replacement would add, remove, change, or reorder a paragraph-level, verse, or
        *   chapter marker. The Find web view substring-matches this sentinel to surface a localized
        *   message.
+       * @throws Error whose message is the `MARKER_DELETION_ERROR` sentinel
+       *   (`'platformScripture.replace.markerDeletion'`) when a replacement would delete a
+       *   structural marker or a note that the replacement does not put back. Checked in every
+       *   interface mode, independently of structure protection. {@link FindResult.removedMarkers}
+       *   reports in advance which results this applies to. Substring-matched by the Find web view
+       *   in the same way.
        */
       replace(
         rangesToReplace: ScriptureRangeUsjChapterOrUsfmVerseLocation[],
@@ -2731,9 +2747,11 @@ declare module 'platform-scripture' {
     warnings?: string[];
     /**
      * Localize key explaining why this project cannot be opened (see
-     * `ProjectMetadata.unsupportedReason`); omitted when it can be. Only opening is blocked:
-     * Send/Receive and download stay allowed, so mark the row with the reason rather than disabling
-     * its Send/Receive actions.
+     * `ProjectMetadata.unsupportedReason`); omitted when it can be. Until Study Bible Additions
+     * projects are supported, a list that offers a manual sync or download for such a project
+     * (Home, the sync projects dialog) shows its row disabled with this reason instead of offering
+     * the action. Scheduled and automatic syncs are not blocked by this. Rationale:
+     * `adr-sba-not-syncable-from-dialog-or-home` in `Architecture-Decisions.md`.
      *
      * Producers set it for local and server-only projects alike. When it is absent, callers fall
      * back to the local project's metadata.

@@ -529,6 +529,29 @@ describe('Home project/resource filter', () => {
     expect(screen.queryByText(GET_STARTED_DESCRIPTION)).not.toBeNull();
   });
 
+  it('shows the getting-started prompt on a Home with nothing to list', () => {
+    const GET_STARTED_DESCRIPTION = enString('%resources_getStartedDescription%');
+    const GET_STARTED_NO_ITEMS_DESCRIPTION = enString('%resources_getStartedNoItemsDescription%');
+
+    renderHomeList({ localProjectsInfo: [] });
+
+    // A new user with no projects at all is who the prompt is for. "Expecting more items?" is for
+    // a list that holds only the sample, so it would make no sense here.
+    expect(screen.queryByText(NOTHING_HERE)).not.toBeNull();
+    expect(screen.queryByText(GET_STARTED_NO_ITEMS_DESCRIPTION)).not.toBeNull();
+    expect(screen.queryByText(GET_STARTED_DESCRIPTION)).toBeNull();
+  });
+
+  it('shows no getting-started prompt on an empty Home where nothing handles Get started', () => {
+    const GET_STARTED_NO_ITEMS_DESCRIPTION = enString('%resources_getStartedNoItemsDescription%');
+
+    renderHomeList({ localProjectsInfo: [], hasGetStartedHandler: false });
+
+    // Positive control: this is the empty state
+    expect(screen.queryByText(NOTHING_HERE)).not.toBeNull();
+    expect(screen.queryByText(GET_STARTED_NO_ITEMS_DESCRIPTION)).toBeNull();
+  });
+
   it('still offers the getting-started guidance when there is nothing to filter', () => {
     renderHomeList({ initialProjectResourceFilter: 'paratextProject' });
 
@@ -1327,9 +1350,9 @@ describe('Home unsynced changes marker', () => {
 });
 
 /*
- * A project that cannot be opened (e.g. a Study Bible Additions project) stays listed so a user can
- * find and sync it: only Open is blocked, with the reason in a tooltip or, inside a row's ⋯ menu,
- * in the disabled item. Sync and Get stay enabled.
+ * A project that cannot be opened (e.g. a Study Bible Additions project) stays listed, but Open,
+ * Sync and Get are all disabled, with the reason in a tooltip or, inside a row's ⋯ menu, in the
+ * disabled item.
  */
 describe('Home unsupported projects', () => {
   const UNSUPPORTED_REASON_KEY = '%project_unsupported_studyBibleAdditions%';
@@ -1416,7 +1439,7 @@ describe('Home unsupported projects', () => {
     expect(onOpenProject).not.toHaveBeenCalled();
   });
 
-  it('mutes a server-only project with a reason but leaves its Get button enabled', () => {
+  it('mutes a server-only project with a reason and disables its Get button with the reason tooltip', () => {
     renderHomeList({
       localProjectsInfo: [],
       sharedProjectsInfo: UNSUPPORTED_SERVER_ONLY_PROJECTS,
@@ -1425,10 +1448,11 @@ describe('Home unsupported projects', () => {
 
     const row = screen.getByText('Server-only Project').closest('tr');
     expect(row).toHaveClass('tw:text-muted-foreground/70');
-    expect(screen.getByRole('button', { name: 'Get' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Get' })).toBeDisabled();
+    expect(screen.getByRole('group', { name: UNSUPPORTED_REASON_TEXT })).toBeInTheDocument();
   });
 
-  it('gets a server-only project with a reason on double-click', async () => {
+  it('does not get a server-only project with a reason on double-click', () => {
     const onSendReceiveProject = vi.fn(async () => {});
     renderHomeList({
       localProjectsInfo: [],
@@ -1437,23 +1461,108 @@ describe('Home unsupported projects', () => {
       onSendReceiveProject,
     });
 
-    // Double-click on a row that isn't local gets it, which the reason doesn't block.
     fireEvent.doubleClick(screen.getByText('SVR'));
 
-    await waitFor(() => {
-      expect(onSendReceiveProject).toHaveBeenCalledWith('server1');
-    });
+    expect(onSendReceiveProject).not.toHaveBeenCalled();
   });
 
-  it('never shows a raw, unresolved localize key as tooltip text', () => {
+  it('gets a supported server-only project on double-click', () => {
+    const onSendReceiveProject = vi.fn(async () => {});
+    renderHomeList({
+      localProjectsInfo: [],
+      sharedProjectsInfo: {
+        server2: {
+          id: 'server2',
+          name: 'SUP',
+          fullName: 'Supported Server-only Project',
+          language: 'en',
+          editedStatus: 'new',
+          lastSendReceiveDate: '',
+        },
+      },
+      onSendReceiveProject,
+    });
+
+    fireEvent.doubleClick(screen.getByText('SUP'));
+
+    expect(onSendReceiveProject).toHaveBeenCalledWith('server2');
+  });
+
+  it('disables Sync for an edited unsupported local project and shows the reason tooltip', () => {
+    const onSendReceiveProject = vi.fn(async () => {});
     renderHomeList({
       localProjectsInfo: [UNSUPPORTED_LOCAL_PROJECT],
+      sharedProjectsInfo: {
+        [UNSUPPORTED_LOCAL_PROJECT.projectId]: {
+          id: UNSUPPORTED_LOCAL_PROJECT.projectId,
+          name: UNSUPPORTED_LOCAL_PROJECT.name,
+          fullName: UNSUPPORTED_LOCAL_PROJECT.fullName,
+          language: 'en',
+          editedStatus: 'edited',
+          lastSendReceiveDate: '2026-09-01T00:00:00.000Z',
+        },
+      },
+      localizedUnsupportedReasons: { [UNSUPPORTED_REASON_KEY]: UNSUPPORTED_REASON_TEXT },
+      onSendReceiveProject,
+    });
+
+    const syncButton = screen.getByRole('button', { name: 'Sync' });
+    expect(syncButton).toBeDisabled();
+    expect(screen.getByRole('group', { name: UNSUPPORTED_REASON_TEXT })).toBeInTheDocument();
+    fireEvent.click(syncButton);
+    expect(onSendReceiveProject).not.toHaveBeenCalled();
+  });
+
+  it('syncs a normal edited project from its Sync button (positive control)', async () => {
+    const onSendReceiveProject = vi.fn(async () => {});
+    renderHomeList({
+      localProjectsInfo: [OPENABLE_PROJECT],
+      sharedProjectsInfo: {
+        [OPENABLE_PROJECT.projectId]: {
+          id: OPENABLE_PROJECT.projectId,
+          name: OPENABLE_PROJECT.name,
+          fullName: OPENABLE_PROJECT.fullName,
+          language: 'en',
+          editedStatus: 'edited',
+          lastSendReceiveDate: '2026-09-01T00:00:00.000Z',
+        },
+      },
+      onSendReceiveProject,
+    });
+
+    expect(screen.getByRole('button', { name: 'Sync' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Sync' }));
+    await waitFor(() => expect(onSendReceiveProject).toHaveBeenCalledWith('openable1'));
+  });
+
+  it.each<[string, Parameters<typeof renderHomeList>[0]]>([
+    ['Open', { localProjectsInfo: [UNSUPPORTED_LOCAL_PROJECT] }],
+    [
+      'Sync',
+      {
+        localProjectsInfo: [UNSUPPORTED_LOCAL_PROJECT],
+        sharedProjectsInfo: {
+          [UNSUPPORTED_LOCAL_PROJECT.projectId]: {
+            id: UNSUPPORTED_LOCAL_PROJECT.projectId,
+            name: UNSUPPORTED_LOCAL_PROJECT.name,
+            fullName: UNSUPPORTED_LOCAL_PROJECT.fullName,
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-09-01T00:00:00.000Z',
+          },
+        },
+      },
+    ],
+    ['Get', { localProjectsInfo: [], sharedProjectsInfo: UNSUPPORTED_SERVER_ONLY_PROJECTS }],
+  ])('never shows a raw, unresolved localize key as tooltip text on %s', (buttonName, props) => {
+    renderHomeList({
+      ...props,
       // Simulates a key that has not resolved to a translation (or the loading seed): the map
       // still echoes the key back as its own "translation".
       localizedUnsupportedReasons: { [UNSUPPORTED_REASON_KEY]: UNSUPPORTED_REASON_KEY },
     });
 
-    expect(screen.getByRole('button', { name: 'Open' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: buttonName })).toBeDisabled();
     // With no text to show, there is no tooltip wrapper either: it would be a tab stop with no
     // name and an empty bubble.
     expect(screen.queryByRole('group')).toBeNull();
@@ -1546,24 +1655,46 @@ describe('Home unsupported projects', () => {
       };
     }
 
-    it.each([
-      ['an openable', OPENABLE_PROJECT],
-      ['an unsupported', UNSUPPORTED_LOCAL_PROJECT],
-    ] as const)('syncs %s downloaded project from its action cell menu', async (_kind, project) => {
+    it('syncs an openable downloaded project from its action cell menu', async () => {
       const onSendReceiveProject = vi.fn(async () => {});
       renderHomeList({
-        localProjectsInfo: [project],
-        sharedProjectsInfo: uneditedSharedCopyOf(project),
-        localizedUnsupportedReasons: { [UNSUPPORTED_REASON_KEY]: UNSUPPORTED_REASON_TEXT },
+        localProjectsInfo: [OPENABLE_PROJECT],
+        sharedProjectsInfo: uneditedSharedCopyOf(OPENABLE_PROJECT),
         onSendReceiveProject,
       });
 
-      const syncItem = await openRowMenu(project.name, 'last', /^Sync$/);
+      const syncItem = await openRowMenu(OPENABLE_PROJECT.name, 'last', /^Sync$/);
       expect(syncItem).not.toHaveAttribute('aria-disabled');
       await userEvent.setup().click(syncItem);
 
-      await waitFor(() => expect(onSendReceiveProject).toHaveBeenCalledWith(project.projectId));
+      await waitFor(() => expect(onSendReceiveProject).toHaveBeenCalledWith('openable1'));
     });
+
+    // The action cell menu holds Sync only for an unedited project; the narrow-width menu holds
+    // it only for an edited one.
+    it.each([
+      ['action cell', 'last', uneditedSharedCopyOf],
+      ['narrow-width', 'first', editedSharedCopyOf],
+    ] as const)(
+      'disables Sync in the %s menu of an unsupported project and shows the reason',
+      async (_menuName, cell, sharedCopyOf) => {
+        const onSendReceiveProject = vi.fn(async () => {});
+        renderHomeList({
+          localProjectsInfo: [UNSUPPORTED_LOCAL_PROJECT],
+          sharedProjectsInfo: sharedCopyOf(UNSUPPORTED_LOCAL_PROJECT),
+          localizedUnsupportedReasons: { [UNSUPPORTED_REASON_KEY]: UNSUPPORTED_REASON_TEXT },
+          onSendReceiveProject,
+        });
+
+        const syncItem = await openRowMenu(UNSUPPORTED_LOCAL_PROJECT.name, cell, /^Sync/);
+
+        expect(syncItem).toHaveAttribute('aria-disabled', 'true');
+        expect(syncItem).toHaveClass('tw:opacity-50');
+        expect(syncItem).toHaveTextContent(UNSUPPORTED_REASON_TEXT);
+        fireEvent.click(syncItem);
+        expect(onSendReceiveProject).not.toHaveBeenCalled();
+      },
+    );
 
     it.each([
       ['action cell', 'last'],

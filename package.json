@@ -94,7 +94,7 @@
     "stage-dev-packages": "node .erb/scripts/stage-dev-packages.ts",
     "verify:dev-packages": "node .erb/scripts/postinstall.ts --check",
     "start": "node ./.erb/scripts/check-port-in-use.mjs && npm run start:renderer",
-    "start:data": "dotnet watch --project c-sharp/ParanextDataProvider.csproj",
+    "start:data": "cross-env PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT=true dotnet watch --project c-sharp/ParanextDataProvider.csproj",
     "start:extension-host": "cross-env NODE_ENV=development NODE_PATH=\"./release/app/node_modules\" nodemon ./src/extension-host/extension-host.ts",
     "start:extensions": "cd extensions && npm run watch",
     "start:main": "concurrently -k -P \"cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --watch --config ./.erb/configs/webpack.config.main.dev.ts\" \"electronmon . {@}\" --",
