@@ -257,7 +257,7 @@ export {
   parseWhenExpression,
 } from './context-keys/when-expression';
 export type { EvaluatableMenu, WhenExpressionErrorHandler } from './context-keys/evaluate-menu';
-export { evaluateMenu } from './context-keys/evaluate-menu';
+export { createMenuTemplateVars, evaluateMenu } from './context-keys/evaluate-menu';
 export type { DblResourceData, ResourceType } from './resources.model';
 export { doesCatalogRowCoverProject } from './resources.model';
 export type {

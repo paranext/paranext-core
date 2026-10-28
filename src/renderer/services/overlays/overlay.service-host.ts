@@ -33,7 +33,7 @@ import {
   LocalizeKey,
   newGuid,
   newPlatformError,
-  normalizeProjectId,
+  createMenuTemplateVars,
   ReferencedItem,
   ABORTED,
   FAILED_PRECONDITION,
@@ -473,13 +473,11 @@ async function showContextMenu(
   const evaluatedContextMenu = evaluateMenu(
     webViewMenu.contextMenu,
     contextKeysService.get,
-    {
+    createMenuTemplateVars({
       webViewId,
       webViewType,
-      projectId: webViewDefinition?.projectId
-        ? normalizeProjectId(webViewDefinition.projectId)
-        : undefined,
-    },
+      projectId: webViewDefinition?.projectId,
+    }),
     (expression, error) =>
       logger.warn(
         `Error evaluating context menu when-expression '${expression}': ${getErrorMessage(error)}`,

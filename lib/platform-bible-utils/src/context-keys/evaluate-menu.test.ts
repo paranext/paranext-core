@@ -1,7 +1,7 @@
 import { vi } from 'vitest';
 import { MultiColumnMenu, SingleColumnMenu } from '../extension-contributions/menus.model';
 import { ContextKeyValue } from './context-keys.model';
-import { evaluateMenu } from './evaluate-menu';
+import { createMenuTemplateVars, evaluateMenu } from './evaluate-menu';
 
 function makeLookup(values: Record<string, ContextKeyValue | undefined>) {
   return (key: string) => values[key];
@@ -245,5 +245,19 @@ describe('evaluateMenu', () => {
     expect(result.items.map((item) => item.label)).toEqual(['%brokenEnabled%']);
     expect(result.items[0].disabled).toBe(true);
     expect(onError).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('createMenuTemplateVars', () => {
+  it('normalizes a lower-case project id to upper case', () => {
+    expect(
+      createMenuTemplateVars({ webViewId: 'wv1', webViewType: 'test.type', projectId: 'abc123' }),
+    ).toEqual({ webViewId: 'wv1', webViewType: 'test.type', projectId: 'ABC123' });
+  });
+
+  it('leaves an undefined project id undefined', () => {
+    expect(createMenuTemplateVars({ webViewId: 'wv1', webViewType: 'test.type' }).projectId).toBe(
+      undefined,
+    );
   });
 });

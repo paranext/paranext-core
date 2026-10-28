@@ -5293,7 +5293,6 @@ export type ContextKeyValue = string | number | boolean;
  *
  * @param key The context key to look up
  * @returns The current value, or `undefined` if the key has no value
- *
  * @experimental This type is unstable and may change or disappear without notice
  */
 export type ContextKeyLookup = (key: string) => ContextKeyValue | undefined;
@@ -5305,7 +5304,6 @@ export type ContextKeyLookup = (key: string) => ContextKeyValue | undefined;
  *
  * @param key The context key to check
  * @returns `true` if the key is structurally valid
- *
  * @experimental This function is unstable and may change or disappear without notice
  */
 export declare function isValidContextKey(key: string): boolean;
@@ -5314,7 +5312,6 @@ export declare function isValidContextKey(key: string): boolean;
  *
  * @param value The value to check
  * @returns `true` if the value is a string, number, or boolean
- *
  * @experimental This function is unstable and may change or disappear without notice
  */
 export declare function isValidContextKeyValue(value: unknown): value is ContextKeyValue;
@@ -5363,7 +5360,6 @@ export type WhenExpressionAst = {
  * @param expression The when-expression to parse
  * @returns The parsed AST
  * @throws Error with a descriptive message if the expression is not valid
- *
  * @experimental This function is unstable and may change or disappear without notice
  */
 export declare function parseWhenExpression(expression: string): WhenExpressionAst;
@@ -5374,7 +5370,6 @@ export declare function parseWhenExpression(expression: string): WhenExpressionA
  * @param expression The when-expression to inspect
  * @returns Array of unique template variable names
  * @throws Error if the expression is not valid
- *
  * @experimental This function is unstable and may change or disappear without notice
  */
 export declare function getTemplateVarNames(expression: string): string[];
@@ -5387,7 +5382,6 @@ export declare function getTemplateVarNames(expression: string): string[];
  *   reference containing a placeholder with no value evaluates to `undefined` (falsy)
  * @returns The boolean result of the expression. `undefined`, `false`, `0`, and `''` are falsy
  * @throws Error if the expression is not valid (use load-time validation to avoid this)
- *
  * @experimental This function is unstable and may change or disappear without notice
  */
 export declare function evaluateWhenExpression(expression: string, getContextKey: ContextKeyLookup, templateVars?: Record<string, string | undefined>): boolean;
@@ -5403,6 +5397,20 @@ export type EvaluatableMenu = SingleColumnMenu | MultiColumnMenu | Localized<Sin
  * @experimental This type is unstable and may change or disappear without notice
  */
 export type WhenExpressionErrorHandler = (expression: string, error: unknown) => void;
+/**
+ * Builds the template variables a surface passes to {@link evaluateMenu} for one web view. Context
+ * keys embed the canonical upper-case project id, so the id a web view was opened with is
+ * normalized before it is substituted into a `{projectId}` placeholder.
+ *
+ * @param vars The web view's id, type and (optional) project id as the web view knows them
+ * @returns Template variables with the project id normalized, or `undefined` when there is none
+ * @experimental This function is unstable and may change or disappear without notice
+ */
+export declare function createMenuTemplateVars(vars: {
+	webViewId: string;
+	webViewType: string;
+	projectId?: string;
+}): Record<string, string | undefined>;
 /**
  * Evaluates all when-expressions in a menu document against the current context key values.
  *
@@ -5423,7 +5431,6 @@ export type WhenExpressionErrorHandler = (expression: string, error: unknown) =>
  *   validated at contribution load time). Failed expressions fail safe: `when` → hidden,
  *   `enabledWhen` → disabled, `checkedWhen` → unchecked
  * @returns A new menu document with expressions applied and stripped
- *
  * @experimental This function is unstable and may change or disappear without notice
  */
 export declare function evaluateMenu<T extends EvaluatableMenu>(menu: T, getContextKey: ContextKeyLookup, templateVars?: Record<string, string | undefined>, onError?: WhenExpressionErrorHandler): T;
