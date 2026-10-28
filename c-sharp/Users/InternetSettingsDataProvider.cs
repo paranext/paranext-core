@@ -16,16 +16,27 @@ internal sealed class InternetSettingsDataProvider : NetworkObjects.DataProvider
     private const string INTERNET_SERVICES_ALLOWED_KEY = "platform.internetServicesAllowed";
 
     private readonly ContextKeys? _contextKeys;
+    private readonly Func<InternetUse> _readRawStatus;
 
     /// <param name="papiClient">Client used to register this data provider</param>
     /// <param name="contextKeys">
     /// Where the <c>platform.internetServicesAllowed</c> context key is published. Defaults to the
     /// process-wide shared store, resolved when first published.
     /// </param>
-    public InternetSettingsDataProvider(PapiClient papiClient, ContextKeys? contextKeys = null)
+    /// <param name="readRawStatus">
+    /// Reads the saved internet-use setting when publishing. Defaults to
+    /// <c>InternetAccess.RawStatus</c>; tests pass a stand-in so they never touch the user's
+    /// <c>InternetSettings.xml</c>.
+    /// </param>
+    public InternetSettingsDataProvider(
+        PapiClient papiClient,
+        ContextKeys? contextKeys = null,
+        Func<InternetUse>? readRawStatus = null
+    )
         : base("paratextRegistration.internetSettingsDataProvider", papiClient)
     {
         _contextKeys = contextKeys;
+        _readRawStatus = readRawStatus ?? (() => InternetAccess.RawStatus);
         PublishContextKeys();
     }
 
@@ -40,7 +51,7 @@ internal sealed class InternetSettingsDataProvider : NetworkObjects.DataProvider
     {
         try
         {
-            var allowed = !InternetServicesGate.IsBlocked(InternetAccess.RawStatus);
+            var allowed = !InternetServicesGate.IsBlocked(_readRawStatus());
             if (_contextKeys != null)
                 _contextKeys.Set(INTERNET_SERVICES_ALLOWED_KEY, allowed);
             else
