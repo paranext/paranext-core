@@ -116,6 +116,10 @@ export type {
 } from '@shared/services/web-view.service-model';
 export type { AppInfo } from '@shared/services/app.service-model';
 export type {
+  ContextKeyChangeEvent,
+  IContextKeysService,
+} from '@shared/services/context-keys.service-model';
+export type {
   NamedSqlParameters,
   SqlOutputRow,
   SqlValue,
