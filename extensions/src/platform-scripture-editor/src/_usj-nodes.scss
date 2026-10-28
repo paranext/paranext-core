@@ -6,6 +6,10 @@
    demo copy's d95907eed30 sync — the two vendored copies must not diverge on those rules).
    When re-syncing, see the "Indent compensation" comment in the gutter section below for the
    invariant usj-nodes-scss-coverage.test.ts enforces on this file and the demo copy.
+   The empty-verse caret rules (`.psc-empty-text-active`, `[data-caret-host]`) come from
+   scripture-editors#34, unmerged when copied. Deliberately different from it: the ellipsis box
+   (`--psc-empty-verse-ellipsis-width`) is 13px rather than 18px, closer to this copy's
+   previous ellipsis, which had no padding around the glyph.
    The source's four `local()`-only Charis SIL @font-face rules are dropped. */
 
 /* stylelint-disable */
@@ -2763,6 +2767,9 @@ span.read img {
   /* Gutter width. The marker left offset uses calc(-(--psc-gutter-width) + 0.5em),
      so both values must be updated together if the gutter size changes. */
   --psc-gutter-width: 4em;
+  /* An empty verse's ellipsis placeholder is a box of this fixed width, so a hidden one can be
+     cancelled out exactly (see the caret host rule below). */
+  --psc-empty-verse-ellipsis-width: 13px;
 }
 
 .psc-gutter-markers .usfm_v,
@@ -2803,10 +2810,48 @@ span.read img {
   color: var(--scripture-accent-chapter);
 }
 
-.psc-gutter-markers .psc-empty-text::after {
+.psc-gutter-markers .psc-empty-text::after,
+.psc-gutter-markers .psc-empty-text-active::after {
   content: '…';
   color: var(--muted-foreground, #6b7280);
   font-style: italic;
+}
+/* A fixed-width box with the glyph centered in it, rather than the glyph's own width: the caret
+   host's margin below cancels a hidden ellipsis by exactly this width. Not for a `.marker` verse
+   (markerMode "visible"), whose ::after is the verse number itself. */
+.psc-gutter-markers .verse:not(.marker).psc-empty-text::after,
+.psc-gutter-markers .verse:not(.marker).psc-empty-text-active::after {
+  display: inline-block;
+  inline-size: var(--psc-empty-verse-ellipsis-width);
+  text-align: center;
+}
+
+/* The empty verse holding the cursor (ActiveTextPlugin) hides its ellipsis but keeps its box, so
+   the line's width and wrap points don't change. */
+.psc-gutter-markers .verse:not(.marker).psc-empty-text-active::after {
+  color: transparent;
+  /* Otherwise forced-colors mode repaints the hidden ellipsis. */
+  forced-color-adjust: none;
+}
+/* The caret host after that verse's number (EmptyVerseCaretGuardPlugin) takes no room: a negative
+   margin pulls it back over the hidden ellipsis, so its caret is drawn right after the number, and
+   an equal end margin keeps the line's width. The host is the verse's next sibling, marked by its
+   own attribute (CARET_HOST_ATTRIBUTE), so real text after the verse never matches. In an RTL
+   paragraph whose text around the verse is Latin, bidi lays the host out LTR and the margins act on
+   the wrong side, drawing the caret after the next verse's number. */
+.psc-gutter-markers .verse:not(.marker).psc-empty-text-active + [data-caret-host] {
+  margin-inline-start: calc(-1 * var(--psc-empty-verse-ellipsis-width));
+  margin-inline-end: var(--psc-empty-verse-ellipsis-width);
+}
+/* In every view, a caret host after a verse adds no line break. A run of empty verses has no break
+   opportunity, and the host's zero-width space would add one. The trailing word joiner moves it
+   inside the host, where nowrap forbids it. Each of the two is needed on its own.
+   (`text-wrap-mode`, not `white-space`, which would also make a typed space a no-break space.) */
+.verse + [data-caret-host] {
+  text-wrap-mode: nowrap;
+}
+.verse + [data-caret-host]::after {
+  content: '\2060';
 }
 
 .psc-gutter-markers .usfm_s,
@@ -2895,6 +2940,36 @@ span.read img {
   position: relative;
   top: -1px;
   background: none;
+}
+
+/* In RTL the verse span sits at the inline-start (right side) of the line.
+   Forcing direction: ltr on the span keeps ::after at the span's right edge
+   (the same side the number appeared at in LTR), so the numeral reads next to
+   the verse text rather than floating away from it. */
+.psc-gutter-markers[dir='rtl'] .verse.marker {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* Without isolation, an inline verse number (a weak EN-type character) bidi-merges with
+   adjacent Latin text into a single LTR run, which makes the verse number render before its
+   text in left-to-right visual order instead of at the start of the verse in RTL reading
+   order.
+
+   `unicode-bidi: isolate` alone is not enough though: an isolated element with no explicit
+   `direction` becomes a *neutral* character in the parent's bidi flow. Bidi rule N1 then
+   promotes any neutrals sandwiched between two strong LTR runs (e.g. the verses sitting
+   between two English text fragments) up to the LTR level, merging them all back into one
+   big LTR run. Forcing `direction: rtl` on the verse makes the isolated unit a *strong* RTL
+   atom in the parent's bidi flow, so each verse keeps its RTL level regardless of neighbors
+   and the bidi algorithm places verse + following text in reading order. The digit inside
+   still renders LTR because EN flips to level 2 within the verse's RTL isolation.
+
+   The .verse.marker rule above is preserved (it forces direction: ltr because the visible-
+   marker mode's "\\v N" content needs to stay readable LTR) and wins via higher specificity. */
+.psc-gutter-markers[dir='rtl'] .verse {
+  direction: rtl;
+  unicode-bidi: isolate;
 }
 
 /* Indent compensation: each marker's --para-indent must equal its text-spacing margin-left above,

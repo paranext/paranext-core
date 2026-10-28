@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test';
 import { expect, test } from '../../fixtures/isolated.fixture';
 import {
   preConfigureRecentlyOpenedProjects,
@@ -97,6 +98,55 @@ test.use({
   seedSettings: { 'platform.firstRunComplete': true },
 });
 
+/** `webViewType` of the fixed Column 3 Commentaries panel in the simple layout. */
+const COMMENTARIES_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.commentaries';
+
+/**
+ * Waits until the Bible-texts and Commentaries panels have both published the projects they display
+ * (`navigableProjectIds`, see `adr-navigable-project-ids`), and returns the ones other than
+ * `targetProjectId`. A panel publishes only once its lists have loaded, so a published value is the
+ * settled answer.
+ */
+async function waitForColumn3DeclaredProjectIds(
+  page: Page,
+  targetProjectId: string,
+): Promise<string[]> {
+  let declared: string[] = [];
+  await expect
+    .poll(
+      async () => {
+        const published = await page.evaluate(
+          async (panelTypes) => {
+            // `globalThis.papi` is set by the renderer and untyped in the Playwright context.
+            // eslint-disable-next-line no-type-assertion/no-type-assertion -- Playwright page has no PAPI types
+            const { papi } = window as unknown as {
+              papi: {
+                webViews: {
+                  getAllOpenWebViewDefinitions: () => Promise<
+                    { webViewType: string; state?: Record<string, unknown> }[]
+                  >;
+                };
+              };
+            };
+            const definitions = await papi.webViews.getAllOpenWebViewDefinitions();
+            return panelTypes.map(
+              (type) =>
+                definitions.find((definition) => definition.webViewType === type)?.state
+                  ?.navigableProjectIds,
+            );
+          },
+          [BIBLE_TEXTS_PANEL_WEBVIEW_TYPE, COMMENTARIES_PANEL_WEBVIEW_TYPE],
+        );
+        if (!published.every(Array.isArray)) return false;
+        declared = published.flat().filter((id): id is string => id !== targetProjectId);
+        return true;
+      },
+      { timeout: 60_000 },
+    )
+    .toBe(true);
+  return declared;
+}
+
 test.describe('simple mode: book/chapter/verse control reaches books in an open resource', () => {
   // App startup, the editor open with its four related-panel commands, the resource panel re-point,
   // and the project-books subscriptions all of that drives.
@@ -119,11 +169,10 @@ test.describe('simple mode: book/chapter/verse control reaches books in an open 
     removeRevelationFromProject(targetProject);
 
     // Pin the target project's own reference list to itself. Without this, the Bible-texts panel's
-    // "no configured reference list" fallback (`resolveResourceSelection`'s `rows[0]` in
-    // `resource-selection.utils.ts`) silently selects the first locally-installed read-only
-    // resource instead — on any machine with one downloaded (e.g. WEB), that resource's full book
-    // list leaks into Phase 1 below and "Show more books" appears before this test ever opens its
-    // own resource. A self-reference makes `rows[0]` resolve to the target project itself, which
+    // "no configured reference list" fallback (`resolveResourceSelection` in
+    // `resource-selection.utils.ts`) shows a locally-installed read-only resource instead — on any
+    // machine with one downloaded (e.g. WEB), that resource's full book list leaks into Phase 1
+    // below. A self-reference makes the panel show the target project itself, which
     // `getOpenProjectIds` (`src/renderer/hooks/use-open-project-book-ids.hook.ts`) excludes as the
     // active project — see `setReferencedProjectsAndResources`'s docblock for the full mechanism.
     setReferencedProjectsAndResources(targetProject, [targetProject.projectId]);
@@ -207,10 +256,21 @@ test.describe('simple mode: book/chapter/verse control reaches books in an open 
     // The book list is populated from the target project, right up to the book before Revelation.
     await expect(mainPage.locator(GENESIS_ITEM)).toBeVisible({ timeout: 30_000 });
     await expect(mainPage.locator(JUDE_ITEM)).toBeVisible();
-    // Baseline for the phase-2 assertions: opening the editor also re-points every Column 3 panel at
-    // this same project, and the hook excludes the navigation target's own project, so there is no
-    // book to reach beyond the project's own — neither the expansion control nor Revelation exists.
-    await expect(showMoreBooks).toHaveCount(0);
+    // Baseline for the phase-2 assertions: Revelation is not reachable yet. Opening the editor
+    // re-points every Column 3 panel at this same project, which the hook excludes as the navigation
+    // target's own. But a panel with nothing of its kind configured shows a resource of that kind
+    // installed on this machine, and offers its books — the Commentaries panel does, wherever a
+    // commentary is installed. So the expansion control may be here, and Revelation must not be
+    // behind it either. Waiting for the panels to publish keeps the control from turning up only
+    // after this check.
+    const otherDeclaredProjectIds = await waitForColumn3DeclaredProjectIds(
+      mainPage,
+      targetProject.projectId,
+    );
+    if (otherDeclaredProjectIds.length > 0) {
+      await expect(showMoreBooks).toBeVisible({ timeout: 60_000 });
+      await showMoreBooks.click();
+    } else await expect(showMoreBooks).toHaveCount(0);
     await expect(mainPage.locator(REVELATION_ITEM)).toHaveCount(0);
     await mainPage.keyboard.press('Escape');
     await expect(searchInput).toHaveCount(0);

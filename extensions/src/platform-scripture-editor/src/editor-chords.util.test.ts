@@ -112,7 +112,12 @@ describe('matchEditorChord', () => {
 });
 
 describe('shouldRunEditorChord', () => {
-  const live = { isReadOnly: false, isEditorFocused: true, isPowerMode: true };
+  const live = {
+    isReadOnly: false,
+    isEditorFocused: true,
+    isPowerMode: true,
+    isCommentEditorOpen: false,
+  };
 
   it.each(['insertFootnote', 'insertCrossReference'] as const)(
     '%s runs in an editable, focused editor in any view',
@@ -142,6 +147,7 @@ describe('shouldRunEditorChord', () => {
         isReadOnly: true,
         isEditorFocused: false,
         isPowerMode: false,
+        isCommentEditorOpen: false,
       }),
     ).toBe(true);
   });
@@ -149,6 +155,115 @@ describe('shouldRunEditorChord', () => {
   it('basicChecks runs in neither mode, since its menu item is hidden in both', () => {
     expect(shouldRunEditorChord('basicChecks', live)).toBe(false);
     expect(shouldRunEditorChord('basicChecks', { ...live, isPowerMode: false })).toBe(false);
+  });
+});
+
+describe('Ctrl+E (toggleView)', () => {
+  it('maps Ctrl+E to toggleView, which is also the macOS chord', () => {
+    expect(matchEditorChord(keyEvent('e', { ctrlKey: true }))).toEqual({
+      chord: 'toggleView',
+      isRepeat: false,
+    });
+    expect(matchEditorChord(keyEvent('E', { ctrlKey: true }))?.chord).toBe('toggleView');
+  });
+
+  it.each([
+    ['Ctrl+Shift+E', keyEvent('E', { ctrlKey: true, shiftKey: true })],
+    ['Ctrl+Alt+E (AltGr types a euro sign)', keyEvent('e', { ctrlKey: true, altKey: true })],
+    ['Meta+E', keyEvent('e', { metaKey: true })],
+    ['a plain e', keyEvent('e', {})],
+    ['Ctrl+E while composing', keyEvent('e', { ctrlKey: true, isComposing: true })],
+    ['keyCode 229', keyEvent('e', { ctrlKey: true, keyCode: 229 })],
+  ])('does not map %s', (_name, event) => {
+    expect(matchEditorChord(event)).toBeUndefined();
+  });
+
+  it('runs only in Power, read-only or not, focused or not', () => {
+    [true, false].forEach((isReadOnly) =>
+      [true, false].forEach((isEditorFocused) => {
+        expect(
+          shouldRunEditorChord('toggleView', {
+            isReadOnly,
+            isEditorFocused,
+            isPowerMode: true,
+            isCommentEditorOpen: false,
+          }),
+        ).toBe(true);
+        expect(
+          shouldRunEditorChord('toggleView', {
+            isReadOnly,
+            isEditorFocused,
+            isPowerMode: false,
+            isCommentEditorOpen: false,
+          }),
+        ).toBe(false);
+      }),
+    );
+  });
+
+  it('does not run while a comment draft is open, even with the main text focused', () => {
+    expect(
+      shouldRunEditorChord('toggleView', {
+        isReadOnly: false,
+        isEditorFocused: true,
+        isPowerMode: true,
+        isCommentEditorOpen: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('runs again once the comment draft is closed', () => {
+    expect(
+      shouldRunEditorChord('toggleView', {
+        isReadOnly: false,
+        isEditorFocused: false,
+        isPowerMode: true,
+        isCommentEditorOpen: false,
+      }),
+    ).toBe(true);
+  });
+
+  it('leaves the insert chords and F7 unaffected by an open comment draft', () => {
+    const ctx = {
+      isReadOnly: false,
+      isEditorFocused: true,
+      isPowerMode: true,
+      isCommentEditorOpen: true,
+    };
+    expect(shouldRunEditorChord('showFootnotes', ctx)).toBe(true);
+    expect(shouldRunEditorChord('insertFootnote', ctx)).toBe(true);
+  });
+
+  it('sends the view toggle for this editor', () => {
+    const effects = makeEffects();
+    runEditorChord('toggleView', effects);
+    expect(effects.sendCommand).toHaveBeenCalledExactlyOnceWith(
+      'platformScriptureEditor.changeView',
+      'editor-web-view-1',
+    );
+    expect(effects.insertNote).not.toHaveBeenCalled();
+  });
+
+  it('acts once when held', () => {
+    const effects = makeEffects();
+    const ctrlE = keyEvent('e', { ctrlKey: true });
+    const state = { isReadOnly: false, isPowerMode: true };
+    const first = pressKey(ctrlE, state, effects);
+    const held = pressKey({ ...ctrlE, repeat: true }, state, effects);
+    expect(first.preventedDefault).toBe(true);
+    expect(held.preventedDefault).toBe(true);
+    expect(effects.sendCommand).toHaveBeenCalledTimes(1);
+  });
+
+  it('is left alone in Simple', () => {
+    const effects = makeEffects();
+    const result = pressKey(
+      keyEvent('e', { ctrlKey: true }),
+      { isReadOnly: false, isPowerMode: false },
+      effects,
+    );
+    expect(result.preventedDefault).toBe(false);
+    expect(effects.sendCommand).not.toHaveBeenCalled();
   });
 });
 
@@ -191,12 +306,23 @@ describe('runEditorChord', () => {
 /** The web view's keydown path: match, guard, swallow, run. Returns whether the key is swallowed. */
 function pressKey(
   event: ChordEvent,
-  state: { isReadOnly: boolean; isPowerMode: boolean; isEditorFocused?: boolean },
+  state: {
+    isReadOnly: boolean;
+    isPowerMode: boolean;
+    isEditorFocused?: boolean;
+    isCommentEditorOpen?: boolean;
+  },
   effects: EditorChordEffects,
 ): { preventedDefault: boolean } {
   const match = matchEditorChord(event);
   if (!match) return { preventedDefault: false };
-  if (!shouldRunEditorChord(match.chord, { isEditorFocused: true, ...state })) {
+  if (
+    !shouldRunEditorChord(match.chord, {
+      isEditorFocused: true,
+      isCommentEditorOpen: false,
+      ...state,
+    })
+  ) {
     return { preventedDefault: false };
   }
   if (!match.isRepeat) runEditorChord(match.chord, effects);
@@ -206,15 +332,15 @@ function pressKey(
 describe('Ctrl+T through match, guard and run', () => {
   const ctrlT = keyEvent('t', { ctrlKey: true });
 
-  // The view type does not reach the chord path, so these name the states each view produces: the
-  // formatted view is editable, and the markers view is editable only when its read-only gate is off.
+  // The view type does not reach the chord path, so these name the states each mode produces: Simple
+  // is editable, and Power is editable only when its read-only gate is off.
   it('inserts a footnote in the formatted view', () => {
     const effects = makeEffects();
     pressKey(ctrlT, { isReadOnly: false, isPowerMode: false }, effects);
     expect(effects.insertNote).toHaveBeenCalledExactlyOnceWith('insertFootnoteAtSelection');
   });
 
-  it('inserts a footnote in the markers view when it is editable', () => {
+  it('inserts a footnote in Power when the text is editable', () => {
     const effects = makeEffects();
     pressKey(ctrlT, { isReadOnly: false, isPowerMode: true }, effects);
     expect(effects.insertNote).toHaveBeenCalledExactlyOnceWith('insertFootnoteAtSelection');

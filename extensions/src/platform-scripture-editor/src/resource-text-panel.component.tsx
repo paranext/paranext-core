@@ -7,10 +7,11 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  Spinner,
   useExtraValidMarkers,
   useViewVisibility,
 } from 'platform-bible-react';
@@ -21,8 +22,18 @@ import {
   PlatformError,
   ResourceType,
 } from 'platform-bible-utils';
-import { ChevronDown } from 'lucide-react';
-import { ComponentProps, ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
+import { ChevronDown, Lock } from 'lucide-react';
+import {
+  ComponentProps,
+  Fragment,
+  ReactNode,
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from 'react';
 import {
   hasNewScrollTarget,
   isEchoOfPublishedScrRef,
@@ -31,6 +42,7 @@ import {
   waitForLayoutToSettle,
 } from './editor-dom.util';
 import { getRefLabel, getResourceReferenceRowId } from './resource-reference.utils';
+import { isTeamPickerResource, splitPickerResourcesBySource } from './resource-selection.utils';
 import type { PickerResource } from './downloaded-resources.utils';
 import type { ResourcePanelReadiness } from './resource-panel-readiness.utils';
 import { PanelReadinessView } from './panel-readiness-view.component';
@@ -54,6 +66,7 @@ import type {
 } from './resource-text-panel.const';
 import type { DblResourceInstallFailureReason } from './use-dbl-resource-auto-install.hook';
 import { RESOURCE_PANEL_INSTALL_FAILURE_KEYS } from './resource-text-panel.const';
+import { RESOURCE_COLLECTION_OPTIONS_KEYS } from './resource-collection-options/resource-collection-options.types';
 import { getInstallFailureMessageKey } from './install-failure-message.utils';
 
 /**
@@ -72,31 +85,150 @@ const localize = (strings: ResourcePanelLocalizedStrings, key: ResourcePanelLoca
 export const RESOURCE_TEXT_EDITOR_CONTAINER_TEST_ID = 'resource-text-editor-container';
 
 /**
- * Identifies the content area's waiting state. `Spinner` is a bare `LoaderCircle` SVG with no role
- * and no accessible name, so without a handle here a test can only assert that the messages and the
- * editor are ABSENT — which a content area rendering nothing at all satisfies just as well.
- * Asserting the spinner is present is what makes "the panel is waiting" a falsifiable claim.
+ * Identifies the content area's waiting state. The state announces itself (see
+ * {@link ContentLoadingView}), but its accessible name is the same localized "Loading…" string the
+ * whole-panel waiting state uses, so a name alone cannot tell the two apart. This handle is what
+ * makes "the CONTENT AREA is waiting" — header still mounted above it — a falsifiable claim rather
+ * than one a panel rendering nothing at all would also satisfy.
  */
 export const RESOURCE_TEXT_WAITING_TEST_ID = 'resource-text-waiting';
+
+/**
+ * The panel's CONTENT-area waiting state, for a chapter that has not arrived yet.
+ *
+ * Distinct from the full-panel {@link LoadingView} the readiness and install states render: the
+ * selector header stays mounted above this one, so it sizes to the content area rather than the
+ * viewport.
+ *
+ * Labelled rather than a bare `Spinner`, matching the three message states it alternates with
+ * (`ResourceBookNotAvailable`, `ResourceBlankChapter`, `ResourceTextUnavailable`), all of which
+ * carry an accessible name. A bare spinner announces nothing at all, and this state is entered on
+ * every chapter navigation.
+ *
+ * @param label Already-localized status text, doubling as the state's accessible name.
+ * @param announcementKey Identifies WHICH chapter is being waited on. Remounts the live region on a
+ *   change so a move from one wait to the next is announced; a surviving `role="status"` holding
+ *   byte-identical text reports nothing.
+ */
+function ContentLoadingView({
+  label,
+  announcementKey,
+}: {
+  label: ReactNode;
+  announcementKey: string;
+}) {
+  return (
+    <div className="tw:flex tw:flex-1" data-testid={RESOURCE_TEXT_WAITING_TEST_ID}>
+      <LoadingView key={announcementKey} sizingClassName="tw:flex-1" label={label} />
+    </div>
+  );
+}
 
 type ResourceSelectorDropdownProps = {
   filteredResources: PickerResource[];
   selectedRef: PickerResource | undefined;
   dblResources: DblResourceData[];
+  /**
+   * Whether a DBL catalog is expected but not here: still loading, or failed. See
+   * `splitPickerResourcesBySource`.
+   */
+  isCatalogUnavailable: boolean;
+  /** When `false`, the rows are one list with no headings, caption or locks */
+  isGrouped: boolean;
   onSelectResource: (id: string) => void;
   /** Undefined hides the option: downloading adds to the project's list, so needs a project */
   onShowResourcePicker: (() => void) | undefined;
   downloadResourcesLabel: string;
+  /**
+   * Already-localized text for the trigger while no row is selected yet — the window where the
+   * panel is configured but its sources have not settled enough to resolve a selection.
+   *
+   * The trigger's only other content is a chevron, which contributes no text, so without this the
+   * button renders blank AND has no accessible name at all.
+   */
+  noSelectionLabel: string;
+  /** Heading over the resources the project administrator put in the team layout */
+  teamResourcesLabel: string;
+  /** Heading over the user's own resources */
+  userResourcesLabel: string;
+  /** Heading over resources installed on this computer that neither list names */
+  otherResourcesLabel: string;
+  /** Says, once under the team heading, that only a project administrator can remove those rows */
+  teamResourcesCaption: string;
+  /** Names the lock on each team row */
+  teamResourceLockLabel: string;
 };
 
+/**
+ * The panel's resource selector. Rows are grouped as the team's, the user's own and other installed
+ * resources (see `splitPickerResourcesBySource`), each under its heading, and a group with no rows
+ * gets none. The team's come first, with a caption saying only a project administrator can remove
+ * them and a lock on each; they always get their heading, since the caption is what explains the
+ * locks. With no team rows and only one other group, the rows are one unlabeled list. Ungrouped,
+ * every row is in one unlabeled list, in the order given, with no caption or locks.
+ */
 function ResourceSelectorDropdown({
   filteredResources,
   selectedRef,
   dblResources,
+  isCatalogUnavailable,
+  isGrouped,
   onSelectResource,
   onShowResourcePicker,
   downloadResourcesLabel,
+  noSelectionLabel,
+  teamResourcesLabel,
+  userResourcesLabel,
+  otherResourcesLabel,
+  teamResourcesCaption,
+  teamResourceLockLabel,
 }: ResourceSelectorDropdownProps) {
+  const headingIdPrefix = useId();
+  const teamHeadingId = `${headingIdPrefix}-team`;
+  const teamCaptionId = `${headingIdPrefix}-team-caption`;
+  const selectedRowId = selectedRef ? getResourceReferenceRowId(selectedRef.reference) : undefined;
+  // TODO(PT-4063): order the team's rows the way the administrator pins them.
+  const { team, user, other } = splitPickerResourcesBySource(filteredResources, {
+    isCatalogUnavailable,
+  });
+  // The groups below the team's, leaving out any with no rows.
+  const nonTeamGroups = [
+    { headingId: `${headingIdPrefix}-user`, label: userResourcesLabel, rows: user },
+    { headingId: `${headingIdPrefix}-other`, label: otherResourcesLabel, rows: other },
+  ].filter((group) => group.rows.length > 0);
+  const isUnlabeled = team.length === 0 && nonTeamGroups.length <= 1;
+
+  const renderRow = (row: PickerResource) => {
+    const rowId = getResourceReferenceRowId(row.reference);
+    const label = getRefLabel(row.reference, dblResources);
+    return (
+      <DropdownMenuCheckboxItem
+        key={rowId}
+        checked={rowId === selectedRowId}
+        onCheckedChange={() => {
+          onSelectResource(rowId);
+        }}
+      >
+        {/* `dir="auto"` on the name rather than the item: `getRefLabel` returns the joined
+            short/full name as one text node, so the name needs its own direction, while the check
+            and the lock keep to the panel's side. A long name ellipsizes rather than wrapping, and
+            `title` shows it whole. */}
+        <span className="tw:min-w-0 tw:truncate" dir="auto" title={label}>
+          {label}
+        </span>
+        {isGrouped && isTeamPickerResource(row) && (
+          <span
+            role="img"
+            aria-label={teamResourceLockLabel}
+            className="tw:ms-auto tw:flex tw:shrink-0 tw:text-muted-foreground"
+          >
+            <Lock aria-hidden />
+          </span>
+        )}
+      </DropdownMenuCheckboxItem>
+    );
+  };
+
   return (
     <div className="tw:px-2 tw:py-1">
       <DropdownMenu>
@@ -108,30 +240,40 @@ function ResourceSelectorDropdown({
             {/* `dir="auto"`: `getRefLabel` returns the joined short/full name as one text node, so
                 the label needs the name's own direction rather than the panel's. */}
             <span className="tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap" dir="auto">
-              {selectedRef ? getRefLabel(selectedRef.reference, dblResources) : ''}
+              {selectedRef ? getRefLabel(selectedRef.reference, dblResources) : noSelectionLabel}
             </span>
             <ChevronDown className="tw:ml-1 tw:h-4 tw:w-4 tw:shrink-0" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="tw:w-72">
-          {filteredResources.map((ref) => {
-            const refId = getResourceReferenceRowId(ref.reference);
-            return (
-              <DropdownMenuCheckboxItem
-                key={refId}
-                checked={
-                  refId ===
-                  (selectedRef ? getResourceReferenceRowId(selectedRef.reference) : undefined)
-                }
-                onCheckedChange={() => {
-                  onSelectResource(refId);
-                }}
-                dir="auto"
-              >
-                {getRefLabel(ref.reference, dblResources)}
-              </DropdownMenuCheckboxItem>
-            );
-          })}
+          {!isGrouped && filteredResources.map(renderRow)}
+          {isGrouped && isUnlabeled && nonTeamGroups[0]?.rows.map(renderRow)}
+          {isGrouped && !isUnlabeled && (
+            <>
+              {team.length > 0 && (
+                // The caption says once what the locks mean, rather than repeating it on every row.
+                <DropdownMenuGroup aria-labelledby={teamHeadingId} aria-describedby={teamCaptionId}>
+                  <DropdownMenuLabel id={teamHeadingId}>{teamResourcesLabel}</DropdownMenuLabel>
+                  <p
+                    id={teamCaptionId}
+                    className="tw:px-1.5 tw:pb-1 tw:text-xs tw:text-muted-foreground"
+                  >
+                    {teamResourcesCaption}
+                  </p>
+                  {team.map(renderRow)}
+                </DropdownMenuGroup>
+              )}
+              {nonTeamGroups.map((group, index) => (
+                <Fragment key={group.headingId}>
+                  {(team.length > 0 || index > 0) && <DropdownMenuSeparator />}
+                  <DropdownMenuGroup aria-labelledby={group.headingId}>
+                    <DropdownMenuLabel id={group.headingId}>{group.label}</DropdownMenuLabel>
+                    {group.rows.map(renderRow)}
+                  </DropdownMenuGroup>
+                </Fragment>
+              ))}
+            </>
+          )}
           {onShowResourcePicker && (
             <>
               <DropdownMenuSeparator />
@@ -182,6 +324,19 @@ export type ResourceTextPanelProps = {
   readiness: ResourcePanelReadiness;
   /** All DBL resources — used to label the selector rows. */
   dblResources: DblResourceData[];
+  /**
+   * Whether a DBL catalog is expected but not here: still loading, or failed. The selector then
+   * lists the user's own and other installed resources together, since without the catalog the
+   * user's DBL references resolve as plain downloads. An installation with no DBL credentials keeps
+   * the groups: it will never have a catalog, and merging them would leave a resource the user
+   * removed listed as one of theirs.
+   */
+  isCatalogUnavailable: boolean;
+  /**
+   * Whether the selector groups its rows as the team's, the user's own and other installed ones,
+   * with the team caption and locks. `false` in Power mode, which has no notion of team resources.
+   */
+  isGrouped: boolean;
   /** Re-runs the DBL resource catalog fetch. */
   onRetryCatalog: () => void;
   /** The reference the panel is displaying. */
@@ -202,6 +357,12 @@ export type ResourceTextPanelProps = {
    * default is itself blank.
    */
   isUsjLoading: boolean;
+  /**
+   * Re-drives the chapter read behind the `failed` content state. Owned by the caller because the
+   * subscription this re-opens is the caller's; this panel only reports that the affordance was
+   * activated.
+   */
+  onRetryChapter: () => void;
   /** The displayed resource's text direction. Applied to the editor only, never to the messages. */
   textDirection: EditorOptions['textDirection'];
   /** The editor's copy limit for the chapter on screen. See `EditorOptions.copyLimit`. */
@@ -267,12 +428,15 @@ export function ResourceTextPanel({
   selectedRef,
   readiness,
   dblResources,
+  isCatalogUnavailable,
+  isGrouped,
   onRetryCatalog,
   scrRef,
   onScrRefChange,
   onSelectResource,
   usjPossiblyError,
   isUsjLoading,
+  onRetryChapter,
   textDirection,
   copyLimit,
   isSelecting,
@@ -292,15 +456,32 @@ export function ResourceTextPanel({
   const usjFromPdp = !isPlatformError(usjPossiblyError) ? usjPossiblyError : undefined;
 
   // A chapter the resource HAS but with nothing in it. Gated on the load having finished because
-  // the data layer doesn't reset to its default when the reference changes — it keeps the previous
-  // chapter's USJ until the new subscription's first update lands, and that default is itself
-  // blank. Without the gate the panel would claim "empty" over a chapter that is still arriving,
-  // and again on first mount.
+  // the data layer doesn't reset to its default when the reference changes — it keeps the PREVIOUS
+  // chapter's USJ until the new subscription's first update lands. Without the gate the panel would
+  // claim "empty" over a chapter that is still arriving, using a blank answer that belongs to the
+  // reference the reader just left.
   //
   // Chapter 0 is front matter rather than a chapter; `isBlankChapterOnScreen` has that rationale.
+  //
+  // A settled read that delivered nothing counts too, and is decided HERE rather than inside
+  // `isBlankChapterOnScreen` because what a settled `undefined` means depends on the caller's seed
+  // for its data hook. This component's `usjPossiblyError` contract makes it a delivered answer; a
+  // caller that seeds a blank USJ gives `undefined` no such meaning, so the shared helper must keep
+  // answering `false` for it.
+  //
+  // It is a real delivered answer rather than a fault: the extender PDP returns `undefined` for a
+  // falsy USX (`platform-scripture-extender-pdpe.model.ts`), deterministically, so re-reading
+  // produces `undefined` again. Naming it a failure would offer a retry that cannot change the
+  // outcome, which is the inert control the failure state exists to avoid.
+  //
+  // Keyed on `usjPossiblyError`, NOT on `usjFromPdp`: the latter is also `undefined` when the read
+  // failed, so using it would report a genuine error as an empty chapter and swallow the failure.
   const isBlankChapter = useMemo(
-    () => !isUsjLoading && isBlankChapterOnScreen(usjFromPdp, scrRef.chapterNum),
-    [usjFromPdp, isUsjLoading, scrRef.chapterNum],
+    () =>
+      !isUsjLoading &&
+      (isBlankChapterOnScreen(usjFromPdp, scrRef.chapterNum) ||
+        (usjPossiblyError === undefined && scrRef.chapterNum > 0)),
+    [usjFromPdp, usjPossiblyError, isUsjLoading, scrRef.chapterNum],
   );
 
   // The book-not-available message is withheld unless the failure names the book AND project on
@@ -313,8 +494,9 @@ export function ResourceTextPanel({
         resourceProjectId,
         usjPossiblyError,
         currentBookNum: Canon.bookIdToNumber(scrRef.book),
+        isUsjSettled: !isUsjLoading,
       }),
-    [resourceProjectId, usjPossiblyError, scrRef.book],
+    [resourceProjectId, usjPossiblyError, scrRef.book, isUsjLoading],
   );
 
   // A chapter read that fails is otherwise invisible outside the UI, and the state it produces — a
@@ -391,9 +573,36 @@ export function ResourceTextPanel({
   // content-area states — the half this dep list already handles — and it keeps six whole-panel
   // early returns of its own, fed by an effect keyed on the USJ alone. In those branches the editor
   // is not rendered in any form, so there is no element to hide.
-  useEffect(() => {
-    if (usjFromPdp) editorRef.current?.setUsj(usjFromPdp);
-  }, [usjFromPdp, contentState, isBlankChapter]);
+  //
+  // A LAYOUT effect, not a passive one, because the render that decides to mount `Editorial` is the
+  // render where the chapter arrived — and the editor holds nothing until this feed runs. A passive
+  // effect runs after the browser has already painted, so that placeholder is shown for a frame on
+  // every arrival. React flushes layout effects after the DOM is mutated but before paint, and the
+  // child's `useImperativeHandle` handle is installed before this parent effect runs, so the feed
+  // lands in the same frame the editor appears in.
+  //
+  // The cost is that `setUsj` runs before paint with a whole chapter's USJ. That is accepted: the
+  // work is the same work either way — the editor is useless until it is fed — and deferring it
+  // past paint does not remove the cost, it only guarantees that the frame the reader sees first is
+  // the wrong one. Chapters are bounded by the largest chapter in scripture, not by anything that
+  // grows.
+  //
+  // HIDDEN CASE (see `.claude/rules/cross-view-sync-hidden-views.md`). rc-dock keeps an inactive
+  // tab's pane mounted under `display: none`, so this panel keeps receiving chapters at full rate
+  // for a view nobody can see. Blocking a paint that will not happen buys nothing, so the feed is
+  // skipped entirely while hidden and `isViewVisible` is a dependency: the flip back to visible
+  // re-runs this effect, feeding whatever chapter is current by then. Repeats collapse for free —
+  // only the latest `usjFromPdp` is ever fed — which is why this does not need `useRunWhenVisible`.
+  // That hook's catch-up runs from a PASSIVE effect, which would reintroduce the post-paint
+  // placeholder frame above at every tab activation, the precise thing this effect exists to avoid.
+  //
+  // `useViewVisibility` resolves through an `IntersectionObserver`, which reports asynchronously, so
+  // between the pane being unhidden and the observer firing the reader sees the editor's previous
+  // contents rather than the current chapter. That window is bounded by one observer callback and
+  // shows stale scripture, not an edit invitation.
+  useLayoutEffect(() => {
+    if (isViewVisible && usjFromPdp) editorRef.current?.setUsj(usjFromPdp);
+  }, [isViewVisible, usjFromPdp, contentState, isBlankChapter]);
 
   // Scroll to the current verse when this tab is shown, and again once a chapter's content lands.
   //
@@ -649,12 +858,10 @@ export function ResourceTextPanel({
   const renderContent = () => {
     if (contentState === 'loading')
       return (
-        <div
-          className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8"
-          data-testid={RESOURCE_TEXT_WAITING_TEST_ID}
-        >
-          <Spinner />
-        </div>
+        <ContentLoadingView
+          label={localize(localizedStrings, '%webView_resourcePanel_loading%')}
+          announcementKey={`${resourceProjectId}:${scrRef.book}:${scrRef.chapterNum}`}
+        />
       );
 
     if (contentState === 'bookNotAvailable')
@@ -680,15 +887,17 @@ export function ResourceTextPanel({
         </div>
       );
 
-    // A failure that is not a missing book in the text on screen. Terminal, because the value in
-    // hand is an error rather than USJ and nothing re-emits until the data provider does — so a
-    // spinner here would claim progress that never arrives.
+    // A failure that is not a missing book in the text on screen. Nothing re-emits on its own, so
+    // this names the failure instead of showing a spinner that would claim progress that never
+    // arrives — and offers the reader the one thing that CAN re-emit, a fresh read.
     if (contentState === 'failed')
       return (
         <div className="tw:flex-1 tw:overflow-auto">
           <ResourceTextUnavailable
             message={localize(localizedStrings, '%webView_resourcePanel_textUnavailable%')}
             announcementKey={`${resourceProjectId}:${scrRef.book}:${scrRef.chapterNum}`}
+            retryLabel={localize(localizedStrings, '%webView_resourcePanel_retry%')}
+            onRetry={onRetryChapter}
           />
         </div>
       );
@@ -699,12 +908,10 @@ export function ResourceTextPanel({
     // cannot edit.
     if (!usjFromPdp)
       return (
-        <div
-          className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8"
-          data-testid={RESOURCE_TEXT_WAITING_TEST_ID}
-        >
-          <Spinner />
-        </div>
+        <ContentLoadingView
+          label={localize(localizedStrings, '%webView_resourcePanel_loading%')}
+          announcementKey={`${resourceProjectId}:${scrRef.book}:${scrRef.chapterNum}`}
+        />
       );
 
     // The zoom marker sits INSIDE the scroll box, never on it or above it: `scrollToVerse` adds a
@@ -741,11 +948,31 @@ export function ResourceTextPanel({
         filteredResources={filteredResources}
         selectedRef={selectedRef}
         dblResources={dblResources}
+        isCatalogUnavailable={isCatalogUnavailable}
+        isGrouped={isGrouped}
         onSelectResource={onSelectResource}
         onShowResourcePicker={hasProject ? onShowResourcePicker : undefined}
         downloadResourcesLabel={localize(
           localizedStrings,
           '%webView_resourcePanel_downloadResources%',
+        )}
+        noSelectionLabel={localize(localizedStrings, '%webView_resourcePanel_loadingResources%')}
+        teamResourcesLabel={localize(
+          localizedStrings,
+          RESOURCE_COLLECTION_OPTIONS_KEYS.teamResourcesHeader,
+        )}
+        userResourcesLabel={localize(
+          localizedStrings,
+          RESOURCE_COLLECTION_OPTIONS_KEYS.userResourcesHeader,
+        )}
+        otherResourcesLabel={localize(localizedStrings, '%webView_resourcePanel_otherResources%')}
+        teamResourcesCaption={localize(
+          localizedStrings,
+          '%webView_resourcePanel_teamResourcesCaption%',
+        )}
+        teamResourceLockLabel={localize(
+          localizedStrings,
+          RESOURCE_COLLECTION_OPTIONS_KEYS.teamSharedLock,
         )}
       />
 

@@ -1,5 +1,5 @@
-import type { WebViewProps } from '@papi/core';
-import papi, { logger } from '@papi/frontend';
+import type { DialogTypes, WebViewProps } from '@papi/core';
+import { logger } from '@papi/frontend';
 import {
   useDataProvider,
   useDialogCallback,
@@ -7,9 +7,7 @@ import {
   useProjectDataProvider,
   useProjectSetting,
   useScrollGroupScrRef,
-  useSetting,
 } from '@papi/frontend/react';
-import { useTabIconSelection, type TabIconUrls } from 'platform-bible-react';
 import {
   DblResourceData,
   formatReplacementString,
@@ -18,15 +16,16 @@ import {
   LocalizeKey,
   ResourceType,
 } from 'platform-bible-utils';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ResourceReferenceList } from 'platform-scripture';
 import { useChapterUsjWithCopyLimit } from './copy-limit/use-chapter-usj-with-copy-limit.hook';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { useResourcePickerResources } from './use-resource-picker-resources.hook';
-import type { PickerResource } from './downloaded-resources.utils';
+import { getPickerDialogSelection, type PickerResource } from './downloaded-resources.utils';
 import {
   canPublishResourcePanelProjectIds,
+  canResolveResourceSelection,
   getResourcePanelReadiness,
   type ResourcePanelReadiness,
 } from './resource-panel-readiness.utils';
@@ -35,6 +34,7 @@ import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
 import { useIsOnline } from './use-is-online.hook';
+import { useIsPowerMode } from './use-is-power-mode.hook';
 import {
   getResourceReferenceRowId,
   isDblResourceReference,
@@ -42,13 +42,19 @@ import {
 } from './resource-reference.utils';
 import {
   findSelectedRow,
+  isTeamPickerResource,
   matchesSelectedResourceId,
   resolveResourceSelection,
   type ResourceSelectionResolution,
 } from './resource-selection.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
+import { resolveLocalizedString } from './scripture-text-grid/view-options-notice.utils';
 import { resolveResourcePanelStringKeys } from './resource-panel-strings.utils';
 import { selectTextConnection } from './select-dbl-resource';
+import {
+  removeFromUserListAndNotify,
+  RESOURCE_REMOVED_FROM_USER_LIST_KEY,
+} from './scripture-text-grid-persistence.utils';
 import { ResourceTextPanel } from './resource-text-panel.component';
 import { RESOURCE_PANEL_STRING_KEYS } from './resource-text-panel.const';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
@@ -64,21 +70,8 @@ const DEFAULT_TEXT_DIRECTION = 'ltr';
 const ALL_STRING_KEYS: LocalizeKey[] = [
   ...RESOURCE_PANEL_STRING_KEYS,
   ...COPYRIGHT_NOTICE_STRING_KEYS,
+  RESOURCE_REMOVED_FROM_USER_LIST_KEY,
 ];
-
-const BIBLE_TEXTS_ICON_URLS: TabIconUrls = {
-  lightDefault: 'papi-extension://platformScriptureEditor/assets/book-open.svg',
-  dark: 'papi-extension://platformScriptureEditor/assets/book-open-dark.svg',
-  lightSelected: 'papi-extension://platformScriptureEditor/assets/book-open-selected.svg',
-  lightUnselected: 'papi-extension://platformScriptureEditor/assets/book-open-unselected.svg',
-};
-
-const COMMENTARIES_ICON_URLS: TabIconUrls = {
-  lightDefault: 'papi-extension://platformScriptureEditor/assets/file-text.svg',
-  dark: 'papi-extension://platformScriptureEditor/assets/file-text-dark.svg',
-  lightSelected: 'papi-extension://platformScriptureEditor/assets/file-text-selected.svg',
-  lightUnselected: 'papi-extension://platformScriptureEditor/assets/file-text-unselected.svg',
-};
 
 // This panel offers locally-downloaded resources alongside the ones already in the text
 // collection, so its rows are the union of both.
@@ -110,55 +103,23 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
     'selectedResourceId',
     undefined,
   );
+  // The resource the user last chose themselves, so a selection the panel fell back to can be told
+  // apart from one the user picked. See `resolveResourceSelection` for why a fallback must not
+  // outlive a configured resource arriving. Written also by `buildResourceTextPanelState`.
+  const [userPickedResourceId, setUserPickedResourceId] = useWebViewState<string | undefined>(
+    'userPickedResourceId',
+    undefined,
+  );
 
   // #endregion
 
-  // #region Tab icon (Simple mode only — Power mode keeps this tab text-only, as today)
+  // #region Interface mode
 
-  const [interfaceModePossiblyError] = useSetting('platform.interfaceMode', 'simple');
-  const isPowerMode = useMemo(() => {
-    if (isPlatformError(interfaceModePossiblyError)) {
-      logger.warn(`Error getting interface mode: ${getErrorMessage(interfaceModePossiblyError)}`);
-      return false;
-    }
-    return interfaceModePossiblyError === 'power';
-  }, [interfaceModePossiblyError]);
-
-  const [isDarkTheme, setIsDarkTheme] = useState(false);
-  useEffect(() => {
-    let disposed = false;
-    let unsubscribe: (() => void) | undefined;
-    papi.themes
-      .subscribeCurrentTheme(undefined, (theme) => {
-        if (!isPlatformError(theme)) setIsDarkTheme(theme.type === 'dark');
-      })
-      .then((unsub) => {
-        if (disposed) unsub();
-        else unsubscribe = unsub;
-        return undefined;
-      })
-      .catch((e) => logger.warn(`Failed to subscribe to the current theme: ${getErrorMessage(e)}`));
-    return () => {
-      disposed = true;
-      unsubscribe?.();
-    };
-  }, []);
-
-  const tabIconUrls =
-    resourceType === 'ScriptureResource' ? BIBLE_TEXTS_ICON_URLS : COMMENTARIES_ICON_URLS;
-  const tabIconUrl = useTabIconSelection(isDarkTheme, tabIconUrls);
-  useEffect(() => {
-    // Power mode: no tab icon, exactly as today. Still clear a previously-set iconUrl explicitly
-    // (rather than skipping the call) — updateWebViewDefinition's merge only touches keys present in
-    // the update object, so a present-but-undefined iconUrl writes through and removes a value a
-    // prior Simple-mode run of this same effect may have set, while omitting the key entirely would
-    // leave it stuck showing the last Simple-mode icon after switching to Power mode at runtime.
-    if (isPowerMode) {
-      updateWebViewDefinition({ iconUrl: undefined });
-      return;
-    }
-    updateWebViewDefinition({ iconUrl: tabIconUrl });
-  }, [isPowerMode, tabIconUrl, updateWebViewDefinition]);
+  // Undefined until the setting loads; the tab icon and tooltip treat that as Simple.
+  const isPowerMode = useIsPowerMode();
+  // The resource picker waits for a confirmed Simple before it shows team resources or offers
+  // removing.
+  const isSimpleMode = isPowerMode === false;
 
   // #endregion
 
@@ -176,11 +137,16 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
 
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
   const { dblResources, isCatalogReady, hasCatalogError, refetchCatalog } = useDblResourceCatalog();
+  // "The catalog is done, however it turned out" — one name for a disjunction the panel needs in
+  // three places (picker rows, selection settlement, and the readiness input below). Distinct from
+  // `isCatalogReady`, which means "done AND delivered"; the difference is what the display/persist
+  // split turns on (see `adr-panel-readiness-splits-display-from-persistence`).
+  const isCatalogSettled = isCatalogReady || hasCatalogError;
   const [pickerResources, arePickerResourcesLoading] = useResourcePickerResources(
     projectId,
     RESOURCE_PICKER_OPTIONS,
     dblResources,
-    isCatalogReady || hasCatalogError,
+    isCatalogSettled,
   );
   const getUserResourceTexts = useCallback(
     async () => textConnectionsProvider?.getUserReferencedProjectsAndResources(),
@@ -258,9 +224,14 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   // the resource they abandoned, with nothing indicating their own earlier pick won.
   const [pendingResourceId, setPendingResourceId] = useState<string | undefined>(undefined);
 
-  // Committing a pick, holding still while one is in flight, migrating a legacy bare id and
-  // falling back when the selection leaves the list are one decision, not four effects that can
-  // disagree across renders. `resolveResourceSelection` makes it, and is tested directly.
+  // The downloaded fallback shown last. Kept in React state rather than web view state because a
+  // fallback is never persisted; holding it keeps a newly installed resource from taking its place.
+  const [heldFallbackRowId, setHeldFallbackRowId] = useState<string | undefined>(undefined);
+
+  // Committing a pick, holding still while one is in flight, migrating a legacy bare id, falling
+  // back when the selection leaves the list, and replacing a downloaded fallback once something
+  // configured is displayable are one decision, not separate effects that can disagree across
+  // renders. `resolveResourceSelection` makes it, and is tested directly.
   //
   // Resolved HERE and handed to the panel as `selectedRef`, rather than resolved by the panel and
   // reported back up: `resourceProjectId` below keys the `ChapterUSJ` subscription that produces
@@ -271,30 +242,72 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   // With no project open the panel shows only a resource it was asked for — one opened from Home —
   // and never picks one by itself: there is no list of the user's texts to pick from, so a fallback
   // would put an arbitrary download on screen instead of "open a project".
+  const arePanelRowsReady = pickerResources !== undefined;
   const selection: ResourceSelectionResolution = projectId
-    ? resolveResourceSelection(filteredResources, selectedResourceId, pendingResourceId)
+    ? resolveResourceSelection(filteredResources, {
+        selectedResourceId,
+        userPickedResourceId,
+        pendingResourceId,
+        heldFallbackRowId,
+        isListComplete:
+          effectiveResourcesState.status === 'ready' && !effectiveResourcesState.isUserLayerMissing,
+        areSourcesSettled: canResolveResourceSelection({
+          listState: effectiveResourcesState,
+          isCatalogReady,
+          hasCatalogError,
+          arePanelRowsReady,
+        }),
+        // Deliberately the stricter question. A failed catalog settles what the rows are well
+        // enough to display one, but its retry can still bring the selected row back, so a fallback
+        // derived from that absence must not be written over the stored pick. Committing a pick
+        // and migrating a legacy bare id still go through.
+        mayPersistCorrection: canPublishResourcePanelProjectIds(
+          effectiveResourcesState,
+          isCatalogReady,
+          arePanelRowsReady,
+        ),
+      })
     : {
         nextSelectedResourceId: undefined,
+        nextUserPickedResourceId: undefined,
         shouldClearPending: false,
         selectedRow: findSelectedRow(filteredResources, selectedResourceId),
+        shownFallbackRowId: undefined,
       };
   // Behind the catalog-error view nothing is on screen, so the first-row fallback must not keep a
   // chapter subscription open or become what Ctrl+F searches.
   const selectedRef = readiness === 'catalogError' ? undefined : selection.selectedRow;
 
-  // Falling back to another row while the catalog is down would overwrite a saved DBL selection
-  // that only lacks a row until the catalog returns. Committing a pick and migrating a legacy bare
-  // id still go through.
-  const isFallbackWhileCatalogFailed =
-    hasCatalogError && pendingResourceId === undefined && !hasRowForSavedSelection;
-  const nextSelectedResourceId = isFallbackWhileCatalogFailed
-    ? undefined
-    : selection.nextSelectedResourceId;
+  const { nextSelectedResourceId, nextUserPickedResourceId, shownFallbackRowId } = selection;
 
+  // The user's pick is written before the selection, so no render sees the new selection without
+  // it and takes it for a fallback (see `handleSelectResourceFromList`).
   useEffect(() => {
+    if (nextUserPickedResourceId !== undefined) setUserPickedResourceId(nextUserPickedResourceId);
     if (nextSelectedResourceId !== undefined) setSelectedResourceId(nextSelectedResourceId);
     if (selection.shouldClearPending) setPendingResourceId(undefined);
-  }, [nextSelectedResourceId, selection.shouldClearPending, setSelectedResourceId]);
+  }, [
+    nextSelectedResourceId,
+    nextUserPickedResourceId,
+    selection.shouldClearPending,
+    setSelectedResourceId,
+    setUserPickedResourceId,
+  ]);
+
+  useEffect(() => {
+    if (shownFallbackRowId !== undefined) setHeldFallbackRowId(shownFallbackRowId);
+  }, [shownFallbackRowId]);
+
+  // The pick is written before the selection so no render sees the user's pick taken for a
+  // fallback. Each web view state key comes back as its own web view update, in the order it was
+  // written, so the two setters are not applied together; keep the pick first.
+  const handleSelectResourceFromList = useCallback(
+    (resourceId: string) => {
+      setUserPickedResourceId(resourceId);
+      setSelectedResourceId(resourceId);
+    },
+    [setUserPickedResourceId, setSelectedResourceId],
+  );
 
   const [isSelecting, setIsSelecting] = useState(false);
 
@@ -374,7 +387,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
       // Rows resolved locally despite a failed catalog (the readiness override above) are an
       // answer; a failed catalog alone is not, and publishing then would wipe the saved list.
       isCatalogReady || readiness === 'configured',
-      pickerResources !== undefined,
+      arePanelRowsReady,
     ),
     // These panels are re-pointed by reloading them, which reuses the web view id, so the
     // published list must be scoped to the project it was built for.
@@ -431,9 +444,20 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   // matter (intros, Psalm superscriptions) this view exists to show. Single-verse surfaces resolve
   // verse 0 to verse 1; whole-chapter surfaces like this one must not (see
   // `adr-single-verse-surfaces-resolve-verse-zero-to-one`).
+
+  // Re-drives a failed chapter read when the reader presses retry (see
+  // `useChapterUsjWithCopyLimit`'s `retryNonce`).
+  const [chapterRetryNonce, setChapterRetryNonce] = useState(0);
+  const retryChapterRead = useCallback(() => setChapterRetryNonce((nonce) => nonce + 1), []);
+
   const { usjPossiblyError, isUsjLoading, copyLimit } = useChapterUsjWithCopyLimit(
     resourceProjectId,
     scrRef,
+    // Unseeded so that "no chapter has arrived yet" is representable. A blank USJ cannot reach the
+    // two branches that answer it — `resolveResourceContentState`'s `'loading'` and the panel's
+    // `!usjFromPdp` spinner — and `Editorial` mounts holding nothing, painting Lexical's "Enter
+    // some Scripture…" prompt: an invitation to type in a text the reader cannot edit.
+    { retryNonce: chapterRetryNonce, isSeededEmpty: false },
   );
 
   // #endregion
@@ -459,23 +483,53 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
 
   // #region Resource picker dialog
 
-  // The IDs the Resource Picker shows as already INCLUDED. Rows sourced from `downloaded` are
-  // installed locally but not in the text collection, so they belong in the picker's INSTALLED
-  // section instead. Drawn from every picker row rather than the type-filtered ones so a resource
-  // of another type that is in the text collection (a commentary alongside Bible texts) is not
-  // re-offered as INSTALLED. That is also why the pick belongs here rather than in the panel: the
-  // panel sees only its type-filtered rows.
-  const currentFilteredDblIds = useMemo(() => {
-    return (pickerResources ?? []).flatMap((r) => {
-      if (r.source === 'downloaded') return [];
-      const { reference } = r;
-      if (isDblResourceReference(reference) || isProjectReference(reference)) return [reference.id];
-      return [];
-    });
-  }, [pickerResources]);
+  // The IDs the Resource Picker shows as already selected: the team's, which it locks, and the
+  // user's own, which it lets the user remove. Rows sourced from `downloaded` are installed locally
+  // but in neither list, so they belong in the picker's INSTALLED section instead. Drawn from every
+  // picker row rather than the type-filtered ones so a resource of another type in the user's list
+  // (a commentary alongside Bible texts) is not re-offered as INSTALLED. That is also why the pick
+  // belongs here rather than in the panel: the panel sees only its type-filtered rows.
+  const pickerSelection = useMemo(() => {
+    const rows = pickerResources ?? [];
+    return getPickerDialogSelection(
+      rows.filter(isTeamPickerResource).map((row) => row.reference),
+      rows.filter((row) => row.source === 'user').map((row) => row.reference),
+      dblResources,
+    );
+  }, [pickerResources, dblResources]);
+
+  // What the user's list stores each removable resource under, as the picker showed it when it
+  // opened. The rows can change while it is open (a catalog refetch empties them until it
+  // reloads), and a removal must take off what the user saw.
+  const listIdsAtPickerOpenRef = useRef<ReadonlyMap<string, string[]>>(new Map());
+
+  // Leaves the resource installed; only the user's own list for this project changes, which the
+  // Text Collection reads too. When it was the one on screen, the selection logic above keeps it
+  // there while it is installed and falls back to the next resource once it leaves the list.
+  const handleResourceRemove = useCallback(
+    (resource: DblResourceData) =>
+      removeFromUserListAndNotify(
+        resource,
+        listIdsAtPickerOpenRef.current.get(resource.dblEntryUid) ?? [],
+        getUserResourceTexts,
+        setUserResourceTexts,
+        resolveLocalizedString(localizedStrings, RESOURCE_REMOVED_FROM_USER_LIST_KEY),
+      ),
+    [getUserResourceTexts, setUserResourceTexts, localizedStrings],
+  );
+
+  // Which pick is the current one. Two picks can overlap — each is an `await` chain over the
+  // settings write and an install, and nothing stops the user choosing again while one runs — and
+  // the `finally` below is unconditional, so without this the FIRST to settle clears `isSelecting`
+  // while the second is still working. That is not cosmetic: `isSelecting` is what suppresses
+  // `useDblResourceAutoInstall`, so clearing it early re-arms auto-install alongside the in-flight
+  // pick's own install of a different resource. Same guard as `use-dbl-resource-catalog.hook.ts`.
+  const selectGenerationRef = useRef(0);
 
   const handleResourceSelect = useCallback(
     async (resource: DblResourceData) => {
+      selectGenerationRef.current += 1;
+      const generation = selectGenerationRef.current;
       setIsSelecting(true);
       // A user-initiated pick is a fresh attempt: clear any prior auto-install failure.
       clearInstallFailure();
@@ -502,7 +556,9 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
           (writtenReference) => setPendingResourceId(getResourceReferenceRowId(writtenReference)),
         );
       } finally {
-        setIsSelecting(false);
+        // Only the newest pick owns the flag. A superseded one leaves it set so the panel keeps
+        // reporting "Selecting…" until the pick the user actually last made finishes.
+        if (generation === selectGenerationRef.current) setIsSelecting(false);
       }
     },
     [
@@ -522,19 +578,40 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   const showResourcePicker = useDialogCallback(
     'platform.resourcePicker',
     useMemo(
-      () => ({ resourceType, selectedResourceIds: currentFilteredDblIds, isModal: true }),
-      [resourceType, currentFilteredDblIds],
+      () => ({
+        resourceType,
+        selectedResourceIds: pickerSelection.selectedResourceIds,
+        // Team resources exist only in Simple, so Power keeps the picker's single "Included"
+        // section. With no project there is no list of the user's to remove anything from, and
+        // until its settings provider arrives there is no way to write one.
+        teamResourceIds: projectId && isSimpleMode ? pickerSelection.teamResourceIds : undefined,
+        allowRemove: !!projectId && isSimpleMode && !!textConnectionsProvider,
+        isModal: true,
+      }),
+      [resourceType, pickerSelection, projectId, isSimpleMode, textConnectionsProvider],
     ),
     useCallback(
-      (resource: DblResourceData | undefined) => {
-        if (!resource) return;
-        handleResourceSelect(resource).catch((e) =>
+      (result: DialogTypes['platform.resourcePicker']['responseType'] | undefined) => {
+        if (!result) return;
+        if (result.action === 'remove') {
+          handleResourceRemove(result.resource).catch((e) =>
+            logger.warn(`Could not report the resource removal: ${getErrorMessage(e)}`),
+          );
+          return;
+        }
+        handleResourceSelect(result.resource).catch((e) =>
           logger.error(`Resource selection failed: ${getErrorMessage(e)}`),
         );
       },
-      [handleResourceSelect],
+      [handleResourceSelect, handleResourceRemove],
     ),
   );
+
+  // The picker is modal, so it cannot be opened again while open and replace the ids it is using.
+  const openResourcePicker = useCallback(() => {
+    listIdsAtPickerOpenRef.current = pickerSelection.listIdsByRemovableId;
+    return showResourcePicker();
+  }, [pickerSelection, showResourcePicker]);
 
   // #endregion
 
@@ -547,12 +624,18 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
       selectedRef={selectedRef}
       readiness={readiness}
       dblResources={dblResources}
+      isCatalogUnavailable={hasCatalogError}
+      // Only Simple mode has team resources, so Power lists every row together. Undefined (still
+      // loading) lists them together too, so a Power session never shows the grouping, even for a
+      // frame.
+      isGrouped={isSimpleMode}
       onRetryCatalog={refetchCatalog}
       scrRef={scrRef}
       onScrRefChange={setScrRef}
-      onSelectResource={setSelectedResourceId}
+      onSelectResource={handleSelectResourceFromList}
       usjPossiblyError={usjPossiblyError}
       isUsjLoading={isUsjLoading}
+      onRetryChapter={retryChapterRead}
       textDirection={textDirection}
       copyLimit={copyLimit}
       isSelecting={isSelecting}
@@ -561,7 +644,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
       installFailureReason={installFailureReason}
       retryInstall={retryInstall}
       isOnline={isOnline}
-      onShowResourcePicker={showResourcePicker}
+      onShowResourcePicker={openResourcePicker}
       logger={logger}
       copyrightNotice={
         <ProjectCopyrightNotice

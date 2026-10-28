@@ -24,7 +24,10 @@ import {
   usfmMarkers,
   type PaletteItem,
 } from 'platform-bible-utils';
-import type { EditorMessageInsertTextualNoteAtSelection } from 'platform-scripture-editor';
+import type {
+  EditorMessageInsertTextualNoteAtSelection,
+  ScriptureEditorViewType,
+} from 'platform-scripture-editor';
 import type { MutableRefObject } from 'react';
 import type {
   ContextMenuOptionConfig,
@@ -39,7 +42,10 @@ import {
   markerMenuItemToPaletteItem,
 } from 'platform-bible-react/experimental';
 import type { FlushableDebouncer } from './flushable-debouncer.util';
-import type { NoteSessionUpdateDecision } from './platform-scripture-editor.utils';
+import {
+  showsReadOnlyPreview,
+  type NoteSessionUpdateDecision,
+} from './platform-scripture-editor.utils';
 import { EDITOR_OWNERSHIP_WINDOW_MS } from './use-editor-pdp-sync.hook';
 import { WRITE_GUARD_RELEASE_AFTER_MS } from './write-in-flight-guard.util';
 
@@ -499,6 +505,83 @@ export const NOTE_INSERT_CONFIG: Record<
  */
 export function shouldSkipNoteInsert(hasEditor: boolean, isReadOnlyEffective: boolean): boolean {
   return !hasEditor || isReadOnlyEffective;
+}
+
+/** Everything the read-only flags are derived from. */
+export type ReadOnlyInputs = {
+  /** The web view's own `isReadOnly` option */
+  isReadOnly: boolean;
+  /** Whether the project's `platform.isEditable` setting is still loading */
+  isProjectEditableLoading: boolean;
+  isProjectEditable: boolean;
+  /** Whether the user's Scripture-edit permission is genuinely still resolving */
+  isCanUserEditScriptureUnresolved: boolean;
+  canUserEditScripture: boolean;
+  /**
+   * Whether the project's `platformScripture.allowInvisibleCharacters` could not be read, which
+   * leaves the editor unsure how the project spells a no-break space
+   */
+  isAllowInvisibleCharactersUnreadable: boolean;
+  /** Whether an automatic Send/Receive is freezing editing */
+  isSyncBlocked: boolean;
+  /** Whether `platform.interfaceMode` is still loading */
+  isInterfaceModeLoading: boolean;
+  /** The DISPLAYED view type (after the interface-mode fallback), not the saved one */
+  viewType: ScriptureEditorViewType;
+  isPowerMode: boolean;
+};
+
+/**
+ * Derives the three read-only flags the editor web view uses.
+ *
+ * - `isReadOnlyEffective`: whether the editor is effectively read-only: the `isReadOnly` option, the
+ *   project's `platform.isEditable` setting, the user's Scripture-edit permission, an unreadable
+ *   `allowInvisibleCharacters` setting, a sync block, or the read-only Preview (the formatted view
+ *   in Power mode). Fails CLOSED (read-only) while editability or permission is genuinely still
+ *   resolving and while `platform.interfaceMode` loads (which decides whether the formatted view is
+ *   Preview), rather than relying on the fail-open default values during that window: a
+ *   briefly-writable editor is worse than a briefly-read-only one.
+ * - `isDurablyReadOnly`: the same reasons minus the loading states and minus `isSyncBlocked`, a
+ *   transient freeze during an automatic Send/Receive rather than a real read-only state. Used for
+ *   the tab title so it does not relabel "(Read-only)" and back on every scheduled sync; the
+ *   sync-blocked banner already communicates that transient state.
+ * - `isReadOnlyForTitle`: `isDurablyReadOnly`, or `undefined` while editability, permission or the
+ *   interface mode is still resolving, so the title effect skips its update and the
+ *   previously-persisted title stays showing.
+ */
+export function deriveReadOnlyFlags({
+  isReadOnly,
+  isProjectEditableLoading,
+  isProjectEditable,
+  isCanUserEditScriptureUnresolved,
+  canUserEditScripture,
+  isAllowInvisibleCharactersUnreadable,
+  isSyncBlocked,
+  isInterfaceModeLoading,
+  viewType,
+  isPowerMode,
+}: ReadOnlyInputs): {
+  isReadOnlyEffective: boolean;
+  isDurablyReadOnly: boolean;
+  isReadOnlyForTitle: boolean | undefined;
+} {
+  const isPreview = showsReadOnlyPreview(viewType, isPowerMode);
+  const isDurablyReadOnly = isReadOnly || !isProjectEditable || !canUserEditScripture || isPreview;
+  const isReadOnlyEffective =
+    isReadOnly ||
+    isProjectEditableLoading ||
+    !isProjectEditable ||
+    isCanUserEditScriptureUnresolved ||
+    !canUserEditScripture ||
+    isAllowInvisibleCharactersUnreadable ||
+    isSyncBlocked ||
+    isInterfaceModeLoading ||
+    isPreview;
+  const isReadOnlyForTitle =
+    isProjectEditableLoading || isCanUserEditScriptureUnresolved || isInterfaceModeLoading
+      ? undefined
+      : isDurablyReadOnly;
+  return { isReadOnlyEffective, isDurablyReadOnly, isReadOnlyForTitle };
 }
 
 /**

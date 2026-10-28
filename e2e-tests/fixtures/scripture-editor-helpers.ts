@@ -1,4 +1,6 @@
 import { type Frame, type Locator, type Page } from '@playwright/test';
+import fs from 'fs';
+import path from 'path';
 import {
   LAUNCH_PHASE_TIMEOUT_MS,
   requireIsolatedProjectRoot,
@@ -45,6 +47,53 @@ export const CONTENT_ZOOM_COMMANDS = {
   out: 'platform.webViewContentZoomOut',
   reset: 'platform.webViewContentZoomReset',
 } as const;
+
+/**
+ * Path to the Scripture editor's persisted "Don't show again today" choices for the read-only
+ * Preview notice. `papi.storage`'s user-data files are named for the base64url of the storage key,
+ * so this is `platformScriptureEditor.markerViewNotificationDisabled` encoded — see
+ * `disabledMapUserDataKey` in
+ * `extensions/src/platform-scripture-editor/src/read-only-view-notifier.model.ts`.
+ */
+const DEV_APPDATA_PREVIEW_NOTICE_DISMISSALS_PATH = path.resolve(
+  __dirname,
+  '../../dev-appdata/extensions/platformScriptureEditor/user-data/cGxhdGZvcm1TY3JpcHR1cmVFZGl0b3IubWFya2VyVmlld05vdGlmaWNhdGlvbkRpc2FibGVk',
+);
+
+/**
+ * Replaces the persisted "Don't show again today" choices for the read-only Preview notice before
+ * the app launches. The notifier reads them once at startup and stays silent for a project for 24
+ * hours after its dismiss is clicked, and the file lives in the shared `dev-appdata`, so a click in
+ * any earlier run or in the developer's own dev app would otherwise hide the notice a spec waits
+ * for.
+ *
+ * Must be called BEFORE the app launches (in `test.beforeAll` for the isolated fixture's
+ * test-scoped app).
+ *
+ * @param dismissedAtByProjectId When each project's notice was dismissed, in epoch milliseconds, as
+ *   the notifier stores it. `{}` means no project's notice is dismissed.
+ * @returns A restore function that writes the file back to its exact pre-call contents (or deletes
+ *   it if it did not exist). Call it AFTER the app has closed — clicking the dismiss rewrites it.
+ */
+export function preConfigurePreviewNoticeDismissals(
+  dismissedAtByProjectId: Record<string, number>,
+): () => void {
+  let originalContents: string | undefined;
+  if (fs.existsSync(DEV_APPDATA_PREVIEW_NOTICE_DISMISSALS_PATH))
+    originalContents = fs.readFileSync(DEV_APPDATA_PREVIEW_NOTICE_DISMISSALS_PATH, 'utf-8');
+
+  fs.mkdirSync(path.dirname(DEV_APPDATA_PREVIEW_NOTICE_DISMISSALS_PATH), { recursive: true });
+  fs.writeFileSync(
+    DEV_APPDATA_PREVIEW_NOTICE_DISMISSALS_PATH,
+    JSON.stringify(dismissedAtByProjectId),
+  );
+
+  return () => {
+    if (originalContents !== undefined)
+      fs.writeFileSync(DEV_APPDATA_PREVIEW_NOTICE_DISMISSALS_PATH, originalContents);
+    else fs.rmSync(DEV_APPDATA_PREVIEW_NOTICE_DISMISSALS_PATH, { force: true });
+  };
+}
 
 /**
  * The `<iframe data-web-view-id>` element's content frame — a real `Frame`, not a `FrameLocator`,
@@ -199,14 +248,14 @@ export async function unlockSampleProjectStructure(): Promise<void> {
 }
 
 /**
- * Calls a write method on the installed sample WEB project's data provider. Refuses to run unless
- * the app was launched with `isolatedProjectRoot: true`, for the reason
- * {@link makeSampleProjectEditable} gives.
+ * Calls a write method on the installed sample WEB project's data provider and returns what it
+ * answered. Refuses to run unless the app was launched with `isolatedProjectRoot: true`, for the
+ * reason {@link makeSampleProjectEditable} gives.
  */
-async function sendSampleProjectPdpRequest(method: string, args: unknown[]): Promise<void> {
+async function sendSampleProjectPdpRequest<T>(method: string, args: unknown[]): Promise<T> {
   requireIsolatedProjectRoot();
   const pdpId = await getSampleProjectDataProviderId();
-  await sendPapiRequestOnce<boolean>(
+  return sendPapiRequestOnce<T>(
     `object:${pdpId}.${method}`,
     args,
     WEBSOCKET_PORT,
@@ -242,6 +291,19 @@ export interface SampleChapterRef {
   verseNum: number;
 }
 
+/** Reads one chapter's USFM from a data provider whose id the caller already resolved. */
+function requestSampleChapterUsfm(
+  pdpId: string,
+  chapter: SampleChapterRef,
+): Promise<string | undefined> {
+  return sendPapiRequestOnce<string | undefined>(
+    `object:${pdpId}.getChapterUSFM`,
+    [chapter],
+    WEBSOCKET_PORT,
+    COMMAND_TIMEOUT_MS,
+  );
+}
+
 /**
  * Rewrites one chapter of the sample WEB project through its data provider — read the chapter's
  * USFM, pass it through `transform`, write the result back — so a spec can put markers the sample
@@ -258,12 +320,7 @@ export async function rewriteSampleProjectChapterUsfm(
 ): Promise<void> {
   requireIsolatedProjectRoot();
   const pdpId = await getSampleProjectDataProviderId();
-  const usfm = await sendPapiRequestOnce<string | undefined>(
-    `object:${pdpId}.getChapterUSFM`,
-    [chapter],
-    WEBSOCKET_PORT,
-    COMMAND_TIMEOUT_MS,
-  );
+  const usfm = await requestSampleChapterUsfm(pdpId, chapter);
   if (!usfm)
     throw new Error(`Sample project has no USFM for ${chapter.book} ${chapter.chapterNum}`);
   await sendPapiRequestOnce(
@@ -272,6 +329,52 @@ export async function rewriteSampleProjectChapterUsfm(
     WEBSOCKET_PORT,
     COMMAND_TIMEOUT_MS,
   );
+}
+
+/** One chapter of the sample WEB project as saved, read through its data provider. */
+export async function getSampleProjectChapterUsfm(
+  chapter: SampleChapterRef,
+): Promise<string | undefined> {
+  return requestSampleChapterUsfm(await getSampleProjectDataProviderId(), chapter);
+}
+
+/**
+ * Replaces a whole book of the sample WEB project through its data provider. A book write skips the
+ * chapter-marker correction a chapter write gets, so this can set up a book with no chapters at
+ * all. Writes project data, so it refuses to run unless the app was launched with
+ * `isolatedProjectRoot: true`, for the same reason as {@link rewriteSampleProjectChapterUsfm}.
+ *
+ * @param book Any reference in the book; only `book` is read.
+ * @param usfm The book's complete new USFM.
+ */
+export async function setSampleProjectBookUsfm(
+  book: SampleChapterRef,
+  usfm: string,
+): Promise<void> {
+  const isWritten = await sendSampleProjectPdpRequest<boolean>('setBookUSFM', [book, usfm]);
+  if (!isWritten) throw new Error(`Sample project did not accept USFM for ${book.book}`);
+}
+
+/** The text after the book code on the `\id` line {@link prepareEmptySampleBook} writes. */
+export const EMPTY_BOOK_ID_TEXT = 'empty book';
+
+/**
+ * Makes the sample WEB project editable and cuts one of its books down to its `\id` line, as a
+ * newly created book is, then reads it back so a failed write fails here rather than as a later
+ * timeout. Writes project data, so it needs `isolatedProjectRoot: true` like
+ * {@link setSampleProjectBookUsfm}.
+ *
+ * @param book Any reference in the book; only `book` is read.
+ * @returns The book's USFM as written, which is also all of its chapter 1.
+ */
+export async function prepareEmptySampleBook(book: SampleChapterRef): Promise<string> {
+  const usfm = `\\id ${book.book} - ${EMPTY_BOOK_ID_TEXT}\r\n`;
+  await makeSampleProjectEditable();
+  await setSampleProjectBookUsfm(book, usfm);
+  const chapterOne = await getSampleProjectChapterUsfm({ ...book, chapterNum: 1 });
+  if (chapterOne !== usfm)
+    throw new Error(`Sample project did not empty ${book.book}; chapter 1 reads ${chapterOne}`);
+  return usfm;
 }
 
 /**

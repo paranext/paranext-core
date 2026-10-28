@@ -3,8 +3,10 @@ import {
   BookA,
   BookCopy,
   BookMarked,
+  BookOpen,
   CircleCheckBig,
   CircleQuestionMark,
+  ClipboardCheck,
   Download,
   ExternalLink,
   Eye,
@@ -59,10 +61,12 @@ const LUCIDE_ICON_COMPONENTS = {
   'square-sigma': SquareSigma,
   book: Book,
   'book-marked': BookMarked,
+  'book-open': BookOpen,
   library: Library,
   search: Search,
   'message-square': MessageSquare,
   'circle-check-big': CircleCheckBig,
+  'clipboard-check': ClipboardCheck,
   sparkles: Sparkles,
 } as const satisfies Record<string, LucideIconComponent>;
 

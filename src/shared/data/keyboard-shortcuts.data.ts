@@ -546,8 +546,20 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     ],
     command: 'platformScriptureEditor.insertCommentAtSelection',
   },
-  // TODO(PT-4777): The design's ⌃E has no editor handler or entry here yet. A new `command` also
-  // needs its row in `EXPECTED_MENU_HINTS`.
+  {
+    id: 'scripture-toggle-view',
+    purpose:
+      'Switch between Standard view and Preview (Power mode). Does nothing in Simple mode or while a comment draft is open',
+    category: 'View',
+    context: 'Scripture editor web view',
+    // Control on every platform, like ⌃F and ⌃T. No `command`: the Switch scripture view items
+    // deliberately show no hint.
+    keys: { macOS: '⌃E', windows: 'Ctrl+E', linux: 'Ctrl+E' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/editor-chords.util.ts',
+    ],
+  },
   {
     id: 'scripture-insert-footnote',
     purpose:

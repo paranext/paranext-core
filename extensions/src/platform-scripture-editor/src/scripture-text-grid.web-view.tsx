@@ -1,10 +1,9 @@
-import type { WebViewProps } from '@papi/core';
+import type { DialogTypes, WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import { useDataProvider, useDialogCallback, useLocalizedStrings } from '@papi/frontend/react';
 import {
   Button,
   EmptyState,
-  pickTabIconUrl,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -15,14 +14,12 @@ import {
   RetryableErrorView,
   useRetryablePromise,
   useViewVisibility,
-  type TabIconUrls,
 } from 'platform-bible-react';
 import { CloudOff, Settings2 } from 'lucide-react';
 import {
   DblResourceData,
   formatReplacementString,
   getErrorMessage,
-  isPlatformError,
   LocalizeKey,
 } from 'platform-bible-utils';
 import type {
@@ -33,6 +30,7 @@ import type {
 import { type ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
 import { getViewOptionsTexts } from './scripture-text-grid-contents.utils';
+import { getPickerDialogSelection } from './downloaded-resources.utils';
 import {
   getOrderedScriptureTextGridContents,
   reorderShownIds,
@@ -50,9 +48,12 @@ import {
   persistCellOrder,
   persistUserAddition,
   persistUserDisplay,
-  persistUserRemoval,
+  removeFromUserListAndNotify,
+  removeFromUserTextConnections,
+  RESOURCE_REMOVED_FROM_USER_LIST_KEY,
 } from './scripture-text-grid-persistence.utils';
 import { useTextCollectionSources } from './use-text-collection-sources.hook';
+import { useIsPowerMode } from './use-is-power-mode.hook';
 import { useFocusedResourceProjectId } from './use-focused-resource-project-id.hook';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
@@ -140,19 +141,10 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   REORDER_ANNOUNCEMENT_KEY,
   REORDER_HANDLE_KEY,
   REORDER_HINT_KEY,
+  // Formatted with the resource's name before it is sent, so it IS fetched here.
+  RESOURCE_REMOVED_FROM_USER_LIST_KEY,
   ...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
 ];
-
-// Theme-adaptive tab icon: the platform paints the tab icon as a static CSS background-image, so a
-// `currentColor` SVG can't follow the theme. We swap the `iconUrl` based on both the current theme
-// and the tab's selected state (light theme: white when selected, near-black when unselected,
-// mid-slate fallback when selection state is unknown; dark theme: always light).
-const TAB_ICON_URLS: TabIconUrls = {
-  lightDefault: 'papi-extension://platformScriptureEditor/assets/library.svg',
-  dark: 'papi-extension://platformScriptureEditor/assets/library-dark.svg',
-  lightSelected: 'papi-extension://platformScriptureEditor/assets/library-selected.svg',
-  lightUnselected: 'papi-extension://platformScriptureEditor/assets/library-unselected.svg',
-};
 
 /** Props {@link ScriptureTextGridProjectView} takes from the web view that hosts it. */
 type ScriptureTextGridProjectViewProps = {
@@ -293,6 +285,10 @@ function ScriptureTextGridProjectView({
     refetchCatalog,
   );
 
+  // Only Simple mode has team resources. Undefined (still loading) lists them plainly too, so a
+  // Power session never shows the team grouping, even for a frame.
+  const isViewOptionsGrouped = useIsPowerMode() === false;
+
   const { top, bottom } = useMemo(
     () =>
       sources
@@ -399,7 +395,11 @@ function ScriptureTextGridProjectView({
     (resourceId: string) => {
       const { current } = sourcesRef;
       if (!current || !textConnectionPdp) return;
-      persistUserRemoval(textConnectionPdp, resourceId, current.userReferenced)?.catch((e) => {
+      removeFromUserTextConnections(
+        [resourceId],
+        async () => current.userReferenced,
+        (list) => textConnectionPdp.setUserReferencedProjectsAndResources(list),
+      ).catch((e) => {
         papi.notifications.send({ message: PERSIST_FAILED_KEY, severity: 'error' });
         logger.warn(`Failed to persist removal: ${getErrorMessage(e)}`);
       });
@@ -469,6 +469,38 @@ function ScriptureTextGridProjectView({
     [top, bottom],
   );
 
+  // Every resource in the team layout is the team's, whether or not the administrator put it in the
+  // Text Collection, so the picker locks it as the Bible texts and Commentaries tabs do.
+  const pickerSelection = useMemo(
+    () =>
+      getPickerDialogSelection(
+        sources?.adminReferenced.items ?? [],
+        [...top, ...bottom].filter((row) => row.isUserRemovable).map((row) => row.reference),
+        cachedResources ?? [],
+      ),
+    [sources, top, bottom, cachedResources],
+  );
+
+  // What the user's list stores each removable resource under, as the picker showed it when it
+  // opened, since the rows can change while it is open.
+  const listIdsAtPickerOpenRef = useRef<ReadonlyMap<string, string[]>>(new Map());
+
+  // Removes exactly what the ✕ in View options would, as the Bible texts and Commentaries tabs do.
+  // The resource stays installed, and leaves those tabs too, since they read the same list.
+  const handleResourceRemove = useCallback(
+    (resource: DblResourceData) => {
+      const pdp = textConnectionPdp;
+      return removeFromUserListAndNotify(
+        resource,
+        listIdsAtPickerOpenRef.current.get(resource.dblEntryUid) ?? [],
+        async () => (pdp ? sourcesRef.current?.userReferenced : undefined),
+        async (list) => pdp?.setUserReferencedProjectsAndResources(list),
+        resolveLocalizedString(localizedStrings, RESOURCE_REMOVED_FROM_USER_LIST_KEY),
+      );
+    },
+    [textConnectionPdp, localizedStrings],
+  );
+
   // Reconcile the saved order: drop ids that have left the user's world (X-removed, or an admin
   // entry no longer shared). `selectedResourceIds` is every resource the user still has (shown AND
   // hidden), so hidden-but-known ids keep their saved slots. Reads sourcesRef.current for freshness;
@@ -491,25 +523,40 @@ function ScriptureTextGridProjectView({
     useMemo(
       () => ({
         resourceType: ['ScriptureResource', 'CommentaryResource'] as const,
-        selectedResourceIds,
+        selectedResourceIds: pickerSelection.selectedResourceIds,
+        // Team resources exist only in Simple, so Power keeps the single "Included" section.
+        teamResourceIds: isViewOptionsGrouped ? pickerSelection.teamResourceIds : undefined,
+        allowRemove: isViewOptionsGrouped && !!textConnectionPdp,
         isModal: true,
         notice: resolvePickerNotice(localizedStrings, !!textConnectionPdp),
         // With no text collection to add to, installing is all a pick can accomplish — so an
         // already-installed resource would take the click and do nothing.
         allowSelectingInstalled: !!textConnectionPdp,
       }),
-      [selectedResourceIds, textConnectionPdp, localizedStrings],
+      [pickerSelection, isViewOptionsGrouped, textConnectionPdp, localizedStrings],
     ),
     useCallback(
-      (resource: DblResourceData | undefined) => {
-        if (!resource) return;
-        handleResourceSelect(resource).catch((e) =>
+      (result: DialogTypes['platform.resourcePicker']['responseType'] | undefined) => {
+        if (!result) return;
+        if (result.action === 'remove') {
+          handleResourceRemove(result.resource).catch((e) =>
+            logger.warn(`Could not report the resource removal: ${getErrorMessage(e)}`),
+          );
+          return;
+        }
+        handleResourceSelect(result.resource).catch((e) =>
           logger.error(`Resource selection failed: ${getErrorMessage(e)}`),
         );
       },
-      [handleResourceSelect],
+      [handleResourceSelect, handleResourceRemove],
     ),
   );
+
+  // The picker is modal, so it cannot be opened again while open and replace the ids it is using.
+  const openResourcePicker = useCallback(() => {
+    listIdsAtPickerOpenRef.current = pickerSelection.listIdsByRemovableId;
+    return showResourcePicker();
+  }, [pickerSelection, showResourcePicker]);
 
   return (
     <>
@@ -542,10 +589,11 @@ function ScriptureTextGridProjectView({
               isChapterEnabled
               top={top}
               bottom={bottom}
+              isGrouped={isViewOptionsGrouped}
               installingResourceNames={installingResourceNames}
               onCheckedChange={handleCheckedChange}
               onRemoveFromList={handleRemoveFromList}
-              onGetResources={showResourcePicker}
+              onGetResources={openResourcePicker}
               // Disabled whenever `getViewOptionsAvailability` is not `ready` — no project, settings
               // still arriving, no settings provider, or settings that could not be read — since
               // every action would otherwise silently no-op.
@@ -657,7 +705,6 @@ function ScriptureTextGridProjectView({
 globalThis.webViewComponent = function ScriptureTextGridWebView({
   id: webViewId,
   projectId,
-  updateWebViewDefinition,
   useWebViewScrollGroupScrRef,
   useWebViewState,
 }: WebViewProps) {
@@ -683,8 +730,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 
   // Owned here for the same reason `scrRef` is: it is one fact about this web view, and the grid
   // renders a cell per resource. Subscribing per cell would build an `IntersectionObserver` each,
-  // all watching the same document for the same answer. The tab icon reads this answer too (via
-  // `pickTabIconUrl` rather than `useTabIconSelection`), so the web view holds exactly one.
+  // all watching the same document for the same answer, so the web view holds exactly one.
   const isViewVisible = useViewVisibility();
 
   // The project whose text collection the grid shows. Opened from the default layout the tab carries
@@ -834,35 +880,6 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // blank until the tab was activated once, even though updateWebViewDefinition had already pushed
   // the correct value. Setting it in the provider means the tab shows the right title/tooltip from
   // its very first render, independent of this web view's own mount timing.
-
-  // Pick the tab icon variant to match the current theme and selected state. The tab icon is
-  // painted by the platform as a static background-image, so a `currentColor` SVG can't follow the
-  // theme — subscribe to the theme here (PAPI-specific) and let the shared hook handle selection
-  // detection and variant picking.
-  const [isDarkTheme, setIsDarkTheme] = useState(false);
-  useEffect(() => {
-    let disposed = false;
-    let unsubscribe: (() => void) | undefined;
-    papi.themes
-      .subscribeCurrentTheme(undefined, (theme) => {
-        if (!isPlatformError(theme)) setIsDarkTheme(theme.type === 'dark');
-      })
-      .then((unsub) => {
-        if (disposed) unsub();
-        else unsubscribe = unsub;
-        return undefined;
-      })
-      .catch((e) => logger.warn(`Failed to subscribe to the current theme: ${getErrorMessage(e)}`));
-    return () => {
-      disposed = true;
-      unsubscribe?.();
-    };
-  }, []);
-
-  const gridIconUrl = pickTabIconUrl(isDarkTheme, isViewVisible, TAB_ICON_URLS);
-  useEffect(() => {
-    updateWebViewDefinition({ iconUrl: gridIconUrl });
-  }, [gridIconUrl, updateWebViewDefinition]);
 
   const installingResourceNames = useMemo(() => installing.map((info) => info.name), [installing]);
 

@@ -16,17 +16,9 @@ function getViewOptionsForType(
     return getViewOptions(STANDARD_VIEW_MODE) ?? getDefaultViewOptions();
   }
   // Power users get to choose their own view options, so don't force the paragraph-structure
-  // preset on them. The markers tweaks below predate this and are required to keep the read-only
-  // markers view working.
-  if (isPowerMode) {
-    const base = getDefaultViewOptions();
-    if (viewType === 'markers') return { ...base, markerMode: 'visible', noteMode: 'expanded' };
-    return base;
-  }
-  const paragraphStructure =
-    getViewOptions(PARAGRAPH_STRUCTURE_VIEW_MODE) ?? getDefaultViewOptions();
-  if (viewType === 'markers') return { ...paragraphStructure, noteMode: 'expanded' };
-  return paragraphStructure;
+  // preset on them.
+  if (isPowerMode) return getDefaultViewOptions();
+  return getViewOptions(PARAGRAPH_STRUCTURE_VIEW_MODE) ?? getDefaultViewOptions();
 }
 
 /**

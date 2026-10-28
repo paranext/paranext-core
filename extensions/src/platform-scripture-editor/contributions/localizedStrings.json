@@ -135,6 +135,8 @@
       "%platformScriptureEditor_dialog_openScriptureEditor_title%": "Open Scripture Editor",
       "%platformScriptureEditor_markersView_readonly_dismiss%": "Don't show again today",
       "%platformScriptureEditor_markersView_readonly_message_format%": "The markers view for {projectName} is read-only.",
+      "%platformScriptureEditor_previewView_readonly_dismiss%": "Don't show again today",
+      "%platformScriptureEditor_previewView_readonly_message_format%": "Preview of {projectName} is read-only. To edit, switch to Standard view.",
       "%platformScriptureEditor_sharedLayout_applyNow%": "Apply now",
       "%platformScriptureEditor_sharedLayout_newLayoutAvailable%": "An admin shared a new layout for this project",
       "%settings_platformScriptureEditor_enableScriptureTextGrid_description%": "Show the scripture text grid view for viewing multiple resources side by side.",
@@ -321,10 +323,15 @@
       "%webView_resourcePanel_installedButUnavailable%": "The resource is installed but couldn't be opened.",
       "%webView_resourcePanel_installing%": "Installing resource…",
       "%webView_resourcePanel_loading%": "Loading…",
+      "%webView_resourcePanel_loadingResources%": "Loading resources",
       "%webView_resourcePanel_noProject%": "No project selected.",
+      "%webView_resourcePanel_otherResources%": "Other resources",
+      "%webView_resourcePanel_removeFailed%": "Couldn't remove the resource from your list. Please try again.",
+      "%webView_resourcePanel_resourceRemoved%": "{resourceName} was removed from your list. It's still installed if you want to add it back.",
       "%webView_resourcePanel_retry%": "Try again",
       "%webView_resourcePanel_selecting%": "Selecting resource…",
       "%webView_resourcePanel_settingsUnavailable%": "Couldn't load your resources. They will appear once they're available.",
+      "%webView_resourcePanel_teamResourcesCaption%": "Only a project administrator can remove these.",
       "%webView_resourcePanel_textUnavailable%": "This text could not be loaded.",
       "%webView_scriptureTextGrid_aria_chapterContextClosed%": "Chapter view closed",
       "%webView_scriptureTextGrid_aria_chapterContextOpened%": "Chapter view opened for {resourceReference}",
@@ -368,7 +375,11 @@
       "%webView_scriptureTextGrid_viewOptions_settingsUnavailable%": "Couldn't load your texts.",
       "%webView_scriptureTextGrid_viewOptions_pickerNoProjectNotice%": "No project is selected, so a resource you choose here will be downloaded to this computer but not added to a text collection.",
       "%webView_scriptureTextGrid_viewOptions_removeFromList%": "Remove {resourceName} from list",
+      "%webView_scriptureTextGrid_viewOptions_removeFromListHint%": "Removing a text takes it off your list on every tab. To hide it only here, clear its checkbox.",
+      "%webView_scriptureTextGrid_viewOptions_teamResourcesHeader%": "Team resources",
+      "%webView_scriptureTextGrid_viewOptions_teamSharedLock%": "Shared by your team",
       "%webView_scriptureTextGrid_viewOptions_textsHeader%": "Texts",
+      "%webView_scriptureTextGrid_viewOptions_userResourcesHeader%": "User resources",
       "%webView_scriptureTextGrid_viewOptions_verse%": "Verse",
       "%webView_scriptureTextGrid_viewOptions_viewHeader%": "View",
       "%webView_selectDblResource_installFailed%": "Failed to install resource. Please try again."
@@ -508,6 +519,8 @@
       "%platformScriptureEditor_dialog_openScriptureEditor_title%": "Abrir el editor de Escrituras",
       "%platformScriptureEditor_markersView_readonly_dismiss%": "No mostrar de nuevo hoy",
       "%platformScriptureEditor_markersView_readonly_message_format%": "La vista de marcadores para {projectName} es de solo lectura.",
+      "%platformScriptureEditor_previewView_readonly_dismiss%": "No mostrar de nuevo hoy",
+      "%platformScriptureEditor_previewView_readonly_message_format%": "La vista previa de {projectName} es de solo lectura. Para editar, cambie a la vista estándar.",
       "%platformScriptureEditor_sharedLayout_applyNow%": "Aplicar ahora",
       "%platformScriptureEditor_sharedLayout_newLayoutAvailable%": "Un administrador compartió un nuevo diseño para este proyecto",
       "%settings_platformScriptureEditor_enableScriptureTextGrid_description%": "Mostrar la vista de cuadrícula de textos bíblicos para ver varios recursos en paralelo.",
@@ -690,10 +703,15 @@
       "%webView_resourcePanel_installedButUnavailable%": "El recurso está instalado, pero no se pudo abrir.",
       "%webView_resourcePanel_installing%": "Instalando recurso…",
       "%webView_resourcePanel_loading%": "Cargando…",
+      "%webView_resourcePanel_loadingResources%": "Cargando recursos",
       "%webView_resourcePanel_noProject%": "Ningún proyecto seleccionado.",
+      "%webView_resourcePanel_otherResources%": "Otros recursos",
+      "%webView_resourcePanel_removeFailed%": "No se pudo quitar el recurso de su lista. Vuelva a intentarlo.",
+      "%webView_resourcePanel_resourceRemoved%": "Se quitó {resourceName} de su lista. Sigue instalado por si quiere volver a agregarlo.",
       "%webView_resourcePanel_retry%": "Reintentar",
       "%webView_resourcePanel_selecting%": "Seleccionando recurso…",
       "%webView_resourcePanel_settingsUnavailable%": "No se pudieron cargar tus recursos. Aparecerán cuando estén disponibles.",
+      "%webView_resourcePanel_teamResourcesCaption%": "Solo un administrador del proyecto puede quitarlos.",
       "%webView_resourcePanel_textUnavailable%": "No se pudo cargar este texto.",
       "%webView_scriptureTextGrid_aria_chapterContextClosed%": "Vista de capítulo cerrada",
       "%webView_scriptureTextGrid_aria_chapterContextOpened%": "Vista de capítulo abierta mostrando {resourceReference}",
@@ -737,7 +755,11 @@
       "%webView_scriptureTextGrid_viewOptions_settingsUnavailable%": "No se pudieron cargar sus textos.",
       "%webView_scriptureTextGrid_viewOptions_pickerNoProjectNotice%": "No hay ningún proyecto seleccionado, así que el recurso que elija aquí se descargará a esta computadora, pero no se agregará a una colección de textos.",
       "%webView_scriptureTextGrid_viewOptions_removeFromList%": "Quitar {resourceName} de la lista",
+      "%webView_scriptureTextGrid_viewOptions_removeFromListHint%": "Al quitar un texto, se quita de su lista en todas las pestañas. Para ocultarlo solo aquí, desmarque su casilla.",
+      "%webView_scriptureTextGrid_viewOptions_teamResourcesHeader%": "Recursos del equipo",
+      "%webView_scriptureTextGrid_viewOptions_teamSharedLock%": "Compartido por su equipo",
       "%webView_scriptureTextGrid_viewOptions_textsHeader%": "Textos",
+      "%webView_scriptureTextGrid_viewOptions_userResourcesHeader%": "Recursos del usuario",
       "%webView_scriptureTextGrid_viewOptions_verse%": "Versículo",
       "%webView_scriptureTextGrid_viewOptions_viewHeader%": "Vista",
       "%webView_selectDblResource_installFailed%": "No se pudo instalar el recurso. Vuelva a intentarlo."
@@ -1252,6 +1274,21 @@
     }
   },
   "metadata": {
+    "%platformScriptureEditor_markersView_readonly_dismiss%": {
+      "deprecationInfo": {
+        "date": "2026-10-22",
+        "message": "Superseded by %platformScriptureEditor_previewView_readonly_dismiss%."
+      }
+    },
+    "%platformScriptureEditor_previewView_readonly_dismiss%": {
+      "fallbackKey": "%platformScriptureEditor_markersView_readonly_dismiss%"
+    },
+    "%platformScriptureEditor_markersView_readonly_message_format%": {
+      "deprecationInfo": {
+        "date": "2026-10-22",
+        "message": "Superseded by %platformScriptureEditor_previewView_readonly_message_format%."
+      }
+    },
     "%webView_footnoteList_header%": {
       "fallbackKey": "%Paratext.ProjectMenu.ProjectPropertiesForm.showInFootnotes.HeaderText%"
     },
@@ -1382,6 +1419,12 @@
     "%webView_platformScriptureEditor_syncEditBlocked_banner_2%": {
       "fallbackKey": "%webView_platformScriptureEditor_syncEditBlocked_banner%"
     },
+    "%webView_scriptureTextGrid_viewOptions_adminSharedLock%": {
+      "deprecationInfo": {
+        "date": "2026-10-26",
+        "message": "The lock now sits under a \"Team resources\" heading and reads as the team's choice, like the Bible texts dropdown's lock. The new key is %webView_scriptureTextGrid_viewOptions_teamSharedLock%."
+      }
+    },
     "%webView_scriptureTextGrid_viewOptions_chapterComingSoon%": {
       "deprecationInfo": {
         "date": "2026-10-23",
@@ -1403,6 +1446,9 @@
         "date": "2026-10-20",
         "message": "The Zoom items moved into the View section of the editor menu, so there is no Zoom heading. Retired with no replacement key."
       }
+    },
+    "%webView_scriptureTextGrid_viewOptions_teamSharedLock%": {
+      "fallbackKey": "%webView_scriptureTextGrid_viewOptions_adminSharedLock%"
     }
   }
 }

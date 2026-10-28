@@ -78,7 +78,8 @@ repo's half for the facts each side holds alone.
 forwarding table for all three consumers: the scripture editor web view, the footnote editor
 component (any host that runs it in editable marker mode), and the footnotes pane's inline row
 editor (a pane-model view — Standard view, or Simple's Formatted view, which gives the pane
-Standard's view options; see `usesPaneNoteModel` and `resolveNoteEditingSurface` in
+Standard's view options; Power's Preview is a pane-model view too, but read-only, so it opens no row
+editor; see `usesPaneNoteModel` and `resolveNoteEditingSurface` in
 `extensions/src/platform-scripture-editor/src/platform-scripture-editor.utils.ts`). The
 per-consumer copies drifted once already; there is one table now.
 
@@ -149,7 +150,8 @@ consequences worth knowing here:
   editor half owns the rule that no offered entry is a silent no-op — see "A menu offers nothing it
   cannot insert" in `docs/standard-view-invariants.md` (`scripture-editors`), which also covers the
   `\id` line, where `\` offers the inline list and the Enter palette's paragraph pick splits the
-  line instead of retagging it.
+  line instead of retagging it. In a book with no chapters that list also offers `\c`, which the
+  host must not filter out: it is the only way to start chapter 1 in Standard view.
 
 **The editor's right-click menu outranks both palettes, and the hand-off rests on listener order
 across the two repos.** While `ContextMenuPlugin`'s menu is open it is the only keyboard mode on

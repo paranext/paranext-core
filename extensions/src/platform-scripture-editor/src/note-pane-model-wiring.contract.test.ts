@@ -13,10 +13,10 @@ import {
 
 /*
  * Guards how this extension, chiefly `platform-scripture-editor.web-view.tsx`, applies the
- * footnotes-pane note model. A pane-model view (Standard view, or Simple's Formatted view — see
- * `usesPaneNoteModel`) edits notes in the pane, navigates the text to a picked note, and highlights
- * its caller; a view that keeps a Standard-only check anywhere along that path behaves half one way
- * and half the other.
+ * footnotes-pane note model. A pane-model view (Standard view, Power's read-only Preview, or
+ * Simple's Formatted view — see `usesPaneNoteModel`) edits notes in the pane when its text is
+ * editable, navigates the text to a picked note, and highlights its caller; a view that keeps a
+ * Standard-only check anywhere along that path behaves half one way and half the other.
  * The web view cannot be mounted in jsdom (see `content-zoom-markers.contract.test.ts`), so this
  * is a source-reading contract test, like `copy-limit-wiring.contract.test.ts`.
  */
@@ -44,7 +44,6 @@ function labelStandardCheck(sourceFile: ts.SourceFile, check: ts.Node): string {
     if (ts.isIfStatement(node) && contains(node.expression)) {
       const condition = node.expression.getText(sourceFile);
       if (condition.includes("=== 't'")) return 'Ctrl+T insert';
-      if (condition.includes('defaultMarkersMenuTrigger')) return 'main-text marker menu trigger';
     }
     if (
       ts.isCallExpression(node) &&
@@ -97,17 +96,18 @@ describe('note pane model wiring', () => {
       // This router serves only the main text's marker palette, which only Standard view has
       'palette-key-routing.util.ts': [
         "shouldRoutePaletteKey: if (viewType !== 'standard') return false;",
+        // The `\` marker menu in the main text; Standard view types markers in place instead
+        'shouldOpenInlineMarkersMenu: return (',
       ],
       'platform-scripture-editor.utils.ts': [
-        // Standard and Markers views are Power-only, and the view cycle steps through Standard
-        "resolveViewTypeForInterfaceMode: if ((viewType === 'standard' || viewType === 'markers') && !isPowerMode) return 'formatted';",
-        "getNextViewTypeInCycle: if (viewType === 'standard') return 'markers';",
+        // Narrows a saved value to a view type; not a note check
+        "isScriptureEditorViewType: return viewType === 'formatted' || viewType === 'standard' || viewType === 'markers';",
+        // The view toggle steps between Standard view and Preview
+        "getNextViewTypeInCycle: return viewType === 'standard' ? 'formatted' : 'standard';",
         // The one place the note model itself is decided
         "usesPaneNoteModel: if (viewType === 'standard') return true;",
       ],
       'platform-scripture-editor.web-view.tsx': [
-        // The `\` marker menu in the main text; Standard view types markers in place instead
-        'main-text marker menu trigger',
         // Which stylesheet mode the text renders in; not a note check
         'useProjectStylesheet',
       ],

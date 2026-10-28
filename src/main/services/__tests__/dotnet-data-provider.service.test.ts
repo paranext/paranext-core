@@ -39,6 +39,7 @@ vi.mock('@shared/services/logger.service', () => ({
 }));
 
 const RESOURCES_PATH = '/repo';
+const SAMPLE_PROJECT_VARIABLE = 'PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT';
 
 describe('dotnetDataProvider.start', () => {
   beforeEach(() => {
@@ -50,12 +51,14 @@ describe('dotnetDataProvider.start', () => {
     globalThis.resourcesPath = RESOURCES_PATH;
     globalThis.isPackaged = false;
     delete process.env.PT_DOTNET_NO_WATCH;
+    vi.stubEnv(SAMPLE_PROJECT_VARIABLE, undefined);
   });
 
   afterEach(() => {
     // `start` is a no-op while a child is recorded, so drop it or the next test spawns nothing.
     dotnetDataProvider.kill();
     delete process.env.PT_DOTNET_NO_WATCH;
+    vi.unstubAllEnvs();
   });
 
   test('runs dotnet watch by default', () => {
@@ -83,7 +86,8 @@ describe('dotnetDataProvider.start', () => {
       '--no-build',
     ]);
     // Matches the cwd `dotnet watch --project` would have used, so the two dev modes agree
-    expect(options).toEqual({ cwd: path.join(RESOURCES_PATH, 'c-sharp') });
+    expect(options).toMatchObject({ cwd: path.join(RESOURCES_PATH, 'c-sharp') });
+    expect(options.env[SAMPLE_PROJECT_VARIABLE]).toBe('true');
     // A stale C# build is invisible from the outside, so the mode has to announce itself
     expect(mocks.loggerInfo).toHaveBeenCalledWith(
       expect.stringContaining('PT_DOTNET_NO_WATCH is set'),
@@ -118,6 +122,48 @@ describe('dotnetDataProvider.start', () => {
     // Packaged runs the shipped binary with no arguments, whatever the dev flag says
     expect(command).not.toBe('dotnet');
     expect(args).toEqual([]);
+  });
+
+  test('opts a dev run into the sample project and keeps the rest of the environment', () => {
+    vi.stubEnv('SOME_OTHER_VARIABLE', 'kept');
+
+    dotnetDataProvider.start();
+
+    const [, , options] = mocks.spawn.mock.calls[0];
+    expect(options.env[SAMPLE_PROJECT_VARIABLE]).toBe('true');
+    expect(options.env.SOME_OTHER_VARIABLE).toBe('kept');
+  });
+
+  test('a dev run keeps a sample project setting from its environment', () => {
+    vi.stubEnv(SAMPLE_PROJECT_VARIABLE, 'false');
+
+    dotnetDataProvider.start();
+
+    const [, , options] = mocks.spawn.mock.calls[0];
+    expect(options.env[SAMPLE_PROJECT_VARIABLE]).toBe('false');
+  });
+
+  test('a dev run treats an empty sample project setting as unset', () => {
+    vi.stubEnv(SAMPLE_PROJECT_VARIABLE, '');
+
+    dotnetDataProvider.start();
+
+    const [, , options] = mocks.spawn.mock.calls[0];
+    expect(options.env[SAMPLE_PROJECT_VARIABLE]).toBe('true');
+  });
+
+  test('a packaged build is not opted into the sample project', () => {
+    globalThis.isPackaged = true;
+    Object.defineProperty(process, 'resourcesPath', {
+      value: RESOURCES_PATH,
+      configurable: true,
+    });
+
+    dotnetDataProvider.start();
+
+    // Spawned with the inherited environment, which does not set the variable
+    const [, , options] = mocks.spawn.mock.calls[0];
+    expect(options.env).toBeUndefined();
   });
 
   test('logs a legible error when no Debug build exists', () => {

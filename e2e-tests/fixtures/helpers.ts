@@ -199,8 +199,9 @@ export interface LaunchElectronAppOptions {
   /**
    * When true, point the app's Paratext project root at an empty temp folder inside the isolated
    * user-data dir (via the PLATFORM_BIBLE_PROJECT_ROOT_FOLDER env var). The C# backend installs the
-   * bundled sample WEB project into an empty root, so tests get an identical project on any
-   * developer's machine and never read or write the developer's real projects.
+   * bundled sample WEB project into an empty root (the launch always sets
+   * PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT), so tests get an identical project on any developer's
+   * machine and never read or write the developer's real projects.
    */
   isolatedProjectRoot?: boolean;
   /**
@@ -776,8 +777,12 @@ export async function launchElectronApp(
   // Strip PLATFORM_BIBLE_PROJECT_ROOT_FOLDER as well as what electronChildEnv always omits: the C#
   // backend honors it, so an ambient value from the dev/CI shell would silently redirect the project
   // root of suites that did not opt into isolatedProjectRoot. Only the isolatedProjectRoot branch (or
-  // an explicit envOverride) below sets it.
-  const restEnv = electronChildEnv('PLATFORM_BIBLE_PROJECT_ROOT_FOLDER');
+  // an explicit envOverride) below sets it. PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT is stripped and
+  // pinned below for the same reason: the specs rely on the sample project.
+  const restEnv = electronChildEnv(
+    'PLATFORM_BIBLE_PROJECT_ROOT_FOLDER',
+    'PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT',
+  );
   isolatedProjectRootDir = opts.isolatedProjectRoot
     ? path.join(userDataDir, 'projects')
     : undefined;
@@ -792,6 +797,8 @@ export async function launchElectronApp(
     // Docked DevTools eats ~555px of a 1280px window, leaving specs interacting with a dock
     // they were never sized for. Honored in src/main/main.ts.
     PT_NO_DEVTOOLS: process.env.PT_NO_DEVTOOLS ?? 'true',
+    // An empty project root gets the sample WEB project the specs open by SAMPLE_WEB_PROJECT_ID
+    PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT: 'true',
     // Placing the project root inside userDataDir means the existing teardown rmSync cleans it up.
     ...(opts.isolatedProjectRoot
       ? { PLATFORM_BIBLE_PROJECT_ROOT_FOLDER: path.join(userDataDir, 'projects') }

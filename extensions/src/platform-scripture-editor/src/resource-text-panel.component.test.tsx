@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeAll, describe, it, expect, vi } from 'vitest';
 import * as React from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
@@ -27,19 +27,42 @@ import { RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID } from './resource-book-not-availab
  */
 const setUsjSpy = vi.fn();
 
-// jsdom implements no `IntersectionObserver`, and the panel's reveal-scroll effect reaches one
-// through `useViewVisibility`. A no-op stub keeps rendering from throwing; the tests below assert on
-// content states rather than on scroll behaviour, so nothing depends on it reporting visibility.
-// Matches the stub in `platform-scripture`'s `find.component.test.tsx`.
+/**
+ * Drives `useViewVisibility` from the tests.
+ *
+ * Two things have to be faked together, because the hook reads visibility twice. Its initial value
+ * is a synchronous `document.body` height check, which is 0 in jsdom — so WITHOUT the height stub
+ * below every test here would run as though the panel's tab were inactive, quietly exercising the
+ * hidden branch of anything gated on visibility and leaving the visible branch uncovered. Its
+ * updates come from an `IntersectionObserver`, which jsdom does not implement at all.
+ *
+ * Defaults to visible, matching the tab a reader is actually looking at.
+ */
+const intersectionCallbacks: ((entries: { isIntersecting: boolean }[]) => void)[] = [];
+
+/** Reports the web view as shown or hidden, the way rc-dock activating a tab pane would. */
+function setViewVisible(isVisible: boolean) {
+  act(() => {
+    intersectionCallbacks.forEach((callback) => callback([{ isIntersecting: isVisible }]));
+  });
+}
+
 beforeAll(() => {
+  vi.spyOn(document.body, 'getBoundingClientRect').mockReturnValue({
+    ...new DOMRect(),
+    height: 800,
+  });
   vi.stubGlobal(
     'IntersectionObserver',
-    vi.fn(() => ({
-      observe: vi.fn(),
-      unobserve: vi.fn(),
-      disconnect: vi.fn(),
-      takeRecords: vi.fn(() => []),
-    })),
+    vi.fn((callback: (entries: { isIntersecting: boolean }[]) => void) => {
+      intersectionCallbacks.push(callback);
+      return {
+        observe: vi.fn(),
+        unobserve: vi.fn(),
+        disconnect: vi.fn(),
+        takeRecords: vi.fn(() => []),
+      };
+    }),
   );
 });
 
@@ -54,8 +77,14 @@ const BIBLE_TEXT_MISSING_BOOK = 'This book does not exist in this Bible text.';
 const COMMENTARY_MISSING_BOOK = 'This book does not exist in this commentary.';
 const BLANK_CHAPTER = 'This chapter is empty in this resource.';
 const TEXT_UNAVAILABLE = 'This text could not be loaded.';
+const RETRY = 'Try again';
 const PICK_BIBLE_TEXTS = 'Pick Bible texts…';
 const SELECTING = 'Selecting resource…';
+const TEAM_RESOURCES = 'Team resources';
+const USER_RESOURCES = 'User resources';
+const OTHER_RESOURCES = 'Other resources';
+const TEAM_RESOURCE_LOCK = 'Shared by your team';
+const TEAM_RESOURCES_CAPTION = 'Only a project administrator can remove these.';
 
 const STRINGS = {
   '%webView_platformScriptureEditor_emptyChapter_messageResource%': BLANK_CHAPTER,
@@ -66,9 +95,10 @@ const STRINGS = {
     "The resource couldn't be installed. Check your connection and try again.",
   '%webView_resourcePanel_installedButUnavailable%':
     "The resource is installed but couldn't be opened.",
-  '%webView_resourcePanel_retry%': 'Try again',
+  '%webView_resourcePanel_retry%': RETRY,
   '%webView_resourcePanel_settingsUnavailable%': "Couldn't load your resources.",
   '%webView_resourcePanel_loading%': 'Loading…',
+  '%webView_resourcePanel_loadingResources%': 'Loading resources',
   '%webView_resourcePanel_catalogUnavailable%': "Couldn't load the list of available resources.",
   '%webView_resourcePanel_downloadResources%': 'Download resources…',
   '%webView_resourcePanel_bibleTexts_emptyState_prompt%':
@@ -78,6 +108,11 @@ const STRINGS = {
   '%webView_resourcePanel_textUnavailable%': TEXT_UNAVAILABLE,
   '%webView_resourcePanel_bibleTexts_bookNotAvailable%': BIBLE_TEXT_MISSING_BOOK,
   '%webView_resourcePanel_commentaries_bookNotAvailable%': COMMENTARY_MISSING_BOOK,
+  '%webView_scriptureTextGrid_viewOptions_teamResourcesHeader%': TEAM_RESOURCES,
+  '%webView_scriptureTextGrid_viewOptions_userResourcesHeader%': USER_RESOURCES,
+  '%webView_resourcePanel_otherResources%': OTHER_RESOURCES,
+  '%webView_scriptureTextGrid_viewOptions_teamSharedLock%': TEAM_RESOURCE_LOCK,
+  '%webView_resourcePanel_teamResourcesCaption%': TEAM_RESOURCES_CAPTION,
 };
 
 const RESOURCE_PROJECT_ID = 'project-web';
@@ -102,11 +137,17 @@ const INSTALLED_COMMENTARY: DblResourceData = {
   projectId: 'project-hbk',
 };
 
-/** The row the panel is handed for an installed, referenced DBL resource. */
-function dblRow(resource: DblResourceData): PickerResource {
+/**
+ * The row the panel is handed for an installed, referenced DBL resource. Defaults to the user's own
+ * row, so a test reaches the team-grouped dropdown only by asking for an `'admin'` row.
+ */
+function dblRow(
+  resource: DblResourceData,
+  source: PickerResource['source'] = 'user',
+): PickerResource {
   return {
     reference: { type: 'dblResource', id: resource.dblEntryUid, name: resource.displayName },
-    source: 'admin',
+    source,
     isAdminLocked: false,
     type: resource.type,
     installed: true,
@@ -139,6 +180,24 @@ const SAMPLE_USJ: Usj = {
 const BLANK_USJ: Usj = { type: 'USJ', version: '3.1', content: [] };
 
 /**
+ * A second chapter with content, for asserting WHICH chapter reached the editor. `BLANK_USJ` cannot
+ * stand in: a blank chapter unmounts `Editorial` for the message, so there would be no editor to
+ * feed and the assertion would pass against a feed that never happened.
+ */
+const OTHER_USJ: Usj = {
+  type: 'USJ',
+  version: '3.1',
+  content: [
+    { type: 'chapter', marker: 'c', number: '2' },
+    {
+      type: 'para',
+      marker: 'p',
+      content: [{ type: 'verse', marker: 'v', number: '1' }, 'And the earth was without form'],
+    },
+  ],
+};
+
+/**
  * The exact message the C# `MissingBookException` produces. `parseMissingBookError` reads the book
  * number and project id back out of it positionally, so a differently-worded rejection lands on the
  * generic failure state instead — build the fixture from the real shape, never an approximation.
@@ -161,12 +220,15 @@ function makeProps(overrides: Partial<ResourceTextPanelProps> = {}): ResourceTex
     selectedRef: WEB_ROW,
     readiness: 'configured',
     dblResources: [INSTALLED_RESOURCE],
+    isCatalogUnavailable: false,
+    isGrouped: true,
     onRetryCatalog: vi.fn(),
     scrRef: MAT_1_1,
     onScrRefChange: vi.fn(),
     onSelectResource: vi.fn(),
     usjPossiblyError: SAMPLE_USJ,
     isUsjLoading: false,
+    onRetryChapter: vi.fn(),
     textDirection: 'ltr',
     copyLimit: undefined,
     isSelecting: false,
@@ -236,8 +298,11 @@ const WAITING_FOR_CONTENT = {
 };
 
 afterEach(() => {
-  vi.restoreAllMocks();
   setUsjSpy.mockClear();
+  // `restoreAllMocks` would also undo the `document.body` height spy installed in `beforeAll`,
+  // which every test depends on to start out visible.
+  vi.clearAllMocks();
+  intersectionCallbacks.length = 0;
 });
 
 describe('ResourceTextPanel book not in this resource', () => {
@@ -395,9 +460,175 @@ describe('ResourceTextPanel content that cannot be shown', () => {
   it('waits while the chapter is still on its way, rather than mounting an empty editor', () => {
     // `Editorial` with nothing set paints its "Enter some Scripture…" placeholder, which invites an
     // edit in a text the reader cannot edit.
-    renderPanel({ usjPossiblyError: undefined });
+    //
+    // `isUsjLoading` is what makes this "on its way" rather than "arrived as nothing": the panel is
+    // seeded with `undefined` instead of a blank USJ, so `undefined` alone no longer distinguishes
+    // the two — only the in-flight flag does. See `resolveResourceContentState`.
+    renderPanel({ usjPossiblyError: undefined, isUsjLoading: true });
 
     expect(contentOnScreen()).toEqual(WAITING_FOR_CONTENT);
+  });
+
+  it('calls a settled read that delivered nothing an empty chapter, not a failure', () => {
+    // The other half of the `undefined`-seed distinction. Once the read has settled, `undefined` is
+    // the delivered answer rather than a value still on its way — and it is a deterministic one:
+    // the extender PDP returns `undefined` for a falsy USX, so a retry would produce `undefined`
+    // again. Calling it a failure would name a fault that is really an empty chapter, and offer a
+    // control that cannot change the outcome.
+    renderPanel({ usjPossiblyError: undefined, isUsjLoading: false });
+
+    expect(contentOnScreen()).toEqual({
+      selector: true,
+      spinner: false,
+      editor: false,
+      missingBook: false,
+      blankChapter: true,
+      unavailable: false,
+    });
+    expect(screen.queryByRole('button', { name: RETRY })).not.toBeInTheDocument();
+  });
+
+  it('still names a failure that arrived as an error, and offers the retry', () => {
+    // The distinction the blank-chapter branch must not swallow: an error leaves no USJ in hand
+    // either, so keying the empty-chapter claim on the USJ alone would report a genuine failure as
+    // an empty chapter and hide the one control that can recover it.
+    renderPanel({
+      usjPossiblyError: { platformErrorVersion: 1, message: 'The disk caught fire.' },
+      isUsjLoading: false,
+    });
+
+    expect(contentOnScreen()).toEqual({
+      selector: true,
+      spinner: false,
+      editor: false,
+      missingBook: false,
+      blankChapter: false,
+      unavailable: true,
+    });
+    expect(screen.getByRole('button', { name: RETRY })).toBeInTheDocument();
+  });
+
+  it('re-drives the chapter read when the reader asks for another attempt', async () => {
+    const onRetryChapter = vi.fn();
+    renderPanel({
+      usjPossiblyError: { platformErrorVersion: 1, message: 'The disk caught fire.' },
+      isUsjLoading: false,
+      onRetryChapter,
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: RETRY }));
+
+    expect(onRetryChapter).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the attempt in progress rather than leaving the failure on screen', () => {
+    // What makes the retry legible. The data layer keeps serving the failed read's error across the
+    // resubscription, so without withholding it the panel renders the identical message for the
+    // whole round trip and the button reads as inert.
+    const { rerenderWith } = renderPanel({
+      usjPossiblyError: { platformErrorVersion: 1, message: 'The disk caught fire.' },
+      isUsjLoading: false,
+    });
+    expect(screen.getByText(TEXT_UNAVAILABLE)).toBeInTheDocument();
+
+    // The retry is in flight: same stale error still in hand, but a read is running for it.
+    rerenderWith({
+      usjPossiblyError: { platformErrorVersion: 1, message: 'The disk caught fire.' },
+      isUsjLoading: true,
+    });
+
+    expect(contentOnScreen()).toEqual(WAITING_FOR_CONTENT);
+  });
+});
+
+describe('ResourceTextPanel selector before a resource resolves', () => {
+  it('names the trigger while no row is selected yet', () => {
+    // The trigger's only other content is a chevron, which contributes no text — so without a label
+    // this button renders blank AND has no accessible name at all, leaving a screen-reader user the
+    // panel's one control with nothing to identify it by.
+    renderPanel({ selectedRef: undefined });
+
+    expect(screen.getByRole('button', { name: 'Loading resources' })).toBeInTheDocument();
+  });
+
+  it("does not label the trigger with the content area's status string", () => {
+    // A status region's sentence and a control's label are different jobs; one key answering to
+    // both is a string translators cannot phrase for either.
+    renderPanel({ selectedRef: undefined });
+
+    expect(screen.queryByRole('button', { name: 'Loading…' })).not.toBeInTheDocument();
+  });
+});
+
+describe('ResourceTextPanel content-area waiting state', () => {
+  it('re-announces when the reader moves to a chapter that is also still arriving', () => {
+    // Paging through a slow resource goes wait → wait, and the label is byte-identical each time.
+    // A live region that SURVIVES that change reports nothing, so the reader gets no confirmation
+    // their navigation applied at all. Node identity is the assertion that matters: asserting the
+    // text or the region's presence passes either way.
+    const { rerenderWith } = renderPanel({ usjPossiblyError: undefined, isUsjLoading: true });
+    const firstRegion = screen.getByRole('status');
+
+    rerenderWith({
+      scrRef: { book: 'MAT', chapterNum: 2, verseNum: 1 },
+      usjPossiblyError: undefined,
+      isUsjLoading: true,
+    });
+
+    expect(screen.getByRole('status')).not.toBe(firstRegion);
+  });
+
+  it('keeps the selector mounted above the wait', () => {
+    // The content area is what is waiting, not the panel. The selector is the reader's only way to
+    // a different text, so a full-panel wait would strip the one control that could get them out.
+    renderPanel({ usjPossiblyError: undefined, isUsjLoading: true });
+
+    expect(screen.getByTestId(RESOURCE_TEXT_WAITING_TEST_ID)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /WEB/ })).toBeInTheDocument();
+  });
+});
+
+describe('ResourceTextPanel editor feed while the tab is hidden', () => {
+  // rc-dock keeps an inactive tab's pane mounted under `display: none`, so this panel keeps
+  // receiving chapters for a view nobody can see. See `.claude/rules/cross-view-sync-hidden-views.md`.
+
+  it('does not feed the editor while the tab is inactive', () => {
+    const { rerenderWith } = renderPanel({ usjPossiblyError: SAMPLE_USJ });
+    setViewVisible(false);
+    setUsjSpy.mockClear();
+
+    rerenderWith({ usjPossiblyError: OTHER_USJ });
+
+    // Pushing a whole chapter into Lexical to beat a paint that is not going to happen is work
+    // spent on a view nobody can see.
+    expect(setUsjSpy).not.toHaveBeenCalled();
+  });
+
+  it('catches up with the current chapter when the tab is shown again', () => {
+    const { rerenderWith } = renderPanel({ usjPossiblyError: SAMPLE_USJ });
+    setViewVisible(false);
+    rerenderWith({ usjPossiblyError: OTHER_USJ });
+    setUsjSpy.mockClear();
+
+    setViewVisible(true);
+
+    // The chapter that is current NOW, not a replay of the ones missed while hidden — without this
+    // the reader activates the tab onto whatever the editor was last given.
+    expect(setUsjSpy).toHaveBeenLastCalledWith(OTHER_USJ);
+  });
+
+  it('collapses chapters missed while hidden into a single feed', () => {
+    const { rerenderWith } = renderPanel({ usjPossiblyError: SAMPLE_USJ });
+    setViewVisible(false);
+    rerenderWith({ usjPossiblyError: OTHER_USJ });
+    rerenderWith({ usjPossiblyError: SAMPLE_USJ });
+    rerenderWith({ usjPossiblyError: OTHER_USJ });
+    setUsjSpy.mockClear();
+
+    setViewVisible(true);
+
+    // Only the last one could have survived anyway, so a queue would just re-do superseded work.
+    expect(setUsjSpy).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -460,6 +691,275 @@ describe('ResourceTextPanel resource selection', () => {
     // The namespaced row id, not the bare DBL entry uid — `resolveResourceSelection` compares row
     // ids, so reporting the bare id would never match the list.
     expect(onSelectResource).toHaveBeenCalledWith('dbl:uid-hbk');
+  });
+});
+
+describe("ResourceTextPanel team resources and the user's own", () => {
+  const KJV: DblResourceData = {
+    ...INSTALLED_RESOURCE,
+    dblEntryUid: 'uid-kjv',
+    displayName: 'KJV',
+    fullName: 'King James Version',
+    projectId: 'project-kjv',
+  };
+  const ASV: DblResourceData = {
+    ...INSTALLED_RESOURCE,
+    dblEntryUid: 'uid-asv',
+    displayName: 'ASV',
+    fullName: 'American Standard Version',
+    projectId: 'project-asv',
+  };
+  const TEAM_WEB = dblRow(INSTALLED_RESOURCE, 'admin');
+  const USER_KJV = dblRow(KJV, 'user');
+  const DOWNLOADED_ASV = dblRow(ASV, 'downloaded');
+  const ALL_TEXTS = [INSTALLED_RESOURCE, KJV, ASV];
+
+  async function openSelector(selectedName: RegExp) {
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: selectedName }));
+    await screen.findByRole('menu');
+    return user;
+  }
+
+  /** The names of the rows in `group`, in order. */
+  function rowNames(group: HTMLElement) {
+    return within(group)
+      .getAllByRole('menuitemcheckbox')
+      .map((item) => item.textContent);
+  }
+
+  it("groups the team's resources, then the user's own, then other installed ones", async () => {
+    renderPanel({
+      filteredResources: [TEAM_WEB, USER_KJV, DOWNLOADED_ASV],
+      selectedRef: USER_KJV,
+      dblResources: ALL_TEXTS,
+    });
+    await openSelector(/KJV/);
+
+    const teamGroup = screen.getByRole('group', { name: TEAM_RESOURCES });
+    const userGroup = screen.getByRole('group', { name: USER_RESOURCES });
+    const otherGroup = screen.getByRole('group', { name: OTHER_RESOURCES });
+    expect(rowNames(teamGroup)).toEqual([expect.stringMatching(/^WEB/)]);
+    expect(rowNames(userGroup)).toEqual([expect.stringMatching(/^KJV/)]);
+    expect(rowNames(otherGroup)).toEqual([expect.stringMatching(/^ASV/)]);
+    expect(comesAfter(teamGroup, userGroup)).toBe(true);
+    expect(comesAfter(userGroup, otherGroup)).toBe(true);
+  });
+
+  it('lists every row as one plain list when ungrouped, with no headings, caption or locks', async () => {
+    renderPanel({
+      filteredResources: [TEAM_WEB, USER_KJV, DOWNLOADED_ASV],
+      selectedRef: USER_KJV,
+      dblResources: ALL_TEXTS,
+      isGrouped: false,
+    });
+    await openSelector(/KJV/);
+
+    // Positive control: every row is on screen, in order, so the absences are real answers.
+    expect(rowNames(screen.getByRole('menu'))).toEqual([
+      expect.stringMatching(/^WEB/),
+      expect.stringMatching(/^KJV/),
+      expect.stringMatching(/^ASV/),
+    ]);
+    expect(screen.queryByRole('group')).toBeNull();
+    expect(screen.queryByText(TEAM_RESOURCES)).toBeNull();
+    expect(screen.queryByText(USER_RESOURCES)).toBeNull();
+    expect(screen.queryByText(OTHER_RESOURCES)).toBeNull();
+    expect(screen.queryByText(TEAM_RESOURCES_CAPTION)).toBeNull();
+    expect(screen.queryByRole('img', { name: TEAM_RESOURCE_LOCK })).toBeNull();
+  });
+
+  it.each([
+    ["the user's own", [USER_KJV]],
+    ['other installed', [DOWNLOADED_ASV]],
+  ])('keeps a single unlabeled list when every row is %s', async (_, filteredResources) => {
+    renderPanel({ filteredResources, selectedRef: filteredResources[0], dblResources: ALL_TEXTS });
+    await openSelector(/KJV|ASV/);
+
+    // Positive control: the rows themselves are on screen, so the absent headings are a real answer.
+    expect(screen.getAllByRole('menuitemcheckbox')).toHaveLength(1);
+    expect(screen.queryByRole('group')).toBeNull();
+    expect(screen.queryByText(TEAM_RESOURCES)).toBeNull();
+    expect(screen.queryByText(USER_RESOURCES)).toBeNull();
+    expect(screen.queryByText(OTHER_RESOURCES)).toBeNull();
+    expect(screen.queryByRole('img', { name: TEAM_RESOURCE_LOCK })).toBeNull();
+    expect(screen.queryByText(TEAM_RESOURCES_CAPTION)).toBeNull();
+  });
+
+  it("labels the user's own and other installed resources apart when the team shared nothing", async () => {
+    renderPanel({
+      filteredResources: [USER_KJV, DOWNLOADED_ASV],
+      selectedRef: USER_KJV,
+      dblResources: ALL_TEXTS,
+    });
+    await openSelector(/KJV/);
+
+    expect(rowNames(screen.getByRole('group', { name: USER_RESOURCES }))).toEqual([
+      expect.stringMatching(/^KJV/),
+    ]);
+    expect(rowNames(screen.getByRole('group', { name: OTHER_RESOURCES }))).toEqual([
+      expect.stringMatching(/^ASV/),
+    ]);
+    expect(screen.queryByText(TEAM_RESOURCES)).toBeNull();
+    expect(screen.queryByText(TEAM_RESOURCES_CAPTION)).toBeNull();
+    // One between the two groups and one above "Download resources…": none above the first group.
+    expect(screen.getAllByRole('separator')).toHaveLength(2);
+  });
+
+  it('labels no group that has no rows', async () => {
+    renderPanel({
+      filteredResources: [TEAM_WEB, DOWNLOADED_ASV],
+      selectedRef: TEAM_WEB,
+      dblResources: ALL_TEXTS,
+    });
+    await openSelector(/WEB/);
+
+    // Positive controls: the groups that do have rows are labeled.
+    expect(screen.getByRole('group', { name: TEAM_RESOURCES })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: OTHER_RESOURCES })).toBeInTheDocument();
+    expect(screen.queryByText(USER_RESOURCES)).toBeNull();
+  });
+
+  describe('while the catalog is unavailable', () => {
+    it("lists the user's own and other installed resources as one unlabeled list", async () => {
+      renderPanel({
+        filteredResources: [USER_KJV, DOWNLOADED_ASV],
+        selectedRef: USER_KJV,
+        dblResources: ALL_TEXTS,
+        isCatalogUnavailable: true,
+      });
+      await openSelector(/KJV/);
+
+      // Positive control: both rows are on screen, so the absent headings are a real answer.
+      expect(screen.getAllByRole('menuitemcheckbox')).toHaveLength(2);
+      expect(screen.queryByRole('group')).toBeNull();
+      expect(screen.queryByText(USER_RESOURCES)).toBeNull();
+      expect(screen.queryByText(OTHER_RESOURCES)).toBeNull();
+    });
+
+    it("lists them together under the user's heading below the team's", async () => {
+      renderPanel({
+        filteredResources: [TEAM_WEB, USER_KJV, DOWNLOADED_ASV],
+        selectedRef: USER_KJV,
+        dblResources: ALL_TEXTS,
+        isCatalogUnavailable: true,
+      });
+      await openSelector(/KJV/);
+
+      expect(rowNames(screen.getByRole('group', { name: TEAM_RESOURCES }))).toEqual([
+        expect.stringMatching(/^WEB/),
+      ]);
+      expect(rowNames(screen.getByRole('group', { name: USER_RESOURCES }))).toEqual([
+        expect.stringMatching(/^KJV/),
+        expect.stringMatching(/^ASV/),
+      ]);
+      expect(screen.queryByText(OTHER_RESOURCES)).toBeNull();
+    });
+  });
+
+  it("labels only the team group when every row is the team's", async () => {
+    renderPanel({ filteredResources: [TEAM_WEB], selectedRef: TEAM_WEB });
+    await openSelector(/WEB/);
+
+    expect(screen.getByRole('group', { name: TEAM_RESOURCES })).toBeInTheDocument();
+    expect(screen.queryByText(USER_RESOURCES)).toBeNull();
+    expect(screen.queryByText(OTHER_RESOURCES)).toBeNull();
+    // Only the one above "Download resources…": no separator for groups that aren't there.
+    expect(screen.getAllByRole('separator')).toHaveLength(1);
+  });
+
+  it('marks each team resource, and only those, as one the user cannot remove', async () => {
+    renderPanel({
+      filteredResources: [TEAM_WEB, USER_KJV, DOWNLOADED_ASV],
+      selectedRef: USER_KJV,
+      dblResources: ALL_TEXTS,
+    });
+    await openSelector(/KJV/);
+
+    const teamItem = within(screen.getByRole('group', { name: TEAM_RESOURCES })).getByRole(
+      'menuitemcheckbox',
+    );
+    expect(within(teamItem).getByRole('img', { name: TEAM_RESOURCE_LOCK })).toBeInTheDocument();
+    [USER_RESOURCES, OTHER_RESOURCES].forEach((groupName) => {
+      const items = within(screen.getByRole('group', { name: groupName })).getAllByRole(
+        'menuitemcheckbox',
+      );
+      expect(items).toHaveLength(1);
+      items.forEach((item) => expect(within(item).queryByRole('img')).toBeNull());
+    });
+  });
+
+  it('says once, under the team heading, that only an administrator can remove those rows', async () => {
+    renderPanel({
+      filteredResources: [TEAM_WEB, dblRow(KJV, 'admin'), DOWNLOADED_ASV],
+      selectedRef: TEAM_WEB,
+      dblResources: ALL_TEXTS,
+    });
+    await openSelector(/WEB/);
+
+    const teamGroup = screen.getByRole('group', { name: TEAM_RESOURCES });
+    // Once for the group, not once per row: two team rows here, one caption.
+    expect(screen.getAllByText(TEAM_RESOURCES_CAPTION)).toHaveLength(1);
+    expect(within(teamGroup).getByText(TEAM_RESOURCES_CAPTION)).toBeInTheDocument();
+    expect(teamGroup).toHaveAccessibleDescription(TEAM_RESOURCES_CAPTION);
+  });
+
+  it('keeps a long name whole in its hover title, since the menu ellipsizes it', async () => {
+    renderPanel({
+      filteredResources: [TEAM_WEB, USER_KJV],
+      selectedRef: USER_KJV,
+      dblResources: ALL_TEXTS,
+    });
+    await openSelector(/KJV/);
+
+    const name = within(screen.getByRole('menuitemcheckbox', { name: /WEB/ })).getByText(
+      'WEB - World English Bible',
+    );
+    expect(name).toHaveAttribute('title', 'WEB - World English Bible');
+    // jsdom computes no layout, so the class is the only observable stand-in for the ellipsis.
+    expect(name).toHaveClass('tw:truncate');
+  });
+
+  it('reports a team resource the user chose', async () => {
+    const onSelectResource = vi.fn();
+    renderPanel({
+      filteredResources: [TEAM_WEB, USER_KJV],
+      selectedRef: USER_KJV,
+      dblResources: ALL_TEXTS,
+      onSelectResource,
+    });
+    const user = await openSelector(/KJV/);
+
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /WEB/ }));
+
+    expect(onSelectResource).toHaveBeenCalledWith('dbl:uid-web');
+  });
+
+  it('groups commentaries the same way', async () => {
+    const teamCommentary = dblRow(INSTALLED_COMMENTARY, 'admin');
+    const userCommentary = dblRow({
+      ...INSTALLED_COMMENTARY,
+      dblEntryUid: 'uid-tnn',
+      displayName: 'TNN',
+    });
+    renderPanel({
+      resourceType: 'CommentaryResource',
+      filteredResources: [teamCommentary, userCommentary],
+      selectedRef: teamCommentary,
+      dblResources: [INSTALLED_COMMENTARY],
+    });
+    await openSelector(/HBKENG/);
+
+    expect(
+      within(screen.getByRole('group', { name: TEAM_RESOURCES })).getByRole('menuitemcheckbox', {
+        name: /HBKENG/,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('group', { name: USER_RESOURCES })).getByRole('menuitemcheckbox', {
+        name: /TNN/,
+      }),
+    ).toBeInTheDocument();
   });
 });
 

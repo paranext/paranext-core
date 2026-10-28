@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+import { LUCIDE_ICON_NAMES } from 'platform-bible-react/experimental';
 import { ScriptureRange } from 'platform-scripture-editor';
 import type PapiBackend from '@papi/backend';
 import { newPlatformError, normalizeProjectId, UsjTextContentLocation } from 'platform-bible-utils';
@@ -28,10 +29,13 @@ import {
   buildScriptureEditorWebViewState,
   UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY,
   UNSUPPORTED_PROJECT_IDS_RETRY_DELAY_MS,
-  showsReadOnlyMarkersView,
+  getViewTypeToSave,
+  showsReadOnlyPreview,
   openDefaultActiveProjectIfApplicable,
   resolveOpenEditorDispatch,
   resolveViewTypeForInterfaceMode,
+  getDisplayedViewType,
+  VIEW_TYPE_UNSET,
   VIEW_TYPE_FOR_SET_VIEW_COMMAND,
   syncOnProjectSwitch,
   syncOnSwitchToPower,
@@ -54,6 +58,9 @@ import {
   isChapterBlank,
   buildChapterScaffoldOps,
   canAddChapterNumber,
+  bookHoldsChapters,
+  shouldProtectAddChapterNumber,
+  insertChapterScaffold,
   resolveAddChapterNumberClick,
   isMissingBookError,
   isMissingBookOnScreen,
@@ -3070,12 +3077,12 @@ function createSyncMockPapi(gate: SyncGateStub = {}, projectKind: ProjectKind = 
 }
 
 /**
- * The sync commands `syncOnProjectSwitch` dispatches, in dispatch order: a deep sync of the
- * incoming project, then a shallower send/receive of the outgoing one.
+ * The sync commands `syncOnProjectSwitch` dispatches, in dispatch order: a shallower send/receive
+ * of the outgoing project, then a deep sync of the incoming one.
  */
 const PROJECT_SWITCH_SYNC_COMMANDS = [
-  'paratextBibleSendReceive.syncProjects',
   'paratextBibleSendReceive.sendReceiveProjects',
+  'paratextBibleSendReceive.syncProjects',
 ];
 
 describe('syncOnProjectSwitch', () => {
@@ -3121,7 +3128,10 @@ describe('syncOnProjectSwitch', () => {
     ]);
   });
 
-  it('calls syncProjects before sendReceiveProjects', async () => {
+  it('syncs the incoming project last, so its result is the one reported', async () => {
+    // These are two separate backend runs and the sync indicator reports the most recent one, so
+    // whichever runs last decides the verdict the user sees. That has to be the project they
+    // switched to rather than the one they left.
     const { papi, mockSendCommand } = createSyncMockPapi();
     const callOrder: string[] = [];
     mockSendCommand.mockImplementation(async (commandName: string) => {
@@ -3131,8 +3141,8 @@ describe('syncOnProjectSwitch', () => {
     await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
     expect(callOrder).toEqual([
-      'paratextBibleSendReceive.syncProjects',
       'paratextBibleSendReceive.sendReceiveProjects',
+      'paratextBibleSendReceive.syncProjects',
     ]);
   });
 
@@ -3146,17 +3156,20 @@ describe('syncOnProjectSwitch', () => {
     );
   });
 
-  it('still calls sendReceiveProjects when syncProjects throws', async () => {
+  it('still syncs the incoming project when the outgoing flush throws', async () => {
     const { papi, mockSendCommand } = createSyncMockPapi();
     mockSendCommand.mockImplementation(async (commandName: string) => {
-      if (commandName === 'paratextBibleSendReceive.syncProjects') throw new Error('sync failed');
+      if (commandName === 'paratextBibleSendReceive.sendReceiveProjects')
+        throw new Error('S/R failed');
     });
 
     await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
-    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
-      'proj-outgoing',
-    ]);
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'paratextBibleSendReceive.syncProjects',
+      ['proj-incoming'],
+      true,
+    );
   });
 
   it('resolves without throwing when both syncs fail', async () => {
@@ -4489,11 +4502,89 @@ describe('buildChapterScaffoldOps', () => {
   });
 
   it('builds one chapter-embed op and one verse-embed op when the chapter has exactly one verse', () => {
-    const ops = buildChapterScaffoldOps(1, 1);
+    const ops = buildChapterScaffoldOps(2, 1);
     expect(ops).toEqual([
-      { insert: { chapter: { number: '1', style: 'c' } } },
+      { insert: { chapter: { number: '2', style: 'c' } } },
       { insert: { verse: { number: '1', style: 'v' } } },
     ]);
+  });
+});
+
+describe('insertChapterScaffold', () => {
+  function makeEditor(isFirstChapterInserted = true) {
+    return { applyUpdate: vi.fn(), insertFirstChapter: vi.fn(() => isFirstChapterInserted) };
+  }
+
+  it('inserts nothing while the editor is not mounted', () => {
+    expect(insertChapterScaffold(undefined, 2, 10)).toEqual({
+      status: 'no-editor',
+    });
+  });
+
+  it("routes chapter 1 to insertFirstChapter with the chapter's verse count", () => {
+    const editor = makeEditor();
+
+    expect(insertChapterScaffold(editor, 1, 17)).toEqual({ status: 'inserted' });
+    expect(editor.insertFirstChapter).toHaveBeenCalledWith(17);
+    expect(editor.applyUpdate).not.toHaveBeenCalled();
+  });
+
+  it('reports chapter 1 as refused when the editor refuses it', () => {
+    expect(insertChapterScaffold(makeEditor(false), 1, 17)).toEqual({
+      status: 'refused',
+    });
+  });
+
+  it('reports what a throwing editor threw instead of letting it escape', () => {
+    const editor = makeEditor();
+    editor.insertFirstChapter.mockImplementation(() => {
+      throw new Error('Cannot insert a chapter in readonly mode');
+    });
+
+    expect(insertChapterScaffold(editor, 1, 17)).toEqual({
+      status: 'failed',
+      error: 'Cannot insert a chapter in readonly mode',
+    });
+  });
+
+  it('inserts a later chapter as a local scaffold update at the start of its document', () => {
+    const editor = makeEditor();
+
+    expect(insertChapterScaffold(editor, 2, 10)).toEqual({ status: 'inserted' });
+    expect(editor.applyUpdate).toHaveBeenCalledWith(buildChapterScaffoldOps(2, 10), 'local');
+    expect(editor.insertFirstChapter).not.toHaveBeenCalled();
+  });
+
+  it('reports a later chapter as failed when the scaffold update throws', () => {
+    const editor = makeEditor();
+    editor.applyUpdate.mockImplementation(() => {
+      throw new Error('apply failed');
+    });
+
+    expect(insertChapterScaffold(editor, 2, 10)).toEqual({
+      status: 'failed',
+      error: 'apply failed',
+    });
+  });
+});
+
+describe('shouldProtectAddChapterNumber', () => {
+  it("lets chapter 1 be added under the user's own lock, so an empty book can be started", () => {
+    expect(shouldProtectAddChapterNumber(true, false, 1)).toBe(false);
+  });
+
+  it("keeps chapter 1 from being added under an administrator's team lock", () => {
+    expect(shouldProtectAddChapterNumber(true, true, 1)).toBe(true);
+  });
+
+  it('keeps a later chapter from being added under either lock', () => {
+    expect(shouldProtectAddChapterNumber(true, false, 2)).toBe(true);
+    expect(shouldProtectAddChapterNumber(true, true, 2)).toBe(true);
+  });
+
+  it('never protects while structure is unlocked', () => {
+    expect(shouldProtectAddChapterNumber(false, false, 1)).toBe(false);
+    expect(shouldProtectAddChapterNumber(false, false, 2)).toBe(false);
   });
 });
 
@@ -4508,6 +4599,23 @@ describe('canAddChapterNumber', () => {
 
   it('returns true when the chapter has at least one verse', () => {
     expect(canAddChapterNumber(1)).toBe(true);
+  });
+});
+
+describe('bookHoldsChapters', () => {
+  it.each(['FRT', 'INT', 'BAK', 'OTH', 'CNC', 'GLO', 'TDX', 'NDX'])(
+    'offers no chapters in the peripheral book %s',
+    (bookId) => {
+      expect(bookHoldsChapters(bookId)).toBe(false);
+    },
+  );
+
+  it.each(['GEN', 'MAT', 'TOB', 'XXA', 'XXG'])('offers chapters in %s', (bookId) => {
+    expect(bookHoldsChapters(bookId)).toBe(true);
+  });
+
+  it('recognizes a peripheral book whatever its case', () => {
+    expect(bookHoldsChapters('frt')).toBe(false);
   });
 });
 
@@ -4537,6 +4645,31 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     surface: 'popover' as const,
     usesPaneModel: false,
   };
+
+  it('navigates a read-only Preview caller to the pane and shows a hidden pane in Power', () => {
+    const d = decideNoteCallerClickAction({
+      ...base,
+      isCollapsed: true,
+      surface: 'none',
+      usesPaneModel: true,
+      isPowerMode: true,
+      paneVisible: false,
+      paneRendered: false,
+    });
+    expect(d.action).toBe('navigate-only');
+    expect(d.showPane).toBe(true);
+    expect(d.sendPaneFocusRequest).toBe(true);
+  });
+
+  it('keeps a read-only caller inert without the pane model', () => {
+    const d = decideNoteCallerClickAction({
+      ...base,
+      isCollapsed: true,
+      surface: 'none',
+      usesPaneModel: false,
+    });
+    expect(d.action).toBe('ignore-read-only');
+  });
 
   it('opens the popover for a plain collapsed-caller click (pane hidden, no session)', () => {
     expect(decideNoteCallerClickAction({ ...base, isPowerMode: false })).toEqual({
@@ -4847,8 +4980,9 @@ describe('decideNoteSessionUpdate (a row edit must not reload the row editor)', 
 describe('usesPaneNoteModel', () => {
   it.each([
     ['standard', true, true],
-    ['formatted', true, false],
+    ['formatted', true, true],
     ['markers', true, false],
+    ['standard', false, true],
     ['formatted', false, true],
     ['markers', false, false],
   ] as const)('%s view, isPowerMode=%s → %s', (viewType, isPowerMode, expected) => {
@@ -4857,18 +4991,31 @@ describe('usesPaneNoteModel', () => {
     );
   });
 
-  it('does not apply the Simple answer while the interface mode is still loading', () => {
-    expect(
-      usesPaneNoteModel({
-        viewType: 'formatted',
-        isPowerMode: false,
-        isInterfaceModeLoading: true,
-      }),
-    ).toBe(false);
-    expect(
-      usesPaneNoteModel({ viewType: 'standard', isPowerMode: false, isInterfaceModeLoading: true }),
-    ).toBe(true);
-  });
+  it.each([[true], [false]])(
+    'counts only Standard view while the interface mode is still loading (isPowerMode=%s)',
+    (isPowerMode) => {
+      expect(
+        usesPaneNoteModel({ viewType: 'formatted', isPowerMode, isInterfaceModeLoading: true }),
+      ).toBe(false);
+      expect(
+        usesPaneNoteModel({ viewType: 'markers', isPowerMode, isInterfaceModeLoading: true }),
+      ).toBe(false);
+      expect(
+        usesPaneNoteModel({ viewType: 'standard', isPowerMode, isInterfaceModeLoading: true }),
+      ).toBe(true);
+    },
+  );
+
+  it.each([[true], [false]])(
+    'uses the pane for a saved markers view once the interface mode has loaded (isPowerMode=%s), since the editor never displays markers',
+    (isPowerMode) => {
+      const displayed = resolveViewTypeForInterfaceMode('markers', isPowerMode);
+      expect(displayed).not.toBe('markers');
+      expect(
+        usesPaneNoteModel({ viewType: displayed, isPowerMode, isInterfaceModeLoading: false }),
+      ).toBe(true);
+    },
+  );
 });
 
 describe('resolveNoteEditingSurface', () => {
@@ -5069,26 +5216,26 @@ describe('shouldPublishPaneDocument (the pane repaints only when its notes chang
   });
 });
 
-describe('resolveViewTypeForInterfaceMode (standard and markers views are power-mode-only)', () => {
+describe('resolveViewTypeForInterfaceMode (Standard is Power-only; Markers is shown nowhere)', () => {
   it('coerces standard to formatted in simple mode', () => {
     expect(resolveViewTypeForInterfaceMode('standard', false)).toBe('formatted');
-  });
-
-  it('keeps standard in power mode', () => {
-    expect(resolveViewTypeForInterfaceMode('standard', true)).toBe('standard');
   });
 
   it('leaves formatted unchanged in simple mode', () => {
     expect(resolveViewTypeForInterfaceMode('formatted', false)).toBe('formatted');
   });
 
-  it('coerces markers to formatted in simple mode, which has no way back from the read-only view', () => {
+  it('coerces a saved markers view to formatted in simple mode', () => {
     expect(resolveViewTypeForInterfaceMode('markers', false)).toBe('formatted');
   });
 
-  it('leaves formatted and markers unchanged in power mode', () => {
+  it('shows a saved markers view as Standard view in Power', () => {
+    expect(resolveViewTypeForInterfaceMode('markers', true)).toBe('standard');
+  });
+
+  it('leaves standard and formatted unchanged in Power', () => {
+    expect(resolveViewTypeForInterfaceMode('standard', true)).toBe('standard');
     expect(resolveViewTypeForInterfaceMode('formatted', true)).toBe('formatted');
-    expect(resolveViewTypeForInterfaceMode('markers', true)).toBe('markers');
   });
 });
 
@@ -5149,6 +5296,88 @@ describe('getSimpleModeRootClassNames', () => {
   });
 });
 
+describe('getDisplayedViewType', () => {
+  it('shows formatted while the mode loads and nothing is saved', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: VIEW_TYPE_UNSET,
+        isPowerMode: false,
+        isInterfaceModeLoading: true,
+      }),
+    ).toBe('formatted');
+  });
+
+  it('shows formatted while the mode loads and nothing is saved, even when Power is reported', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: VIEW_TYPE_UNSET,
+        isPowerMode: true,
+        isInterfaceModeLoading: true,
+      }),
+    ).toBe('formatted');
+  });
+
+  it('shows the persisted value as is while the mode loads', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: 'standard',
+        isPowerMode: false,
+        isInterfaceModeLoading: true,
+      }),
+    ).toBe('standard');
+  });
+
+  it('shows Standard view for a never-saved Power tab', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: VIEW_TYPE_UNSET,
+        isPowerMode: true,
+        isInterfaceModeLoading: false,
+      }),
+    ).toBe('standard');
+  });
+
+  it('shows a saved markers view as Standard view in Power', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: 'markers',
+        isPowerMode: true,
+        isInterfaceModeLoading: false,
+      }),
+    ).toBe('standard');
+  });
+
+  it('keeps a saved formatted view in Power', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: 'formatted',
+        isPowerMode: true,
+        isInterfaceModeLoading: false,
+      }),
+    ).toBe('formatted');
+  });
+
+  it('shows formatted in Simple when nothing is saved', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: VIEW_TYPE_UNSET,
+        isPowerMode: false,
+        isInterfaceModeLoading: false,
+      }),
+    ).toBe('formatted');
+  });
+
+  it('shows formatted in Simple for a saved standard view', () => {
+    expect(
+      getDisplayedViewType({
+        persistedViewType: 'standard',
+        isPowerMode: false,
+        isInterfaceModeLoading: false,
+      }),
+    ).toBe('formatted');
+  });
+});
+
 describe('direct view-setting commands', () => {
   it('maps setViewStandard to standard and setViewPreview to formatted', () => {
     expect(VIEW_TYPE_FOR_SET_VIEW_COMMAND['platformScriptureEditor.setViewStandard']).toBe(
@@ -5161,10 +5390,13 @@ describe('direct view-setting commands', () => {
 });
 
 describe('getNextViewTypeInCycle', () => {
-  it('cycles formatted -> standard -> markers -> formatted in power mode', () => {
+  it('toggles Standard view and Preview in Power', () => {
+    expect(getNextViewTypeInCycle('standard', true)).toBe('formatted');
     expect(getNextViewTypeInCycle('formatted', true)).toBe('standard');
-    expect(getNextViewTypeInCycle('standard', true)).toBe('markers');
-    expect(getNextViewTypeInCycle('markers', true)).toBe('formatted');
+  });
+
+  it('goes to Standard view from a markers value in Power', () => {
+    expect(getNextViewTypeInCycle('markers', true)).toBe('standard');
   });
 
   it('has nothing to change in simple mode, so a saved Power view type is never overwritten', () => {
@@ -5175,22 +5407,56 @@ describe('getNextViewTypeInCycle', () => {
   });
 });
 
-describe('showsReadOnlyMarkersView', () => {
-  it('is true for a saved markers view in Power, where the editor shows it read-only', () => {
-    expect(showsReadOnlyMarkersView('markers', true)).toBe(true);
+describe('getViewTypeToSave', () => {
+  const change = { method: 'changeScriptureView' } as const;
+
+  it('toggles Standard view and Preview for changeScriptureView in Power', () => {
+    expect(getViewTypeToSave(change, { viewType: 'standard', isPowerMode: true })).toBe(
+      'formatted',
+    );
+    expect(getViewTypeToSave(change, { viewType: 'formatted', isPowerMode: true })).toBe(
+      'standard',
+    );
+    expect(getViewTypeToSave(change, { viewType: 'markers', isPowerMode: true })).toBe('standard');
   });
 
-  it('is false for a saved markers view outside Power, where the editor shows the editable Preview', () => {
-    expect(showsReadOnlyMarkersView('markers', false)).toBe(false);
+  it('saves nothing for changeScriptureView in Simple, whatever the current view', () => {
+    const allViewTypes = ['formatted', 'markers', 'standard'] as const;
+    allViewTypes.forEach((viewType) => {
+      expect(getViewTypeToSave(change, { viewType, isPowerMode: false })).toBeUndefined();
+    });
   });
 
-  it.each([['formatted'], ['standard'], [undefined], [42]])(
-    'is false for a saved view type of %s',
-    (viewType) => {
-      expect(showsReadOnlyMarkersView(viewType, true)).toBe(false);
-      expect(showsReadOnlyMarkersView(viewType, false)).toBe(false);
-    },
-  );
+  it('saves the requested view type as is for setScriptureView', () => {
+    // `isPowerMode: false` is also what a still-loading interface mode reads as, so this row covers
+    // both Simple and the loading case.
+    expect(
+      getViewTypeToSave(
+        { method: 'setScriptureView', viewType: 'standard' },
+        { viewType: 'formatted', isPowerMode: false },
+      ),
+    ).toBe('standard');
+    expect(
+      getViewTypeToSave(
+        { method: 'setScriptureView', viewType: 'formatted' },
+        { viewType: 'standard', isPowerMode: true },
+      ),
+    ).toBe('formatted');
+  });
+});
+
+describe('showsReadOnlyPreview', () => {
+  it('is true for a saved formatted view in Power', () => {
+    expect(showsReadOnlyPreview('formatted', true)).toBe(true);
+  });
+
+  it.each([['standard'], ['markers'], [undefined], [42]])('is false for %s in Power', (v) => {
+    expect(showsReadOnlyPreview(v, true)).toBe(false);
+  });
+
+  it.each([['formatted'], ['standard'], ['markers']])('is false for %s outside Power', (v) => {
+    expect(showsReadOnlyPreview(v, false)).toBe(false);
+  });
 });
 
 describe('isMissingBookError', () => {
@@ -5378,22 +5644,37 @@ describe('resolveResourceContentState', () => {
         resourceProjectId: undefined,
         usjPossiblyError: undefined,
         currentBookNum: GENESIS,
+        isUsjSettled: false,
       }),
     ).toBe('loading');
   });
 
-  it('returns "loading" for a caller whose hook is not seeded with a default', () => {
-    // The Bible texts panel passes `EMPTY_USJ` as its hook's default, so its value is an object from
-    // the first render and this pair does not occur there. Kept because the state is part of this
-    // function's contract for any caller reading a hook without a seeded default, and because the
-    // alternative — falling to `'ready'` — would mount an editor with nothing to put in it.
+  it('returns "loading" while nothing has arrived and the subscription is still working', () => {
+    // The state a caller reaches by seeding its hook with `undefined` (the Bible texts panel): no
+    // chapter in hand and none refused, so the honest answer is a spinner. Falling to `'ready'`
+    // here would mount an editor with nothing to put in it.
     expect(
       resolveResourceContentState({
         resourceProjectId: PROJECT_ID,
         usjPossiblyError: undefined,
         currentBookNum: GENESIS,
+        isUsjSettled: false,
       }),
     ).toBe('loading');
+  });
+
+  it('returns "failed" when the subscription settles having delivered nothing', () => {
+    // `ChapterUSJ`'s `getData` is `Usj | undefined` and the extender PDP returns `undefined` for a
+    // falsy USX, so this is a real delivery, not an absence of one. Reported rather than spun on:
+    // an unending spinner with no message is the "stuck loading" symptom itself.
+    expect(
+      resolveResourceContentState({
+        resourceProjectId: PROJECT_ID,
+        usjPossiblyError: undefined,
+        currentBookNum: GENESIS,
+        isUsjSettled: true,
+      }),
+    ).toBe('failed');
   });
 
   it('returns "ready" once chapter data has arrived', () => {
@@ -5402,6 +5683,7 @@ describe('resolveResourceContentState', () => {
         resourceProjectId: PROJECT_ID,
         usjPossiblyError: { type: 'USJ', version: '3.1', content: [] },
         currentBookNum: GENESIS,
+        isUsjSettled: true,
       }),
     ).toBe('ready');
   });
@@ -5412,6 +5694,7 @@ describe('resolveResourceContentState', () => {
         resourceProjectId: PROJECT_ID,
         usjPossiblyError: missingBook(GENESIS),
         currentBookNum: GENESIS,
+        isUsjSettled: true,
       }),
     ).toBe('bookNotAvailable');
   });
@@ -5431,6 +5714,7 @@ describe('resolveResourceContentState', () => {
         resourceProjectId: PROJECT_ID,
         usjPossiblyError: missingBook(MATTHEW),
         currentBookNum: GENESIS,
+        isUsjSettled: true,
       }),
     ).toBe('loading');
   });
@@ -5443,6 +5727,7 @@ describe('resolveResourceContentState', () => {
         resourceProjectId: PROJECT_ID,
         usjPossiblyError: missingBook(GENESIS, 'someOtherProject'),
         currentBookNum: GENESIS,
+        isUsjSettled: true,
       }),
     ).toBe('loading');
   });
@@ -5461,6 +5746,7 @@ describe('resolveResourceContentState', () => {
           content: [`Book number ${GENESIS} not found in project ${PROJECT_ID}.`],
         },
         currentBookNum: GENESIS,
+        isUsjSettled: true,
       }),
     ).toBe('ready');
   });
@@ -5475,6 +5761,7 @@ describe('resolveResourceContentState', () => {
         resourceProjectId: 'abc123',
         usjPossiblyError: missingBook(GENESIS, 'ABC123'),
         currentBookNum: GENESIS,
+        isUsjSettled: true,
       }),
     ).toBe('bookNotAvailable');
   });
@@ -5488,6 +5775,7 @@ describe('resolveResourceContentState', () => {
         resourceProjectId: PROJECT_ID,
         usjPossiblyError: missingBook(0),
         currentBookNum: 0,
+        isUsjSettled: true,
       }),
     ).toBe('loading');
   });
@@ -5504,8 +5792,25 @@ describe('resolveResourceContentState', () => {
         resourceProjectId: PROJECT_ID,
         usjPossiblyError: newPlatformError(new Error('Project abc123 is not available')),
         currentBookNum: GENESIS,
+        isUsjSettled: true,
       }),
     ).toBe('failed');
+  });
+
+  it('withholds a failure while a read for it is still in flight', () => {
+    // The data layer holds the last delivered value across a resubscription — it resets `isLoading`,
+    // never `data` — so an error stays in hand while the next attempt runs. Naming it then would
+    // report a failure for a read that has not finished, and it is what makes the retry affordance
+    // look inert: re-driving the read would otherwise leave the identical message on screen for the
+    // whole round trip.
+    expect(
+      resolveResourceContentState({
+        resourceProjectId: PROJECT_ID,
+        usjPossiblyError: newPlatformError(new Error('Project abc123 is not available')),
+        currentBookNum: GENESIS,
+        isUsjSettled: false,
+      }),
+    ).toBe('loading');
   });
 });
 
@@ -5538,6 +5843,26 @@ describe('formatEditorTitle', () => {
       mockGetLocalizedStrings,
     );
     expect(title).toBe('My Project (Read-only)');
+  });
+
+  it.each([
+    ['formatted', true, 'Project (Read-only)'],
+    ['markers', true, 'Project (Editable)'],
+    ['formatted', false, 'Project (Editable)'],
+  ])('titles a saved %s view (Power: %s) as "%s"', async (viewType, isPowerMode, expected) => {
+    const stub = vi.fn().mockResolvedValue({
+      '%webView_platformScriptureEditor_title_format%': '{projectId} {editable}',
+      '%webView_platformScriptureEditor_title_readonly_indicator%': '(Read-only)',
+      '%webView_platformScriptureEditor_title_editable_indicator%': '(Editable)',
+    });
+    const title = await formatEditorTitle(
+      undefined,
+      'p1',
+      showsReadOnlyPreview(viewType, isPowerMode),
+      async () => 'Project',
+      stub,
+    );
+    expect(title).toBe(expected);
   });
 });
 
@@ -6077,6 +6402,23 @@ function savedGrid(
 }
 
 describe('buildScriptureTextGridWebView', () => {
+  it.each(['simple', 'power'] as const)(
+    'opts its icon in to theme colouring in %s mode',
+    async (interfaceMode) => {
+      const papi = createGridProviderMockPapi(interfaceMode);
+
+      const definition = await buildScriptureTextGridWebView(
+        papi,
+        savedGrid('p1'),
+        {},
+        GRID_ASSETS,
+      );
+
+      expect(definition.iconName).toBe('library');
+      expect(LUCIDE_ICON_NAMES).toContain(definition.iconName);
+    },
+  );
+
   it('binds the project a switch supplied rather than the one the tab already had', async () => {
     // The provider half of the re-point. Inverting this precedence leaves the panel on the
     // outgoing project, which is the bug this whole mechanism exists to prevent — and it is only

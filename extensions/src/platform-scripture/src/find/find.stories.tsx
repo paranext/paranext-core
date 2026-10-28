@@ -137,8 +137,10 @@ function escapeRegExp(value: string): string {
  * Build the regular expression for the current search params (or `undefined` for an empty term or
  * an invalid user-supplied regex). Honors match-case, the word-boundary restriction, the
  * allow-regex toggle and ignore-whitespace-differences the same way the real find job's options
- * would. Ignore-diacritics is not emulated here — the real engine NFD-normalizes the source text to
- * apply it, which this fixture-backed harness does not do.
+ * would. Two things the real engine does are not emulated here: ignore-diacritics, which needs the
+ * source text NFD-normalized, and the block-boundary whitespace tolerance, which needs the USJ
+ * block structure this fixture-backed harness does not have. A phrase spanning a rendered line
+ * break therefore matches in the app but not in this story.
  */
 function buildSearchRegex(params: SearchParams): RegExp | undefined {
   if (!params.term) return undefined;

@@ -1,4 +1,4 @@
-import { Button, RetryableErrorView, Spinner } from 'platform-bible-react';
+import { Button, cn, RetryableErrorView, Spinner } from 'platform-bible-react';
 import { ReactNode, useId, useState } from 'react';
 
 /**
@@ -21,19 +21,28 @@ export const PANEL_FILL_CLASSES = 'tw:h-screen tw:justify-center-safe tw:overflo
  *
  * @param label Already-localized status text shown next to the spinner (e.g. "Installing
  *   resource…"). Doubles as the state's accessible name.
- * @param heightClassName How tall the view is. Defaults to the whole panel; pass `tw:h-full` to
- *   wait inside a content area that keeps a header above it.
+ * @param sizingClassName Sizing for the block, REPLACING the default full-panel height rather than
+ *   merging with it. A panel waiting inside its own content area — below a selector header that
+ *   stays mounted — passes the height of that area instead, so the spinner centres in the region it
+ *   describes rather than pushing past the bottom of the panel. Named for sizing specifically
+ *   because the replacement is the point: a general-purpose `className` carrying, say, padding
+ *   would silently drop the full-panel height, and `cn` would not restore it — `tw:h-screen` and a
+ *   padding utility do not conflict, so a merge would keep both and size the block to the
+ *   viewport.
  */
 export function LoadingView({
   label,
-  heightClassName = 'tw:h-screen',
+  sizingClassName = 'tw:h-screen',
 }: {
   label: ReactNode;
-  heightClassName?: string;
+  sizingClassName?: string;
 }) {
   return (
     <div
-      className={`tw:flex ${heightClassName} tw:items-center tw:justify-center tw:gap-2 tw:p-8 tw:text-center`}
+      className={cn(
+        'tw:flex tw:items-center tw:justify-center tw:gap-2 tw:p-8 tw:text-center',
+        sizingClassName,
+      )}
       role="status"
     >
       <Spinner aria-hidden />

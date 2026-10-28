@@ -37,19 +37,8 @@ describe('getEditorViewOptions', () => {
       ...getDefaultViewOptions(),
       ...on,
     });
-    expect(getEditorViewOptions('markers', true, true)).toEqual({
-      ...getDefaultViewOptions(),
-      markerMode: 'visible',
-      noteMode: 'expanded',
-      ...on,
-    });
     expect(getEditorViewOptions('formatted', false, true)).toEqual({
       ...paragraphStructure,
-      ...on,
-    });
-    expect(getEditorViewOptions('markers', false, true)).toEqual({
-      ...paragraphStructure,
-      noteMode: 'expanded',
       ...on,
     });
   });

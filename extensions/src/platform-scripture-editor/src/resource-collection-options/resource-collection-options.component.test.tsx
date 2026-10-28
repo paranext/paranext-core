@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { DblResourceReference } from 'platform-scripture';
 import {
@@ -43,12 +43,16 @@ STRINGS['%webView_scriptureTextGrid_viewOptions_chapterNotYetAvailable%'] =
   'Chapter view is not yet available.';
 STRINGS['%webView_scriptureTextGrid_viewOptions_textsHeader%'] = 'Texts';
 STRINGS['%webView_scriptureTextGrid_viewOptions_getResources%'] = 'Get resources…';
-STRINGS['%webView_scriptureTextGrid_viewOptions_adminSharedLock%'] = 'Shared by administrator';
+STRINGS['%webView_scriptureTextGrid_viewOptions_teamSharedLock%'] = 'Shared by your team';
 STRINGS['%webView_scriptureTextGrid_viewOptions_removeFromList%'] =
   'Remove {resourceName} from list';
+STRINGS['%webView_scriptureTextGrid_viewOptions_removeFromListHint%'] =
+  'Removing a text takes it off your list on every tab.';
 STRINGS['%webView_scriptureTextGrid_viewOptions_installing%'] = 'Installing {resourceName}…';
 STRINGS['%webView_scriptureTextGrid_viewOptions_emptyState_prompt%'] =
   'No texts added yet. Use {getResourcesLabel} to add them.';
+STRINGS['%webView_scriptureTextGrid_viewOptions_teamResourcesHeader%'] = 'Team resources';
+STRINGS['%webView_scriptureTextGrid_viewOptions_userResourcesHeader%'] = 'User resources';
 
 const ref = (id: string, name: string): DblResourceReference => ({
   type: 'dblResource',
@@ -161,12 +165,12 @@ describe('ResourceCollectionOptions — TEXTS list', () => {
     renderComponent({
       bottom: [
         row('u1', 'My Text', { isUserRemovable: true }),
-        row('a2', 'Opted-out Admin', { isUserRemovable: false }),
+        row('a2', 'Downloaded Text', { isUserRemovable: false }),
       ],
     });
     expect(screen.getByRole('button', { name: 'Remove My Text from list' })).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: 'Remove Opted-out Admin from list' }),
+      screen.queryByRole('button', { name: 'Remove Downloaded Text from list' }),
     ).not.toBeInTheDocument();
   });
 
@@ -189,6 +193,102 @@ describe('ResourceCollectionOptions — TEXTS list', () => {
   it('shows an "Installing {name}…" row for pending installs', () => {
     renderComponent({ installingResourceNames: ['New Resource'] });
     expect(screen.getByText('Installing New Resource…')).toBeInTheDocument();
+  });
+
+  // The ✕ removes from the list the Bible texts and Commentaries tabs read too, which nothing on
+  // the row says.
+  it('says what removing does, and describes each remove control with it', () => {
+    renderComponent({ bottom: [row('u1', 'My Text', { isUserRemovable: true })] });
+    expect(
+      screen.getByRole('button', { name: 'Remove My Text from list' }),
+    ).toHaveAccessibleDescription('Removing a text takes it off your list on every tab.');
+  });
+
+  it('says nothing about removing when no row can be removed', () => {
+    renderComponent({ top: [row('a1', 'Admin Text', { isAdminLocked: true })] });
+    // Positive control: the list rendered, so the missing hint is a real answer.
+    expect(screen.getByRole('checkbox', { name: 'Admin Text' })).toBeInTheDocument();
+    expect(
+      screen.queryByText('Removing a text takes it off your list on every tab.'),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe("ResourceCollectionOptions — team resources and the user's own", () => {
+  const TEAM_ROW = row('a1', 'Admin Text', { isAdminLocked: true });
+  const USER_ROW = row('u1', 'My Text', { isUserRemovable: true });
+
+  it("groups the team's resources above the user's own", () => {
+    renderComponent({ top: [TEAM_ROW], bottom: [USER_ROW] });
+
+    const teamGroup = screen.getByRole('group', { name: 'Team resources' });
+    const userGroup = screen.getByRole('group', { name: 'User resources' });
+    expect(within(teamGroup).getByRole('checkbox', { name: 'Admin Text' })).toBeInTheDocument();
+    expect(within(teamGroup).queryByRole('checkbox', { name: 'My Text' })).toBeNull();
+    expect(within(userGroup).getByRole('checkbox', { name: 'My Text' })).toBeInTheDocument();
+    expect(
+      // compareDocumentPosition reports its answer as bit flags
+      // eslint-disable-next-line no-bitwise
+      teamGroup.compareDocumentPosition(userGroup) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('keeps a single unlabeled list when the team shared nothing', () => {
+    renderComponent({ bottom: [USER_ROW], installingResourceNames: ['New Resource'] });
+
+    // Positive control: the rows themselves are on screen, so the absent headings are a real answer.
+    expect(screen.getByRole('checkbox', { name: 'My Text' })).toBeInTheDocument();
+    // By name: the VIEW toggle is itself a `group`.
+    expect(screen.queryByRole('group', { name: 'Team resources' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'User resources' })).toBeNull();
+    expect(screen.queryByText('Team resources')).toBeNull();
+    expect(screen.queryByText('User resources')).toBeNull();
+  });
+
+  it('lists every row as one plain list when ungrouped, with no headings or locks', () => {
+    renderComponent({ top: [TEAM_ROW], bottom: [USER_ROW], isGrouped: false });
+
+    // Positive control: both rows are on screen, team row first, so the absences are real answers.
+    const teamBox = screen.getByRole('checkbox', { name: 'Admin Text' });
+    const userBox = screen.getByRole('checkbox', { name: 'My Text' });
+    expect(
+      // compareDocumentPosition reports its answer as bit flags
+      // eslint-disable-next-line no-bitwise
+      teamBox.compareDocumentPosition(userBox) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.queryByText('Team resources')).toBeNull();
+    expect(screen.queryByText('User resources')).toBeNull();
+    expect(screen.queryByLabelText('Shared by your team')).toBeNull();
+    // Still the team's: unchecking is the only control, with no ✕ to remove it.
+    expect(screen.queryByLabelText('Remove Admin Text from list')).toBeNull();
+    expect(screen.getByLabelText('Remove My Text from list')).toBeInTheDocument();
+  });
+
+  it("labels only the team group when every row is the team's", () => {
+    renderComponent({ top: [TEAM_ROW] });
+
+    expect(screen.getByRole('group', { name: 'Team resources' })).toBeInTheDocument();
+    expect(screen.queryByText('User resources')).toBeNull();
+  });
+
+  it("files a resource being installed under the user's own, even when it is the only one", () => {
+    renderComponent({ top: [TEAM_ROW], installingResourceNames: ['New Resource'] });
+
+    expect(
+      within(screen.getByRole('group', { name: 'User resources' })).getByText(
+        'Installing New Resource…',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps the lock on team rows inside the group', () => {
+    renderComponent({ top: [TEAM_ROW], bottom: [USER_ROW] });
+
+    expect(
+      within(screen.getByRole('group', { name: 'Team resources' })).getByRole('img', {
+        name: 'Shared by your team',
+      }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -325,7 +425,7 @@ describe('ResourceCollectionOptions locked-admin indicator', () => {
       top: [row('a', 'Admin ESV', { isAdminLocked: true, isUserRemovable: false })],
       bottom: [row('b', 'My NIV', { isUserRemovable: true })],
     });
-    expect(screen.getByLabelText('Shared by administrator')).toBeInTheDocument();
+    expect(screen.getByLabelText('Shared by your team')).toBeInTheDocument();
     // Admin row has no "Remove ... from list" control.
     expect(screen.queryByLabelText('Remove Admin ESV from list')).not.toBeInTheDocument();
   });
@@ -338,14 +438,14 @@ describe('ResourceCollectionOptions locked-admin indicator', () => {
     expect(screen.getByLabelText('Remove My NIV from list')).toBeInTheDocument();
   });
 
-  it('shows neither a lock nor a remove control on an opted-out admin row', () => {
-    // Opted-out admin entries land in the bottom section: not shared (isAdminLocked false) and not
-    // user-removable. They must show no lock (not currently shared) and no remove (✕) control.
+  it('shows neither a lock nor a remove control on a downloaded row', () => {
+    // Downloaded rows land in the bottom section: not the team's (isAdminLocked false) and not
+    // user-removable. They must show no lock and no remove (✕) control.
     renderComponent({
-      bottom: [row('a2', 'Opted-out Admin', { isAdminLocked: false, isUserRemovable: false })],
+      bottom: [row('a2', 'Downloaded Text', { isAdminLocked: false, isUserRemovable: false })],
     });
-    expect(screen.queryByLabelText('Shared by administrator')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Remove Opted-out Admin from list')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Shared by your team')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Remove Downloaded Text from list')).not.toBeInTheDocument();
   });
 
   it('the lock is not a focusable/tab-stop button', () => {
@@ -353,7 +453,7 @@ describe('ResourceCollectionOptions locked-admin indicator', () => {
       top: [row('a', 'Admin ESV', { isAdminLocked: true, isUserRemovable: false })],
       bottom: [],
     });
-    const lock = screen.getByLabelText('Shared by administrator');
+    const lock = screen.getByLabelText('Shared by your team');
     expect(lock.tagName).not.toBe('BUTTON');
   });
 });

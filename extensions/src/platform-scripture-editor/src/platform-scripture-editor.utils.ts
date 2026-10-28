@@ -44,7 +44,7 @@ import {
   UsjReaderWriter,
   UsjTextContentLocation,
 } from 'platform-bible-utils';
-import { SerializedVerseRef } from '@sillsdev/scripture';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import type { ScriptureEditorViewType, ScriptureRange } from 'platform-scripture-editor';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import type { UnsyncedChangesSnapshot } from 'paratext-bible-send-receive';
@@ -77,15 +77,16 @@ export const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptu
 const PDP_FACTORY_OBJECT_TYPE = 'pdpFactory';
 
 /**
- * Resolves the view type the editor is allowed to show under the current `platform.interfaceMode`.
- * Standard and markers views are power-mode-only surfaces.
+ * Resolves the view type the editor shows under the current `platform.interfaceMode`. Standard view
+ * is a Power-mode-only surface, and the Markers view is shown nowhere.
  *
  * Simple mode's editor offers one view, the Formatted "Preview", and has no menu or shortcut to
  * leave another view. So a view type persisted during a power-mode session must not be shown in
- * simple mode. Coerces 'standard' and 'markers' to 'formatted' (the simple-mode view) when not in
- * power mode; every other combination passes through unchanged. The result is for display only:
- * callers must not write it back to the persisted view type, so returning to power mode restores
- * the user's choice.
+ * simple mode: outside Power, 'standard' and 'markers' resolve to 'formatted' (the editable Simple
+ * view). In Power, a saved 'markers' is a value from earlier versions and is shown as Standard
+ * view; 'standard' and 'formatted' pass through unchanged. The result is for display only: callers
+ * must not write it back to the persisted view type, so returning to power mode restores the user's
+ * choice.
  *
  * @param viewType The current (requested or persisted) view type
  * @param isPowerMode Whether `platform.interfaceMode` is 'power'
@@ -95,8 +96,54 @@ export function resolveViewTypeForInterfaceMode(
   viewType: ScriptureEditorViewType,
   isPowerMode: boolean,
 ): ScriptureEditorViewType {
-  if ((viewType === 'standard' || viewType === 'markers') && !isPowerMode) return 'formatted';
-  return viewType;
+  if (!isPowerMode) return 'formatted';
+  return viewType === 'markers' ? 'standard' : viewType;
+}
+
+/**
+ * Sentinel that is never a real {@link ScriptureEditorViewType}. It is the `defaultValue` of the web
+ * view's `viewType` state, so a value equal to it means no view type has been saved for the web
+ * view. `useWebViewState` only reads its default when nothing is persisted and never writes it, so
+ * this value never reaches the store.
+ */
+export const VIEW_TYPE_UNSET = '__view_type_unset_not_a_real_view_type__' as const;
+
+/** The persisted `viewType` state: a saved view type, or {@link VIEW_TYPE_UNSET}. */
+export type PersistedViewType = ScriptureEditorViewType | typeof VIEW_TYPE_UNSET;
+
+/**
+ * Derives the view the editor shows from the persisted view type. The result is for display only
+ * and is never written back.
+ *
+ * While `platform.interfaceMode` loads, `isPowerMode` is always `false`, so coercing then would
+ * hide a Power user's saved Standard view: the persisted value is shown as is, or the formatted
+ * view when nothing is saved. Once the mode is known, a never-saved Power tab shows Standard view
+ * (the Power default) and everything else goes through {@link resolveViewTypeForInterfaceMode}.
+ *
+ * @param input.persistedViewType The persisted view type, or {@link VIEW_TYPE_UNSET}
+ * @param input.isPowerMode Whether `platform.interfaceMode` is 'power'
+ * @param input.isInterfaceModeLoading Whether `platform.interfaceMode` has not resolved yet
+ * @returns The view type that should actually be shown
+ */
+export function getDisplayedViewType({
+  persistedViewType,
+  isPowerMode,
+  isInterfaceModeLoading,
+}: {
+  persistedViewType: PersistedViewType;
+  isPowerMode: boolean;
+  isInterfaceModeLoading: boolean;
+}): ScriptureEditorViewType {
+  if (persistedViewType === VIEW_TYPE_UNSET) {
+    return isPowerMode && !isInterfaceModeLoading ? 'standard' : 'formatted';
+  }
+  if (isInterfaceModeLoading) return persistedViewType;
+  return resolveViewTypeForInterfaceMode(persistedViewType, isPowerMode);
+}
+
+/** Narrows an untyped saved value to a {@link ScriptureEditorViewType}. */
+function isScriptureEditorViewType(viewType: unknown): viewType is ScriptureEditorViewType {
+  return viewType === 'formatted' || viewType === 'standard' || viewType === 'markers';
 }
 
 /**
@@ -128,16 +175,17 @@ export function getSimpleModeRootClassNames({
 }
 
 /**
- * Whether a saved view type makes the editor show the read-only markers view in the current mode.
- * Outside Power a saved markers view is shown as the editable formatted view (see
- * {@link resolveViewTypeForInterfaceMode}), so it is not read-only there.
+ * Whether a saved view type makes the editor show Preview, the read-only formatted view. Preview is
+ * read-only only in Power; outside Power 'formatted' is the editable Simple view.
  *
  * @param viewType The view type saved in the web view's state (untyped there)
  * @param isPowerMode Whether `platform.interfaceMode` is 'power'
  */
-export function showsReadOnlyMarkersView(viewType: unknown, isPowerMode: boolean): boolean {
+export function showsReadOnlyPreview(viewType: unknown, isPowerMode: boolean): boolean {
   return (
-    viewType === 'markers' && resolveViewTypeForInterfaceMode(viewType, isPowerMode) === 'markers'
+    isPowerMode &&
+    isScriptureEditorViewType(viewType) &&
+    resolveViewTypeForInterfaceMode(viewType, isPowerMode) === 'formatted'
   );
 }
 
@@ -151,29 +199,50 @@ export const VIEW_TYPE_FOR_SET_VIEW_COMMAND = {
 } as const satisfies Record<string, ScriptureEditorViewType>;
 
 /**
- * Computes the next view type for the view-cycling affordance (the `changeScriptureView` command).
- * Power mode cycles formatted -> standard -> markers -> formatted. Simple mode only shows the
- * formatted view (see {@link resolveViewTypeForInterfaceMode}), so there is nothing to cycle to, and
- * returning nothing keeps a view type saved in Power from being overwritten.
+ * Computes the next view type for the view-toggling affordance (the `changeScriptureView` command).
+ * Power mode toggles between Standard view and Preview; a saved 'markers' value goes to Standard
+ * view. Simple mode has a single view (see {@link resolveViewTypeForInterfaceMode}), so there is
+ * nothing to change to, and returning nothing keeps a view type saved in Power from being
+ * overwritten.
  *
- * Cycles on the view type rather than `ViewOptions.markerMode`: in non-power mode both 'formatted'
- * and 'markers' resolve to markerMode 'hidden' (the non-power markers view overrides only
- * noteMode), so a markerMode-based cycle would orphan 'formatted'.
- *
- * @param viewType The current view type (resolved for mode first, so a lingering 'standard' or
- *   'markers' in simple mode advances as if it were already coerced)
+ * @param viewType The current view type
  * @param isPowerMode Whether `platform.interfaceMode` is 'power'
- * @returns The next view type in the Power cycle, or `undefined` in simple mode, where the caller
- *   must leave the saved view type alone
+ * @returns The other view type in Power, or `undefined` in simple mode, where the caller must leave
+ *   the saved view type alone
  */
 export function getNextViewTypeInCycle(
   viewType: ScriptureEditorViewType,
   isPowerMode: boolean,
 ): ScriptureEditorViewType | undefined {
   if (!isPowerMode) return undefined;
-  if (viewType === 'formatted') return 'standard';
-  if (viewType === 'standard') return 'markers';
-  return 'formatted';
+  return viewType === 'standard' ? 'formatted' : 'standard';
+}
+
+/** The two editor messages that can change the saved view type. */
+export type ViewChangeMessage =
+  | { method: 'changeScriptureView' }
+  | { method: 'setScriptureView'; viewType: ScriptureEditorViewType };
+
+/**
+ * Decides which view type, if any, a view-changing message should save.
+ *
+ * `changeScriptureView` toggles per {@link getNextViewTypeInCycle}; in Simple mode there is nothing
+ * to toggle to, so nothing is saved. `setScriptureView` saves the requested view type exactly as
+ * given and is never coerced by the interface mode: the displayed view type is derived from the
+ * saved one by {@link resolveViewTypeForInterfaceMode}, and persisting that coercion (for example
+ * while `platform.interfaceMode` is still loading and reads as not Power) would overwrite the
+ * user's Power choice.
+ *
+ * @param message The view-changing message received
+ * @param context The current view type and whether `platform.interfaceMode` is 'power'
+ * @returns The view type to save, or `undefined` when the saved view type must be left alone
+ */
+export function getViewTypeToSave(
+  message: ViewChangeMessage,
+  context: { viewType: ScriptureEditorViewType; isPowerMode: boolean },
+): ScriptureEditorViewType | undefined {
+  if (message.method === 'setScriptureView') return message.viewType;
+  return getNextViewTypeInCycle(context.viewType, context.isPowerMode);
 }
 
 /**
@@ -423,22 +492,24 @@ export function validateCommentSelection(
 /**
  * Decides whether a view uses the footnotes-pane note model, PT9's: notes are edited in place in
  * the footnotes pane, picking a note moves the text to it, and the picked note's caller is
- * highlighted. Standard view uses it, and so does Simple mode's Formatted view, which edits notes
- * exactly as Standard view does while its own text keeps hiding markers. Power mode's Formatted and
- * Markers views keep the popover model, and so does Simple's Markers view, which is read-only and
- * shows its notes expanded in the text.
+ * highlighted. Every view the editor shows uses it: Standard view, Power's Preview (the read-only
+ * Formatted view, where a note caller still jumps to its note in the pane) and Simple mode's
+ * Formatted view, which edits notes exactly as Standard view does while its own text keeps hiding
+ * markers. Only a 'markers' view type keeps the popover model, and the editor never displays one
+ * once `platform.interfaceMode` has loaded (see {@link resolveViewTypeForInterfaceMode}).
  *
- * While `platform.interfaceMode` is still loading, `isPowerMode` reads `false` whatever the mode
- * really is, so only Standard view counts then: a Power user never briefly gets Simple's answer.
+ * The answer does not depend on `isPowerMode`; the option stays so every call site passes the same
+ * view facts. While `platform.interfaceMode` is still loading, the displayed view type is the
+ * unresolved saved one, so only Standard view counts then.
  *
- * @param options.viewType The scripture editor's current view type
- * @param options.isPowerMode Whether `platform.interfaceMode` is 'power'
+ * @param options.viewType The scripture editor's current (displayed) view type
+ * @param options.isPowerMode Whether `platform.interfaceMode` is 'power'; does not affect the
+ *   answer
  * @param options.isInterfaceModeLoading Whether `platform.interfaceMode` is still loading
  * @returns Whether the view uses the footnotes-pane note model
  */
 export function usesPaneNoteModel({
   viewType,
-  isPowerMode,
   isInterfaceModeLoading,
 }: {
   viewType: ScriptureEditorViewType;
@@ -446,7 +517,7 @@ export function usesPaneNoteModel({
   isInterfaceModeLoading: boolean;
 }): boolean {
   if (viewType === 'standard') return true;
-  return !isInterfaceModeLoading && !isPowerMode && viewType === 'formatted';
+  return !isInterfaceModeLoading && viewType === 'formatted';
 }
 
 /**
@@ -1939,8 +2010,8 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
 // #region Project-Switch Sync
 
 /**
- * Fire-and-forget helper that syncs the incoming project first, then the outgoing one. Each sync is
- * independently error-isolated so a failure in one doesn't block the other. Called after a
+ * Fire-and-forget helper that flushes the outgoing project, then syncs the incoming one. Each sync
+ * is independently error-isolated so a failure in one doesn't block the other. Called after a
  * Simple-mode replace-tab project switch, and by `finalizeProjectSwitch` after a Power -> Simple
  * mode switch — by which time the user may be back in Power mode.
  *
@@ -1948,6 +2019,13 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
  * connected resources and translation partners (deep sync). Uses the shallower
  * `paratextBibleSendReceive.sendReceiveProjects` for the outgoing project because we only need to
  * flush any local edits — a full deep sync is unnecessary on the way out.
+ *
+ * The incoming project syncs LAST because these are two separate backend runs and the sync
+ * indicator reports the most recent one. Whichever runs last is the verdict the user is shown, and
+ * the project they just switched to — the one on screen — is what that verdict should describe. A
+ * failure flushing the outgoing project reaches the user only through its own failure toast (see
+ * below), not the indicator; see `adr-sync-activity-outcome-is-coarse` in
+ * `.context/standards/Architecture-Decisions.md`.
  *
  * The outgoing sync is skipped only for a published resource (see `isProjectPublished`), which
  * holds nothing the user wrote. A translation project with editing switched off still syncs: its
@@ -2002,6 +2080,18 @@ export async function syncOnProjectSwitch(
     }
   }
 
+  if (outgoingProjectId && !(await isProjectPublished(papi, outgoingProjectId))) {
+    try {
+      await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [
+        outgoingProjectId,
+      ]);
+    } catch (e) {
+      papi.logger.warn(
+        `Project-switch sync: outgoing sync for ${outgoingProjectId} failed: ${getErrorMessage(e)}`,
+      );
+    }
+  }
+
   try {
     // Mode change mid-sync: intentionally not handled. The flag is fixed for the run, and the
     // toolbar indicator mounts only in Simple mode, so switching to Power while a suppressed sync
@@ -2017,18 +2107,6 @@ export async function syncOnProjectSwitch(
     papi.logger.warn(
       `Project-switch sync: incoming sync for ${incomingProjectId} failed: ${getErrorMessage(e)}`,
     );
-  }
-
-  if (outgoingProjectId && !(await isProjectPublished(papi, outgoingProjectId))) {
-    try {
-      await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [
-        outgoingProjectId,
-      ]);
-    } catch (e) {
-      papi.logger.warn(
-        `Project-switch sync: outgoing sync for ${outgoingProjectId} failed: ${getErrorMessage(e)}`,
-      );
-    }
   }
 }
 
@@ -2946,6 +3024,9 @@ export function isBlankChapterOnScreen(usj: Usj | undefined, chapterNum: number)
  * followed by one verse marker per verse, each with empty text content. Intended for
  * `EditorRef.applyUpdate` when reinstating a chapter number in an effectively-blank chapter.
  *
+ * Not for chapter 1: these ops insert at the start of the document, which there is the book's `\id`
+ * line. Chapter 1 goes through `EditorRef.insertFirstChapter`; see {@link insertChapterScaffold}.
+ *
  * @param chapterNum The chapter number to insert (matching the chapter shown in the BCV control).
  * @param lastVerseNum The last verse number for this chapter, per the project's versification.
  * @returns The Delta operations, in insertion order.
@@ -2971,6 +3052,47 @@ export function canAddChapterNumber(lastVerse: number): boolean {
   return lastVerse > 0;
 }
 
+/**
+ * Whether a book holds chapters, so the "Add Chapter Number" button can be offered in it. A
+ * peripheral book (FRT, INT, BAK, OTH, CNC, GLO, TDX, NDX) never does, and the editor refuses `\c`
+ * in one, though the versification gives it chapters and verses. The Extra books (XXA–XXG) hold
+ * chapters like any other book. The book and chapter control draws the same line.
+ *
+ * Upper-cases the id first: `Canon.isExtraMaterial` matches its id list case-sensitively, so a
+ * lowercase id would read as a book that holds chapters.
+ *
+ * @param bookId The book id, e.g. from the current scripture reference.
+ */
+export function bookHoldsChapters(bookId: string): boolean {
+  const upperBookId = bookId.toUpperCase();
+  return !Canon.isExtraMaterial(upperBookId) || Canon.extraBooks().includes(upperBookId);
+}
+
+/**
+ * Whether structure protection disables the "Add Chapter Number" button.
+ *
+ * Chapter 1 is exempt from the user's own lock so a Simple-mode user, whose structure is locked by
+ * default, can start a new book, which holds only its `\id` line. A chapter document can't tell
+ * whether later chapters exist, so chapter 1 of a book that starts at a later chapter, such as a
+ * partial translation, is exempt too. Adding chapter 1 there is still valid USFM.
+ *
+ * The team lock has no exemption: an administrator sets it as a rule for the whole team, so a user
+ * it binds waits for an administrator to lift it, even to start a book.
+ *
+ * @param isStructureProtected Whether the project's structure is currently locked, by either lock.
+ * @param isTeamLockBinding Whether the administrator's team lock binds this user, as
+ *   `useStructureProtectionState` reports it: `true` while that lock's setting is unknown too.
+ * @param chapterNum The blank chapter the button would add.
+ * @returns `true` if the button must stay disabled.
+ */
+export function shouldProtectAddChapterNumber(
+  isStructureProtected: boolean,
+  isTeamLockBinding: boolean,
+  chapterNum: number,
+): boolean {
+  return isTeamLockBinding || (isStructureProtected && chapterNum !== 1);
+}
+
 /** Outcome of {@link resolveAddChapterNumberClick} — what a click on the button should do. */
 export type AddChapterNumberClickOutcome = 'insert' | 'already-in-flight' | 'no-versification';
 
@@ -2978,10 +3100,10 @@ export type AddChapterNumberClickOutcome = 'insert' | 'already-in-flight' | 'no-
  * Decides what a click on the "Add Chapter Number" button should do, given whether a previous
  * click's scaffold insert is still in flight and the chapter's last verse number.
  *
- * - `'already-in-flight'` — a previous click's insert is still working its way through the
- *   `applyUpdate` → save → PDP-echo round trip (~300ms measured), during which the button stays
- *   visible and enabled. Treating this click as a no-op prevents the scaffold from being inserted a
- *   second time (which would write duplicate `\c`/`\v` markers).
+ * - `'already-in-flight'` — a previous click's insert is still working its way through the insert →
+ *   save → PDP-echo round trip (~300ms measured), during which the button stays visible and
+ *   enabled. Treating this click as a no-op prevents the scaffold from being inserted a second time
+ *   (which would write duplicate `\c`/`\v` markers).
  * - `'no-versification'` — `lastVerse <= 0`. `canAddChapterNumber` should already have hidden the
  *   button in this case, so reaching this outcome is a rare defensive fallback, not the normal
  *   path.
@@ -2998,6 +3120,50 @@ export function resolveAddChapterNumberClick(
   if (isInsertInFlight) return 'already-in-flight';
   if (!canAddChapterNumber(lastVerse)) return 'no-versification';
   return 'insert';
+}
+
+/**
+ * Outcome of {@link insertChapterScaffold}. Anything but `'inserted'` changed nothing:
+ *
+ * - `'no-editor'` — there was no editor.
+ * - `'refused'` — `EditorRef.insertFirstChapter` returned `false` for chapter 1: its document already
+ *   holds a chapter, the editor's own `scrRef` is not chapter 1 (it reads that, not the
+ *   `chapterNum` passed to {@link insertChapterScaffold}), or its inner editor is not mounted yet.
+ * - `'failed'` — the insert threw, and `error` says why.
+ */
+export type ChapterScaffoldInsertOutcome =
+  | { status: 'inserted' | 'no-editor' | 'refused' }
+  | { status: 'failed'; error: string };
+
+/**
+ * Inserts a blank chapter's `\c` marker and its empty verses. Chapter 1's document also holds the
+ * book's `\id` line and front matter, so only the editor can place `\c 1` after them, and only it
+ * knows where chapter content starts: it leaves the verses out when that content already holds text
+ * or a verse, as a book typed or imported without chapter markers does. A later chapter's scaffold
+ * goes at the start of its document.
+ *
+ * Catches what the editor throws (`insertFirstChapter` does for a read-only editor or one with no
+ * scripture reference) and reports it as `'failed'`: an error thrown in a web view's click handler
+ * never reaches the app's log.
+ *
+ * @param editor The editor to insert into, or nothing while it is not mounted.
+ * @param chapterNum The blank chapter to add.
+ * @param lastVerse The chapter's last verse number, from `getEndVerse(book, chapterNum)`.
+ */
+export function insertChapterScaffold(
+  editor: Pick<EditorRef, 'applyUpdate' | 'insertFirstChapter'> | null | undefined,
+  chapterNum: number,
+  lastVerse: number,
+): ChapterScaffoldInsertOutcome {
+  if (!editor) return { status: 'no-editor' };
+  try {
+    if (chapterNum === 1)
+      return { status: editor.insertFirstChapter(lastVerse) ? 'inserted' : 'refused' };
+    editor.applyUpdate(buildChapterScaffoldOps(chapterNum, lastVerse), 'local');
+    return { status: 'inserted' };
+  } catch (error) {
+    return { status: 'failed', error: getErrorMessage(error) };
+  }
 }
 
 // #endregion Chapter Scaffold Helpers
@@ -3218,24 +3384,54 @@ export type ResourceContentState = 'loading' | 'bookNotAvailable' | 'failed' | '
  *
  * @param options.resourceProjectId The project id the panel is reading from, or `undefined` if a
  *   resource has not resolved to one yet.
- * @param options.usjPossiblyError The chapter USJ, a `PlatformError`, or `undefined` if none yet. A
- *   caller that seeds its data hook with a default (the Bible texts panel passes `EMPTY_USJ`) never
- *   passes `undefined`; for those, `resourceProjectId` not having resolved yet is what produces
- *   `'loading'`.
+ * @param options.usjPossiblyError The chapter USJ, a `PlatformError`, or `undefined` if none yet.
+ *   Whether `undefined` can reach here at all is the caller's choice of seed for its data hook. A
+ *   caller seeding `undefined` (e.g., the Bible texts panel) says "nothing has arrived" through
+ *   this value directly. One seeding a blank USJ (e.g.,
+ *   `scripture-text-grid/resource-cell.component.tsx`) never can, because a blank USJ is neither
+ *   `undefined` nor falsy, and must distinguish not-yet-arrived some other way — there,
+ *   `resourceProjectId` not having resolved yet, plus the `isLoading` its own `deriveCellState`
+ *   takes.
  * @param options.currentBookNum The book number the panel is currently displaying. A value of 0 or
  *   less means the panel has no book it can name, so no claim is made about one.
+ * @param options.isUsjSettled Whether the chapter subscription has stopped loading. Answers "is the
+ *   value in hand the CURRENT read's?", which both terminal branches need, because the data layer
+ *   holds the last delivered value across a resubscription — it resets `isLoading`, never `data`.
+ *
+ *   Escalating out of `'loading'`: distinguishes an `undefined` that has not arrived yet from one
+ *   that IS the answer — the data type's `getData` is `Usj | undefined` and the extender PDP
+ *   returns `undefined` for a falsy USX, so a delivered `undefined` is reachable and would
+ *   otherwise spin forever. This reports that case as `'failed'`, which is the honest answer for
+ *   the only reference it can reach here — chapter 0, the book's front matter. For a real chapter
+ *   the resource panel decides first that a delivered nothing is an EMPTY chapter and renders that
+ *   message instead; see its `isBlankChapter`. A retry cannot change a deterministic `undefined`,
+ *   so that precedence is what keeps an inert control off the state.
+ *
+ *   Entering `'loading'`: an error with a read in flight is the previous attempt's, so it is withheld
+ *   rather than named. Without this, re-driving a failed read leaves the identical message on
+ *   screen for the whole round trip and the retry affordance reads as inert.
+ *
+ *   The flag is re-armed from an effect, so for one render after a selector change it still reads
+ *   settled. With USJ or `undefined` in hand that is invisible (the value is the previous
+ *   reference's USJ, not `undefined`); with a stale error in hand it shows the old failure for a
+ *   single render before the spinner replaces it.
  * @returns Which of the four content states to render.
  */
 export function resolveResourceContentState({
   resourceProjectId,
   usjPossiblyError,
   currentBookNum,
+  isUsjSettled,
 }: {
   resourceProjectId: string | undefined;
   usjPossiblyError: unknown;
   currentBookNum: number;
+  isUsjSettled: boolean;
 }): ResourceContentState {
-  if (!resourceProjectId || usjPossiblyError === undefined) return 'loading';
+  if (!resourceProjectId) return 'loading';
+  // Nothing in hand. Still on its way until the subscription says otherwise; once it has settled,
+  // `undefined` is the delivered answer and there is no text to show.
+  if (usjPossiblyError === undefined) return isUsjSettled ? 'failed' : 'loading';
   if (!isPlatformError(usjPossiblyError)) return 'ready';
 
   // Parsed once and compared, rather than calling `isMissingBookOnScreen` and then
@@ -3249,6 +3445,14 @@ export function resolveResourceContentState({
   // the same ordering `deriveCellState` uses for the Scripture Text Grid, so the two surfaces cannot
   // give opposite answers about one error.
   if (missingBook || isMissingBookError(usjPossiblyError)) return 'loading';
+
+  // An error with a read already in flight belongs to the PREVIOUS attempt. The data layer holds
+  // the last delivered value across a resubscription — it resets `isLoading`, never `data` — so the
+  // error survives both a retry and a plain navigation, and reporting it would name a failure for a
+  // reference whose read has not finished. This is also what makes the retry affordance legible:
+  // without it, re-driving the read leaves the identical message on screen for the whole round
+  // trip, so pressing the button looks like it did nothing.
+  if (!isUsjSettled) return 'loading';
 
   // Any other failure is terminal: the value in hand is an error rather than USJ, and nothing
   // re-emits until the data provider does. Naming it beats both a spinner that never resolves and an
@@ -3304,7 +3508,8 @@ export async function buildScriptureTextGridWebView(
     projectId,
     content: webViewContent.content,
     styles: webViewContent.styles,
-    iconUrl: 'papi-extension://platformScriptureEditor/assets/library.svg',
+    // Drawn in the tab's text colour so it follows the theme, in both modes
+    iconName: 'library',
     scrollGroupScrRef: interfaceMode === 'simple' ? 0 : savedWebView.scrollGroupScrRef,
   };
 }

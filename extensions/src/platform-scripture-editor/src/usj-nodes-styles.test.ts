@@ -270,6 +270,81 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
         /\.psc-active-focus \.psc-active-text::before/,
       );
     });
+    describe('empty-verse caret', () => {
+      // The caret rules only show in layout, so what is pinned is that each load-bearing
+      // declaration stays on exactly the selector list the editor renders for. A rule is matched
+      // from its start, so a declaration in some other rule ending in the same selector can't pass.
+      const rules = scss.replace(/\/\*[\s\S]*?\*\//g, '');
+      const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const exactRule = (selectors: string[], declaration: string) =>
+        new RegExp(
+          `(?:^|\\}|;)\\s*${selectors.map(escapeRegExp).join(',\\s*')}\\s*\\{[^}]*${escapeRegExp(declaration)}`,
+        );
+      const activeVerse = '.psc-gutter-markers .verse:not(.marker).psc-empty-text-active';
+      const host = `${activeVerse} + [data-caret-host]`;
+
+      it('sizes the ellipsis box from one variable', () => {
+        expect(rules).toContain('--psc-empty-verse-ellipsis-width: 13px;');
+        const box = [
+          '.psc-gutter-markers .verse:not(.marker).psc-empty-text::after',
+          `${activeVerse}::after`,
+        ];
+        expect(rules).toMatch(exactRule(box, 'display: inline-block;'));
+        expect(rules).toMatch(
+          exactRule(box, 'inline-size: var(--psc-empty-verse-ellipsis-width);'),
+        );
+      });
+
+      it('draws the ellipsis for both empty-verse classes', () => {
+        expect(rules).toMatch(
+          exactRule(
+            [
+              '.psc-gutter-markers .psc-empty-text::after',
+              '.psc-gutter-markers .psc-empty-text-active::after',
+            ],
+            "content: '…';",
+          ),
+        );
+      });
+
+      it("hides only the cursor's empty-verse ellipsis, keeping its box", () => {
+        expect(rules).toMatch(exactRule([`${activeVerse}::after`], 'color: transparent;'));
+        expect(rules).toMatch(exactRule([`${activeVerse}::after`], 'forced-color-adjust: none;'));
+      });
+
+      it('pulls the caret host back over the hidden ellipsis by the same width', () => {
+        expect(rules).toMatch(
+          exactRule(
+            [host],
+            'margin-inline-start: calc(-1 * var(--psc-empty-verse-ellipsis-width));',
+          ),
+        );
+        expect(rules).toMatch(
+          exactRule([host], 'margin-inline-end: var(--psc-empty-verse-ellipsis-width);'),
+        );
+      });
+
+      it('keeps a caret host after any verse from adding a line break', () => {
+        expect(rules).toMatch(exactRule(['.verse + [data-caret-host]'], 'text-wrap-mode: nowrap;'));
+        expect(rules).toMatch(
+          exactRule(['.verse + [data-caret-host]::after'], "content: '\\2060';"),
+        );
+      });
+
+      it('isolates RTL verses so the caret host sits beside its own verse number', () => {
+        // Without it, bidi reordering moves the host next to the following verse's digits, and
+        // the host's negative margin pulls the caret back from there.
+        expect(rules).toMatch(
+          exactRule([".psc-gutter-markers[dir='rtl'] .verse"], 'direction: rtl;'),
+        );
+        expect(rules).toMatch(
+          exactRule([".psc-gutter-markers[dir='rtl'] .verse"], 'unicode-bidi: isolate;'),
+        );
+        expect(rules).toMatch(
+          exactRule([".psc-gutter-markers[dir='rtl'] .verse.marker"], 'direction: ltr;'),
+        );
+      });
+    });
     it('does not override text-align in the RTL gutter rule (Chrome/Firefox bidi paint quirk)', () => {
       const rtlGutter = scss
         .replace(/\/\*[\s\S]*?\*\//g, '')

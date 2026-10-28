@@ -775,7 +775,7 @@ export function ModelTextPanel({
         return (
           <LoadingView
             label={localize(localizedStrings, '%webView_modelTextPanel_selecting%')}
-            heightClassName="tw:h-full"
+            sizingClassName="tw:h-full"
           />
         );
 

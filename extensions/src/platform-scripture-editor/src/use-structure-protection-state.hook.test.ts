@@ -406,3 +406,63 @@ describe('useStructureProtectionState — isLoading', () => {
     expect(result.current.isLoading).toBe(false);
   });
 });
+
+// The toolbar button and the web view's "Add chapter number" read this field instead of combining
+// `isProtectedByAdmin` and `canAdminToggle`. The button's tests mock this hook, so the cases where
+// those two fields read as unlocked but the lock must hold are pinned here.
+describe('useStructureProtectionState — isTeamLockBinding', () => {
+  it('is true for a user the team lock binds', async () => {
+    setup({ adminSetting: true, userSetting: false, canWrite: false });
+    const { result } = renderHook(() => useStructureProtectionState('proj-1'));
+    await act(async () => {});
+    expect(result.current.isTeamLockBinding).toBe(true);
+  });
+
+  it('is false for an administrator who can lift the team lock', async () => {
+    setup({ adminSetting: true, userSetting: true, canWrite: true });
+    const { result } = renderHook(() => useStructureProtectionState('proj-1'));
+    await act(async () => {});
+    expect(result.current.isTeamLockBinding).toBe(false);
+  });
+
+  it('is false when no team lock is set, even under the personal lock', async () => {
+    setup({ adminSetting: false, userSetting: true, canWrite: false });
+    const { result } = renderHook(() => useStructureProtectionState('proj-1'));
+    await act(async () => {});
+    expect(result.current.isStructureProtected).toBe(true);
+    expect(result.current.isTeamLockBinding).toBe(false);
+  });
+
+  it('is true while the admin setting is loading, although isProtectedByAdmin reads false', async () => {
+    setup({
+      adminSetting: false,
+      userSetting: false,
+      canWrite: false,
+      isAdminSettingLoading: true,
+    });
+    const { result } = renderHook(() => useStructureProtectionState('proj-1'));
+    await act(async () => {});
+    expect(result.current.isProtectedByAdmin).toBe(false);
+    expect(result.current.isTeamLockBinding).toBe(true);
+  });
+
+  it('is true when the admin setting failed to load, although isProtectedByAdmin reads false', async () => {
+    setup({ adminSetting: makePlatformError(), userSetting: false, canWrite: false });
+    const { result } = renderHook(() => useStructureProtectionState('proj-1'));
+    await act(async () => {});
+    expect(result.current.isProtectedByAdmin).toBe(false);
+    expect(result.current.isTeamLockBinding).toBe(true);
+  });
+
+  it('is false in power mode, where the feature is inactive', async () => {
+    setup({
+      adminSetting: true,
+      canWrite: false,
+      interfaceMode: 'power',
+      isAdminSettingLoading: true,
+    });
+    const { result } = renderHook(() => useStructureProtectionState('proj-1'));
+    await act(async () => {});
+    expect(result.current.isTeamLockBinding).toBe(false);
+  });
+});
