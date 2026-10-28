@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+import { LUCIDE_ICON_NAMES } from 'platform-bible-react/experimental';
 import { ScriptureRange } from 'platform-scripture-editor';
 import type PapiBackend from '@papi/backend';
 import { newPlatformError, normalizeProjectId, UsjTextContentLocation } from 'platform-bible-utils';
@@ -57,6 +58,9 @@ import {
   isChapterBlank,
   buildChapterScaffoldOps,
   canAddChapterNumber,
+  bookHoldsChapters,
+  shouldProtectAddChapterNumber,
+  insertChapterScaffold,
   resolveAddChapterNumberClick,
   isMissingBookError,
   isMissingBookOnScreen,
@@ -3073,12 +3077,12 @@ function createSyncMockPapi(gate: SyncGateStub = {}, projectKind: ProjectKind = 
 }
 
 /**
- * The sync commands `syncOnProjectSwitch` dispatches, in dispatch order: a deep sync of the
- * incoming project, then a shallower send/receive of the outgoing one.
+ * The sync commands `syncOnProjectSwitch` dispatches, in dispatch order: a shallower send/receive
+ * of the outgoing project, then a deep sync of the incoming one.
  */
 const PROJECT_SWITCH_SYNC_COMMANDS = [
-  'paratextBibleSendReceive.syncProjects',
   'paratextBibleSendReceive.sendReceiveProjects',
+  'paratextBibleSendReceive.syncProjects',
 ];
 
 describe('syncOnProjectSwitch', () => {
@@ -3124,7 +3128,10 @@ describe('syncOnProjectSwitch', () => {
     ]);
   });
 
-  it('calls syncProjects before sendReceiveProjects', async () => {
+  it('syncs the incoming project last, so its result is the one reported', async () => {
+    // These are two separate backend runs and the sync indicator reports the most recent one, so
+    // whichever runs last decides the verdict the user sees. That has to be the project they
+    // switched to rather than the one they left.
     const { papi, mockSendCommand } = createSyncMockPapi();
     const callOrder: string[] = [];
     mockSendCommand.mockImplementation(async (commandName: string) => {
@@ -3134,8 +3141,8 @@ describe('syncOnProjectSwitch', () => {
     await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
     expect(callOrder).toEqual([
-      'paratextBibleSendReceive.syncProjects',
       'paratextBibleSendReceive.sendReceiveProjects',
+      'paratextBibleSendReceive.syncProjects',
     ]);
   });
 
@@ -3149,17 +3156,20 @@ describe('syncOnProjectSwitch', () => {
     );
   });
 
-  it('still calls sendReceiveProjects when syncProjects throws', async () => {
+  it('still syncs the incoming project when the outgoing flush throws', async () => {
     const { papi, mockSendCommand } = createSyncMockPapi();
     mockSendCommand.mockImplementation(async (commandName: string) => {
-      if (commandName === 'paratextBibleSendReceive.syncProjects') throw new Error('sync failed');
+      if (commandName === 'paratextBibleSendReceive.sendReceiveProjects')
+        throw new Error('S/R failed');
     });
 
     await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
-    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
-      'proj-outgoing',
-    ]);
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'paratextBibleSendReceive.syncProjects',
+      ['proj-incoming'],
+      true,
+    );
   });
 
   it('resolves without throwing when both syncs fail', async () => {
@@ -4492,11 +4502,89 @@ describe('buildChapterScaffoldOps', () => {
   });
 
   it('builds one chapter-embed op and one verse-embed op when the chapter has exactly one verse', () => {
-    const ops = buildChapterScaffoldOps(1, 1);
+    const ops = buildChapterScaffoldOps(2, 1);
     expect(ops).toEqual([
-      { insert: { chapter: { number: '1', style: 'c' } } },
+      { insert: { chapter: { number: '2', style: 'c' } } },
       { insert: { verse: { number: '1', style: 'v' } } },
     ]);
+  });
+});
+
+describe('insertChapterScaffold', () => {
+  function makeEditor(isFirstChapterInserted = true) {
+    return { applyUpdate: vi.fn(), insertFirstChapter: vi.fn(() => isFirstChapterInserted) };
+  }
+
+  it('inserts nothing while the editor is not mounted', () => {
+    expect(insertChapterScaffold(undefined, 2, 10)).toEqual({
+      status: 'no-editor',
+    });
+  });
+
+  it("routes chapter 1 to insertFirstChapter with the chapter's verse count", () => {
+    const editor = makeEditor();
+
+    expect(insertChapterScaffold(editor, 1, 17)).toEqual({ status: 'inserted' });
+    expect(editor.insertFirstChapter).toHaveBeenCalledWith(17);
+    expect(editor.applyUpdate).not.toHaveBeenCalled();
+  });
+
+  it('reports chapter 1 as refused when the editor refuses it', () => {
+    expect(insertChapterScaffold(makeEditor(false), 1, 17)).toEqual({
+      status: 'refused',
+    });
+  });
+
+  it('reports what a throwing editor threw instead of letting it escape', () => {
+    const editor = makeEditor();
+    editor.insertFirstChapter.mockImplementation(() => {
+      throw new Error('Cannot insert a chapter in readonly mode');
+    });
+
+    expect(insertChapterScaffold(editor, 1, 17)).toEqual({
+      status: 'failed',
+      error: 'Cannot insert a chapter in readonly mode',
+    });
+  });
+
+  it('inserts a later chapter as a local scaffold update at the start of its document', () => {
+    const editor = makeEditor();
+
+    expect(insertChapterScaffold(editor, 2, 10)).toEqual({ status: 'inserted' });
+    expect(editor.applyUpdate).toHaveBeenCalledWith(buildChapterScaffoldOps(2, 10), 'local');
+    expect(editor.insertFirstChapter).not.toHaveBeenCalled();
+  });
+
+  it('reports a later chapter as failed when the scaffold update throws', () => {
+    const editor = makeEditor();
+    editor.applyUpdate.mockImplementation(() => {
+      throw new Error('apply failed');
+    });
+
+    expect(insertChapterScaffold(editor, 2, 10)).toEqual({
+      status: 'failed',
+      error: 'apply failed',
+    });
+  });
+});
+
+describe('shouldProtectAddChapterNumber', () => {
+  it("lets chapter 1 be added under the user's own lock, so an empty book can be started", () => {
+    expect(shouldProtectAddChapterNumber(true, false, 1)).toBe(false);
+  });
+
+  it("keeps chapter 1 from being added under an administrator's team lock", () => {
+    expect(shouldProtectAddChapterNumber(true, true, 1)).toBe(true);
+  });
+
+  it('keeps a later chapter from being added under either lock', () => {
+    expect(shouldProtectAddChapterNumber(true, false, 2)).toBe(true);
+    expect(shouldProtectAddChapterNumber(true, true, 2)).toBe(true);
+  });
+
+  it('never protects while structure is unlocked', () => {
+    expect(shouldProtectAddChapterNumber(false, false, 1)).toBe(false);
+    expect(shouldProtectAddChapterNumber(false, false, 2)).toBe(false);
   });
 });
 
@@ -4511,6 +4599,23 @@ describe('canAddChapterNumber', () => {
 
   it('returns true when the chapter has at least one verse', () => {
     expect(canAddChapterNumber(1)).toBe(true);
+  });
+});
+
+describe('bookHoldsChapters', () => {
+  it.each(['FRT', 'INT', 'BAK', 'OTH', 'CNC', 'GLO', 'TDX', 'NDX'])(
+    'offers no chapters in the peripheral book %s',
+    (bookId) => {
+      expect(bookHoldsChapters(bookId)).toBe(false);
+    },
+  );
+
+  it.each(['GEN', 'MAT', 'TOB', 'XXA', 'XXG'])('offers chapters in %s', (bookId) => {
+    expect(bookHoldsChapters(bookId)).toBe(true);
+  });
+
+  it('recognizes a peripheral book whatever its case', () => {
+    expect(bookHoldsChapters('frt')).toBe(false);
   });
 });
 
@@ -6258,6 +6363,23 @@ function savedGrid(
 }
 
 describe('buildScriptureTextGridWebView', () => {
+  it.each(['simple', 'power'] as const)(
+    'opts its icon in to theme colouring in %s mode',
+    async (interfaceMode) => {
+      const papi = createGridProviderMockPapi(interfaceMode);
+
+      const definition = await buildScriptureTextGridWebView(
+        papi,
+        savedGrid('p1'),
+        {},
+        GRID_ASSETS,
+      );
+
+      expect(definition.iconName).toBe('library');
+      expect(LUCIDE_ICON_NAMES).toContain(definition.iconName);
+    },
+  );
+
   it('binds the project a switch supplied rather than the one the tab already had', async () => {
     // The provider half of the re-point. Inverting this precedence leaves the panel on the
     // outgoing project, which is the bug this whole mechanism exists to prevent — and it is only

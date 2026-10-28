@@ -31,7 +31,8 @@ export interface ResourceTextPanelOptions extends OpenWebViewOptions {
 
 /**
  * The web view state a Bible texts or Commentaries panel is built with: its saved state, the kind
- * of resource it lists, and — when one was asked for — the resource to select.
+ * of resource it lists, and — when one was asked for — the resource to select, marked as the user's
+ * own pick.
  *
  * @param savedState The panel's saved state
  * @param resourceType The kind of resource the panel lists
@@ -43,11 +44,16 @@ export function buildResourceTextPanelState(
   resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
   options: ResourceTextPanelOptions,
 ): Record<string, unknown> {
+  // A resource asked for is recorded as the user's own pick, so the panel never replaces it with a
+  // configured resource the way it replaces a fallback (see `resolveResourceSelection`).
   return {
     ...savedState,
     resourceType,
     ...(options.selectedResourceId !== undefined
-      ? { selectedResourceId: options.selectedResourceId }
+      ? {
+          selectedResourceId: options.selectedResourceId,
+          userPickedResourceId: options.selectedResourceId,
+        }
       : {}),
   };
 }

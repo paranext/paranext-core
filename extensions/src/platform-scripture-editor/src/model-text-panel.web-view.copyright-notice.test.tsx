@@ -2,7 +2,8 @@
 import '@testing-library/jest-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { logger } from '@papi/frontend';
 import type { WebViewProps } from '@papi/core';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { ResourceReference } from 'platform-scripture';
@@ -220,6 +221,21 @@ describe('ModelTextPanelWebView model text picker', () => {
     expect(mockShowDialog).toHaveBeenCalledWith(
       'platform.resourcePicker',
       expect.objectContaining({ disableRestrictedModelTexts: true }),
+    );
+  });
+
+  // With no settings provider here, selecting fails, and the failure names the resource the panel
+  // took from the dialog's result.
+  it('selects the resource the picker returns', async () => {
+    const picked = installed('picked-uid', 'picked-project', 'PICKED');
+    mockShowDialog.mockResolvedValue({ resource: picked, action: 'add' });
+    configureModelText(undefined);
+
+    renderWebView();
+    fireEvent.click(await screen.findByRole('button', { name: 'Pick a text…' }));
+
+    await waitFor(() =>
+      expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('selecting picked-uid')),
     );
   });
 });

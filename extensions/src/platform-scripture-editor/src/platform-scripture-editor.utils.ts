@@ -49,7 +49,7 @@ import {
   UsjReaderWriter,
   UsjTextContentLocation,
 } from 'platform-bible-utils';
-import { SerializedVerseRef } from '@sillsdev/scripture';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import type { ScriptureEditorViewType, ScriptureRange } from 'platform-scripture-editor';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import type { UnsyncedChangesSnapshot } from 'paratext-bible-send-receive';
@@ -2035,8 +2035,8 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
 // #region Project-Switch Sync
 
 /**
- * Fire-and-forget helper that syncs the incoming project first, then the outgoing one. Each sync is
- * independently error-isolated so a failure in one doesn't block the other. Called after a
+ * Fire-and-forget helper that flushes the outgoing project, then syncs the incoming one. Each sync
+ * is independently error-isolated so a failure in one doesn't block the other. Called after a
  * Simple-mode replace-tab project switch, and by `finalizeProjectSwitch` after a Power -> Simple
  * mode switch — by which time the user may be back in Power mode.
  *
@@ -2044,6 +2044,13 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
  * connected resources and translation partners (deep sync). Uses the shallower
  * `paratextBibleSendReceive.sendReceiveProjects` for the outgoing project because we only need to
  * flush any local edits — a full deep sync is unnecessary on the way out.
+ *
+ * The incoming project syncs LAST because these are two separate backend runs and the sync
+ * indicator reports the most recent one. Whichever runs last is the verdict the user is shown, and
+ * the project they just switched to — the one on screen — is what that verdict should describe. A
+ * failure flushing the outgoing project reaches the user only through its own failure toast (see
+ * below), not the indicator; see `adr-sync-activity-outcome-is-coarse` in
+ * `.context/standards/Architecture-Decisions.md`.
  *
  * The outgoing sync is skipped only for a published resource (see `isProjectPublished`), which
  * holds nothing the user wrote. A translation project with editing switched off still syncs: its
@@ -2098,6 +2105,18 @@ export async function syncOnProjectSwitch(
     }
   }
 
+  if (outgoingProjectId && !(await isProjectPublished(papi, outgoingProjectId))) {
+    try {
+      await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [
+        outgoingProjectId,
+      ]);
+    } catch (e) {
+      papi.logger.warn(
+        `Project-switch sync: outgoing sync for ${outgoingProjectId} failed: ${getErrorMessage(e)}`,
+      );
+    }
+  }
+
   try {
     // Mode change mid-sync: intentionally not handled. The flag is fixed for the run, and the
     // toolbar indicator mounts only in Simple mode, so switching to Power while a suppressed sync
@@ -2113,18 +2132,6 @@ export async function syncOnProjectSwitch(
     papi.logger.warn(
       `Project-switch sync: incoming sync for ${incomingProjectId} failed: ${getErrorMessage(e)}`,
     );
-  }
-
-  if (outgoingProjectId && !(await isProjectPublished(papi, outgoingProjectId))) {
-    try {
-      await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [
-        outgoingProjectId,
-      ]);
-    } catch (e) {
-      papi.logger.warn(
-        `Project-switch sync: outgoing sync for ${outgoingProjectId} failed: ${getErrorMessage(e)}`,
-      );
-    }
   }
 }
 
@@ -3042,6 +3049,9 @@ export function isBlankChapterOnScreen(usj: Usj | undefined, chapterNum: number)
  * followed by one verse marker per verse, each with empty text content. Intended for
  * `EditorRef.applyUpdate` when reinstating a chapter number in an effectively-blank chapter.
  *
+ * Not for chapter 1: these ops insert at the start of the document, which there is the book's `\id`
+ * line. Chapter 1 goes through `EditorRef.insertFirstChapter`; see {@link insertChapterScaffold}.
+ *
  * @param chapterNum The chapter number to insert (matching the chapter shown in the BCV control).
  * @param lastVerseNum The last verse number for this chapter, per the project's versification.
  * @returns The Delta operations, in insertion order.
@@ -3067,6 +3077,47 @@ export function canAddChapterNumber(lastVerse: number): boolean {
   return lastVerse > 0;
 }
 
+/**
+ * Whether a book holds chapters, so the "Add Chapter Number" button can be offered in it. A
+ * peripheral book (FRT, INT, BAK, OTH, CNC, GLO, TDX, NDX) never does, and the editor refuses `\c`
+ * in one, though the versification gives it chapters and verses. The Extra books (XXA–XXG) hold
+ * chapters like any other book. The book and chapter control draws the same line.
+ *
+ * Upper-cases the id first: `Canon.isExtraMaterial` matches its id list case-sensitively, so a
+ * lowercase id would read as a book that holds chapters.
+ *
+ * @param bookId The book id, e.g. from the current scripture reference.
+ */
+export function bookHoldsChapters(bookId: string): boolean {
+  const upperBookId = bookId.toUpperCase();
+  return !Canon.isExtraMaterial(upperBookId) || Canon.extraBooks().includes(upperBookId);
+}
+
+/**
+ * Whether structure protection disables the "Add Chapter Number" button.
+ *
+ * Chapter 1 is exempt from the user's own lock so a Simple-mode user, whose structure is locked by
+ * default, can start a new book, which holds only its `\id` line. A chapter document can't tell
+ * whether later chapters exist, so chapter 1 of a book that starts at a later chapter, such as a
+ * partial translation, is exempt too. Adding chapter 1 there is still valid USFM.
+ *
+ * The team lock has no exemption: an administrator sets it as a rule for the whole team, so a user
+ * it binds waits for an administrator to lift it, even to start a book.
+ *
+ * @param isStructureProtected Whether the project's structure is currently locked, by either lock.
+ * @param isTeamLockBinding Whether the administrator's team lock binds this user, as
+ *   `useStructureProtectionState` reports it: `true` while that lock's setting is unknown too.
+ * @param chapterNum The blank chapter the button would add.
+ * @returns `true` if the button must stay disabled.
+ */
+export function shouldProtectAddChapterNumber(
+  isStructureProtected: boolean,
+  isTeamLockBinding: boolean,
+  chapterNum: number,
+): boolean {
+  return isTeamLockBinding || (isStructureProtected && chapterNum !== 1);
+}
+
 /** Outcome of {@link resolveAddChapterNumberClick} — what a click on the button should do. */
 export type AddChapterNumberClickOutcome = 'insert' | 'already-in-flight' | 'no-versification';
 
@@ -3074,10 +3125,10 @@ export type AddChapterNumberClickOutcome = 'insert' | 'already-in-flight' | 'no-
  * Decides what a click on the "Add Chapter Number" button should do, given whether a previous
  * click's scaffold insert is still in flight and the chapter's last verse number.
  *
- * - `'already-in-flight'` — a previous click's insert is still working its way through the
- *   `applyUpdate` → save → PDP-echo round trip (~300ms measured), during which the button stays
- *   visible and enabled. Treating this click as a no-op prevents the scaffold from being inserted a
- *   second time (which would write duplicate `\c`/`\v` markers).
+ * - `'already-in-flight'` — a previous click's insert is still working its way through the insert →
+ *   save → PDP-echo round trip (~300ms measured), during which the button stays visible and
+ *   enabled. Treating this click as a no-op prevents the scaffold from being inserted a second time
+ *   (which would write duplicate `\c`/`\v` markers).
  * - `'no-versification'` — `lastVerse <= 0`. `canAddChapterNumber` should already have hidden the
  *   button in this case, so reaching this outcome is a rare defensive fallback, not the normal
  *   path.
@@ -3094,6 +3145,50 @@ export function resolveAddChapterNumberClick(
   if (isInsertInFlight) return 'already-in-flight';
   if (!canAddChapterNumber(lastVerse)) return 'no-versification';
   return 'insert';
+}
+
+/**
+ * Outcome of {@link insertChapterScaffold}. Anything but `'inserted'` changed nothing:
+ *
+ * - `'no-editor'` — there was no editor.
+ * - `'refused'` — `EditorRef.insertFirstChapter` returned `false` for chapter 1: its document already
+ *   holds a chapter, the editor's own `scrRef` is not chapter 1 (it reads that, not the
+ *   `chapterNum` passed to {@link insertChapterScaffold}), or its inner editor is not mounted yet.
+ * - `'failed'` — the insert threw, and `error` says why.
+ */
+export type ChapterScaffoldInsertOutcome =
+  | { status: 'inserted' | 'no-editor' | 'refused' }
+  | { status: 'failed'; error: string };
+
+/**
+ * Inserts a blank chapter's `\c` marker and its empty verses. Chapter 1's document also holds the
+ * book's `\id` line and front matter, so only the editor can place `\c 1` after them, and only it
+ * knows where chapter content starts: it leaves the verses out when that content already holds text
+ * or a verse, as a book typed or imported without chapter markers does. A later chapter's scaffold
+ * goes at the start of its document.
+ *
+ * Catches what the editor throws (`insertFirstChapter` does for a read-only editor or one with no
+ * scripture reference) and reports it as `'failed'`: an error thrown in a web view's click handler
+ * never reaches the app's log.
+ *
+ * @param editor The editor to insert into, or nothing while it is not mounted.
+ * @param chapterNum The blank chapter to add.
+ * @param lastVerse The chapter's last verse number, from `getEndVerse(book, chapterNum)`.
+ */
+export function insertChapterScaffold(
+  editor: Pick<EditorRef, 'applyUpdate' | 'insertFirstChapter'> | null | undefined,
+  chapterNum: number,
+  lastVerse: number,
+): ChapterScaffoldInsertOutcome {
+  if (!editor) return { status: 'no-editor' };
+  try {
+    if (chapterNum === 1)
+      return { status: editor.insertFirstChapter(lastVerse) ? 'inserted' : 'refused' };
+    editor.applyUpdate(buildChapterScaffoldOps(chapterNum, lastVerse), 'local');
+    return { status: 'inserted' };
+  } catch (error) {
+    return { status: 'failed', error: getErrorMessage(error) };
+  }
 }
 
 // #endregion Chapter Scaffold Helpers
@@ -3400,7 +3495,8 @@ export async function buildScriptureTextGridWebView(
     projectId,
     content: webViewContent.content,
     styles: webViewContent.styles,
-    iconUrl: 'papi-extension://platformScriptureEditor/assets/library.svg',
+    // Drawn in the tab's text colour so it follows the theme, in both modes
+    iconName: 'library',
     scrollGroupScrRef: interfaceMode === 'simple' ? 0 : savedWebView.scrollGroupScrRef,
   };
 }

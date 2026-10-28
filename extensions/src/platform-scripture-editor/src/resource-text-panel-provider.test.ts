@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { LUCIDE_ICON_NAMES } from 'platform-bible-react/experimental';
 import type { SavedWebViewDefinition } from '@papi/core';
 import { createResourceTextPanelProvider } from './main';
 import type { ResourceTextPanelOptions } from './show-resource-in-panel.util';
@@ -14,8 +15,10 @@ vi.mock('./resource-text-panel.web-view?inline', () => ({ default: 'resource-pan
 vi.mock('./scripture-text-grid.web-view?inline', () => ({ default: '' }));
 vi.mock('./scripture-text-grid.web-view.scss?inline', () => ({ default: '' }));
 
+const mocks = vi.hoisted(() => ({ getSetting: vi.fn(async (): Promise<string> => 'simple') }));
+
 vi.mock('@papi/backend', () => ({
-  default: { settings: { get: vi.fn(async () => 'simple') } },
+  default: { settings: { get: mocks.getSetting } },
   // Base classes `main.ts` and the modules it imports extend when they load; unused here.
   DataProviderEngine: vi.fn(),
   WebViewFactory: vi.fn(),
@@ -65,5 +68,54 @@ describe('reference panel providers', () => {
     );
 
     expect(built?.state).toEqual(expect.objectContaining({ selectedResourceId: 'dbl:previous' }));
+  });
+});
+
+describe('reference panel provider tab icon', () => {
+  afterEach(() => {
+    mocks.getSetting.mockResolvedValue('simple');
+  });
+
+  it('names a theme-coloured icon in simple mode', async () => {
+    const provider = createResourceTextPanelProvider(
+      'platformScriptureEditor.bibleTexts',
+      'title',
+      'ScriptureResource',
+      'book-open',
+    );
+
+    const built = await provider.getWebView(
+      savedPanel('platformScriptureEditor.bibleTexts'),
+      {},
+      'nonce-1',
+    );
+
+    expect(built?.iconName).toBe('book-open');
+    expect(LUCIDE_ICON_NAMES).toContain('book-open');
+    expect(built?.iconUrl).toBeUndefined();
+  });
+
+  it('shows the default logo in power mode, dropping any saved icon', async () => {
+    mocks.getSetting.mockResolvedValue('power');
+    const provider = createResourceTextPanelProvider(
+      'platformScriptureEditor.commentaries',
+      'title',
+      'CommentaryResource',
+      'file-text',
+    );
+
+    const built = await provider.getWebView(
+      {
+        ...savedPanel('platformScriptureEditor.commentaries'),
+        iconUrl: 'papi-extension://platformScriptureEditor/assets/file-text-dark.svg',
+        iconName: 'file-text',
+      },
+      {},
+      'nonce-1',
+    );
+
+    expect(built?.isClosable).toBe(true);
+    expect(built?.iconName).toBeUndefined();
+    expect(built?.iconUrl).toBeUndefined();
   });
 });

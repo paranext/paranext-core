@@ -206,7 +206,7 @@ import { useProjectStylesheet } from './use-project-stylesheet.hook';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import {
   availableScrollGroupIds,
-  buildChapterScaffoldOps,
+  bookHoldsChapters,
   canAddChapterNumber,
   correctEditorUsjVersion,
   decideNoteCallerClickAction,
@@ -218,6 +218,7 @@ import {
   getSimpleModeRootClassNames,
   getViewTypeToSave,
   hasDisplayableParagraphMarkerTitle,
+  insertChapterScaffold,
   isChapterBlank,
   isMissingBookError,
   isMissingBookInfoOnScreen,
@@ -241,6 +242,7 @@ import {
   readCommentRangeText,
   hasPendingCommentTextChanged,
   shouldEndPaneNoteEditOnRowSelect,
+  shouldProtectAddChapterNumber,
   shouldPublishPaneDocument,
   showCommentThreadForInterfaceMode,
   UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY,
@@ -288,7 +290,7 @@ import {
 import {
   commitVersionHistorySnapshot,
   EDIT_ACTION_BLOCKED_KEY,
-  notifyEditMenuActionBlocked,
+  notifyEditActionBlocked,
   notifyStructureProtected as sendStructureProtectedNotification,
   notifySyncEditBlocked as sendSyncEditBlockedNotification,
   SYNC_EDIT_BLOCKED_KEY,
@@ -1679,7 +1681,8 @@ function PlatformScriptureEditor({
   // Effective structure-protection state for this project/user, used to gate keyboard edits to
   // paragraph/verse markers in the editor (fed into EditorOptions.structureProtectionMode below). The
   // toolbar StructureProtectionButton subscribes to the same state independently.
-  const { isStructureProtected, isProtectionActive } = useStructureProtectionState(projectId);
+  const { isStructureProtected, isProtectionActive, isTeamLockBinding } =
+    useStructureProtectionState(projectId);
 
   // Locked (by admin, personal preference, or both) always yields "protected" (hard block); Power
   // mode leaves the feature fully inactive regardless of lock state ("off"); otherwise (Simple mode,
@@ -2152,7 +2155,7 @@ function PlatformScriptureEditor({
           isSyncBlocked,
         },
         {
-          notifyActionBlocked: () => notifyEditMenuActionBlocked(localizedStrings),
+          notifyActionBlocked: () => notifyEditActionBlocked(localizedStrings),
           notifySyncEditBlocked,
           restoreSelectionIfLost: (editor) =>
             restoreSelectionIfLost(editor, lastFocusOutSelectionRef.current),
@@ -3419,10 +3422,16 @@ function PlatformScriptureEditor({
     [scrRef.book, scrRef.chapterNum, getEndVerse],
   );
 
+  const isAddChapterNumberProtected = shouldProtectAddChapterNumber(
+    isStructureProtected,
+    isTeamLockBinding,
+    scrRef.chapterNum,
+  );
+
   // Tracks a scaffold insert this component triggered that hasn't yet been observed to land
   // (`isBlankChapter` flipping to `false`) or been superseded by navigating away. Serves two roles
-  // that are always set and reset together: (1) re-entrancy guard for the whole applyUpdate -> save
-  // -> PDP-echo round trip (~300ms measured) — while `true`, a second click is a no-op instead of
+  // that are always set and reset together: (1) re-entrancy guard for the whole insert -> save ->
+  // PDP-echo round trip (~300ms measured) — while `true`, a second click is a no-op instead of
   // inserting the scaffold twice; (2) "the chapter just stopped being blank because of THIS insert"
   // signal for the refocus effect below, distinguishing that from any other cause of the same
   // transition (ordinary navigation, a remote/collaborative update, a Send/Receive sync landing).
@@ -3441,12 +3450,12 @@ function PlatformScriptureEditor({
   }, [scrRef.book, scrRef.chapterNum]);
 
   const handleAddChapterNumber = useCallback(() => {
-    // Defense-in-depth: unreachable while the button is disabled (`disabled={isStructureProtected}`
-    // in `EmptyChapterView`), mirroring the same second-layer check already used for the paragraph
-    // and inline marker menus in this file — a structural insert like this one should never fire
-    // solely because a disabled-state prop drifted out of sync with the action in some future
-    // refactor.
-    if (isStructureProtected) {
+    // Defense-in-depth: unreachable while the button is disabled (`EmptyChapterView` disables it
+    // from the same `isAddChapterNumberProtected`), mirroring the same second-layer check already
+    // used for the paragraph and inline marker menus in this file — a structural insert like this
+    // one should never fire solely because a disabled-state prop drifted out of sync with the
+    // action in some future refactor.
+    if (isAddChapterNumberProtected) {
       notifyStructureProtected();
       return;
     }
@@ -3461,7 +3470,6 @@ function PlatformScriptureEditor({
       );
       return;
     }
-    pendingScaffoldInsertRef.current = true;
     // Undo for this insert depends on the editor keeping its history across the `onUsjChange` round
     // trip this call sets off: the editor's state-load effect fires Lexical's
     // `CLEAR_HISTORY_COMMAND` unconditionally, so anything that re-runs it moments after an edit
@@ -3470,8 +3478,24 @@ function PlatformScriptureEditor({
     // not. The editor is staged from the revision `dev-packages.json` pins, so it can change with
     // no version diff here at all, and no test here or upstream covers undo for this path —
     // re-check it by hand whenever that revision moves.
-    editorRef.current?.applyUpdate(buildChapterScaffoldOps(scrRef.chapterNum, lastVerse), 'local');
-  }, [scrRef.book, scrRef.chapterNum, lastVerse, isStructureProtected, notifyStructureProtected]);
+    const insert = insertChapterScaffold(editorRef.current, scrRef.chapterNum, lastVerse);
+    if (insert.status !== 'inserted') {
+      logger.warn(
+        `handleAddChapterNumber: no chapter added to ${scrRef.book} ${scrRef.chapterNum} (${insert.status === 'failed' ? insert.error : insert.status})`,
+      );
+      notifyEditActionBlocked(localizedStrings);
+      return;
+    }
+    // Set only after the insert, so a refused or failed insert never leaves the button stuck.
+    pendingScaffoldInsertRef.current = true;
+  }, [
+    scrRef.book,
+    scrRef.chapterNum,
+    lastVerse,
+    isAddChapterNumberProtected,
+    notifyStructureProtected,
+    localizedStrings,
+  ]);
 
   // `Editorial` stays mounted but visually hidden while the chapter is blank, so any focus/cursor
   // or scroll effect Lexical/the "scroll the selected verse" effect above would normally run for
@@ -4146,6 +4170,10 @@ function PlatformScriptureEditor({
               // before that edit, which the editor would take for a re-send of old text and keep
               // the refused edit on screen.
               setEditorUsj.current(usjFromPdp, { force: true });
+              // The revert takes back any chapter number still in flight, so "Add chapter number"
+              // must accept another click. Only for the chapter on screen, which owns the flag.
+              if (chapterKeyRef.current === savedChapterKey)
+                pendingScaffoldInsertRef.current = false;
             }
           } catch (innerError) {
             logger.error(
@@ -5348,12 +5376,13 @@ function PlatformScriptureEditor({
         {showEmptyChapterView && (
           <EmptyChapterView
             localizedStrings={localizedStrings}
-            isStructureProtected={isStructureProtected}
+            isAddChapterNumberProtected={isAddChapterNumberProtected}
             isResource={isResource}
             showButton={
               !isReadOnlyEffective &&
               lastVersesInCurrentBook !== undefined &&
-              canAddChapterNumber(lastVerse)
+              canAddChapterNumber(lastVerse) &&
+              bookHoldsChapters(scrRef.book)
             }
             onAddChapterNumber={handleAddChapterNumber}
             announcementKey={`${projectId}:${scrRef.book} ${scrRef.chapterNum}`}

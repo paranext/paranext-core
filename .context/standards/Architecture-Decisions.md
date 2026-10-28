@@ -1071,6 +1071,34 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   DOM selection). **Revisit** with PT-4818.
 - **Source:** PT-4608 hand QA.
 
+## adr-chapter-one-skips-only-the-personal-structure-lock: "Add chapter number" on chapter 1 passes the user's own structure lock, never the team lock
+
+- **Date:** 2026-10-27
+- **Status:** Accepted
+- **Context:** A new book holds only its `\id` line. In Simple mode the empty-chapter view's "Add
+  chapter number" button is the only way to start it, and Simple locks structure by default, which
+  disabled that button. `useStructureProtectionState` folds two locks into one
+  `isStructureProtected`: the user's own (on by default in Simple) and the team lock an
+  administrator stages in the Team layout dialog (`adr-team-lock-lives-in-the-team-layout-dialog`),
+  which binds every user without `canAdminToggle`.
+- **Decision:** `shouldProtectAddChapterNumber` (`platform-scripture-editor.utils.ts`) exempts
+  chapter 1 from the user's own lock only. The team lock disables the button on every chapter,
+  chapter 1 included, so a non-administrator under it waits for an administrator to lift it, even
+  to start a book. Whether the team lock binds comes from the hook's `isTeamLockBinding`, which
+  counts an admin setting still loading or failed to load as locked: the exemption fails closed,
+  and the toolbar's personal toggle reads the same field once loading ends. The exemption also
+  covers chapter 1 of a book that starts at a later chapter, such as a partial translation: a
+  chapter document cannot see whether later chapters exist, and adding `\c 1` there is still valid
+  USFM.
+- **Alternatives:** **Exempt chapter 1 from both locks** — the team lock is a rule an administrator
+  sets for the whole team, and nothing about starting a book makes it a weaker case than adding a
+  later chapter. **No exemption** — a Simple user could not start a new book without first turning
+  off a lock that is on by default. **Read the whole book to exempt only a
+  truly empty one** — async book-level state for a case whose result is valid USFM either way.
+- **Consequences:** Chapter 1 of a partial translation is addable under the user's own lock while
+  its blank chapter 2 is not. Chapter 2 onward (PT-1704) should start from this policy rather than
+  re-derive it.
+
 ## adr-character-marker-removal-peels-one-layer: Character-marker removal peels one nesting layer per activation; the row is labelled to match rather than looping
 
 - **Formerly:** ADR-0011
@@ -4374,6 +4402,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   will then be a value to keep, while files that older builds saved for "Disable access…" will
   still hold it.
 - **Source:** PT-4893; reverses the option-to-value mapping chosen in PT-4590.
+- **Amended 2026-10-27 (PT-4736):** a packaged build no longer installs the bundled sample project
+  (`adr-sample-project-dev-runs-only`), so "Disable access…" during onboarding would now leave a
+  new user with no project at all. That strengthens the reason not to offer the list in the wizard.
 
 ## adr-launch-token-withdrawn: A launch token is required to deliver launch parameters to an already-open web view — WITHDRAWN
 
@@ -5052,7 +5083,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   and order, and checks that a command served in both modes carries the same label in each, so a
   missed, reordered or relabelled copy fails there. Every third-column tab must have a Simple Tools
   item (`shipped-simple-layout-order.test.ts`; the menu's own order is the design's, not the
-  column's), so adding a third-column tab fails that test until a Tools item exists. Hiding a
+  column's), so adding a third-column tab fails that test until a Tools item exists. *(Amended
+  2026-10-27: the Tools items must now list the third-column tabs in the column's order, which
+  PT-4864's design sets as resources first, then tools. The same test fails if either one is
+  reordered without the other.)* Hiding a
   Power-only item without re-adding
   it to a Simple column removes its only entry point: Simple now has no menu route at all to the
   four Inventories, Markers Checklist, or Open Checks. That follows the v0 Simple design, which has
@@ -5582,6 +5616,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   first-run experience. **Revisit** when the Sample project (PT-4324) lands: unless it reuses the
   sample WEB's ID, it will count as a project until this rule learns to exclude it.
 - **Source:** PT-4311 implementation (2026-09-25); the registered-user wording is PT-4442.
+- **Amended 2026-10-27 (PT-4736):** the empty-answer rule no longer holds as written. A packaged
+  build does not install the sample (`adr-sample-project-dev-runs-only`), so an empty answer reads
+  `none` when the C# Paratext factory (`platform.Paratext-pdpf`), asked directly, also reports no
+  projects, and `unknown` (retried, bounded) otherwise. The hook asks through `getMetadataForAllProjectsWithoutRetries`, since the
+  retrying lookup would hold an empty answer for its 30 s startup grace period. The sample stays
+  excluded by its ID, since dev runs still install it.
 
 ## adr-node-dom-globals-polyfill: Node processes install `@xmldom/xmldom` DOM globals; the extension host does it in a first-import side-effect module
 
@@ -7512,13 +7552,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   project both consumers hold costs two fan-outs. They differ in shape (the scroll-group cache is
   pull-driven and re-read on every conversion; the hook's is push-driven and consulted on join or
   by its retry timer), so a shared cache would have to carry the retry policy of the push-driven
-  consumer. Worth doing when a third consumer appears. (e) **Heal from network events instead of a
-  timer** — `use-project-picker-data.hook.ts` already does this for the same failure mode,
-  refetching on `platform.onDidChangeProjects` and on `object:onDidCreateNetworkObject` filtered
-  to PDP factories, debounced. It costs nothing while idle and heals in about 200 ms. Not chosen
-  for the hook: three more network subscriptions against one timer, and the events miss a C#
-  factory that starts serving an id without a new factory registering. Remains the right shape
-  for a consumer that must heal fast.
+  consumer. Worth doing when a third consumer appears; as of 2026-10-27 tracked on PT-4935.
+  (e) **Heal from network events instead of a timer** — `use-project-picker-data.hook.ts` already
+  does this for the same failure mode, refetching on `platform.onDidChangeProjects` and on
+  `object:onDidCreateNetworkObject` filtered to PDP factories, debounced. It costs nothing while
+  idle and heals in about 200 ms. Not chosen for the hook: three more network subscriptions against
+  one timer, and the events miss a C# factory that starts serving an id without a new factory
+  registering. Remains the right shape for a consumer that must heal fast.
 - **Consequences:** Reviewers should flag `projectDataProviders.get`, `getMetadataForProject`, or
   `getMetadataForAllProjects` inside a React effect, a subscription callback, or any loop whose
   trigger can fire repeatedly, and ask how the caller bounds it. A project whose lookup,
@@ -7531,12 +7571,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   open loses its books from the list mid-interaction, accepted over showing books that cannot be
   navigated to. A subscription that dies without reporting a failure (a provider whose network
   object is disposed by an extension host restart while the subscription stays registered
-  locally) is not covered by the timer; as of 2026-09-24 it is tracked on PT-4592.
-  The flap sources that exposed this are tracked as PT-4592 (a panel republishing its navigable
-  project ids while its reference list resolves transiently empty) and PT-4743 (one installed
-  resource yielding two picker rows under two project id spellings). Revisit rule (2) if a
-  platform-level in-flight de-duplication lands. Rule (1) is restated for agents in
-  `.claude/rules/architecture/provider-lookups-fan-out.md`.
+  locally) is not covered by the timer; as of 2026-10-27 it is tracked on PT-4934, not yet
+  confirmed in a running app. The flap sources that exposed this were PT-4592 (a panel
+  republishing its navigable project ids while its reference list resolves transiently empty;
+  since #2928 the resource it falls back to then is no longer saved, so the declared ids recover
+  with the list, but they still change while the list is incomplete) and PT-4743 (one installed
+  resource yielding two picker rows under two project id spellings; open as of 2026-10-27).
+  Revisit rule (2) if a platform-level in-flight de-duplication lands. Rule (1) is restated for
+  agents in `.claude/rules/architecture/provider-lookups-fan-out.md`.
 
 ## adr-pt9-interlinear-selected-reads: Publish the size limit and allow callers to select individual files or all at once
 
@@ -8559,6 +8601,43 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   arbitrary, inherited from PT-1561.
 - **Source:** PT-4421; resubscribe-storm and burst behavior measured during review of this change.
 
+## adr-sample-project-dev-runs-only: Only dev runs install the sample WEB project, so "no projects" is a real state
+
+- **Date:** 2026-10-27
+- **Status:** Accepted
+- **Context:** `LocalParatextProjects.Initialize` (C#) installed the bundled sample WEB project
+  (`c-sharp/assets/WEB`) into every empty projects folder, in every build, so Paratext 10 Studio
+  users met a "WEB" they never asked for. Developers and the E2E suite rely on it (39 isolated spec
+  files open it by its fixed ID). Two consumers also read an empty project list as "not loaded
+  yet", which held only because the sample was always there: the editor's
+  `use-project-presence.hook.ts` and the startup sync's `startup-readiness.util.ts`.
+- **Decision:** `Initialize` installs the sample only when `PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT`
+  is `true`. Dev launchers set it: the main process for unpackaged runs
+  (`dotnet-data-provider.service.ts`), `npm run start:data`, VS Code's "Debug .NET Core", and the
+  E2E launcher (`launchElectronApp`, which pins it). A packaged build gets the sample only if its
+  environment opts in. Both consumers treat an empty answer as final only when the C# Paratext
+  factory (`platform.Paratext-pdpf`), asked directly after the empty answer, reports no projects.
+  `ProjectDataProviderFactory.InitializeAsync` awaits `StartFactoryAsync`, which scans the projects
+  folder, before it registers, so a reachable factory's answer is complete. Trusting the empty
+  answer because the right factories were listed as registered was rejected: the lookup silently
+  skips a factory it cannot reach, including inside the Scripture Extender's own fan-out.
+- **Alternatives:** **Remove the sample and its assets** — rejected: the E2E suite and developers
+  use it. **Disable it only in Studio, through its core patch** — rejected: one more hunk to carry
+  on every realignment, and packaged Platform.Bible would still get it. **Keep installing it but
+  hide it** — rejected: every surface that lists projects would need the exclusion. **Have the E2E
+  launcher copy the sample into isolated roots instead** — not chosen: it covers only E2E, and
+  `npm start` into an empty folder would lose the sample too. **Fix the two consumers later** —
+  rejected: a new Studio user with no projects would get no guidance in the empty editor and wait
+  120 s for the startup sync that brings their first project.
+- **Consequences:** A packaged build can start with no projects at all; new code must not assume
+  one exists. Every other caller of the retrying `getMetadataForAllProjects` (Home, the toolbar
+  project picker) still waits out its 30 s startup grace period on an empty answer and then logs a
+  warning, until PT-4941 makes that wait end once the project sources have loaded. Existing
+  installs keep their WEB copy. Home's "Get started" prompt, which used to key only on the sample
+  being the only item, also shows on an empty Home, so a new packaged user still gets the link to
+  the getting-started help. **Revisit** when the built-in Sample project (PT-4324) lands.
+- **Source:** PT-4736 (test team confirmed on the ticket, 2026-10-27, that they do not need WEB).
+
 ## adr-sba-not-syncable-from-dialog-or-home: Study Bible Additions projects cannot be synced from the sync projects dialog or Home
 
 - **Date:** 2026-10-27
@@ -9576,6 +9655,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   exactly one case — a dock reactivation brings a window back before readiness lands — which is the
   case it was added for.
 - **Source:** PT-4386.
+- **Amended 2026-10-27 (PT-4736):** phase 2 also accepts an empty probe answer as ready when the
+  C# Paratext factory (`platform.Paratext-pdpf`), asked directly after that probe, also reports no
+  projects. A packaged
+  build no longer installs the sample project (`adr-sample-project-dev-runs-only`), so a workspace
+  with no local projects is real, and it would otherwise hold the startup sync, the one that brings
+  a new user's first project, for the whole 120 s budget.
 
 ## adr-styleinfo-over-css: Project stylesheets cross the wire as structured StyleInfo, not generated CSS
 
@@ -9681,6 +9766,96 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   decided by the Send/Receive implementation, not by this trigger; as of 2026-10-23 both are
   verified only by hand in a Paratext 10 build.
 - **Source:** PT-4826.
+
+## adr-sync-activity-outcome-is-coarse: The all-paths sync-activity signal reports a coarse outcome, not per-project results
+
+- **Date:** 2026-09-11
+- **Status:** Accepted
+- **Context:** Two sync signals exist and, before this decision, neither answered "how did the last
+  sync go" for every sync path. `getSyncState` / `onSyncStateChanged` carries a per-project
+  `resultStatus` but sees only syncs that claim through the Send/Receive extension's wrappers.
+  `getSyncActivity` / `onSyncActivityChanged` (`SyncActivityState`, `SyncActivityNotifierService`),
+  derived from the C# sync run marker, sees every path — including the Simple-mode startup sync
+  (`main/startup-tasks.ts`) and the picker's `syncOnProjectSwitch`, which call the dotnet commands
+  directly — but carried only `{ isSyncing, projectIds }`. Those paths therefore completed with no
+  observable outcome, and `useSyncStatus` could only report `unknown` when one ended.
+  `adr-toolbar-sync-status-is-local` names this gap and calls a semaphore-derived signal "the proper
+  general fix"; that signal exists, and PT-4569 adds the missing verdict to it (the companion
+  Paratext 10 Studio sub-task, PT-4570, populates it).
+- **Decision:** Add an optional coarse `outcome` — `'succeeded' | 'failed'` — to the activity
+  snapshot (C# `SyncOutcome?` on `SyncActivityState`; TS `SyncActivitySnapshot.outcome`). It
+  describes the most recently completed run in the backend process: absent while a run is in
+  progress, set on the snapshot that closes a run, and kept on every later snapshot and
+  `getSyncActivity` read until the next run opens. A cancelled run reports `failed`. Absent means
+  "this build cannot say" — a build predating the field, no run completed yet, or a run in flight —
+  and no consumer may read it as either verdict. The field is optional in core's seam declaration,
+  as `SyncState.syncingProjectIds` was, so core merges ahead of the Studio build that populates it.
+  In the renderer, `readSyncActivitySnapshot` (`sync-activity-service.ts`) reads it field by field —
+  an unrecognized value is logged and dropped while `isSyncing` and `projectIds` still apply — the
+  store drops it whenever `isSyncing` is true. Where both signals carry a verdict, `useSyncStatus`
+  ORDERS them rather than guessing between them: the snapshot carries `completedAt` (C#
+  `DateTimeOffset?`) beside the outcome, compared against the claim's own
+  `lastResults.sendReceiveDate`, and whichever is dated later is shown. The backend dates a run later
+  than any earlier run's results, and never later than the claim's results for that same run, so a
+  tie keeps the claim's verdict; that recognizes the
+  claim's own run when the indicator mounts after it ended, and keeps one run from getting two
+  verdicts. Dates are consulted before whether the hook saw the claim join the run, because that
+  record can be wrong: a claimless run opening while the claim's end-of-sync read is still in flight
+  is recorded as seen. Where the two are not both dated, the outcome answers when a sync the claim
+  never saw ends (`isClaimVerdictStale`), replacing the `unknown` that branch reported, and when the
+  claim has reached no verdict of its own (`idle`/`unknown`); otherwise the claim's richer
+  per-project verdict stands. A run ending is detected during render rather than in an effect, so
+  the ending and its verdict land in one commit — the commit between them would otherwise render and
+  announce the claim's earlier verdict, and report a cancelled sync as a failure. A verdict about a
+  sync the claim's results do not describe has no per-project detail behind it — the details web
+  view describes the last CLAIMED sync — so the popover withholds its "View sync details" link for
+  one, including the `unknown` a sync the claim never saw ends in on a build reporting no outcome.
+  And the picker syncs the project being switched TO last
+  (`syncOnProjectSwitch`), because these are two backend runs and the indicator reports the most
+  recent, so the verdict the user is shown describes the project now on screen.
+- **Alternatives:** **A per-project result map** — rejected: the detail already has a home in
+  `SyncState.lastResults` and the sync status web view, and this signal's job is coverage, not
+  detail; a second copy of the results is a second place for them to drift. **A three-valued verdict
+  with `cancelled`** — rejected: the claim path reports cancellation as a non-success
+  `resultStatus`, so a distinct value here would have the two signals describe the same run
+  differently. **A boolean `succeeded`** — rejected: `false` would blur "failed" into "cannot say",
+  the one distinction this field exists to keep. **An outcome on the closing event only** —
+  rejected: a consumer that seeds after the run ended (a renderer reload) would never learn it.
+  **Keeping the outcome across later runs** — rejected: it would sit beside `isSyncing: true`
+  describing a different run. **A third positional record parameter** — rejected: it changes the
+  constructor and generated `Deconstruct` that the out-of-repo Studio patch compiles against, where
+  an `init` property does not. **Rejecting a snapshot whose outcome is unrecognized** — rejected: it
+  would discard a live `isSyncing` with it, the all-or-nothing defect
+  `adr-toolbar-sync-status-is-local` follow-up 5 records against `isValidSyncState`. **Latching
+  `hasObservedSyncRun` on a present outcome** — not done: the toolbar already mounts the indicator
+  whenever send/receive is available, and in the one case the latch would change (the extension
+  missing) the indicator would mount showing `unknown`, not the verdict. **Keeping a failure sticky
+  until a later sync of the same projects succeeds** — rejected: it would make the indicator report
+  something other than the last sync, which is a product decision about what the control means rather
+  than an accuracy fix. **Syncing both projects of a switch in one call** — not taken: one run would
+  report one verdict covering both, at the cost of a deep sync on the project being left.
+- **Consequences:** An activity-only sync now ends in `synced` or `failed` on a build that reports
+  the outcome, and still in `unknown` on one that does not. Ordering the two verdicts depends on the
+  Studio build populating `completedAt` as well as `outcome`; a build reporting neither behaves as it
+  did before, with the claim's verdict standing. This does not close
+  `adr-toolbar-sync-status-is-local` follow-up 1 (those paths still raise no claim) or the
+  overlapping sync notifications recorded there, which still fall short of reporting sync status
+  once and truthfully. Open items, unfiled unless a ticket is named:
+  1. *A watchdog re-query in flight when the closing snapshot arrives* re-applies the older "still
+     syncing" answer and drops the outcome until the next tick. Pre-existing, and `completedAt` does
+     not help: the stale answer is a live read of whether a sync is running, not a verdict to order.
+     It does keep the verdict right once the run closes again: the replayed run looks like one the
+     claim never saw, but its outcome ties the claim's results, so the claim's verdict and details
+     link stand.
+  2. *A project switch still runs two backend runs*, so the indicator reports the incoming project's
+     sync only; a failure flushing the project being left reaches the user through its own failure
+     toast. Reporting both needs one run covering both projects, which an optional flush-first
+     parameter on `syncProjects` would give without a deep sync of the project being left
+     (PT-4902).
+  3. *`first-run/steps/sync-progress.component.tsx`* could read the outcome rather than rely on its
+     recovery timeout alone, but still needs the timeout for a build that cannot say.
+  4. *"Has this user ever synced"* (PT-4327) — the outcome lasts one backend process, so answering
+     that across restarts still needs persistence.
 
 ## adr-sync-surface-per-interface-mode: Each sync gets one persistent progress surface per interface mode, chosen by its caller
 

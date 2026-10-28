@@ -133,7 +133,8 @@ consequences worth knowing here:
   editor half owns the rule that no offered entry is a silent no-op — see "A menu offers nothing it
   cannot insert" in `docs/standard-view-invariants.md` (`scripture-editors`), which also covers the
   `\id` line, where `\` offers the inline list and the Enter palette's paragraph pick splits the
-  line instead of retagging it.
+  line instead of retagging it. In a book with no chapters that list also offers `\c`, which the
+  host must not filter out: it is the only way to start chapter 1 in Standard view.
 
 **The editor's right-click menu outranks both palettes, and the hand-off rests on listener order
 across the two repos.** While `ContextMenuPlugin`'s menu is open it is the only keyboard mode on

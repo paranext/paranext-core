@@ -91,8 +91,8 @@ describe('mergeDefaultLayoutSupplement', () => {
     expect(gridTab.id).not.toBe(gridEntry.tab.id);
   });
   it('inserts the supplement tab before the tab named by insertBeforeWebViewType', () => {
-    // Simple mode's Column 3 keeps Find last, so Text Collection has to land before it rather than
-    // at the end of the panel.
+    // Simple mode's Column 3 has a fixed order, so a supplement tab has to land at its own slot
+    // rather than at the end of the panel.
     const layout = baseLayout();
     tabsInFirstPanel(layout).push({
       id: 'find-tab',

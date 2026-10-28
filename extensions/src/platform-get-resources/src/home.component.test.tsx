@@ -529,6 +529,29 @@ describe('Home project/resource filter', () => {
     expect(screen.queryByText(GET_STARTED_DESCRIPTION)).not.toBeNull();
   });
 
+  it('shows the getting-started prompt on a Home with nothing to list', () => {
+    const GET_STARTED_DESCRIPTION = enString('%resources_getStartedDescription%');
+    const GET_STARTED_NO_ITEMS_DESCRIPTION = enString('%resources_getStartedNoItemsDescription%');
+
+    renderHomeList({ localProjectsInfo: [] });
+
+    // A new user with no projects at all is who the prompt is for. "Expecting more items?" is for
+    // a list that holds only the sample, so it would make no sense here.
+    expect(screen.queryByText(NOTHING_HERE)).not.toBeNull();
+    expect(screen.queryByText(GET_STARTED_NO_ITEMS_DESCRIPTION)).not.toBeNull();
+    expect(screen.queryByText(GET_STARTED_DESCRIPTION)).toBeNull();
+  });
+
+  it('shows no getting-started prompt on an empty Home where nothing handles Get started', () => {
+    const GET_STARTED_NO_ITEMS_DESCRIPTION = enString('%resources_getStartedNoItemsDescription%');
+
+    renderHomeList({ localProjectsInfo: [], hasGetStartedHandler: false });
+
+    // Positive control: this is the empty state
+    expect(screen.queryByText(NOTHING_HERE)).not.toBeNull();
+    expect(screen.queryByText(GET_STARTED_NO_ITEMS_DESCRIPTION)).toBeNull();
+  });
+
   it('still offers the getting-started guidance when there is nothing to filter', () => {
     renderHomeList({ initialProjectResourceFilter: 'paratextProject' });
 

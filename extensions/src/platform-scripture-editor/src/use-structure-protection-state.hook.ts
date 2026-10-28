@@ -16,7 +16,11 @@ export type StructureProtectionState = {
    * power mode, where the feature is fully inactive (no enforcement, no toggles).
    */
   isProtectionActive: boolean;
-  /** Raw project setting — `true` means the admin has set a structure lock */
+  /**
+   * Raw project setting — `true` means the admin has set a structure lock. `false` while the
+   * setting is loading or failed to load, so to decide whether the lock binds this user read
+   * {@link StructureProtectionState.isTeamLockBinding}, not this.
+   */
   isProtectedByAdmin: boolean;
   /**
    * Set when the admin (project-level) `structureProtected` setting failed to load (e.g. a
@@ -34,6 +38,16 @@ export type StructureProtectionState = {
    * the three have to agree, so the name is that shared contract's rather than this hook's.
    */
   canAdminToggle: boolean;
+  /**
+   * Whether the administrator's team lock binds this user: it is set and the user cannot lift it.
+   *
+   * Fails closed. While the admin setting is still loading, or after it failed to load, this is
+   * `true`, although `isProtectedByAdmin` falls back to `false` in both cases. Anything that lets a
+   * user past the personal lock but not the team lock must read this, never re-derive it from
+   * `isProtectedByAdmin` and `canAdminToggle`. `false` in power mode, like the rest of the
+   * feature.
+   */
+  isTeamLockBinding: boolean;
   /**
    * Whether every input to the state above has been delivered at least once.
    *
@@ -213,6 +227,11 @@ export function useStructureProtectionState(
     isProtectedByAdmin: isProtectionActive && isAdminProtected,
     adminSettingError: isProtectionActive ? adminSettingError : undefined,
     canAdminToggle: isProtectionActive && canAdminToggle,
+    isTeamLockBinding:
+      isProtectionActive &&
+      (isAdminSettingLoading ||
+        adminSettingError !== undefined ||
+        (isAdminProtected && !canAdminToggle)),
     isProtectionActive,
     // `userSettingState === undefined` covers both "still subscribing" and "never set"; the latter
     // is a legitimate settled state, so it cannot gate this on its own. The admin setting and the
