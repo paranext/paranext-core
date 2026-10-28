@@ -1,6 +1,6 @@
 import papi, { logger } from '@papi/frontend';
 import type { IProjectDataProviderFactory, NetworkObjectDetails } from '@papi/core';
-import { useEvent } from 'platform-bible-react';
+import { useEvent, useEventSeededState } from 'platform-bible-react';
 import { getErrorMessage } from 'platform-bible-utils';
 import type { SyncActivitySnapshot } from 'paratext-bible-send-receive';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -68,11 +68,11 @@ export const SYNC_ACTIVITY_SEED_RETRY_DELAY_MS = 3 * 1000;
 const MAX_SYNC_ACTIVITY_SEED_RETRIES = 10;
 
 /**
- * How often to re-read the sync activity while it is not known to be idle: a sync is running, or no
- * read has succeeded yet. Both hops that forward `onSyncActivityChanged` are fire-and-forget, so a
- * lost closing event would otherwise leave the answer `unknown` until the next sync, and an idle
- * app sends no event to recover a seed that ran out of retries or got a malformed reply. Same
- * interval as core's `sync-activity-service.ts` watchdog.
+ * How often to re-read the sync activity while a sync is reported as running. Both hops that
+ * forward `onSyncActivityChanged` are fire-and-forget, so a lost closing event would otherwise
+ * leave the answer `unknown` until the next sync. The shared hook rechecks only once a valid
+ * snapshot exists, so a seed that ran out of retries is recovered by the next event, not by this
+ * interval. Same interval as core's `sync-activity-service.ts` watchdog.
  */
 export const SYNC_ACTIVITY_RECHECK_INTERVAL_MS = 30 * 1000;
 
@@ -117,9 +117,11 @@ function isOwnProject(metadata: {
   );
 }
 
+type SyncActivityValue = Pick<SyncActivitySnapshot, 'isSyncing'>;
+
 // Checked rather than trusted: the sync-activity types were declared ahead of the Paratext 10 change
 // that implements them, so a build may send another shape.
-function isSyncActivitySnapshot(value: unknown): value is Pick<SyncActivitySnapshot, 'isSyncing'> {
+function isSyncActivitySnapshot(value: unknown): value is SyncActivityValue {
   return (
     typeof value === 'object' &&
     !!value &&
@@ -127,6 +129,14 @@ function isSyncActivitySnapshot(value: unknown): value is Pick<SyncActivitySnaps
     typeof value.isSyncing === 'boolean'
   );
 }
+
+const readSyncActivity = () =>
+  papi.commands.sendCommand('paratextBibleSendReceive.getSyncActivity').catch((e) => {
+    logger.debug(`Could not read the sync activity: ${getErrorMessage(e)}`);
+    throw e;
+  });
+
+const isSyncRunning = (snapshot: SyncActivityValue) => snapshot.isSyncing;
 
 /**
  * Reports whether this user has any project of their own, as a tri-state that keeps "could not
@@ -155,8 +165,22 @@ function isSyncActivitySnapshot(value: unknown): value is Pick<SyncActivitySnaps
  */
 export function useProjectPresence({ enabled }: { enabled: boolean }): ProjectPresence {
   const [lookupAnswer, setLookupAnswer] = useState<ProjectPresence>('unknown');
-  // `undefined` until the first snapshot arrives: not knowing is not the same as idle
-  const [isSyncing, setIsSyncing] = useState<boolean | undefined>(undefined);
+  const onSyncActivityChanged = useMemo(
+    () => papi.network.getNetworkEvent('paratextBibleSendReceive.onSyncActivityChanged'),
+    [],
+  );
+  const { value: syncActivity } = useEventSeededState<SyncActivityValue>({
+    read: readSyncActivity,
+    event: onSyncActivityChanged,
+    isValid: isSyncActivitySnapshot,
+    seedRetries: MAX_SYNC_ACTIVITY_SEED_RETRIES,
+    seedRetryDelayMs: SYNC_ACTIVITY_SEED_RETRY_DELAY_MS,
+    recheckIntervalMs: SYNC_ACTIVITY_RECHECK_INTERVAL_MS,
+    shouldRecheck: isSyncRunning,
+    enabled,
+  });
+  // `undefined` until the first valid snapshot arrives: not knowing is not the same as idle
+  const isSyncing = syncActivity?.isSyncing;
   const [lookupRequestCount, setLookupRequestCount] = useState(0);
   const requestLookup = useCallback(() => setLookupRequestCount((count) => count + 1), []);
   const lookupRetryCountRef = useRef(0);
@@ -165,8 +189,6 @@ export function useProjectPresence({ enabled }: { enabled: boolean }): ProjectPr
     lookupRetryCountRef.current = 0;
     requestLookup();
   }, [requestLookup]);
-  // Counts sync-activity events, so a read that was in flight when one arrived can tell it is older
-  const syncEventCountRef = useRef(0);
 
   const isIdle = enabled && isSyncing === false;
 
@@ -247,77 +269,6 @@ export function useProjectPresence({ enabled }: { enabled: boolean }): ProjectPr
     ),
   );
   useEffect(() => () => clearTimeout(factoryRegistrationTimerRef.current), []);
-
-  /** Reads the sync activity. Rejects if the request fails. */
-  const readSyncActivity = useCallback(async (isStillWanted: () => boolean) => {
-    const eventCountAtRequest = syncEventCountRef.current;
-    const snapshot = await papi.commands.sendCommand('paratextBibleSendReceive.getSyncActivity');
-    // An event that arrived while this read was in flight is newer than the read, so it wins.
-    if (
-      isStillWanted() &&
-      syncEventCountRef.current === eventCountAtRequest &&
-      isSyncActivitySnapshot(snapshot)
-    )
-      setIsSyncing(snapshot.isSyncing);
-  }, []);
-
-  // The event carries no replay, so the state is seeded from the command as well.
-  useEffect(() => {
-    if (!enabled) {
-      setIsSyncing(undefined);
-      return undefined;
-    }
-    let isCurrent = true;
-    let retryTimer: ReturnType<typeof setTimeout> | undefined;
-    const eventCountAtSeed = syncEventCountRef.current;
-    const seed = async (retriesLeft: number) => {
-      // A sync event has answered since the seed began, so a retry has nothing left to add.
-      if (syncEventCountRef.current !== eventCountAtSeed) return;
-      try {
-        await readSyncActivity(() => isCurrent);
-      } catch (e) {
-        if (!isCurrent) return;
-        logger.debug(`Could not read the sync activity: ${getErrorMessage(e)}`);
-        if (retriesLeft > 0)
-          retryTimer = setTimeout(() => seed(retriesLeft - 1), SYNC_ACTIVITY_SEED_RETRY_DELAY_MS);
-      }
-    };
-    seed(MAX_SYNC_ACTIVITY_SEED_RETRIES);
-    return () => {
-      isCurrent = false;
-      clearTimeout(retryTimer);
-    };
-  }, [enabled, readSyncActivity]);
-
-  useEffect(() => {
-    if (!enabled || isSyncing === false) return undefined;
-    let isCurrent = true;
-    const recheckTimer = setInterval(() => {
-      readSyncActivity(() => isCurrent).catch((e) =>
-        logger.debug(`Could not re-read the sync activity: ${getErrorMessage(e)}`),
-      );
-    }, SYNC_ACTIVITY_RECHECK_INTERVAL_MS);
-    return () => {
-      isCurrent = false;
-      clearInterval(recheckTimer);
-    };
-  }, [enabled, isSyncing, readSyncActivity]);
-
-  const onSyncActivityChanged = useMemo(
-    () => papi.network.getNetworkEvent('paratextBibleSendReceive.onSyncActivityChanged'),
-    [],
-  );
-  useEvent(
-    onSyncActivityChanged,
-    useCallback(
-      (snapshot: unknown) => {
-        if (!enabled || !isSyncActivitySnapshot(snapshot)) return;
-        syncEventCountRef.current += 1;
-        setIsSyncing(snapshot.isSyncing);
-      },
-      [enabled],
-    ),
-  );
 
   return isIdle ? lookupAnswer : 'unknown';
 }
