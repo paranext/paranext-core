@@ -10,8 +10,6 @@ export type SyncActivity = {
   isSyncing: boolean;
   /** IDs of the projects being synced. Empty when the backend does not name them. */
   projectIds: readonly string[];
-  /** Whether the backend has answered at least once with a well-formed snapshot. */
-  isKnown: boolean;
 };
 
 /**
@@ -21,7 +19,7 @@ export type SyncActivity = {
  */
 export const SYNC_ACTIVITY_RECHECK_INTERVAL_MS = 30_000;
 
-const IDLE_ACTIVITY: SyncActivity = { isSyncing: false, projectIds: [], isKnown: false };
+const IDLE_ACTIVITY: SyncActivity = { isSyncing: false, projectIds: [] };
 
 type SyncActivityValue = Pick<SyncActivitySnapshot, 'isSyncing' | 'projectIds'>;
 
@@ -57,7 +55,7 @@ export function useSyncActivity(): SyncActivity {
     () => papi.network.getNetworkEvent('paratextBibleSendReceive.onSyncActivityChanged'),
     [],
   );
-  const { value, hasSeedFailed } = useEventSeededState<SyncActivityValue>({
+  const { value } = useEventSeededState<SyncActivityValue>({
     read: readSyncActivity,
     event,
     isValid: isSyncActivitySnapshot,
@@ -66,13 +64,12 @@ export function useSyncActivity(): SyncActivity {
   });
 
   return useMemo(() => {
-    if (value === undefined || hasSeedFailed) return IDLE_ACTIVITY;
+    if (value === undefined) return IDLE_ACTIVITY;
     return {
       isSyncing: value.isSyncing,
       projectIds: value.isSyncing ? (value.projectIds ?? []) : [],
-      isKnown: true,
     };
-  }, [value, hasSeedFailed]);
+  }, [value]);
 }
 
 export default useSyncActivity;
