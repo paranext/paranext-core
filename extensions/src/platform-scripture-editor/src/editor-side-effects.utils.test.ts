@@ -16,7 +16,7 @@ import papi, { logger } from '@papi/frontend';
 // eslint-disable-next-line import/first
 import {
   EDIT_ACTION_BLOCKED_KEY,
-  notifyEditMenuActionBlocked,
+  notifyEditActionBlocked,
   notifyStructureProtected,
   notifySyncEditBlocked,
   STRUCTURE_PROTECTED_NOTIFICATION_ID,
@@ -30,13 +30,13 @@ beforeEach(() => {
   vi.resetAllMocks();
 });
 
-describe('notifyEditMenuActionBlocked', () => {
-  it('sends the resolved Edit-flyout-blocked message as a warning', async () => {
+describe('notifyEditActionBlocked', () => {
+  it('sends the resolved edit-blocked message as a warning', async () => {
     const localizedStrings: LanguageStrings = {
       [EDIT_ACTION_BLOCKED_KEY]: 'Editing is not available right now.',
     };
 
-    await notifyEditMenuActionBlocked(localizedStrings);
+    await notifyEditActionBlocked(localizedStrings);
 
     expect(send).toHaveBeenCalledWith({
       message: 'Editing is not available right now.',
@@ -45,7 +45,7 @@ describe('notifyEditMenuActionBlocked', () => {
   });
 
   it('falls back to the raw key when the string is missing', async () => {
-    await notifyEditMenuActionBlocked({});
+    await notifyEditActionBlocked({});
 
     expect(send).toHaveBeenCalledWith({
       message: EDIT_ACTION_BLOCKED_KEY,
@@ -56,12 +56,12 @@ describe('notifyEditMenuActionBlocked', () => {
   it('logs rather than throws when sending the notification fails', async () => {
     send.mockRejectedValueOnce(new Error('offline'));
 
-    await expect(notifyEditMenuActionBlocked({})).resolves.toBeUndefined();
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('edit-menu-action-blocked'));
+    await expect(notifyEditActionBlocked({})).resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('edit-action-blocked'));
   });
 });
 
-// Sanity check that the mock setup above (shared with notifyEditMenuActionBlocked) also exercises
+// Sanity check that the mock setup above (shared with notifyEditActionBlocked) also exercises
 // the sibling function correctly, since both funnel through the same notifyEditorWarning helper.
 describe('notifySyncEditBlocked', () => {
   it('sends the resolved sync-blocked message as a warning', async () => {

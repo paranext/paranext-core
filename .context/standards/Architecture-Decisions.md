@@ -1071,6 +1071,34 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   DOM selection). **Revisit** with PT-4818.
 - **Source:** PT-4608 hand QA.
 
+## adr-chapter-one-skips-only-the-personal-structure-lock: "Add chapter number" on chapter 1 passes the user's own structure lock, never the team lock
+
+- **Date:** 2026-10-27
+- **Status:** Accepted
+- **Context:** A new book holds only its `\id` line. In Simple mode the empty-chapter view's "Add
+  chapter number" button is the only way to start it, and Simple locks structure by default, which
+  disabled that button. `useStructureProtectionState` folds two locks into one
+  `isStructureProtected`: the user's own (on by default in Simple) and the team lock an
+  administrator stages in the Team layout dialog (`adr-team-lock-lives-in-the-team-layout-dialog`),
+  which binds every user without `canAdminToggle`.
+- **Decision:** `shouldProtectAddChapterNumber` (`platform-scripture-editor.utils.ts`) exempts
+  chapter 1 from the user's own lock only. The team lock disables the button on every chapter,
+  chapter 1 included, so a non-administrator under it waits for an administrator to lift it, even
+  to start a book. Whether the team lock binds comes from the hook's `isTeamLockBinding`, which
+  counts an admin setting still loading or failed to load as locked: the exemption fails closed,
+  and the toolbar's personal toggle reads the same field once loading ends. The exemption also
+  covers chapter 1 of a book that starts at a later chapter, such as a partial translation: a
+  chapter document cannot see whether later chapters exist, and adding `\c 1` there is still valid
+  USFM.
+- **Alternatives:** **Exempt chapter 1 from both locks** — the team lock is a rule an administrator
+  sets for the whole team, and nothing about starting a book makes it a weaker case than adding a
+  later chapter. **No exemption** — a Simple user could not start a new book without first turning
+  off a lock that is on by default. **Read the whole book to exempt only a
+  truly empty one** — async book-level state for a case whose result is valid USFM either way.
+- **Consequences:** Chapter 1 of a partial translation is addable under the user's own lock while
+  its blank chapter 2 is not. Chapter 2 onward (PT-1704) should start from this policy rather than
+  re-derive it.
+
 ## adr-character-marker-removal-peels-one-layer: Character-marker removal peels one nesting layer per activation; the row is labelled to match rather than looping
 
 - **Formerly:** ADR-0011
