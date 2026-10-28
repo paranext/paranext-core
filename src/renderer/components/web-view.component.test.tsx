@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   loggerWarn: vi.fn(),
   loggerError: vi.fn(),
   setFocus: vi.fn(async () => true),
+  useEvaluatedMenu: vi.fn(),
 }));
 
 // The shard is stubbed whole: these tests are about what the component makes of the shard's
@@ -75,6 +76,14 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
     addRecentScriptureRef: vi.fn(),
   })),
 }));
+// Wraps the real hook in a spy so a test can assert on the template variables the component passes
+// while every other test still gets the real evaluation.
+vi.mock('@renderer/hooks/papi-hooks/use-evaluated-menu.hook', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@renderer/hooks/papi-hooks/use-evaluated-menu.hook')>();
+  mocks.useEvaluatedMenu.mockImplementation(actual.useEvaluatedMenu);
+  return { useEvaluatedMenu: mocks.useEvaluatedMenu };
+});
 vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({ useIsPowerMode: vi.fn(() => true) }));
 vi.mock('@renderer/services/scroll-group.service', () => ({ availableScrollGroupIds: [1, 2, 3] }));
 vi.mock('@renderer/services/book-chapter-control.registry', () => ({
@@ -579,6 +588,29 @@ describe('the iframe asks for its tab to be focused when it loads', () => {
     await vi.waitFor(() => expect(applyContentZoomForWebView).toHaveBeenCalled());
     await flushTimerTurn();
     expect(mocks.setFocus).not.toHaveBeenCalled();
+  });
+});
+
+describe('the menu template variables of a web view', () => {
+  test('substitute the project id in its normalized upper-case form', async () => {
+    const { WebView } = await import('./web-view.component');
+    const lowerCaseProjectId = 'abcdef0123456789abcdef0123456789abcdef01';
+
+    render(
+      <WebView
+        id="menu-vars-view"
+        webViewType="test.type"
+        title="Menu variables view"
+        content=""
+        contentType={WEB_VIEW_CONTENT_TYPE.HTML}
+        projectId={lowerCaseProjectId}
+      />,
+    );
+
+    expect(mocks.useEvaluatedMenu).toHaveBeenCalledWith(
+      undefined,
+      expect.objectContaining({ projectId: lowerCaseProjectId.toUpperCase() }),
+    );
   });
 });
 
