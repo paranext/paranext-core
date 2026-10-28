@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, renderHook } from '@testing-library/react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { vi } from 'vitest';
 import { PlatformEventEmitter, SingleColumnMenu } from 'platform-bible-utils';
 
@@ -80,6 +80,23 @@ describe('useEvaluatedMenu', () => {
         mockChangeSequence += 1;
       }, []);
       return useEvaluatedMenu(menuData, { webViewId: 'wv1' });
+    });
+    expect(result.current?.items.map((item) => item.label)).toEqual(['%always%', '%conditional%']);
+  });
+
+  it('should catch up when a render that reused the memo saw a newer change sequence', () => {
+    // Referentially stable so the second render reuses the memoized evaluation
+    const templateVars = { webViewId: 'wv1' };
+    const { result } = renderHook(() => {
+      const evaluated = useEvaluatedMenu(menuData, templateVars);
+      // A render-phase update re-renders before the commit; the memo keeps the first evaluation
+      const [bumped, setBumped] = useState(false);
+      if (!bumped) {
+        mockContextKeyValues.set('test.webView.wv1.visible', true);
+        mockChangeSequence += 1;
+        setBumped(true);
+      }
+      return evaluated;
     });
     expect(result.current?.items.map((item) => item.label)).toEqual(['%always%', '%conditional%']);
   });
