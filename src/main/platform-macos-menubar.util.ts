@@ -24,6 +24,12 @@ import { logger } from '@shared/services/logger.service';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 
 /**
+ * Incremented at the start of every menubar rebuild. A rebuild awaits localization, so rebuilds can
+ * overlap; only the latest one may apply its result.
+ */
+let latestRebuildGeneration = 0;
+
+/**
  * Subscribe to changes in the main menu data and context keys, and update the macOS menubar
  * accordingly.
  *
@@ -40,6 +46,8 @@ export async function subscribeCurrentMacosMenubar() {
   // Reads `currentMainMenu` from the enclosing scope; falls back to the default menubar when no
   // valid menu data is available (e.g. after a PlatformError, which is logged by the subscriber)
   async function rebuildMacosMenubar(): Promise<void> {
+    latestRebuildGeneration += 1;
+    const thisRebuildGeneration = latestRebuildGeneration;
     let currentMacosMenubarTemplate;
     if (!currentMainMenu) {
       currentMacosMenubarTemplate = await fallbackToDefaultMacosMenubar();
@@ -64,6 +72,9 @@ export async function subscribeCurrentMacosMenubar() {
         currentMacosMenubarTemplate = await fallbackToDefaultMacosMenubar();
       }
     }
+
+    // A newer rebuild started while this one awaited, so this result is stale
+    if (thisRebuildGeneration !== latestRebuildGeneration) return;
 
     try {
       const coreMacosMenubar = Menu.buildFromTemplate(currentMacosMenubarTemplate);
@@ -211,6 +222,7 @@ function getMenubarColumnContent(
               }
             : {
                 label: item.label,
+                enabled: !item.disabled,
                 submenu: getMenubarColumnContent(
                   groups,
                   items,
