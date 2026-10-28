@@ -5,7 +5,6 @@ import path from 'path';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import papi from '@papi/frontend';
-import type { NetworkObjectDetails } from '@papi/core';
 import {
   LOOKUP_RETRY_DELAY_MS,
   MAX_LOOKUP_RETRIES,
@@ -17,6 +16,9 @@ import {
   useProjectPresence,
 } from './use-project-presence.hook';
 
+// Untyped, so a test can hand the hook a fake factory or none at all.
+const { getNetworkObject } = vi.hoisted(() => ({ getNetworkObject: vi.fn() }));
+
 vi.mock('@papi/frontend', () => ({
   default: {
     projectLookup: {
@@ -24,7 +26,7 @@ vi.mock('@papi/frontend', () => ({
       getMetadataForAllProjectsWithoutRetries: vi.fn(),
     },
     commands: { sendCommand: vi.fn() },
-    networkObjectStatus: { getAllNetworkObjectDetails: vi.fn() },
+    networkObjects: { get: getNetworkObject },
     // The event's name doubles as its token, so the `useEvent` mock below can route by name.
     network: { getNetworkEvent: vi.fn((eventName: string) => eventName) },
   },
@@ -42,26 +44,17 @@ vi.mock('platform-bible-react', () => ({
 const lookUpProjects = vi.mocked(papi.projectLookup.getMetadataForAllProjectsWithoutRetries);
 const retryingLookup = vi.mocked(papi.projectLookup.getMetadataForAllProjects);
 const sendCommand = vi.mocked(papi.commands.sendCommand);
-const getAllNetworkObjectDetails = vi.mocked(papi.networkObjectStatus.getAllNetworkObjectDetails);
+// What the C# Paratext project factory answers when asked directly for its projects.
+const getParatextFactoryProjects = vi.fn();
 
-// The C# factory for the user's Paratext projects, which registers only once it has scanned the
-// projects folder.
-const PARATEXT_PDP_FACTORY: NetworkObjectDetails = {
-  id: 'platform.Paratext-pdpf',
-  objectType: 'pdpFactory',
-  functionNames: [],
-  attributes: { projectInterfaces: ['platform.base'] },
-};
-// The Scripture Extender factory (platform-scripture), which layers the interface the Scripture
-// editor opens projects with.
-const SCRIPTURE_EXTENDER_PDP_FACTORY: NetworkObjectDetails = {
-  id: 'platformScripture.scriptureExtenderPdpf-pdpf',
-  objectType: 'pdpFactory',
-  functionNames: [],
-  attributes: {
-    projectInterfaces: ['platformScripture.USJ_Chapter', 'platformScripture.USX_Book'],
-  },
-};
+/** Makes the C# Paratext project factory reachable, or not, from now on. */
+function setParatextFactoryReachable(isReachable: boolean) {
+  getNetworkObject.mockImplementation(async (id: string) =>
+    isReachable && id === PARATEXT_PDP_FACTORY_ID
+      ? { getAvailableProjects: getParatextFactoryProjects }
+      : undefined,
+  );
+}
 
 /**
  * Advances through `count` lookup retry delays, one `act` each: React applies a retry's re-render
@@ -74,12 +67,6 @@ async function advanceThroughRetryDelays(count: number) {
       await vi.advanceTimersByTimeAsync(LOOKUP_RETRY_DELAY_MS);
     });
   }, Promise.resolve());
-}
-
-function registerNetworkObjects(...details: NetworkObjectDetails[]) {
-  getAllNetworkObjectDetails.mockResolvedValue(
-    Object.fromEntries(details.map((detail) => [detail.id, detail])),
-  );
 }
 
 const PROJECT = {
@@ -97,8 +84,8 @@ const RESOURCE = {
   isPublished: true,
   isEditable: false,
 };
-// What the lookup reports for the sample project core installs into an empty projects folder in
-// development runs.
+// What the lookup reports for the sample project core installs into an empty projects folder when
+// `PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT` is `true`.
 const SAMPLE_WEB = {
   id: '32664DC3288A28DF2E2BB75DED887FC8F17A15FB',
   name: 'WEB',
@@ -122,7 +109,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   eventHandlers.clear();
   answerSyncActivity(false);
-  registerNetworkObjects();
+  setParatextFactoryReachable(true);
+  getParatextFactoryProjects.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -143,7 +131,7 @@ describe('SAMPLE_PROJECT_ID', () => {
   });
 });
 
-// A mismatch would never trust an empty answer, so a user with no projects would never see the
+// A mismatch would never confirm an empty answer, so a user with no projects would never see the
 // guidance.
 describe('PARATEXT_PDP_FACTORY_ID', () => {
   it('is the ID the C# Paratext project factory registers under', () => {
@@ -173,63 +161,92 @@ describe('useProjectPresence', () => {
     expect(retryingLookup).not.toHaveBeenCalled();
   });
 
-  it('answers none for an empty answer when both project factories had registered before the lookup', async () => {
-    registerNetworkObjects(PARATEXT_PDP_FACTORY, SCRIPTURE_EXTENDER_PDP_FACTORY);
+  it('answers none for an empty answer once the Paratext project factory, asked afterward, has no projects', async () => {
     lookUpProjects.mockResolvedValue([]);
 
     const { result } = renderHook(() => useProjectPresence({ enabled: true }));
 
     await waitFor(() => expect(result.current).toBe('none'));
-  });
-
-  it.each<[scenario: string, networkObjects: NetworkObjectDetails[]]>([
-    ['before the project factories have registered', []],
-    ['when only the Paratext project factory had registered', [PARATEXT_PDP_FACTORY]],
-    ['when only the Scripture Extender factory had registered', [SCRIPTURE_EXTENDER_PDP_FACTORY]],
-    [
-      // A project data provider carries the same `projectInterfaces` attribute as its factory.
-      'when only a project data provider, not a factory, serves the Scripture interface',
-      [
-        PARATEXT_PDP_FACTORY,
-        { ...SCRIPTURE_EXTENDER_PDP_FACTORY, id: 'abc-pdp', objectType: 'pdp' },
-      ],
-    ],
-  ])('stays unknown for an empty answer %s', async (_scenario, networkObjects) => {
-    registerNetworkObjects(...networkObjects);
-    lookUpProjects.mockResolvedValue([]);
-
-    const { result } = renderHook(() => useProjectPresence({ enabled: true }));
-
-    await waitFor(() => expect(lookUpProjects).toHaveBeenCalled());
-    await act(async () => {});
-    expect(result.current).toBe('unknown');
-  });
-
-  it('stays unknown for an empty answer when the factories registered only after the lookup began', async () => {
-    lookUpProjects.mockImplementation(async () => {
-      registerNetworkObjects(PARATEXT_PDP_FACTORY, SCRIPTURE_EXTENDER_PDP_FACTORY);
-      return [];
-    });
-
-    const { result } = renderHook(() => useProjectPresence({ enabled: true }));
-
-    await waitFor(() => expect(lookUpProjects).toHaveBeenCalled());
-    await act(async () => {});
-    expect(result.current).toBe('unknown');
-    expect(getAllNetworkObjectDetails.mock.invocationCallOrder[0]).toBeLessThan(
-      lookUpProjects.mock.invocationCallOrder[0],
+    expect(getNetworkObject).toHaveBeenCalledWith(PARATEXT_PDP_FACTORY_ID);
+    expect(lookUpProjects.mock.invocationCallOrder[0]).toBeLessThan(
+      getParatextFactoryProjects.mock.invocationCallOrder[0],
     );
   });
 
-  it('answers none once the project factories register after an empty answer', async () => {
+  // Its C# handler takes one argument, and StreamJsonRpc rejects a call with any other count.
+  it('asks the Paratext project factory with exactly one argument', async () => {
+    lookUpProjects.mockResolvedValue([]);
+
+    const { result } = renderHook(() => useProjectPresence({ enabled: true }));
+
+    await waitFor(() => expect(result.current).toBe('none'));
+    expect(getParatextFactoryProjects.mock.calls).toEqual([[{}]]);
+  });
+
+  it('does not ask the Paratext project factory when the lookup finds projects', async () => {
+    lookUpProjects.mockResolvedValue([SAMPLE_WEB]);
+
+    const { result } = renderHook(() => useProjectPresence({ enabled: true }));
+
+    await waitFor(() => expect(result.current).toBe('none'));
+    expect(getNetworkObject).not.toHaveBeenCalled();
+    expect(getParatextFactoryProjects).not.toHaveBeenCalled();
+  });
+
+  it.each<[scenario: string, arrange: () => void]>([
+    ['the Paratext project factory is not reachable', () => setParatextFactoryReachable(false)],
+    [
+      'asking the Paratext project factory fails',
+      () => getParatextFactoryProjects.mockRejectedValue(new Error('request timed out')),
+    ],
+    [
+      // The lookup skipped a factory that does have projects
+      'the Paratext project factory has projects',
+      () => getParatextFactoryProjects.mockResolvedValue([PROJECT]),
+    ],
+  ])('stays unknown for an empty answer when %s, and retries', async (_scenario, arrange) => {
     vi.useFakeTimers();
     lookUpProjects.mockResolvedValue([]);
+    arrange();
     const { result } = renderHook(() => useProjectPresence({ enabled: true }));
     await act(async () => {});
     expect(result.current).toBe('unknown');
 
-    registerNetworkObjects(PARATEXT_PDP_FACTORY, SCRIPTURE_EXTENDER_PDP_FACTORY);
-    fire('object:onDidCreateNetworkObject', PARATEXT_PDP_FACTORY);
+    setParatextFactoryReachable(true);
+    getParatextFactoryProjects.mockResolvedValue([]);
+    await advanceThroughRetryDelays(1);
+
+    expect(lookUpProjects).toHaveBeenCalledTimes(2);
+    expect(result.current).toBe('none');
+  });
+
+  it('stops retrying an empty answer the Paratext project factory never confirms', async () => {
+    vi.useFakeTimers();
+    lookUpProjects.mockResolvedValue([]);
+    setParatextFactoryReachable(false);
+    const { result } = renderHook(() => useProjectPresence({ enabled: true }));
+    await act(async () => {});
+
+    await advanceThroughRetryDelays(MAX_LOOKUP_RETRIES + 3);
+
+    expect(lookUpProjects).toHaveBeenCalledTimes(1 + MAX_LOOKUP_RETRIES);
+    expect(result.current).toBe('unknown');
+  });
+
+  it('answers none once project factories register after an unconfirmed empty answer', async () => {
+    vi.useFakeTimers();
+    lookUpProjects.mockResolvedValue([]);
+    setParatextFactoryReachable(false);
+    const { result } = renderHook(() => useProjectPresence({ enabled: true }));
+    await act(async () => {});
+    expect(result.current).toBe('unknown');
+
+    setParatextFactoryReachable(true);
+    fire('object:onDidCreateNetworkObject', {
+      id: PARATEXT_PDP_FACTORY_ID,
+      objectType: 'pdpFactory',
+      functionNames: [],
+    });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(PDP_FACTORY_REGISTRATION_DEBOUNCE_MS);
     });
@@ -237,62 +254,24 @@ describe('useProjectPresence', () => {
     expect(result.current).toBe('none');
   });
 
-  it('stays unknown for an empty answer when the network objects could not be listed', async () => {
-    getAllNetworkObjectDetails.mockRejectedValue(new Error('status service unavailable'));
-    lookUpProjects.mockResolvedValue([]);
+  it('ignores an empty answer whose confirmation arrives after a newer lookup began', async () => {
+    lookUpProjects.mockResolvedValueOnce([]);
+    let resolveStaleConfirmation: (value: unknown[]) => void = () => {};
+    getParatextFactoryProjects.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveStaleConfirmation = resolve;
+      }),
+    );
+    lookUpProjects.mockResolvedValueOnce([PROJECT]);
 
     const { result } = renderHook(() => useProjectPresence({ enabled: true }));
-
-    await waitFor(() => expect(lookUpProjects).toHaveBeenCalled());
-    await act(async () => {});
-    expect(result.current).toBe('unknown');
-  });
-
-  it('answers some when the network objects could not be listed but the lookup finds a project', async () => {
-    getAllNetworkObjectDetails.mockRejectedValue(new Error('status service unavailable'));
-    lookUpProjects.mockResolvedValue([PROJECT]);
-
-    const { result } = renderHook(() => useProjectPresence({ enabled: true }));
-
+    await waitFor(() => expect(getParatextFactoryProjects).toHaveBeenCalledTimes(1));
+    fire('platform.onDidChangeProjects');
     await waitFor(() => expect(result.current).toBe('some'));
-  });
 
-  it('retries an empty answer whose network objects could not be listed', async () => {
-    vi.useFakeTimers();
-    getAllNetworkObjectDetails.mockRejectedValueOnce(new Error('status service unavailable'));
-    registerNetworkObjects(PARATEXT_PDP_FACTORY, SCRIPTURE_EXTENDER_PDP_FACTORY);
-    lookUpProjects.mockResolvedValue([]);
-    const { result } = renderHook(() => useProjectPresence({ enabled: true }));
-    await act(async () => {});
-    expect(result.current).toBe('unknown');
+    await act(async () => resolveStaleConfirmation([]));
 
-    await advanceThroughRetryDelays(1);
-
-    expect(lookUpProjects).toHaveBeenCalledTimes(2);
-    expect(result.current).toBe('none');
-  });
-
-  it('stops retrying an empty answer whose network objects keep failing to list', async () => {
-    vi.useFakeTimers();
-    getAllNetworkObjectDetails.mockRejectedValue(new Error('status service unavailable'));
-    lookUpProjects.mockResolvedValue([]);
-    renderHook(() => useProjectPresence({ enabled: true }));
-    await act(async () => {});
-
-    await advanceThroughRetryDelays(MAX_LOOKUP_RETRIES + 3);
-
-    expect(lookUpProjects).toHaveBeenCalledTimes(1 + MAX_LOOKUP_RETRIES);
-  });
-
-  it('does not retry an empty answer from before the project factories have registered', async () => {
-    vi.useFakeTimers();
-    lookUpProjects.mockResolvedValue([]);
-    renderHook(() => useProjectPresence({ enabled: true }));
-    await act(async () => {});
-
-    await advanceThroughRetryDelays(2);
-
-    expect(lookUpProjects).toHaveBeenCalledTimes(1);
+    expect(result.current).toBe('some');
   });
 
   it('answers some when the lookup finds a project', async () => {

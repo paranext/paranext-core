@@ -1,7 +1,10 @@
 import { MAX_REQUEST_ATTEMPTS, REQUEST_ATTEMPT_WAIT_TIME_MS } from '@shared/data/rpc.model';
-import { type NetworkObjectDetails } from '@shared/models/network-object.model';
-import { PDP_FACTORY_OBJECT_TYPE } from '@shared/models/project-data-provider-factory.interface';
+import {
+  type IProjectDataProviderFactory,
+  PDP_FACTORY_OBJECT_TYPE,
+} from '@shared/models/project-data-provider-factory.interface';
 import { logger } from '@shared/services/logger.service';
+import { networkObjectService } from '@shared/services/network-object.service';
 import { networkObjectStatusService } from '@shared/services/network-object-status.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { AsyncVariable, escapeStringRegexp, getErrorMessage, wait } from 'platform-bible-utils';
@@ -75,8 +78,8 @@ const SCRIPTURE_READINESS_PROJECT_INTERFACE = 'platformScripture.USJ_Chapter';
  * loading.
  *
  * Kept here rather than in `src/shared` so a single startup check doesn't add it to `papi.d.ts`.
- * The Scripture editor's `use-project-presence.hook.ts` keeps its own copy of this literal and of
- * {@link canTrustEmptyAnswer}; keep them in step.
+ * The Scripture editor's `use-project-presence.hook.ts` keeps its own copy of this literal; keep
+ * them in step.
  */
 export const PARATEXT_PDP_FACTORY_ID = 'platform.Paratext-pdpf';
 
@@ -321,50 +324,45 @@ function shouldLogProbeAttempt(attempt: number): boolean {
 }
 
 /**
- * Whether an empty probe answer can be trusted to mean the workspace has no scripture projects: the
- * network objects listed before the probe include both the .NET Paratext factory
- * ({@link PARATEXT_PDP_FACTORY_ID}) and a PDP factory serving
- * {@link SCRIPTURE_READINESS_PROJECT_INTERFACE} (the Scripture Extender that phase 1 waits for).
- *
- * TODO(PT-4941): replace with the project lookup service's own rule once it has one.
+ * What asking the .NET Paratext factory directly concluded: it answered with no projects, the app
+ * began quitting, or it could not confirm (`reason` is log-safe).
  */
-function canTrustEmptyAnswer(networkObjects: Record<string, NetworkObjectDetails>): boolean {
-  const details = Object.values(networkObjects);
-  return (
-    details.some(({ id }) => id === PARATEXT_PDP_FACTORY_ID) &&
-    details.some(
-      ({ objectType, attributes }) =>
-        objectType === PDP_FACTORY_OBJECT_TYPE &&
-        Array.isArray(attributes?.projectInterfaces) &&
-        attributes.projectInterfaces.includes(SCRIPTURE_READINESS_PROJECT_INTERFACE),
-    )
-  );
-}
+type ParatextFactoryAnswer =
+  | { kind: 'no-projects' }
+  | { kind: 'aborted' }
+  | { kind: 'unconfirmed'; reason: string };
 
 /**
- * Lists the network objects and applies {@link canTrustEmptyAnswer}, bounded by `settleWithin` like
- * every other await here. A failed listing, the deadline or an abort answers `false`, so the
- * probe's empty answer counts as not-ready.
+ * Asks the .NET Paratext factory ({@link PARATEXT_PDP_FACTORY_ID}) directly for its projects. Only
+ * an actual empty answer counts: the lookup service's fan-out skips any factory
+ * `networkObjectService.get` could not reach, so its empty answer cannot tell "no projects" from
+ * "not answering".
  */
-async function isEmptyAnswerTrustworthy(
+async function askParatextFactoryForProjects(
   deadline: number,
-  attempt: number,
   abortSignal?: AbortSignal,
-): Promise<boolean> {
+): Promise<ParatextFactoryAnswer> {
   try {
-    const settled = await settleWithin(
-      networkObjectStatusService.getAllNetworkObjectDetails(),
+    const factory = await settleWithin(
+      networkObjectService.get<IProjectDataProviderFactory>(PARATEXT_PDP_FACTORY_ID),
       deadline,
       abortSignal,
     );
-    if (settled === ABORTED || settled === TIMED_OUT) return false;
-    return canTrustEmptyAnswer(settled);
+    if (factory === ABORTED) return { kind: 'aborted' };
+    if (factory === TIMED_OUT) return { kind: 'unconfirmed', reason: 'timed out reaching it' };
+    if (!factory) return { kind: 'unconfirmed', reason: 'it is not reachable' };
+    if (abortSignal?.aborted) return { kind: 'aborted' };
+    // One argument, never zero: the C# handler takes one parameter and StreamJsonRpc matches by
+    // arity, so a zero-argument call fails.
+    const projects = await settleWithin(factory.getAvailableProjects({}), deadline, abortSignal);
+    if (projects === ABORTED) return { kind: 'aborted' };
+    if (projects === TIMED_OUT) return { kind: 'unconfirmed', reason: 'it did not answer in time' };
+    if (projects.length > 0)
+      return { kind: 'unconfirmed', reason: `it lists ${projects.length} project(s)` };
+    return { kind: 'no-projects' };
   } catch (e) {
-    if (shouldLogProbeAttempt(attempt))
-      logger.debug(
-        `Startup sync readiness: could not list network objects on attempt ${attempt}, so an empty answer will not count as ready: ${getErrorMessage(e)}`,
-      );
-    return false;
+    if (abortSignal?.aborted) return { kind: 'aborted' };
+    return { kind: 'unconfirmed', reason: getErrorMessage(e) };
   }
 }
 
@@ -378,11 +376,11 @@ async function isEmptyAnswerTrustworthy(
  * failure one layer later.
  *
  * An empty result is ambiguous: nothing has answered yet, or the workspace has no local scripture
- * projects. It counts as ready only when the network objects listed BEFORE that probe was issued
- * pass {@link canTrustEmptyAnswer}, since a factory that registers while the probe is in flight may
- * not be reflected in its answer. Otherwise it counts as not-ready and polling continues. This
- * matters most for a user with no local projects, whose first project arrives through the very sync
- * this gate delays and who would otherwise wait out the whole budget.
+ * projects. It counts as ready only when the .NET Paratext factory, asked directly after the empty
+ * probe, answers that it has no projects (see {@link askParatextFactoryForProjects}). Otherwise it
+ * counts as not-ready and polling continues. This matters most for a user with no local projects,
+ * whose first project arrives through the very sync this gate delays and who would otherwise wait
+ * out the whole budget.
  *
  * Note this probe and the eventual sync measure different things: the probe checks for projects
  * visible via `SCRIPTURE_READINESS_PROJECT_INTERFACE`, while `syncProjects(undefined)`'s scope
@@ -404,8 +402,8 @@ async function isEmptyAnswerTrustworthy(
  * The polling itself is not free even in that case: `includeProjectInterfaces` is applied only
  * AFTER `getMetadataForAllProjectsWithoutRetries` fans out, so every probe still calls
  * `getAvailableProjects` on every registered factory. A workspace with no projects yet therefore
- * pays one fan-out per probe until both factories are up (or, if they never are, for the life of
- * the budget), at the backoff cadence below.
+ * pays one fan-out per probe, plus one direct Paratext factory call, until that factory confirms it
+ * has none (or, if it never does, for the life of the budget), at the backoff cadence below.
  *
  * Deliberately uses the unscoped lookup (no `includePdpFactoryIds`) rather than narrowing the probe
  * to just the scripture factory: the Scripture Extender is a layering factory whose
@@ -438,12 +436,6 @@ async function pollUntilScriptureMetadataAnswers(
     // a throwing attempt reports the underlying error instead of the generic "no projects" detail.
     let attemptDetail: string = FACTORY_NOT_REPORTING_PROJECTS_DETAIL;
 
-    // Intentionally awaiting inside the loop: the listing must precede this attempt's probe.
-    // eslint-disable-next-line no-await-in-loop
-    const emptyAnswerIsTrustworthy = await isEmptyAnswerTrustworthy(deadline, attempt, abortSignal);
-    // Don't pay for a whole-workspace fan-out whose answer a quit would only discard.
-    if (abortSignal?.aborted) return { outcome: 'aborted' };
-
     try {
       // Intentionally awaiting inside the loop so we probe once at a time.
       // eslint-disable-next-line no-await-in-loop
@@ -469,15 +461,21 @@ async function pollUntilScriptureMetadataAnswers(
       // late quit is honored instead of reporting a stale 'ready' the app is already shutting down.
       if (abortSignal?.aborted) return { outcome: 'aborted' };
       if (settled.length > 0) return { outcome: 'ready' };
-      if (emptyAnswerIsTrustworthy) {
+
+      // TODO(PT-4941): use the lookup service's own answer once it can say whether every factory
+      // answered. Awaited inside the loop because this attempt's empty answer depends on it.
+      // eslint-disable-next-line no-await-in-loop
+      const paratextAnswer = await askParatextFactoryForProjects(deadline, abortSignal);
+      if (paratextAnswer.kind === 'aborted') return { outcome: 'aborted' };
+      if (paratextAnswer.kind === 'no-projects') {
         logger.debug(
-          `Startup sync readiness: workspace answered with no scripture projects, and the Paratext and Scripture Extender factories were both registered before the probe (attempt ${attempt}); treating it as ready`,
+          `Startup sync readiness: workspace answered with no scripture projects and the Paratext factory, asked directly, has none (attempt ${attempt}); treating it as ready`,
         );
         return { outcome: 'ready' };
       }
       if (shouldLogProbeAttempt(attempt))
         logger.debug(
-          `Startup sync readiness: scripture factory is registered but reports no projects yet (attempt ${attempt}); retrying`,
+          `Startup sync readiness: scripture factory is registered but reports no projects yet, and the Paratext factory could not confirm it has none: ${paratextAnswer.reason} (attempt ${attempt}); retrying`,
         );
     } catch (e) {
       // Re-check abort first, for the same reason as phase 1's catch: a quit landing in the same

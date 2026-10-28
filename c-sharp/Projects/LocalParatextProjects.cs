@@ -599,8 +599,9 @@ internal class LocalParatextProjects : IDisposable
     /// </summary>
     public IEnumerable<ProjectDetails> GetAvailableUnpublishedProjectDetails()
     {
-        // The startup readiness gate and the editor's `use-project-presence.hook.ts` read this
-        // factory's empty answer as "no projects", so it must never answer from an unscanned folder
+        // The factories already scan before they register (StartFactoryAsync). This covers callers
+        // that read project details without one: UnsyncedChangesTracker, RemoteChangesPoller and
+        // InventoryDataProvider (through GetAllProjectDetails).
         Initialize();
         // IsResourceProject is true for ResourceScrText and JoinedScrText (PT9's read-only
         // resource-backed project shapes); everything else is unpublished.

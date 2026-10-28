@@ -5590,9 +5590,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4311 implementation (2026-09-25); the registered-user wording is PT-4442.
 - **Amended 2026-10-27 (PT-4736):** the empty-answer rule no longer holds as written. A packaged
   build does not install the sample (`adr-sample-project-dev-runs-only`), so an empty answer reads
-  `none` when the network objects listed just before the lookup include both the C# Paratext
-  factory (`platform.Paratext-pdpf`) and a factory serving `platformScripture.USJ_Chapter`, and
-  `unknown` otherwise. The hook asks through `getMetadataForAllProjectsWithoutRetries`, since the
+  `none` when the C# Paratext factory (`platform.Paratext-pdpf`), asked directly, also reports no
+  projects, and `unknown` (retried, bounded) otherwise. The hook asks through `getMetadataForAllProjectsWithoutRetries`, since the
   retrying lookup would hold an empty answer for its 30 s startup grace period. The sample stays
   excluded by its ID, since dev runs still install it.
 
@@ -8588,10 +8587,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   is `true`. Dev launchers set it: the main process for unpackaged runs
   (`dotnet-data-provider.service.ts`), `npm run start:data`, VS Code's "Debug .NET Core", and the
   E2E launcher (`launchElectronApp`, which pins it). A packaged build gets the sample only if its
-  environment opts in. Both consumers treat an empty answer as final once the C# Paratext factory
-  (`platform.Paratext-pdpf`) and a factory serving `platformScripture.USJ_Chapter` were registered
-  before the lookup was issued; `LocalParatextProjects` scans the folder before it answers any
-  project list, so a registered factory's answer is complete.
+  environment opts in. Both consumers treat an empty answer as final only when the C# Paratext
+  factory (`platform.Paratext-pdpf`), asked directly after the empty answer, reports no projects.
+  `ProjectDataProviderFactory.InitializeAsync` awaits `StartFactoryAsync`, which scans the projects
+  folder, before it registers, so a reachable factory's answer is complete. Trusting the empty
+  answer because the right factories were listed as registered was rejected: the lookup silently
+  skips a factory it cannot reach, including inside the Scripture Extender's own fan-out.
 - **Alternatives:** **Remove the sample and its assets** — rejected: the E2E suite and developers
   use it. **Disable it only in Studio, through its core patch** — rejected: one more hunk to carry
   on every realignment, and packaged Platform.Bible would still get it. **Keep installing it but
@@ -9580,8 +9581,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   case it was added for.
 - **Source:** PT-4386.
 - **Amended 2026-10-27 (PT-4736):** phase 2 also accepts an empty probe answer as ready when the
-  network objects listed just before that probe include both the C# Paratext factory
-  (`platform.Paratext-pdpf`) and a factory serving `platformScripture.USJ_Chapter`. A packaged
+  C# Paratext factory (`platform.Paratext-pdpf`), asked directly after that probe, also reports no
+  projects. A packaged
   build no longer installs the sample project (`adr-sample-project-dev-runs-only`), so a workspace
   with no local projects is real, and it would otherwise hold the startup sync, the one that brings
   a new user's first project, for the whole 120 s budget.

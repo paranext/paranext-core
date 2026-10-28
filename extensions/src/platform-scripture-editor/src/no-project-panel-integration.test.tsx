@@ -4,8 +4,11 @@ import '@testing-library/jest-dom';
 import { act, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import papi from '@papi/frontend';
-import type { NetworkObjectDetails } from '@papi/core';
 import { NoProjectPanel } from './no-project-panel.component';
+import { PARATEXT_PDP_FACTORY_ID } from './use-project-presence.hook';
+
+// Untyped, so a test can hand the hook a fake factory.
+const { getNetworkObject } = vi.hoisted(() => ({ getNetworkObject: vi.fn() }));
 
 // Only the PAPI boundary is mocked: the panel runs its real hooks and view.
 vi.mock('@papi/frontend', () => ({
@@ -15,7 +18,7 @@ vi.mock('@papi/frontend', () => ({
       getMetadataForAllProjectsWithoutRetries: vi.fn(),
     },
     commands: { sendCommand: vi.fn() },
-    networkObjectStatus: { getAllNetworkObjectDetails: vi.fn() },
+    networkObjects: { get: getNetworkObject },
     network: { getNetworkEvent: vi.fn((eventName: string) => eventName) },
   },
   logger: { warn: vi.fn(), debug: vi.fn() },
@@ -39,28 +42,15 @@ const STRINGS = {
   '%product_name%': 'Paratext 10',
 };
 // What the lookup reports for the sample project, which core installs into an empty projects folder
-// only in development runs.
+// when `PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT` is `true`.
 const SAMPLE_WEB = {
   id: '32664DC3288A28DF2E2BB75DED887FC8F17A15FB',
   projectInterfaces: [],
   pdpFactoryInfo: {},
   isPublished: false,
 };
-// A booted app's project factories, so an empty lookup answer can be trusted.
-const BOOTED_NETWORK_OBJECTS: Record<string, NetworkObjectDetails> = {
-  'platform.Paratext-pdpf': {
-    id: 'platform.Paratext-pdpf',
-    objectType: 'pdpFactory',
-    functionNames: [],
-    attributes: { projectInterfaces: ['platform.base'] },
-  },
-  'platformScripture.scriptureExtenderPdpf-pdpf': {
-    id: 'platformScripture.scriptureExtenderPdpf-pdpf',
-    objectType: 'pdpFactory',
-    functionNames: [],
-    attributes: { projectInterfaces: ['platformScripture.USJ_Chapter'] },
-  },
-};
+// The C# Paratext project factory of a user with no projects, which confirms an empty lookup answer.
+const EMPTY_PARATEXT_FACTORY = { getAvailableProjects: vi.fn(async () => []) };
 
 const lookUpProjects = vi.mocked(papi.projectLookup.getMetadataForAllProjectsWithoutRetries);
 
@@ -77,8 +67,8 @@ function renderPanel() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(papi.networkObjectStatus.getAllNetworkObjectDetails).mockResolvedValue(
-    BOOTED_NETWORK_OBJECTS,
+  getNetworkObject.mockImplementation(async (id: string) =>
+    id === PARATEXT_PDP_FACTORY_ID ? EMPTY_PARATEXT_FACTORY : undefined,
   );
 });
 

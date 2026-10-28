@@ -75,6 +75,7 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_get%',
   '%resources_getStarted%',
   '%resources_getStartedDescription%',
+  '%resources_getStartedNoItemsDescription%',
   '%resources_getResources%',
   '%resources_items%',
   '%resources_language%',
@@ -396,6 +397,9 @@ export function Home({
   const getText: string = getLocalizedString('%resources_get%');
   const getStartedText: string = getLocalizedString('%resources_getStarted%');
   const getStartedDescriptionText: string = getLocalizedString('%resources_getStartedDescription%');
+  const getStartedNoItemsDescriptionText: string = getLocalizedString(
+    '%resources_getStartedNoItemsDescription%',
+  );
   const getResourcesText: string = getLocalizedString('%resources_getResources%');
   const itemsText: string = isLocalizedStringsLoading
     ? ''
@@ -1173,7 +1177,9 @@ export function Home({
             {(mergedProjectInfo.length === 0 || isOnlyWebSampleListed) && onGetStarted && (
               <div className="tw:flex tw:flex-col tw:gap-4 tw:items-center tw:w-auto">
                 <p className="tw:text-muted-foreground tw:font-normal">
-                  {getStartedDescriptionText}
+                  {mergedProjectInfo.length === 0
+                    ? getStartedNoItemsDescriptionText
+                    : getStartedDescriptionText}
                 </p>
                 <Button onClick={onGetStarted}>{getStartedText}</Button>
               </div>
