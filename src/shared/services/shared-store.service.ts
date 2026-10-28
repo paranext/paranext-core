@@ -23,6 +23,8 @@ const STORE_GET_REQUEST = `${SHARED_STORE_PREFIX}:get`;
  * process ID. The method exists exactly as long as the process is connected, so main learns which
  * process died from the disconnect event's removed method names and can release that process's
  * keys.
+ *
+ * @experimental This constant is unstable and may change or disappear without notice
  */
 export const SHARED_STORE_OWNER_METHOD_PREFIX = `${SHARED_STORE_PREFIX}:owner:`;
 /**
@@ -174,7 +176,13 @@ function releaseKeysOfDisconnectedProcesses(removedMethodNames: string[]): void 
     } catch (error) {
       logger.error(`Error releasing shared store key ${key}: ${getErrorMessage(error)}`);
     }
-    onDidChangeStoreEmitter.emit({ key, value: undefined });
+    // No caller is left to see a subscriber's throw, and the rest of the dead process's keys must
+    // still be released, so isolate each subscriber failure.
+    onDidChangeStoreEmitter.emitIsolated({ key, value: undefined }, (error) =>
+      logger.error(
+        `Subscriber threw while releasing shared store key ${key}: ${getErrorMessage(error)}`,
+      ),
+    );
   });
 }
 

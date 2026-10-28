@@ -554,12 +554,36 @@ describe('sharedStoreService', () => {
       expect(sharedStoreService.get('platform.customNetworkTimeoutMs.k2')).toBeUndefined();
       expect(sharedStoreService.get('platform.customNetworkTimeoutMs.k3')).toBe(3);
       expect(mockEmitter.emit).toHaveBeenCalledWith(
-        expect.objectContaining({ key: 'platform.customNetworkTimeoutMs.k1', deleted: true }),
+        expect.objectContaining({
+          key: 'platform.customNetworkTimeoutMs.k1',
+          deleted: true,
+          clock: expect.objectContaining({ counter: expect.any(Number) }),
+        }),
       );
+      const k1Release = vi
+        .mocked(mockEmitter.emit)
+        .mock.calls.map(([event]) => event)
+        .find((event) => event.key === 'platform.customNetworkTimeoutMs.k1');
+      expect(k1Release?.clock.counter).toBeGreaterThan(10);
       expect(handler).toHaveBeenCalledWith({
         key: 'platform.customNetworkTimeoutMs.k1',
         value: undefined,
       });
+      unsubscribe();
+    });
+
+    it('still releases the remaining keys when a change subscriber throws', async () => {
+      await initializeSharedStore(networkService);
+      remoteChange('platform.customNetworkTimeoutMs.k1', 1, 10, 'extension-host-abc');
+      remoteChange('platform.customNetworkTimeoutMs.k2', 2, 11, 'extension-host-abc');
+      const unsubscribe = onDidChangeSharedStore(() => {
+        throw new Error('subscriber failure');
+      });
+
+      disconnectHandler({ removedMethodNames: ['shared-store:owner:extension-host-abc'] });
+
+      expect(sharedStoreService.get('platform.customNetworkTimeoutMs.k1')).toBeUndefined();
+      expect(sharedStoreService.get('platform.customNetworkTimeoutMs.k2')).toBeUndefined();
       unsubscribe();
     });
 
