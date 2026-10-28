@@ -1941,3 +1941,78 @@ describe('Home while a sync runs', () => {
     expect(syncItem).toHaveTextContent('Wait for the current sync to finish');
   });
 });
+
+describe('Home while a sync started elsewhere runs', () => {
+  const LINE = 'A sync is running. Projects load when it finishes.';
+  const WAIT_REASON = 'Wait for the current sync to finish';
+
+  const sharedProjects: SharedProjectsInfo = {
+    projectOne: {
+      id: 'projectOne',
+      name: 'ONE',
+      fullName: 'ONE full name',
+      language: 'en',
+      editedStatus: 'notEdited',
+      lastSendReceiveDate: '2026-08-16T00:00:00.000Z',
+    },
+    projectTwo: {
+      id: 'projectTwo',
+      name: 'TWO',
+      fullName: 'TWO full name',
+      language: 'en',
+      editedStatus: 'notEdited',
+      lastSendReceiveDate: '2026-08-16T00:00:00.000Z',
+    },
+  };
+
+  function homeElement({
+    isExternalSyncRunning,
+    remoteProjectsState,
+  }: {
+    isExternalSyncRunning: boolean;
+    remoteProjectsState: 'loading' | 'loaded';
+  }) {
+    return (
+      <Home
+        headerContent={undefined}
+        localProjectsInfo={[]}
+        sharedProjectsInfo={sharedProjects}
+        remoteProjectsState={remoteProjectsState}
+        isExternalSyncRunning={isExternalSyncRunning}
+        onSendReceiveProject={() => {}}
+        localizedStringsWithLoadingState={[EN_STRINGS, false]}
+      />
+    );
+  }
+
+  it('shows the sync-running line under the spinner while loading with an external sync', () => {
+    render(homeElement({ isExternalSyncRunning: true, remoteProjectsState: 'loading' }));
+    expect(screen.getByText(LINE)).toBeInTheDocument();
+  });
+
+  it('disables every Get and Sync button while an external sync runs', () => {
+    render(homeElement({ isExternalSyncRunning: true, remoteProjectsState: 'loaded' }));
+    const getButtons = screen.getAllByRole('button', { name: 'Get' });
+    expect(getButtons).toHaveLength(2);
+    getButtons.forEach((button) => expect(button).toBeDisabled());
+    expect(screen.getAllByRole('group', { name: WAIT_REASON })).toHaveLength(2);
+  });
+
+  it('re-enables rows and hides the line when the external sync ends', () => {
+    const { rerender } = render(
+      homeElement({ isExternalSyncRunning: true, remoteProjectsState: 'loading' }),
+    );
+    expect(screen.getByText(LINE)).toBeInTheDocument();
+    rerender(homeElement({ isExternalSyncRunning: true, remoteProjectsState: 'loaded' }));
+    screen.getAllByRole('button', { name: 'Get' }).forEach((b) => expect(b).toBeDisabled());
+    rerender(homeElement({ isExternalSyncRunning: false, remoteProjectsState: 'loaded' }));
+    screen.getAllByRole('button', { name: 'Get' }).forEach((b) => expect(b).toBeEnabled());
+    expect(screen.queryByText(LINE)).toBeNull();
+  });
+
+  it('does not show the line when loaded', () => {
+    render(homeElement({ isExternalSyncRunning: true, remoteProjectsState: 'loaded' }));
+    expect(screen.queryByText(LINE)).toBeNull();
+    screen.getAllByRole('button', { name: 'Get' }).forEach((b) => expect(b).toBeDisabled());
+  });
+});

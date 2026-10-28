@@ -207,13 +207,29 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
   const [isSendReceiveInProgress, setIsSendReceiveInProgress] = useState<boolean>(false);
   const [activeSendReceiveProjects, setActiveSendReceiveProjects] = useState<string[]>([]);
   const [syncsCompletedCount, setSyncsCompletedCount] = useState<number>(0);
+  const [isSyncRunning, setIsSyncRunning] = useState<boolean>(false);
+  const didReceiveSyncStateEventRef = useRef(false);
 
   useEvent(
     papi.network.getNetworkEvent('paratextBibleSendReceive.onSyncStateChanged'),
     useCallback(({ isSyncing }: { isSyncing: boolean }) => {
+      didReceiveSyncStateEventRef.current = true;
+      setIsSyncRunning(isSyncing);
       if (!isSyncing) setSyncsCompletedCount((k) => k + 1);
     }, []),
   );
+
+  // A sync already running when Home opens raises no event; ask for it once. An event that lands
+  // before the answer is newer than the answer, so the answer only fills in the initial `false`.
+  useEffect(() => {
+    papi.commands
+      .sendCommand('paratextBibleSendReceive.getSyncState')
+      .then(({ isSyncing }) => {
+        if (isMounted.current && !didReceiveSyncStateEventRef.current) setIsSyncRunning(isSyncing);
+        return undefined;
+      })
+      .catch((e) => logger.warn(`Home could not read the sync state: ${getErrorMessage(e)}`));
+  }, []);
 
   // Declared before the first use below: the send/receive failures that are not internet blocks
   // report through this id, so a repeat failure replaces the previous toast instead of stacking.
@@ -434,6 +450,7 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
       onGetStarted={getStarted}
       showGetResourcesButton={showGetResourcesButton}
       isSendReceiveInProgress={isSendReceiveInProgress}
+      isExternalSyncRunning={isSyncRunning && !isSendReceiveInProgress}
       isLoadingLocalProjects={isLoadingLocalProjects}
       unsyncedProjectIds={unsyncedProjectIds}
       remoteProjectsState={remoteProjectsState}

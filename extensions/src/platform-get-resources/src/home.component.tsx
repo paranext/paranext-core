@@ -99,6 +99,7 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_syncFailed_title%',
   '%resources_syncWaiting_reason%',
   '%resources_sync%',
+  '%home_syncRunning_listLoads%',
 ] as const);
 
 type HomeLocalizedStringKey = (typeof HOME_STRING_KEYS)[number];
@@ -302,6 +303,12 @@ export type HomeProps = {
   /** Whether a send/receive operation is in progress. */
   isSendReceiveInProgress?: boolean;
   /**
+   * Whether a sync that Home did not start is running (from startup, another tab, or the Sync
+   * dialog). Gates every row like `isSendReceiveInProgress` does, and explains the wait while the
+   * list loads, since loading the shared projects queues behind the running sync.
+   */
+  isExternalSyncRunning?: boolean;
+  /**
    * Normalized (upper-cased) IDs of the projects with changes to send or receive, the union of the
    * two sets `paratextBibleSendReceive.getUnsyncedChanges` returns. Listed projects are marked and
    * offer Sync first.
@@ -357,6 +364,7 @@ export type HomeProps = {
  * @param {onGetStarted} - Callback function to get started with the platform.
  * @param {showGetResourcesButton} - Whether to show the Get Resources button.
  * @param {isSendReceiveInProgress} - Whether a send/receive operation is in progress.
+ * @param {isExternalSyncRunning} - Whether a sync that Home did not start is running.
  * @param {isLoadingLocalProjects} - Whether loading local projects is in progress.
  * @param {remoteProjectsState} - What is known about the send/receive server's half of the list.
  * @param {initialProjectResourceFilter} - Which items the type filter starts on.
@@ -382,6 +390,7 @@ export function Home({
   onGetStarted,
   showGetResourcesButton = true,
   isSendReceiveInProgress = false,
+  isExternalSyncRunning = false,
   unsyncedProjectIds,
   isLoadingLocalProjects = false,
   remoteProjectsState = 'absent',
@@ -446,6 +455,11 @@ export function Home({
   const serverUnreachableDescriptionText: string = getLocalizedString(
     '%resources_serverUnreachable_description%',
   );
+
+  const syncRunningListLoadsText: string = getLocalizedString('%home_syncRunning_listLoads%');
+
+  // Every row waits while any sync runs, whether Home started it or not.
+  const isAnySyncRunning = isSendReceiveInProgress || isExternalSyncRunning;
 
   const isLoading = isLoadingLocalProjects || remoteProjectsState === 'loading';
 
@@ -950,13 +964,13 @@ export function Home({
     // The sync service runs one sync at a time and refuses a second one, so every row is gated while
     // any sync runs, not just the active one. The active row shows the spinner and needs no reason.
     const isThisProjectSyncing = activeSendReceiveProjects.includes(project.projectId);
-    const isWaitingForOtherSync = isSendReceiveInProgress && !isThisProjectSyncing;
+    const isWaitingForOtherSync = isAnySyncRunning && !isThisProjectSyncing;
     const waitingReasonText = isWaitingForOtherSync ? syncWaitingReasonText : undefined;
     const sendReceiveLabel = project.isLocallyAvailable ? syncText : getText;
     if (isMenuItem)
       return blockableMenuItem({
         label: getSendReceiveButtonContent(project),
-        isBlocked: isBlocked || isSendReceiveInProgress,
+        isBlocked: isBlocked || isAnySyncRunning,
         reasonText: unsupportedReasonText ?? waitingReasonText,
         onActivate: () => handleSendReceiveProject(project.projectId),
       });
@@ -964,7 +978,7 @@ export function Home({
       isBlocked || isWaitingForOtherSync,
       unsupportedReasonText ?? waitingReasonText,
       <Button
-        disabled={isBlocked || isSendReceiveInProgress}
+        disabled={isBlocked || isAnySyncRunning}
         aria-busy={isThisProjectSyncing}
         // The spinner has no text, so the button keeps its name while it shows; otherwise its
         // visible text is the name.
@@ -1090,6 +1104,9 @@ export function Home({
       {isLoading ? (
         <CardContent className="tw:flex tw:flex-grow tw:flex-col tw:items-center tw:justify-center tw:gap-2">
           <Spinner />
+          {isExternalSyncRunning && (
+            <p className="tw:text-sm tw:text-muted-foreground">{syncRunningListLoadsText}</p>
+          )}
         </CardContent>
       ) : (
         <CardContent className="tw:flex-grow tw:overflow-auto tw:min-h-32 tw:px-0">
@@ -1178,7 +1195,7 @@ export function Home({
                               if (project.unsupportedReason) return;
                               if (project.isLocallyAvailable) {
                                 handleOpenProject(project);
-                              } else if (!isSendReceiveInProgress) {
+                              } else if (!isAnySyncRunning) {
                                 handleSendReceiveProject(project.projectId);
                               }
                             }}

@@ -21,6 +21,7 @@
   },
   "localizedStrings": {
     "en": {
+      "%home_syncRunning_listLoads%": "A sync is running. Projects load when it finishes.",
       "%new_tab_dialog_title%": "New Tab",
       "%resources_action%": "Action",
       "%resources_actionDidNotTakeEffect%": "This change couldn't be confirmed. The list of resources may be out of date. Try again.",
@@ -99,6 +100,7 @@
       "%mainMenu_open_2%": "Open"
     },
     "es": {
+      "%home_syncRunning_listLoads%": "Hay una sincronización en curso. Los proyectos se cargarán cuando termine.",
       "%new_tab_dialog_title%": "Nueva pestaña",
       "%resources_action%": "Acción",
       "%resources_actionDidNotTakeEffect%": "No se pudo confirmar este cambio. Es posible que la lista de recursos esté desactualizada. Inténtelo de nuevo.",
