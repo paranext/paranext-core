@@ -59,8 +59,9 @@ test.describe('Dynamic menu items', () => {
       await expect(editorFrame.getByRole('menu')).toHaveCount(0, { timeout: 5_000 });
     };
     // The accessible name is the label followed by its keyboard shortcut hint, so match the start.
+    const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const insertItem = (name: string) =>
-      editorFrame.getByRole('menuitem', { name: new RegExp(`^${name}(\\s|$)`) });
+      editorFrame.getByRole('menuitem', { name: new RegExp(`^${escapeRegExp(name)}(\\s|$)`) });
 
     await test.step('Insert items are disabled, not hidden, in a read-only project', async () => {
       await openMenu();
@@ -87,12 +88,17 @@ test.describe('Dynamic menu items', () => {
       await expect
         .poll(
           async () => {
-            await openMenu();
-            const disabledFlags = await Promise.all(
-              INSERT_NOTE_ITEM_NAMES.map((name) => insertItem(name).getAttribute('aria-disabled')),
-            );
-            await closeMenu();
-            return disabledFlags.every((flag) => flag !== 'true');
+            try {
+              await openMenu();
+              const disabledFlags = await Promise.all(
+                INSERT_NOTE_ITEM_NAMES.map((name) =>
+                  insertItem(name).getAttribute('aria-disabled'),
+                ),
+              );
+              return disabledFlags.every((flag) => flag !== 'true');
+            } finally {
+              await closeMenu();
+            }
           },
           { timeout: 30_000 },
         )
@@ -111,10 +117,12 @@ test.describe('Dynamic menu items', () => {
       await expect
         .poll(
           async () => {
-            await openMenu();
-            const after = await showFootnotes().getAttribute('aria-checked');
-            await closeMenu();
-            return after;
+            try {
+              await openMenu();
+              return await showFootnotes().getAttribute('aria-checked');
+            } finally {
+              await closeMenu();
+            }
           },
           { timeout: 20_000 },
         )
