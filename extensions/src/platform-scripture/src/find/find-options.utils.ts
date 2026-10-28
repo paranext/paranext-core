@@ -39,6 +39,19 @@ export type FindUiState = {
  * `buildSearchRegex` ignores both flags in regex mode, where the pattern must mean exactly what the
  * user wrote, so no carve-out is needed here.
  *
+ * One tolerance is **not** togglable and is on for every non-regex search: a whitespace run in the
+ * query may match zero characters at a block boundary, where the editor renders a block break — a
+ * line break, or the edge of a table cell, whose neighbours sit side by side — and the concatenated
+ * USJ has nothing. It carries no toggle because the position is what licenses it: it cannot fire
+ * mid-paragraph.
+ *
+ * That does cost something, rather than costing nothing: at a block boundary a byte-exact non-regex
+ * search is no longer available, invisible characters included. `isWhiteSpaceChar` is built on
+ * `SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS`, which contains NBSP and ZWSP, so an interior
+ * NBSP or ZWSP compiles as an optional group like any other whitespace and can match where no such
+ * character exists — narrowing, at those positions only, the exact-search guarantee the paragraph
+ * above describes. See `adr-find-block-boundary-whitespace`.
+ *
  * @param input The current Find UI state
  * @returns The options describing the search to run
  */
