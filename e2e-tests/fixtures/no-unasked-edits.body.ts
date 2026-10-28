@@ -2,7 +2,8 @@
  * The running app makes no edit to Scripture that the user did not ask for — the shared body of the
  * `no-unasked-edits-*` specs, one spec per editable view (isolated specs are one test() per file,
  * so each view needs its own file; the spec files only pick the view), plus
- * {@link runPreviewWritesNothing} for Power mode's read-only Preview.
+ * {@link runPreviewWritesNothing} for Power mode's read-only Preview and
+ * {@link runFootnotesPaneRowEdits} for the footnotes pane's row editor.
  *
  * Every other fidelity test exercises one leg of the save path in isolation. This one drives the
  * whole composition in the real app — C# USFM → USX, the USX parse into the editor, the editor's
@@ -591,7 +592,8 @@ const CHAPTERS: ChapterCase[] = [
  *   LF endings — chapters the user never opened included. Content is unchanged. Catalog row E-1.
  * - **Within the saved chapter only, hand-authored whitespace is regularized**: trailing spaces at a
  *   line end are dropped (the WEB's `\c 1` line and most verse lines end in spaces) and runs of
- *   spaces collapse to one (the WEB puts two spaces between a footnote's `\fr 1:1` and its `\ft`).
+ *   spaces collapse to one (the WEB puts two spaces between a footnote's `\fr 1:1` and its `\ft`),
+ *   and a line holding nothing but spaces goes altogether (Tobit's `\c 1` is followed by one).
  *   ParatextData's `NormalizeUsfm`/`RegularizeSpaces` on the USX → USFM leg; catalog row S-2.
  *   Chapter 1's save spans the book header too.
  *
@@ -609,9 +611,12 @@ function expectedAfterFirstSave(installed: Buffer, chapterNum: number): Buffer {
   const end = nextChapter < 0 ? lines.length : nextChapter;
   return Buffer.from(
     lines
-      .map((line, index) =>
-        index >= start && index < end ? line.replace(/ +$/, '').replace(/ {2,}/g, ' ') : line,
-      )
+      .flatMap((line, index) => {
+        if (index < start || index >= end) return [line];
+        const normalized = line.replace(/ +$/, '').replace(/ {2,}/g, ' ');
+        // The last element is what follows the file's final line break, not a line.
+        return normalized === '' && index < lines.length - 1 ? [] : [normalized];
+      })
       .join('\r\n'),
     'utf8',
   );
@@ -622,12 +627,14 @@ function installedBookPath(bookFile: string): string {
 }
 
 /**
- * Every chapter's book file as installed, by file name. Fails unless each is the bundled copy, so
+ * Each chapter's book file as installed, by file name. Fails unless each is the bundled copy, so
  * the capture is the form under test and not something the app already rewrote.
  */
-function captureInstalledBooks(): Map<string, Buffer> {
+function captureInstalledBooks(
+  chapters: ReadonlyArray<Pick<ChapterCase, 'bookFile'>> = CHAPTERS,
+): Map<string, Buffer> {
   return new Map(
-    CHAPTERS.map((chapter) => {
+    chapters.map((chapter) => {
       const installed = fs.readFileSync(installedBookPath(chapter.bookFile));
       expect(
         installed.equals(fs.readFileSync(path.join(BUNDLED_WEB_DIR, chapter.bookFile))),
@@ -1157,13 +1164,19 @@ async function snapshotSettledProject(page: Page): Promise<ProjectSnapshot> {
 /**
  * Soft-asserts that no file of the installed project was added, removed, rewritten or touched since
  * `before` was taken, naming each one that was; a changed file's diff is in the message and both
- * versions are attached to the report.
+ * versions are attached to the report. `exceptFiles`, paths relative to the project folder, are
+ * left out: a caller that expects those files to change judges them on its own.
  */
-async function expectProjectUnchanged(before: ProjectSnapshot, when: string): Promise<void> {
+async function expectProjectUnchanged(
+  before: ProjectSnapshot,
+  when: string,
+  exceptFiles: readonly string[] = [],
+): Promise<void> {
   const after = snapshotInstalledProject();
   const changes: string[] = [];
   await Promise.all(
     [...before].map(async ([file, { bytes, mtimeMs }]) => {
+      if (exceptFiles.includes(file)) return;
       const now = after.get(file);
       if (!now) changes.push(`${file}: removed`);
       else if (!now.bytes.equals(bytes)) {
@@ -1340,6 +1353,509 @@ export async function runPreviewWritesNothing({
     await mainPage.waitForTimeout(LOAD_QUIET_MS);
     await expectProjectUnchanged(before, 'switching back to Preview');
   });
+}
+
+// #endregion
+
+// #region The footnotes pane's row editor
+
+/** How a row-editing session is left — each of the ways the user can move on from a note. */
+type RowLeave = 'Escape' | 'clicking the text' | 'closing the pane';
+
+/** One footnote the pane run edits in its row editor. */
+interface FootnoteRowCase {
+  /** Step title. */
+  label: string;
+  /**
+   * Text that occurs in this footnote and nowhere else in its book, clear of every point this run
+   * types or pastes at so it still matches after each edit. It picks the note's pane row, and the
+   * note's bytes in the book are the `\f …\f*` run around it.
+   */
+  anchor: string;
+  /** Where typing goes, inside the note's `\ft` text; unique in the row editor and in the note. */
+  typePoint: TextPoint;
+  /** How the no-change session, the typing and its deletion are each left. */
+  leaves: { unchanged: RowLeave; typed: RowLeave; deleted: RowLeave };
+  /** A range of the note's own `\ft` text copied and pasted back at `destination`, in the row. */
+  copyPaste?: { from: TextPoint; to: TextPoint; destination: TextPoint };
+}
+
+interface FootnoteChapterCase {
+  /** Step title. */
+  label: string;
+  /** English reference for the toolbar navigation. */
+  reference: string;
+  /** The chapter the editor saves. */
+  chapterNum: number;
+  /** The book's file name in the WEB project. */
+  bookFile: string;
+  /** Text near the end of the chapter, proving the chapter's own content has rendered. */
+  renderedText: string;
+  /**
+   * A place in the Scripture text, away from any note caller: the first save of the chapter is made
+   * here, and a click here is how a row-editing session is left by clicking the text.
+   */
+  textPoint: TextPoint;
+  notes: FootnoteRowCase[];
+}
+
+/**
+ * The footnotes {@link runFootnotesPaneRowEdits} edits. The WEB sample has no no-break space (`~`)
+ * anywhere, so none of them carries one.
+ */
+const FOOTNOTE_CHAPTERS: FootnoteChapterCase[] = [
+  {
+    label: 'Matthew 4 — footnotes beside a \\wj span and ending in a space',
+    reference: 'Matthew 4:1',
+    chapterNum: 4,
+    bookFile: '41MATengWEBUS.SFM',
+    renderedText: 'from beyond the Jordan followed him',
+    textPoint: 'casting a |net into',
+    notes: [
+      {
+        // 4:10: `\wj “Get behind me,\wj*\f + … \f* \wj Satan!` — the note sits between two spans.
+        label: 'the 4:10 footnote, between two \\wj spans',
+        anchor: 'instead of “Get behind me”',
+        typePoint: 'read “Go |away”',
+        leaves: { unchanged: 'Escape', typed: 'Escape', deleted: 'clicking the text' },
+        copyPaste: { from: 'away” |instead', to: 'instead |of', destination: 'instead |of' },
+      },
+      {
+        // 4:18: `\ft TR reads “Jesus” instead of “he” \f*` — a space before the closer.
+        label: 'the 4:18 footnote, whose text ends in a space',
+        anchor: 'instead of “he”',
+        typePoint: 'TR reads |“Jesus”',
+        leaves: { unchanged: 'clicking the text', typed: 'clicking the text', deleted: 'Escape' },
+      },
+    ],
+  },
+  {
+    // A book without a leading number: the toolbar's match row runs a numbered book's reference
+    // into its book code (`2 Thessalonians 2:12TH`), which `navigateToolbarBcv` cannot pick.
+    label: 'Tobit 1 — a footnote holding an \\fqa span',
+    reference: 'Tobit 1:1',
+    chapterNum: 1,
+    bookFile: '68TOBengWEBUS.SFM',
+    renderedText: 'cupbearer, keeper of the signet',
+    textPoint: 'save my wife |Anna and',
+    notes: [
+      {
+        // 1:2: `\ft That is, \fqa Shalmaneser. \ft Compare 2 Kings 17:3, 23. \f*` — the second
+        // `\ft` opens right after an unclosed `\fqa`, and a space precedes the closer.
+        label: 'the 1:2 footnote, \\ft text after an \\fqa span',
+        anchor: 'Shalmaneser.',
+        typePoint: 'Compare |2 Kings',
+        leaves: { unchanged: 'closing the pane', typed: 'closing the pane', deleted: 'Escape' },
+      },
+    ],
+  },
+];
+
+/** The `\f …\f*` run, as offsets into `bookText`, around the one occurrence of `anchor`. */
+function footnoteExtent(bookText: string, anchor: string): { start: number; end: number } {
+  const at = bookText.indexOf(anchor);
+  if (at < 0 || bookText.indexOf(anchor, at + 1) >= 0)
+    throw new Error(`${JSON.stringify(anchor)} must occur exactly once in the book`);
+  const start = bookText.lastIndexOf('\\f ', at);
+  const closer = bookText.indexOf('\\f*', at);
+  if (start < 0 || closer < 0) throw new Error(`${JSON.stringify(anchor)} is not inside a \\f`);
+  return { start, end: closer + '\\f*'.length };
+}
+
+/**
+ * `book` with `inserted` at `point` inside the footnote around `anchor`, and nothing else changed —
+ * what the book must read once the typing at that point is saved. Also returns the byte offset of
+ * the insertion, for the report.
+ */
+function withInsertionInFootnote(
+  book: Buffer,
+  anchor: string,
+  point: TextPoint,
+  inserted: string,
+): { bytes: Buffer; byteOffset: number } {
+  const text = book.toString('utf8');
+  const { start, end } = footnoteExtent(text, anchor);
+  const note = text.slice(start, end);
+  const at = note.indexOf(pointText(point));
+  if (at < 0 || note.indexOf(pointText(point), at + 1) >= 0)
+    throw new Error(`${JSON.stringify(pointText(point))} must occur exactly once in ${note}`);
+  const offset = start + at + splitPoint(point)[0].length;
+  return {
+    bytes: Buffer.from(text.slice(0, offset) + inserted + text.slice(offset), 'utf8'),
+    byteOffset: Buffer.byteLength(text.slice(0, offset), 'utf8'),
+  };
+}
+
+/** `point` once `inserted` has been typed at it, with the caret after what was typed. */
+function pointAfterInsertion(point: TextPoint, inserted: string): TextPoint {
+  const [before, after] = splitPoint(point);
+  return `${before}${inserted}|${after}`;
+}
+
+/** `point` once `inserted` has been typed at it, with the caret before what was typed. */
+function pointBeforeInsertion(point: TextPoint, inserted: string): TextPoint {
+  const [before, after] = splitPoint(point);
+  return `${before}|${inserted}${after}`;
+}
+
+/**
+ * Clicks the Scripture text at `point` with the mouse, as the user would: the point's text is
+ * scrolled into view inside the editor's frame, and the click lands on the character after the
+ * caret, in page coordinates.
+ */
+async function clickTextAt(
+  mainPage: Page,
+  editorId: string,
+  editorInput: Locator,
+  point: TextPoint,
+) {
+  const [before, after] = splitPoint(point);
+  const inFrame = await editorInput.evaluate(
+    (root, { text, caret }) => {
+      const hits: Array<{ node: Text; offset: number }> = [];
+      const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        // SHOW_TEXT yields only Text nodes.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const textNode = node as Text;
+        for (
+          let at = textNode.data.indexOf(text);
+          at >= 0;
+          at = textNode.data.indexOf(text, at + 1)
+        )
+          hits.push({ node: textNode, offset: at + caret });
+      }
+      if (hits.length !== 1)
+        throw new Error(`${JSON.stringify(text)} occurs ${hits.length} times in the editor's text`);
+      const { node, offset } = hits[0];
+      node.parentElement?.scrollIntoView({ block: 'center' });
+      const range = root.ownerDocument.createRange();
+      range.setStart(node, offset);
+      range.setEnd(node, offset + 1);
+      const rect = range.getBoundingClientRect();
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    },
+    { text: before + after, caret: before.length },
+  );
+  const frameBox = await mainPage.locator(`iframe[data-web-view-id="${editorId}"]`).boundingBox();
+  if (!frameBox) throw new Error('The editor frame has no bounding box');
+  await mainPage.mouse.click(frameBox.x + inFrame.x, frameBox.y + inFrame.y);
+}
+
+/**
+ * The footnotes pane run's whole test body. In `view`, for each footnote of
+ * {@link FOOTNOTE_CHAPTERS}, the footnotes pane's row editor (the inline note editor a pane row
+ * becomes when clicked) changes the book file only as the user asked:
+ *
+ * 1. **Opening a row and leaving it writes nothing.** Before the chapter has ever been saved: click
+ *    the row, let the editor settle, leave it — by Escape, by clicking the Scripture text, or by
+ *    closing the pane. Every file of the project keeps its bytes and its modification time.
+ * 2. **Typing changes only what was typed.** Once the chapter is at rest (one main-text edit and its
+ *    deletion, which must leave exactly the known first-save normalization): type one character at
+ *    a known point in the note's `\ft` text and leave. The book is the at-rest book with exactly
+ *    that byte inserted at that point in that note; its `.BAK` holds the book as it was before the
+ *    save, and every other file is untouched. Reopen the row, delete the character, leave: the book
+ *    is byte-identical to the at-rest book.
+ * 3. **Copy and paste of the note's own text adds only the paste.** Copy a range of the note's `\ft`
+ *    text in the row and paste it back right after itself: the book gains exactly those bytes
+ *    there. Reopen the row, select the pasted text, delete it, leave: byte-identical again.
+ *
+ * Expectations are computed from the bytes on disk, never from what the editor shows.
+ */
+export async function runFootnotesPaneRowEdits(
+  { mainPage, electronApp }: { mainPage: Page; electronApp: ElectronApplication },
+  view: EditableViewCase,
+): Promise<void> {
+  // Heavy isolated test: its own Electron instance, then several quiet waits and saves per note.
+  test.setTimeout(900_000);
+
+  if (view.interfaceMode === 'power') await waitForHomeTab(mainPage);
+  else await waitForAppReady(mainPage);
+  await makeSampleProjectEditable();
+  const installedBooks = captureInstalledBooks(FOOTNOTE_CHAPTERS);
+  await snapshotSettledProject(mainPage);
+
+  const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
+  const editorFrame = mainPage.frameLocator(`iframe[data-web-view-id="${editorId}"]`);
+  await editorFrame.locator('.editor-container').waitFor({ timeout: 60_000 });
+  // `.first()`: the pane's row editor renders an editor input of its own, after the text's.
+  const editorInput = editorFrame.locator('.editor-input').first();
+  const footnotesPane = editorFrame.locator('[data-footnotes-pane]');
+  const editingRow = footnotesPane.locator('li[data-state="editing"]');
+  const rowEditor = editingRow.locator('.editor-input');
+  // The close button floats over the list as the pane's only direct child button.
+  const paneCloseButton = footnotesPane.locator(':scope > button');
+
+  const showPane = async () => {
+    if ((await footnotesPane.count()) === 0)
+      await sendCommandWithId(mainPage, 'platformScriptureEditor.toggleFootnotes', editorId);
+    await expect(footnotesPane).toHaveCount(1, { timeout: 20_000 });
+  };
+
+  /**
+   * Opens `note`'s row editor with a click on its row, runs `act` in it, and leaves by `leave`;
+   * returns once the row is a plain row again.
+   */
+  const editRow = async (
+    chapter: FootnoteChapterCase,
+    note: FootnoteRowCase,
+    leave: RowLeave,
+    act: () => Promise<void>,
+  ) => {
+    await showPane();
+    await footnotesPane.locator('li[role="option"]').filter({ hasText: note.anchor }).click();
+    await expect(rowEditor).toContainText(note.anchor, { timeout: 20_000 });
+    // The row editor places its caret over a timeout and an animation frame after it loads.
+    await mainPage.waitForTimeout(SELECTION_ADOPTED_MS * 2);
+    await act();
+    if (leave === 'Escape') await mainPage.keyboard.press('Escape');
+    else if (leave === 'clicking the text')
+      await clickTextAt(mainPage, editorId, editorInput, chapter.textPoint);
+    else await paneCloseButton.click();
+    await expect(editingRow).toHaveCount(0, { timeout: 20_000 });
+  };
+
+  const settledBooks = new Map<string, Buffer>();
+
+  const runChapter = (chapter: FootnoteChapterCase) =>
+    test.step(`${view.name}: ${chapter.label}`, async () => {
+      const installed = installedBooks.get(chapter.bookFile);
+      if (!installed) throw new Error(`No capture for ${chapter.bookFile}`);
+      const bookPath = installedBookPath(chapter.bookFile);
+
+      await navigateToolbarBcv(mainPage, chapter.reference);
+      await expect(editorInput).toContainText(chapter.renderedText, { timeout: 60_000 });
+      await expect
+        .poll(
+          () => editorInput.evaluate((root, selector) => root.matches(selector), view.rootSelector),
+          {
+            message: `the editor should be showing ${view.name} (${view.rootSelector})`,
+            timeout: 30_000,
+          },
+        )
+        .toBe(true);
+      const beforeOpening = await snapshotSettledProject(mainPage);
+
+      // Chained, not concurrent: one row editor at a time.
+      const forEachNote = (run: (note: FootnoteRowCase) => Promise<void>) =>
+        chapter.notes.reduce(async (previous, note) => {
+          await previous;
+          await run(note);
+        }, Promise.resolve());
+
+      await forEachNote((note) =>
+        test.step(`${note.label}: opening its row and leaving by ${note.leaves.unchanged} writes nothing`, async () => {
+          await editRow(chapter, note, note.leaves.unchanged, async () => {
+            await selectInEditor(rowEditor, note.typePoint);
+            await mainPage.keyboard.press('ArrowRight');
+            await mainPage.keyboard.press('ArrowLeft');
+          });
+          await mainPage.waitForTimeout(LOAD_QUIET_MS);
+          await expectProjectUnchanged(
+            beforeOpening,
+            `opening ${note.label} in the row editor and leaving it by ${note.leaves.unchanged}`,
+          );
+        }),
+      );
+
+      const atRest =
+        await test.step('the first save of the chapter, from the Scripture text', async () => {
+          await selectInEditor(editorInput, chapter.textPoint);
+          await mainPage.keyboard.type(TYPED_CHARACTER);
+          const afterTyping = await waitForSaveToSettle(mainPage, bookPath, installed);
+          if (!afterTyping)
+            throw new Error(
+              `${chapter.bookFile}: typing in the Scripture text never saved to disk`,
+            );
+          await selectInEditor(
+            editorInput,
+            pointAfterInsertion(chapter.textPoint, TYPED_CHARACTER),
+          );
+          await mainPage.keyboard.press('Backspace');
+          const afterDeleting = await waitForSaveToSettle(mainPage, bookPath, afterTyping);
+          if (!afterDeleting)
+            throw new Error(
+              `${chapter.bookFile}: deleting in the Scripture text never saved to disk`,
+            );
+          await expectSameBytes(
+            chapter.bookFile,
+            expectedAfterFirstSave(installed, chapter.chapterNum),
+            afterDeleting,
+            'installed-with-known-first-save-normalization',
+            'after-first-edit-and-delete',
+            `${chapter.bookFile}: the first save of ${chapter.reference} changed more (or less) than the known first-save normalization`,
+          );
+          return afterDeleting;
+        });
+      const atRestProject = await snapshotSettledProject(mainPage);
+
+      // ParatextData keeps the book as it was before each save in a `.BAK` beside it.
+      const backupFile = `${chapter.bookFile}.BAK`;
+
+      /**
+       * Runs one row session that must save `expected`, then checks the book is exactly that, its
+       * backup is exactly the book before the save, and no other file of the project moved. Returns
+       * the book as saved.
+       */
+      const expectRowSave = async (
+        where: string,
+        before: Buffer,
+        expected: Buffer,
+        session: () => Promise<void>,
+      ): Promise<Buffer> => {
+        await session();
+        const saved = await waitForSaveToSettle(mainPage, bookPath, before);
+        if (!saved) {
+          expect
+            .soft(saved, `${where} never saved to disk within ${SAVE_LANDED_TIMEOUT_MS}ms`)
+            .toBeDefined();
+          return before;
+        }
+        await expectSameBytes(chapter.bookFile, expected, saved, 'expected', 'saved', where);
+        await expectSameBytes(
+          backupFile,
+          before,
+          fs.readFileSync(
+            path.join(requireIsolatedProjectRoot(), INSTALLED_WEB_FOLDER, backupFile),
+          ),
+          'book-before-the-save',
+          'backup',
+          `${where}: the book's backup is not the book as it was before the save`,
+        );
+        await expectProjectUnchanged(atRestProject, where, [chapter.bookFile, backupFile]);
+        return saved;
+      };
+
+      await forEachNote((note) =>
+        test.step(`${note.label}: typing in its \\ft text changes only that byte`, async () => {
+          const typed = withInsertionInFootnote(
+            atRest,
+            note.anchor,
+            note.typePoint,
+            TYPED_CHARACTER,
+          );
+          test.info().annotations.push({
+            type: 'typed',
+            description: `${chapter.bookFile} (${view.name}): ${note.label}: "${TYPED_CHARACTER}" expected at byte ${typed.byteOffset}`,
+          });
+          const afterTyping = await expectRowSave(
+            `${chapter.bookFile} (${view.name}): typing "${TYPED_CHARACTER}" at ${note.typePoint} in ${note.label} and leaving by ${note.leaves.typed}`,
+            atRest,
+            typed.bytes,
+            () =>
+              editRow(chapter, note, note.leaves.typed, async () => {
+                await selectInEditor(rowEditor, note.typePoint);
+                await mainPage.keyboard.type(TYPED_CHARACTER);
+              }),
+          );
+          await expectRowSave(
+            `${chapter.bookFile} (${view.name}): deleting the typed "${TYPED_CHARACTER}" in ${note.label} and leaving by ${note.leaves.deleted}`,
+            afterTyping,
+            atRest,
+            () =>
+              editRow(chapter, note, note.leaves.deleted, async () => {
+                await selectInEditor(
+                  rowEditor,
+                  pointAfterInsertion(note.typePoint, TYPED_CHARACTER),
+                );
+                await mainPage.keyboard.press('Backspace');
+              }),
+          );
+        }),
+      );
+
+      await forEachNote(async (note) => {
+        const { copyPaste } = note;
+        if (!copyPaste) return;
+        await test.step(`${note.label}: pasting a copy of its own \\ft text adds only the paste`, async () => {
+          const { start, end } = footnoteExtent(atRest.toString('utf8'), note.anchor);
+          const copied = usfmBetween(
+            atRest.toString('utf8').slice(start, end),
+            copyPaste.from,
+            copyPaste.to,
+          );
+          const pasted = withInsertionInFootnote(
+            atRest,
+            note.anchor,
+            copyPaste.destination,
+            copied,
+          );
+          const afterPaste = await expectRowSave(
+            `${chapter.bookFile} (${view.name}): copying ${JSON.stringify(copied)} in ${note.label} and pasting it at ${copyPaste.destination}`,
+            atRest,
+            pasted.bytes,
+            () =>
+              editRow(chapter, note, 'closing the pane', async () => {
+                await electronApp.evaluate(
+                  ({ clipboard }, sentinel) => clipboard.writeText(sentinel),
+                  CLIPBOARD_SENTINEL,
+                );
+                await selectInEditor(rowEditor, copyPaste.from, copyPaste.to);
+                await mainPage.keyboard.press(COPY_KEY);
+                await expect
+                  .poll(() => electronApp.evaluate(({ clipboard }) => clipboard.readText()), {
+                    message: `copying ${copyPaste.from} … ${copyPaste.to} in the row editor never reached the OS clipboard`,
+                    timeout: 15_000,
+                  })
+                  .not.toBe(CLIPBOARD_SENTINEL);
+                test.info().annotations.push({
+                  type: 'copied',
+                  description: `${note.label} (${view.name}): text/plain ${JSON.stringify(
+                    await electronApp.evaluate(({ clipboard }) => clipboard.readText()),
+                  )}`,
+                });
+                await selectInEditor(rowEditor, copyPaste.destination);
+                await mainPage.keyboard.press(PASTE_KEY);
+              }),
+          );
+          await expectRowSave(
+            `${chapter.bookFile} (${view.name}): deleting the pasted ${JSON.stringify(copied)} in ${note.label}`,
+            afterPaste,
+            atRest,
+            () =>
+              editRow(chapter, note, 'Escape', async () => {
+                await selectInEditor(
+                  rowEditor,
+                  pointBeforeInsertion(copyPaste.destination, copied),
+                  pointAfterInsertion(copyPaste.destination, copied),
+                );
+                await mainPage.keyboard.press('Delete');
+              }),
+          );
+        });
+      });
+
+      settledBooks.set(chapter.bookFile, fs.readFileSync(bookPath));
+      await expectSameBytes(
+        chapter.bookFile,
+        atRest,
+        fs.readFileSync(bookPath),
+        'at-rest',
+        'after-its-notes',
+        `${chapter.bookFile}: the book does not read as it did at rest once every note's edit was taken back`,
+      );
+    });
+
+  await FOOTNOTE_CHAPTERS.reduce(async (previous, chapter) => {
+    await previous;
+    await runChapter(chapter);
+  }, Promise.resolve());
+
+  // Leaving a chapter flushes any pending save; nothing may reach a book after its step finished.
+  await Promise.all(
+    FOOTNOTE_CHAPTERS.map(async (chapter) => {
+      const settled = settledBooks.get(chapter.bookFile);
+      if (!settled) return;
+      await expectSameBytes(
+        chapter.bookFile,
+        settled,
+        fs.readFileSync(installedBookPath(chapter.bookFile)),
+        'when-its-step-finished',
+        'at-the-end-of-the-run',
+        `${chapter.bookFile}: the book file changed after its own step finished`,
+      );
+    }),
+  );
 }
 
 // #endregion
