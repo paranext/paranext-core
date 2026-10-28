@@ -92,6 +92,7 @@ async function startupWithSettingsChangedDuringReadinessWait(
     if (key === 'platform.interfaceMode') return current.mode;
     if (key === 'platform.firstRunComplete') return current.firstRunComplete;
     if (key === 'platform.syncOnStartup') return current.syncOnStartup;
+    if (key === 'platform.firstSyncState') return 'synced';
     throw new Error(`Unexpected settings key in test stub: ${key}`);
   });
   let resolveReadiness: (result: { outcome: 'ready' }) => void = () => {};
@@ -185,6 +186,15 @@ describe('performStartupTasks', () => {
     expect(mockSendCommand).not.toHaveBeenCalled();
     expect(mockLoggerInfo).toHaveBeenCalledWith(
       expect.stringContaining('automatic sync deferred for this session'),
+    );
+  });
+
+  it('does NOT fire sync in simple mode while the first successful sync is pending', async () => {
+    stubSettings({ mode: 'simple', firstRunComplete: true, firstSyncState: 'pending' });
+    await performStartupTasks();
+    expect(mockSendCommand).not.toHaveBeenCalled();
+    expect(mockLoggerInfo).toHaveBeenCalledWith(
+      expect.stringContaining('Startup sync skipped: no successful sync yet'),
     );
   });
 

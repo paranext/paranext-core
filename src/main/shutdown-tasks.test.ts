@@ -897,6 +897,7 @@ describe('startWindowCloseTasksWithoutWaiting', () => {
     let resolveModeRead: (mode: SettingTypes['platform.interfaceMode']) => void = () => {};
     mockSettingsGet.mockImplementation(async (key: string) => {
       if (key === 'platform.firstRunComplete') return true;
+      if (key === 'platform.firstSyncState') return 'synced';
       return new Promise((resolve) => {
         resolveModeRead = resolve;
       });

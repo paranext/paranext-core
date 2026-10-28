@@ -7,11 +7,13 @@ import { getErrorMessage } from 'platform-bible-utils';
  * Whether an automatic Simple-mode Send/Receive may start, as answered by
  * {@link getAutomaticSyncConsent}:
  *
- * - `granted`: the first-run wizard has been answered, and the user has not deferred sync this
- *   session.
+ * - `granted`: the first-run wizard has been answered, the user has not deferred sync this session,
+ *   and no first sync is still awaited.
  * - `unconfirmed`: the wizard has not been answered yet.
- * - `unreadable`: `platform.firstRunComplete` could not be read.
+ * - `unreadable`: `platform.firstRunComplete` or `platform.firstSyncState` could not be read.
  * - `deferred`: the user chose "Don't sync yet" in the wizard earlier in this app session.
+ * - `notYetSynced`: the wizard step that starts the first sync has begun (`platform.firstSyncState`
+ *   is `pending`) and that sync has not succeeded, so an automatic sync would race it.
  *
  * Derived from the `platform.getAutomaticSyncConsent` command's declaration, which exposes the same
  * answer to the extension host, so the two cannot drift.
@@ -28,6 +30,7 @@ export const WITHHELD_SYNC_CONSENT_REASONS: Record<
   unconfirmed: 'first-run sync consent not confirmed',
   unreadable: 'first-run sync consent could not be read',
   deferred: `automatic sync deferred for this session ("Don't sync yet")`,
+  notYetSynced: 'no successful sync yet',
 };
 
 // Main-process memory rather than a setting, so the deferral lasts exactly one app session: every
@@ -52,7 +55,7 @@ export function deferAutomaticSyncForSession(): void {
  * window-close syncs call it directly, and the extension host reaches it through the
  * `platform.getAutomaticSyncConsent` command. The rationale and rejected alternatives are in
  * `adr-first-run-sync-consent` (`.context/standards/Architecture-Decisions.md`). The sync on a
- * switch from Simple to Power asks too, but lets `unconfirmed` through: see
+ * switch from Simple to Power asks too, but lets `unconfirmed` and `notYetSynced` through: see
  * `adr-switch-to-power-sends-unsent-changes`.
  *
  * TODO(PT-4605): the Send/Receive extension's `paratextBibleSendReceive.syncOpenProjects` can start
@@ -60,7 +63,9 @@ export function deferAutomaticSyncForSession(): void {
  *
  * Fails CLOSED: only a literal `true` in `platform.firstRunComplete` counts as answered, and an
  * unreadable flag reads as `unreadable`, which withholds the sync like every answer but `granted`.
- * Never rejects, so callers need no try/catch of their own.
+ * Only a literal `'pending'` in `platform.firstSyncState` withholds as `notYetSynced`; any other
+ * value, including one missing from an older settings file, counts as synced. Never rejects, so
+ * callers need no try/catch of their own.
  *
  * Precondition: the caller has already established that the app is in Simple mode (except the
  * switch-to-Power sync above, which does not act on `unconfirmed`). `platform.firstRunComplete` is
@@ -72,11 +77,20 @@ export async function getAutomaticSyncConsent(): Promise<AutomaticSyncConsent> {
   if (isAutomaticSyncDeferred) return 'deferred';
   try {
     const firstRunComplete = await settingsService.get('platform.firstRunComplete');
-    return firstRunComplete === true ? 'granted' : 'unconfirmed';
+    if (firstRunComplete !== true) return 'unconfirmed';
   } catch (e) {
     // The call site's skip line names the answer; this warn carries the error behind it
     logger.warn(
       `Could not read platform.firstRunComplete; answering unreadable: ${getErrorMessage(e)}`,
+    );
+    return 'unreadable';
+  }
+  try {
+    const firstSyncState = await settingsService.get('platform.firstSyncState');
+    return firstSyncState === 'pending' ? 'notYetSynced' : 'granted';
+  } catch (e) {
+    logger.warn(
+      `Could not read platform.firstSyncState; answering unreadable: ${getErrorMessage(e)}`,
     );
     return 'unreadable';
   }

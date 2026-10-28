@@ -18,6 +18,8 @@ interface SettingsStubValues {
   firstRunComplete: StubbedSettingValue<boolean>;
   /** `platform.syncOnStartup` */
   syncOnStartup: StubbedSettingValue<boolean>;
+  /** `platform.firstSyncState` */
+  firstSyncState: StubbedSettingValue<string>;
 }
 
 /**
@@ -30,6 +32,10 @@ interface SettingsStubValues {
  * compares against a literal `true`, so it reads as "not complete" — silently disabling sync in
  * every Simple-mode test while the suite stays green.
  *
+ * `platform.firstSyncState` is answered `'synced'` unless a test overrides it, because the consent
+ * gate reads it for every Simple-mode sync and a suite that is not about the first sync should not
+ * have to list it.
+ *
  * A setting the suite did not list throws instead of resolving `undefined`, so a newly added
  * settings read in the code under test fails loudly here rather than quietly taking whatever branch
  * `undefined` happens to select.
@@ -39,20 +45,26 @@ export function createSettingsStub<TOption extends keyof SettingsStubValues>(
   defaults: Pick<SettingsStubValues, TOption>,
 ): (overrides?: Partial<Pick<SettingsStubValues, TOption>>) => void {
   return (overrides = {}) => {
-    const values: Partial<SettingsStubValues> = { ...defaults, ...overrides };
+    const values: Partial<SettingsStubValues> = {
+      firstSyncState: 'synced',
+      ...defaults,
+      ...overrides,
+    };
     mockSettingsGet.mockImplementation(async (key: string) => {
       if (key === 'platform.interfaceMode' && values.mode !== undefined) return values.mode;
       if (key === 'platform.firstRunComplete' && values.firstRunComplete !== undefined)
         return answerRead(values.firstRunComplete);
       if (key === 'platform.syncOnStartup' && values.syncOnStartup !== undefined)
         return answerRead(values.syncOnStartup);
+      if (key === 'platform.firstSyncState' && values.firstSyncState !== undefined)
+        return answerRead(values.firstSyncState);
       throw new Error(`Unexpected settings key in test stub: ${key}`);
     });
   };
 }
 
 /** Resolves a stubbed value, or rejects the read for {@link READ_THROWS}. */
-function answerRead(value: StubbedSettingValue<boolean>): boolean {
+function answerRead<T>(value: StubbedSettingValue<T>): T {
   if (value === READ_THROWS) throw new Error('read failed');
   return value;
 }

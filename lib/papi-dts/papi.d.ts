@@ -6404,14 +6404,16 @@ declare module 'papi-shared-types' {
     /**
      * Whether the first-run sync consent gate allows an automatic Simple-mode Send/Receive to start
      * now: `granted`; `unconfirmed` when the first-run wizard has not been answered; `unreadable`
-     * when its completion flag could not be read; or `deferred` when the user chose "Don't sync
-     * yet" earlier in this app session. Only meaningful in Simple mode: the completion flag is
-     * never written in Power mode, so a Power-mode sync must not consult this.
+     * when its completion flag or the first-sync state could not be read; `deferred` when the user
+     * chose "Don't sync yet" earlier in this app session; or `notYetSynced` when the first
+     * Send/Receive (`platform.firstSyncState` is `pending`) has not succeeded yet. Only meaningful
+     * in Simple mode: the completion flag is never written in Power mode, so a Power-mode sync must
+     * not consult this.
      *
      * @experimental This command is unstable and may change or disappear without notice
      */
     'platform.getAutomaticSyncConsent': () => Promise<
-      'granted' | 'unconfirmed' | 'unreadable' | 'deferred'
+      'granted' | 'unconfirmed' | 'unreadable' | 'deferred' | 'notYetSynced'
     >;
     /**
      * Withhold automatic Simple-mode Send/Receive for the rest of this app session. Called when the
@@ -6729,6 +6731,8 @@ declare module 'papi-shared-types' {
    * @example 'platform.quit';
    */
   type CommandNames = keyof CommandHandlers;
+  /** Whether the user's first Send/Receive has succeeded. See `platform.firstSyncState`. */
+  type FirstSyncState = 'unknown' | 'pending' | 'synced';
   /**
    * Types corresponding to each user setting available in Platform.Bible. Keys are setting names,
    * and values are setting data types. Extensions can add more user setting types with
@@ -6833,6 +6837,18 @@ declare module 'papi-shared-types' {
      * finished and the wizard should gate the app on the next simple-mode startup.
      */
     'platform.firstRunComplete': boolean;
+    /**
+     * Whether the user's first Send/Receive has succeeded, so the first-run wizard knows whether to
+     * keep reopening its Sync step. Hidden; managed by the first-run flow and the Send/Receive
+     * backend, not user-configurable.
+     *
+     * - `'unknown'` (default): never written. This setup predates the state or no wizard has run.
+     * - `'pending'`: a first run started and no sync has succeeded yet.
+     * - `'synced'`: a sync has succeeded at least once.
+     *
+     * Treat anything other than `'pending'` as "has synced".
+     */
+    'platform.firstSyncState': FirstSyncState;
     /**
      * Whether to perform automatic startup sync. Hidden; not exposed in the settings UI. Read on
      * each launch by the Simple-mode startup sync only — Power mode never reads it. Absent or

@@ -136,14 +136,16 @@ declare module 'papi-shared-types' {
     /**
      * Whether the first-run sync consent gate allows an automatic Simple-mode Send/Receive to start
      * now: `granted`; `unconfirmed` when the first-run wizard has not been answered; `unreadable`
-     * when its completion flag could not be read; or `deferred` when the user chose "Don't sync
-     * yet" earlier in this app session. Only meaningful in Simple mode: the completion flag is
-     * never written in Power mode, so a Power-mode sync must not consult this.
+     * when its completion flag or the first-sync state could not be read; `deferred` when the user
+     * chose "Don't sync yet" earlier in this app session; or `notYetSynced` when the first
+     * Send/Receive (`platform.firstSyncState` is `pending`) has not succeeded yet. Only meaningful
+     * in Simple mode: the completion flag is never written in Power mode, so a Power-mode sync must
+     * not consult this.
      *
      * @experimental This command is unstable and may change or disappear without notice
      */
     'platform.getAutomaticSyncConsent': () => Promise<
-      'granted' | 'unconfirmed' | 'unreadable' | 'deferred'
+      'granted' | 'unconfirmed' | 'unreadable' | 'deferred' | 'notYetSynced'
     >;
     /**
      * Withhold automatic Simple-mode Send/Receive for the rest of this app session. Called when the

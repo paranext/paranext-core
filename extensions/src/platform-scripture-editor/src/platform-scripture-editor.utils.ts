@@ -2292,7 +2292,8 @@ const projectIdsDecidingSyncOnSwitchToPower = new Set<string>();
  * - The user chose "Don't sync yet" this session (`deferred`), the first-run flag cannot be read
  *   (`unreadable`), or the consent request rejects. Asked before and after the wait for unsent
  *   changes, so a decline during the wait still counts. An `unconfirmed` answer does NOT skip it: a
- *   user who started in Power mode never sees the wizard that records consent. See
+ *   user who started in Power mode never sees the wizard that records consent. Nor does
+ *   `notYetSynced`: the switch is the user's own act, and the unsent changes are what it sends. See
  *   `adr-switch-to-power-sends-unsent-changes`.
  * - The mode no longer reads `'power'` when the sync would start: the switch back to Simple makes its
  *   own (consent-gated) sync decision, and anything still unsent goes on the next switch to Power.
@@ -2339,12 +2340,12 @@ export async function syncOnSwitchToPower(
 
 /**
  * The first-run sync consent gate's answer when it lets the switch-to-Power sync run, or
- * `undefined` (logged) when it does not. Only `granted` and `unconfirmed` let it run, so an answer
- * this does not know fails closed.
+ * `undefined` (logged) when it does not. Only `granted`, `unconfirmed` and `notYetSynced` let it
+ * run, so an answer this does not know fails closed.
  */
 async function getSwitchToPowerSyncConsent(
   papi: typeof PapiBackend,
-): Promise<'granted' | 'unconfirmed' | undefined> {
+): Promise<'granted' | 'unconfirmed' | 'notYetSynced' | undefined> {
   let consent;
   try {
     consent = await papi.commands.sendCommand('platform.getAutomaticSyncConsent');
@@ -2354,7 +2355,8 @@ async function getSwitchToPowerSyncConsent(
     );
     return undefined;
   }
-  if (consent === 'granted' || consent === 'unconfirmed') return consent;
+  if (consent === 'granted' || consent === 'unconfirmed' || consent === 'notYetSynced')
+    return consent;
   papi.logger.info(`Switch-to-Power sync skipped: first-run sync consent is ${consent}`);
   return undefined;
 }
