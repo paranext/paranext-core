@@ -817,6 +817,77 @@ describe('when expression validation', () => {
     ).toThrow(/'%item%' in defaultWebViewContextMenu uses checkedWhen/);
   });
 
+  function makeContributionWithWebViewSurfaceItem(
+    surface: 'tabMenu' | 'contextMenu',
+    extraItemProps: Record<string, string>,
+  ) {
+    return {
+      mainMenu: { columns: {}, groups: {}, items: [] },
+      defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
+      defaultWebViewContextMenu: { groups: {}, items: [] },
+      webViewMenus: {
+        'ext1.webView': {
+          includeDefaults: false,
+          [surface]: {
+            groups: { 'ext1.group': { order: 1 } },
+            items: [
+              {
+                label: '%item%',
+                localizeNotes: '',
+                group: 'ext1.group',
+                order: 1,
+                command: 'ext1.doThing',
+                ...extraItemProps,
+              },
+            ],
+          },
+        },
+      },
+    };
+  }
+
+  it('rejects enabledWhen on a web view tab menu item', () => {
+    const combiner = new MenuDocumentCombiner(baseDocument);
+    expect(() =>
+      combiner.addOrUpdateContribution(
+        'ext1',
+        makeContributionWithWebViewSurfaceItem('tabMenu', { enabledWhen: 'ext1.flag' }),
+      ),
+    ).toThrow(/'%item%' in webViewMenus\.ext1\.webView\.tabMenu uses enabledWhen/);
+  });
+
+  it('rejects checkedWhen on a web view context menu item', () => {
+    const combiner = new MenuDocumentCombiner(baseDocument);
+    expect(() =>
+      combiner.addOrUpdateContribution(
+        'ext1',
+        makeContributionWithWebViewSurfaceItem('contextMenu', { checkedWhen: 'ext1.flag' }),
+      ),
+    ).toThrow(/'%item%' in webViewMenus\.ext1\.webView\.contextMenu uses checkedWhen/);
+  });
+
+  it('rejects enabledWhen on a tab menu item in the base document (validateOutput path)', () => {
+    const badBaseDocument = {
+      ...baseDocument,
+      defaultWebViewTabMenu: {
+        groups: { 'platform.tabGroup': { order: 1 } },
+        items: [
+          {
+            label: '%bad%',
+            localizeNotes: '',
+            group: 'platform.tabGroup',
+            order: 1,
+            command: 'platform.bad',
+            enabledWhen: 'platform.flag',
+          },
+        ],
+      },
+    };
+    expect(() => new MenuDocumentCombiner(badBaseDocument)).toThrow(
+      /'%bad%' in defaultWebViewTabMenu uses enabledWhen/,
+    );
+  });
+
   it('rejects an invalid expression in the base document (validateOutput path)', () => {
     const badBaseDocument = {
       ...baseDocument,
