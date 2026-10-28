@@ -4446,13 +4446,14 @@ export type EventSeededStateOptions<T> = {
 	 */
 	recheckIntervalMs?: number;
 	/**
-	 * Whether the current value may be stale in a way the event will not correct, so it is re-read
-	 * every `recheckIntervalMs`. Defaults to never. Rechecks run only once a valid value is known; a
-	 * failed or invalid seed is recovered only by an event.
+	 * Whether to re-read every `recheckIntervalMs`, given the current value, or `undefined` while none
+	 * is known. Use it when the value may be stale in a way the event will not correct. Defaults to
+	 * never. A failed or invalid seed is recovered by an event, or by the recheck if this returns
+	 * `true` for `undefined`.
 	 *
 	 * @experimental This option is unstable and may change or disappear without notice
 	 */
-	shouldRecheck?: (value: T) => boolean;
+	shouldRecheck?: (value: T | undefined) => boolean;
 	/**
 	 * Whether to track the value at all. While `false` the value is reset to `undefined`, nothing is
 	 * read and emitted events are ignored. Defaults to `true`.
