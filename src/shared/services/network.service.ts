@@ -37,6 +37,7 @@ import { PapiNetworkEventEmitter } from '@shared/models/papi-network-event-emitt
 import {
   IRpcLocalClientAcceptor,
   IRpcMethodRegistrar,
+  IRpcWebSocketClientCloser,
   RpcClientDisconnectEvent,
 } from '@shared/models/rpc.interface';
 import { isServer } from '@shared/utils/internal-util';
@@ -308,6 +309,37 @@ export function acceptLocalClient(socket: ServerSocketLike, name: string): void 
   if (!isRpcLocalClientAcceptor(jsonRpc))
     throw new Error('The PAPI network handler in this process cannot accept local clients');
   jsonRpc.acceptLocalClient(socket, name);
+}
+
+/**
+ * Whether an RPC handler can close its websocket clients. Only main's `RpcWebSocketListener` can;
+ * the client handlers do not implement the method.
+ */
+function isRpcWebSocketClientCloser(
+  handler: IRpcMethodRegistrar,
+): handler is IRpcMethodRegistrar & IRpcWebSocketClientCloser {
+  return 'closeWebSocketClients' in handler && typeof handler.closeWebSocketClients === 'function';
+}
+
+/**
+ * Close every client connected to this process's PAPI websocket server on port 8876, telling each
+ * why. Main-process only. A client such as the .NET data provider runs until its connection drops,
+ * so this is how main asks it to finish up and exit. Renderers' local connections are left open;
+ * see {@link IRpcWebSocketClientCloser.closeWebSocketClients}.
+ *
+ * Does nothing when the network service is not initialized, since then no client is connected.
+ *
+ * @param code WebSocket close code to send to each client
+ * @param reason Human-readable reason to send to each client
+ * @throws If this is not the main process, or its handler cannot close websocket clients
+ * @experimental
+ */
+export function closeWebSocketClients(code: number, reason: string): void {
+  if (!isServer()) throw new Error('Only the main process has PAPI websocket clients to close');
+  if (!jsonRpc) return;
+  if (!isRpcWebSocketClientCloser(jsonRpc))
+    throw new Error('The PAPI network handler in this process cannot close websocket clients');
+  jsonRpc.closeWebSocketClients(code, reason);
 }
 
 // #endregion

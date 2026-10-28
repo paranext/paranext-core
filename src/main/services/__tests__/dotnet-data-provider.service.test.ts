@@ -177,3 +177,57 @@ describe('dotnetDataProvider.start', () => {
     );
   });
 });
+
+describe('dotnetDataProvider.waitForClose', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    globalThis.isPackaged = false;
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /**
+   * The service keeps its close promise at module level and it never resets once the child exits,
+   * so each test starts a fresh copy of the service rather than the one imported above.
+   */
+  async function startFreshDataProvider() {
+    const child = fakeChildProcess();
+    mocks.spawn.mockReturnValue(child);
+    vi.resetModules();
+    const service = (await import('@main/services/dotnet-data-provider.service'))
+      .dotnetDataProvider;
+    service.start();
+    /** What the child does when it exits by itself */
+    const exit = () => {
+      const onExit = child.once.mock.calls.find(([event]) => event === 'exit')?.[1];
+      if (!onExit) throw new Error('The service did not listen for the child exiting');
+      onExit(0, undefined);
+    };
+    return { service, child, exit };
+  }
+
+  test('kills the data provider when it does not exit within the time given', async () => {
+    const { service, child } = await startFreshDataProvider();
+
+    const waiting = service.waitForClose(2000);
+    await vi.advanceTimersByTimeAsync(2000);
+    await waiting;
+
+    expect(child.kill).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not kill the data provider when it exits by itself in time', async () => {
+    const { service, child, exit } = await startFreshDataProvider();
+
+    const waiting = service.waitForClose(2000);
+    // As the provider does once main closes its PAPI connection
+    exit();
+    await vi.advanceTimersByTimeAsync(2000);
+    await waiting;
+
+    expect(child.kill).not.toHaveBeenCalled();
+  });
+});

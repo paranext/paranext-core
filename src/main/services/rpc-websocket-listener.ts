@@ -20,6 +20,7 @@ import {
 import {
   IRpcLocalClientAcceptor,
   IRpcMethodRegistrar,
+  IRpcWebSocketClientCloser,
   RegisteredRpcMethodDetails,
   RpcClientDisconnectEvent,
 } from '@shared/models/rpc.interface';
@@ -76,7 +77,9 @@ function onServerError(error: unknown): void {
  *
  * Created by the main process on start up when the network service initializes
  */
-export class RpcWebSocketListener implements IRpcMethodRegistrar, IRpcLocalClientAcceptor {
+export class RpcWebSocketListener
+  implements IRpcMethodRegistrar, IRpcLocalClientAcceptor, IRpcWebSocketClientCloser
+{
   connectionStatus: ConnectionStatus = ConnectionStatus.Disconnected;
   /**
    * Event that fires when a connected process goes away, carrying the method names its departure
@@ -99,6 +102,11 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar, IRpcLocalClien
   private nextSocketNumber = 1;
   private readonly connectionMutex = new Mutex();
   private readonly rpcServerBySocket = new Map<ServerSocketLike, RpcServer>();
+  /**
+   * The sockets the websocket server accepted, as opposed to local clients handed over through
+   * {@link acceptLocalClient}. Kept apart so {@link closeWebSocketClients} closes only these.
+   */
+  private readonly webSocketClients = new Set<ServerSocketLike>();
   private readonly rpcMethodDetailsByMethodName = new Map<string, RegisteredRpcMethodDetails>();
   private readonly localMethodsByMethodName = new Map<string, InternalRequestHandler>();
   private readonly rpcEventDetailsByEventName = new RpcEventRegistry();
@@ -368,6 +376,19 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar, IRpcLocalClien
     // Only renderers connect this way, and a web view can drive its renderer's connection
     this.serveClient(socket, name, false);
     logger.info(`PAPI client ${name} connected over a local port`);
+  }
+
+  /**
+   * Close every client the websocket server accepted. See
+   * {@link IRpcWebSocketClientCloser.closeWebSocketClients}.
+   *
+   * @experimental
+   */
+  closeWebSocketClients(code: number, reason: string): void {
+    if (this.webSocketClients.size === 0) return;
+    logger.info(`Closing ${this.webSocketClients.size} PAPI websocket clients (${reason})`);
+    // Copied first: a socket's close handler removes it from the set
+    [...this.webSocketClients].forEach((socket) => socket.close(code, reason));
   }
 
   generateOpenRpcSchema(): OpenRpc {
@@ -640,6 +661,7 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar, IRpcLocalClien
       socketId,
       !!upgradeRequest && upgradeRequest.headers.origin === undefined,
     );
+    this.webSocketClients.add(webSocket);
     // Note: `webSocket.url` is always undefined for server-side sockets, so log the socket id
     logger.info(`Websocket client ${socketId} connected`);
   }
@@ -683,6 +705,7 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar, IRpcLocalClien
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const webSocket = ev.target as unknown as ServerSocketLike;
     webSocket.removeEventListener('close', this.onClientDisconnect);
+    this.webSocketClients.delete(webSocket);
     if (!this.rpcServerBySocket.delete(webSocket)) {
       logger.warn('Close called on a websocket, but no rpc server handler was found for it');
     }

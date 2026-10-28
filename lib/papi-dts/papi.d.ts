@@ -2456,6 +2456,24 @@ declare module 'shared/models/rpc.interface' {
      */
     acceptLocalClient(socket: ServerSocketLike, name: string): void;
   }
+  /**
+   * An RPC handler that can close the connections of the clients its websocket server accepted. Only
+   * the process that owns the server (main) implements this.
+   *
+   * @experimental
+   */
+  export interface IRpcWebSocketClientCloser {
+    /**
+     * Close every client connection accepted from the websocket server, telling each why. Clients
+     * served through {@link IRpcLocalClientAcceptor.acceptLocalClient} are left open: whoever handed
+     * their sockets over owns closing them.
+     *
+     * @param code WebSocket close code to send to each client
+     * @param reason Human-readable reason to send to each client
+     * @experimental
+     */
+    closeWebSocketClients(code: number, reason: string): void;
+  }
 }
 declare module 'shared/data/papi-port.model' {
   /**
@@ -3249,6 +3267,7 @@ declare module 'main/services/rpc-websocket-listener' {
   import {
     IRpcLocalClientAcceptor,
     IRpcMethodRegistrar,
+    IRpcWebSocketClientCloser,
     RpcClientDisconnectEvent,
   } from 'shared/models/rpc.interface';
   import {
@@ -3272,7 +3291,9 @@ declare module 'main/services/rpc-websocket-listener' {
    *
    * Created by the main process on start up when the network service initializes
    */
-  export class RpcWebSocketListener implements IRpcMethodRegistrar, IRpcLocalClientAcceptor {
+  export class RpcWebSocketListener
+    implements IRpcMethodRegistrar, IRpcLocalClientAcceptor, IRpcWebSocketClientCloser
+  {
     private readonly port;
     connectionStatus: ConnectionStatus;
     /**
@@ -3296,6 +3317,11 @@ declare module 'main/services/rpc-websocket-listener' {
     private nextSocketNumber;
     private readonly connectionMutex;
     private readonly rpcServerBySocket;
+    /**
+     * The sockets the websocket server accepted, as opposed to local clients handed over through
+     * {@link acceptLocalClient}. Kept apart so {@link closeWebSocketClients} closes only these.
+     */
+    private readonly webSocketClients;
     private readonly rpcMethodDetailsByMethodName;
     private readonly localMethodsByMethodName;
     private readonly rpcEventDetailsByEventName;
@@ -3344,6 +3370,13 @@ declare module 'main/services/rpc-websocket-listener' {
      * @experimental
      */
     acceptLocalClient(socket: ServerSocketLike, name: string): void;
+    /**
+     * Close every client the websocket server accepted. See
+     * {@link IRpcWebSocketClientCloser.closeWebSocketClients}.
+     *
+     * @experimental
+     */
+    closeWebSocketClients(code: number, reason: string): void;
     generateOpenRpcSchema(): OpenRpc;
     emitEventOnNetwork<T>(eventType: string, event: T): void;
     private propagateEvent;
@@ -3468,6 +3501,20 @@ declare module 'shared/services/network.service' {
    * @experimental
    */
   export function acceptLocalClient(socket: ServerSocketLike, name: string): void;
+  /**
+   * Close every client connected to this process's PAPI websocket server on port 8876, telling each
+   * why. Main-process only. A client such as the .NET data provider runs until its connection drops,
+   * so this is how main asks it to finish up and exit. Renderers' local connections are left open;
+   * see {@link IRpcWebSocketClientCloser.closeWebSocketClients}.
+   *
+   * Does nothing when the network service is not initialized, since then no client is connected.
+   *
+   * @param code WebSocket close code to send to each client
+   * @param reason Human-readable reason to send to each client
+   * @throws If this is not the main process, or its handler cannot close websocket clients
+   * @experimental
+   */
+  export function closeWebSocketClients(code: number, reason: string): void;
   /** Set the number of seconds that network requests in this process should wait before timing out */
   export function setRequestTimeout(timeoutSeconds: number): void;
   /**
