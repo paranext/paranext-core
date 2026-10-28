@@ -172,11 +172,6 @@ const BUNDLED_SAMPLE_PROJECT_SHORT_NAME = 'WEB';
 const DEFAULT_SORT_CONFIG: SortConfig = { key: 'language', direction: 'ascending' };
 
 /**
- * A last send/receive date as a timestamp, or `undefined` for a row with none. Compared as time,
- * not as text: the backend sends local-offset ISO strings, which sort out of order across a DST
- * change.
- */
-/**
  * Removes the `JSON-RPC Request error (<code>): ` prefix the network layer puts on every backend
  * error. The prefix is transport detail that tells the user nothing; the message after it is the
  * backend's own, already localized.
@@ -185,6 +180,11 @@ function withoutJsonRpcErrorPrefix(message: string): string {
   return message.replace(/^JSON-RPC Request error \(-?\d+\): /, '');
 }
 
+/**
+ * A last send/receive date as a timestamp, or `undefined` for a row with none. Compared as time,
+ * not as text: the backend sends local-offset ISO strings, which sort out of order across a DST
+ * change.
+ */
 function getLastSendReceiveTime(project: MergedProjectInfo): number | undefined {
   if (!project.lastSendReceiveDate) return undefined;
   const time = new Date(project.lastSendReceiveDate).getTime();
