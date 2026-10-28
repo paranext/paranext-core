@@ -703,6 +703,14 @@ describe('UserProfilePopover non-production server dot (toolbar trigger)', () =>
     render(<UserProfilePopover />);
     expect(screen.queryByTestId('user-profile-non-production-dot')).not.toBeInTheDocument();
   });
+
+  test('is hidden behind the registration reminder dot when both conditions hold, which always wins', () => {
+    setMockSetting('internetSettings', { selectedServer: 'Development' });
+    act(() => publishRegistrationValidity('invalid'));
+    render(<UserProfilePopover />);
+    expect(screen.getByTestId('user-profile-registration-dot')).toBeInTheDocument();
+    expect(screen.queryByTestId('user-profile-non-production-dot')).not.toBeInTheDocument();
+  });
 });
 
 describe('UserProfilePopover language picker', () => {
