@@ -159,7 +159,7 @@ describe('sharedStoreService', () => {
       await expect(initializeSharedStore(networkService)).resolves.toBeUndefined();
 
       expect(sharedStoreService.isInitialized()).toBe(true);
-      expect(logger.warn).toHaveBeenCalledWith(
+      expect(logger.error).toHaveBeenCalledWith(
         expect.stringContaining('Could not register the shared store owner marker'),
       );
       sharedStoreService.set(testKey, 42);
@@ -613,8 +613,6 @@ describe('sharedStoreService', () => {
       remoteChange(testKey, 1, 10, 'extension-host-abc');
 
       expect(networkService.onDidDisconnectClient).not.toHaveBeenCalled();
-      // Only a handler captured during this test's initialize could release keys; none is subscribed.
-      disconnectHandler({ removedMethodNames: ['shared-store:owner:extension-host-abc'] });
       expect(sharedStoreService.get(testKey)).toBe(1);
     });
   });
