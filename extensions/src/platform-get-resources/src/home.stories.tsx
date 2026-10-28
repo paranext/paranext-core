@@ -268,6 +268,15 @@ export const SyncInProgress: Story = {
 };
 
 /**
+ * A sync started somewhere other than Home, such as the Sync dialog or startup, is running. Home
+ * shows the same state as for its own sync: the syncing project's row has a spinner and every other
+ * row's Get and Sync is disabled with the reason "Wait for the current sync to finish".
+ */
+export const SyncStartedElsewhere: Story = {
+  decorators: [SyncInProgressDecorator],
+};
+
+/**
  * The send/receive server could not be reached, so the list holds only what is already on this
  * computer.
  */

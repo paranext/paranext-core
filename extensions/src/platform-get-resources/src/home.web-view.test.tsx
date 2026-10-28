@@ -11,15 +11,35 @@ import type { ComponentType } from 'react';
  * made; these cover the decision.
  */
 
-const { mockSendCommand } = vi.hoisted(() => ({
-  mockSendCommand: vi.fn(async (): Promise<unknown> => undefined),
-}));
+const { mockSendCommand, syncActivityEvents } = vi.hoisted(() => {
+  const createSyncActivityEvents = (): { handlers: ((payload: unknown) => void)[] } => ({
+    handlers: [],
+  });
+  return {
+    mockSendCommand: vi.fn(async (): Promise<unknown> => undefined),
+    // Handlers that subscribed to `onSyncActivityChanged`, so a test can emit the event.
+    syncActivityEvents: createSyncActivityEvents(),
+  };
+});
 
 vi.mock('@papi/frontend', () => ({
   default: {
     commands: { sendCommand: mockSendCommand },
     notifications: { send: vi.fn() },
-    network: { getNetworkEvent: vi.fn(() => vi.fn(() => vi.fn())) },
+    network: {
+      getNetworkEvent: vi.fn((eventName: string) =>
+        eventName === 'paratextBibleSendReceive.onSyncActivityChanged'
+          ? vi.fn((handler: (payload: unknown) => void) => {
+              syncActivityEvents.handlers.push(handler);
+              return vi.fn(() => {
+                syncActivityEvents.handlers = syncActivityEvents.handlers.filter(
+                  (h) => h !== handler,
+                );
+              });
+            })
+          : vi.fn(() => vi.fn()),
+      ),
+    },
   },
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
@@ -64,12 +84,14 @@ vi.mock('./home.component', async (importOriginal) => {
       onProjectResourceFilterChange,
       onSendReceiveProject,
       isSendReceiveInProgress,
+      activeSendReceiveProjects,
     }: {
       remoteProjectsState?: string;
       initialProjectResourceFilter?: string;
       onProjectResourceFilterChange?: (filter: string) => void;
       onSendReceiveProject?: (projectId: string) => void | Promise<void>;
       isSendReceiveInProgress?: boolean;
+      activeSendReceiveProjects?: string[];
     }) => {
       // The real Home reads its initial filter once, into state, so a value that only arrives after
       // the first render never reaches it. Kept the same way here, or a regression that delivers
@@ -81,6 +103,7 @@ vi.mock('./home.component', async (importOriginal) => {
           data-remote-state={String(remoteProjectsState)}
           data-initial-filter={String(filterAtMount)}
           data-send-receive-in-progress={String(!!isSendReceiveInProgress)}
+          data-active-projects={JSON.stringify(activeSendReceiveProjects ?? [])}
         >
           <button type="button" onClick={() => onProjectResourceFilterChange?.('resource')}>
             filter to resources
@@ -89,7 +112,7 @@ vi.mock('./home.component', async (importOriginal) => {
           <button
             type="button"
             onClick={() => {
-              Promise.resolve(onSendReceiveProject?.('project1')).catch(() => {});
+              Promise.resolve(onSendReceiveProject?.('RH2')).catch(() => {});
             }}
           >
             send/receive
@@ -372,6 +395,131 @@ describe('HomeWebView send/receive guard', () => {
 
     fireEvent.click(button);
     expect(sendReceiveCallCount()).toBe(2);
+  });
+});
+
+/*
+ * A sync can be started somewhere other than Home (the Sync dialog, startup). Home learns of it from
+ * the backend's sync activity and must disable its rows, but it must not reload its lists for it:
+ * only Home's own sync completing does that.
+ */
+describe('HomeWebView sync started elsewhere', () => {
+  const SEND_RECEIVE_PROJECTS = 'paratextBibleSendReceive.sendReceiveProjects';
+  const GET_SYNC_ACTIVITY = 'paratextBibleSendReceive.getSyncActivity';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    syncActivityEvents.handlers = [];
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === IS_AVAILABLE) return true;
+      if (commandName === GET_SHARED_PROJECTS) return {};
+      if (commandName === GET_SYNC_ACTIVITY) return { isSyncing: false, projectIds: [] };
+      return undefined;
+    });
+  });
+
+  const getSharedProjectsCallCount = () =>
+    mockSendCommand.mock.calls.filter(([name]) => name === GET_SHARED_PROJECTS).length;
+
+  const activeProjects = (home: HTMLElement): string[] =>
+    JSON.parse(home.getAttribute('data-active-projects') ?? '[]');
+
+  /** Emits a sync activity event to every subscriber, as the backend would. */
+  async function emitSyncActivity(payload: unknown) {
+    await act(async () => {
+      syncActivityEvents.handlers.forEach((handler) => handler(payload));
+    });
+  }
+
+  /** Renders the web view settled and subscribed to the sync activity event. */
+  async function renderSubscribed() {
+    const home = await renderAndWaitForRemoteState();
+    await waitFor(() => {
+      expect(syncActivityEvents.handlers.length).toBeGreaterThan(0);
+    });
+    return home;
+  }
+
+  it('disables every row while a sync started elsewhere runs', async () => {
+    const home = await renderSubscribed();
+    expect(home).toHaveAttribute('data-send-receive-in-progress', 'false');
+
+    await emitSyncActivity({ isSyncing: true, projectIds: [] });
+
+    expect(home).toHaveAttribute('data-send-receive-in-progress', 'true');
+    expect(activeProjects(home)).toEqual([]);
+  });
+
+  it('marks the rows the outside sync names', async () => {
+    const home = await renderSubscribed();
+
+    await emitSyncActivity({ isSyncing: true, projectIds: ['RH3'] });
+
+    expect(activeProjects(home)).toContain('RH3');
+  });
+
+  it("merges the outside project ids with Home's own, once each", async () => {
+    let resolveSync: (value: unknown) => void = () => {};
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === IS_AVAILABLE) return true;
+      if (commandName === GET_SHARED_PROJECTS) return {};
+      if (commandName === GET_SYNC_ACTIVITY) return { isSyncing: false, projectIds: [] };
+      if (commandName === SEND_RECEIVE_PROJECTS)
+        return new Promise((resolve) => {
+          resolveSync = resolve;
+        });
+      return undefined;
+    });
+    const home = await renderSubscribed();
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    await waitFor(() => {
+      expect(activeProjects(home)).toEqual(['RH2']);
+    });
+    await emitSyncActivity({ isSyncing: true, projectIds: ['RH3', 'RH2'] });
+
+    expect([...activeProjects(home)].sort()).toEqual(['RH2', 'RH3']);
+
+    await act(async () => {
+      resolveSync(undefined);
+    });
+  });
+
+  it('does not re-fetch shared projects for an outside sync', async () => {
+    const home = await renderSubscribed();
+    const callsBefore = getSharedProjectsCallCount();
+    expect(callsBefore).toBeGreaterThan(0);
+
+    await emitSyncActivity({ isSyncing: true, projectIds: ['RH3'] });
+    expect(home).toHaveAttribute('data-send-receive-in-progress', 'true');
+    await emitSyncActivity({ isSyncing: false, projectIds: [] });
+    expect(home).toHaveAttribute('data-send-receive-in-progress', 'false');
+
+    expect(getSharedProjectsCallCount()).toBe(callsBefore);
+  });
+
+  it('re-enables when the activity event says idle', async () => {
+    const home = await renderSubscribed();
+    await emitSyncActivity({ isSyncing: true, projectIds: ['RH3'] });
+    expect(home).toHaveAttribute('data-send-receive-in-progress', 'true');
+
+    await emitSyncActivity({ isSyncing: false, projectIds: [] });
+
+    expect(home).toHaveAttribute('data-send-receive-in-progress', 'false');
+    expect(activeProjects(home)).toEqual([]);
+  });
+
+  it('ignores a second click while an outside sync runs', async () => {
+    const home = await renderSubscribed();
+    await emitSyncActivity({ isSyncing: true, projectIds: [] });
+    expect(home).toHaveAttribute('data-send-receive-in-progress', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    await act(async () => {});
+
+    expect(
+      mockSendCommand.mock.calls.filter(([name]) => name === SEND_RECEIVE_PROJECTS),
+    ).toHaveLength(0);
   });
 });
 

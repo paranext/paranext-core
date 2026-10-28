@@ -19,6 +19,7 @@ import { getInternetBlockedNotification } from './internet-block-notification.ut
 import { isProjectResourceFilterValue } from './project-resource-filter.component';
 import { useUnsupportedReasonStrings } from './use-unsupported-reason-strings.hook';
 import { useLocalProjects } from './use-local-projects.hook';
+import { useSyncActivity } from './use-sync-activity.hook';
 import { openHomeItem } from './open-home-item';
 
 const defaultInterfaceLanguages: string[] = ['en'];
@@ -204,8 +205,17 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
     }, []),
   );
 
-  const [isSendReceiveInProgress, setIsSendReceiveInProgress] = useState<boolean>(false);
-  const [activeSendReceiveProjects, setActiveSendReceiveProjects] = useState<string[]>([]);
+  const [isOwnSendReceiveInProgress, setIsOwnSendReceiveInProgress] = useState<boolean>(false);
+  const [ownActiveSendReceiveProjects, setOwnActiveSendReceiveProjects] = useState<string[]>([]);
+  const syncActivity = useSyncActivity();
+
+  // Two flags because a sync started elsewhere must disable Home's rows but never reload its lists:
+  // the fetch gates below follow only Home's own sync, and only what Home shows follows both.
+  const isAnySendReceiveInProgress = isOwnSendReceiveInProgress || syncActivity.isSyncing;
+  const activeSendReceiveProjects = useMemo(
+    () => Array.from(new Set([...ownActiveSendReceiveProjects, ...syncActivity.projectIds])),
+    [ownActiveSendReceiveProjects, syncActivity.projectIds],
+  );
   const [syncsCompletedCount, setSyncsCompletedCount] = useState<number>(0);
 
   useEvent(
@@ -240,25 +250,25 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
     // Last line of defence: the UI disables the other rows while a sync runs. A second command
     // would be refused by the sync service, and its rejection would clear the first sync's
     // progress state.
-    if (isSendReceiveInFlight.current) return;
+    if (isSendReceiveInFlight.current || isAnySendReceiveInProgress) return;
 
     try {
       isSendReceiveInFlight.current = true;
-      setIsSendReceiveInProgress(true);
-      setActiveSendReceiveProjects((prev) => [...prev, projectId]);
+      setIsOwnSendReceiveInProgress(true);
+      setOwnActiveSendReceiveProjects((prev) => [...prev, projectId]);
 
       await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [projectId]);
 
       if (isMounted.current) {
-        setActiveSendReceiveProjects((prev) => prev.filter((id) => id !== projectId));
-        setIsSendReceiveInProgress(false);
+        setOwnActiveSendReceiveProjects((prev) => prev.filter((id) => id !== projectId));
+        setIsOwnSendReceiveInProgress(false);
       }
     } catch (e) {
       const errorMessage = getErrorMessage(e);
       logger.warn(`Home web view failed to send/receive project ${projectId}: ${errorMessage}`);
       if (isMounted.current) {
-        setActiveSendReceiveProjects((prev) => prev.filter((id) => id !== projectId));
-        setIsSendReceiveInProgress(false);
+        setOwnActiveSendReceiveProjects((prev) => prev.filter((id) => id !== projectId));
+        setIsOwnSendReceiveInProgress(false);
       }
 
       // The failures we can recognize report through a notification instead of Home's "Sync failed"
@@ -365,7 +375,7 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
       }
     };
 
-    if (isSendReceiveInProgress) {
+    if (isOwnSendReceiveInProgress) {
       return;
     }
     // Each run starts over: without this the gate stays down through a re-fetch, and on the first
@@ -381,7 +391,7 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
     };
   }, [
     isSendReceiveAvailable,
-    isSendReceiveInProgress,
+    isOwnSendReceiveInProgress,
     sharedProjectErrorNotificationId,
     syncsCompletedCount, // triggers a re-fetch each time a sync completes
   ]);
@@ -389,7 +399,7 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
   const { localProjectsInfo, isLoadingLocalProjects } = useLocalProjects({
     logLabel: 'Home',
     // Pause fetching while a Send/Receive runs and resume when it finishes.
-    enabled: !isSendReceiveInProgress,
+    enabled: !isOwnSendReceiveInProgress,
     // Re-fetch when the cached resource list changes or a sync completes.
     refetchTriggers: [resourcesList, syncsCompletedCount],
   });
@@ -433,7 +443,7 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
       onSendReceiveProject={sendReceiveProject}
       onGetStarted={getStarted}
       showGetResourcesButton={showGetResourcesButton}
-      isSendReceiveInProgress={isSendReceiveInProgress}
+      isSendReceiveInProgress={isAnySendReceiveInProgress}
       isLoadingLocalProjects={isLoadingLocalProjects}
       unsyncedProjectIds={unsyncedProjectIds}
       remoteProjectsState={remoteProjectsState}
