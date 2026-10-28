@@ -19,6 +19,13 @@ const SHARED_STORE_PREFIX = 'shared-store';
  */
 const STORE_GET_REQUEST = `${SHARED_STORE_PREFIX}:get`;
 /**
+ * Prefix of the request method every non-main process registers, suffixed with its shared store
+ * process ID. The method exists exactly as long as the process is connected, so main learns which
+ * process died from the disconnect event's removed method names and can release that process's
+ * keys.
+ */
+export const SHARED_STORE_OWNER_METHOD_PREFIX = `${SHARED_STORE_PREFIX}:owner:`;
+/**
  * The `shared-store:change` event name. This is a multi-source network event the platform uses
  * internally; it is intentionally NOT declared in the public `MultiSourceNetworkEvents`/
  * `NetworkEvents` types (the shared store service is not part of the public API), but it is tracked
@@ -147,6 +154,31 @@ function resetInitializationStartedSignal(): void {
 resetInitializationStartedSignal();
 
 /**
+ * Tombstones every key whose live entry was written by a process whose owner marker method was
+ * removed, so a restarted producer can claim the keys again. Runs in the main process only.
+ */
+function releaseKeysOfDisconnectedProcesses(removedMethodNames: string[]): void {
+  if (!storeChangeEmitter) return;
+  const deadProcessIds = new Set(
+    removedMethodNames
+      .filter((name) => name.startsWith(SHARED_STORE_OWNER_METHOD_PREFIX))
+      .map((name) => name.slice(SHARED_STORE_OWNER_METHOD_PREFIX.length)),
+  );
+  if (deadProcessIds.size === 0) return;
+  Object.entries(localStore).forEach(([key, entry]) => {
+    if (entry.deleted || !deadProcessIds.has(entry.clock.processId)) return;
+    const clock = getNextClock();
+    localStore[key] = { value: undefined, clock, deleted: true };
+    try {
+      storeChangeEmitter?.emit({ key, value: undefined, clock, deleted: true });
+    } catch (error) {
+      logger.error(`Error releasing shared store key ${key}: ${getErrorMessage(error)}`);
+    }
+    onDidChangeStoreEmitter.emit({ key, value: undefined });
+  });
+}
+
+/**
  * Initialize the shared store service, setting up request handlers and event listeners. Idempotent:
  * subsequent calls return the same promise as the first call.
  *
@@ -202,6 +234,26 @@ export function initialize(networkService: NetworkService): Promise<void> {
   initializationPromise = (async () => {
     try {
       if (globalThis.processType !== ProcessType.Main) {
+        // Marks this process as a shared store writer: main watches for the marker's removal to
+        // release this process's keys. The .NET process registers no marker because its shared store
+        // never checks ownership and it has no in-app restart.
+        await networkService.registerRequestHandler(
+          `${SHARED_STORE_OWNER_METHOD_PREFIX}${processId}`,
+          () => processId,
+          {
+            method: {
+              'x-experimental': true,
+              summary:
+                'Marks this process as a shared store writer so main can release its keys when it disconnects',
+              params: [],
+              result: {
+                name: 'return value',
+                summary: 'The shared store process ID of this process',
+                schema: { type: 'string' },
+              },
+            },
+          },
+        );
         // Outside the main process, sync the local store to the main store's data initially.
         try {
           const initial = await networkService.request<[], Record<string, StoreEntry>>(
@@ -247,6 +299,11 @@ export function initialize(networkService: NetworkService): Promise<void> {
               },
             },
           },
+        );
+        // Only the process that owns the connections can see one being lost. Subscribed here rather
+        // than at module scope because this module only references the network service by type.
+        networkService.onDidDisconnectClient(({ removedMethodNames }) =>
+          releaseKeysOfDisconnectedProcesses(removedMethodNames),
         );
       }
 
@@ -388,7 +445,7 @@ function set<K extends SharedStoreKeys>(key: K, value?: SharedStoreValues[K]): v
   let clonedValue: SharedStoreValues[K] | undefined;
   try {
     const currentEntry = localStore[key];
-    if (currentEntry && currentEntry.clock.processId !== processId)
+    if (currentEntry && !currentEntry.deleted && currentEntry.clock.processId !== processId)
       throw new Error('Cannot set value from a different process than the one that created it');
     // Skip a redundant set only when there is already a live (non-removed) value equal to the new
     // one. A removed key must be re-set even if its stored value also happens to equal `value`.
@@ -444,7 +501,7 @@ function remove<K extends SharedStoreKeys>(key: K): void {
   if (!processId || !storeChangeEmitter) throw new Error('Shared store service is not initialized');
   try {
     const currentEntry = localStore[key];
-    if (currentEntry && currentEntry.clock.processId !== processId)
+    if (currentEntry && !currentEntry.deleted && currentEntry.clock.processId !== processId)
       throw new Error('Cannot remove value from a different process than the one that created it');
     // Nothing to remove if the key is already absent or already removed.
     if (!currentEntry || currentEntry.deleted) return;

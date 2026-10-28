@@ -1,4 +1,5 @@
 import { vi } from 'vitest';
+import { logger } from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
 import { ProcessType } from '@shared/global-this.model';
 import { PlatformEventEmitter } from 'platform-bible-utils';
@@ -18,6 +19,7 @@ vi.mock('@shared/services/network.service', () => ({
   getNetworkEvent: vi.fn(),
   request: vi.fn(),
   registerRequestHandler: vi.fn(),
+  onDidDisconnectClient: vi.fn(),
 }));
 
 vi.mock('@shared/services/logger.service', () => ({
@@ -44,6 +46,8 @@ describe('sharedStoreService', () => {
   const originalProcessType = globalThis.processType;
 
   const testKey = 'platform.customNetworkTimeoutMs.test';
+
+  let disconnectHandler: (event: { removedMethodNames: string[] }) => void = () => {};
 
   beforeEach(() => {
     // Reset mocks
@@ -74,6 +78,12 @@ describe('sharedStoreService', () => {
         registeredEmitterPromise: Promise.resolve(mockEmitter),
       } as unknown as ReturnType<typeof networkService.createCoreMultiSourceEventEmitter>,
     );
+
+    // Capture the handler the shared store subscribes to disconnects with
+    vi.mocked(networkService.onDidDisconnectClient).mockImplementation((handler) => {
+      disconnectHandler = handler;
+      return () => true;
+    });
 
     // Set process type to Main by default
     globalThis.processType = ProcessType.Main;
@@ -486,6 +496,80 @@ describe('sharedStoreService', () => {
       // Local store should still have the remote value
       const finalValue = sharedStoreService.get(testKey);
       expect(finalValue).toEqual(newValue);
+    });
+  });
+
+  describe('ownership release', () => {
+    function remoteChange(
+      key: string,
+      value: unknown,
+      counter: number,
+      processIdOfWriter: string,
+      deleted?: boolean,
+    ) {
+      const changeEventHandler = vi.mocked(mockEmitter.event).mock.calls[0][0];
+      changeEventHandler({
+        key,
+        value,
+        clock: { counter, processId: processIdOfWriter },
+        ...(deleted ? { deleted: true } : {}),
+      });
+    }
+
+    it('allows any process to set a key whose entry is a tombstone', async () => {
+      await initializeSharedStore(networkService);
+      remoteChange(testKey, 1, 100, 'other-process');
+      remoteChange(testKey, undefined, 101, 'other-process', true);
+
+      sharedStoreService.set(testKey, 7000);
+
+      expect(sharedStoreService.get(testKey)).toBe(7000);
+      expect(logger.error).not.toHaveBeenCalled();
+    });
+
+    it('registers an owner marker method in non-main processes', async () => {
+      globalThis.processType = ProcessType.ExtensionHost;
+      await initializeSharedStore(networkService);
+      expect(networkService.registerRequestHandler).toHaveBeenCalledWith(
+        expect.stringMatching(/^shared-store:owner:extension-host-/),
+        expect.any(Function),
+        expect.anything(),
+      );
+    });
+
+    it('tombstones every key owned by a process whose owner marker vanished (main only)', async () => {
+      await initializeSharedStore(networkService);
+      remoteChange('platform.customNetworkTimeoutMs.k1', 1, 10, 'extension-host-abc');
+      remoteChange('platform.customNetworkTimeoutMs.k2', 2, 11, 'extension-host-abc');
+      sharedStoreService.set('platform.customNetworkTimeoutMs.k3', 3);
+      const handler = vi.fn();
+      const unsubscribe = onDidChangeSharedStore(handler);
+      vi.mocked(mockEmitter.emit).mockClear();
+
+      disconnectHandler({
+        removedMethodNames: ['shared-store:owner:extension-host-abc', 'command:foo'],
+      });
+
+      expect(sharedStoreService.get('platform.customNetworkTimeoutMs.k1')).toBeUndefined();
+      expect(sharedStoreService.get('platform.customNetworkTimeoutMs.k2')).toBeUndefined();
+      expect(sharedStoreService.get('platform.customNetworkTimeoutMs.k3')).toBe(3);
+      expect(mockEmitter.emit).toHaveBeenCalledWith(
+        expect.objectContaining({ key: 'platform.customNetworkTimeoutMs.k1', deleted: true }),
+      );
+      expect(handler).toHaveBeenCalledWith({
+        key: 'platform.customNetworkTimeoutMs.k1',
+        value: undefined,
+      });
+      unsubscribe();
+    });
+
+    it('does nothing on disconnect in a non-main process', async () => {
+      globalThis.processType = ProcessType.ExtensionHost;
+      await initializeSharedStore(networkService);
+      remoteChange(testKey, 1, 10, 'extension-host-abc');
+
+      expect(networkService.onDidDisconnectClient).not.toHaveBeenCalled();
+      expect(sharedStoreService.get(testKey)).toBe(1);
     });
   });
 });

@@ -14,6 +14,7 @@ vi.mock('@shared/services/network.service', () => ({
   getNetworkEvent: vi.fn(),
   request: vi.fn(),
   registerRequestHandler: vi.fn(),
+  onDidDisconnectClient: vi.fn(),
 }));
 
 vi.mock('@shared/services/logger.service', () => ({
