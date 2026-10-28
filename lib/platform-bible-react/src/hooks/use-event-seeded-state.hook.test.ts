@@ -22,10 +22,12 @@ function createFakeEvent() {
 
 function createDeferred<T>() {
   let resolveDeferred!: (value: T) => void;
-  const promise = new Promise<T>((resolve) => {
+  let rejectDeferred!: (reason: unknown) => void;
+  const promise = new Promise<T>((resolve, reject) => {
     resolveDeferred = resolve;
+    rejectDeferred = reject;
   });
-  return { promise, resolve: resolveDeferred };
+  return { promise, resolve: resolveDeferred, reject: rejectDeferred };
 }
 
 /** Lets already-resolved promise continuations run without advancing fake timers. */
@@ -113,6 +115,21 @@ describe('useEventSeededState', () => {
     await act(async () => deferred.resolve({ n: 1 }));
 
     expect(result.current.value).toEqual({ n: 2 });
+  });
+
+  it('does not report seed failure when an event answered before the last read rejected', async () => {
+    const deferred = createDeferred<unknown>();
+    const read = vi.fn(() => deferred.promise);
+    const { event, emit } = createFakeEvent();
+    const { result } = renderHook(() =>
+      useEventSeededState({ read, event, isValid: isSnapshot, seedRetries: 0 }),
+    );
+
+    act(() => emit({ busy: true }));
+    await act(async () => deferred.reject(new Error('down')));
+
+    expect(result.current.value).toEqual({ busy: true });
+    expect(result.current.hasSeedFailed).toBe(false);
   });
 
   it('stops seed retries once an event has answered', async () => {

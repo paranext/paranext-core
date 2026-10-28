@@ -161,7 +161,9 @@ export function useEventSeededState<T>({
       try {
         await readAndApply(() => isCurrent);
       } catch {
-        if (!isCurrent) return;
+        // An event that arrived while the read was in flight already holds the answer, so the
+        // rejection is neither a failure to report nor a reason to retry.
+        if (!isCurrent || eventCountRef.current !== eventCountAtSeed) return;
         if (retriesLeft > 0) retryTimer = setTimeout(() => seed(retriesLeft - 1), seedRetryDelayMs);
         else setHasSeedFailed(true);
       }
