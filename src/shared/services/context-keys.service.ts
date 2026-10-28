@@ -105,8 +105,9 @@ export const contextKeysService = {
    */
   onDidChange: onDidChangeEmitter.event,
   /**
-   * Platform-internal. Number of context key changes forwarded so far in this process; a changed
-   * value between two reads means at least one key changed in between. Not on the PAPI surface.
+   * Number of context key changes forwarded so far in this process; a changed value between two
+   * reads means at least one key changed in between. Intended for platform-internal use (the
+   * renderer's useEvaluatedMenu); not part of papi.contextKeys.
    *
    * @experimental This field is unstable and may change or disappear without notice
    */
