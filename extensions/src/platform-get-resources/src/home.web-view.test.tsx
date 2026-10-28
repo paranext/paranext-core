@@ -3,6 +3,8 @@ import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ComponentType } from 'react';
+import papi from '@papi/frontend';
+import { useEvent } from 'platform-bible-react';
 
 /*
  * Whether Home may claim the list is complete is decided here, not in the component: the web view
@@ -64,12 +66,14 @@ vi.mock('./home.component', async (importOriginal) => {
       onProjectResourceFilterChange,
       onSendReceiveProject,
       isSendReceiveInProgress,
+      isExternalSyncRunning,
     }: {
       remoteProjectsState?: string;
       initialProjectResourceFilter?: string;
       onProjectResourceFilterChange?: (filter: string) => void;
       onSendReceiveProject?: (projectId: string) => void | Promise<void>;
       isSendReceiveInProgress?: boolean;
+      isExternalSyncRunning?: boolean;
     }) => {
       // The real Home reads its initial filter once, into state, so a value that only arrives after
       // the first render never reaches it. Kept the same way here, or a regression that delivers
@@ -81,6 +85,7 @@ vi.mock('./home.component', async (importOriginal) => {
           data-remote-state={String(remoteProjectsState)}
           data-initial-filter={String(filterAtMount)}
           data-send-receive-in-progress={String(!!isSendReceiveInProgress)}
+          data-external-sync-running={String(!!isExternalSyncRunning)}
         >
           <button type="button" onClick={() => onProjectResourceFilterChange?.('resource')}>
             filter to resources
@@ -372,6 +377,107 @@ describe('HomeWebView send/receive guard', () => {
 
     fireEvent.click(button);
     expect(sendReceiveCallCount()).toBe(2);
+  });
+});
+
+/*
+ * Whether a sync Home did not start is running comes from the sync activity signal, which sees every
+ * sync path. Its event carries no replay, so Home also asks once on mount — and an event that lands
+ * before that answer is newer than it.
+ */
+describe('HomeWebView sync activity', () => {
+  const GET_SYNC_ACTIVITY = 'paratextBibleSendReceive.getSyncActivity';
+  const SYNC_ACTIVITY_CHANGED = 'paratextBibleSendReceive.onSyncActivityChanged';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  /** Makes `getSyncActivity` answer only when the returned function is called */
+  function deferSyncActivitySeed() {
+    let answer: (value: unknown) => void = () => {};
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === GET_SYNC_ACTIVITY)
+        return new Promise((resolve) => {
+          answer = resolve;
+        });
+      return undefined;
+    });
+    return async (value: unknown) => {
+      await act(async () => answer(value));
+    };
+  }
+
+  /** Fires `onSyncActivityChanged` at the handler Home's latest render subscribed */
+  function fireSyncActivity(payload: unknown) {
+    const { calls, results } = vi.mocked(papi.network.getNetworkEvent).mock;
+    const activityEvents = new Set(
+      calls.flatMap(([eventType], index) =>
+        eventType === SYNC_ACTIVITY_CHANGED ? [results[index].value] : [],
+      ),
+    );
+    const subscription = [...vi.mocked(useEvent).mock.calls]
+      .reverse()
+      .find(([event]) => activityEvents.has(event));
+    if (!subscription) throw new Error('Home never subscribed to onSyncActivityChanged');
+    act(() => subscription[1](payload));
+  }
+
+  const renderHome = () => {
+    const HomeWebView = getHomeWebView();
+    render(<HomeWebView useWebViewState={makeUseWebViewState({})} />);
+    return screen.getByTestId('home');
+  };
+
+  it('shows a sync already running when Home opens as running', async () => {
+    const answerSeed = deferSyncActivitySeed();
+    const home = renderHome();
+    expect(mockSendCommand).toHaveBeenCalledWith(GET_SYNC_ACTIVITY);
+    expect(home).toHaveAttribute('data-external-sync-running', 'false');
+
+    await answerSeed({ isSyncing: true, projectIds: [] });
+    expect(home).toHaveAttribute('data-external-sync-running', 'true');
+  });
+
+  it('follows sync activity events after the seed answers', async () => {
+    const answerSeed = deferSyncActivitySeed();
+    const home = renderHome();
+    await answerSeed({ isSyncing: false });
+
+    fireSyncActivity({ isSyncing: true, projectIds: ['PROJ1'] });
+    expect(home).toHaveAttribute('data-external-sync-running', 'true');
+    fireSyncActivity({ isSyncing: false, projectIds: [], outcome: 'succeeded' });
+    expect(home).toHaveAttribute('data-external-sync-running', 'false');
+  });
+
+  it('keeps a sync start heard before the seed answers when the seed then says idle', async () => {
+    const answerSeed = deferSyncActivitySeed();
+    const home = renderHome();
+
+    fireSyncActivity({ isSyncing: true, projectIds: [] });
+    await answerSeed({ isSyncing: false });
+    expect(home).toHaveAttribute('data-external-sync-running', 'true');
+  });
+
+  it('keeps a sync end heard before the seed answers when the seed then says running', async () => {
+    const answerSeed = deferSyncActivitySeed();
+    const home = renderHome();
+
+    fireSyncActivity({ isSyncing: true, projectIds: [] });
+    fireSyncActivity({ isSyncing: false, projectIds: [] });
+    await answerSeed({ isSyncing: true, projectIds: [] });
+    expect(home).toHaveAttribute('data-external-sync-running', 'false');
+  });
+
+  it('ignores a seed or event without a boolean isSyncing', async () => {
+    const answerSeed = deferSyncActivitySeed();
+    const home = renderHome();
+    await answerSeed({ isSyncing: 'yes' });
+    expect(home).toHaveAttribute('data-external-sync-running', 'false');
+
+    fireSyncActivity({ isSyncing: true });
+    fireSyncActivity({ projectIds: [] });
+    expect(home).toHaveAttribute('data-external-sync-running', 'true');
   });
 });
 

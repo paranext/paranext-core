@@ -11,6 +11,7 @@ import {
   newGuid,
   retryUntil,
 } from 'platform-bible-utils';
+import type { SyncActivitySnapshot } from 'paratext-bible-send-receive';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Home, HOME_STRING_KEYS, type RemoteProjectsState } from './home.component';
@@ -27,6 +28,17 @@ const defaultInterfaceLanguages: string[] = ['en'];
 // extension activations (~1.5s in a Paratext 10 build).
 const SEND_RECEIVE_ATTEMPTS = 4;
 const SEND_RECEIVE_RETRY_MS = 2000;
+
+// Checked rather than trusted: the sync-activity types were declared ahead of the Paratext 10 change
+// that implements them, so a build may send another shape.
+function isSyncActivitySnapshot(value: unknown): value is Pick<SyncActivitySnapshot, 'isSyncing'> {
+  return (
+    typeof value === 'object' &&
+    !!value &&
+    'isSyncing' in value &&
+    typeof value.isSyncing === 'boolean'
+  );
+}
 
 globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewProps) {
   // Set by the web view provider from an opener's preset, and otherwise kept as the user left it.
@@ -208,14 +220,24 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
   const [activeSendReceiveProjects, setActiveSendReceiveProjects] = useState<string[]>([]);
   const [syncsCompletedCount, setSyncsCompletedCount] = useState<number>(0);
   const [isSyncRunning, setIsSyncRunning] = useState<boolean>(false);
-  const didReceiveSyncStateEventRef = useRef(false);
+  const didReceiveSyncActivityEventRef = useRef(false);
 
   useEvent(
     papi.network.getNetworkEvent('paratextBibleSendReceive.onSyncStateChanged'),
     useCallback(({ isSyncing }: { isSyncing: boolean }) => {
-      didReceiveSyncStateEventRef.current = true;
-      setIsSyncRunning(isSyncing);
       if (!isSyncing) setSyncsCompletedCount((k) => k + 1);
+    }, []),
+  );
+
+  // Whether any sync is running comes from the sync activity signal, which sees every sync path —
+  // including the ones that call the dotnet commands directly (the startup sync, the project-switch
+  // sync, Home's own Sync), which `onSyncStateChanged` never reports.
+  useEvent(
+    papi.network.getNetworkEvent('paratextBibleSendReceive.onSyncActivityChanged'),
+    useCallback((snapshot: unknown) => {
+      if (!isSyncActivitySnapshot(snapshot)) return;
+      didReceiveSyncActivityEventRef.current = true;
+      setIsSyncRunning(snapshot.isSyncing);
     }, []),
   );
 
@@ -223,12 +245,17 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
   // before the answer is newer than the answer, so the answer only fills in the initial `false`.
   useEffect(() => {
     papi.commands
-      .sendCommand('paratextBibleSendReceive.getSyncState')
-      .then(({ isSyncing }) => {
-        if (isMounted.current && !didReceiveSyncStateEventRef.current) setIsSyncRunning(isSyncing);
+      .sendCommand('paratextBibleSendReceive.getSyncActivity')
+      .then((snapshot) => {
+        if (
+          isMounted.current &&
+          !didReceiveSyncActivityEventRef.current &&
+          isSyncActivitySnapshot(snapshot)
+        )
+          setIsSyncRunning(snapshot.isSyncing);
         return undefined;
       })
-      .catch((e) => logger.warn(`Home could not read the sync state: ${getErrorMessage(e)}`));
+      .catch((e) => logger.warn(`Home could not read the sync activity: ${getErrorMessage(e)}`));
   }, []);
 
   // Declared before the first use below: the send/receive failures that are not internet blocks

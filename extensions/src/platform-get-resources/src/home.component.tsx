@@ -303,9 +303,12 @@ export type HomeProps = {
   /** Whether a send/receive operation is in progress. */
   isSendReceiveInProgress?: boolean;
   /**
-   * Whether a sync that Home did not start is running (from startup, another tab, or the Sync
-   * dialog). Gates every row like `isSendReceiveInProgress` does, and explains the wait while the
-   * list loads, since loading the shared projects queues behind the running sync.
+   * Whether a sync that Home did not start is running (from startup, a project switch, another tab,
+   * or the Sync dialog). The web view reads it from the all-paths sync activity signal
+   * (`paratextBibleSendReceive.getSyncActivity` / `onSyncActivityChanged`), which also sees syncs
+   * that call the dotnet commands directly. Gates every row like `isSendReceiveInProgress` does,
+   * and explains the wait while the list loads, since loading the shared projects queues behind the
+   * running sync.
    */
   isExternalSyncRunning?: boolean;
   /**
