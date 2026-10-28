@@ -4402,6 +4402,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   will then be a value to keep, while files that older builds saved for "Disable access…" will
   still hold it.
 - **Source:** PT-4893; reverses the option-to-value mapping chosen in PT-4590.
+- **Amended 2026-10-27 (PT-4736):** a packaged build no longer installs the bundled sample project
+  (`adr-sample-project-dev-runs-only`), so "Disable access…" during onboarding would now leave a
+  new user with no project at all. That strengthens the reason not to offer the list in the wizard.
 
 ## adr-launch-token-withdrawn: A launch token is required to deliver launch parameters to an already-open web view — WITHDRAWN
 
@@ -5613,6 +5616,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   first-run experience. **Revisit** when the Sample project (PT-4324) lands: unless it reuses the
   sample WEB's ID, it will count as a project until this rule learns to exclude it.
 - **Source:** PT-4311 implementation (2026-09-25); the registered-user wording is PT-4442.
+- **Amended 2026-10-27 (PT-4736):** the empty-answer rule no longer holds as written. A packaged
+  build does not install the sample (`adr-sample-project-dev-runs-only`), so an empty answer reads
+  `none` when the C# Paratext factory (`platform.Paratext-pdpf`), asked directly, also reports no
+  projects, and `unknown` (retried, bounded) otherwise. The hook asks through `getMetadataForAllProjectsWithoutRetries`, since the
+  retrying lookup would hold an empty answer for its 30 s startup grace period. The sample stays
+  excluded by its ID, since dev runs still install it.
 
 ## adr-node-dom-globals-polyfill: Node processes install `@xmldom/xmldom` DOM globals; the extension host does it in a first-import side-effect module
 
@@ -8592,6 +8601,43 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   arbitrary, inherited from PT-1561.
 - **Source:** PT-4421; resubscribe-storm and burst behavior measured during review of this change.
 
+## adr-sample-project-dev-runs-only: Only dev runs install the sample WEB project, so "no projects" is a real state
+
+- **Date:** 2026-10-27
+- **Status:** Accepted
+- **Context:** `LocalParatextProjects.Initialize` (C#) installed the bundled sample WEB project
+  (`c-sharp/assets/WEB`) into every empty projects folder, in every build, so Paratext 10 Studio
+  users met a "WEB" they never asked for. Developers and the E2E suite rely on it (39 isolated spec
+  files open it by its fixed ID). Two consumers also read an empty project list as "not loaded
+  yet", which held only because the sample was always there: the editor's
+  `use-project-presence.hook.ts` and the startup sync's `startup-readiness.util.ts`.
+- **Decision:** `Initialize` installs the sample only when `PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT`
+  is `true`. Dev launchers set it: the main process for unpackaged runs
+  (`dotnet-data-provider.service.ts`), `npm run start:data`, VS Code's "Debug .NET Core", and the
+  E2E launcher (`launchElectronApp`, which pins it). A packaged build gets the sample only if its
+  environment opts in. Both consumers treat an empty answer as final only when the C# Paratext
+  factory (`platform.Paratext-pdpf`), asked directly after the empty answer, reports no projects.
+  `ProjectDataProviderFactory.InitializeAsync` awaits `StartFactoryAsync`, which scans the projects
+  folder, before it registers, so a reachable factory's answer is complete. Trusting the empty
+  answer because the right factories were listed as registered was rejected: the lookup silently
+  skips a factory it cannot reach, including inside the Scripture Extender's own fan-out.
+- **Alternatives:** **Remove the sample and its assets** — rejected: the E2E suite and developers
+  use it. **Disable it only in Studio, through its core patch** — rejected: one more hunk to carry
+  on every realignment, and packaged Platform.Bible would still get it. **Keep installing it but
+  hide it** — rejected: every surface that lists projects would need the exclusion. **Have the E2E
+  launcher copy the sample into isolated roots instead** — not chosen: it covers only E2E, and
+  `npm start` into an empty folder would lose the sample too. **Fix the two consumers later** —
+  rejected: a new Studio user with no projects would get no guidance in the empty editor and wait
+  120 s for the startup sync that brings their first project.
+- **Consequences:** A packaged build can start with no projects at all; new code must not assume
+  one exists. Every other caller of the retrying `getMetadataForAllProjects` (Home, the toolbar
+  project picker) still waits out its 30 s startup grace period on an empty answer and then logs a
+  warning, until PT-4941 makes that wait end once the project sources have loaded. Existing
+  installs keep their WEB copy. Home's "Get started" prompt, which used to key only on the sample
+  being the only item, also shows on an empty Home, so a new packaged user still gets the link to
+  the getting-started help. **Revisit** when the built-in Sample project (PT-4324) lands.
+- **Source:** PT-4736 (test team confirmed on the ticket, 2026-10-27, that they do not need WEB).
+
 ## adr-scroll-group-hosted-in-main: The scroll group service is hosted in main, and each renderer keeps a predicting cache
 
 - **Date:** 2026-08-07
@@ -9562,6 +9608,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   exactly one case — a dock reactivation brings a window back before readiness lands — which is the
   case it was added for.
 - **Source:** PT-4386.
+- **Amended 2026-10-27 (PT-4736):** phase 2 also accepts an empty probe answer as ready when the
+  C# Paratext factory (`platform.Paratext-pdpf`), asked directly after that probe, also reports no
+  projects. A packaged
+  build no longer installs the sample project (`adr-sample-project-dev-runs-only`), so a workspace
+  with no local projects is real, and it would otherwise hold the startup sync, the one that brings
+  a new user's first project, for the whole 120 s budget.
 
 ## adr-styleinfo-over-css: Project stylesheets cross the wire as structured StyleInfo, not generated CSS
 

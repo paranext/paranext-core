@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.Projects;
+using Paratext.Data;
 
 namespace TestParanextDataProvider.Projects;
 
@@ -128,6 +129,106 @@ public class LocalParatextProjectsTests
             unpublished.Select(d => d.Metadata.Id),
             Is.EquivalentTo(new[] { "AAAA01", "AAAA02" })
         );
+    }
+
+    // No "" case: setting an environment variable to "" deletes it, so it would repeat null
+    [TestCase(null)]
+    [TestCase("false")]
+    [TestCase("1")]
+    public void Initialize_EmptyRootWithoutSampleProjectOptIn_InstallsNoProjects(string? optIn)
+    {
+        UseLocalProjectsConstructedWithSampleProjectOptIn(optIn);
+
+        _localProjects.Initialize();
+
+        Assert.That(_localProjects.GetAllProjectDetails(), Is.Empty);
+        Assert.That(
+            Directory.Exists(Path.Join(TestProjectRootFolder, SAMPLE_PROJECT_FOLDER)),
+            Is.False
+        );
+    }
+
+    [TestCase("true")]
+    [TestCase("TRUE")]
+    // cmd's `set VAR=true && app` keeps the space before `&&`
+    [TestCase("true ")]
+    public void Initialize_EmptyRootWithSampleProjectOptIn_InstallsSampleProject(string optIn)
+    {
+        UseLocalProjectsConstructedWithSampleProjectOptIn(optIn);
+
+        _localProjects.Initialize();
+
+        var details = _localProjects.GetAllProjectDetails().Single();
+        Assert.That(details.Metadata.Id, Is.EqualTo(SAMPLE_PROJECT_ID).IgnoreCase);
+        Assert.That(details.HomeDirectory, Does.EndWith(SAMPLE_PROJECT_FOLDER));
+    }
+
+    [Test]
+    public void Initialize_RootWithAProjectAndSampleProjectOptIn_DoesNotInstallSampleProject()
+    {
+        UseLocalProjectsConstructedWithSampleProjectOptIn("true");
+        CreateTempProject("NR1", CreateParatextProjectDetails("NR1", "First", "aaaa01"));
+
+        _localProjects.Initialize();
+
+        Assert.That(
+            _localProjects.GetAllProjectDetails().Select(d => d.Metadata.Id),
+            Is.EquivalentTo(new[] { "AAAA01" })
+        );
+    }
+
+    /// <summary>`<Guid>` of the bundled sample project, `c-sharp/assets/WEB/Settings.xml`</summary>
+    private const string SAMPLE_PROJECT_ID = "32664dc3288a28df2e2bb75ded887fc8f17a15fb";
+    private const string SAMPLE_PROJECT_FOLDER = "WEB";
+    private const string SAMPLE_PROJECT_OPT_IN_VARIABLE = "PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT";
+
+    private string TestProjectRootFolder =>
+        ((TestLocalParatextProjectsInTempDir)_localProjects).TestProjectRootFolder;
+
+    /// <summary>
+    /// Replaces the fixture's instance with one constructed while the sample-project opt-in
+    /// variable holds <paramref name="optIn"/> (null unsets it). The constructor reads the variable
+    /// once, so it is restored right after construction and never leaks into other tests.
+    /// </summary>
+    private void UseLocalProjectsConstructedWithSampleProjectOptIn(string? optIn)
+    {
+        // Disposed first: both instances would otherwise share one temp folder name
+        if (_localProjects is IDisposable disposable)
+            disposable.Dispose();
+
+        string? original = Environment.GetEnvironmentVariable(SAMPLE_PROJECT_OPT_IN_VARIABLE);
+        Environment.SetEnvironmentVariable(SAMPLE_PROJECT_OPT_IN_VARIABLE, optIn);
+        try
+        {
+            _localProjects = new TestLocalParatextProjectsInTempDir();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(SAMPLE_PROJECT_OPT_IN_VARIABLE, original);
+        }
+    }
+
+    [Test]
+    public void GetAvailableUnpublishedProjectDetails_BeforeInitialize_ScansProjectsFolder()
+    {
+        CreateTempProject("NR1", CreateParatextProjectDetails("NR1", "First", "aaaa01"));
+
+        // No Initialize(): a factory answering this must never see an unscanned folder as empty
+        var unpublished = _localProjects.GetAvailableUnpublishedProjectDetails().ToList();
+
+        Assert.That(unpublished.Select(d => d.Metadata.Id), Is.EquivalentTo(new[] { "AAAA01" }));
+    }
+
+    [Test]
+    public void GetAvailablePublishedProjectDetails_BeforeInitialize_ScansProjectsFolder()
+    {
+        CreateTempProject("NR1", CreateParatextProjectDetails("NR1", "First", "aaaa01"));
+
+        // No Initialize(), and no other getter that would run it: only this call can have pointed
+        // ParatextData's project collection at the temp folder
+        _localProjects.GetAvailablePublishedProjectDetails().ToList();
+
+        Assert.That(ScrTextCollection.Find("NR1"), Is.Not.Null);
     }
 
     [Test]

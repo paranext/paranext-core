@@ -75,6 +75,7 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_get%',
   '%resources_getStarted%',
   '%resources_getStartedDescription%',
+  '%resources_getStartedNoItemsDescription%',
   '%resources_getResources%',
   '%resources_items%',
   '%resources_language%',
@@ -161,8 +162,9 @@ const TOOLTIP_TRIGGER_BUTTON_CLASS =
   'tw:cursor-default tw:rounded-sm tw:text-start tw:outline-hidden tw:focus-visible:ring-2 tw:focus-visible:ring-ring';
 
 /**
- * Short name of the sample project the app installs on first run, which the getting-started prompt
- * is about.
+ * Short name of the sample project the app installs into an empty projects folder, which the
+ * getting-started prompt is about when it is the only item. Only dev (unpackaged) runs install it
+ * by default; a new user of a packaged build sees the prompt on the empty Home instead.
  */
 const BUNDLED_SAMPLE_PROJECT_SHORT_NAME = 'WEB';
 
@@ -395,6 +397,9 @@ export function Home({
   const getText: string = getLocalizedString('%resources_get%');
   const getStartedText: string = getLocalizedString('%resources_getStarted%');
   const getStartedDescriptionText: string = getLocalizedString('%resources_getStartedDescription%');
+  const getStartedNoItemsDescriptionText: string = getLocalizedString(
+    '%resources_getStartedNoItemsDescription%',
+  );
   const getResourcesText: string = getLocalizedString('%resources_getResources%');
   const itemsText: string = isLocalizedStringsLoading
     ? ''
@@ -1165,11 +1170,16 @@ export function Home({
                 )}
               </div>
             )}
-            {/* About the one item the type filter lists, so only while that item is on screen. */}
-            {isOnlyWebSampleListed && onGetStarted && (
+            {/*
+             * For a user who has nothing yet, or whose only item is the sample (and only while the
+             * type filter shows it).
+             */}
+            {(mergedProjectInfo.length === 0 || isOnlyWebSampleListed) && onGetStarted && (
               <div className="tw:flex tw:flex-col tw:gap-4 tw:items-center tw:w-auto">
                 <p className="tw:text-muted-foreground tw:font-normal">
-                  {getStartedDescriptionText}
+                  {mergedProjectInfo.length === 0
+                    ? getStartedNoItemsDescriptionText
+                    : getStartedDescriptionText}
                 </p>
                 <Button onClick={onGetStarted}>{getStartedText}</Button>
               </div>
