@@ -41,7 +41,10 @@ const downloadedRow = (id: string): PickerResource => ({ ...projectRow(id), sour
 /** A configured DBL resource that is installed, the kind that can replace a fallback. */
 const configuredRow = (id: string): PickerResource => ({ ...dblRow(id), source: 'admin' });
 
-/** Calls the resolver with a complete list and no pick, pending pick, or held fallback by default. */
+/**
+ * Calls the resolver with a complete, settled list and no pick, pending pick, or held fallback by
+ * default.
+ */
 const resolve = (rows: PickerResource[], inputs: Partial<ResourceSelectionInputs> = {}) =>
   resolveResourceSelection(rows, {
     selectedResourceId: undefined,
@@ -49,6 +52,8 @@ const resolve = (rows: PickerResource[], inputs: Partial<ResourceSelectionInputs
     pendingResourceId: undefined,
     heldFallbackRowId: undefined,
     isListComplete: true,
+    areSourcesSettled: true,
+    mayPersistCorrection: true,
     ...inputs,
   });
 
@@ -383,6 +388,104 @@ describe('resolveResourceSelection', () => {
         resolve([dblRow('abc')], { selectedResourceId: 'abc', isListComplete: false })
           .nextSelectedResourceId,
       ).toBe('dbl:abc');
+    });
+  });
+
+  describe('while the sources the rows are filtered against are still arriving', () => {
+    const UNSETTLED = { areSourcesSettled: false, mayPersistCorrection: false } as const;
+
+    it('persists no fallback over a selection that has not arrived yet', () => {
+      // The rows are filtered against the DBL catalog, so a configured resource whose catalog
+      // entry has not landed is simply absent. Auto-correcting on that absence overwrites the
+      // user's pick with the first row, and the pick does not come back once the catalog
+      // completes — it has already been persisted away.
+      const result = resolve([dblRow('a'), dblRow('b')], {
+        selectedResourceId: 'dbl:not-arrived-yet',
+        ...UNSETTLED,
+      });
+      expect(result.nextSelectedResourceId).toBeUndefined();
+    });
+
+    it('displays no row rather than one the user did not choose', () => {
+      // The rendered resource and the persisted `selectedResourceId` must agree, or the dropdown's
+      // checkmark sits on a row nobody picked.
+      const result = resolve([dblRow('a'), dblRow('b')], {
+        selectedResourceId: 'dbl:not-arrived-yet',
+        ...UNSETTLED,
+      });
+      expect(result.selectedRow).toBeUndefined();
+    });
+
+    it('still displays a selection whose row IS present', () => {
+      // Gating suppresses auto-correct, not selection: a positive match is an answer whether or not
+      // the remaining sources have settled.
+      const result = resolve([dblRow('a'), dblRow('b')], {
+        selectedResourceId: 'dbl:b',
+        ...UNSETTLED,
+      });
+      expect(result.selectedRow?.projectId).toBe('proj-b');
+      expect(result.nextSelectedResourceId).toBeUndefined();
+    });
+
+    it('still commits a pick that has arrived', () => {
+      // A pick is the user's own action against a row already in hand; waiting on unrelated sources
+      // would leave the picked resource unselected.
+      const result = resolve([dblRow('old'), dblRow('new')], {
+        selectedResourceId: 'dbl:old',
+        pendingResourceId: 'dbl:new',
+        ...UNSETTLED,
+      });
+      expect(result.nextSelectedResourceId).toBe('dbl:new');
+      expect(result.shouldClearPending).toBe(true);
+    });
+
+    it('keeps the pick once the catalog completes and its row appears', () => {
+      // The whole point, end to end: the selection survives the catalog going from partial to
+      // complete, rather than having been reset while it was incomplete.
+      const duringFetch = resolve([dblRow('a')], {
+        selectedResourceId: 'dbl:late',
+        ...UNSETTLED,
+      });
+      expect(duringFetch.nextSelectedResourceId).toBeUndefined();
+
+      const afterFetch = resolve([dblRow('a'), dblRow('late')], {
+        selectedResourceId: 'dbl:late',
+      });
+      expect(afterFetch.selectedRow?.projectId).toBe('proj-late');
+    });
+
+    it('does not supersede a downloaded selection on an unsettled list', () => {
+      const rows = [configuredRow('team'), downloadedRow('local')];
+      const result = resolve(rows, {
+        selectedResourceId: 'project:local',
+        ...UNSETTLED,
+      });
+      expect(result.selectedRow).toBe(rows[1]);
+      expect(result.nextSelectedResourceId).toBeUndefined();
+    });
+  });
+
+  describe('when the sources settled only because the catalog FAILED', () => {
+    // A failed catalog is retryable, and a DBL reference with no catalog row resolves to nothing at
+    // all — so an absent selection may be absent only because the fetch failed. The panel is
+    // showing its catalog-error view in this window, so a fallback written here replaces the pick
+    // without the reader ever seeing it happen, and a later successful retry cannot bring it back.
+    const CATALOG_FAILED = { areSourcesSettled: true, mayPersistCorrection: false } as const;
+
+    it('displays a fallback row so the panel is not left blank', () => {
+      const result = resolve([dblRow('a'), dblRow('b')], {
+        selectedResourceId: 'dbl:dropped-with-the-catalog',
+        ...CATALOG_FAILED,
+      });
+      expect(result.selectedRow?.projectId).toBe('proj-a');
+    });
+
+    it('persists nothing over the stored pick', () => {
+      const result = resolve([dblRow('a'), dblRow('b')], {
+        selectedResourceId: 'dbl:dropped-with-the-catalog',
+        ...CATALOG_FAILED,
+      });
+      expect(result.nextSelectedResourceId).toBeUndefined();
     });
   });
 });

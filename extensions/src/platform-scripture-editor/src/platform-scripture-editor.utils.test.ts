@@ -5644,22 +5644,37 @@ describe('resolveResourceContentState', () => {
         resourceProjectId: undefined,
         usjPossiblyError: undefined,
         currentBookNum: GENESIS,
+        isUsjSettled: false,
       }),
     ).toBe('loading');
   });
 
-  it('returns "loading" for a caller whose hook is not seeded with a default', () => {
-    // The Bible texts panel passes `EMPTY_USJ` as its hook's default, so its value is an object from
-    // the first render and this pair does not occur there. Kept because the state is part of this
-    // function's contract for any caller reading a hook without a seeded default, and because the
-    // alternative — falling to `'ready'` — would mount an editor with nothing to put in it.
+  it('returns "loading" while nothing has arrived and the subscription is still working', () => {
+    // The state a caller reaches by seeding its hook with `undefined` (the Bible texts panel): no
+    // chapter in hand and none refused, so the honest answer is a spinner. Falling to `'ready'`
+    // here would mount an editor with nothing to put in it.
     expect(
       resolveResourceContentState({
         resourceProjectId: PROJECT_ID,
         usjPossiblyError: undefined,
         currentBookNum: GENESIS,
+        isUsjSettled: false,
       }),
     ).toBe('loading');
+  });
+
+  it('returns "failed" when the subscription settles having delivered nothing', () => {
+    // `ChapterUSJ`'s `getData` is `Usj | undefined` and the extender PDP returns `undefined` for a
+    // falsy USX, so this is a real delivery, not an absence of one. Reported rather than spun on:
+    // an unending spinner with no message is the "stuck loading" symptom itself.
+    expect(
+      resolveResourceContentState({
+        resourceProjectId: PROJECT_ID,
+        usjPossiblyError: undefined,
+        currentBookNum: GENESIS,
+        isUsjSettled: true,
+      }),
+    ).toBe('failed');
   });
 
   it('returns "ready" once chapter data has arrived', () => {
@@ -5668,6 +5683,7 @@ describe('resolveResourceContentState', () => {
         resourceProjectId: PROJECT_ID,
         usjPossiblyError: { type: 'USJ', version: '3.1', content: [] },
         currentBookNum: GENESIS,
+        isUsjSettled: true,
       }),
     ).toBe('ready');
   });
@@ -5678,6 +5694,7 @@ describe('resolveResourceContentState', () => {
         resourceProjectId: PROJECT_ID,
         usjPossiblyError: missingBook(GENESIS),
         currentBookNum: GENESIS,
+        isUsjSettled: true,
       }),
     ).toBe('bookNotAvailable');
   });
@@ -5697,6 +5714,7 @@ describe('resolveResourceContentState', () => {
         resourceProjectId: PROJECT_ID,
         usjPossiblyError: missingBook(MATTHEW),
         currentBookNum: GENESIS,
+        isUsjSettled: true,
       }),
     ).toBe('loading');
   });
@@ -5709,6 +5727,7 @@ describe('resolveResourceContentState', () => {
         resourceProjectId: PROJECT_ID,
         usjPossiblyError: missingBook(GENESIS, 'someOtherProject'),
         currentBookNum: GENESIS,
+        isUsjSettled: true,
       }),
     ).toBe('loading');
   });
@@ -5727,6 +5746,7 @@ describe('resolveResourceContentState', () => {
           content: [`Book number ${GENESIS} not found in project ${PROJECT_ID}.`],
         },
         currentBookNum: GENESIS,
+        isUsjSettled: true,
       }),
     ).toBe('ready');
   });
@@ -5741,6 +5761,7 @@ describe('resolveResourceContentState', () => {
         resourceProjectId: 'abc123',
         usjPossiblyError: missingBook(GENESIS, 'ABC123'),
         currentBookNum: GENESIS,
+        isUsjSettled: true,
       }),
     ).toBe('bookNotAvailable');
   });
@@ -5754,6 +5775,7 @@ describe('resolveResourceContentState', () => {
         resourceProjectId: PROJECT_ID,
         usjPossiblyError: missingBook(0),
         currentBookNum: 0,
+        isUsjSettled: true,
       }),
     ).toBe('loading');
   });
@@ -5770,8 +5792,25 @@ describe('resolveResourceContentState', () => {
         resourceProjectId: PROJECT_ID,
         usjPossiblyError: newPlatformError(new Error('Project abc123 is not available')),
         currentBookNum: GENESIS,
+        isUsjSettled: true,
       }),
     ).toBe('failed');
+  });
+
+  it('withholds a failure while a read for it is still in flight', () => {
+    // The data layer holds the last delivered value across a resubscription — it resets `isLoading`,
+    // never `data` — so an error stays in hand while the next attempt runs. Naming it then would
+    // report a failure for a read that has not finished, and it is what makes the retry affordance
+    // look inert: re-driving the read would otherwise leave the identical message on screen for the
+    // whole round trip.
+    expect(
+      resolveResourceContentState({
+        resourceProjectId: PROJECT_ID,
+        usjPossiblyError: newPlatformError(new Error('Project abc123 is not available')),
+        currentBookNum: GENESIS,
+        isUsjSettled: false,
+      }),
+    ).toBe('loading');
   });
 });
 
