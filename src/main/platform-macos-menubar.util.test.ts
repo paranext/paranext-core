@@ -153,6 +153,41 @@ describe('translatePlatformMenuItemsAndCombine', () => {
     expect(appMenuLength()).toBe(before);
   });
 
+  it('marks a disabled submenu parent item as not enabled', async () => {
+    const combined = await translatePlatformMenuItemsAndCombine({
+      columns: { 'test.column': { label: '%mainMenu_custom%', order: 1 }, isExtensible: true },
+      groups: {
+        'test.group': { column: 'test.column', order: 1 },
+        'test.subGroup': { menuItem: 'test.parent', order: 1 },
+      },
+      items: [
+        {
+          label: '%test_parent%',
+          group: 'test.group',
+          order: 1,
+          id: 'test.parent',
+          disabled: true,
+          localizeNotes: 'Fixture submenu parent contributed by a test.',
+        },
+        {
+          label: '%test_child%',
+          group: 'test.subGroup',
+          order: 1,
+          command: 'test.command',
+          localizeNotes: 'Fixture submenu child contributed by a test.',
+        },
+      ],
+    });
+    const column = combined.find((menu) => menu.label === '%mainMenu_custom%');
+    const submenu: unknown = column?.submenu;
+    const parent = Array.isArray(submenu)
+      ? submenu.filter(isRecord).find((item) => item.label === '%test_parent%')
+      : undefined;
+    expect(parent?.enabled).toBe(false);
+    // Positive control: the parent really carries its child submenu
+    expect(Array.isArray(parent?.submenu)).toBe(true);
+  });
+
   it("keeps each zoom item's click handler callable", async () => {
     const combined = await translatePlatformMenuItemsAndCombine(
       menuWithContributedColumn('%mainMenu_file%'),
@@ -193,5 +228,11 @@ describe('subscribeCurrentMacosMenubar', () => {
     releaseFirstLocalization();
     await firstRebuild;
     expect(Menu.setApplicationMenu).toHaveBeenCalledTimes(1);
+    // The one applied menu is the newer rebuild's, not the overtaken first one
+    expect(Menu.buildFromTemplate).toHaveBeenCalledTimes(1);
+    const appliedTemplate = vi.mocked(Menu.buildFromTemplate).mock.calls[0][0];
+    const appliedLabels = appliedTemplate.map((menu) => menu.label);
+    expect(appliedLabels).toContain('%mainMenu_second%');
+    expect(appliedLabels).not.toContain('%mainMenu_first%');
   });
 });
