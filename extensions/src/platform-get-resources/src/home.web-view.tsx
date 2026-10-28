@@ -207,7 +207,8 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
 
   const [isOwnSendReceiveInProgress, setIsOwnSendReceiveInProgress] = useState<boolean>(false);
   const [ownActiveSendReceiveProjects, setOwnActiveSendReceiveProjects] = useState<string[]>([]);
-  // Hidden case: keeps following while the tab is inactive; data-only and cheap, so the rows are current when shown.
+  // Hidden case: keeps following while the tab is inactive; data-only and cheap, so the rows are
+  // current when shown.
   const syncActivity = useSyncActivity();
 
   // Two flags because a sync started elsewhere must disable Home's rows but never reload its lists:

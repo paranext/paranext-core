@@ -26,9 +26,8 @@ const IDLE_ACTIVITY: SyncActivity = { isSyncing: false, projectIds: [], isKnown:
 type SyncActivityValue = Pick<SyncActivitySnapshot, 'isSyncing' | 'projectIds'>;
 
 /**
- * Checked rather than trusted: the sync-activity types were declared ahead of the Paratext 10
- * change that implements them, so a build may send another shape. `projectIds` may be absent or
- * null.
+ * Checked rather than trusted: the snapshot is wire data from another process, and only a Paratext
+ * 10 build serves it, so a build may send another shape. `projectIds` may be absent or null.
  */
 export function isSyncActivitySnapshot(value: unknown): value is SyncActivityValue {
   if (typeof value !== 'object' || !value) return false;
