@@ -84,7 +84,12 @@ The per-OS separator carries over from the string conventions above: **macOS** p
   </ExampleBlock>
 </ExampleBlockGroup>
 
-<ExampleBlock variant="neutral" title="What ShortcutKeys renders" preview={<KbdGroup><Kbd>Ctrl</Kbd><span>+</span><Kbd>Z</Kbd></KbdGroup>} code="<KbdGroup><Kbd>Ctrl</Kbd><span>+</span><Kbd>Z</Kbd></KbdGroup>">
+<ExampleBlock
+  variant="neutral"
+  title="What ShortcutKeys renders"
+  preview={<KbdGroup><Kbd>Ctrl</Kbd><span>+</span><Kbd>Z</Kbd></KbdGroup>}
+  code="<KbdGroup><Kbd>Ctrl</Kbd><span>+</span><Kbd>Z</Kbd></KbdGroup>"
+>
   This is the DOM <code>ShortcutKeys</code> produces for <code>hint="Ctrl+Z"</code>: one{' '}
   <code>Kbd</code> per key inside a <code>KbdGroup</code>, with a plain <code>span</code> separator
   on Windows/Linux. Build this by hand only where <code>ShortcutKeys</code> genuinely doesn't fit.
