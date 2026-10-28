@@ -72,11 +72,13 @@ const getMenubarContent = (
     items: items.map(({ item, subGroups = [] }) => {
       let menuEntry: ReactNode;
       if ('command' in item) {
+        const isCheckboxItem = item.checked !== undefined;
         const itemContent = (
           <>
+            {/* A checkbox item's check indicator is drawn over this slot, so it has no icon of its own */}
             <MenuItemIcon
-              iconName={item.iconNameBefore}
-              icon={item.iconPathBefore}
+              iconName={isCheckboxItem ? undefined : item.iconNameBefore}
+              icon={isCheckboxItem ? undefined : item.iconPathBefore}
               menuLabel={item.label}
               leading
               leadingSlot={leadingSlot}
@@ -100,25 +102,26 @@ const getMenubarContent = (
           // eslint-disable-next-line no-type-assertion/no-type-assertion
           onSelectMenuItem(item as MenuItemContainingCommand);
         };
-        menuEntry =
-          item.checked !== undefined ? (
-            <MenubarCheckboxItem
-              key={`menubar-item-${item.label}-${item.command}`}
-              checked={item.checked}
-              disabled={item.disabled}
-              onSelect={handleSelect}
-            >
-              {itemContent}
-            </MenubarCheckboxItem>
-          ) : (
-            <MenubarItem
-              key={`menubar-item-${item.label}-${item.command}`}
-              disabled={item.disabled}
-              onSelect={handleSelect}
-            >
-              {itemContent}
-            </MenubarItem>
-          );
+        menuEntry = isCheckboxItem ? (
+          <MenubarCheckboxItem
+            key={`menubar-item-${item.label}-${item.command}`}
+            // Start padding matches MenubarItem; the check indicator sits in the leading slot
+            className="tw:ps-1.5"
+            checked={item.checked}
+            disabled={item.disabled}
+            onSelect={handleSelect}
+          >
+            {itemContent}
+          </MenubarCheckboxItem>
+        ) : (
+          <MenubarItem
+            key={`menubar-item-${item.label}-${item.command}`}
+            disabled={item.disabled}
+            onSelect={handleSelect}
+          >
+            {itemContent}
+          </MenubarItem>
+        );
       } else {
         menuEntry = (
           <MenubarSub key={`menubar-sub-${item.label}-${item.id}`}>
