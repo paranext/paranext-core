@@ -1998,6 +1998,13 @@ declare module 'shared/models/openrpc.model' {
 }
 declare module 'shared/services/shared-store.service' {
   import { ContextKeyValue, PlatformEvent } from 'platform-bible-utils';
+  /**
+   * Prefix of the request method every non-main process registers, suffixed with its shared store
+   * process ID. The method exists exactly as long as the process is connected, so main learns which
+   * process died from the disconnect event's removed method names and can release that process's
+   * keys.
+   */
+  export const SHARED_STORE_OWNER_METHOD_PREFIX = 'shared-store:owner:';
   type LamportClock = {
     counter: number;
     processId: string;
@@ -12337,6 +12344,153 @@ declare module 'renderer/hooks/papi-hooks/use-recent-scripture-refs.hook' {
     addRecentScriptureRef: (newRef: SerializedVerseRef) => void;
   };
 }
+declare module 'shared/services/context-keys.service-model' {
+  import { ContextKeyValue, PlatformEvent } from 'platform-bible-utils';
+  /**
+   * Event emitted when a context key's value changes
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  export type ContextKeyChangeEvent = {
+    /**
+     * The context key that changed (without any internal storage prefix)
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    key: string;
+    /**
+     * The new value, or `undefined` if the key was removed
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    value: ContextKeyValue | undefined;
+  };
+  /**
+   *
+   * Service for reading and writing context keys: named properties that drive dynamic UI state such
+   * as menu item visibility (`when`), enablement (`enabledWhen`), and checked state (`checkedWhen`)
+   * declared in menus.json contributions.
+   *
+   * Context keys live in a single flat, in-memory, cross-process store (the platform shared store),
+   * so reads are synchronous — no network calls. Values are ephemeral: they are never persisted and
+   * producers must re-publish after a restart.
+   *
+   * Conventions:
+   *
+   * - Key format: at least two dot-separated segments of word characters or hyphens
+   * - Prefix keys with your extension's name; `platform.` is reserved for the platform
+   * - Scoping is by key construction, e.g. `myExt.project.<projectId>.isEditable` — menu expressions
+   *   reference these with template variables like `{projectId}`
+   * - Each key should have exactly one producer. A key first set in one process can only be updated
+   *   from that same process
+   */
+  export interface IContextKeysService {
+    /**
+     * Sets or updates a context key.
+     *
+     * Throws if the key is not structurally valid (at least two dot-separated segments of word
+     * characters or hyphens) or the value is not a string, number, or boolean.
+     *
+     * Conventions: prefix keys with your extension's name (`platform.` is reserved); give each key
+     * exactly one producer. A key first set in one process can only be updated from that same process
+     * (ownership violations are logged, not thrown).
+     *
+     * @param key The context key to set, e.g. `myExtension.project.<projectId>.isEditable`
+     * @param value The value to set (string, number, or boolean)
+     * @experimental This function is unstable and may change or disappear without notice
+     */
+    set(key: string, value: ContextKeyValue): void;
+    /**
+     * Gets the current value of a context key synchronously from the in-process store copy — no
+     * network call.
+     *
+     * @param key The context key to read
+     * @returns The current value, or `undefined` if the key has never been set or was removed
+     * @experimental This function is unstable and may change or disappear without notice
+     */
+    get(key: string): ContextKeyValue | undefined;
+    /**
+     * Sets a context key's value to `undefined`. A subsequent {@link IContextKeysService.get} for the
+     * key returns `undefined`.
+     *
+     * Throws if the key is not structurally valid. Like {@link IContextKeysService.set}, a key first
+     * set in one process can only be removed from that same process (ownership violations are logged,
+     * not thrown).
+     *
+     * @param key The context key to remove
+     * @experimental This function is unstable and may change or disappear without notice
+     */
+    remove(key: string): void;
+    /**
+     * Event that fires when any context key changes, whether the change was made in this process or
+     * in another one. The event's `key` is the context key without any internal storage prefix, and
+     * its `value` is `undefined` when the key was removed.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    onDidChange: PlatformEvent<ContextKeyChangeEvent>;
+  }
+}
+declare module 'shared/services/context-keys.service' {
+  import { ContextKeyValue } from 'platform-bible-utils';
+  import {
+    ContextKeyChangeEvent,
+    IContextKeysService,
+  } from 'shared/services/context-keys.service-model';
+  function set(key: string, value: ContextKeyValue): void;
+  function get(key: string): ContextKeyValue | undefined;
+  function remove(key: string): void;
+  /**
+   *
+   * Service for reading and writing context keys: named properties that drive dynamic UI state such
+   * as menu item visibility (`when`), enablement (`enabledWhen`), and checked state (`checkedWhen`)
+   * declared in menus.json contributions.
+   *
+   * Context keys live in a single flat, in-memory, cross-process store (the platform shared store),
+   * so reads are synchronous — no network calls. Values are ephemeral: they are never persisted and
+   * producers must re-publish after a restart.
+   *
+   * Conventions:
+   *
+   * - Key format: at least two dot-separated segments of word characters or hyphens
+   * - Prefix keys with your extension's name; `platform.` is reserved for the platform
+   * - Scoping is by key construction, e.g. `myExt.project.<projectId>.isEditable` — menu expressions
+   *   reference these with template variables like `{projectId}`
+   * - Each key should have exactly one producer. A key first set in one process can only be updated
+   *   from that same process
+   */
+  export const contextKeysService: {
+    set: typeof set;
+    get: typeof get;
+    remove: typeof remove;
+    /** Event that fires when any context key changes (whether changed locally or in another process). */
+    onDidChange: import('platform-bible-utils').PlatformEvent<ContextKeyChangeEvent>;
+  };
+  /** Context keys service exposed on PAPI (both `@papi/backend` and `@papi/frontend`) */
+  export const papiContextKeysService: IContextKeysService;
+}
+declare module 'renderer/hooks/papi-hooks/use-evaluated-menu.hook' {
+  import { EvaluatableMenu } from 'platform-bible-utils';
+  /**
+   * Evaluates the when-expressions (`when`, `enabledWhen`, `checkedWhen`) in a menu document against
+   * the current context keys and re-evaluates on every context key change, local or remote. Use it
+   * in a web view that renders its own menu and must react to keys it does not own.
+   *
+   * @param menuData The menu document to evaluate (pass a referentially stable object, e.g. state or
+   *   memoized data)
+   * @param templateVars Values for `{placeholder}` segments in expression property references.
+   *   `templateVars` MUST be referentially stable (memoize in the caller) or the menu re-evaluates on
+   *   every render
+   * @returns The evaluated menu document (hidden items removed, `disabled`/`checked` decorated), or
+   *   `undefined` if `menuData` is `undefined`
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function useEvaluatedMenu<T extends EvaluatableMenu>(
+    menuData: T | undefined,
+    templateVars: Record<string, string | undefined>,
+  ): T | undefined;
+  export default useEvaluatedMenu;
+}
 declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useDataProvider } from 'renderer/hooks/papi-hooks/use-data-provider.hook';
   export { default as useData } from 'renderer/hooks/papi-hooks/use-data.hook';
@@ -12351,6 +12505,7 @@ declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useLocalizedStrings } from 'renderer/hooks/papi-hooks/use-localized-strings-hook';
   export { default as useWebViewController } from 'renderer/hooks/papi-hooks/use-web-view-controller.hook';
   export { default as useRecentScriptureRefs } from 'renderer/hooks/papi-hooks/use-recent-scripture-refs.hook';
+  export { default as useEvaluatedMenu } from 'renderer/hooks/papi-hooks/use-evaluated-menu.hook';
 }
 declare module 'renderer/services/overlays/overlay-store' {
   /**
@@ -14104,131 +14259,6 @@ declare module 'shared/services/database.service' {
   import { IDatabaseService } from 'shared/services/database.service-model';
   export const databaseService: IDatabaseService;
   export default databaseService;
-}
-declare module 'shared/services/context-keys.service-model' {
-  import { ContextKeyValue, PlatformEvent } from 'platform-bible-utils';
-  /**
-   * Event emitted when a context key's value changes
-   *
-   * @experimental This type is unstable and may change or disappear without notice
-   */
-  export type ContextKeyChangeEvent = {
-    /**
-     * The context key that changed (without any internal storage prefix)
-     *
-     * @experimental This field is unstable and may change or disappear without notice
-     */
-    key: string;
-    /**
-     * The new value, or `undefined` if the key was removed
-     *
-     * @experimental This field is unstable and may change or disappear without notice
-     */
-    value: ContextKeyValue | undefined;
-  };
-  /**
-   *
-   * Service for reading and writing context keys: named properties that drive dynamic UI state such
-   * as menu item visibility (`when`), enablement (`enabledWhen`), and checked state (`checkedWhen`)
-   * declared in menus.json contributions.
-   *
-   * Context keys live in a single flat, in-memory, cross-process store (the platform shared store),
-   * so reads are synchronous — no network calls. Values are ephemeral: they are never persisted and
-   * producers must re-publish after a restart.
-   *
-   * Conventions:
-   *
-   * - Key format: at least two dot-separated segments of word characters or hyphens
-   * - Prefix keys with your extension's name; `platform.` is reserved for the platform
-   * - Scoping is by key construction, e.g. `myExt.project.<projectId>.isEditable` — menu expressions
-   *   reference these with template variables like `{projectId}`
-   * - Each key should have exactly one producer. A key first set in one process can only be updated
-   *   from that same process
-   */
-  export interface IContextKeysService {
-    /**
-     * Sets or updates a context key.
-     *
-     * Throws if the key is not structurally valid (at least two dot-separated segments of word
-     * characters or hyphens) or the value is not a string, number, or boolean.
-     *
-     * Conventions: prefix keys with your extension's name (`platform.` is reserved); give each key
-     * exactly one producer. A key first set in one process can only be updated from that same process
-     * (ownership violations are logged, not thrown).
-     *
-     * @param key The context key to set, e.g. `myExtension.project.<projectId>.isEditable`
-     * @param value The value to set (string, number, or boolean)
-     * @experimental This function is unstable and may change or disappear without notice
-     */
-    set(key: string, value: ContextKeyValue): void;
-    /**
-     * Gets the current value of a context key synchronously from the in-process store copy — no
-     * network call.
-     *
-     * @param key The context key to read
-     * @returns The current value, or `undefined` if the key has never been set or was removed
-     * @experimental This function is unstable and may change or disappear without notice
-     */
-    get(key: string): ContextKeyValue | undefined;
-    /**
-     * Sets a context key's value to `undefined`. A subsequent {@link IContextKeysService.get} for the
-     * key returns `undefined`.
-     *
-     * Throws if the key is not structurally valid. Like {@link IContextKeysService.set}, a key first
-     * set in one process can only be removed from that same process (ownership violations are logged,
-     * not thrown).
-     *
-     * @param key The context key to remove
-     * @experimental This function is unstable and may change or disappear without notice
-     */
-    remove(key: string): void;
-    /**
-     * Event that fires when any context key changes, whether the change was made in this process or
-     * in another one. The event's `key` is the context key without any internal storage prefix, and
-     * its `value` is `undefined` when the key was removed.
-     *
-     * @experimental This field is unstable and may change or disappear without notice
-     */
-    onDidChange: PlatformEvent<ContextKeyChangeEvent>;
-  }
-}
-declare module 'shared/services/context-keys.service' {
-  import { ContextKeyValue } from 'platform-bible-utils';
-  import {
-    ContextKeyChangeEvent,
-    IContextKeysService,
-  } from 'shared/services/context-keys.service-model';
-  function set(key: string, value: ContextKeyValue): void;
-  function get(key: string): ContextKeyValue | undefined;
-  function remove(key: string): void;
-  /**
-   *
-   * Service for reading and writing context keys: named properties that drive dynamic UI state such
-   * as menu item visibility (`when`), enablement (`enabledWhen`), and checked state (`checkedWhen`)
-   * declared in menus.json contributions.
-   *
-   * Context keys live in a single flat, in-memory, cross-process store (the platform shared store),
-   * so reads are synchronous — no network calls. Values are ephemeral: they are never persisted and
-   * producers must re-publish after a restart.
-   *
-   * Conventions:
-   *
-   * - Key format: at least two dot-separated segments of word characters or hyphens
-   * - Prefix keys with your extension's name; `platform.` is reserved for the platform
-   * - Scoping is by key construction, e.g. `myExt.project.<projectId>.isEditable` — menu expressions
-   *   reference these with template variables like `{projectId}`
-   * - Each key should have exactly one producer. A key first set in one process can only be updated
-   *   from that same process
-   */
-  export const contextKeysService: {
-    set: typeof set;
-    get: typeof get;
-    remove: typeof remove;
-    /** Event that fires when any context key changes (whether changed locally or in another process). */
-    onDidChange: import('platform-bible-utils').PlatformEvent<ContextKeyChangeEvent>;
-  };
-  /** Context keys service exposed on PAPI (both `@papi/backend` and `@papi/frontend`) */
-  export const papiContextKeysService: IContextKeysService;
 }
 declare module 'shared/services/scroll-group.service' {
   import { IScrollGroupService } from 'shared/services/scroll-group.service-model';

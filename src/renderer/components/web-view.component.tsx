@@ -51,7 +51,7 @@ import {
   useScrollGroupScrRef,
   useRecentScriptureRefs,
 } from '@renderer/hooks/papi-hooks';
-import { useEvaluatedMenu } from '@renderer/hooks/use-evaluated-menu.hook';
+import { useEvaluatedMenu } from '@renderer/hooks/papi-hooks/use-evaluated-menu.hook';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service';
 import { registerBookChapterControlHandle } from '@renderer/services/book-chapter-control.registry';
