@@ -20,6 +20,7 @@ import {
   flushRowEditsThenSave,
   generateInlineMarkerMenuListItems,
   getChapterKey,
+  getEditorWebViewContextKeys,
   INSERT_CONTEXT_MENU_STRING_KEYS,
   insertNoteAtCurrentSelectionCore,
   markerMenuItemsToResolvedPaletteItems,
@@ -1116,5 +1117,34 @@ describe('createInsertContextMenuItems', () => {
         expect(actions[name]).toHaveBeenCalledTimes(name === actionName ? 1 : 0);
       },
     );
+  });
+});
+
+describe('getEditorWebViewContextKeys', () => {
+  it('names the three per-web-view keys from the web view id', () => {
+    const keys = getEditorWebViewContextKeys('wv1', {
+      isPreview: false,
+      isSyncBlocked: false,
+      footnotesPaneVisible: false,
+    });
+    expect(Object.keys(keys).sort()).toEqual([
+      'platformScriptureEditor.webView.wv1.footnotesPaneVisible',
+      'platformScriptureEditor.webView.wv1.isPreview',
+      'platformScriptureEditor.webView.wv1.isSyncBlocked',
+    ]);
+  });
+
+  it('mirrors isPreview, isSyncBlocked and footnotesPaneVisible', () => {
+    expect(
+      getEditorWebViewContextKeys('wv1', {
+        isPreview: true,
+        isSyncBlocked: false,
+        footnotesPaneVisible: true,
+      }),
+    ).toEqual({
+      'platformScriptureEditor.webView.wv1.isPreview': true,
+      'platformScriptureEditor.webView.wv1.isSyncBlocked': false,
+      'platformScriptureEditor.webView.wv1.footnotesPaneVisible': true,
+    });
   });
 });

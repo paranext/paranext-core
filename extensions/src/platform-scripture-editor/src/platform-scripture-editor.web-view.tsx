@@ -38,6 +38,7 @@ import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
   useData,
+  useEvaluatedMenu,
   useLocalizedStrings,
   useProjectData,
   useProjectDataProvider,
@@ -99,7 +100,6 @@ import {
 } from 'platform-bible-react/experimental';
 import {
   ABORTED,
-  evaluateMenu,
   formatReplacementString,
   getErrorMessage,
   getLocalizeKeysForScrollGroupIds,
@@ -246,6 +246,7 @@ import {
   shouldProtectAddChapterNumber,
   shouldPublishPaneDocument,
   showCommentThreadForInterfaceMode,
+  showsReadOnlyPreview,
   UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY,
   usesPaneNoteModel,
 } from './platform-scripture-editor.utils';
@@ -259,6 +260,7 @@ import {
   CONTEXT_MENU_ACTION_TO_NOTE_KIND,
   createInsertContextMenuItems,
   deriveReadOnlyFlags,
+  getEditorWebViewContextKeys,
   flushRowEditsThenSave,
   forgetCaretSnapshotIfParaMarkerSelected,
   isEditorContextMenuOpen,
@@ -1153,22 +1155,34 @@ function PlatformScriptureEditor({
     footnotesPaneVisibleRef.current = footnotesPaneVisible;
   }, [footnotesPaneVisible]);
 
-  /**
-   * Bumped after each context key this web view publishes has been written to the store, so the
-   * menu evaluation below re-runs against the written value. The store is written in an effect,
-   * after the render that evaluated the menu, so a memo keyed on the state itself would read the
-   * previous value and show a checkbox one toggle behind the pane
-   */
-  const [contextKeysVersion, setContextKeysVersion] = useState(0);
+  const isPreview = useMemo(
+    () => showsReadOnlyPreview(viewType, isPowerMode),
+    [viewType, isPowerMode],
+  );
 
-  // Publish the context key driving `checkedWhen` on this web view's Show Footnotes menu item
+  // Publish the per-tab facts the menu's `enabledWhen` / `checkedWhen` expressions read, and remove
+  // them when this web view closes. Hidden case: a hidden tab keeps publishing; the menu is only
+  // visible in the active tab, which re-evaluates against the current keys on activation.
   useEffect(() => {
-    papi.contextKeys.set(
-      `platformScriptureEditor.webView.${webViewId}.footnotesPaneVisible`,
+    const keys = getEditorWebViewContextKeys(webViewId, {
+      isPreview,
+      isSyncBlocked,
       footnotesPaneVisible,
-    );
-    setContextKeysVersion((version) => version + 1);
-  }, [footnotesPaneVisible, webViewId]);
+    });
+    Object.entries(keys).forEach(([key, value]) => papi.contextKeys.set(key, value));
+  }, [webViewId, isPreview, isSyncBlocked, footnotesPaneVisible]);
+
+  useEffect(() => {
+    return () => {
+      Object.keys(
+        getEditorWebViewContextKeys(webViewId, {
+          isPreview: false,
+          isSyncBlocked: false,
+          footnotesPaneVisible: false,
+        }),
+      ).forEach((key) => papi.contextKeys.remove(key));
+    };
+  }, [webViewId]);
 
   const isPowerModeRef = useRef(isPowerMode);
 
@@ -5152,35 +5166,13 @@ function PlatformScriptureEditor({
     [webViewId, projectId],
   );
 
-  // Evaluate menu when-expressions (enabledWhen / checkedWhen / when) using current context keys.
-  // papi.contextKeys has no onDidChange in @papi/frontend (v1, by design), so this memo cannot
-  // react to arbitrary context key changes. It re-evaluates on `contextKeysVersion`, which the
-  // effects publishing this web view's own keys bump after writing the store. Keys other producers
-  // publish (`isEditable`, set once by the extension host when the web view is created) are read
-  // as they stand at evaluation time. A new key published by this web view must bump
-  // `contextKeysVersion` after its write, the way the footnotes pane key does.
-  const webViewMenu = useMemo(() => {
-    if (!webViewMenuRaw.topMenu) return webViewMenuRaw;
-    const evaluatedTopMenu = evaluateMenu(
-      webViewMenuRaw.topMenu,
-      papi.contextKeys.get,
-      menuTemplateVars,
-      (expression, error) => {
-        logger.warn(
-          `Error evaluating menu when-expression '${expression}': ${getErrorMessage(error)}`,
-        );
-      },
-    );
-    return { ...webViewMenuRaw, topMenu: evaluatedTopMenu };
-    // contextKeysVersion is not read inside the memo; it is here to re-run it after a key is written
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [webViewMenuRaw, menuTemplateVars, contextKeysVersion]);
+  const evaluatedTopMenu = useEvaluatedMenu(webViewMenuRaw.topMenu, menuTemplateVars);
 
   // Menu labels are localized once for every editor, so the project name stays as the
   // `{projectName}` placeholder (for example the Sync item's "Sync {projectName}") until here.
   const projectMenuData = useMemo(
-    () => substituteProjectNameInMenu(webViewMenu.topMenu, projectName),
-    [webViewMenu.topMenu, projectName],
+    () => substituteProjectNameInMenu(evaluatedTopMenu, projectName),
+    [evaluatedTopMenu, projectName],
   );
 
   const [booksPresentPossiblyError] = useProjectSetting(
