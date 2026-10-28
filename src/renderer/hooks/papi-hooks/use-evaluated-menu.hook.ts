@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { EvaluatableMenu, evaluateMenu, getErrorMessage } from 'platform-bible-utils';
 import { contextKeysService } from '@shared/services/context-keys.service';
 import { logger } from '@shared/services/logger.service';
@@ -23,13 +23,18 @@ export function useEvaluatedMenu<T extends EvaluatableMenu>(
 ): T | undefined {
   const [contextKeysVersion, setContextKeysVersion] = useState(0);
 
+  // The change sequence at the time of the latest render, i.e. what the latest evaluation saw
+  const renderedChangeSequenceRef = useRef(0);
+  renderedChangeSequenceRef.current = contextKeysService.getChangeSequence();
+
   useEffect(() => {
     const unsubscribe = contextKeysService.onDidChange(() =>
       setContextKeysVersion((version) => version + 1),
     );
-    // The first render evaluated before this subscription existed, so a key set in between (for
-    // example by a sibling effect) would otherwise be missed until the next change
-    setContextKeysVersion((version) => version + 1);
+    // A key can change between the render that evaluated and this subscription (for example in a
+    // sibling effect); re-evaluate only in that case so a plain mount evaluates once
+    if (contextKeysService.getChangeSequence() !== renderedChangeSequenceRef.current)
+      setContextKeysVersion((version) => version + 1);
     return () => {
       unsubscribe();
     };

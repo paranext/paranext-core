@@ -7,10 +7,13 @@ import { PlatformEventEmitter, SingleColumnMenu } from 'platform-bible-utils';
 const mockContextKeyValues = new Map<string, string | number | boolean>();
 const mockOnDidChangeEmitter = new PlatformEventEmitter<{ key: string; value: unknown }>();
 const mockUnsubscribe = vi.fn();
+const mockGet = vi.fn((key: string) => mockContextKeyValues.get(key));
+let mockChangeSequence = 0;
 
 vi.mock('@shared/services/context-keys.service', () => ({
   contextKeysService: {
-    get: (key: string) => mockContextKeyValues.get(key),
+    get: (key: string) => mockGet(key),
+    getChangeSequence: () => mockChangeSequence,
     onDidChange: (callback: (event: { key: string; value: unknown }) => void) => {
       const unsubscribe = mockOnDidChangeEmitter.event(callback);
       return () => {
@@ -54,6 +57,8 @@ describe('useEvaluatedMenu', () => {
   beforeEach(() => {
     mockContextKeyValues.clear();
     mockUnsubscribe.mockClear();
+    mockGet.mockClear();
+    mockChangeSequence = 0;
   });
 
   it('should return undefined for undefined menu data', () => {
@@ -72,10 +77,17 @@ describe('useEvaluatedMenu', () => {
       // Runs before the hook's own subscription effect, after the first render evaluated
       useEffect(() => {
         mockContextKeyValues.set('test.webView.wv1.visible', true);
+        mockChangeSequence += 1;
       }, []);
       return useEvaluatedMenu(menuData, { webViewId: 'wv1' });
     });
     expect(result.current?.items.map((item) => item.label)).toEqual(['%always%', '%conditional%']);
+  });
+
+  it('evaluates the menu exactly once on a plain mount', () => {
+    const { result } = renderHook(() => useEvaluatedMenu(menuData, { webViewId: 'wv1' }));
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    expect(result.current?.items.map((item) => item.label)).toEqual(['%always%']);
   });
 
   it('should re-evaluate when a context key changes', () => {
@@ -84,6 +96,7 @@ describe('useEvaluatedMenu', () => {
 
     act(() => {
       mockContextKeyValues.set('test.webView.wv1.visible', true);
+      mockChangeSequence += 1;
       mockOnDidChangeEmitter.emit({ key: 'test.webView.wv1.visible', value: true });
     });
     expect(result.current?.items.map((item) => item.label)).toEqual(['%always%', '%conditional%']);

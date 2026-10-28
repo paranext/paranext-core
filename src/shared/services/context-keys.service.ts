@@ -51,10 +51,19 @@ function remove(key: string): void {
 
 const onDidChangeEmitter = new PlatformEventEmitter<ContextKeyChangeEvent>();
 
+// Counts every forwarded change so a subscriber that attaches late can tell whether anything
+// changed between its last read and its subscription
+let changeSequence = 0;
+
+function getChangeSequence(): number {
+  return changeSequence;
+}
+
 // Forward shared-store changes within the contextKeys namespace to our subscribers with the
 // internal storage prefix stripped
 onDidChangeSharedStore((event) => {
   if (!event.key.startsWith(CONTEXT_KEYS_STORE_PREFIX)) return;
+  changeSequence += 1;
   onDidChangeEmitter.emit({
     key: event.key.substring(CONTEXT_KEYS_STORE_PREFIX.length),
     // Values in the contextKeys namespace are constrained to ContextKeyValue on every writer
@@ -95,6 +104,11 @@ export const contextKeysService = {
    * @experimental This field is unstable and may change or disappear without notice
    */
   onDidChange: onDidChangeEmitter.event,
+  /**
+   * Platform-internal. Number of context key changes forwarded so far in this process; a changed
+   * value between two reads means at least one key changed in between. Not on the PAPI surface.
+   */
+  getChangeSequence,
 };
 
 /**
