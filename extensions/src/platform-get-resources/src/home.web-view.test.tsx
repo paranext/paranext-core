@@ -526,6 +526,39 @@ describe('HomeWebView sync started elsewhere', () => {
       mockSendCommand.mock.calls.filter(([name]) => name === SEND_RECEIVE_PROJECTS),
     ).toHaveLength(0);
   });
+
+  it('reports the running sync to Home while the shared projects are still loading', async () => {
+    let resolveFetch: (value: unknown) => void = () => {};
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === IS_AVAILABLE) return true;
+      if (commandName === GET_SHARED_PROJECTS)
+        return new Promise((resolve) => {
+          resolveFetch = resolve;
+        });
+      if (commandName === GET_SYNC_ACTIVITY) return { isSyncing: false, projectIds: [] };
+      return undefined;
+    });
+    const HomeWebView = getHomeWebView();
+    render(<HomeWebView useWebViewState={makeUseWebViewState({})} />);
+    const home = screen.getByTestId('home');
+    await waitFor(() => {
+      expect(home).toHaveAttribute('data-remote-state', 'loading');
+      expect(syncActivityEvents.handlers.length).toBeGreaterThan(0);
+    });
+
+    await emitSyncActivity({ isSyncing: true, projectIds: [] });
+
+    expect(home).toHaveAttribute('data-remote-state', 'loading');
+    expect(home).toHaveAttribute('data-send-receive-in-progress', 'true');
+
+    await act(async () => {
+      resolveFetch({});
+    });
+    await waitFor(() => {
+      expect(home).toHaveAttribute('data-remote-state', 'loaded');
+    });
+    expect(home).toHaveAttribute('data-send-receive-in-progress', 'true');
+  });
 });
 
 /*

@@ -272,6 +272,33 @@ export const SyncInProgress: Story = {
 };
 
 /**
+ * Home opens while a sync that started elsewhere holds the server list: the spinner shows with a
+ * line saying a sync is running and the projects load when it finishes.
+ */
+function LoadingDuringSyncDecorator(Story: (update?: { args: HomeProps }) => ReactElement) {
+  return (
+    <Story
+      args={{
+        localizedStringsWithLoadingState: [localizedStrings, false],
+        localProjectsInfo: staticLocalProjectsAndResources,
+        remoteProjectsState: 'loading',
+        isSendReceiveInProgress: true,
+        headerContent: (
+          <>
+            <HomeIcon size="36" />
+            <CardTitle>Home</CardTitle>
+          </>
+        ),
+      }}
+    />
+  );
+}
+
+export const LoadingDuringSync: Story = {
+  decorators: [LoadingDuringSyncDecorator],
+};
+
+/**
  * The send/receive server could not be reached, so the list holds only what is already on this
  * computer.
  */

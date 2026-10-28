@@ -99,6 +99,7 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_syncFailed_title%',
   '%resources_syncWaiting_reason%',
   '%resources_sync%',
+  '%resources_syncRunning_listLoads%',
 ] as const);
 
 type HomeLocalizedStringKey = (typeof HOME_STRING_KEYS)[number];
@@ -443,6 +444,7 @@ export function Home({
   // contextual title ("Sync failed") communicates what failed better than the generic "Error".
   const syncFailedTitleText: string = getLocalizedString('%resources_syncFailed_title%');
   const syncWaitingReasonText: string = getLocalizedString('%resources_syncWaiting_reason%');
+  const syncRunningListLoadsText: string = getLocalizedString('%resources_syncRunning_listLoads%');
   const serverUnreachableDescriptionText: string = getLocalizedString(
     '%resources_serverUnreachable_description%',
   );
@@ -1090,6 +1092,11 @@ export function Home({
       {isLoading ? (
         <CardContent className="tw:flex tw:flex-grow tw:flex-col tw:items-center tw:justify-center tw:gap-2">
           <Spinner />
+          {/* The web view holds its own fetches while Home's own sync runs, so the list is only
+              loading during a sync when one started elsewhere holds the server list. */}
+          {isSendReceiveInProgress && (
+            <p className="tw:text-sm tw:text-muted-foreground">{syncRunningListLoadsText}</p>
+          )}
         </CardContent>
       ) : (
         <CardContent className="tw:flex-grow tw:overflow-auto tw:min-h-32 tw:px-0">

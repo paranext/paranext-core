@@ -1941,3 +1941,76 @@ describe('Home while a sync runs', () => {
     expect(syncItem).toHaveTextContent('Wait for the current sync to finish');
   });
 });
+
+describe('Home while a sync holds the project list', () => {
+  const LINE = 'A sync is running. Projects load when it finishes.';
+
+  const sharedProjects: SharedProjectsInfo = {
+    projectOne: {
+      id: 'projectOne',
+      name: 'ONE',
+      fullName: 'ONE full name',
+      language: 'en',
+      editedStatus: 'notEdited',
+      lastSendReceiveDate: '2026-08-16T00:00:00.000Z',
+    },
+    projectTwo: {
+      id: 'projectTwo',
+      name: 'TWO',
+      fullName: 'TWO full name',
+      language: 'en',
+      editedStatus: 'notEdited',
+      lastSendReceiveDate: '2026-08-16T00:00:00.000Z',
+    },
+  };
+
+  function homeElement({
+    isSendReceiveInProgress,
+    remoteProjectsState,
+  }: {
+    isSendReceiveInProgress: boolean;
+    remoteProjectsState: 'loading' | 'loaded';
+  }) {
+    return (
+      <Home
+        headerContent={undefined}
+        localProjectsInfo={[]}
+        sharedProjectsInfo={remoteProjectsState === 'loaded' ? sharedProjects : undefined}
+        remoteProjectsState={remoteProjectsState}
+        isSendReceiveInProgress={isSendReceiveInProgress}
+        onSendReceiveProject={() => {}}
+        localizedStringsWithLoadingState={[EN_STRINGS, false]}
+      />
+    );
+  }
+
+  it('says why the list is loading while a sync runs', () => {
+    render(homeElement({ isSendReceiveInProgress: true, remoteProjectsState: 'loading' }));
+    expect(screen.getByText(LINE)).toBeInTheDocument();
+  });
+
+  it('shows no line once loaded, and keeps the Get buttons disabled during the sync', () => {
+    render(homeElement({ isSendReceiveInProgress: true, remoteProjectsState: 'loaded' }));
+    expect(screen.queryByText(LINE)).toBeNull();
+    const getButtons = screen.getAllByRole('button', { name: 'Get' });
+    expect(getButtons).toHaveLength(2);
+    getButtons.forEach((button) => expect(button).toBeDisabled());
+  });
+
+  it('shows no line while loading when no sync runs', () => {
+    render(homeElement({ isSendReceiveInProgress: false, remoteProjectsState: 'loading' }));
+    expect(screen.queryByText(LINE)).toBeNull();
+  });
+
+  it('drops the line when the list arrives and re-enables rows when the sync ends', () => {
+    const { rerender } = render(
+      homeElement({ isSendReceiveInProgress: true, remoteProjectsState: 'loading' }),
+    );
+    expect(screen.getByText(LINE)).toBeInTheDocument();
+    rerender(homeElement({ isSendReceiveInProgress: true, remoteProjectsState: 'loaded' }));
+    expect(screen.queryByText(LINE)).toBeNull();
+    screen.getAllByRole('button', { name: 'Get' }).forEach((b) => expect(b).toBeDisabled());
+    rerender(homeElement({ isSendReceiveInProgress: false, remoteProjectsState: 'loaded' }));
+    screen.getAllByRole('button', { name: 'Get' }).forEach((b) => expect(b).toBeEnabled());
+  });
+});
