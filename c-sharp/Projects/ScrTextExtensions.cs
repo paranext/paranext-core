@@ -204,7 +204,7 @@ internal static class ScrTextExtensions
     /// so a malformed Editable setting excludes the project from the editable lists rather than
     /// dropping it entirely.
     /// </summary>
-    private static bool GetIsEditable(ScrText scrText)
+    internal static bool GetIsEditable(ScrText scrText)
     {
         if (scrText.IsResourceProject)
             return false;
