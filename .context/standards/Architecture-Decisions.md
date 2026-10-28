@@ -5291,7 +5291,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - Command handlers keep their own guards and `PlatformError`s: keyboard shortcuts and direct
     PAPI calls bypass menus, and a key can lag the state it describes.
   - Overlay context menus apply visibility (`when`) only, and tab menus evaluate once when read;
-    `enabledWhen` and `checkedWhen` have no effect there.
+    `enabledWhen` and `checkedWhen` on those surfaces are rejected when the contribution loads.
   - A key that no producer has published reads as unknown, which counts as false.
 - **Alternatives:** Evaluate expressions in the menu data provider (producer side): rejected, since
   it would need every key change to travel to the provider and back to every window, and the
