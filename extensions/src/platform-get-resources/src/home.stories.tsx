@@ -239,6 +239,35 @@ export const SendReceiveError: Story = {
 };
 
 /**
+ * A sync is running for the undownloaded shared project `HPUX-S/R`: its row shows a spinner, and
+ * every other row's Get and Sync is disabled with the reason "Wait for the current sync to
+ * finish".
+ */
+function SyncInProgressDecorator(Story: (update?: { args: HomeProps }) => ReactElement) {
+  return (
+    <Story
+      args={{
+        localizedStringsWithLoadingState: [localizedStrings, false],
+        localProjectsInfo: staticLocalProjectsAndResources,
+        sharedProjectsInfo: staticProjectsAndResources,
+        isSendReceiveInProgress: true,
+        activeSendReceiveProjects: ['17'],
+        headerContent: (
+          <>
+            <HomeIcon size="36" />
+            <CardTitle>Home</CardTitle>
+          </>
+        ),
+      }}
+    />
+  );
+}
+
+export const SyncInProgress: Story = {
+  decorators: [SyncInProgressDecorator],
+};
+
+/**
  * The send/receive server could not be reached, so the list holds only what is already on this
  * computer.
  */

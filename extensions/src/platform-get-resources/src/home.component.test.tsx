@@ -211,6 +211,25 @@ describe('Home send/receive failures', () => {
     expect(screen.queryByText('Sync failed')).not.toBeNull();
   });
 
+  it('shows the backend message without the transport prefix', async () => {
+    const onSendReceiveProject = vi.fn(async () => {
+      throw new Error(
+        'JSON-RPC Request error (-32000): A sync is already in progress. Please wait for it to finish and try again.',
+      );
+    });
+    renderHome(onSendReceiveProject);
+
+    clickSendReceive();
+
+    await waitFor(() => {
+      expect(
+        screen.queryByText(
+          'A sync is already in progress. Please wait for it to finish and try again.',
+        ),
+      ).not.toBeNull();
+    });
+  });
+
   it('shows no failure alert when the send/receive callback resolves', async () => {
     const onSendReceiveProject = vi.fn(async () => {});
     renderHome(onSendReceiveProject);
@@ -1855,9 +1874,17 @@ describe('Home while a sync runs', () => {
 
   it("disables the other rows' Get buttons while one project syncs", () => {
     renderHomeDuringSync({ activeSendReceiveProjects: ['syncingProject'] });
+    // The syncing row shows a spinner in place of "Get" but keeps "Get" as its accessible name.
     const getButtons = screen.getAllByRole('button', { name: 'Get' });
-    expect(getButtons).toHaveLength(1); // the syncing row shows a spinner, not "Get"
-    expect(getButtons[0]).toBeDisabled();
+    expect(getButtons).toHaveLength(2);
+    getButtons.forEach((button) => expect(button).toBeDisabled());
+    expect(getButtons.filter((button) => button.getAttribute('aria-busy') === 'true')).toHaveLength(
+      1,
+    );
+    // Only the waiting row explains why it is disabled; the syncing row needs no reason.
+    expect(
+      screen.getAllByRole('group', { name: 'Wait for the current sync to finish' }),
+    ).toHaveLength(1);
   });
 
   it('enables every Get button when no sync runs', () => {
@@ -1874,5 +1901,17 @@ describe('Home while a sync runs', () => {
     await userEvent.click(ellipsisTrigger);
     const syncItem = await screen.findByRole('menuitem');
     expect(syncItem).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it("gives a waiting row's Sync menu item the reason while another project syncs", async () => {
+    renderHomeDuringSync({ activeSendReceiveProjects: ['syncingProject'], withLocalProject: true });
+    const row = screen.getByText('LOC').closest('tr');
+    if (!row) throw new Error('Home rendered no row for the local project');
+    const ellipsisTrigger = within(row).getAllByRole('button').at(-1);
+    if (!ellipsisTrigger) throw new Error('The local project row has no buttons');
+    await userEvent.click(ellipsisTrigger);
+    const syncItem = await screen.findByRole('menuitem');
+    expect(syncItem).toHaveAttribute('aria-disabled', 'true');
+    expect(syncItem).toHaveTextContent('Wait for the current sync to finish');
   });
 });

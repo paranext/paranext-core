@@ -176,6 +176,15 @@ const DEFAULT_SORT_CONFIG: SortConfig = { key: 'language', direction: 'ascending
  * not as text: the backend sends local-offset ISO strings, which sort out of order across a DST
  * change.
  */
+/**
+ * Removes the `JSON-RPC Request error (<code>): ` prefix the network layer puts on every backend
+ * error. The prefix is transport detail that tells the user nothing; the message after it is the
+ * backend's own, already localized.
+ */
+function withoutJsonRpcErrorPrefix(message: string): string {
+  return message.replace(/^JSON-RPC Request error \(-?\d+\): /, '');
+}
+
 function getLastSendReceiveTime(project: MergedProjectInfo): number | undefined {
   if (!project.lastSendReceiveDate) return undefined;
   const time = new Date(project.lastSendReceiveDate).getTime();
@@ -462,7 +471,7 @@ export function Home({
     try {
       await onSendReceiveProject(projectId);
     } catch (e) {
-      setActionError(getErrorMessage(e));
+      setActionError(withoutJsonRpcErrorPrefix(getErrorMessage(e)));
     }
   };
 
@@ -953,6 +962,9 @@ export function Home({
       unsupportedReasonText ?? waitingReasonText,
       <Button
         disabled={isBlocked || isSendReceiveInProgress}
+        aria-busy={isThisProjectSyncing}
+        // The spinner has no text, so the button keeps its name while it shows.
+        aria-label={project.isLocallyAvailable ? syncText : getText}
         onClick={() => handleSendReceiveProject(project.projectId)}
       >
         {getSendReceiveButtonContent(project)}
