@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { formatProjectName, formatReplacementString } from 'platform-bible-utils';
+import {
+  formatProjectName,
+  formatReplacementString,
+  resolveLocalizedString,
+} from 'platform-bible-utils';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { ResourceReference } from 'platform-scripture';
 import {
@@ -37,7 +41,6 @@ import {
   BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS,
   BaseOrModelTextExplanation,
   focusResourcePickerOnOpen,
-  resolveLocalizedString,
   ResourcePickerDialog,
 } from 'platform-bible-react/experimental';
 import type { ResourcePickerDialogLocalizedStrings } from 'platform-bible-react/experimental';

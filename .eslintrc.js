@@ -141,6 +141,13 @@ module.exports = {
     // explanatory comment on the immediately preceding line
     'paranext/require-disable-comment': 'error',
 
+    // Localized lookups must not fall back with `??`/`||`: an unresolved lookup returns the raw
+    // key, a defined string, so the fallback never runs. Use `resolveLocalizedString` from
+    // `platform-bible-utils`. See .context/standards/Localization-Guide.md.
+    // `warn` while the existing call sites are swept; escalate to `error` once the count is zero.
+    // The sweep and that escalation are TODO(PT-4103).
+    'paranext/no-nullish-localized-fallback': 'warn',
+
     // #endregion
   },
   globals: {
@@ -163,6 +170,9 @@ module.exports = {
       rules: {
         // Stories use console.log for Storybook action logging
         'no-console': 'off',
+        // Stories stand in fake localized strings; a fallback there never reaches a user. Scoped
+        // to the story file itself.
+        'paranext/no-nullish-localized-fallback': 'off',
         '@typescript-eslint/naming-convention': [
           'error',
           {
@@ -210,6 +220,9 @@ module.exports = {
         'vitest/env': true,
       },
       rules: {
+        // Tests construct localized-string maps directly; a fallback there never reaches a user.
+        // Scoped to the test file itself - a shared `*.test-utils.ts` helper keeps the rule on.
+        'paranext/no-nullish-localized-fallback': 'off',
         // `vitest/expect-expect` is already enabled by legacy-recommended; this only customizes
         // `assertFunctionNames` so `expectTypeOf()` counts as an assertion.
         'vitest/expect-expect': ['error', { assertFunctionNames: ['expect', 'expectTypeOf'] }],

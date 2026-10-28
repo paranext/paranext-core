@@ -21,6 +21,8 @@ import {
   formatReplacementString,
   getErrorMessage,
   LocalizeKey,
+  localizedStringOrUndefined,
+  resolveLocalizedString,
 } from 'platform-bible-utils';
 import type {
   DblResourceReference,
@@ -39,7 +41,6 @@ import {
 import { resolveDblLongName } from './scripture-text-grid/view-options-long-name.utils';
 import {
   DOWNLOADED_NO_PROJECT_KEY,
-  resolveLocalizedString,
   resolvePickerNotice,
   VIEW_OPTIONS_NOTICE_STRING_KEYS,
 } from './scripture-text-grid/view-options-notice.utils';
@@ -234,14 +235,20 @@ function ScriptureTextGridProjectView({
     (context: ChapterContextResource) => {
       setChapterContext(context);
       onAnnounce(
-        buildChapterContextOpenedMessage(localizedStrings[ARIA_OPENED_KEY] ?? '', context.label),
+        buildChapterContextOpenedMessage(
+          resolveLocalizedString(
+            localizedStrings[ARIA_OPENED_KEY],
+            'Chapter view opened for {resourceReference}',
+          ),
+          context.label,
+        ),
       );
     },
     [localizedStrings, onAnnounce],
   );
   const handleCloseChapterContext = useCallback(() => {
     setChapterContext(undefined);
-    onAnnounce(localizedStrings[ARIA_CLOSED_KEY] ?? '');
+    onAnnounce(resolveLocalizedString(localizedStrings[ARIA_CLOSED_KEY], 'Chapter view closed'));
   }, [localizedStrings, onAnnounce]);
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -266,7 +273,7 @@ function ScriptureTextGridProjectView({
   // unmount, not as it was when this effect ran.
   const unmountAnnouncementRef = useRef<string | undefined>(undefined);
   unmountAnnouncementRef.current = chapterContext
-    ? (localizedStrings[ARIA_CLOSED_KEY] ?? '')
+    ? resolveLocalizedString(localizedStrings[ARIA_CLOSED_KEY], 'Chapter view closed')
     : undefined;
   const onAnnounceRef = useRef(onAnnounce);
   onAnnounceRef.current = onAnnounce;
@@ -361,15 +368,21 @@ function ScriptureTextGridProjectView({
     [textConnectionState, sources, hasSettingsError],
   );
   const disabledMessage = useMemo(() => {
-    // Resolved rather than indexed: `useLocalizedStrings` seeds its result with the key itself
-    // until the real value arrives, and rendering that shows literal `%…%` text.
+    // A disabled control with no explanation reads as broken, so each reason keeps its English
+    // wording when the lookup has not resolved rather than going silent.
     if (viewOptionsAvailability === 'noProject')
-      return resolveLocalizedString(localizedStrings, NO_PROJECT_KEY);
+      return resolveLocalizedString(localizedStrings[NO_PROJECT_KEY], 'No project selected.');
     if (viewOptionsAvailability === 'unavailable')
-      return resolveLocalizedString(localizedStrings, NOT_SUPPORTED_KEY);
+      return resolveLocalizedString(
+        localizedStrings[NOT_SUPPORTED_KEY],
+        'Text Collection settings could not be loaded for this project.',
+      );
     if (viewOptionsAvailability === 'settingsError')
-      return resolveLocalizedString(localizedStrings, SETTINGS_UNAVAILABLE_KEY);
-    return resolveLocalizedString(localizedStrings, LOADING_KEY);
+      return resolveLocalizedString(
+        localizedStrings[SETTINGS_UNAVAILABLE_KEY],
+        "Couldn't load your texts.",
+      );
+    return resolveLocalizedString(localizedStrings[LOADING_KEY], 'Loading');
   }, [viewOptionsAvailability, localizedStrings]);
 
   useEffect(() => {
@@ -422,16 +435,25 @@ function ScriptureTextGridProjectView({
 
   const getReorderHandleLabel = useCallback(
     (resourceName: string) =>
-      formatReplacementString(localizedStrings[REORDER_HANDLE_KEY] ?? '', { resourceName }),
+      formatReplacementString(
+        resolveLocalizedString(localizedStrings[REORDER_HANDLE_KEY], 'Reorder {resourceName}'),
+        { resourceName },
+      ),
     [localizedStrings],
   );
   const getReorderAnnouncement = useCallback(
     (resourceName: string, position: number, total: number) =>
-      formatReplacementString(localizedStrings[REORDER_ANNOUNCEMENT_KEY] ?? '', {
-        resourceName,
-        position,
-        total,
-      }),
+      formatReplacementString(
+        resolveLocalizedString(
+          localizedStrings[REORDER_ANNOUNCEMENT_KEY],
+          'Moved {resourceName} to position {position} of {total}',
+        ),
+        {
+          resourceName,
+          position,
+          total,
+        },
+      ),
     [localizedStrings],
   );
 
@@ -495,7 +517,7 @@ function ScriptureTextGridProjectView({
         listIdsAtPickerOpenRef.current.get(resource.dblEntryUid) ?? [],
         async () => (pdp ? sourcesRef.current?.userReferenced : undefined),
         async (list) => pdp?.setUserReferencedProjectsAndResources(list),
-        resolveLocalizedString(localizedStrings, RESOURCE_REMOVED_FROM_USER_LIST_KEY),
+        localizedStringOrUndefined(localizedStrings, RESOURCE_REMOVED_FROM_USER_LIST_KEY),
       );
     },
     [textConnectionPdp, localizedStrings],
@@ -552,6 +574,12 @@ function ScriptureTextGridProjectView({
     ),
   );
 
+  // One label for the button, its tooltip and the empty state that names it, so they cannot drift.
+  const viewOptionsLabel = resolveLocalizedString(
+    localizedStrings[VIEW_OPTIONS_BUTTON_KEY],
+    'View Options',
+  );
+
   // The picker is modal, so it cannot be opened again while open and replace the ids it is using.
   const openResourcePicker = useCallback(() => {
     listIdsAtPickerOpenRef.current = pickerSelection.listIdsByRemovableId;
@@ -569,7 +597,7 @@ function ScriptureTextGridProjectView({
                   <Button
                     variant="ghost"
                     size="icon"
-                    aria-label={localizedStrings[VIEW_OPTIONS_BUTTON_KEY]}
+                    aria-label={viewOptionsLabel}
                     // Explicit themed colors so the icon is visible in both light and dark themes; a
                     // plain ghost button inherits the (un-themed) default color and vanishes on dark
                     // tabs.
@@ -579,7 +607,7 @@ function ScriptureTextGridProjectView({
                   </Button>
                 </PopoverTrigger>
               </TooltipTrigger>
-              <TooltipContent>{localizedStrings[VIEW_OPTIONS_BUTTON_KEY]}</TooltipContent>
+              <TooltipContent>{viewOptionsLabel}</TooltipContent>
             </Tooltip>
           </TooltipProvider>
           <PopoverContent className="tw:max-h-[70vh] tw:overflow-y-auto">
@@ -611,8 +639,11 @@ function ScriptureTextGridProjectView({
         {gridBodyState === 'grid' &&
           (isRetryingCatalog || shouldShowCatalogRetryBanner({ hasCatalogError, resources })) && (
             <CatalogRetryBanner
-              message={localizedStrings[CATALOG_ERROR_KEY]}
-              retryLabel={localizedStrings[CATALOG_RETRY_KEY]}
+              message={resolveLocalizedString(
+                localizedStrings[CATALOG_ERROR_KEY],
+                "Couldn't load the list of available resources.",
+              )}
+              retryLabel={resolveLocalizedString(localizedStrings[CATALOG_RETRY_KEY], 'Try again')}
               onRetry={retryCatalogFromBanner}
               isRetrying={isRetryingCatalog}
             />
@@ -621,7 +652,9 @@ function ScriptureTextGridProjectView({
       {/* Grid body: a message when nothing is renderable, otherwise the verse-cell rows.
           Gate the message on loading being finished so it can't flash before data arrives —
           `sources` undefined and `cachedResources` still loading each make `resources` transiently
-          empty. The `!isLoadingLocalizedStrings` guard also avoids flashing a raw `%key%`.
+          empty. The grid branch renders while strings are still loading, so every string it passes
+          down goes through `resolveLocalizedString` and shows its English fallback until the
+          translation arrives.
 
           The body itself is not a zoom area: each cell marks only its resource's text, with that
           resource's own area (`resource-<id>`, see `resource-zoom-area.utils.ts`), so the cells'
@@ -634,8 +667,11 @@ function ScriptureTextGridProjectView({
           <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:p-4">
             <RetryableErrorView
               icon={<CloudOff />}
-              message={localizedStrings[CATALOG_ERROR_KEY]}
-              retryLabel={localizedStrings[CATALOG_RETRY_KEY]}
+              message={resolveLocalizedString(
+                localizedStrings[CATALOG_ERROR_KEY],
+                "Couldn't load the list of available resources.",
+              )}
+              retryLabel={resolveLocalizedString(localizedStrings[CATALOG_RETRY_KEY], 'Try again')}
               onRetry={refetchCatalog}
             />
           </div>
@@ -647,15 +683,21 @@ function ScriptureTextGridProjectView({
             <EmptyState
               id="scripture-text-grid-empty-state"
               className="tw:text-center"
-              message={formatReplacementString(localizedStrings[EMPTY_STATE_KEY], {
-                viewOptionsLabel: localizedStrings[VIEW_OPTIONS_BUTTON_KEY],
-              })}
+              message={formatReplacementString(
+                resolveLocalizedString(
+                  localizedStrings[EMPTY_STATE_KEY],
+                  'No texts to display. Open {viewOptionsLabel} to choose which texts to show.',
+                ),
+                {
+                  viewOptionsLabel,
+                },
+              )}
             />
           </div>
         )}
         {gridBodyState === 'grid' && (
           <ScriptureTextGrid
-            ariaLabel={localizedStrings[TITLE_KEY]}
+            ariaLabel={resolveLocalizedString(localizedStrings[TITLE_KEY], 'Text Collection')}
             resources={resources}
             scrRef={scrRef}
             setScrRef={setScrRef}
@@ -666,15 +708,24 @@ function ScriptureTextGridProjectView({
             chapterContext={chapterContext}
             onChapterContextChange={handleChapterContextChange}
             onChapterContextClose={handleCloseChapterContext}
-            closeChapterContextLabel={localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY]}
-            cellAccessibleNameTemplate={localizedStrings[CELL_ACCESSIBLE_NAME_KEY]}
+            closeChapterContextLabel={resolveLocalizedString(
+              localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY],
+              'Close chapter view',
+            )}
+            cellAccessibleNameTemplate={resolveLocalizedString(
+              localizedStrings[CELL_ACCESSIBLE_NAME_KEY],
+              '{resourceName}, {reference}',
+            )}
             // Withheld until the saved order is in hand: reordering against the empty stand-in
             // would persist only the resources on screen and drop every hidden resource's saved
             // slot. `ScriptureTextGrid` keys the grip, the `draggable` attribute, and both gesture
             // handlers off this prop, so an unusable reorder is never offered in the first place.
             onReorder={isOrderPending ? undefined : handleReorder}
             getReorderHandleLabel={getReorderHandleLabel}
-            reorderHint={localizedStrings[REORDER_HINT_KEY]}
+            reorderHint={resolveLocalizedString(
+              localizedStrings[REORDER_HINT_KEY],
+              'Drag or press arrow keys to reorder',
+            )}
             getReorderAnnouncement={getReorderAnnouncement}
           />
         )}
@@ -715,10 +766,13 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   const zoom = useResourceContentZoom(webViewId, useWebViewState);
   const zoomMenuLabels = useMemo<ZoomMenuLabels>(
     () => ({
-      zoomIn: localizedStrings[ZOOM_IN_KEY],
-      zoomOut: localizedStrings[ZOOM_OUT_KEY],
-      reset: localizedStrings[RESET_ZOOM_KEY],
-      options: localizedStrings[ZOOM_OPTIONS_KEY],
+      zoomIn: resolveLocalizedString(localizedStrings[ZOOM_IN_KEY], 'Zoom in'),
+      zoomOut: resolveLocalizedString(localizedStrings[ZOOM_OUT_KEY], 'Zoom out'),
+      reset: resolveLocalizedString(localizedStrings[RESET_ZOOM_KEY], 'Reset zoom'),
+      options: resolveLocalizedString(
+        localizedStrings[ZOOM_OPTIONS_KEY],
+        'Zoom options for {resourceName}',
+      ),
     }),
     [localizedStrings],
   );

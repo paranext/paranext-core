@@ -1,4 +1,4 @@
-import { LocalizeKey } from 'platform-bible-utils';
+import { localizedStringOrUndefined, LocalizeKey } from 'platform-bible-utils';
 
 /**
  * The shape `useLocalizedStrings` returns. Declared structurally rather than imported as
@@ -22,19 +22,6 @@ export const VIEW_OPTIONS_NOTICE_STRING_KEYS: LocalizeKey[] = [
 ];
 
 /**
- * A localized string, or `undefined` when there is nothing usable to show yet.
- * `useLocalizedStrings` seeds its result with the key itself until the real value arrives, so an
- * unresolved key has to be recognized by value — rendering one shows literal `%…%` text.
- */
-export function resolveLocalizedString(
-  localizedStrings: LocalizedStrings,
-  key: LocalizeKey,
-): string | undefined {
-  const value = localizedStrings[key];
-  return value === undefined || value === key ? undefined : value;
-}
-
-/**
  * The notice shown above the resource picker's list, or `undefined` when there is nothing to say.
  *
  * With a text collection bound there is no limitation to explain. Without one, a pick can still
@@ -47,5 +34,5 @@ export function resolvePickerNotice(
 ): string | undefined {
   return hasTextConnection
     ? undefined
-    : resolveLocalizedString(localizedStrings, PICKER_NO_PROJECT_NOTICE_KEY);
+    : localizedStringOrUndefined(localizedStrings, PICKER_NO_PROJECT_NOTICE_KEY);
 }

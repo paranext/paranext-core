@@ -219,6 +219,11 @@ export type {
   StringsMetadata,
 } from './extension-contributions/localized-strings.model';
 export { localizedStringsDocumentSchema } from './extension-contributions/localized-strings.model';
+export {
+  isResolvedLocalizedValue,
+  localizedStringOrUndefined,
+  resolveLocalizedString,
+} from './localization.util';
 export type {
   LocalizeKey,
   ReferencedItem,

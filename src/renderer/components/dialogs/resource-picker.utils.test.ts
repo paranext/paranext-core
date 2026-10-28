@@ -97,6 +97,23 @@ describe('buildResourcePickerNotice', () => {
     ).toBeUndefined();
   });
 
+  it('shows nothing rather than a raw key when the value is some other key', () => {
+    // An exact `value === key` comparison passes this through and renders `%…%` text at the user.
+    expect(
+      buildResourcePickerNotice(FAILED, FOUND_ONE, {
+        '%resourcePicker_notice_dblCatalogUnavailable%': '%a_different_key%',
+      }),
+    ).toBeUndefined();
+  });
+
+  it('shows nothing when the value is whitespace only', () => {
+    expect(
+      buildResourcePickerNotice(FAILED, FOUND_ONE, {
+        '%resourcePicker_notice_dblCatalogUnavailable%': '   ',
+      }),
+    ).toBeUndefined();
+  });
+
   it('still shows the caller notice when the fetch notice has no translation', () => {
     expect(buildResourcePickerNotice(FAILED, FOUND_ONE, {}, 'No project is open.')).toBe(
       'No project is open.',

@@ -1,9 +1,9 @@
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { Spinner } from 'platform-bible-react';
-import { resolveLocalizedString } from 'platform-bible-react/experimental';
 import {
   PROJECT_OPEN_BLOCKED_FALLBACK_KEY,
   PROJECT_OPEN_BLOCKED_FALLBACK_MESSAGE,
+  resolveLocalizedString,
   toProjectOpenBlockedReasonKey,
 } from 'platform-bible-utils';
 import { PropsWithChildren, useMemo } from 'react';

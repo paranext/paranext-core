@@ -144,9 +144,8 @@ export function SettingsSidebar({
   );
 
   // `buttonPlaceholder` and `ariaLabel` are this sidebar's own copy; the popover's two strings are
-  // optional. Unsupplied entries are left off the bag rather than set to `undefined`, because
-  // ProjectSelector layers this bag over its own English defaults with a plain spread — an explicit
-  // `undefined` would blank the default it lands on instead of falling back to it.
+  // optional, and ProjectSelector resolves each field on its own, so an entry this bag leaves out
+  // (or an unresolved one) falls back to the picker's English default.
   const projectSelectorStrings = useMemo((): ProjectSelectorLocalizedStrings => {
     const strings: ProjectSelectorLocalizedStrings = {
       buttonPlaceholder: buttonPlaceholderText,

@@ -1,5 +1,5 @@
 import { cn } from '@/utils/shadcn-ui/utils';
-import { resolveLocalizedString } from '@/utils/localization.util';
+import { resolveLocalizedString } from 'platform-bible-utils';
 
 /**
  * The keys this explanation reads. They are defined by the platform-scripture-editor extension (its

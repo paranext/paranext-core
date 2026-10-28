@@ -40,6 +40,7 @@ import {
   normalizeProjectId,
   notifyProjectOpenBlocked,
   NotifyProjectOpenBlockedDependencies,
+  resolveLocalizedString,
 } from 'platform-bible-utils';
 import { getBookIdsFromBooksPresent } from 'platform-bible-utils/experimental';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
@@ -497,17 +498,32 @@ global.webViewComponent = function ManageBooksWebView({
   // initial title (cold open) and update title (project switch) both produce
   // `${titleTemplate}` (no project) or `${titleTemplate} — {projectName}`.
   //
-  // `lastAppliedProjectIdRef` dedupes when this effect re-runs for non-projectId
-  // dep changes (e.g. `localizedStrings` arriving from the localization service).
-  // It must be a ref (not state) so the dedupe survives React's render → cleanup →
-  // re-run cycle without cancelling the in-flight async PDP fetch.
-  const lastAppliedProjectIdRef = useRef<string | undefined>(undefined);
+  // `lastTitleInputRef` dedupes when this effect re-runs without changing what the title would
+  // say. It keys on the template as well as the project because the template starts out as the
+  // English fallback and is replaced when the localization service delivers a translation —
+  // keying on `projectId` alone would strand the English title for the rest of the session.
+  // Every re-run first runs the previous cleanup, which cancels that run's fetch, so the cleanup
+  // forgets the input unless its run already applied the title; otherwise a re-run with the same
+  // input would return early and nothing would replace the cancelled fetch.
+  const lastTitleInputRef = useRef<{ projectId: string; titleTemplate: string } | undefined>(
+    undefined,
+  );
   useEffect(() => {
     if (!projectId) return undefined;
-    if (lastAppliedProjectIdRef.current === projectId) return undefined;
-    lastAppliedProjectIdRef.current = projectId;
+
+    // Resolved outside the async body so it can take part in the dedupe key; an unresolved lookup
+    // comes back as the raw key, which is a defined string, so a nullish check never fires on it.
+    const titleTemplate = resolveLocalizedString(
+      localizedStrings['%manageBooks_dialog_title%'],
+      'Manage books',
+    );
+    const lastInput = lastTitleInputRef.current;
+    if (lastInput?.projectId === projectId && lastInput.titleTemplate === titleTemplate)
+      return undefined;
+    lastTitleInputRef.current = { projectId, titleTemplate };
 
     let cancelled = false;
+    let applied = false;
     (async () => {
       // Resolve the projectName (display name) the same way the provider does:
       // `platform.name` setting, falling back to projectId when unavailable.
@@ -521,14 +537,11 @@ global.webViewComponent = function ManageBooksWebView({
       }
       if (cancelled) return;
 
-      // Compose the title using the localized template; if the localized string
-      // hasn't loaded yet (string-fetch race), fall back to the English default
-      // so the title still updates.
-      const titleTemplate = localizedStrings['%manageBooks_dialog_title%'] ?? 'Manage books';
       const title = projectName
         ? formatReplacementString(`${titleTemplate} — {projectName}`, { projectName })
         : titleTemplate;
 
+      applied = true;
       try {
         const ok = updateWebViewDefinition({ projectId, title });
         if (!ok) {
@@ -545,6 +558,7 @@ global.webViewComponent = function ManageBooksWebView({
 
     return () => {
       cancelled = true;
+      if (!applied) lastTitleInputRef.current = undefined;
     };
   }, [projectId, updateWebViewDefinition, localizedStrings]);
 

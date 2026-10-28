@@ -51,12 +51,12 @@ import {
   ProjectSelectorGrouping,
   ProjectSelectorLocalizedStrings,
   ProjectSelectorProject,
-  resolveLocalizedString,
 } from 'platform-bible-react/experimental';
 import {
   formatProjectName,
   isolateBidi,
   makeProjectSelectorCustomData,
+  resolveLocalizedString,
 } from 'platform-bible-utils';
 import { ManageBooksSidebar } from './manage-books-sidebar.component';
 import {

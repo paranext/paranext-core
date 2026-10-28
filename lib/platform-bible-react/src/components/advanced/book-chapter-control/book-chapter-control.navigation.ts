@@ -2,8 +2,7 @@ import { Direction } from '@/utils/dir-helper.util';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { ChevronDown, ChevronsLeft, ChevronsRight, ChevronUp } from 'lucide-react';
 import { ComponentType, useCallback, useMemo } from 'react';
-import { compareScrRefs, LanguageStrings } from 'platform-bible-utils';
-import { resolveLocalizedString } from '@/utils/localization.util';
+import { compareScrRefs, LanguageStrings, resolveLocalizedString } from 'platform-bible-utils';
 import {
   getNextChapterRef,
   getNextVerseRef,

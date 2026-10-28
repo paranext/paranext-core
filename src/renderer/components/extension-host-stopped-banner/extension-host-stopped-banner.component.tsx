@@ -1,6 +1,10 @@
 import { Alert, AlertDescription, AlertTitle, Button, cn } from 'platform-bible-react';
-import { resolveLocalizedString } from 'platform-bible-react/experimental';
-import { formatReplacementString, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
+import {
+  formatReplacementString,
+  getErrorMessage,
+  LocalizeKey,
+  resolveLocalizedString,
+} from 'platform-bible-utils';
 import { CircleAlert, CircleCheck, TriangleAlert } from 'lucide-react';
 import { FocusEvent, ReactElement, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';

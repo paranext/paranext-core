@@ -1,5 +1,5 @@
 import { LocalizationData } from '@shared/services/localization.service-model';
-import { LocalizeKey } from 'platform-bible-utils';
+import { LocalizeKey, resolveLocalizedString } from 'platform-bible-utils';
 import { Direction, readDirection } from 'platform-bible-react/experimental';
 import { CSSProperties } from 'react';
 
@@ -102,12 +102,8 @@ export function buildCrashedViewButtonStateCss(buttonClass: string): string {
 export function createCrashedViewLocalizer<TKey extends LocalizeKey>(
   englishDefaults: Readonly<Record<TKey, string>>,
 ): (localizedStrings: LocalizationData, key: TKey) => string {
-  return (localizedStrings, key) => {
-    const value = localizedStrings[key];
-    // `useLocalizedStrings` seeds each key with the key itself, so an unresolved string is
-    // indistinguishable from one that resolved to its own name — treat both as unresolved
-    return value && value !== key ? value : englishDefaults[key];
-  };
+  return (localizedStrings, key) =>
+    resolveLocalizedString(localizedStrings[key], englishDefaults[key]);
 }
 
 /**

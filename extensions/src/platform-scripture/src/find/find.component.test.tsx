@@ -323,6 +323,7 @@ describe("Find project selector — Find's own strings unresolved", () => {
   const UNRESOLVED_STRINGS: LanguageStrings = Object.fromEntries(
     FIND_LOCALIZED_STRING_KEYS.map((key) => [key, key]),
   );
+  const RAW_KEY = /%[^%\s]+%/;
 
   it("keeps Find's own placeholder wording rather than the picker's generic English", () => {
     render(<Find {...buildProps({ localizedStrings: UNRESOLVED_STRINGS, projects: [] })} />);
@@ -330,13 +331,15 @@ describe("Find project selector — Find's own strings unresolved", () => {
     const trigger = screen.getByRole('combobox', { name: 'Project' });
     expect(trigger).toHaveTextContent('No open projects or resources');
     expect(trigger).not.toHaveTextContent('Select a project');
+    // Asserting the English wording alone would still pass if a raw key sat beside it in the
+    // trigger. Nothing the trigger renders may be a key, whatever its prefix.
+    expect(trigger.textContent ?? '').not.toMatch(RAW_KEY);
   });
 
   it("keeps Find's own empty message inside the popover", async () => {
     // The trigger assertion above cannot reach this: `commandEmptyMessage` only renders once the
     // popover is open. Any `%…%` key, whatever its prefix — a sweep narrowed to `%webView_find_`
     // would miss the shared `%projectSelector_*%` block the popover also renders.
-    const RAW_KEY = /%[^%\s]+%/;
     const user = setupUser();
     render(<Find {...buildProps({ localizedStrings: UNRESOLVED_STRINGS, projects: [] })} />);
 

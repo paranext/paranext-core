@@ -554,11 +554,13 @@ describe('unresolved localized strings', () => {
     // only the popover's.
     await user.click(screen.getByRole('button', { name: 'Group by' }));
 
-    // The English assertions are what carry this test. A raw-key sweep would add nothing: the
-    // builder above already rejected every key-as-value, so no raw key can reach this DOM under
-    // any behavior of the merge. The consumer-override test below is where a sweep bites.
     expect(screen.getByPlaceholderText('Search projects & resources')).toBeInTheDocument();
     expect(screen.getByRole('menuitemradio', { name: 'None' })).toBeInTheDocument();
+    // The English assertions above check one string each; this sweep covers every string the open
+    // popover and menu render, so a field still showing its raw key fails here even when the
+    // fields checked above are fine.
+    expect(screen.queryAllByPlaceholderText(RAW_KEY)).toHaveLength(0);
+    expect(screen.queryAllByText(RAW_KEY)).toHaveLength(0);
   });
 
   it('falls back to English when a consumer overrides with its own unresolved keys', async () => {
@@ -589,8 +591,9 @@ describe('unresolved localized strings', () => {
     await user.type(searchInput, 'zzzzz');
     expect(await screen.findByText('No projects found')).toBeInTheDocument();
 
-    // The load-bearing half: asserting the English strings alone would still pass if the fallback
-    // were reached some other way. Nothing may render a raw key, whatever its prefix.
+    // The English assertions above check one string each; this sweep covers every string the
+    // picker renders, so a field still showing its raw key — whatever its prefix — fails here even
+    // when the fields checked above are fine.
     expect(screen.queryAllByPlaceholderText(RAW_KEY)).toHaveLength(0);
     expect(screen.queryAllByText(RAW_KEY)).toHaveLength(0);
   });
@@ -657,7 +660,12 @@ describe('unresolved localized strings', () => {
       />,
     );
 
-    expect(screen.getByRole('combobox', { name: 'Padded label' })).toBeInTheDocument();
+    // Asserted on the raw attribute, not the accessible name: name computation normalizes
+    // whitespace, so a `name: 'Padded label'` query passes whether or not the value was trimmed.
+    expect(screen.getByRole('combobox', { name: 'Padded label' })).toHaveAttribute(
+      'aria-label',
+      '  Padded label  ',
+    );
   });
 
   // A partially-translated locale is the realistic case: one bag carries resolved strings, raw

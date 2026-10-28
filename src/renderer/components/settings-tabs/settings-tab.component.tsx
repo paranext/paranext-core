@@ -19,7 +19,9 @@ import {
   formatReplacementString,
   Localized,
   LocalizeKey,
+  localizedStringOrUndefined,
   normalizeFullName,
+  resolveLocalizedString,
   SettingBase,
 } from 'platform-bible-utils';
 import { SettingsContributionInfo } from '@shared/utils/settings-document-combiner-base';
@@ -315,6 +317,10 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
     );
   }
 
+  // TODO(PT-4103): Raw read - on a cold open this loading message renders as its key, and
+  // permanently if localization fails. `no-nullish-localized-fallback` cannot see it (there is no
+  // `??`), so it will not turn up in that sweep's warning list. It is one of many in this file:
+  // every raw `localizedStrings[…]` read in the tab's messages and notices belongs to the same sweep.
   if (
     isLoadingSettingsContributions ||
     isLoadingProjectSettingsContributions ||
@@ -349,11 +355,27 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
           selectedSidebarItem={selectedSidebarItem}
           searchValue={searchQuery}
           onSearch={handleSearchInput}
-          extensionsSidebarGroupLabel={localizedStrings['%settings_sidebar_generalSettingsLabel%']}
-          projectsSidebarGroupLabel={localizedStrings['%settings_sidebar_projectSettingsLabel%']}
-          buttonPlaceholderText={localizedStrings['%settings_sidebar_projectsComboBoxPlaceholder%']}
-          searchPlaceholderText={localizedStrings[PROJECT_SELECTOR_SEARCH_PLACEHOLDER_KEY]}
-          noResultsText={localizedStrings[PROJECT_SELECTOR_NO_RESULTS_KEY]}
+          extensionsSidebarGroupLabel={resolveLocalizedString(
+            localizedStrings['%settings_sidebar_generalSettingsLabel%'],
+            'General Settings',
+          )}
+          projectsSidebarGroupLabel={resolveLocalizedString(
+            localizedStrings['%settings_sidebar_projectSettingsLabel%'],
+            'Project Settings',
+          )}
+          buttonPlaceholderText={resolveLocalizedString(
+            localizedStrings['%settings_sidebar_projectsComboBoxPlaceholder%'],
+            'Select project',
+          )}
+          // The picker's own two strings stay undefined while unresolved, so it uses its defaults.
+          searchPlaceholderText={localizedStringOrUndefined(
+            localizedStrings,
+            PROJECT_SELECTOR_SEARCH_PLACEHOLDER_KEY,
+          )}
+          noResultsText={localizedStringOrUndefined(
+            localizedStrings,
+            PROJECT_SELECTOR_NO_RESULTS_KEY,
+          )}
         >
           <div className="project-or-settings-list-container">
             {selectedSidebarItem.projectId ? (

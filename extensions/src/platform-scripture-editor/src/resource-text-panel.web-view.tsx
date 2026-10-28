@@ -13,6 +13,7 @@ import {
   formatReplacementString,
   getErrorMessage,
   isPlatformError,
+  localizedStringOrUndefined,
   LocalizeKey,
   ResourceType,
 } from 'platform-bible-utils';
@@ -47,7 +48,6 @@ import {
   type ResourceSelectionResolution,
 } from './resource-selection.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
-import { resolveLocalizedString } from './scripture-text-grid/view-options-notice.utils';
 import { resolveResourcePanelStringKeys } from './resource-panel-strings.utils';
 import { selectTextConnection } from './select-dbl-resource';
 import {
@@ -488,7 +488,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
         listIdsAtPickerOpenRef.current.get(resource.dblEntryUid) ?? [],
         getUserResourceTexts,
         setUserResourceTexts,
-        resolveLocalizedString(localizedStrings, RESOURCE_REMOVED_FROM_USER_LIST_KEY),
+        localizedStringOrUndefined(localizedStrings, RESOURCE_REMOVED_FROM_USER_LIST_KEY),
       ),
     [getUserResourceTexts, setUserResourceTexts, localizedStrings],
   );

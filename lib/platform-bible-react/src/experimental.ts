@@ -36,11 +36,6 @@ export {
   makeSelectionGrouping,
   defaultGroupings,
 } from './components/advanced/project-selector/project-selector.component';
-// One reader for "can this localized value be shown to a user, or must it fall back?", shared with
-// consumers so a web view merging its own `%webView_…%` lookups onto a component's string bag
-// judges them the same way the component does. A nullish chain cannot: an unresolved lookup arrives
-// as the raw key, which is a defined string, so `?? 'Default'` never fires on it.
-export { resolveLocalizedString } from './utils/localization.util';
 export {
   default as ResourcePickerDialog,
   type ResourcePickerDialogProps,
