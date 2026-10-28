@@ -905,7 +905,28 @@ export function Home({
     </DropdownMenuItem>
   );
 
+  /**
+   * Wraps a button for an action a project's `unsupportedReason` can block in a tooltip that shows
+   * the reason. The button keeps its own props, including `disabled`.
+   */
+  const blockableTooltip = (
+    isBlocked: boolean,
+    reasonText: string | undefined,
+    button: ReactNode,
+  ) => (
+    // Without reason text the wrapper would be a nameless tab stop with an empty bubble; the button
+    // stays disabled either way.
+    <DisabledActionTooltip disabled={isBlocked && !!reasonText} tooltipText={reasonText ?? ''}>
+      {button}
+    </DisabledActionTooltip>
+  );
+
   const syncOrGetButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
+    // Home reuses `unsupportedReason` (the can't-open signal) to block Sync and Get too. Today that
+    // is only Study Bible Additions (see `adr-sba-not-syncable-from-dialog-or-home`). A project type
+    // that becomes openable (removed from `ScrTextExtensions.GetOpenBlockedReason`) stops being
+    // blocked here automatically; a type that stays unopenable but should be syncable needs its own
+    // check instead of `unsupportedReason`.
     const isBlocked = !!project.unsupportedReason;
     const unsupportedReasonText = getUnsupportedReasonText(project);
     if (isMenuItem)
@@ -915,21 +936,18 @@ export function Home({
         reasonText: unsupportedReasonText,
         onActivate: () => handleSendReceiveProject(project.projectId),
       });
-    return (
-      <DisabledActionTooltip
-        disabled={isBlocked && !!unsupportedReasonText}
-        tooltipText={unsupportedReasonText ?? ''}
+    return blockableTooltip(
+      isBlocked,
+      unsupportedReasonText,
+      <Button
+        disabled={
+          isBlocked ||
+          (isSendReceiveInProgress && activeSendReceiveProjects.includes(project.projectId))
+        }
+        onClick={() => handleSendReceiveProject(project.projectId)}
       >
-        <Button
-          disabled={
-            isBlocked ||
-            (isSendReceiveInProgress && activeSendReceiveProjects.includes(project.projectId))
-          }
-          onClick={() => handleSendReceiveProject(project.projectId)}
-        >
-          {getSendReceiveButtonContent(project)}
-        </Button>
-      </DisabledActionTooltip>
+        {getSendReceiveButtonContent(project)}
+      </Button>,
     );
   };
 
@@ -945,26 +963,21 @@ export function Home({
         isDisabled: isOpening,
         onActivate: () => handleOpenProject(project),
       });
-    // Without reason text the wrapper would be a nameless tab stop with an empty bubble; the button
-    // stays disabled either way.
-    return (
-      <DisabledActionTooltip
-        disabled={isOpenBlocked && !!unsupportedReasonText}
-        tooltipText={unsupportedReasonText ?? ''}
+    return blockableTooltip(
+      isOpenBlocked,
+      unsupportedReasonText,
+      <Button
+        disabled={isOpenBlocked}
+        // Not `disabled` while opening, which would drop the focus of a keyboard user who pressed
+        // it; a repeat press is ignored by `handleOpenProject`.
+        aria-disabled={isOpening}
+        aria-busy={isOpening}
+        // The spinner has no text, so the button keeps its name while it shows.
+        aria-label={openText}
+        onClick={() => handleOpenProject(project)}
       >
-        <Button
-          disabled={isOpenBlocked}
-          // Not `disabled` while opening, which would drop the focus of a keyboard user who pressed
-          // it; a repeat press is ignored by `handleOpenProject`.
-          aria-disabled={isOpening}
-          aria-busy={isOpening}
-          // The spinner has no text, so the button keeps its name while it shows.
-          aria-label={openText}
-          onClick={() => handleOpenProject(project)}
-        >
-          {isOpening ? <Spinner className="tw:h-5 tw:py-[1px]" /> : openText}
-        </Button>
-      </DisabledActionTooltip>
+        {isOpening ? <Spinner className="tw:h-5 tw:py-[1px]" /> : openText}
+      </Button>,
     );
   };
 
@@ -1132,7 +1145,11 @@ export function Home({
                             }}
                             onDoubleClick={(e) => {
                               if (!isEventInside(e)) return;
-                              // Open, Sync, and Get are all blocked for an unsupported project.
+                              // Open, Sync, and Get are all blocked for an unsupported project:
+                              // Home reuses the can't-open `unsupportedReason` to block sync too
+                              // (today only Study Bible Additions; see
+                              // `adr-sba-not-syncable-from-dialog-or-home`). A type that stays
+                              // unopenable but should be syncable needs its own check here.
                               if (project.unsupportedReason) return;
                               if (project.isLocallyAvailable) {
                                 handleOpenProject(project);

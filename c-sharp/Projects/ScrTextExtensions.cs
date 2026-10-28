@@ -73,7 +73,8 @@ internal static class ScrTextExtensions
     /// It is deliberately not in <see cref="LocalParatextProjects.GetParatextProject"/>.
     /// Send/Receive, project settings, titles and metadata share that lookup and must keep working;
     /// scheduled and automatic syncs of such a project are not blocked at this layer (the sync
-    /// projects dialog and Home disable manual sync in the UI). ParatextData's own reads, such as a
+    /// projects dialog and Home disable manual sync in the UI; the editor tab's "Sync" menu item
+    /// does not, see adr-sba-not-syncable-from-dialog-or-home). ParatextData's own reads, such as a
     /// merged Study Bible reading its additions, are unaffected.
     /// </para>
     /// </remarks>

@@ -2731,9 +2731,11 @@ declare module 'platform-scripture' {
     warnings?: string[];
     /**
      * Localize key explaining why this project cannot be opened (see
-     * `ProjectMetadata.unsupportedReason`); omitted when it can be. Only opening is blocked:
-     * Send/Receive and download stay allowed, so mark the row with the reason rather than disabling
-     * its Send/Receive actions.
+     * `ProjectMetadata.unsupportedReason`); omitted when it can be. Until Study Bible Additions
+     * projects are supported, a list that offers a manual sync or download for such a project
+     * (Home, the sync projects dialog) shows its row disabled with this reason instead of offering
+     * the action. Scheduled and automatic syncs are not blocked by this. Rationale:
+     * `adr-sba-not-syncable-from-dialog-or-home` in `Architecture-Decisions.md`.
      *
      * Producers set it for local and server-only projects alike. When it is absent, callers fall
      * back to the local project's metadata.

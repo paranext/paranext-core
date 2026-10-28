@@ -8562,12 +8562,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 ## adr-sba-not-syncable-from-dialog-or-home: Study Bible Additions projects cannot be synced from the sync projects dialog or Home
 
 - **Date:** 2026-10-27
-- **Status:** Accepted. Supersedes the "must stay syncable" parts of `adr-unsupported-project-reason`.
+- **Status:** Accepted. The block applies to Study Bible Additions projects until they are
+  supported (PT-4704, Definition of Done item 11). Supersedes the "must stay syncable" parts of
+  `adr-unsupported-project-reason`.
 - **Context:** `adr-unsupported-project-reason` kept Study Bible Additions (SBA) projects selectable
   and syncable in Send/Receive lists. UX decided otherwise in PT-4704's Definition of Done item 11
   (2026-10-27): users cannot open an SBA project, so offering to sync it from the places that
   present it as a normal project is inconsistent.
-- **Decision:**
+- **Decision:** Until Study Bible Additions projects are supported, they cannot be synced from the
+  sync projects dialog or Home:
   - **Sync projects dialog:** SBA rows stay visible and greyed out with the unsupported reason, but
     cannot be ticked. The All, Edited and New shortcuts skip them, saved ticks for them are pruned,
     and submit filters them out.
@@ -8589,9 +8592,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     paratext-10-studio repo, and these checks are temporary — they go once Platform.Bible can open
     SBA projects — so a gate would protect only surfaces added before then.
 - **Consequences:**
-  - Every new surface that offers to sync a project from a list or from Home must treat a project
-    with an `unsupportedReason` as not syncable. Scheduled, automatic and server-side paths are not
-    gated by this.
+  - Until SBA projects are supported, a surface that offers to sync a project from a list or from
+    Home must treat an SBA project as not syncable. Write the gate to key on `unsupportedReason`, so
+    lifting the block needs no change at each surface; a surface that hard-codes SBA instead must
+    carry a comment saying so. Scheduled, automatic and server-side paths are not gated by this.
+  - As of 2026-10-28, the Send/Receive extension's "Sync <project name>" top-menu item on
+    `platformScriptureEditor.react` tabs (`paratextBibleSendReceive.sendReceiveProjectsByWebViewId`)
+    still syncs an SBA project when its placeholder tab is open, because that command does not check
+    `unsupportedReason`. This holds until SBA projects are supported or the extension hides the item
+    for a placeholder tab.
   - `ScrTextExtensions.GetOpenBlockedReason` still never blocks `GetParatextProject`, so a schedule
     or a direct command can still sync an SBA project.
 - **Source:** PT-4704, Definition of Done item 11; design in

@@ -1327,9 +1327,9 @@ describe('Home unsynced changes marker', () => {
 });
 
 /*
- * A project that cannot be opened (e.g. a Study Bible Additions project) stays listed so a user can
- * find and sync it: only Open is blocked, with the reason in a tooltip or, inside a row's ⋯ menu,
- * in the disabled item. Sync and Get stay enabled.
+ * A project that cannot be opened (e.g. a Study Bible Additions project) stays listed, but Open,
+ * Sync and Get are all disabled, with the reason in a tooltip or, inside a row's ⋯ menu, in the
+ * disabled item.
  */
 describe('Home unsupported projects', () => {
   const UNSUPPORTED_REASON_KEY = '%project_unsupported_studyBibleAdditions%';
@@ -1441,6 +1441,28 @@ describe('Home unsupported projects', () => {
     fireEvent.doubleClick(screen.getByText('SVR'));
 
     expect(onSendReceiveProject).not.toHaveBeenCalled();
+  });
+
+  it('gets a supported server-only project on double-click', () => {
+    const onSendReceiveProject = vi.fn(async () => {});
+    renderHomeList({
+      localProjectsInfo: [],
+      sharedProjectsInfo: {
+        server2: {
+          id: 'server2',
+          name: 'SUP',
+          fullName: 'Supported Server-only Project',
+          language: 'en',
+          editedStatus: 'new',
+          lastSendReceiveDate: '',
+        },
+      },
+      onSendReceiveProject,
+    });
+
+    fireEvent.doubleClick(screen.getByText('SUP'));
+
+    expect(onSendReceiveProject).toHaveBeenCalledWith('server2');
   });
 
   it('disables Sync for an edited unsupported local project and shows the reason tooltip', () => {
