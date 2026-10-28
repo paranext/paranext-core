@@ -62,10 +62,14 @@ vi.mock('./home.component', async (importOriginal) => {
       remoteProjectsState,
       initialProjectResourceFilter,
       onProjectResourceFilterChange,
+      onSendReceiveProject,
+      isSendReceiveInProgress,
     }: {
       remoteProjectsState?: string;
       initialProjectResourceFilter?: string;
       onProjectResourceFilterChange?: (filter: string) => void;
+      onSendReceiveProject?: (projectId: string) => void | Promise<void>;
+      isSendReceiveInProgress?: boolean;
     }) => {
       // The real Home reads its initial filter once, into state, so a value that only arrives after
       // the first render never reaches it. Kept the same way here, or a regression that delivers
@@ -76,9 +80,19 @@ vi.mock('./home.component', async (importOriginal) => {
           data-testid="home"
           data-remote-state={String(remoteProjectsState)}
           data-initial-filter={String(filterAtMount)}
+          data-send-receive-in-progress={String(!!isSendReceiveInProgress)}
         >
           <button type="button" onClick={() => onProjectResourceFilterChange?.('resource')}>
             filter to resources
+          </button>
+          {/* The real Home catches a rejection and shows it; the stub drops it. */}
+          <button
+            type="button"
+            onClick={() => {
+              Promise.resolve(onSendReceiveProject?.('project1')).catch(() => {});
+            }}
+          >
+            send/receive
           </button>
         </div>
       );
@@ -283,6 +297,81 @@ describe('HomeWebView shared project fetch', () => {
     await waitFor(() => {
       expect(screen.getByTestId('home')).toHaveAttribute('data-remote-state', 'loaded');
     });
+  });
+});
+
+/*
+ * The sync service runs one sync at a time and refuses a second. The UI disables the other rows,
+ * and the web view is the last line of defence for a second press that arrives before the first
+ * render has disabled anything.
+ */
+describe('HomeWebView send/receive guard', () => {
+  const SEND_RECEIVE_PROJECTS = 'paratextBibleSendReceive.sendReceiveProjects';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  /** Answers availability `true` and hands each `sendReceiveProjects` call to the given behavior. */
+  function mockAvailableSync(sendReceiveProjects: () => Promise<unknown>) {
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === IS_AVAILABLE) return true;
+      if (commandName === GET_SHARED_PROJECTS) return {};
+      if (commandName === SEND_RECEIVE_PROJECTS) return sendReceiveProjects();
+      return undefined;
+    });
+  }
+
+  const sendReceiveCallCount = () =>
+    mockSendCommand.mock.calls.filter(([name]) => name === SEND_RECEIVE_PROJECTS).length;
+
+  it('sends one command when the button is pressed twice before the first sync settles', async () => {
+    let resolveSync: (value: unknown) => void = () => {};
+    mockAvailableSync(
+      () =>
+        new Promise((resolve) => {
+          resolveSync = resolve;
+        }),
+    );
+    const home = await renderAndWaitForRemoteState();
+    const button = screen.getByRole('button', { name: 'send/receive' });
+
+    // No await between the presses: the second arrives before any re-render could disable anything.
+    fireEvent.click(button);
+    fireEvent.click(button);
+
+    expect(sendReceiveCallCount()).toBe(1);
+    await waitFor(() => {
+      expect(home).toHaveAttribute('data-send-receive-in-progress', 'true');
+    });
+
+    resolveSync(undefined);
+    await waitFor(() => {
+      expect(home).toHaveAttribute('data-send-receive-in-progress', 'false');
+    });
+
+    // The guard is released once the sync settles.
+    fireEvent.click(button);
+    expect(sendReceiveCallCount()).toBe(2);
+  });
+
+  it('accepts a new sync after the previous one was refused', async () => {
+    mockAvailableSync(async () => {
+      throw new Error(
+        'JSON-RPC Request error (-32000): A sync is already in progress. Please wait for it to finish and try again.',
+      );
+    });
+    const home = await renderAndWaitForRemoteState();
+    const button = screen.getByRole('button', { name: 'send/receive' });
+
+    fireEvent.click(button);
+    await waitFor(() => {
+      expect(sendReceiveCallCount()).toBe(1);
+      expect(home).toHaveAttribute('data-send-receive-in-progress', 'false');
+    });
+
+    fireEvent.click(button);
+    expect(sendReceiveCallCount()).toBe(2);
   });
 });
 
