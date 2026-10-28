@@ -1750,17 +1750,23 @@ export type MenuItemBase = OrderedItem & {
 	 * property references (web view menus provide `{webViewId}`, `{webViewType}`, and `{projectId}`;
 	 * the main menu provides none). Example: `"myExtension.project.{projectId}.isEditable &&
 	 * !platform.someFlag"`
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
 	 */
 	when?: string;
 	/**
 	 * When-expression controlling whether this menu item is enabled. If not provided, the item is
 	 * always enabled. Same grammar as {@link MenuItemBase.when}.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
 	 */
 	enabledWhen?: string;
 	/**
 	 * Whether this menu item is currently disabled. Computed at runtime from
 	 * {@link MenuItemBase.enabledWhen} by `evaluateMenu` — NOT allowed in menus.json contributions
 	 * (rejected by the schema).
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
 	 */
 	disabled?: boolean;
 };
@@ -1802,12 +1808,16 @@ export type MenuItemContainingCommand = MenuItemBase & {
 	 * When-expression controlling whether this menu item shows a checkmark. If provided, the item
 	 * renders as a checkbox-style item (checked or unchecked); if not provided, the item renders as a
 	 * plain item. Same grammar as {@link MenuItemBase.when}.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
 	 */
 	checkedWhen?: string;
 	/**
 	 * Whether this menu item's checkbox is currently checked. Computed at runtime from
 	 * {@link MenuItemContainingCommand.checkedWhen} by `evaluateMenu` — NOT allowed in menus.json
 	 * contributions (rejected by the schema).
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
 	 */
 	checked?: boolean;
 };
@@ -5274,6 +5284,8 @@ export declare function recencyMapFromOrderedIds(orderedProjectIds: readonly str
  * Value that can be stored in a context key. Deliberately constrained to scalar types so
  * when-expression equality semantics stay trivial and the store is not used as a general-purpose
  * state bus.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
  */
 export type ContextKeyValue = string | number | boolean;
 /**
@@ -5281,6 +5293,8 @@ export type ContextKeyValue = string | number | boolean;
  *
  * @param key The context key to look up
  * @returns The current value, or `undefined` if the key has no value
+ *
+ * @experimental This type is unstable and may change or disappear without notice
  */
 export type ContextKeyLookup = (key: string) => ContextKeyValue | undefined;
 /**
@@ -5291,6 +5305,8 @@ export type ContextKeyLookup = (key: string) => ContextKeyValue | undefined;
  *
  * @param key The context key to check
  * @returns `true` if the key is structurally valid
+ *
+ * @experimental This function is unstable and may change or disappear without notice
  */
 export declare function isValidContextKey(key: string): boolean;
 /**
@@ -5298,9 +5314,15 @@ export declare function isValidContextKey(key: string): boolean;
  *
  * @param value The value to check
  * @returns `true` if the value is a string, number, or boolean
+ *
+ * @experimental This function is unstable and may change or disappear without notice
  */
 export declare function isValidContextKeyValue(value: unknown): value is ContextKeyValue;
-/** One segment of a property reference in a when-expression */
+/**
+ * One segment of a property reference in a when-expression
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
 export type WhenExpressionPropertySegment = {
 	type: "identifier";
 	text: string;
@@ -5308,7 +5330,11 @@ export type WhenExpressionPropertySegment = {
 	type: "templateVar";
 	name: string;
 };
-/** Parsed form of a when-expression */
+/**
+ * Parsed form of a when-expression
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
 export type WhenExpressionAst = {
 	type: "literal";
 	value: ContextKeyValue;
@@ -5337,6 +5363,8 @@ export type WhenExpressionAst = {
  * @param expression The when-expression to parse
  * @returns The parsed AST
  * @throws Error with a descriptive message if the expression is not valid
+ *
+ * @experimental This function is unstable and may change or disappear without notice
  */
 export declare function parseWhenExpression(expression: string): WhenExpressionAst;
 /**
@@ -5346,6 +5374,8 @@ export declare function parseWhenExpression(expression: string): WhenExpressionA
  * @param expression The when-expression to inspect
  * @returns Array of unique template variable names
  * @throws Error if the expression is not valid
+ *
+ * @experimental This function is unstable and may change or disappear without notice
  */
 export declare function getTemplateVarNames(expression: string): string[];
 /**
@@ -5357,11 +5387,21 @@ export declare function getTemplateVarNames(expression: string): string[];
  *   reference containing a placeholder with no value evaluates to `undefined` (falsy)
  * @returns The boolean result of the expression. `undefined`, `false`, `0`, and `''` are falsy
  * @throws Error if the expression is not valid (use load-time validation to avoid this)
+ *
+ * @experimental This function is unstable and may change or disappear without notice
  */
 export declare function evaluateWhenExpression(expression: string, getContextKey: ContextKeyLookup, templateVars?: Record<string, string | undefined>): boolean;
-/** Menu document shapes that {@link evaluateMenu} can process */
+/**
+ * Menu document shapes that {@link evaluateMenu} can process
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
 export type EvaluatableMenu = SingleColumnMenu | MultiColumnMenu | Localized<SingleColumnMenu> | Localized<MultiColumnMenu>;
-/** Callback invoked when a when-expression fails to evaluate */
+/**
+ * Callback invoked when a when-expression fails to evaluate
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
 export type WhenExpressionErrorHandler = (expression: string, error: unknown) => void;
 /**
  * Evaluates all when-expressions in a menu document against the current context key values.
@@ -5383,6 +5423,8 @@ export type WhenExpressionErrorHandler = (expression: string, error: unknown) =>
  *   validated at contribution load time). Failed expressions fail safe: `when` → hidden,
  *   `enabledWhen` → disabled, `checkedWhen` → unchecked
  * @returns A new menu document with expressions applied and stripped
+ *
+ * @experimental This function is unstable and may change or disappear without notice
  */
 export declare function evaluateMenu<T extends EvaluatableMenu>(menu: T, getContextKey: ContextKeyLookup, templateVars?: Record<string, string | undefined>, onError?: WhenExpressionErrorHandler): T;
 export type ResourceType = "ScriptureResource" | "CommentaryResource" | "EnhancedResource" | "XmlResource" | "SourceLanguageResource";

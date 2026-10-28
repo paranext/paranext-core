@@ -2003,6 +2003,8 @@ declare module 'shared/services/shared-store.service' {
    * process ID. The method exists exactly as long as the process is connected, so main learns which
    * process died from the disconnect event's removed method names and can release that process's
    * keys.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
    */
   export const SHARED_STORE_OWNER_METHOD_PREFIX = 'shared-store:owner:';
   type LamportClock = {
@@ -2166,6 +2168,8 @@ declare module 'shared/services/shared-store.service' {
   /**
    * Keys for context key values (see `context-keys.service.ts`). Keys are dynamically constructed by
    * adding this prefix to the context key name.
+   *
+   * @experimental This type is unstable and may change or disappear without notice
    */
   export type ContextKeySharedStoreKey = `contextKeys.${string}`;
   /**
@@ -12383,8 +12387,18 @@ declare module 'shared/services/context-keys.service-model' {
    *   reference these with template variables like `{projectId}`
    * - Each key should have exactly one producer. A key first set in one process can only be updated
    *   from that same process
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
    */
   export interface IContextKeysService {
+    /**
+     * Event that fires when any context key changes, whether the change was made in this process or
+     * in another one. The event's `key` is the context key without any internal storage prefix, and
+     * its `value` is `undefined` when the key was removed.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    onDidChange: PlatformEvent<ContextKeyChangeEvent>;
     /**
      * Sets or updates a context key.
      *
@@ -12421,14 +12435,6 @@ declare module 'shared/services/context-keys.service-model' {
      * @experimental This function is unstable and may change or disappear without notice
      */
     remove(key: string): void;
-    /**
-     * Event that fires when any context key changes, whether the change was made in this process or
-     * in another one. The event's `key` is the context key without any internal storage prefix, and
-     * its `value` is `undefined` when the key was removed.
-     *
-     * @experimental This field is unstable and may change or disappear without notice
-     */
-    onDidChange: PlatformEvent<ContextKeyChangeEvent>;
   }
 }
 declare module 'shared/services/context-keys.service' {
@@ -12458,23 +12464,33 @@ declare module 'shared/services/context-keys.service' {
    *   reference these with template variables like `{projectId}`
    * - Each key should have exactly one producer. A key first set in one process can only be updated
    *   from that same process
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
    */
   export const contextKeysService: {
     set: typeof set;
     get: typeof get;
     remove: typeof remove;
-    /** Event that fires when any context key changes (whether changed locally or in another process). */
+    /**
+     * Event that fires when any context key changes (whether changed locally or in another process).
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
     onDidChange: import('platform-bible-utils').PlatformEvent<ContextKeyChangeEvent>;
   };
-  /** Context keys service exposed on PAPI (both `@papi/backend` and `@papi/frontend`) */
+  /**
+   * Context keys service exposed on PAPI (both `@papi/backend` and `@papi/frontend`)
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
   export const papiContextKeysService: IContextKeysService;
 }
 declare module 'renderer/hooks/papi-hooks/use-evaluated-menu.hook' {
   import { EvaluatableMenu } from 'platform-bible-utils';
   /**
    * Evaluates the when-expressions (`when`, `enabledWhen`, `checkedWhen`) in a menu document against
-   * the current context keys and re-evaluates on every context key change, local or remote. Use it
-   * in a web view that renders its own menu and must react to keys it does not own.
+   * the current context keys and re-evaluates on every context key change, local or remote. Use it in
+   * a web view that renders its own menu and must react to keys it does not own.
    *
    * @param menuData The menu document to evaluate (pass a referentially stable object, e.g. state or
    *   memoized data)
@@ -14911,6 +14927,8 @@ declare module '@papi/backend' {
      *   reference these with template variables like `{projectId}`
      * - Each key should have exactly one producer. A key first set in one process can only be updated
      *   from that same process
+     *
+     * @experimental This constant is unstable and may change or disappear without notice
      */
     contextKeys: IContextKeysService;
     /**
@@ -15200,6 +15218,8 @@ declare module '@papi/backend' {
    *   reference these with template variables like `{projectId}`
    * - Each key should have exactly one producer. A key first set in one process can only be updated
    *   from that same process
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
    */
   export const contextKeys: IContextKeysService;
   /**
@@ -15899,6 +15919,8 @@ declare module '@papi/frontend' {
      *   reference these with template variables like `{projectId}`
      * - Each key should have exactly one producer. A key first set in one process can only be updated
      *   from that same process
+     *
+     * @experimental This constant is unstable and may change or disappear without notice
      */
     contextKeys: IContextKeysService;
     /**
@@ -16099,6 +16121,8 @@ declare module '@papi/frontend' {
    *   reference these with template variables like `{projectId}`
    * - Each key should have exactly one producer. A key first set in one process can only be updated
    *   from that same process
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
    */
   export const contextKeys: IContextKeysService;
   /**

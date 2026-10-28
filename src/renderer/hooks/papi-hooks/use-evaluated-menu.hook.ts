@@ -5,8 +5,8 @@ import { logger } from '@shared/services/logger.service';
 
 /**
  * Evaluates the when-expressions (`when`, `enabledWhen`, `checkedWhen`) in a menu document against
- * the current context keys and re-evaluates on every context key change, local or remote. Use it
- * in a web view that renders its own menu and must react to keys it does not own.
+ * the current context keys and re-evaluates on every context key change, local or remote. Use it in
+ * a web view that renders its own menu and must react to keys it does not own.
  *
  * @param menuData The menu document to evaluate (pass a referentially stable object, e.g. state or
  *   memoized data)

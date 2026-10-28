@@ -80,16 +80,26 @@ onDidChangeSharedStore((event) => {
  *   reference these with template variables like `{projectId}`
  * - Each key should have exactly one producer. A key first set in one process can only be updated
  *   from that same process
+ *
+ * @experimental This constant is unstable and may change or disappear without notice
  */
 export const contextKeysService = {
   set,
   get,
   remove,
-  /** Event that fires when any context key changes (whether changed locally or in another process). */
+  /**
+   * Event that fires when any context key changes (whether changed locally or in another process).
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
   onDidChange: onDidChangeEmitter.event,
 };
 
-/** Context keys service exposed on PAPI (both `@papi/backend` and `@papi/frontend`) */
+/**
+ * Context keys service exposed on PAPI (both `@papi/backend` and `@papi/frontend`)
+ *
+ * @experimental This constant is unstable and may change or disappear without notice
+ */
 export const papiContextKeysService: IContextKeysService = {
   set,
   get,

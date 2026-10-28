@@ -113,17 +113,23 @@ export type MenuItemBase = OrderedItem & {
    * property references (web view menus provide `{webViewId}`, `{webViewType}`, and `{projectId}`;
    * the main menu provides none). Example: `"myExtension.project.{projectId}.isEditable &&
    * !platform.someFlag"`
+   *
+   * @experimental This field is unstable and may change or disappear without notice
    */
   when?: string;
   /**
    * When-expression controlling whether this menu item is enabled. If not provided, the item is
    * always enabled. Same grammar as {@link MenuItemBase.when}.
+   *
+   * @experimental This field is unstable and may change or disappear without notice
    */
   enabledWhen?: string;
   /**
    * Whether this menu item is currently disabled. Computed at runtime from
    * {@link MenuItemBase.enabledWhen} by `evaluateMenu` — NOT allowed in menus.json contributions
    * (rejected by the schema).
+   *
+   * @experimental This field is unstable and may change or disappear without notice
    */
   disabled?: boolean;
 };
@@ -167,12 +173,16 @@ export type MenuItemContainingCommand = MenuItemBase & {
    * When-expression controlling whether this menu item shows a checkmark. If provided, the item
    * renders as a checkbox-style item (checked or unchecked); if not provided, the item renders as a
    * plain item. Same grammar as {@link MenuItemBase.when}.
+   *
+   * @experimental This field is unstable and may change or disappear without notice
    */
   checkedWhen?: string;
   /**
    * Whether this menu item's checkbox is currently checked. Computed at runtime from
    * {@link MenuItemContainingCommand.checkedWhen} by `evaluateMenu` — NOT allowed in menus.json
    * contributions (rejected by the schema).
+   *
+   * @experimental This field is unstable and may change or disappear without notice
    */
   checked?: boolean;
 };

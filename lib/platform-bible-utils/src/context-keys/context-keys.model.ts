@@ -2,6 +2,8 @@
  * Value that can be stored in a context key. Deliberately constrained to scalar types so
  * when-expression equality semantics stay trivial and the store is not used as a general-purpose
  * state bus.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
  */
 export type ContextKeyValue = string | number | boolean;
 
@@ -10,6 +12,7 @@ export type ContextKeyValue = string | number | boolean;
  *
  * @param key The context key to look up
  * @returns The current value, or `undefined` if the key has no value
+ * @experimental This type is unstable and may change or disappear without notice
  */
 export type ContextKeyLookup = (key: string) => ContextKeyValue | undefined;
 
@@ -24,6 +27,7 @@ const CONTEXT_KEY_SEGMENT_REGEX = /^[A-Za-z0-9_-]+$/;
  *
  * @param key The context key to check
  * @returns `true` if the key is structurally valid
+ * @experimental This function is unstable and may change or disappear without notice
  */
 export function isValidContextKey(key: string): boolean {
   const segments = key.split('.');
@@ -36,6 +40,7 @@ export function isValidContextKey(key: string): boolean {
  *
  * @param value The value to check
  * @returns `true` if the value is a string, number, or boolean
+ * @experimental This function is unstable and may change or disappear without notice
  */
 export function isValidContextKeyValue(value: unknown): value is ContextKeyValue {
   return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
