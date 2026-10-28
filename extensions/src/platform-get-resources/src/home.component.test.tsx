@@ -1798,3 +1798,81 @@ describe('Home unsupported projects', () => {
     });
   });
 });
+
+describe('Home while a sync runs', () => {
+  const sharedProject = (id: string, name: string): SharedProjectsInfo[string] => ({
+    id,
+    name,
+    fullName: `${name} full name`,
+    language: 'en',
+    editedStatus: 'notEdited',
+    lastSendReceiveDate: '2026-08-16T00:00:00.000Z',
+  });
+
+  /**
+   * Renders two shared projects that are not downloaded, so each row's action is a "Get" button.
+   * With `withLocalProject`, a downloaded, unedited shared project is listed too; its Sync action
+   * sits in the row's "⋯" menu.
+   */
+  function renderHomeDuringSync({
+    isSendReceiveInProgress = true,
+    activeSendReceiveProjects,
+    withLocalProject = false,
+  }: {
+    isSendReceiveInProgress?: boolean;
+    activeSendReceiveProjects: string[];
+    withLocalProject?: boolean;
+  }) {
+    const sharedProjectsInfo: SharedProjectsInfo = {
+      syncingProject: sharedProject('syncingProject', 'SYN'),
+      waitingProject: sharedProject('waitingProject', 'WAI'),
+      ...(withLocalProject ? { localProject: sharedProject('localProject', 'LOC') } : {}),
+    };
+    const localProjectsInfo: LocalProjectInfo[] = withLocalProject
+      ? [
+          {
+            projectId: 'localProject',
+            isPublished: false,
+            fullName: 'LOC full name',
+            name: 'LOC',
+            language: 'en',
+          },
+        ]
+      : [];
+    return render(
+      <Home
+        headerContent={undefined}
+        localProjectsInfo={localProjectsInfo}
+        sharedProjectsInfo={sharedProjectsInfo}
+        remoteProjectsState="loaded"
+        isSendReceiveInProgress={isSendReceiveInProgress}
+        activeSendReceiveProjects={activeSendReceiveProjects}
+        onSendReceiveProject={() => {}}
+        localizedStringsWithLoadingState={[EN_STRINGS, false]}
+      />,
+    );
+  }
+
+  it("disables the other rows' Get buttons while one project syncs", () => {
+    renderHomeDuringSync({ activeSendReceiveProjects: ['syncingProject'] });
+    const getButtons = screen.getAllByRole('button', { name: 'Get' });
+    expect(getButtons).toHaveLength(1); // the syncing row shows a spinner, not "Get"
+    expect(getButtons[0]).toBeDisabled();
+  });
+
+  it('enables every Get button when no sync runs', () => {
+    renderHomeDuringSync({ isSendReceiveInProgress: false, activeSendReceiveProjects: [] });
+    screen.getAllByRole('button', { name: 'Get' }).forEach((b) => expect(b).toBeEnabled());
+  });
+
+  it('disables the Sync menu item of a project that is already syncing', async () => {
+    renderHomeDuringSync({ activeSendReceiveProjects: ['localProject'], withLocalProject: true });
+    const row = screen.getByText('LOC').closest('tr');
+    if (!row) throw new Error('Home rendered no row for the local project');
+    const ellipsisTrigger = within(row).getAllByRole('button').at(-1);
+    if (!ellipsisTrigger) throw new Error('The local project row has no buttons');
+    await userEvent.click(ellipsisTrigger);
+    const syncItem = await screen.findByRole('menuitem');
+    expect(syncItem).toHaveAttribute('aria-disabled', 'true');
+  });
+});

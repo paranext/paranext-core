@@ -97,6 +97,7 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_serverUnreachable_description%',
   '%resources_serverUnreachable_title%',
   '%resources_syncFailed_title%',
+  '%resources_syncWaiting_reason%',
   '%resources_sync%',
 ] as const);
 
@@ -430,6 +431,7 @@ export function Home({
   // Specific title for failed sync/get attempts — the alert is only shown for that flow, so a
   // contextual title ("Sync failed") communicates what failed better than the generic "Error".
   const syncFailedTitleText: string = getLocalizedString('%resources_syncFailed_title%');
+  const syncWaitingReasonText: string = getLocalizedString('%resources_syncWaiting_reason%');
   const serverUnreachableDescriptionText: string = getLocalizedString(
     '%resources_serverUnreachable_description%',
   );
@@ -934,21 +936,23 @@ export function Home({
     // check instead of `unsupportedReason`.
     const isBlocked = !!project.unsupportedReason;
     const unsupportedReasonText = getUnsupportedReasonText(project);
+    // The sync service runs one sync at a time and refuses a second one, so every row is gated while
+    // any sync runs, not just the active one. The active row shows the spinner and needs no reason.
+    const isThisProjectSyncing = activeSendReceiveProjects.includes(project.projectId);
+    const isWaitingForOtherSync = isSendReceiveInProgress && !isThisProjectSyncing;
+    const waitingReasonText = isWaitingForOtherSync ? syncWaitingReasonText : undefined;
     if (isMenuItem)
       return blockableMenuItem({
         label: getSendReceiveButtonContent(project),
-        isBlocked,
-        reasonText: unsupportedReasonText,
+        isBlocked: isBlocked || isSendReceiveInProgress,
+        reasonText: unsupportedReasonText ?? waitingReasonText,
         onActivate: () => handleSendReceiveProject(project.projectId),
       });
     return blockableTooltip(
-      isBlocked,
-      unsupportedReasonText,
+      isBlocked || isWaitingForOtherSync,
+      unsupportedReasonText ?? waitingReasonText,
       <Button
-        disabled={
-          isBlocked ||
-          (isSendReceiveInProgress && activeSendReceiveProjects.includes(project.projectId))
-        }
+        disabled={isBlocked || isSendReceiveInProgress}
         onClick={() => handleSendReceiveProject(project.projectId)}
       >
         {getSendReceiveButtonContent(project)}
