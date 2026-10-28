@@ -523,6 +523,7 @@ describe('sharedStoreService', () => {
       counter: number,
       processIdOfWriter: string,
       deleted?: boolean,
+      released?: boolean,
     ) {
       const changeEventHandler = vi.mocked(mockEmitter.event).mock.calls[0][0];
       changeEventHandler({
@@ -530,18 +531,30 @@ describe('sharedStoreService', () => {
         value,
         clock: { counter, processId: processIdOfWriter },
         ...(deleted ? { deleted: true } : {}),
+        ...(released ? { released: true } : {}),
       });
     }
 
-    it('allows any process to set a key whose entry is a tombstone', async () => {
+    it('allows any process to set a key released after its owner disconnected', async () => {
+      await initializeSharedStore(networkService);
+      remoteChange(testKey, 1, 100, 'other-process');
+      remoteChange(testKey, undefined, 101, 'other-process', true, true);
+
+      sharedStoreService.set(testKey, 7000);
+
+      expect(sharedStoreService.get(testKey)).toBe(7000);
+      expect(logger.error).not.toHaveBeenCalled();
+    });
+
+    it('still refuses to set a key another live process removed', async () => {
       await initializeSharedStore(networkService);
       remoteChange(testKey, 1, 100, 'other-process');
       remoteChange(testKey, undefined, 101, 'other-process', true);
 
       sharedStoreService.set(testKey, 7000);
 
-      expect(sharedStoreService.get(testKey)).toBe(7000);
-      expect(logger.error).not.toHaveBeenCalled();
+      expect(sharedStoreService.get(testKey)).toBeUndefined();
+      expect(logger.error).toHaveBeenCalled();
     });
 
     it('registers an owner marker method in non-main processes', async () => {
@@ -574,6 +587,7 @@ describe('sharedStoreService', () => {
         expect.objectContaining({
           key: 'platform.customNetworkTimeoutMs.k1',
           deleted: true,
+          released: true,
           clock: expect.objectContaining({ counter: expect.any(Number) }),
         }),
       );

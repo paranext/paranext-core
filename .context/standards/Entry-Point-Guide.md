@@ -159,7 +159,8 @@ under (`ProjectMetadata.Id` is upper case), so producers must build keys from th
 (`isEditable`, `isSyncing`), never answers to "should this item show"; the expression combines them.
 Each key has exactly **one producer process**: a TypeScript process refuses (logs, does not throw)
 a write to a key another process wrote first; the .NET store does not check, so a C# write to
-another process's key takes it over. Either way two producers on one key race, so keep exactly one.
+another process's key takes it over. A key released after its writer disconnected is claimable by
+any process. Either way two producers on one key race, so keep exactly one.
 
 **Handlers still check.** Keyboard shortcuts and direct PAPI calls bypass menus, and a key can lag
 the state it describes, so the command handler keeps its submission-time check and its
