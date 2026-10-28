@@ -481,6 +481,9 @@ declare module 'papi-shared-types' {
 
   // #region User Settings
 
+  /** Whether the user's first Send/Receive has succeeded. See `platform.firstSyncState`. */
+  export type FirstSyncState = 'unknown' | 'pending' | 'synced';
+
   /**
    * Types corresponding to each user setting available in Platform.Bible. Keys are setting names,
    * and values are setting data types. Extensions can add more user setting types with
@@ -579,6 +582,18 @@ declare module 'papi-shared-types' {
      * finished and the wizard should gate the app on the next simple-mode startup.
      */
     'platform.firstRunComplete': boolean;
+    /**
+     * Whether the user's first Send/Receive has succeeded, so the first-run wizard knows whether to
+     * keep reopening its Sync step. Hidden; managed by the first-run flow and the Send/Receive
+     * backend, not user-configurable.
+     *
+     * - `'unknown'` (default): never written. This setup predates the state or no wizard has run.
+     * - `'pending'`: a first run started and no sync has succeeded yet.
+     * - `'synced'`: a sync has succeeded at least once.
+     *
+     * Treat anything other than `'pending'` as "has synced".
+     */
+    'platform.firstSyncState': FirstSyncState;
     /**
      * Whether to perform automatic startup sync. Hidden; not exposed in the settings UI. Read on
      * each launch by the Simple-mode startup sync only — Power mode never reads it. Absent or

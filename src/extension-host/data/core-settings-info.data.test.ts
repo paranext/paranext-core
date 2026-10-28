@@ -92,6 +92,31 @@ describe('platform.firstRunComplete setting', () => {
   });
 });
 
+describe('platform.firstSyncState setting', () => {
+  it('is declared as a hidden setting defaulting to unknown', () => {
+    const group = Array.isArray(platformSettings) ? platformSettings[0] : platformSettings;
+    const setting = group.properties['platform.firstSyncState'];
+    expect(setting).toBeDefined();
+    expect(setting?.default).toBe('unknown');
+    expect(setting?.isHidden).toBe(true);
+  });
+
+  it('accepts only the three known states', async () => {
+    const validator = coreSettingsValidators['platform.firstSyncState'];
+    expect(validator).toBeDefined();
+    await expect(validator?.('unknown', 'unknown', {})).resolves.toBe(true);
+    await expect(validator?.('pending', 'unknown', {})).resolves.toBe(true);
+    await expect(validator?.('synced', 'unknown', {})).resolves.toBe(true);
+    // Feed values outside the compile-time union past the validator to prove the runtime guard rejects them.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion -- deliberately violating the compile-time type to exercise the runtime type guard
+    await expect(validator?.('done' as never, 'unknown', {})).resolves.toBe(false);
+    // eslint-disable-next-line no-type-assertion/no-type-assertion -- deliberately violating the compile-time type to exercise the runtime type guard
+    await expect(validator?.(true as never, 'unknown', {})).resolves.toBe(false);
+    // eslint-disable-next-line no-type-assertion/no-type-assertion -- deliberately violating the compile-time type to exercise the runtime type guard
+    await expect(validator?.(undefined as never, 'unknown', {})).resolves.toBe(false);
+  });
+});
+
 describe('content zoom settings', () => {
   it('declares webViewContentZoom visible with the memory setting hidden', () => {
     const group = groups[0];
@@ -231,6 +256,7 @@ describe('settings layout', () => {
       'platform.firstRunComplete',
       'platform.syncOnStartup',
       'platform.internetUseChoiceAsked',
+      'platform.firstSyncState',
       'platform.requestTimeout',
       'platform.showRegistrationReminderOnStartup',
     ];
