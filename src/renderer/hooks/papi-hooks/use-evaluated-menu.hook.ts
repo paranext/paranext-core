@@ -27,6 +27,9 @@ export function useEvaluatedMenu<T extends EvaluatableMenu>(
     const unsubscribe = contextKeysService.onDidChange(() =>
       setContextKeysVersion((version) => version + 1),
     );
+    // The first render evaluated before this subscription existed, so a key set in between (for
+    // example by a sibling effect) would otherwise be missed until the next change
+    setContextKeysVersion((version) => version + 1);
     return () => {
       unsubscribe();
     };
