@@ -77,10 +77,14 @@ describe('contextKeysService', () => {
     expect(contextKeysService.get('testExt.neverSet')).toBeUndefined();
   });
 
+  it('should return undefined when reading an invalid key', () => {
+    expect(contextKeysService.get('singleSegment')).toBeUndefined();
+    expect(contextKeysService.get('bad key.x')).toBeUndefined();
+  });
+
   it('should throw on invalid key formats', () => {
     expect(() => contextKeysService.set('singleSegment', true)).toThrow(/Invalid context key/);
     expect(() => contextKeysService.set('bad key.x', true)).toThrow(/Invalid context key/);
-    expect(() => contextKeysService.get('singleSegment')).toThrow(/Invalid context key/);
     expect(() => contextKeysService.remove('singleSegment')).toThrow(/Invalid context key/);
   });
 
