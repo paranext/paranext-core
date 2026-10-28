@@ -107,6 +107,8 @@ export const contextKeysService = {
   /**
    * Platform-internal. Number of context key changes forwarded so far in this process; a changed
    * value between two reads means at least one key changed in between. Not on the PAPI surface.
+   *
+   * @experimental This field is unstable and may change or disappear without notice
    */
   getChangeSequence,
 };

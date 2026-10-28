@@ -12456,6 +12456,7 @@ declare module 'shared/services/context-keys.service' {
   function set(key: string, value: ContextKeyValue): void;
   function get(key: string): ContextKeyValue | undefined;
   function remove(key: string): void;
+  function getChangeSequence(): number;
   /**
    *
    * Service for reading and writing context keys: named properties that drive dynamic UI state such
@@ -12487,6 +12488,13 @@ declare module 'shared/services/context-keys.service' {
      * @experimental This field is unstable and may change or disappear without notice
      */
     onDidChange: import('platform-bible-utils').PlatformEvent<ContextKeyChangeEvent>;
+    /**
+     * Platform-internal. Number of context key changes forwarded so far in this process; a changed
+     * value between two reads means at least one key changed in between. Not on the PAPI surface.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    getChangeSequence: typeof getChangeSequence;
   };
   /**
    * Context keys service exposed on PAPI (both `@papi/backend` and `@papi/frontend`)
