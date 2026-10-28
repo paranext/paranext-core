@@ -182,7 +182,10 @@ function MenubarCheckboxItem({
       data-slot="menubar-checkbox-item"
       data-inset={inset}
       className={cn(
-        'tw:relative tw:flex tw:cursor-default tw:items-center tw:gap-1.5 tw:rounded-md tw:py-1 tw:pe-1.5 tw:ps-7 tw:text-sm tw:outline-hidden tw:select-none tw:focus:bg-accent tw:focus:text-accent-foreground tw:focus:**:text-accent-foreground tw:data-inset:ps-7 tw:data-disabled:pointer-events-none tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0',
+        // CUSTOM: Added `tw:data-disabled:opacity-50` so a disabled checkbox item dims like every other
+        // disabled menu item, and `tw:[&_svg:not([class*=size-])]:size-4` so icons inside it get the same
+        // 16px size as in MenubarItem. Both were missing from the checkbox item's class list.
+        'tw:relative tw:flex tw:cursor-default tw:items-center tw:gap-1.5 tw:rounded-md tw:py-1 tw:pe-1.5 tw:ps-7 tw:text-sm tw:outline-hidden tw:select-none tw:focus:bg-accent tw:focus:text-accent-foreground tw:focus:**:text-accent-foreground tw:data-inset:ps-7 tw:data-disabled:pointer-events-none tw:data-disabled:opacity-50 tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0 tw:[&_svg:not([class*=size-])]:size-4',
         // CUSTOM: Apply variant-driven styles from menu context
         menuVariants({ variant: context.variant, className }),
       )}

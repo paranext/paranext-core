@@ -246,6 +246,11 @@ describe('getLeadingIconSlot', () => {
     ).toBe('icon');
   });
 
+  it('reserves the icon slot when any item is a checkbox item', () => {
+    expect(getLeadingIconSlot([{}, { checked: false }])).toBe('icon');
+    expect(getLeadingIconSlot([{}, { checked: true }])).toBe('icon');
+  });
+
   it('ignores trailing icons', () => {
     const trailingOnly = [
       { iconNameBefore: undefined, iconNameAfter: 'search' },

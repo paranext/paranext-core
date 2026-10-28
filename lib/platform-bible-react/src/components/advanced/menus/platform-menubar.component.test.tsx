@@ -598,4 +598,50 @@ describe('PlatformMenubar dynamic item states', () => {
 
     expect(onSelectMenuItem).not.toHaveBeenCalled();
   });
+
+  it('renders a disabled checkbox item with the disabled opacity class', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <PlatformMenubar
+        menuData={{
+          ...DYNAMIC_STATE_MENU,
+          items: [
+            {
+              label: 'Disabled Checked',
+              group: 'test.group',
+              order: 1,
+              command: 'test.disabledChecked',
+              localizeNotes: '',
+              checked: true,
+              disabled: true,
+            },
+          ],
+        }}
+        onSelectMenuItem={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByText('TestColumn'));
+    const checkbox = (await screen.findByText('Disabled Checked')).closest(
+      '[role="menuitemcheckbox"]',
+    );
+    expect(checkbox).toHaveAttribute('data-disabled');
+    expect(checkbox?.className).toContain('data-disabled:opacity-50');
+  });
+
+  it('gives a checkbox item and a plain item in one group the same start padding class', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(<PlatformMenubar menuData={DYNAMIC_STATE_MENU} onSelectMenuItem={vi.fn()} />);
+
+    await user.click(screen.getByText('TestColumn'));
+    const plain = (await screen.findByText('Enabled Item')).closest('[role="menuitem"]');
+    const checkbox = screen.getByText('Checked Item').closest('[role="menuitemcheckbox"]');
+
+    expect(plain?.className).toContain('tw:px-1.5');
+    expect(checkbox?.className).toContain('tw:ps-1.5');
+    expect(checkbox?.className).not.toContain('tw:ps-7');
+    // Every item reserves the same leading slot, so all labels start at the same x
+    expect(plain?.querySelector('[data-slot="menu-icon-spacer"]')).not.toBeNull();
+    expect(checkbox?.querySelector('[data-slot="menu-icon-spacer"]')).not.toBeNull();
+  });
 });

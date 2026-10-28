@@ -791,3 +791,63 @@ describe('TabDropdownMenu label alignment and shortcut spacing', () => {
     expect(shortcut).toHaveClass('tw:ps-4');
   });
 });
+
+describe('TabDropdownMenu dynamic item states', () => {
+  const DYNAMIC_MENU: Localized<MultiColumnMenu> = {
+    columns: { 'test.project': { label: 'Project', order: 1 } },
+    groups: { 'test.top': { column: 'test.project', order: 1 } },
+    items: [
+      { label: 'Plain', localizeNotes: '', group: 'test.top', order: 1, command: 'test.plain' },
+      {
+        label: 'Disabled',
+        localizeNotes: '',
+        group: 'test.top',
+        order: 2,
+        command: 'test.disabled',
+        disabled: true,
+      },
+      {
+        label: 'Checked',
+        localizeNotes: '',
+        group: 'test.top',
+        order: 3,
+        command: 'test.checked',
+        checked: true,
+      },
+      {
+        label: 'Unchecked',
+        localizeNotes: '',
+        group: 'test.top',
+        order: 4,
+        command: 'test.unchecked',
+        checked: false,
+      },
+      {
+        label: 'Disabled checked',
+        localizeNotes: '',
+        group: 'test.top',
+        order: 5,
+        command: 'test.disabledChecked',
+        checked: true,
+        disabled: true,
+      },
+    ],
+  };
+
+  it('renders checked and disabled items', async () => {
+    await openMenu(DYNAMIC_MENU);
+    expect(screen.getByRole('menuitem', { name: 'Disabled' })).toHaveAttribute('data-disabled');
+    expect(screen.getByRole('menuitem', { name: 'Plain' })).not.toHaveAttribute('data-disabled');
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Checked' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Unchecked' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
+    const disabledChecked = screen.getByRole('menuitemcheckbox', { name: 'Disabled checked' });
+    expect(disabledChecked).toHaveAttribute('data-disabled');
+    expect(disabledChecked.className).toContain('data-disabled:opacity-50');
+  });
+});

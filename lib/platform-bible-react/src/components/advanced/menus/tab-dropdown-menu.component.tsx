@@ -40,6 +40,7 @@ import {
   joinGroupsWithSeparators,
   LeadingIconSlot,
   MenuGroupNode,
+  MenuItemNodeSource,
 } from './menu.util';
 import { SelectMenuItemHandler } from './platform-menubar.component';
 import MenuItemIcon from './menu-icon.component';
@@ -47,6 +48,12 @@ import MenuItemIcon from './menu-icon.component';
 const createDropdownSeparator = (groupKey: string) => (
   <DropdownMenuSeparator key={`separator-${groupKey}`} />
 );
+
+/**
+ * A checkbox item's check indicator sits at the end of its row in this menu, so it reserves no
+ * leading icon slot. Clearing `checked` keeps it out of the slot decision.
+ */
+const withoutCheckedState = (item: MenuItemNodeSource) => ({ ...item, checked: undefined });
 
 /**
  * Renders the items of the given groups in the order given, one entry per group. A submenu joins
@@ -161,7 +168,9 @@ const getGroupContent = (
                   subGroups,
                   onSelectMenuItem,
                   getLeadingIconSlot(
-                    subGroups.flatMap((group) => group.items.map((node) => node.item)),
+                    subGroups.flatMap((group) =>
+                      group.items.map(({ item: subItem }) => withoutCheckedState(subItem)),
+                    ),
                   ),
                 ),
                 createDropdownSeparator,
@@ -240,7 +249,9 @@ export default function TabDropdownMenu({
   // Every section shares one content, so one slot keeps all their labels aligned
   const leadingSlot = getLeadingIconSlot(
     sections.flatMap(({ columnKey }) =>
-      groupsOfSection(columnKey).flatMap((group) => group.items.map((node) => node.item)),
+      groupsOfSection(columnKey).flatMap((group) =>
+        group.items.map(({ item }) => withoutCheckedState(item)),
+      ),
     ),
   );
 

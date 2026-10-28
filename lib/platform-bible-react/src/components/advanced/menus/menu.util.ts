@@ -151,7 +151,12 @@ export function getMenuSectionsWithItems(menuData: Localized<MultiColumnMenu>): 
 export type LeadingIconSlot = 'none' | 'icon';
 
 /** The fields of a menu item that decide whether it shows a leading icon */
-type ItemWithLeadingIcon = { iconNameBefore?: string; iconPathBefore?: string };
+type ItemWithLeadingIcon = {
+  iconNameBefore?: string;
+  iconPathBefore?: string;
+  /** Defined on a checkbox item, whose check indicator takes the leading slot */
+  checked?: boolean;
+};
 
 /**
  * Picks the leading icon slot for one rendered list of menu items (one dropdown content, one
@@ -159,11 +164,15 @@ type ItemWithLeadingIcon = { iconNameBefore?: string; iconPathBefore?: string };
  * items that have one, so all labels in the list start at the same position.
  *
  * @param items The items rendered in the list, including submenu trigger items
- * @returns `'icon'` if any item has a leading icon — a known named icon or an image path — and
- *   `'none'` otherwise. An unknown icon name counts only through the image path beside it, if any
+ * @returns `'icon'` if any item has a leading icon — a known named icon or an image path — or is a
+ *   checkbox item (`checked` is defined), and `'none'` otherwise. An unknown icon name counts only
+ *   through the image path beside it, if any
  */
 export function getLeadingIconSlot(items: ItemWithLeadingIcon[]): LeadingIconSlot {
-  return items.some((item) => isLucideIconName(item.iconNameBefore) || item.iconPathBefore)
+  return items.some(
+    (item) =>
+      isLucideIconName(item.iconNameBefore) || item.iconPathBefore || item.checked !== undefined,
+  )
     ? 'icon'
     : 'none';
 }
