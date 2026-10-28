@@ -117,8 +117,8 @@ function isOwnProject(metadata: {
   );
 }
 
-// Checked rather than trusted: the sync-activity types were declared ahead of the Paratext 10 change
-// that implements them, so a build may send another shape.
+// Checked rather than trusted: the payload comes from another process, and only `isSyncing` is
+// relied on.
 function isSyncActivitySnapshot(value: unknown): value is Pick<SyncActivitySnapshot, 'isSyncing'> {
   return (
     typeof value === 'object' &&

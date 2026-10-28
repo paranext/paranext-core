@@ -29,8 +29,8 @@ const defaultInterfaceLanguages: string[] = ['en'];
 const SEND_RECEIVE_ATTEMPTS = 4;
 const SEND_RECEIVE_RETRY_MS = 2000;
 
-// Checked rather than trusted: the sync-activity types were declared ahead of the Paratext 10 change
-// that implements them, so a build may send another shape.
+// Checked rather than trusted: the payload comes from another process, and only `isSyncing` is
+// relied on.
 function isSyncActivitySnapshot(value: unknown): value is Pick<SyncActivitySnapshot, 'isSyncing'> {
   return (
     typeof value === 'object' &&
