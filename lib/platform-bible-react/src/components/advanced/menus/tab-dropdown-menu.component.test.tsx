@@ -850,4 +850,49 @@ describe('TabDropdownMenu dynamic item states', () => {
     expect(disabledChecked).toHaveAttribute('data-disabled');
     expect(disabledChecked.className).toContain('data-disabled:opacity-50');
   });
+
+  it('reserves no leading icon slot for checkbox items, because the check indicator is trailing', async () => {
+    await openMenu(DYNAMIC_MENU);
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Checked' })).toBeInTheDocument();
+    expect(document.querySelectorAll('[data-slot="menu-icon-spacer"]')).toHaveLength(0);
+  });
+
+  it('reserves no leading icon slot for checkbox items inside a submenu', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const submenuData: Localized<MultiColumnMenu> = {
+      columns: { 'test.project': { label: 'Project', order: 1 } },
+      groups: {
+        'test.top': { column: 'test.project', order: 1 },
+        'test.sub': { menuItem: 'test.submenu', order: 1 },
+      },
+      items: [
+        { id: 'test.submenu', label: 'Sub', localizeNotes: '', group: 'test.top', order: 1 },
+        {
+          label: 'Inner checked',
+          localizeNotes: '',
+          group: 'test.sub',
+          order: 1,
+          command: 'test.innerChecked',
+          checked: true,
+        },
+        {
+          label: 'Inner unchecked',
+          localizeNotes: '',
+          group: 'test.sub',
+          order: 2,
+          command: 'test.innerUnchecked',
+          checked: false,
+        },
+      ],
+    };
+    render(
+      <TabDropdownMenu menuData={submenuData} onSelectMenuItem={() => {}} tabLabel="Tab menu" />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Tab menu' }));
+    const trigger = await screen.findByRole('menuitem', { name: /^Sub/ });
+    trigger.focus();
+    await user.keyboard('{ArrowRight}');
+    await screen.findByRole('menuitemcheckbox', { name: 'Inner checked' });
+    expect(document.querySelectorAll('[data-slot="menu-icon-spacer"]')).toHaveLength(0);
+  });
 });
