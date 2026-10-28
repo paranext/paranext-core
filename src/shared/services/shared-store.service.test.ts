@@ -52,6 +52,7 @@ describe('sharedStoreService', () => {
   beforeEach(() => {
     // Reset mocks
     vi.resetAllMocks();
+    disconnectHandler = () => {};
 
     // Mock event emitter creation
     vi.mocked(networkService.createNetworkEventEmitter).mockReturnValue(
@@ -147,6 +148,22 @@ describe('sharedStoreService', () => {
       expect(vi.mocked(networkService.createCoreMultiSourceEventEmitter).mock.calls.length).toBe(
         createEmitterCallCount,
       );
+    });
+
+    it('still initializes when the owner marker cannot be registered', async () => {
+      globalThis.processType = ProcessType.ExtensionHost;
+      vi.mocked(networkService.registerRequestHandler).mockRejectedValueOnce(
+        new Error('marker boom'),
+      );
+
+      await expect(initializeSharedStore(networkService)).resolves.toBeUndefined();
+
+      expect(sharedStoreService.isInitialized()).toBe(true);
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Could not register the shared store owner marker'),
+      );
+      sharedStoreService.set(testKey, 42);
+      expect(sharedStoreService.get(testKey)).toBe(42);
     });
 
     it('clears the cached promise on failure so a later call can retry', async () => {
@@ -580,11 +597,14 @@ describe('sharedStoreService', () => {
         throw new Error('subscriber failure');
       });
 
-      disconnectHandler({ removedMethodNames: ['shared-store:owner:extension-host-abc'] });
+      try {
+        disconnectHandler({ removedMethodNames: ['shared-store:owner:extension-host-abc'] });
 
-      expect(sharedStoreService.get('platform.customNetworkTimeoutMs.k1')).toBeUndefined();
-      expect(sharedStoreService.get('platform.customNetworkTimeoutMs.k2')).toBeUndefined();
-      unsubscribe();
+        expect(sharedStoreService.get('platform.customNetworkTimeoutMs.k1')).toBeUndefined();
+        expect(sharedStoreService.get('platform.customNetworkTimeoutMs.k2')).toBeUndefined();
+      } finally {
+        unsubscribe();
+      }
     });
 
     it('does nothing on disconnect in a non-main process', async () => {
@@ -593,6 +613,8 @@ describe('sharedStoreService', () => {
       remoteChange(testKey, 1, 10, 'extension-host-abc');
 
       expect(networkService.onDidDisconnectClient).not.toHaveBeenCalled();
+      // Only a handler captured during this test's initialize could release keys; none is subscribed.
+      disconnectHandler({ removedMethodNames: ['shared-store:owner:extension-host-abc'] });
       expect(sharedStoreService.get(testKey)).toBe(1);
     });
   });

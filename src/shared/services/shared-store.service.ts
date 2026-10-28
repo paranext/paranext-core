@@ -251,23 +251,29 @@ export function initialize(networkService: NetworkService): Promise<void> {
         // Marks this process as a shared store writer: main watches for the marker's removal to
         // release this process's keys. The .NET process registers no marker because its shared store
         // never checks ownership and it has no in-app restart.
-        await networkService.registerRequestHandler(
-          `${SHARED_STORE_OWNER_METHOD_PREFIX}${processId}`,
-          () => processId,
-          {
-            method: {
-              'x-experimental': true,
-              summary:
-                'Marks this process as a shared store writer so main can release its keys when it disconnects',
-              params: [],
-              result: {
-                name: 'return value',
-                summary: 'The shared store process ID of this process',
-                schema: { type: 'string' },
+        try {
+          await networkService.registerRequestHandler(
+            `${SHARED_STORE_OWNER_METHOD_PREFIX}${processId}`,
+            () => processId,
+            {
+              method: {
+                'x-experimental': true,
+                summary:
+                  'Marks this process as a shared store writer so main can release its keys when it disconnects',
+                params: [],
+                result: {
+                  name: 'return value',
+                  summary: 'The shared store process ID of this process',
+                  schema: { type: 'string' },
+                },
               },
             },
-          },
-        );
+          );
+        } catch (error) {
+          logger.warn(
+            `Could not register the shared store owner marker; this process's keys will not be released if it disconnects: ${getErrorMessage(error)}`,
+          );
+        }
         // Outside the main process, sync the local store to the main store's data initially.
         try {
           const initial = await networkService.request<[], Record<string, StoreEntry>>(
