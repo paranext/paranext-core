@@ -412,6 +412,14 @@ export const DynamicItemStates: Story = {
           command: 'story.unchecked',
           checked: false,
         },
+        {
+          label: 'Plain item with a leading icon',
+          localizeNotes: '',
+          group: 'story.dynamicGroup',
+          order: 5,
+          command: 'story.withIcon',
+          iconNameBefore: 'settings',
+        },
       ],
     };
 
@@ -431,7 +439,7 @@ export const DynamicItemStates: Story = {
             <strong>Last Command:</strong> {lastCommand || 'None'}
           </div>
           <p className="tw:mt-2 tw:text-xs tw:text-muted-foreground">
-            Open &quot;Dynamic&quot; to see disabled and checkbox item states.
+            Open &quot;Dynamic&quot; to see disabled and checkbox item states. Labels of checkbox items and the icon item start at the same position.
           </p>
         </div>
       </div>
