@@ -5,6 +5,7 @@ import {
   MultiColumnMenu,
   SingleColumnMenu,
 } from '../extension-contributions/menus.model';
+import { normalizeProjectId } from '../project-util';
 import { deepClone } from '../util';
 import { ContextKeyLookup } from './context-keys.model';
 import { evaluateWhenExpression } from './when-expression';
@@ -26,6 +27,27 @@ export type EvaluatableMenu =
  * @experimental This type is unstable and may change or disappear without notice
  */
 export type WhenExpressionErrorHandler = (expression: string, error: unknown) => void;
+
+/**
+ * Builds the template variables a surface passes to {@link evaluateMenu} for one web view. Context
+ * keys embed the canonical upper-case project id, so the id a web view was opened with is
+ * normalized before it is substituted into a `{projectId}` placeholder.
+ *
+ * @param vars The web view's id, type and (optional) project id as the web view knows them
+ * @returns Template variables with the project id normalized, or `undefined` when there is none
+ * @experimental This function is unstable and may change or disappear without notice
+ */
+export function createMenuTemplateVars(vars: {
+  webViewId: string;
+  webViewType: string;
+  projectId?: string;
+}): Record<string, string | undefined> {
+  return {
+    webViewId: vars.webViewId,
+    webViewType: vars.webViewType,
+    projectId: vars.projectId ? normalizeProjectId(vars.projectId) : undefined,
+  };
+}
 
 type AnyMenuItem =
   | MenuItemContainingCommand
