@@ -43,7 +43,7 @@ interface SettingsStubValues {
 export function createSettingsStub<TOption extends keyof SettingsStubValues>(
   mockSettingsGet: MockedSettingsGet,
   defaults: Pick<SettingsStubValues, TOption>,
-): (overrides?: Partial<Pick<SettingsStubValues, TOption>>) => void {
+): (overrides?: Partial<Pick<SettingsStubValues, TOption | 'firstSyncState'>>) => void {
   return (overrides = {}) => {
     const values: Partial<SettingsStubValues> = {
       firstSyncState: 'synced',

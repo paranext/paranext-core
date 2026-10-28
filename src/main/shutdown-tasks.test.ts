@@ -519,6 +519,20 @@ describe('performShutdownTasks', () => {
       );
     });
 
+    it('does NOT S/R on shutdown while the first successful sync is pending', async () => {
+      stubSettings({ mode: 'simple', firstRunComplete: true, firstSyncState: 'pending' });
+      stubWritableEditorOpen();
+
+      await performShutdownTasks();
+
+      expect(mockRequestNoRetry.mock.calls.map(([cmd]) => cmd)).not.toContainEqual(
+        expect.stringContaining('sendReceiveProjects'),
+      );
+      expect(mockLoggerInfo).toHaveBeenCalledWith(
+        expect.stringContaining('Sync on shutdown skipped: no successful sync yet'),
+      );
+    });
+
     it('leaves the power-mode shutdown sync ungated by the consent setting', async () => {
       // The gate is Simple-mode only, on purpose (see getAutomaticSyncConsent): the setting is never
       // written in Power mode, so gating there would permanently kill scheduled sync.
