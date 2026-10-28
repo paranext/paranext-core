@@ -165,8 +165,9 @@ function resetInitializationStartedSignal(): void {
 resetInitializationStartedSignal();
 
 /**
- * Tombstones every key whose live entry was written by a process whose owner marker method was
- * removed, so a restarted producer can claim the keys again. Runs in the main process only.
+ * Releases every key (live or removed) last written by a process whose owner marker method was
+ * removed, turning it into a released tombstone, so a restarted producer can claim the keys again.
+ * Runs in the main process only.
  */
 function releaseKeysOfDisconnectedProcesses(removedMethodNames: string[]): void {
   if (!storeChangeEmitter) return;
@@ -177,7 +178,7 @@ function releaseKeysOfDisconnectedProcesses(removedMethodNames: string[]): void 
   );
   if (deadProcessIds.size === 0) return;
   Object.entries(localStore).forEach(([key, entry]) => {
-    if (entry.deleted || !deadProcessIds.has(entry.clock.processId)) return;
+    if (entry.released || !deadProcessIds.has(entry.clock.processId)) return;
     const clock = getNextClock();
     localStore[key] = { value: undefined, clock, deleted: true, released: true };
     try {
