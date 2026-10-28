@@ -215,7 +215,10 @@ async function localizeMenuItems(menuItems: Localized<MenuItemBase>[] | undefine
 
 /** Template variables available to when-expressions in web-view-scoped menus */
 const WEB_VIEW_MENU_TEMPLATE_VARS = ['webViewId', 'webViewType', 'projectId'];
-/** Template variables available to when-expressions in the main menu (none in v1) */
+/**
+ * Template variables available to when-expressions in the main menu (none: its expressions can
+ * reference only global keys)
+ */
 const MAIN_MENU_TEMPLATE_VARS: string[] = [];
 /**
  * Template variables available to when-expressions in tab menus. A tab menu acts on the tab frame

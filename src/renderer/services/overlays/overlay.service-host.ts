@@ -468,8 +468,9 @@ async function showContextMenu(
   // Through the shared proxy rather than the renderer's own web view service shard: the shard's
   // import graph reaches back to this module through the frontend PAPI, which would be a cycle
   const webViewDefinition = await webViewService.getOpenWebViewDefinition(webViewId);
-  // Note: context menus only apply visibility filtering (hidden items removed) in v1;
-  // the OverlayContextMenuItem model does not render disabled/checked state.
+  // Overlay context menus apply `when` only (hidden items removed); `enabledWhen`/`checkedWhen` are
+  // rejected for them at load, and the OverlayContextMenuItem model does not render disabled/checked
+  // state.
   const evaluatedContextMenu = evaluateMenu(
     webViewMenu.contextMenu,
     contextKeysService.get,

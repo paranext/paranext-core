@@ -80,7 +80,7 @@ import {
 import { CSSProperties, useCallback, useMemo } from 'react';
 
 const MAIN_MENU_DEFAULT = { columns: {}, groups: {}, items: [] };
-/** The main menu provides no template variables for when-expressions in v1 */
+/** The main menu has no template variables; its expressions can reference only global keys */
 const MAIN_MENU_TEMPLATE_VARS = {};
 
 // Stable identity for the "nothing extra to offer" case, so the memo below does not hand
