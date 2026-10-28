@@ -259,6 +259,18 @@ declare module 'paratext-bible-send-receive' {
     errors?: string[];
   };
 
+  /**
+   * Event payload emitted by the `paratextBibleSendReceive.onDidRequestProjectSelection` network
+   * event
+   */
+  export type ProjectSelectionRequestEvent = {
+    /**
+     * The projects `openSendReceive` ensured are ticked in the sync projects dialog's saved
+     * selection, whether newly ticked or already ticked
+     */
+    projectIds: string[];
+  };
+
   /** Event payload emitted by the `paratextBibleSendReceive.onSyncStateChanged` network event */
   export type SyncProgressEvent = {
     /**
@@ -313,6 +325,13 @@ declare module 'paratext-bible-send-receive' {
      * PREVIOUS sync, so labelling an in-progress sync with it names the wrong projects.
      */
     lastRequestedProjectIds: string[];
+    /**
+     * The latest completed result for each project synced through this extension's wrappers this
+     * session. Syncs core runs directly (startup, project switch) are not included. Keyed by
+     * `normalizeProjectId(projectId)`; a fresh object is built on every `getSyncState` call. Absent
+     * from older Send/Receive extension builds.
+     */
+    lastResultByProjectId?: Record<string, ResultInfo>;
     /**
      * Project ids of the sync(s) running RIGHT NOW. Empty exactly when `isSyncing` is `false`.
      * Overlapping syncs are unioned.
@@ -501,6 +520,7 @@ declare module 'paratext-bible-send-receive' {
 
 declare module 'papi-shared-types' {
   import type {
+    ProjectSelectionRequestEvent,
     ResultsData,
     SyncActivitySnapshot,
     SyncProgressDetail,
@@ -568,12 +588,17 @@ declare module 'papi-shared-types' {
     'paratextBibleSendReceive.openSyncStatus': () => Promise<string | undefined>;
 
     /**
-     * Opens the Send/Receive web view and returns its WebView id
+     * Opens the Send/Receive web view (or brings the open one to the front) with the active project
+     * ticked in the sync projects dialog
      *
+     * @param projectIdsToSelect Projects to tick instead of the active project. Unsupported
+     *   projects are skipped
      * @returns WebView id for the Send/Receive WebView or `undefined` if not created
      * @experimental This command is unstable and may change or disappear without notice
      */
-    'paratextBibleSendReceive.openSendReceive': () => Promise<string | undefined>;
+    'paratextBibleSendReceive.openSendReceive': (
+      projectIdsToSelect?: string[],
+    ) => Promise<string | undefined>;
 
     /**
      * Returns the current {@link SyncState} so a consumer can seed its sync status on mount rather
@@ -723,13 +748,15 @@ declare module 'papi-shared-types' {
       boundary: 'startup' | 'shutdown',
     ) => Promise<'synced' | 'failed' | 'skipped'>;
     /**
-     * Gets all open webview project IDs and calls `paratextBibleSendReceive.syncProjects` with
-     * them.
+     * Gets all open webview project IDs (or exactly `projectIds` when given) and calls
+     * `paratextBibleSendReceive.syncProjects` with them.
      *
+     * @param projectIds Sync only these projects (deduplicated) instead of the open editors'
+     *   projects
      * @throws `PlatformUnimplementedException` if not running in an application that implements
      *   this command (e.g., Paratext 10)
      */
-    'paratextBibleSendReceive.syncOpenProjects': () => Promise<void>;
+    'paratextBibleSendReceive.syncOpenProjects': (projectIds?: string[]) => Promise<void>;
 
     /**
      * Cancels an in-progress sync operation if one is running. The process will finish dealing with
@@ -811,6 +838,11 @@ declare module 'papi-shared-types' {
   }
 
   export interface NetworkEvents {
+    /**
+     * Fired after `openSendReceive` ensures projects are ticked in the saved selection (newly or
+     * already), so an open dialog can sort them to the top
+     */
+    'paratextBibleSendReceive.onDidRequestProjectSelection': ProjectSelectionRequestEvent;
     /** Emitted whenever a sync starts or ends */
     'paratextBibleSendReceive.onSyncStateChanged': SyncProgressEvent;
     /** Emitted repeatedly during a sync with the current project name or reconnect status */

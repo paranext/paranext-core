@@ -845,88 +845,144 @@ export function Home({
     return project.isLocallyAvailable ? syncText : getText;
   };
 
-  const syncOrGetButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
-    if (isMenuItem)
-      return (
-        <DropdownMenuItem onClick={() => handleSendReceiveProject(project.projectId)}>
-          <span>{getSendReceiveButtonContent(project)}</span>
-        </DropdownMenuItem>
-      );
-    return (
-      <Button
-        disabled={isSendReceiveInProgress && activeSendReceiveProjects.includes(project.projectId)}
-        onClick={() => handleSendReceiveProject(project.projectId)}
-      >
-        {getSendReceiveButtonContent(project)}
-      </Button>
-    );
-  };
-
-  const openButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
-    const isOpening = openingProjectIds.includes(project.projectId);
-    const isOpenBlocked = !!project.unsupportedReason;
+  /**
+   * The text explaining why a project's Open, Sync, and Get are blocked, or `undefined` when the
+   * project is supported.
+   */
+  const getUnsupportedReasonText = (project: MergedProjectInfo): string | undefined => {
+    if (!project.unsupportedReason) return undefined;
     // A key with no translation can resolve to itself (the loading seed, and possibly the
     // fallback chain's last resort), so a value that is still a localize key is treated as
     // missing rather than shown verbatim as tooltip text. A reason that is missing that way, or
     // is not a key at all, falls back to the generic reason.
     const toShowableText = (text: string | undefined) =>
       text && !isLocalizeKey(text) ? text : undefined;
-    const unsupportedReasonText = isOpenBlocked
-      ? (toShowableText(
-          project.unsupportedReason && isLocalizeKey(project.unsupportedReason)
-            ? localizedUnsupportedReasons[project.unsupportedReason]
-            : undefined,
-        ) ?? toShowableText(localizedUnsupportedReasons[PROJECT_OPEN_BLOCKED_FALLBACK_KEY]))
-      : undefined;
-    // The reason is written inside the item, since a menu item cannot show a hover tooltip. The
-    // item is `aria-disabled` rather than Radix-`disabled` so keyboard navigation still reaches
-    // it and the reason is read as part of its accessible name; selecting it does nothing.
-    if (isMenuItem)
-      return (
-        <DropdownMenuItem
-          disabled={isOpening}
-          aria-disabled={isOpenBlocked || undefined}
-          className={cn({ 'tw:opacity-50': isOpenBlocked })}
-          onSelect={(event) => {
-            if (isOpenBlocked) {
-              event.preventDefault();
-              return;
-            }
-            handleOpenProject(project);
-          }}
-        >
-          {/* Not muted: the blocked item is already drawn at half opacity, and muted text under
-              that is unreadable. `min-w-0` lets a long reason wrap instead of widening the menu. */}
-          <div className="tw:flex tw:min-w-0 tw:flex-col">
-            <span>{openText}</span>
-            {unsupportedReasonText && (
-              <span className="tw:text-xs tw:italic tw:whitespace-normal tw:text-foreground">
-                {unsupportedReasonText}
-              </span>
-            )}
-          </div>
-        </DropdownMenuItem>
-      );
+    return (
+      toShowableText(
+        isLocalizeKey(project.unsupportedReason)
+          ? localizedUnsupportedReasons[project.unsupportedReason]
+          : undefined,
+      ) ?? toShowableText(localizedUnsupportedReasons[PROJECT_OPEN_BLOCKED_FALLBACK_KEY])
+    );
+  };
+
+  /**
+   * A menu item for an action a project's `unsupportedReason` can block. The reason is written
+   * inside the item, since a menu item cannot show a hover tooltip. The item is `aria-disabled`
+   * rather than Radix-`disabled` so keyboard navigation still reaches it and the reason is read as
+   * part of its accessible name; selecting it does nothing.
+   */
+  const blockableMenuItem = ({
+    label,
+    isBlocked,
+    reasonText,
+    isDisabled,
+    onActivate,
+  }: {
+    label: ReactNode;
+    isBlocked: boolean;
+    reasonText: string | undefined;
+    isDisabled?: boolean;
+    onActivate: () => void;
+  }) => (
+    <DropdownMenuItem
+      disabled={isDisabled}
+      aria-disabled={isBlocked || undefined}
+      className={cn({ 'tw:opacity-50': isBlocked })}
+      onSelect={(event) => {
+        if (isBlocked) {
+          event.preventDefault();
+          return;
+        }
+        onActivate();
+      }}
+    >
+      {/* Not muted: the blocked item is already drawn at half opacity, and muted text under that
+          is unreadable. `min-w-0` lets a long reason wrap instead of widening the menu. */}
+      <div className="tw:flex tw:min-w-0 tw:flex-col">
+        <span>{label}</span>
+        {reasonText && (
+          <span className="tw:text-xs tw:italic tw:whitespace-normal tw:text-foreground">
+            {reasonText}
+          </span>
+        )}
+      </div>
+    </DropdownMenuItem>
+  );
+
+  /**
+   * Wraps a button for an action a project's `unsupportedReason` can block in a tooltip that shows
+   * the reason. The button keeps its own props, including `disabled`.
+   */
+  const blockableTooltip = (
+    isBlocked: boolean,
+    reasonText: string | undefined,
+    button: ReactNode,
+  ) => (
     // Without reason text the wrapper would be a nameless tab stop with an empty bubble; the button
     // stays disabled either way.
-    return (
-      <DisabledActionTooltip
-        disabled={isOpenBlocked && !!unsupportedReasonText}
-        tooltipText={unsupportedReasonText ?? ''}
+    <DisabledActionTooltip disabled={isBlocked && !!reasonText} tooltipText={reasonText ?? ''}>
+      {button}
+    </DisabledActionTooltip>
+  );
+
+  const syncOrGetButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
+    // Home reuses `unsupportedReason` (the can't-open signal) to block Sync and Get too. Today that
+    // is only Study Bible Additions (see `adr-sba-not-syncable-from-dialog-or-home`). A project type
+    // that becomes openable (removed from `ScrTextExtensions.GetOpenBlockedReason`) stops being
+    // blocked here automatically; a type that stays unopenable but should be syncable needs its own
+    // check instead of `unsupportedReason`.
+    const isBlocked = !!project.unsupportedReason;
+    const unsupportedReasonText = getUnsupportedReasonText(project);
+    if (isMenuItem)
+      return blockableMenuItem({
+        label: getSendReceiveButtonContent(project),
+        isBlocked,
+        reasonText: unsupportedReasonText,
+        onActivate: () => handleSendReceiveProject(project.projectId),
+      });
+    return blockableTooltip(
+      isBlocked,
+      unsupportedReasonText,
+      <Button
+        disabled={
+          isBlocked ||
+          (isSendReceiveInProgress && activeSendReceiveProjects.includes(project.projectId))
+        }
+        onClick={() => handleSendReceiveProject(project.projectId)}
       >
-        <Button
-          disabled={isOpenBlocked}
-          // Not `disabled` while opening, which would drop the focus of a keyboard user who pressed
-          // it; a repeat press is ignored by `handleOpenProject`.
-          aria-disabled={isOpening}
-          aria-busy={isOpening}
-          // The spinner has no text, so the button keeps its name while it shows.
-          aria-label={openText}
-          onClick={() => handleOpenProject(project)}
-        >
-          {isOpening ? <Spinner className="tw:h-5 tw:py-[1px]" /> : openText}
-        </Button>
-      </DisabledActionTooltip>
+        {getSendReceiveButtonContent(project)}
+      </Button>,
+    );
+  };
+
+  const openButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
+    const isOpening = openingProjectIds.includes(project.projectId);
+    const isOpenBlocked = !!project.unsupportedReason;
+    const unsupportedReasonText = getUnsupportedReasonText(project);
+    if (isMenuItem)
+      return blockableMenuItem({
+        label: openText,
+        isBlocked: isOpenBlocked,
+        reasonText: unsupportedReasonText,
+        isDisabled: isOpening,
+        onActivate: () => handleOpenProject(project),
+      });
+    return blockableTooltip(
+      isOpenBlocked,
+      unsupportedReasonText,
+      <Button
+        disabled={isOpenBlocked}
+        // Not `disabled` while opening, which would drop the focus of a keyboard user who pressed
+        // it; a repeat press is ignored by `handleOpenProject`.
+        aria-disabled={isOpening}
+        aria-busy={isOpening}
+        // The spinner has no text, so the button keeps its name while it shows.
+        aria-label={openText}
+        onClick={() => handleOpenProject(project)}
+      >
+        {isOpening ? <Spinner className="tw:h-5 tw:py-[1px]" /> : openText}
+      </Button>,
     );
   };
 
@@ -1094,9 +1150,13 @@ export function Home({
                             }}
                             onDoubleClick={(e) => {
                               if (!isEventInside(e)) return;
+                              // Open, Sync, and Get are all blocked for an unsupported project:
+                              // Home reuses the can't-open `unsupportedReason` to block sync too
+                              // (today only Study Bible Additions; see
+                              // `adr-sba-not-syncable-from-dialog-or-home`). A type that stays
+                              // unopenable but should be syncable needs its own check here.
+                              if (project.unsupportedReason) return;
                               if (project.isLocallyAvailable) {
-                                // Only Open is blocked for an unsupported project, not Get.
-                                if (project.unsupportedReason) return;
                                 handleOpenProject(project);
                               } else if (!isSendReceiveInProgress) {
                                 handleSendReceiveProject(project.projectId);
