@@ -812,3 +812,23 @@ export function getEditorFocusLocation(
   if (focusSubject?.focusType === 'webView' && !doesEditorDocumentHaveFocus) return 'settling';
   return 'thisEditor';
 }
+
+/**
+ * Names the context keys one editor web view publishes about itself, which its menu items'
+ * `enabledWhen` / `checkedWhen` expressions read.
+ *
+ * @param webViewId The web view's id
+ * @param state The facts to publish
+ * @returns Context key name -> value, one entry per published fact
+ */
+export function getEditorWebViewContextKeys(
+  webViewId: string,
+  state: { isPreview: boolean; isSyncBlocked: boolean; footnotesPaneVisible: boolean },
+): Record<string, boolean> {
+  const prefix = `platformScriptureEditor.webView.${webViewId}`;
+  return {
+    [`${prefix}.isPreview`]: state.isPreview,
+    [`${prefix}.isSyncBlocked`]: state.isSyncBlocked,
+    [`${prefix}.footnotesPaneVisible`]: state.footnotesPaneVisible,
+  };
+}
