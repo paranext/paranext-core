@@ -54,7 +54,7 @@ export async function subscribeCurrentMacosMenubar() {
       currentMacosMenubarTemplate = await fallbackToDefaultMacosMenubar();
     } else {
       try {
-        // The main menu provides no template variables for when-expressions in v1
+        // The main menu has no template variables; its expressions can reference only global keys
         const evaluatedMainMenu = evaluateMenu(
           currentMainMenu,
           contextKeysService.get,
