@@ -50,6 +50,7 @@ export async function subscribeCurrentMacosMenubar() {
     const thisRebuildGeneration = latestRebuildGeneration;
     let currentMacosMenubarTemplate;
     if (!currentMainMenu) {
+      // If this fallback fails, the current menubar stays in place, by design
       currentMacosMenubarTemplate = await fallbackToDefaultMacosMenubar();
     } else {
       try {
