@@ -1,8 +1,12 @@
 // @vitest-environment jsdom
 /* eslint-disable no-null/no-null -- the wire may send null, which the guard must accept */
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { isSyncActivitySnapshot, useSyncActivity } from './use-sync-activity.hook';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  isSyncActivitySnapshot,
+  SYNC_ACTIVITY_RECHECK_INTERVAL_MS,
+  useSyncActivity,
+} from './use-sync-activity.hook';
 
 const { mockSendCommand, emitter } = vi.hoisted(() => {
   const listeners = new Set<(payload: unknown) => void>();
@@ -76,6 +80,7 @@ describe('useSyncActivity', () => {
     mockSendCommand.mockRejectedValue(new Error('not registered'));
     const { result } = renderHook(() => useSyncActivity());
     await waitFor(() => expect(mockSendCommand).toHaveBeenCalled());
+    await act(async () => {});
     expect(result.current).toEqual({ isSyncing: false, projectIds: [], isKnown: false });
   });
 
@@ -85,5 +90,50 @@ describe('useSyncActivity', () => {
     await waitFor(() => expect(result.current.isSyncing).toBe(true));
     act(() => emitter.emit({ isSyncing: false }));
     expect(result.current).toEqual({ isSyncing: false, projectIds: [], isKnown: true });
+  });
+
+  it('stays busy when a malformed event follows a busy seed', async () => {
+    mockSendCommand.mockResolvedValue({ isSyncing: true, projectIds: ['RH3'] });
+    const { result } = renderHook(() => useSyncActivity());
+    await waitFor(() => expect(result.current.isSyncing).toBe(true));
+    act(() => emitter.emit({ isSyncing: 'yes' }));
+    expect(result.current).toEqual({ isSyncing: true, projectIds: ['RH3'], isKnown: true });
+  });
+
+  it('never marks projects busy for an idle snapshot that carries ids', async () => {
+    mockSendCommand.mockResolvedValue({ isSyncing: false, projectIds: ['RH3'] });
+    const { result } = renderHook(() => useSyncActivity());
+    await waitFor(() =>
+      expect(result.current).toEqual({ isSyncing: false, projectIds: [], isKnown: true }),
+    );
+  });
+
+  describe('recheck while syncing', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('re-reads every 30 seconds until the backend answers idle', async () => {
+      mockSendCommand.mockResolvedValue({ isSyncing: true });
+      const { result } = renderHook(() => useSyncActivity());
+      await act(async () => {});
+      expect(result.current.isSyncing).toBe(true);
+      expect(mockSendCommand).toHaveBeenCalledTimes(1);
+
+      mockSendCommand.mockResolvedValue({ isSyncing: false });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(SYNC_ACTIVITY_RECHECK_INTERVAL_MS);
+      });
+      expect(mockSendCommand).toHaveBeenCalledTimes(2);
+      expect(result.current.isSyncing).toBe(false);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(SYNC_ACTIVITY_RECHECK_INTERVAL_MS);
+      });
+      expect(mockSendCommand).toHaveBeenCalledTimes(2);
+    });
   });
 });

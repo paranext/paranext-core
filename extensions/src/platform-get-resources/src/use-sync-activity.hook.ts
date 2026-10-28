@@ -1,5 +1,6 @@
-import papi from '@papi/frontend';
+import papi, { logger } from '@papi/frontend';
 import { useEventSeededState } from 'platform-bible-react';
+import { getErrorMessage } from 'platform-bible-utils';
 import type { SyncActivitySnapshot } from 'paratext-bible-send-receive';
 import { useMemo } from 'react';
 
@@ -40,7 +41,10 @@ export function isSyncActivitySnapshot(value: unknown): value is SyncActivityVal
 }
 
 const readSyncActivity = () =>
-  papi.commands.sendCommand('paratextBibleSendReceive.getSyncActivity');
+  papi.commands.sendCommand('paratextBibleSendReceive.getSyncActivity').catch((e) => {
+    logger.debug(`Home could not read the sync activity: ${getErrorMessage(e)}`);
+    throw e;
+  });
 
 const shouldRecheck = (snapshot: SyncActivityValue) => snapshot.isSyncing;
 
@@ -64,7 +68,11 @@ export function useSyncActivity(): SyncActivity {
 
   return useMemo(() => {
     if (value === undefined || hasSeedFailed) return IDLE_ACTIVITY;
-    return { isSyncing: value.isSyncing, projectIds: value.projectIds ?? [], isKnown: true };
+    return {
+      isSyncing: value.isSyncing,
+      projectIds: value.isSyncing ? (value.projectIds ?? []) : [],
+      isKnown: true,
+    };
   }, [value, hasSeedFailed]);
 }
 

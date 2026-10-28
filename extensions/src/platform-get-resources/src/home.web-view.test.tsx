@@ -3,6 +3,7 @@ import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ComponentType } from 'react';
+import { useLocalProjects } from './use-local-projects.hook';
 
 /*
  * Whether Home may claim the list is complete is decided here, not in the component: the web view
@@ -496,6 +497,10 @@ describe('HomeWebView sync started elsewhere', () => {
     expect(home).toHaveAttribute('data-send-receive-in-progress', 'false');
 
     expect(getSharedProjectsCallCount()).toBe(callsBefore);
+    // The local list keeps loading too: only Home's own sync pauses it.
+    expect(vi.mocked(useLocalProjects)).not.toHaveBeenCalledWith(
+      expect.objectContaining({ enabled: false }),
+    );
   });
 
   it('re-enables when the activity event says idle', async () => {

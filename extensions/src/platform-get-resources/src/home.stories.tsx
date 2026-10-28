@@ -263,16 +263,11 @@ function SyncInProgressDecorator(Story: (update?: { args: HomeProps }) => ReactE
   );
 }
 
-export const SyncInProgress: Story = {
-  decorators: [SyncInProgressDecorator],
-};
-
 /**
- * A sync started somewhere other than Home, such as the Sync dialog or startup, is running. Home
- * shows the same state as for its own sync: the syncing project's row has a spinner and every other
- * row's Get and Sync is disabled with the reason "Wait for the current sync to finish".
+ * A sync is running. Also what Home shows for a sync started elsewhere: the Sync dialog, auto-sync,
+ * startup or a project switch.
  */
-export const SyncStartedElsewhere: Story = {
+export const SyncInProgress: Story = {
   decorators: [SyncInProgressDecorator],
 };
 

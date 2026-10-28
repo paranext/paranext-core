@@ -55,7 +55,8 @@ export type EventSeededStateOptions<T> = {
   recheckIntervalMs?: number;
   /**
    * Whether the current value may be stale in a way the event will not correct, so it is re-read
-   * every `recheckIntervalMs`. Defaults to never.
+   * every `recheckIntervalMs`. Defaults to never. Rechecks run only once a valid value is known; a
+   * failed or invalid seed is recovered only by an event.
    *
    * @experimental This option is unstable and may change or disappear without notice
    */
