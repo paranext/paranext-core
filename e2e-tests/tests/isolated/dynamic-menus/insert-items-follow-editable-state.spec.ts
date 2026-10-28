@@ -64,17 +64,19 @@ test.describe('Dynamic menu items', () => {
 
     await test.step('Insert items are disabled, not hidden, in a read-only project', async () => {
       await openMenu();
+      // Comments stay available in a read-only project. This check retries until the C# process
+      // has published `canCreateComments`, so it runs first: the disabled assertions below prove
+      // nothing until the project's keys have arrived.
+      await expect(insertItem(INSERT_COMMENT_ITEM_NAME)).toBeVisible({ timeout: 10_000 });
+      await expect(insertItem(INSERT_COMMENT_ITEM_NAME)).not.toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
       await Promise.all(
         INSERT_NOTE_ITEM_NAMES.map(async (name) => {
           await expect(insertItem(name)).toBeVisible({ timeout: 10_000 });
           await expect(insertItem(name)).toHaveAttribute('aria-disabled', 'true');
         }),
-      );
-      // Comments stay available in a read-only project.
-      await expect(insertItem(INSERT_COMMENT_ITEM_NAME)).toBeVisible({ timeout: 10_000 });
-      await expect(insertItem(INSERT_COMMENT_ITEM_NAME)).not.toHaveAttribute(
-        'aria-disabled',
-        'true',
       );
       await closeMenu();
     });
