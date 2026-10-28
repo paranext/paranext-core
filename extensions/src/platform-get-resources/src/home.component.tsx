@@ -1092,10 +1092,14 @@ export function Home({
       {isLoading ? (
         <CardContent className="tw:flex tw:flex-grow tw:flex-col tw:items-center tw:justify-center tw:gap-2">
           <Spinner />
-          {/* The web view holds its own fetches while Home's own sync runs, so the list is only
-              loading during a sync when one started elsewhere holds the server list. */}
-          {isSendReceiveInProgress && (
-            <p className="tw:text-sm tw:text-muted-foreground">{syncRunningListLoadsText}</p>
+          {/* The server list queues behind a running sync. The web view holds its own fetches while
+              Home's own sync runs, so normally this shows only for a sync started elsewhere. Briefly,
+              when Home's own sync ends, the refetch can start before the backend's closing activity
+              event arrives, and the line can show for a moment. */}
+          {remoteProjectsState === 'loading' && isSendReceiveInProgress && (
+            <p role="status" className="tw:text-sm tw:text-muted-foreground">
+              {syncRunningListLoadsText}
+            </p>
           )}
         </CardContent>
       ) : (

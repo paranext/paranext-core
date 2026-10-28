@@ -1987,6 +1987,23 @@ describe('Home while a sync holds the project list', () => {
   it('says why the list is loading while a sync runs', () => {
     render(homeElement({ isSendReceiveInProgress: true, remoteProjectsState: 'loading' }));
     expect(screen.getByText(LINE)).toBeInTheDocument();
+    // Home has other status regions, so the line is checked by its own element.
+    expect(screen.getByText(LINE)).toHaveAttribute('role', 'status');
+  });
+
+  it('shows no line while only the local projects load', () => {
+    render(
+      <Home
+        headerContent={undefined}
+        localProjectsInfo={[]}
+        isLoadingLocalProjects
+        remoteProjectsState="absent"
+        isSendReceiveInProgress
+        onSendReceiveProject={() => {}}
+        localizedStringsWithLoadingState={[EN_STRINGS, false]}
+      />,
+    );
+    expect(screen.queryByText(LINE)).toBeNull();
   });
 
   it('shows no line once loaded, and keeps the Get buttons disabled during the sync', () => {
