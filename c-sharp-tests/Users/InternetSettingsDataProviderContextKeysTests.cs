@@ -6,64 +6,59 @@ using Paratext.Data;
 
 namespace TestParanextDataProvider.Users
 {
+    /// <summary>
+    /// Reads the internet-use setting through the provider's seam so no test touches the user's
+    /// real <c>InternetSettings.xml</c>.
+    /// </summary>
     [ExcludeFromCodeCoverage]
     internal class InternetSettingsDataProviderContextKeysTests : PapiTestBase
     {
         private const string Key = "contextKeys.platform.internetServicesAllowed";
 
         private FakeSharedStore _store = null!;
-        private InternetAccess.InternetSettingsMemento _originalSettings = null!;
+        private InternetUse _rawStatus;
 
         [SetUp]
         public override async Task TestSetupAsync()
         {
             await base.TestSetupAsync();
             _store = new FakeSharedStore();
-            _originalSettings = CreateProvider().GetInternetSettings();
-        }
-
-        [TearDown]
-        public void TearDown()
-        {
-            CreateProvider().SetInternetSettings(_originalSettings);
+            _rawStatus = InternetUse.Enabled;
         }
 
         private InternetSettingsDataProvider CreateProvider() =>
-            new(Client, new ContextKeys(_store));
+            new(Client, new ContextKeys(_store), () => _rawStatus);
 
         [Test]
         public void Ctor_PublishesInternetServicesAllowed()
         {
-            InternetAccess.RawStatus = InternetUse.Enabled;
-
             CreateProvider();
 
             Assert.That(_store.Values[Key], Is.EqualTo(true));
         }
 
         [Test]
-        public void SetInternetSettings_Disabled_PublishesFalse()
+        public void Ctor_Disabled_PublishesFalse()
         {
-            InternetAccess.RawStatus = InternetUse.Enabled;
-            var provider = CreateProvider();
-            var settings = provider.GetInternetSettings();
-            settings.PermittedInternetUse = InternetUse.Disabled;
+            _rawStatus = InternetUse.Disabled;
 
-            provider.SetInternetSettings(settings);
+            CreateProvider();
 
             Assert.That(_store.Values[Key], Is.EqualTo(false));
         }
 
         [Test]
-        public void SetInternetSettings_Enabled_PublishesTrue()
+        public void PublishContextKeys_RereadsSavedSetting()
         {
-            InternetAccess.RawStatus = InternetUse.Disabled;
             var provider = CreateProvider();
-            Assert.That(_store.Values[Key], Is.EqualTo(false));
-            var settings = provider.GetInternetSettings();
-            settings.PermittedInternetUse = InternetUse.Enabled;
+            _rawStatus = InternetUse.Disabled;
 
-            provider.SetInternetSettings(settings);
+            provider.PublishContextKeys();
+
+            Assert.That(_store.Values[Key], Is.EqualTo(false));
+
+            _rawStatus = InternetUse.Enabled;
+            provider.PublishContextKeys();
 
             Assert.That(_store.Values[Key], Is.EqualTo(true));
         }
