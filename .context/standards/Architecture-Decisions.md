@@ -10930,8 +10930,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     into every same-origin web view and the host would re-dispatch synthetic presses in all other
     frames. It makes Radix's own detection work with no wrapper change and could carry a keydown twin
     for Escape across frames, but it has more moving parts and needs cooperation from cross-origin
-    `src` web views, while the blur rule already covers every reported case. Worth revisiting if
-    cross-frame keyboard forwarding is ever built; the two should share a channel.
+    `src` web views, while the blur rule already covers every reported case. Sebastian prototyped
+    this route for PT-2989 in PR #2887 (draft as of 2026-10-29), including a title-bar drag-region
+    toggle that this decision does not adopt (the toolbar keeps its drag behaviour, as in VS Code).
+    Worth revisiting if cross-frame keyboard forwarding is ever built; the two should share a channel.
   - *Reuse the main process's app-window input broadcast.* The main process already broadcasts
     app-window mouse-down and Escape across frames (`EVENT_NAME_ON_DID_APP_WINDOW_INPUT`, consumed
     by `handleAppWindowInput`). It is not reused here because the component library has no PAPI
