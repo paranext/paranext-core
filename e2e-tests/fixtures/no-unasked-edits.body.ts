@@ -169,7 +169,7 @@ const DOC_END_KEY = isMac ? 'Meta+ArrowDown' : 'Control+End';
  * text, `|` removed, must occur in the book's USFM for the verse, so expectations can be computed
  * from the bytes.
  */
-type TextPoint = string;
+export type TextPoint = string;
 
 /** What a gesture needs to act on the open editor. */
 interface GestureContext {
@@ -277,7 +277,7 @@ function usfmBetween(unitText: string, from: TextPoint, to: TextPoint): string {
  * than once, naming it, so an anchor that stops being unique fails loudly instead of aiming the
  * gesture somewhere else.
  */
-async function selectInEditor(editorInput: Locator, from: TextPoint, to: TextPoint = from) {
+export async function selectInEditor(editorInput: Locator, from: TextPoint, to: TextPoint = from) {
   await editorInput.evaluate(
     (root, points) => {
       // Runs in the page, so it cannot call `splitPoint`; the points were checked by it below.
@@ -623,7 +623,7 @@ function expectedAfterFirstSave(installed: Buffer, chapterNum: number): Buffer {
   );
 }
 
-function installedBookPath(bookFile: string): string {
+export function installedBookPath(bookFile: string): string {
   return path.join(requireIsolatedProjectRoot(), INSTALLED_WEB_FOLDER, bookFile);
 }
 
@@ -741,7 +741,7 @@ async function expectChangesOnlyIn(
  * they have held still for {@link SETTLED_QUIET_MS}, so a second write still in flight is not
  * missed. Returns the settled bytes, or `undefined` if no write landed within the timeout.
  */
-async function waitForSaveToSettle(
+export async function waitForSaveToSettle(
   page: Page,
   filePath: string,
   previous: Buffer,
