@@ -60,6 +60,7 @@ import { dotnetDataProvider } from '@main/services/dotnet-data-provider.service'
 import { enhancedResourceProtocolService } from '@main/services/enhanced-resource-protocol.service';
 import { extensionAssetProtocolService } from '@main/services/extension-asset-protocol.service';
 import { extensionHostService } from '@main/services/extension-host.service';
+import { stopChildProcessesInOrder } from '@main/services/process-shutdown-order.util';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
 import { registerPowerMonitorListeners } from '@main/services/power-monitor-logging.service';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
@@ -2377,10 +2378,14 @@ async function main() {
         unsubscribeBounded('the macOS menubar', unsubscribeMenubar),
       ]);
 
-      await Promise.all([
-        dotnetDataProvider.waitForClose(PROCESS_CLOSE_TIME_OUT_MS),
-        extensionHostService.waitForClose(PROCESS_CLOSE_TIME_OUT_MS),
-      ]);
+      await stopChildProcessesInOrder({
+        waitForExtensionHostToClose: () =>
+          extensionHostService.waitForClose(PROCESS_CLOSE_TIME_OUT_MS),
+        closeWebSocketClients: () =>
+          networkService.closeWebSocketClients(INTENTIONAL_CLOSE_CODE, 'app shutdown'),
+        waitForDataProviderToClose: () =>
+          dotnetDataProvider.waitForClose(PROCESS_CLOSE_TIME_OUT_MS),
+      });
       // Windows are normally destroyed by now, so this closes nothing; it is the backstop for a
       // port still open when the network goes down, so it reads as an intentional close.
       closeAllPapiPorts(INTENTIONAL_CLOSE_CODE, 'app shutdown');
