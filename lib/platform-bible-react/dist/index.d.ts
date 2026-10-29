@@ -2895,7 +2895,7 @@ export declare const PopoverPortalContainerProvider: ({ container, children, }: 
 	children: React$1.ReactNode;
 }) => import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Popover */
-export declare function PopoverContent({ className, align, sideOffset, style, ref, ...props }: React$1.ComponentProps<typeof PopoverPrimitive.Content>): import("react/jsx-runtime").JSX.Element;
+export declare function PopoverContent({ className, align, sideOffset, style, ref, onCloseAutoFocus, ...props }: React$1.ComponentProps<typeof PopoverPrimitive.Content>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Popover */
 export declare function PopoverAnchor({ ...props }: React$1.ComponentProps<typeof PopoverPrimitive.Anchor>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Popover */
@@ -3597,7 +3597,7 @@ export declare function ContextMenuSub({ ...props }: React$1.ComponentProps<type
 /** @inheritdoc ContextMenu */
 export declare function ContextMenuRadioGroup({ ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.RadioGroup>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc ContextMenu */
-export declare function ContextMenuContent({ className, style, ref, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.Content> & {
+export declare function ContextMenuContent({ className, style, ref, onCloseAutoFocus, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.Content> & {
 	side?: "top" | "right" | "bottom" | "left";
 }): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc ContextMenu */
@@ -3752,7 +3752,7 @@ export declare function DropdownMenuPortal({ ...props }: React$1.ComponentProps<
 /** @inheritdoc DropdownMenuProps */
 export declare function DropdownMenuTrigger({ ...props }: React$1.ComponentProps<typeof DropdownMenuPrimitive.Trigger>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuContent({ className, align, sideOffset, style, children, ref, ...props }: DropdownMenuContentProps): import("react/jsx-runtime").JSX.Element;
+export declare function DropdownMenuContent({ className, align, sideOffset, style, children, ref, onCloseAutoFocus, ...props }: DropdownMenuContentProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
 export declare function DropdownMenuGroup({ ...props }: React$1.ComponentProps<typeof DropdownMenuPrimitive.Group>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
@@ -4585,6 +4585,12 @@ export declare const useViewVisibility: () => boolean;
  *   effect re-firing on every visibility flip.
  */
 export declare function useRunWhenVisible(isViewVisible: boolean, run: () => void): () => void;
+type DismissOnWindowBlurProps<T extends HTMLElement> = {
+	/** The caller's own ref for the content element (function or object), if any */
+	ref?: React$1.Ref<T>;
+	/** The caller's own close-auto-focus handler, if any */
+	onCloseAutoFocus?: (event: Event) => void;
+};
 /**
  * Treats the window losing focus as a press outside the calling surface, so an open menu or popover
  * dismisses itself.
@@ -4608,18 +4614,32 @@ export declare function useRunWhenVisible(isViewVisible: boolean, run: () => voi
  * Radix anyway: a layer below the top-most layer that disables outside pointer events does not
  * dismiss.
  *
+ * Focus rule: a dismissal caused by window blur does not return focus to the trigger. The user has
+ * already put focus somewhere else (another frame, another application), and Radix's default
+ * close-auto-focus would pull it back. That matters most across frames: a menu closing in one frame
+ * by returning focus to its trigger blurs the main window, which would close the menu the user just
+ * opened in another frame. The returned `onCloseAutoFocus` calls `preventDefault()` on the
+ * close-auto-focus event of a blur dismissal (Radix runs it from a zero-delay timer queued while
+ * unmounting, so the hook's flag outlives the press by one timer) and leaves every other close,
+ * such as Escape or a click outside, restoring focus as usual.
+ *
  * Hidden-view case: an inactive-tab pane cannot hold an open menu, so a stray blur there is a
  * harmless no-op and there is deliberately no catch-up logic. See
  * `.claude/rules/cross-view-sync-hidden-views.md`.
  *
- * @param forwardedRef The caller's own ref for the content element (function or object), if any. It
- *   receives the element too, so wiring this hook does not take the ref away from the caller.
- * @returns Ref callback to attach to the surface's content element. The element is `null` while the
- *   surface is closed, which makes the blur a no-op. Its identity is stable unless `forwardedRef`
- *   changes.
+ * @param props The caller's `ref` and `onCloseAutoFocus` for the Radix Content. Both still work:
+ *   the ref receives the element too, and the caller's handler runs first and can itself prevent
+ *   the default.
+ * @returns `ref`: ref callback to attach to the surface's content element. The element is `null`
+ *   while the surface is closed, which makes the blur a no-op. Its identity is stable unless
+ *   `props.ref` changes. `onCloseAutoFocus`: handler to pass to the content. Spread both onto the
+ *   Radix Content.
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function useDismissOnWindowBlur<T extends HTMLElement>(forwardedRef?: React$1.Ref<T>): React$1.RefCallback<T>;
+export declare function useDismissOnWindowBlur<T extends HTMLElement>({ ref: forwardedRef, onCloseAutoFocus: forwardedOnCloseAutoFocus, }: DismissOnWindowBlurProps<T>): {
+	ref: React$1.RefCallback<T>;
+	onCloseAutoFocus: (event: Event) => void;
+};
 /**
  * Tracks whether `scrollerRef`'s element still has content below the fold.
  *
