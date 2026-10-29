@@ -376,7 +376,11 @@ export { useStylesheet } from './hooks/use-stylesheet.hook';
 export { useExtraValidMarkers } from './hooks/use-extra-valid-markers.hook';
 export { useViewVisibility } from './hooks/use-view-visibility.hook';
 export { useRunWhenVisible } from './hooks/use-run-when-visible.hook';
-export { useDismissOnWindowBlur } from './hooks/use-dismiss-on-window-blur.hook';
+export {
+  isRunningInWebView,
+  shouldSuppressFocusReturn,
+  useDismissOnWindowBlur,
+} from './hooks/use-dismiss-on-window-blur.hook';
 export { useHasContentBelow } from './hooks/use-has-content-below.hook';
 export {
   useLivePopoverAnchor,

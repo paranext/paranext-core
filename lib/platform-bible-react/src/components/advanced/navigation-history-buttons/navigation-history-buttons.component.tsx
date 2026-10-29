@@ -13,6 +13,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
+import {
+  isRunningInWebView,
+  shouldSuppressFocusReturn,
+} from '@/hooks/use-dismiss-on-window-blur.hook';
 import { readDirection } from '@/utils/dir-helper.util';
 import { isMacOs } from '@/utils/platform.util';
 import { cn } from '@/utils/shadcn-ui/utils';
@@ -228,7 +232,11 @@ export function NavigationHistoryButtons({
             // Radix would return focus to the trigger — the non-focusable wrapper span, dropping
             // focus on the body. Send it back to the button so keyboard users keep their place.
             event.preventDefault();
-            buttonRef.current?.focus();
+            // Explicit focus bypasses the shared focus-return rule, so gate it on that rule: focus
+            // must stay where the user put it when that is a web view.
+            if (!shouldSuppressFocusReturn(document, isRunningInWebView())) {
+              buttonRef.current?.focus();
+            }
           }}
         >
           {items.map((item) => (
