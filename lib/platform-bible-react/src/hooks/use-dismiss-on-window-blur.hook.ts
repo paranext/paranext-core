@@ -18,8 +18,9 @@ import { RefObject, useEffect } from 'react';
  * The press lands "outside this surface, but inside whatever hosts it". A popover portaled into a
  * dialog (via `PopoverPortalContainerProvider`) closes while the dialog's own `DismissableLayer`
  * sees an inside press and stays open. A popover or menu portaled to `document.body` is pressed on
- * from its own wrapper, which is outside it. A modal menu opened from inside a dialog is protected
- * by Radix anyway: a layer below the top-most layer that disables outside pointer events does not
+ * from its own Radix popper wrapper (`data-radix-popper-content-wrapper`, what `parentElement`
+ * resolves to there), which is outside it. A modal menu opened from inside a dialog is protected by
+ * Radix anyway: a layer below the top-most layer that disables outside pointer events does not
  * dismiss.
  *
  * Hidden-view case: an inactive-tab pane cannot hold an open menu, so a stray blur there is a
