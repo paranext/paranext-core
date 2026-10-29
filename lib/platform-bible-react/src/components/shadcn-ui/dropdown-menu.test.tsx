@@ -131,6 +131,10 @@ describe('DropdownMenuContent focus after dismissal', () => {
     blurWindow();
 
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+    // Let FocusScope's own zero-delay close-auto-focus timer run before asserting
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
     expect(document.activeElement).not.toBe(screen.getByText('open'));
   });
 

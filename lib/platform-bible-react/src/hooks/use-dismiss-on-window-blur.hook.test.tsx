@@ -132,6 +132,17 @@ describe('useDismissOnWindowBlur', () => {
       expect(event.defaultPrevented).toBe(false);
     });
 
+    it('consumes the flag on the first close-auto-focus call', () => {
+      const onCloseAutoFocus = renderProbe();
+      window.dispatchEvent(new Event('blur'));
+      const first = cancelable();
+      const second = cancelable();
+      onCloseAutoFocus(first);
+      onCloseAutoFocus(second);
+      expect(first.defaultPrevented).toBe(true);
+      expect(second.defaultPrevented).toBe(false);
+    });
+
     it('leaves close-auto-focus alone otherwise', () => {
       const onCloseAutoFocus = renderProbe();
       const event = cancelable();
