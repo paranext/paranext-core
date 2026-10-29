@@ -119,9 +119,8 @@ function DropdownMenuContent({
   // CUSTOM: Destructure style so we can merge the shared z-index constant into it
   style,
   children,
-  // CUSTOM: Destructure ref (a regular prop in React 19) so it can be composed with the local ref
-  // that useDismissOnWindowBlur reads
-  ref: forwardedRef,
+  // CUSTOM: Destructure ref (a regular prop in React 19) so useDismissOnWindowBlur can compose it
+  ref,
   ...props
 }: DropdownMenuContentProps) {
   // CUSTOM: Use readDirection for RTL support — wraps children in dir div to mirror layout
@@ -129,26 +128,14 @@ function DropdownMenuContent({
   // CUSTOM: Added useDismissOnWindowBlur so the menu closes when the window loses focus. A click
   // into another iframe never reaches this document, so the window's blur stands in for the outside
   // press; see the hook's TSDoc. DropdownMenuSubContent is not wired: a sub-menu closes with its
-  // root menu.
-  // React's ref API uses null as the empty value
-  // eslint-disable-next-line no-null/no-null
-  const contentRef = React.useRef<HTMLDivElement>(null);
-  useDismissOnWindowBlur(contentRef);
-  // CUSTOM: Compose the local ref with the caller's ref
-  const setContentRef = React.useCallback(
-    (node: HTMLDivElement | null) => {
-      contentRef.current = node;
-      if (typeof forwardedRef === 'function') forwardedRef(node);
-      else if (forwardedRef) forwardedRef.current = node;
-    },
-    [forwardedRef],
-  );
+  // root menu. The returned ref callback also forwards the caller's ref.
+  const contentRef = useDismissOnWindowBlur(ref);
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
         data-slot="dropdown-menu-content"
-        // CUSTOM: Composed ref so useDismissOnWindowBlur can find the content's parent
-        ref={setContentRef}
+        // CUSTOM: Ref from useDismissOnWindowBlur so it can find the content's parent
+        ref={contentRef}
         sideOffset={sideOffset}
         align={align}
         className={cn(
