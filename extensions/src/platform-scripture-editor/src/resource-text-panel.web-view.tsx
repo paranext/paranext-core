@@ -282,12 +282,8 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   useEffect(() => {
     if (nextUserPickedResourceId !== undefined || nextSelectedResourceId !== undefined)
       updateSelection({
-        ...(nextUserPickedResourceId !== undefined
-          ? { userPickedResourceId: nextUserPickedResourceId }
-          : {}),
-        ...(nextSelectedResourceId !== undefined
-          ? { selectedResourceId: nextSelectedResourceId }
-          : {}),
+        userPickedResourceId: nextUserPickedResourceId,
+        selectedResourceId: nextSelectedResourceId,
       });
     if (selection.shouldClearPending) setPendingResourceId(undefined);
   }, [

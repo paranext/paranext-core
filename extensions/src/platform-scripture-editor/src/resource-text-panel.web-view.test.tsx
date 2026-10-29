@@ -20,7 +20,7 @@ import {
   NO_PROJECT_SELECTION_KEY,
   RESOURCE_SELECTION_BY_PROJECT_STATE_KEY,
   toResourceSelections,
-  type ResourceSelection,
+  type StoredResourceSelection,
 } from './resource-selection-state.utils';
 
 // ---------------------------------------------------------------------------
@@ -279,7 +279,7 @@ function makeProps(
  * @param selectionKey The project's key: see `getResourceSelectionKey`
  */
 function savedSelectionState(
-  selection: ResourceSelection,
+  selection: StoredResourceSelection,
   selectionKey = DEFAULT_PROJECT_ID,
 ): Record<string, unknown> {
   return { [RESOURCE_SELECTION_BY_PROJECT_STATE_KEY]: { [selectionKey]: selection } };
@@ -291,7 +291,7 @@ function savedSelectionState(
  * @param written The value written, if any
  * @param selectionKey The project's key: see `getResourceSelectionKey`
  */
-function selectionIn(written: unknown, selectionKey = DEFAULT_PROJECT_ID): ResourceSelection {
+function selectionIn(written: unknown, selectionKey = DEFAULT_PROJECT_ID): StoredResourceSelection {
   return toResourceSelections(written)[selectionKey] ?? {};
 }
 
@@ -359,7 +359,9 @@ function makeTrackedWebViewState(
  * The default project's selection in each value written through a {@link makeTrackedWebViewState}
  * stub, in order.
  */
-function writtenSelections(setters: Map<string, ReturnType<typeof vi.fn>>): ResourceSelection[] {
+function writtenSelections(
+  setters: Map<string, ReturnType<typeof vi.fn>>,
+): StoredResourceSelection[] {
   return (setters.get(RESOURCE_SELECTION_BY_PROJECT_STATE_KEY)?.mock.calls ?? []).map(([written]) =>
     selectionIn(written),
   );

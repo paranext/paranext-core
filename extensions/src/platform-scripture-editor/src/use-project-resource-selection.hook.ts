@@ -1,11 +1,12 @@
 import type { UseWebViewStateHook } from '@papi/core';
+import { deepEqual } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   getResourceSelectionKey,
   RESOURCE_SELECTION_BY_PROJECT_STATE_KEY,
   toResourceSelections,
   updateResourceSelections,
-  type ResourceSelection,
+  type StoredResourceSelection,
   type ResourceSelectionByProject,
 } from './resource-selection-state.utils';
 
@@ -29,7 +30,7 @@ const NO_SELECTIONS: ResourceSelectionByProject = {};
 export function useProjectResourceSelection(
   useWebViewState: UseWebViewStateHook,
   projectId: string | undefined,
-): [ResourceSelection, (update: ResourceSelection) => void] {
+): [StoredResourceSelection, (update: StoredResourceSelection) => void] {
   const [savedSelections, setSelections] = useWebViewState<ResourceSelectionByProject>(
     RESOURCE_SELECTION_BY_PROJECT_STATE_KEY,
     NO_SELECTIONS,
@@ -39,14 +40,29 @@ export function useProjectResourceSelection(
   // The setter takes a whole value, not an update, so two changes made before the next render would
   // otherwise each start from the same stale record and the second would undo the first.
   const latestSelectionsRef = useRef(selections);
+  // The last value written, until the web view state reports it back. Each write is reported back in
+  // turn, so an earlier write can render after a later one was made; taking that render as the
+  // latest would let the next change build on it and undo the later write.
+  const unreportedWriteRef = useRef<ResourceSelectionByProject | undefined>(undefined);
   useEffect(() => {
+    const unreportedWrite = unreportedWriteRef.current;
+    if (unreportedWrite) {
+      if (!deepEqual(selections, unreportedWrite)) return;
+      unreportedWriteRef.current = undefined;
+    }
     latestSelectionsRef.current = selections;
   }, [selections]);
 
   const updateSelection = useCallback(
-    (update: ResourceSelection) => {
-      const next = updateResourceSelections(latestSelectionsRef.current, projectId, update);
+    (update: StoredResourceSelection) => {
+      // Normalized like a rendered value, so the render that reports it back compares equal
+      const next = toResourceSelections(
+        updateResourceSelections(latestSelectionsRef.current, projectId, update),
+      );
+      // An unchanged value is never reported back, so it must not wait for a report
+      if (deepEqual(next, latestSelectionsRef.current)) return;
       latestSelectionsRef.current = next;
+      unreportedWriteRef.current = next;
       setSelections(next);
     },
     [projectId, setSelections],

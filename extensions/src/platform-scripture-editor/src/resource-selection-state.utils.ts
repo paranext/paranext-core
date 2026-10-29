@@ -8,6 +8,8 @@
  * builds the state a panel is reloaded with.
  */
 
+import { isString } from 'platform-bible-utils';
+
 /** The web view state key the per-project selections are kept under. */
 export const RESOURCE_SELECTION_BY_PROJECT_STATE_KEY = 'resourceSelectionByProjectId';
 
@@ -17,8 +19,11 @@ export const RESOURCE_SELECTION_BY_PROJECT_STATE_KEY = 'resourceSelectionByProje
  */
 export const NO_PROJECT_SELECTION_KEY = '';
 
-/** One project's selection. See `ResourceSelectionInputs` for what the two ids mean. */
-export type ResourceSelection = {
+/**
+ * One project's selection as kept in web view state. See `ResourceSelectionInputs` for what the two
+ * ids mean.
+ */
+export type StoredResourceSelection = {
   /** The persisted selection, namespaced or legacy-bare */
   selectedResourceId?: string;
   /** The id of the resource the user last chose themselves */
@@ -26,7 +31,7 @@ export type ResourceSelection = {
 };
 
 /** Each project's selection, by project id ({@link NO_PROJECT_SELECTION_KEY} for none). */
-export type ResourceSelectionByProject = Record<string, ResourceSelection>;
+export type ResourceSelectionByProject = Record<string, StoredResourceSelection>;
 
 /**
  * The key a project's selection is kept under.
@@ -43,7 +48,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function toOptionalString(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
+  return isString(value) ? value : undefined;
 }
 
 /**
@@ -79,7 +84,8 @@ export function getResourceSelections(
 }
 
 /**
- * Per-project selections with the given fields of one project's selection changed.
+ * Per-project selections with the given fields of one project's selection changed. A field that is
+ * `undefined` in `update` keeps the value it had, so a caller can pass only what it knows.
  *
  * @param selections Each project's selection
  * @param projectId The project, if one is open
@@ -89,10 +95,13 @@ export function getResourceSelections(
 export function updateResourceSelections(
   selections: ResourceSelectionByProject,
   projectId: string | undefined,
-  update: ResourceSelection,
+  update: StoredResourceSelection,
 ): ResourceSelectionByProject {
   const key = getResourceSelectionKey(projectId);
-  return { ...selections, [key]: { ...selections[key], ...update } };
+  const changed = Object.fromEntries(
+    Object.entries(update).filter(([, value]) => value !== undefined),
+  );
+  return { ...selections, [key]: { ...selections[key], ...changed } };
 }
 
 /**
@@ -105,29 +114,31 @@ export function updateResourceSelections(
 export function getResourceSelection(
   state: Record<string, unknown> | undefined,
   projectId: string | undefined,
-): ResourceSelection {
+): StoredResourceSelection {
   return getResourceSelections(state)[getResourceSelectionKey(projectId)] ?? {};
 }
 
 /**
- * A panel's web view state with one project's selection replaced.
+ * A panel's web view state with the given fields of one project's selection changed, as
+ * {@link updateResourceSelections} changes them.
  *
  * @param state The panel's web view state
  * @param projectId The project, if one is open
- * @param selection The project's new selection
- * @returns The state with that project's selection replaced and every other project's kept
+ * @param update The fields to change
+ * @returns The state with that project's selection changed and every other project's kept
  */
 export function withResourceSelection(
   state: Record<string, unknown> | undefined,
   projectId: string | undefined,
-  selection: ResourceSelection,
+  update: StoredResourceSelection,
 ): Record<string, unknown> {
   return {
     ...state,
-    [RESOURCE_SELECTION_BY_PROJECT_STATE_KEY]: {
-      ...getResourceSelections(state),
-      [getResourceSelectionKey(projectId)]: selection,
-    },
+    [RESOURCE_SELECTION_BY_PROJECT_STATE_KEY]: updateResourceSelections(
+      getResourceSelections(state),
+      projectId,
+      update,
+    ),
   };
 }
 
