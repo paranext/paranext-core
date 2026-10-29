@@ -22,7 +22,7 @@ internal sealed class FirstSyncRecorder
     private const string SYNCED = "synced";
 
     private readonly Func<string?> _readState;
-    private readonly Action<string> _writeState;
+    private readonly Func<string, bool> _writeState;
     private readonly Func<Action, Task> _runInBackground;
     private readonly ParatextProjectSendReceiveService? _service;
     private readonly object _lock = new();
@@ -39,11 +39,13 @@ internal sealed class FirstSyncRecorder
     }
 
     /// <param name="readState">The current value of the first-sync state setting.</param>
-    /// <param name="writeState">Writes a new value to the first-sync state setting.</param>
+    /// <param name="writeState">
+    /// Writes a new value to the first-sync state setting; answers whether the write was accepted.
+    /// </param>
     /// <param name="runInBackground">Runs the given work off the calling thread.</param>
     internal FirstSyncRecorder(
         Func<string?> readState,
-        Action<string> writeState,
+        Func<string, bool> writeState,
         Func<Action, Task> runInBackground
     )
     {
@@ -81,7 +83,10 @@ internal sealed class FirstSyncRecorder
         {
             if (_readState() == SYNCED)
                 return;
-            _writeState(SYNCED);
+            if (!_writeState(SYNCED))
+                Console.Error.WriteLine(
+                    "Could not record the first successful sync: the setting write was refused"
+                );
         }
         catch (Exception ex)
         {

@@ -15,6 +15,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
         private readonly List<string> _writes = [];
         private readonly List<Action> _queued = [];
         private bool _throwOnWrite;
+        private bool _refuseWrite;
         private FirstSyncRecorder _recorder = null!;
 
         [SetUp]
@@ -24,14 +25,18 @@ namespace TestParanextDataProvider.Projects.SendReceive
             _writes.Clear();
             _queued.Clear();
             _throwOnWrite = false;
+            _refuseWrite = false;
             _recorder = new FirstSyncRecorder(
                 () => _state,
                 value =>
                 {
                     if (_throwOnWrite)
                         throw new InvalidOperationException("write failed");
+                    if (_refuseWrite)
+                        return false;
                     _writes.Add(value);
                     _state = value;
+                    return true;
                 },
                 work =>
                 {
@@ -115,6 +120,34 @@ namespace TestParanextDataProvider.Projects.SendReceive
             Assert.That(_writes, Is.Empty);
 
             _throwOnWrite = false;
+            _recorder.OnSyncActivityChanged(Finished(SyncOutcome.Succeeded));
+            RunQueued();
+            Assert.That(_writes, Is.EqualTo(new[] { "synced" }));
+        }
+
+        [Test]
+        public void WriteRefused_IsLoggedAndNextSuccessRetries()
+        {
+            _refuseWrite = true;
+            var originalError = Console.Error;
+            var captured = new StringWriter();
+            Console.SetError(captured);
+            try
+            {
+                _recorder.OnSyncActivityChanged(Finished(SyncOutcome.Succeeded));
+                Assert.DoesNotThrow(RunQueued);
+                Assert.That(
+                    captured.ToString(),
+                    Does.Contain("Could not record the first successful sync")
+                );
+            }
+            finally
+            {
+                Console.SetError(originalError);
+            }
+            Assert.That(_writes, Is.Empty);
+
+            _refuseWrite = false;
             _recorder.OnSyncActivityChanged(Finished(SyncOutcome.Succeeded));
             RunQueued();
             Assert.That(_writes, Is.EqualTo(new[] { "synced" }));
