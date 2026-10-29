@@ -809,6 +809,16 @@ describe('performWindowCloseTasks', () => {
     );
   });
 
+  it('does NOT sync a closing window while the first successful sync is pending', async () => {
+    stubSettings({ mode: 'simple', firstRunComplete: true, firstSyncState: 'pending' });
+    mockGetOpenWebViewsForWindow.mockResolvedValue(asWindowWebViews([writableEditor('p1')]));
+
+    await performWindowCloseTasks('2');
+
+    expect(mockRequestNoRetry).not.toHaveBeenCalled();
+    expect(mockLoggerInfo).toHaveBeenCalledWith(expect.stringContaining('no successful sync yet'));
+  });
+
   it('skips the sync and warns when the interface mode cannot be read', async () => {
     mockSettingsGet.mockRejectedValue(new Error('extension host is going away'));
 

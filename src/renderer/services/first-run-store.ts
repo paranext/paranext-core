@@ -13,6 +13,7 @@ import {
   isPlatformError,
 } from 'platform-bible-utils';
 import { readCachedInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
+import { INTERNET_SETTINGS_DATA_PROVIDER } from '@renderer/components/internet-settings.constants';
 import { clearBooleanFlag, readBooleanFlag, writeBooleanFlag } from './local-storage-flag.util';
 import { decideFirstRun } from './first-run.reducer';
 import { FirstRunStep } from './first-run.model';
@@ -22,6 +23,7 @@ import {
 } from './registration-validity-store';
 import { pickBestSetupLanguage } from './pick-best-setup-language';
 import { askForInternetUseChoiceIfNeeded } from './internet-use-choice-store';
+import { askSendReceiveAvailable } from './send-receive-availability.util';
 
 /** What the app should currently render for first-run gating. */
 export type FirstRunStatus =
@@ -225,19 +227,6 @@ async function seedInterfaceLanguageFromOsLocale(): Promise<void> {
 }
 
 /**
- * Asks whether this build can run Send/Receive. Answers `undefined` when the request rejects (e.g.
- * the backend has not registered the command yet); callers treat that as unavailable.
- */
-async function askSendReceiveAvailable(): Promise<boolean | undefined> {
-  try {
-    return (await commandService.sendCommand('paratextBibleSendReceive.isAvailable')) === true;
-  } catch (e) {
-    logger.warn(`Could not tell whether Send/Receive is available: ${getErrorMessage(e)}`);
-    return undefined;
-  }
-}
-
-/**
  * Reads `platform.firstSyncState`. A failed read answers `'unknown'`, which counts as synced, so a
  * transient failure never reopens the wizard for a user who finished setup.
  */
@@ -265,9 +254,7 @@ async function canUseInternetForFirstSync(): Promise<boolean> {
   try {
     const asked = await settingsService.get('platform.internetUseChoiceAsked');
     if (isPlatformError(asked) || asked !== true) return false;
-    const provider = await dataProviderService.get(
-      'paratextRegistration.internetSettingsDataProvider',
-    );
+    const provider = await dataProviderService.get(INTERNET_SETTINGS_DATA_PROVIDER);
     if (!provider) return false;
     const { permittedInternetUse } = await provider.getInternetSettings(undefined);
     return permittedInternetUse === 'Enabled';

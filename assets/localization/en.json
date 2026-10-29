@@ -550,7 +550,7 @@
   "%settings_platform_comments_enabled_description%": "Whether reading and writing comments in projects is enabled. This is an experimental feature.",
   "%settings_platform_comments_enabled_label%": "Comments enabled (experimental)",
   "%settings_platform_firstRunComplete_label%": "Setup complete",
-  "%settings_platform_firstSyncState_label%": "First Send/Receive state",
+  "%settings_platform_firstSyncState_label%": "First sync state",
   "%settings_platform_internetUseChoiceAsked_label%": "Asked for an internet access choice",
   "%settings_platform_showRegistrationReminderOnStartup_description%": "When your Paratext registration is no longer valid, show the registration step at startup so you can re-register.",
   "%settings_platform_showRegistrationReminderOnStartup_label%": "Show re-registration reminder at startup",

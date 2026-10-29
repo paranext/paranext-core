@@ -664,6 +664,7 @@
   "%settings_lockReason_projectRegistered%": "Cambie este nombre en el Registro de Paratext.",
   "%settings_platform_comments_enabled_description%": "Indica si la función experimental de ver y editar los comentarios en proyectos está habilitada.",
   "%settings_platform_comments_enabled_label%": "Comentarios habilitados (experimental)",
+  "%settings_platform_firstSyncState_label%": "Estado de la primera sincronización",
   "%settings_platform_group1_description%": "Configuraciones generales del software fundamental",
   "%settings_platform_group1_label_alternative%": "General",
   "%settings_platform_group1_label%": "Configuración de Platform",

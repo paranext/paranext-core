@@ -17,10 +17,12 @@
 // crashes an older Paratext 10 build on the missing value:
 //   * `SyncState.syncingProjectIds` — required in the upstream file above.
 //   * `SyncActivitySnapshot.projectIds` and `SyncActivitySnapshot.outcome` — no upstream declaration
-//     to diverge from yet; this whole type, `SyncOutcome`, `getSyncActivity`,
-//     `onSyncActivityChanged` and `isAvailable` are declared here ahead of the Paratext 10 patch that raises the
+//     to diverge from yet; this whole type, `SyncOutcome`, `getSyncActivity` and
+//     `onSyncActivityChanged` are declared here ahead of the Paratext 10 patch that raises the
 //     signal, the same way the write-gate seam (`getAutoSyncBlocking` /
 //     `onSyncWriteLockChanged`) is.
+// Also declared here with no upstream counterpart yet, though not a divergence in optionality:
+//   * `isAvailable` — ahead of the Paratext 10 patch that overrides core's answer to it.
 //
 // Why this lives in `src/@types` and not under an extension's `src/types`:
 //

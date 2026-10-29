@@ -8,6 +8,13 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// already <c>synced</c>, writes <c>synced</c> to it. The first-run wizard reads the setting to stop
 /// reopening its Sync step.
 /// <para>
+/// Any run that ends <see cref="SyncOutcome.Succeeded"/> counts, however it was started, including
+/// a run that found nothing to sync. The consent gate keeps automatic runs from starting while the
+/// state is <c>pending</c>, but an automatic trigger that skips the gate
+/// (<c>paratextBibleSendReceive.syncOpenProjects</c>, TODO(PT-4605)) can record the first sync
+/// without any project having synced.
+/// </para>
+/// <para>
 /// This writes a user setting, not project data, so it does not take the Send/Receive write gate.
 /// </para>
 /// <para>

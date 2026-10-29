@@ -379,8 +379,11 @@ declare module 'papi-shared-types' {
      * choice (`platform.internetUseChoiceAsked`), sets `platform.firstSyncState` to `pending` so
      * the wizard's Sync step returns and automatic syncs wait until a sync succeeds again (a later
      * successful Send/Receive sets it back to `synced`), and turns `platform.syncOnStartup` and
-     * `platform.showRegistrationReminderOnStartup` back on. Works in installed builds: press F12
-     * and run `await papi.commands.sendCommand('platform.resetFirstRun')` in the console.
+     * `platform.showRegistrationReminderOnStartup` back on. It writes `pending` even in a build
+     * without Send/Receive, where no sync can clear it, so afterwards
+     * `platform.getAutomaticSyncConsent` answers `notYetSynced` there from then on; such a build
+     * runs no automatic syncs, so nothing is held back. Works in installed builds: press F12 and
+     * run `await papi.commands.sendCommand('platform.resetFirstRun')` in the console.
      *
      * @param options What to do with the Paratext registration; see {@link ResetFirstRunOptions}
      * @experimental This command is unstable and may change or disappear without notice
