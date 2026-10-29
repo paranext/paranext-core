@@ -44,6 +44,7 @@ import {
   hasDistinctFullName,
   isLocalizeKey,
   normalizeFullName,
+  normalizeProjectId,
   PROJECT_OPEN_BLOCKED_FALLBACK_KEY,
 } from 'platform-bible-utils';
 import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
@@ -413,6 +414,14 @@ export function Home({
     return localizedStringsWithLoadingState[0][localizeKey] ?? localizeKey;
   };
   const isLocalizedStringsLoading = localizedStringsWithLoadingState[1];
+  // Ids reach Home from more than one source (the backend's sync activity, the project list), so
+  // they are compared in their normalized form.
+  const normalizedActiveProjectIds = useMemo(
+    () => new Set(activeSendReceiveProjects.map(normalizeProjectId)),
+    [activeSendReceiveProjects],
+  );
+  const isProjectSyncing = (projectId: string) =>
+    normalizedActiveProjectIds.has(normalizeProjectId(projectId));
   const actionText: string = getLocalizedString('%resources_action%');
   const activityText: string = getLocalizedString('%resources_activity%');
   const clearFiltersText: string = getLocalizedString('%resources_clearFilters%');
@@ -891,7 +900,7 @@ export function Home({
     event.target instanceof Node && event.currentTarget.contains(event.target);
 
   const getSendReceiveButtonContent = (project: MergedProjectInfo) => {
-    if (isSendReceiveInProgress && activeSendReceiveProjects.includes(project.projectId)) {
+    if (isSendReceiveInProgress && isProjectSyncing(project.projectId)) {
       return <Spinner className="tw:h-5 tw:py-[1px]" />;
     }
 
@@ -996,7 +1005,7 @@ export function Home({
     const unsupportedReasonText = getUnsupportedReasonText(project);
     // The sync service runs one sync at a time and refuses a second one, so every row is gated while
     // any sync runs, not just the active one. The active row shows the spinner and needs no reason.
-    const isThisProjectSyncing = activeSendReceiveProjects.includes(project.projectId);
+    const isThisProjectSyncing = isProjectSyncing(project.projectId);
     const isWaitingForOtherSync = isSendReceiveInProgress && !isThisProjectSyncing;
     const waitingReasonText = isWaitingForOtherSync ? syncWaitingReasonText : undefined;
     const sendReceiveLabel = project.isLocallyAvailable ? syncText : getText;

@@ -9,6 +9,7 @@ import {
   isErrorMessageAboutRegistryAuthFailure,
   isPlatformError,
   newGuid,
+  normalizeProjectId,
   retryUntil,
 } from 'platform-bible-utils';
 import type { SharedProjectsInfo } from 'platform-scripture';
@@ -215,7 +216,12 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
   // behind it; the local list keeps loading, and only Home's own sync pauses that.
   const isAnySendReceiveInProgress = isOwnSendReceiveInProgress || syncActivity.isSyncing;
   const activeSendReceiveProjects = useMemo(
-    () => Array.from(new Set([...ownActiveSendReceiveProjects, ...syncActivity.projectIds])),
+    () =>
+      Array.from(
+        new Set(
+          [...ownActiveSendReceiveProjects, ...syncActivity.projectIds].map(normalizeProjectId),
+        ),
+      ),
     [ownActiveSendReceiveProjects, syncActivity.projectIds],
   );
   const [syncsCompletedCount, setSyncsCompletedCount] = useState<number>(0);

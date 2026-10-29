@@ -1888,6 +1888,19 @@ describe('Home while a sync runs', () => {
     ).toHaveLength(1);
   });
 
+  it('matches the syncing project whatever the casing of its id', () => {
+    // Paratext ids reach Home upper-cased from the backend's sync activity and as the project list
+    // spells them; a mismatch in case must not turn the syncing row into a waiting one.
+    renderHomeDuringSync({ activeSendReceiveProjects: ['SYNCINGPROJECT'] });
+    const getButtons = screen.getAllByRole('button', { name: 'Get' });
+    expect(getButtons.filter((button) => button.getAttribute('aria-busy') === 'true')).toHaveLength(
+      1,
+    );
+    expect(
+      screen.getAllByRole('group', { name: 'Wait for the current sync to finish' }),
+    ).toHaveLength(1);
+  });
+
   it('enables every Get button when no sync runs', () => {
     renderHomeDuringSync({ isSendReceiveInProgress: false, activeSendReceiveProjects: [] });
     screen.getAllByRole('button', { name: 'Get' }).forEach((b) => expect(b).toBeEnabled());

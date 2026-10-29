@@ -506,6 +506,14 @@ describe('HomeWebView sync started elsewhere', () => {
     expect(activeProjects(home)).toContain('RH3');
   });
 
+  it('passes the outside project ids in their normalized form', async () => {
+    const home = await renderSubscribed();
+
+    await emitSyncActivity({ isSyncing: true, projectIds: ['rh3'] });
+
+    expect(activeProjects(home)).toEqual(['RH3']);
+  });
+
   it("merges the outside project ids with Home's own, once each", async () => {
     let resolveSync: (value: unknown) => void = () => {};
     mockSendCommand.mockImplementation(async (commandName: string) => {
