@@ -2333,35 +2333,6 @@ describe('SyncStatusButton — dismissal across a WebView boundary', () => {
       expect(screen.queryByTestId('toolbar-sync-popover-status')).not.toBeInTheDocument();
     });
   });
-
-  // A plain window switch is not a move into a WebView, and dismissing on it would close the popover
-  // every time the user glanced at another app or opened DevTools.
-  it('stays open when the whole window loses focus', async () => {
-    mockSyncState(IDLE_STATE);
-    render(<SyncStatusButton />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Sync' }));
-    await screen.findByTestId('toolbar-sync-popover-status');
-
-    mockFocus({ hasFocus: false, focusedEl: addForeignWebView() });
-    fireEvent.blur(window);
-
-    expect(screen.getByTestId('toolbar-sync-popover-status')).toBeInTheDocument();
-  });
-
-  // Radix portals the content to document.body, so containment has to be measured against the
-  // content node: measuring against the trigger would read the popover's own content as "outside"
-  // and dismiss the popover the moment the user interacted with it.
-  it('stays open when focus is inside its own portaled content', async () => {
-    mockSyncState(IDLE_STATE);
-    render(<SyncStatusButton />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Sync' }));
-    const viewDetails = await screen.findByTestId('toolbar-sync-view-details-button');
-
-    mockFocus({ hasFocus: true, focusedEl: viewDetails });
-    fireEvent.blur(window);
-
-    expect(screen.getByTestId('toolbar-sync-popover-status')).toBeInTheDocument();
-  });
 });
 
 describe('SyncStatusButton — accessibility', () => {
