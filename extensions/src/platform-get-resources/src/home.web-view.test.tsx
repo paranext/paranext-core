@@ -402,11 +402,6 @@ describe('HomeWebView send/receive guard', () => {
   });
 });
 
-/*
- * A sync can be started somewhere other than Home (the Sync dialog, startup). Home learns of it from
- * the backend's sync activity and must disable its rows, but it must not reload its lists for it:
- * only Home's own sync completing does that.
- */
 describe('HomeWebView server list expected after a sync', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -451,6 +446,11 @@ describe('HomeWebView server list expected after a sync', () => {
   });
 });
 
+/*
+ * A sync can be started somewhere other than Home (the Sync dialog, startup). Home learns of it from
+ * the backend's sync activity and must disable its rows, but it must not reload its lists for it:
+ * only Home's own sync completing does that.
+ */
 describe('HomeWebView sync started elsewhere', () => {
   const SEND_RECEIVE_PROJECTS = 'paratextBibleSendReceive.sendReceiveProjects';
   const GET_SYNC_ACTIVITY = 'paratextBibleSendReceive.getSyncActivity';

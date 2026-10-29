@@ -2041,7 +2041,8 @@ describe('Home while a sync holds the project list', () => {
       const liveRegions = screen
         .getAllByRole('status')
         .filter((element) => element.hasAttribute('aria-live'));
-      return liveRegions[1]?.textContent ?? '';
+      if (liveRegions.length < 2) throw new Error('Home rendered no live region for the sync line');
+      return liveRegions[1].textContent ?? '';
     }
 
     it('announces the line only once it has stayed for the settle delay', () => {
