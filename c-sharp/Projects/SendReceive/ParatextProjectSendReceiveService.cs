@@ -234,8 +234,8 @@ internal class ParatextProjectSendReceiveService(
     /// <summary>
     /// Whether this build can run Send/Receive.
     /// <para>
-    /// Scaffolding: public Platform.Bible runs no Send/Receive, so this answers
-    /// <see langword="false"/> here. The Paratext 10 patch replaces the body to answer
+    /// Scaffolding: public Platform.Bible runs no Send/Receive, so this stub answers
+    /// <see langword="false"/> in Platform.Bible. The Paratext 10 patch replaces the body to answer
     /// <see langword="true"/>. Do not remove — removing it breaks the patch.
     /// </para>
     /// </summary>
