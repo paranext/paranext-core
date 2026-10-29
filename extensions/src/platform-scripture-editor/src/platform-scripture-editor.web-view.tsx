@@ -2498,16 +2498,19 @@ function PlatformScriptureEditor({
   // Need to add a window listener for click events that will close the markers menu when you click
   // outside. There is another `onClick` listener for the marker menu that prevents click events
   // from being passed to this listener if the marker menu is being clicked. Those click events are
-  // handled separately.
+  // handled separately. A click in another iframe or the main toolbar never reaches this document,
+  // so the window's blur stands in for it.
   useEffect(() => {
     const clickListener = () => {
       if (showMarkersMenu) setShowMarkersMenu(false);
     };
 
     window.addEventListener('click', clickListener);
+    window.addEventListener('blur', clickListener);
 
     return () => {
       window.removeEventListener('click', clickListener);
+      window.removeEventListener('blur', clickListener);
     };
   }, [showMarkersMenu]);
 
