@@ -2192,6 +2192,46 @@ describe('openDefaultActiveProjectIfApplicable', () => {
     expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('pdp unavailable'));
   });
 
+  it('checks each recent project on its own when one can be neither read nor opened', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      mockProjectDataProvidersGet,
+      setRecentProjects,
+      setPublishedIds,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    setRecentProjects(['bad', 'res', 'p1']);
+    setPublishedIds(['res']);
+    const defaultProjectDataProvidersGet = mockProjectDataProvidersGet.getMockImplementation();
+    mockProjectDataProvidersGet.mockImplementation(async (interfaceName, projectId) => {
+      if (projectId === 'bad' || !defaultProjectDataProvidersGet)
+        throw new Error('pdp unavailable');
+      return defaultProjectDataProvidersGet(interfaceName, projectId);
+    });
+    // An unreadable project counts as a project, so it must also fail to open for the walk to move on.
+    mockSendCommand.mockImplementation(async (commandName: string, projectId: string) => {
+      if (commandName !== 'platformScriptureEditor.openScriptureEditor')
+        throw new Error(`Unexpected command in test: ${commandName}`);
+      if (projectId === 'bad') throw new Error('cannot open');
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(
+      mockSendCommand.mock.calls
+        .filter(([cmd]) => cmd === 'platformScriptureEditor.openScriptureEditor')
+        .map(([, id]) => id),
+    ).toEqual(['bad', 'p1']);
+  });
+
   it('falls through to the shared projects when every recent project is a published resource', async () => {
     const {
       papi,
