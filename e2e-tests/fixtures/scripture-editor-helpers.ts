@@ -173,7 +173,9 @@ export async function ensureFootnotesVisible(
  * registered or finished installing the sample project into an empty isolated root — observed as a
  * `-32601 'object:platform.Paratext-pdpf.…' not found` failure on cold first launches.
  */
-async function waitForSampleProjectMetadata(timeoutMs = LAUNCH_PHASE_TIMEOUT_MS): Promise<void> {
+export async function waitForSampleProjectMetadata(
+  timeoutMs = LAUNCH_PHASE_TIMEOUT_MS,
+): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {

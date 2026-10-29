@@ -62,6 +62,7 @@ import {
   SAMPLE_WEB_PROJECT_ID,
   sendCommandWithId,
   waitForHomeTab,
+  waitForSampleProjectMetadata,
 } from './scripture-editor-helpers';
 import { unifiedUsfmDiff } from './usfm-line-diff';
 import { describeChangesOutside, getUsfmUnit } from './usfm-units';
@@ -997,7 +998,7 @@ export async function runNoUnaskedEdits(
   if (view.interfaceMode === 'power') await waitForHomeTab(mainPage);
   // Simple mode's layout has no Home tab; this also suppresses the onboarding tour.
   else await waitForAppReady(mainPage);
-  await makeSampleProjectEditable();
+  await makeSampleProjectEditableExpectingOnlyThat();
 
   // Capture every book file before any editor is opened.
   const installedBooks = captureInstalledBooks();
@@ -1130,14 +1131,12 @@ function isSameSnapshot(first: ProjectSnapshot, second: ProjectSnapshot): boolea
   );
 }
 
-/** The longest the Preview run waits for the project to go quiet before taking its baseline. */
+/** The longest a run waits for the project to go quiet before taking a baseline. */
 const PROJECT_SETTLE_TIMEOUT_MS = 60_000;
 
 /**
- * The installed project once no file of it has changed for {@link LOAD_QUIET_MS}. The backend saves
- * `Settings.xml` by itself around the time the app is ready (the character inventory's default
- * characters, a recomputed `BooksPresent`) and the editable flag is a save of its own, so a
- * baseline taken straight away can catch the project between those writes.
+ * The installed project once no file of it has changed for {@link LOAD_QUIET_MS}: for a baseline
+ * taken after an edit, whose save can be followed by a second write still in flight.
  */
 async function snapshotSettledProject(page: Page): Promise<ProjectSnapshot> {
   const deadline = Date.now() + PROJECT_SETTLE_TIMEOUT_MS;
@@ -1187,9 +1186,103 @@ async function expectProjectUnchanged(
     }),
   );
   [...after.keys()]
-    .filter((file) => !before.has(file))
+    .filter((file) => !before.has(file) && !exceptFiles.includes(file))
     .forEach((file) => changes.push(`${file}: added`));
   expect.soft(changes.sort().join('\n\n'), `${when} wrote to the project`).toBe('');
+}
+
+/** The project settings file, the one file making the project editable saves. */
+const SETTINGS_FILE = 'Settings.xml';
+
+/** Where ParatextData keeps the settings file a save replaced. */
+const SETTINGS_BACKUP_FILE = `${SETTINGS_FILE}.BAK`;
+
+/** Every file of the bundled sample project, by name. */
+function readBundledProject(): Map<string, Buffer> {
+  return new Map(
+    fs
+      .readdirSync(BUNDLED_WEB_DIR, { withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => [entry.name, fs.readFileSync(path.join(BUNDLED_WEB_DIR, entry.name))]),
+  );
+}
+
+/**
+ * The bundled settings file as ParatextData saves it once the project is editable: the editable
+ * flag set, and every line break written as CRLF where the bundled file has LF.
+ */
+function editableSettings(bundledSettings: Buffer): Buffer {
+  const text = bundledSettings.toString('utf8');
+  if (!text.includes('<Editable>F</Editable>'))
+    throw new Error(`The bundled ${SETTINGS_FILE} should say the project is not editable`);
+  return Buffer.from(
+    text.replace(/\r?\n/g, '\r\n').replace('<Editable>F</Editable>', '<Editable>T</Editable>'),
+    'utf8',
+  );
+}
+
+/**
+ * Soft-asserts that each file in `expected` has exactly those bytes in the installed project,
+ * naming each one that does not; with `andNoOtherFiles`, also names every installed file not in
+ * it.
+ */
+async function expectInstalledBytes(
+  expected: ReadonlyMap<string, Buffer>,
+  when: string,
+  andNoOtherFiles: boolean,
+): Promise<void> {
+  const installed = snapshotInstalledProject();
+  const changes: string[] = [];
+  await Promise.all(
+    [...expected].map(async ([file, bytes]) => {
+      const now = installed.get(file);
+      if (!now) changes.push(`${file}: missing`);
+      else if (!now.bytes.equals(bytes)) {
+        await attachBoth(file, bytes, now.bytes, 'expected', when);
+        changes.push(`${file}: differs\n${describeByteDrift(bytes, now.bytes, 'expected', when)}`);
+      }
+    }),
+  );
+  if (andNoOtherFiles)
+    [...installed.keys()]
+      .filter((file) => !expected.has(file))
+      .forEach((file) => changes.push(`${file}: added`));
+  expect.soft(changes.sort().join('\n\n'), `${when}: the project is not as expected`).toBe('');
+}
+
+/**
+ * Makes the installed sample editable, checking that the app wrote nothing else to it, and returns
+ * the project as that left it — the baseline for a run, taken straight away.
+ *
+ * The backend installs the sample as a byte-for-byte copy of the bundled one, so until it is made
+ * editable every file must still have the bundled bytes: any difference is a write the app made by
+ * itself while starting. One that lands later shows up in the Preview run, which compares the whole
+ * project with this baseline after every step. Making it editable is one save of the settings file,
+ * which keeps the file it replaced as a `.BAK`; every other file keeps its bytes and its
+ * modification time.
+ */
+async function makeSampleProjectEditableExpectingOnlyThat(): Promise<ProjectSnapshot> {
+  await waitForSampleProjectMetadata();
+  const bundled = readBundledProject();
+  const bundledSettings = bundled.get(SETTINGS_FILE);
+  if (!bundledSettings) throw new Error(`The bundled sample has no ${SETTINGS_FILE}`);
+  await expectInstalledBytes(bundled, 'after the app started', true);
+
+  const beforeEditable = snapshotInstalledProject();
+  await makeSampleProjectEditable();
+  await expectProjectUnchanged(beforeEditable, 'making the project editable', [
+    SETTINGS_FILE,
+    SETTINGS_BACKUP_FILE,
+  ]);
+  await expectInstalledBytes(
+    new Map([
+      [SETTINGS_FILE, editableSettings(bundledSettings)],
+      [SETTINGS_BACKUP_FILE, bundledSettings],
+    ]),
+    'after making the project editable',
+    false,
+  );
+  return snapshotInstalledProject();
 }
 
 /**
@@ -1212,9 +1305,8 @@ export async function runPreviewWritesNothing({
 
   await waitForHomeTab(mainPage);
   // Editable, so Preview is read-only because of the view and not because of the project.
-  await makeSampleProjectEditable();
+  const before = await makeSampleProjectEditableExpectingOnlyThat();
   captureInstalledBooks();
-  const before = await snapshotSettledProject(mainPage);
 
   const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID, {
     editorOptions: { viewType: 'formatted' },
@@ -1571,9 +1663,8 @@ export async function runFootnotesPaneRowEdits(
 
   if (view.interfaceMode === 'power') await waitForHomeTab(mainPage);
   else await waitForAppReady(mainPage);
-  await makeSampleProjectEditable();
+  await makeSampleProjectEditableExpectingOnlyThat();
   const installedBooks = captureInstalledBooks(FOOTNOTE_CHAPTERS);
-  await snapshotSettledProject(mainPage);
 
   const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
   const editorFrame = mainPage.frameLocator(`iframe[data-web-view-id="${editorId}"]`);
