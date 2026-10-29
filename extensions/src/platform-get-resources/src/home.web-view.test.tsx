@@ -81,6 +81,7 @@ vi.mock('./home.component', async (importOriginal) => {
     HOME_STRING_KEYS: original.HOME_STRING_KEYS,
     Home: ({
       remoteProjectsState,
+      isServerListExpectedAfterSync,
       initialProjectResourceFilter,
       onProjectResourceFilterChange,
       onSendReceiveProject,
@@ -88,6 +89,7 @@ vi.mock('./home.component', async (importOriginal) => {
       activeSendReceiveProjects,
     }: {
       remoteProjectsState?: string;
+      isServerListExpectedAfterSync?: boolean;
       initialProjectResourceFilter?: string;
       onProjectResourceFilterChange?: (filter: string) => void;
       onSendReceiveProject?: (projectId: string) => void | Promise<void>;
@@ -102,6 +104,7 @@ vi.mock('./home.component', async (importOriginal) => {
         <div
           data-testid="home"
           data-remote-state={String(remoteProjectsState)}
+          data-server-list-expected={String(!!isServerListExpectedAfterSync)}
           data-initial-filter={String(filterAtMount)}
           data-send-receive-in-progress={String(!!isSendReceiveInProgress)}
           data-active-projects={JSON.stringify(activeSendReceiveProjects ?? [])}
@@ -404,6 +407,50 @@ describe('HomeWebView send/receive guard', () => {
  * the backend's sync activity and must disable its rows, but it must not reload its lists for it:
  * only Home's own sync completing does that.
  */
+describe('HomeWebView server list expected after a sync', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('expects the list only once availability is answered and the fetch is pending', async () => {
+    let answerAvailability: (value: boolean) => void = () => {};
+    let answerSharedProjects: (value: unknown) => void = () => {};
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === IS_AVAILABLE)
+        return new Promise<boolean>((resolve) => {
+          answerAvailability = resolve;
+        });
+      if (commandName === GET_SHARED_PROJECTS)
+        return new Promise((resolve) => {
+          answerSharedProjects = resolve;
+        });
+      return undefined;
+    });
+    const HomeWebView = getHomeWebView();
+    render(<HomeWebView useWebViewState={makeUseWebViewState({})} />);
+    const home = await screen.findByTestId('home');
+
+    // Loading, but only because Send/Receive has not said whether it is available.
+    expect(home).toHaveAttribute('data-remote-state', 'loading');
+    expect(home).toHaveAttribute('data-server-list-expected', 'false');
+
+    await act(async () => {
+      answerAvailability(true);
+    });
+    await waitFor(() => {
+      expect(home).toHaveAttribute('data-server-list-expected', 'true');
+    });
+
+    await act(async () => {
+      answerSharedProjects({});
+    });
+    await waitFor(() => {
+      expect(home).toHaveAttribute('data-remote-state', 'loaded');
+    });
+    expect(home).toHaveAttribute('data-server-list-expected', 'false');
+  });
+});
+
 describe('HomeWebView sync started elsewhere', () => {
   const SEND_RECEIVE_PROJECTS = 'paratextBibleSendReceive.sendReceiveProjects';
   const GET_SYNC_ACTIVITY = 'paratextBibleSendReceive.getSyncActivity';

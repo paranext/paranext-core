@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { afterAll, beforeAll, describe, it, expect, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, it, expect, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { formatReplacementString } from 'platform-bible-utils';
 import type { LanguageStrings } from 'platform-bible-utils';
@@ -12,6 +12,7 @@ import localizedStringsContribution from '../contributions/localizedStrings.json
 import {
   Home,
   HOME_STRING_KEYS,
+  SYNC_RUNNING_ANNOUNCEMENT_DELAY_MS,
   type HomeProps,
   type LocalProjectInfo,
   type RemoteProjectsState,
@@ -1989,9 +1990,11 @@ describe('Home while a sync holds the project list', () => {
   function homeElement({
     isSendReceiveInProgress,
     remoteProjectsState,
+    isServerListExpectedAfterSync = true,
   }: {
     isSendReceiveInProgress: boolean;
     remoteProjectsState: 'loading' | 'loaded';
+    isServerListExpectedAfterSync?: boolean;
   }) {
     return (
       <Home
@@ -1999,6 +2002,7 @@ describe('Home while a sync holds the project list', () => {
         localProjectsInfo={[]}
         sharedProjectsInfo={remoteProjectsState === 'loaded' ? sharedProjects : undefined}
         remoteProjectsState={remoteProjectsState}
+        isServerListExpectedAfterSync={isServerListExpectedAfterSync}
         isSendReceiveInProgress={isSendReceiveInProgress}
         onSendReceiveProject={() => {}}
         localizedStringsWithLoadingState={[EN_STRINGS, false]}
@@ -2009,8 +2013,75 @@ describe('Home while a sync holds the project list', () => {
   it('says why the list is loading while a sync runs', () => {
     render(homeElement({ isSendReceiveInProgress: true, remoteProjectsState: 'loading' }));
     expect(screen.getByText(LINE)).toBeInTheDocument();
-    // Home has other status regions, so the line is checked by its own element.
-    expect(screen.getByText(LINE)).toHaveAttribute('role', 'status');
+    // Announced through the hidden live region instead, so the visible line is plain text.
+    expect(screen.getByText(LINE)).not.toHaveAttribute('role');
+  });
+
+  it('shows no line while the list is loading for another reason than the sync', () => {
+    render(
+      homeElement({
+        isSendReceiveInProgress: true,
+        remoteProjectsState: 'loading',
+        isServerListExpectedAfterSync: false,
+      }),
+    );
+    expect(screen.queryByText(LINE)).toBeNull();
+  });
+
+  describe('announcing the line', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    /** The hidden live region for the line, the second one after the filter-results region. */
+    function syncAnnouncement(): string {
+      const liveRegions = screen
+        .getAllByRole('status')
+        .filter((element) => element.hasAttribute('aria-live'));
+      return liveRegions[1]?.textContent ?? '';
+    }
+
+    it('announces the line only once it has stayed for the settle delay', () => {
+      render(homeElement({ isSendReceiveInProgress: true, remoteProjectsState: 'loading' }));
+      expect(syncAnnouncement()).toBe('');
+      act(() => {
+        vi.advanceTimersByTime(SYNC_RUNNING_ANNOUNCEMENT_DELAY_MS - 1);
+      });
+      expect(syncAnnouncement()).toBe('');
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(syncAnnouncement()).toBe(LINE);
+    });
+
+    it('never announces a line that goes away before the settle delay', () => {
+      const { rerender } = render(
+        homeElement({ isSendReceiveInProgress: true, remoteProjectsState: 'loading' }),
+      );
+      act(() => {
+        vi.advanceTimersByTime(SYNC_RUNNING_ANNOUNCEMENT_DELAY_MS - 1);
+      });
+      rerender(homeElement({ isSendReceiveInProgress: true, remoteProjectsState: 'loaded' }));
+      act(() => {
+        vi.advanceTimersByTime(SYNC_RUNNING_ANNOUNCEMENT_DELAY_MS * 2);
+      });
+      expect(syncAnnouncement()).toBe('');
+    });
+
+    it('empties the announcement when the line goes away', () => {
+      const { rerender } = render(
+        homeElement({ isSendReceiveInProgress: true, remoteProjectsState: 'loading' }),
+      );
+      act(() => {
+        vi.advanceTimersByTime(SYNC_RUNNING_ANNOUNCEMENT_DELAY_MS);
+      });
+      expect(syncAnnouncement()).toBe(LINE);
+      rerender(homeElement({ isSendReceiveInProgress: true, remoteProjectsState: 'loaded' }));
+      expect(syncAnnouncement()).toBe('');
+    });
   });
 
   it('shows no line while only the local projects load', () => {

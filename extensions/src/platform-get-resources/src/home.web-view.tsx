@@ -449,6 +449,9 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
       isLoadingLocalProjects={isLoadingLocalProjects}
       unsyncedProjectIds={unsyncedProjectIds}
       remoteProjectsState={remoteProjectsState}
+      isServerListExpectedAfterSync={
+        isSendReceiveAvailable === true && sharedProjectsFetchState === 'loading'
+      }
       initialProjectResourceFilter={projectResourceFilter}
       onProjectResourceFilterChange={setProjectResourceFilter}
       localProjectsInfo={localProjectsInfo}

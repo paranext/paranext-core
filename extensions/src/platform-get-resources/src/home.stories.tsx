@@ -282,6 +282,7 @@ function LoadingDuringSyncDecorator(Story: (update?: { args: HomeProps }) => Rea
         localizedStringsWithLoadingState: [localizedStrings, false],
         localProjectsInfo: staticLocalProjectsAndResources,
         remoteProjectsState: 'loading',
+        isServerListExpectedAfterSync: true,
         isSendReceiveInProgress: true,
         headerContent: (
           <>

@@ -47,7 +47,7 @@ import {
   PROJECT_OPEN_BLOCKED_FALLBACK_KEY,
 } from 'platform-bible-utils';
 import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
-import { ReactNode, useMemo, useRef, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { HomeItemDropdownMenu } from './home-item-menu';
 import {
   isShownByProjectResourceFilter,
@@ -142,6 +142,12 @@ export type RemoteProjectsState =
 const NO_LOCAL_PROJECTS: LocalProjectInfo[] = [];
 const NO_SHARED_PROJECTS: SharedProjectsInfo = {};
 const NO_ACTIVE_SEND_RECEIVE_PROJECTS: string[] = [];
+
+/**
+ * How long the "a sync is running" line must stay before a screen reader is told. Longer than the
+ * moment the line can flash when a refetch starts just before the sync's closing event arrives.
+ */
+export const SYNC_RUNNING_ANNOUNCEMENT_DELAY_MS = 1000;
 const NO_LOCALIZED_UNSUPPORTED_REASONS: LanguageStrings = {};
 
 export type SortConfig = {
@@ -318,6 +324,12 @@ export type HomeProps = {
    */
   remoteProjectsState?: RemoteProjectsState;
   /**
+   * Whether the server's list is known to be coming and is waiting for a running sync to end, as
+   * opposed to still waiting for Send/Receive to report whether it is available at all. Only then
+   * does the loading spinner say that a sync is the reason. Defaults to `false`.
+   */
+  isServerListExpectedAfterSync?: boolean;
+  /**
    * Which items the type filter starts on. The user can change it from there. The Home web view
    * passes the filter it last showed, which an opener's preset replaces — the title bar's project
    * picker footer asks for `paratextProject`. Unset starts on `all`. Read once, on mount: a later
@@ -360,6 +372,8 @@ export type HomeProps = {
  * @param {isSendReceiveInProgress} - Whether a send/receive operation is in progress.
  * @param {isLoadingLocalProjects} - Whether loading local projects is in progress.
  * @param {remoteProjectsState} - What is known about the send/receive server's half of the list.
+ * @param {isServerListExpectedAfterSync} - Whether the server's list is waiting for a running sync
+ *   to end.
  * @param {initialProjectResourceFilter} - Which items the type filter starts on.
  * @param {onProjectResourceFilterChange} - Called with the new filter each time the user changes
  *   it.
@@ -386,6 +400,7 @@ export function Home({
   unsyncedProjectIds,
   isLoadingLocalProjects = false,
   remoteProjectsState = 'absent',
+  isServerListExpectedAfterSync = false,
   initialProjectResourceFilter = 'all',
   onProjectResourceFilterChange = () => {},
   localProjectsInfo = NO_LOCAL_PROJECTS,
@@ -707,6 +722,29 @@ export function Home({
     if (settledAnnouncement !== filteredToNothingAnnouncement)
       setFilteredToNothingAnnouncement(settledAnnouncement);
   }
+
+  const isSyncRunningLineShown =
+    isLoading &&
+    remoteProjectsState === 'loading' &&
+    isServerListExpectedAfterSync &&
+    isSendReceiveInProgress;
+  // The line is announced through its own always-mounted region, apart from the filter-results one:
+  // that one holds its last message through a reload, so sharing it would announce that message
+  // again when the list returned. Held back until the line has stayed, so a line that flashes for
+  // a moment while a refetch overlaps the end of a sync is never read out. Hidden case: a hidden
+  // tab announces nothing either way, so nothing is deferred for it.
+  const [syncRunningAnnouncement, setSyncRunningAnnouncement] = useState('');
+  useEffect(() => {
+    if (!isSyncRunningLineShown) {
+      setSyncRunningAnnouncement('');
+      return undefined;
+    }
+    const timer = setTimeout(
+      () => setSyncRunningAnnouncement(syncRunningListLoadsText),
+      SYNC_RUNNING_ANNOUNCEMENT_DELAY_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [isSyncRunningLineShown, syncRunningListLoadsText]);
 
   // React element refs start out as `null`.
   // eslint-disable-next-line no-null/no-null
@@ -1099,6 +1137,9 @@ export function Home({
       <div role="status" aria-live="polite" aria-atomic="true" className="tw:sr-only">
         {filteredToNothingAnnouncement}
       </div>
+      <div role="status" aria-live="polite" aria-atomic="true" className="tw:sr-only">
+        {syncRunningAnnouncement}
+      </div>
       {isLoading ? (
         <CardContent className="tw:flex tw:flex-grow tw:flex-col tw:items-center tw:justify-center tw:gap-2">
           <Spinner />
@@ -1106,10 +1147,8 @@ export function Home({
               Home's own sync runs, so normally this shows only for a sync started elsewhere. Briefly,
               when Home's own sync ends, the refetch can start before the backend's closing activity
               event arrives, and the line can show for a moment. */}
-          {remoteProjectsState === 'loading' && isSendReceiveInProgress && (
-            <p role="status" className="tw:text-sm tw:text-muted-foreground">
-              {syncRunningListLoadsText}
-            </p>
+          {isSyncRunningLineShown && (
+            <p className="tw:text-sm tw:text-muted-foreground">{syncRunningListLoadsText}</p>
           )}
         </CardContent>
       ) : (
