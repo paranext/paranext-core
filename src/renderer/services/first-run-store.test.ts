@@ -503,6 +503,106 @@ describe('first sync (Simple mode with Send/Receive available)', () => {
     expect(pendingWrites()).toEqual([]);
   });
 
+  it('asks again after the registration probe when a cold start rejects the availability question', async () => {
+    stubSettings({ firstSyncState: 'unknown', internetUseChoiceAsked: true });
+    stubSendReceive();
+    mockSendCommand.mockRejectedValueOnce(new Error('not registered yet'));
+    mockResolveReg.mockResolvedValue('valid');
+    await resolveFirstRunState();
+    expect(
+      mockSendCommand.mock.calls.filter(
+        ([command]) => command === 'paratextBibleSendReceive.isAvailable',
+      ),
+    ).toHaveLength(2);
+    expect(getFirstRunStatus()).toMatchObject({
+      kind: 'wizard',
+      step: 'syncConsent',
+      firstSyncRequired: true,
+    });
+    expect(mockSet).toHaveBeenCalledWith('platform.firstSyncState', 'pending');
+  });
+
+  it('does not record the first sync as pending when the state cannot be re-read', async () => {
+    stubSettings({ firstSyncState: 'unknown', internetUseChoiceAsked: true });
+    stubSendReceive();
+    mockResolveReg.mockResolvedValue('valid');
+    const stubbedGet = mockGet.getMockImplementation();
+    let firstSyncStateReads = 0;
+    // @ts-expect-error ts(2345) - as in stubSettings, a generic per-key return is not expressible here
+    mockGet.mockImplementation(async (key) => {
+      if (key !== 'platform.firstSyncState') return stubbedGet?.(key);
+      firstSyncStateReads += 1;
+      if (firstSyncStateReads === 1) return 'unknown';
+      throw new Error('settings unavailable');
+    });
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'syncConsent' });
+    expect(firstSyncStateReads).toBe(2);
+    expect(pendingWrites()).toEqual([]);
+  });
+
+  it('does not rewrite a first sync that is already pending', async () => {
+    stubSettings({
+      firstRunComplete: true,
+      firstSyncState: 'pending',
+      internetUseChoiceAsked: true,
+    });
+    stubSendReceive();
+    mockResolveReg.mockResolvedValue('valid');
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'syncConsent' });
+    expect(pendingWrites()).toEqual([]);
+  });
+
+  it('waits for the registration when a finished setup has a pending first sync and the probe cannot resolve', async () => {
+    stubSettings({
+      firstRunComplete: true,
+      firstSyncState: 'pending',
+      internetUseChoiceAsked: true,
+    });
+    stubSendReceive();
+    mockResolveReg.mockResolvedValue('unknown');
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toEqual({ kind: 'error' });
+  });
+
+  it('seeds the loading gate, not the app, for a finished setup whose first sync is pending', () => {
+    localStorage.setItem('platform-bible.firstRunComplete', 'true');
+    localStorage.setItem('platform-bible.firstSyncPending', 'true');
+    resetFirstRunStore(); // recomputes status from computeInitialStatus
+    expect(getFirstRunStatus()).toEqual({ kind: 'loading' });
+  });
+
+  it('remembers a pending first sync for the next launch', async () => {
+    stubSettings({ firstSyncState: 'unknown', internetUseChoiceAsked: true });
+    stubSendReceive();
+    mockResolveReg.mockResolvedValue('valid');
+    await resolveFirstRunState();
+    expect(localStorage.getItem('platform-bible.firstSyncPending')).toBe('true');
+  });
+
+  it('forgets a pending first sync once the first sync has succeeded', async () => {
+    localStorage.setItem('platform-bible.firstRunComplete', 'true');
+    localStorage.setItem('platform-bible.firstSyncPending', 'true');
+    resetFirstRunStore();
+    stubSettings({ firstRunComplete: true, firstSyncState: 'synced', showReminder: false });
+    stubSendReceive();
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(localStorage.getItem('platform-bible.firstSyncPending')).not.toBe('true');
+    resetFirstRunStore();
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+  });
+
+  it('forgets a pending first sync when Send/Receive is not available', async () => {
+    localStorage.setItem('platform-bible.firstSyncPending', 'true');
+    stubSettings({ firstRunComplete: true, firstSyncState: 'pending', showReminder: false });
+    stubSendReceive({ available: false });
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(localStorage.getItem('platform-bible.firstSyncPending')).not.toBe('true');
+  });
+
   it('shows the app to a finished setup whose first sync is pending when availability cannot be read', async () => {
     stubSettings({
       firstRunComplete: true,
@@ -1102,6 +1202,7 @@ describe('clearFirstRunLocalState', () => {
   it('clears every first-run flag but leaves demo mode alone', () => {
     const firstRunKeys = [
       'platform-bible.firstRunComplete',
+      'platform-bible.firstSyncPending',
       'platform-bible.firstRunWizardActive',
       'platform-bible.firstRunJustRegistered',
       'platform-bible.firstRunWizardRestarted',

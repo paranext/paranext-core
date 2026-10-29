@@ -52,6 +52,10 @@ export type FirstRunStatus =
 
 const FIRST_RUN_COMPLETE_CACHE_KEY = 'platform-bible.firstRunComplete';
 const WIZARD_ACTIVE_KEY = 'platform-bible.firstRunWizardActive';
+// Mirrors a `platform.firstSyncState` of 'pending' with Send/Receive available, as last seen by
+// resolveInternal. A completed setup with this set will reopen the wizard, so startup seeds the
+// loading gate instead of the app (see computeInitialStatus).
+const FIRST_SYNC_PENDING_CACHE_KEY = 'platform-bible.firstSyncPending';
 // Demo/UX enablement only (PT-4219). When set, the wizard launches from the top without touching
 // the real registration backend or triggering a relaunch, and completion is NOT persisted so the
 // click-through re-runs on every launch. Toggle from devtools:
@@ -131,9 +135,14 @@ function computeInitialStatus(): FirstRunStatus {
   // (which would flash the app before resolveInternal routes back to the wizard).
   if (isDemoMode()) return { kind: 'loading' };
   // Power mode is never gated, and already-onboarded simple users are done — seed 'app' for both so
-  // neither flashes the gate before the async settings read resolves. Fresh/unknown → loading gate.
+  // neither flashes the gate before the async settings read resolves. Fresh/unknown → loading gate,
+  // as is an onboarded user still waiting for a first sync, whom resolution will route back into
+  // the wizard.
   if (readCachedInterfaceMode() === 'power') return { kind: 'app' };
-  return readBooleanFlag(FIRST_RUN_COMPLETE_CACHE_KEY) ? { kind: 'app' } : { kind: 'loading' };
+  return readBooleanFlag(FIRST_RUN_COMPLETE_CACHE_KEY) &&
+    !readBooleanFlag(FIRST_SYNC_PENDING_CACHE_KEY)
+    ? { kind: 'app' }
+    : { kind: 'loading' };
 }
 
 let status: FirstRunStatus = computeInitialStatus();
@@ -216,15 +225,15 @@ async function seedInterfaceLanguageFromOsLocale(): Promise<void> {
 }
 
 /**
- * Asks whether this build can run Send/Receive. A rejection (e.g. the backend has not registered
- * the command yet) answers false, which keeps today's behavior.
+ * Asks whether this build can run Send/Receive. Answers `undefined` when the request rejects (e.g.
+ * the backend has not registered the command yet); callers treat that as unavailable.
  */
-async function isSendReceiveAvailable(): Promise<boolean> {
+async function askSendReceiveAvailable(): Promise<boolean | undefined> {
   try {
     return (await commandService.sendCommand('paratextBibleSendReceive.isAvailable')) === true;
   } catch (e) {
     logger.warn(`Could not tell whether Send/Receive is available: ${getErrorMessage(e)}`);
-    return false;
+    return undefined;
   }
 }
 
@@ -334,17 +343,23 @@ async function resolveInternal(generation: number): Promise<void> {
         writeBooleanFlag(FIRST_RUN_COMPLETE_CACHE_KEY, firstRunComplete);
       }
     }
-    const [sendReceiveAvailable, firstSyncState] = await Promise.all([
-      isSendReceiveAvailable(),
+    const [earlySendReceiveAnswer, firstSyncState] = await Promise.all([
+      askSendReceiveAvailable(),
       readFirstSyncState(),
     ]);
+    let sendReceiveAvailable = earlySendReceiveAnswer === true;
     // A user who finished setup is held in the wizard only while a first sync is recorded as
     // pending. 'unknown' means setup finished before the first-sync state existed: that counts as
     // synced, so those users are left alone.
-    const firstSyncRequired =
-      sendReceiveAvailable &&
-      (firstRunComplete ? firstSyncState === 'pending' : firstSyncState !== 'synced');
-    if (firstRunComplete && !firstSyncRequired) {
+    const isFirstSyncRequired = (available: boolean): boolean =>
+      available && (firstRunComplete ? firstSyncState === 'pending' : firstSyncState !== 'synced');
+    // Unguarded by isSuperseded, unlike the durable writes below: this cache only mirrors the
+    // durable state just read, so writing it after a bail is still correct.
+    writeBooleanFlag(
+      FIRST_SYNC_PENDING_CACHE_KEY,
+      sendReceiveAvailable && firstSyncState === 'pending',
+    );
+    if (firstRunComplete && !isFirstSyncRequired(sendReceiveAvailable)) {
       applyStatus({ kind: 'app' });
       // Completed Simple-mode user: re-check registration in the background (not awaited) so a
       // registration that has since become invalid can re-raise the wizard without regressing
@@ -374,6 +389,14 @@ async function resolveInternal(generation: number): Promise<void> {
     // before publishing would spend the suppression without anyone acting on it, and the dot would
     // then contradict a registration the user really did just complete.
     if (effectiveValidity !== registrationValidity) publishRegistrationValidity(effectiveValidity);
+    // A cold start can reject the early question before the backend registers it. Only an
+    // unfinished setup gets here after a rejection (a finished one went to the app above), and the
+    // registration probe has just proven the backend is up, so ask again. Treating the rejection as
+    // final would leave this setup unmarked, and finishing it would then look like a setup from
+    // before the first-sync state existed — exempt for good.
+    if (earlySendReceiveAnswer === undefined)
+      sendReceiveAvailable = (await askSendReceiveAvailable()) === true;
+    const firstSyncRequired = isFirstSyncRequired(sendReceiveAvailable);
     const canSyncNow =
       sendReceiveAvailable && effectiveValidity === 'valid' && (await canUseInternetForFirstSync());
     const decision = decideFirstRun({
@@ -389,8 +412,8 @@ async function resolveInternal(generation: number): Promise<void> {
     // The registration probe above is the long await where the watchdog reveals the escape hatch, so
     // it's where a "continue without setup" bail most likely lands. If that superseded us, the user
     // is already in the app — skip the switch entirely so none of its persisted writes run. (Every
-    // durable write below sits in this switch; the reads/writes before the probe complete before the
-    // watchdog's reveal threshold, so they aren't reachable after a bail.)
+    // durable write below sits in this switch. The writes before the probe either complete before
+    // the watchdog's reveal threshold or, like the first-sync cache, only mirror state just read.)
     if (isSuperseded()) return;
 
     switch (decision.action) {
@@ -418,8 +441,10 @@ async function resolveInternal(generation: number): Promise<void> {
           if (isSuperseded()) return;
         }
         if (firstSyncRequired) {
-          await markFirstSyncPending();
+          const pending =
+            firstSyncState === 'pending' || (await markFirstSyncPending(isSuperseded));
           if (isSuperseded()) return;
+          if (pending) writeBooleanFlag(FIRST_SYNC_PENDING_CACHE_KEY, true);
         }
         writeBooleanFlag(WIZARD_ACTIVE_KEY, true);
         applyStatus({
@@ -445,19 +470,34 @@ async function resolveInternal(generation: number): Promise<void> {
 
 /**
  * Records that the wizard is waiting for the user's first successful sync, unless that sync has
- * already succeeded. Best-effort: a failed write is logged and the wizard still opens.
+ * already succeeded. Best-effort: a failed read or write is logged and the wizard still opens.
  *
- * The state is re-read right before the write to keep the window short, but this is still a
- * read-then-write: if the backend records `'synced'` for a sync that finishes in between, this can
- * overwrite it with `'pending'`, and the wizard reopens at the Sync step until the next successful
- * sync. A sync finishing while the wizard is starting is rare, and the cost is one extra sync.
+ * The state is re-read right before the write to keep the window short, and nothing is written
+ * unless that read returns a real value: a read failure must not turn into overwriting 'synced'.
+ * This is still a read-then-write: if the backend records `'synced'` for a sync that finishes in
+ * between, this can overwrite it with `'pending'`, and the wizard reopens at the Sync step until
+ * the next successful sync. A sync finishing while the wizard is starting is rare, and the cost is
+ * one extra sync.
+ *
+ * @param isSuperseded Whether the resolution that called this was superseded; checked right before
+ *   the write
+ * @returns Whether the state is now `'pending'`
  */
-async function markFirstSyncPending(): Promise<void> {
+async function markFirstSyncPending(isSuperseded: () => boolean): Promise<boolean> {
   try {
-    if ((await readFirstSyncState()) === 'synced') return;
+    const current = await settingsService.get('platform.firstSyncState');
+    if (isPlatformError(current)) {
+      logger.warn(`Could not read platform.firstSyncState: ${getErrorMessage(current)}`);
+      return false;
+    }
+    if (current === 'synced') return false;
+    if (current === 'pending') return true;
+    if (isSuperseded()) return false;
     await settingsService.set('platform.firstSyncState', 'pending');
+    return true;
   } catch (e) {
     logger.warn(`Could not save platform.firstSyncState: ${getErrorMessage(e)}`);
+    return false;
   }
 }
 
@@ -624,6 +664,7 @@ export function continueWithoutRegistration(): void {
 export function clearFirstRunLocalState(): void {
   [
     FIRST_RUN_COMPLETE_CACHE_KEY,
+    FIRST_SYNC_PENDING_CACHE_KEY,
     WIZARD_ACTIVE_KEY,
     JUST_REGISTERED_KEY,
     WIZARD_RESTARTED_KEY,
