@@ -4,6 +4,7 @@ import * as commandService from '@shared/services/command.service';
 import { getCurrentLocale } from 'platform-bible-utils';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
+import { dataProviderService } from '@shared/services/data-provider.service';
 import * as resolver from './resolve-registration-validity';
 import { RegistrationValidity } from './first-run.model';
 import {
@@ -30,7 +31,8 @@ import { askForInternetUseChoiceIfNeeded } from './internet-use-choice-store';
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: { get: vi.fn(), set: vi.fn() },
 }));
-// Only `paratextRegistration.isRegistrationCopiedFromParatext9` is sent from this store.
+// `paratextRegistration.isRegistrationCopiedFromParatext9` and `paratextBibleSendReceive.isAvailable`
+// are sent from this store. A bare resolved value answers both; see stubSendReceive to tell them apart.
 vi.mock('@shared/services/command.service', () => ({ sendCommand: vi.fn() }));
 vi.mock('@shared/services/logger.service', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -38,6 +40,9 @@ vi.mock('@shared/services/logger.service', () => ({
 vi.mock('./resolve-registration-validity', () => ({
   REGISTRATION_RESOLVE_TIMEOUT_MS: 15000,
   resolveRegistrationValidity: vi.fn(),
+}));
+vi.mock('@shared/services/data-provider.service', () => ({
+  dataProviderService: { get: vi.fn() },
 }));
 vi.mock('@shared/services/localization.service', () => ({
   localizationService: { getSetupDialogLanguages: vi.fn() },
@@ -58,6 +63,7 @@ const mockGetSetupDialogLanguages = vi.mocked(localizationService.getSetupDialog
 const mockLogger = vi.mocked(logger);
 const mockSendCommand = vi.mocked(commandService.sendCommand);
 const mockAskForInternetUseChoice = vi.mocked(askForInternetUseChoiceIfNeeded);
+const mockGetDataProvider = vi.mocked(dataProviderService.get);
 
 /** SettingsService.get is keyed; return the right value per setting. */
 function stubSettings({
@@ -65,11 +71,15 @@ function stubSettings({
   firstRunComplete = false,
   showReminder,
   interfaceLanguage,
+  firstSyncState = 'unknown',
+  internetUseChoiceAsked = false,
 }: {
   mode?: string;
   firstRunComplete?: boolean;
   showReminder?: boolean;
   interfaceLanguage?: string[];
+  firstSyncState?: string;
+  internetUseChoiceAsked?: boolean;
 } = {}) {
   // @ts-expect-error ts(2345) - the mock's implicit-undefined fallthrough is not assignable to
   // the SettingTypes union; that mismatch is the load-bearing compile-time guard that every
@@ -80,8 +90,17 @@ function stubSettings({
     if (key === 'platform.showRegistrationReminderOnStartup') return showReminder;
     // Left undefined unless a test sets it, to exercise the seed's handling of an unset value.
     if (key === 'platform.interfaceLanguage') return interfaceLanguage;
+    if (key === 'platform.firstSyncState') return firstSyncState;
+    if (key === 'platform.internetUseChoiceAsked') return internetUseChoiceAsked;
     return undefined;
   });
+}
+
+/** Answers that the registration was copied from Paratext 9, and every other command `false`. */
+function stubRegistrationCopiedFromParatext9() {
+  mockSendCommand.mockImplementation(
+    async (command: string) => command === 'paratextRegistration.isRegistrationCopiedFromParatext9',
+  );
 }
 
 // This suite deliberately uses the real (jsdom) localStorage rather than a mock: the cache
@@ -139,7 +158,7 @@ describe('resolveFirstRunState', () => {
   it('shows the full wizard to a user whose registration was copied from Paratext 9', async () => {
     stubSettings({ firstRunComplete: false });
     mockResolveReg.mockResolvedValue('valid'); // wizardActive is false (localStorage cleared)
-    mockSendCommand.mockResolvedValue(true);
+    stubRegistrationCopiedFromParatext9();
     await resolveFirstRunState();
     expect(getFirstRunStatus()).toEqual({
       kind: 'wizard',
@@ -170,7 +189,7 @@ describe('resolveFirstRunState', () => {
     localStorage.setItem('platform-bible.firstRunWizardActive', 'true');
     stubSettings({ firstRunComplete: false });
     mockResolveReg.mockResolvedValue('valid');
-    mockSendCommand.mockResolvedValue(true);
+    stubRegistrationCopiedFromParatext9();
     await resolveFirstRunState();
     expect(getFirstRunStatus()).toMatchObject({
       kind: 'wizard',
@@ -372,6 +391,174 @@ describe('resolveFirstRunState', () => {
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
     expect(mockGet).not.toHaveBeenCalledWith('platform.syncOnStartup');
     expect(mockSet).not.toHaveBeenCalledWith('platform.syncOnStartup', expect.anything());
+  });
+});
+
+describe('first sync (Simple mode with Send/Receive available)', () => {
+  /**
+   * Answers `paratextBibleSendReceive.isAvailable` with `available` (or rejects with it), and the
+   * internet settings provider with `permittedInternetUse`.
+   */
+  function stubSendReceive({
+    available = true,
+    permittedInternetUse = 'Enabled',
+  }: {
+    available?: boolean | Error;
+    permittedInternetUse?: string | Error;
+  } = {}) {
+    mockSendCommand.mockImplementation(async (command: string) => {
+      if (command !== 'paratextBibleSendReceive.isAvailable') return false;
+      if (available instanceof Error) throw available;
+      return available;
+    });
+    mockGetDataProvider.mockResolvedValue({
+      getInternetSettings: vi.fn(async () => {
+        if (permittedInternetUse instanceof Error) throw permittedInternetUse;
+        return { permittedInternetUse };
+      }),
+    });
+  }
+
+  const pendingWrites = () =>
+    mockSet.mock.calls.filter(([key]) => key === 'platform.firstSyncState');
+
+  it('leaves a user who finished setup before the first-sync state existed in the app', async () => {
+    stubSettings({ firstRunComplete: true, firstSyncState: 'unknown', showReminder: false });
+    stubSendReceive();
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(pendingWrites()).toEqual([]);
+  });
+
+  it('reopens the wizard at the Sync step for a finished setup whose first sync is pending', async () => {
+    stubSettings({
+      firstRunComplete: true,
+      firstSyncState: 'pending',
+      internetUseChoiceAsked: true,
+    });
+    stubSendReceive();
+    mockResolveReg.mockResolvedValue('valid');
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toMatchObject({
+      kind: 'wizard',
+      step: 'syncConsent',
+      firstSyncRequired: true,
+    });
+  });
+
+  it('reopens the full wizard for a finished setup whose first sync is pending but internet is off', async () => {
+    stubSettings({
+      firstRunComplete: true,
+      firstSyncState: 'pending',
+      internetUseChoiceAsked: true,
+    });
+    stubSendReceive({ permittedInternetUse: 'Disabled' });
+    mockResolveReg.mockResolvedValue('valid');
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toMatchObject({
+      kind: 'wizard',
+      step: 'language',
+      firstSyncRequired: true,
+    });
+  });
+
+  it('starts an unfinished setup that can sync at the Sync step and records the first sync as pending', async () => {
+    stubSettings({ firstSyncState: 'unknown', internetUseChoiceAsked: true });
+    stubSendReceive();
+    mockResolveReg.mockResolvedValue('valid');
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toMatchObject({
+      kind: 'wizard',
+      step: 'syncConsent',
+      firstSyncRequired: true,
+    });
+    expect(mockSet).toHaveBeenCalledWith('platform.firstSyncState', 'pending');
+  });
+
+  it('does not mark a first sync that already succeeded as pending', async () => {
+    stubSettings({ firstSyncState: 'synced', internetUseChoiceAsked: true });
+    stubSendReceive();
+    mockResolveReg.mockResolvedValue('valid');
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard' });
+    expect(getFirstRunStatus()).not.toHaveProperty('firstSyncRequired');
+    expect(pendingWrites()).toEqual([]);
+  });
+
+  it('does not overwrite a first sync that succeeded while the wizard was starting', async () => {
+    stubSettings({ firstSyncState: 'unknown', internetUseChoiceAsked: true });
+    stubSendReceive();
+    mockResolveReg.mockResolvedValue('valid');
+    const stubbedGet = mockGet.getMockImplementation();
+    let firstSyncStateReads = 0;
+    // @ts-expect-error ts(2345) - as in stubSettings, a generic per-key return is not expressible here
+    mockGet.mockImplementation(async (key) => {
+      if (key !== 'platform.firstSyncState') return stubbedGet?.(key);
+      firstSyncStateReads += 1;
+      return firstSyncStateReads === 1 ? 'unknown' : 'synced';
+    });
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'syncConsent' });
+    expect(firstSyncStateReads).toBe(2);
+    expect(pendingWrites()).toEqual([]);
+  });
+
+  it('shows the app to a finished setup whose first sync is pending when availability cannot be read', async () => {
+    stubSettings({
+      firstRunComplete: true,
+      firstSyncState: 'pending',
+      internetUseChoiceAsked: true,
+      showReminder: false,
+    });
+    stubSendReceive({ available: new Error('not registered yet') });
+    mockResolveReg.mockResolvedValue('valid');
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(pendingWrites()).toEqual([]);
+  });
+
+  it('treats unreadable internet settings as unable to sync', async () => {
+    stubSettings({ firstSyncState: 'unknown', internetUseChoiceAsked: true });
+    stubSendReceive({ permittedInternetUse: new Error('provider down') });
+    mockResolveReg.mockResolvedValue('valid');
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'language' });
+  });
+
+  it('starts an unfinished setup whose internet choice was never saved at the first step', async () => {
+    stubSettings({ firstSyncState: 'unknown', internetUseChoiceAsked: false });
+    stubSendReceive();
+    mockResolveReg.mockResolvedValue('valid');
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toMatchObject({
+      kind: 'wizard',
+      step: 'language',
+      firstSyncRequired: true,
+    });
+    expect(mockSet).toHaveBeenCalledWith('platform.firstSyncState', 'pending');
+  });
+
+  it("keeps today's wizard when Send/Receive is not available", async () => {
+    stubSettings({ firstSyncState: 'unknown', internetUseChoiceAsked: true });
+    stubSendReceive({ available: false });
+    mockResolveReg.mockResolvedValue('valid');
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'language' });
+    expect(getFirstRunStatus()).not.toHaveProperty('firstSyncRequired');
+    expect(pendingWrites()).toEqual([]);
+  });
+
+  it('still starts the wizard when the pending state cannot be saved', async () => {
+    stubSettings({ firstSyncState: 'unknown', internetUseChoiceAsked: true });
+    stubSendReceive();
+    mockResolveReg.mockResolvedValue('valid');
+    mockSet.mockImplementation(async (key) => {
+      if (key === 'platform.firstSyncState') throw new Error('disk full');
+      return true;
+    });
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'syncConsent' });
+    expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('firstSyncState'));
   });
 });
 
