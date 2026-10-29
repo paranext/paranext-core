@@ -5,6 +5,7 @@ import { createServer } from 'net';
 import { WebSocket } from 'ws';
 import { retryUntil } from 'platform-bible-utils';
 import { RpcWebSocketListener } from '@main/services/rpc-websocket-listener';
+import { INTENTIONAL_CLOSE_CODE } from '@shared/data/rpc.model';
 import { REGISTRY_TOKEN_REQUEST_TYPE } from '@node/services/request-registry-tokens.service-model';
 import { createFakeWebSocket } from './fake-web-socket-test.util';
 
@@ -264,5 +265,94 @@ describe('the Registry token request type over real connections', () => {
     await vi.waitFor(() => expect(renderer.sentPayloads).toHaveLength(1));
     expect(renderer.sentPayloads[0]).toContain('not available');
     expect(issueToken).not.toHaveBeenCalled();
+  });
+});
+
+describe('closing the websocket clients on the way down', () => {
+  let listener: RpcWebSocketListener | undefined;
+
+  afterEach(async () => {
+    await listener?.disconnect();
+    listener = undefined;
+  });
+
+  /** Opens a real client, connected the way the .NET data provider connects */
+  async function openClient(port: number): Promise<WebSocket> {
+    const socket = new WebSocket(`ws://localhost:${port}`);
+    await new Promise<void>((resolve, reject) => {
+      socket.once('open', () => resolve());
+      socket.once('error', reject);
+    });
+    return socket;
+  }
+
+  function closeOf(socket: WebSocket): Promise<{ code: number; reason: string }> {
+    return new Promise((resolve) => {
+      socket.once('close', (code, reason) => resolve({ code, reason: reason.toString() }));
+    });
+  }
+
+  it('closes every websocket client with the code and reason given', async () => {
+    const bound = await bindOnAFreePort();
+    listener = bound.listener;
+    const dataProvider = await openClient(bound.port);
+    const externalTool = await openClient(bound.port);
+    const dataProviderClosed = closeOf(dataProvider);
+    const externalToolClosed = closeOf(externalTool);
+    // No wait needed for the server to know both clients: `ws` emits `connection` as it writes the
+    // handshake response, before the client can have read it and opened
+
+    listener.closeWebSocketClients(INTENTIONAL_CLOSE_CODE, 'app shutdown');
+
+    await expect(dataProviderClosed).resolves.toEqual({
+      code: INTENTIONAL_CLOSE_CODE,
+      reason: 'app shutdown',
+    });
+    await expect(externalToolClosed).resolves.toEqual({
+      code: INTENTIONAL_CLOSE_CODE,
+      reason: 'app shutdown',
+    });
+  });
+
+  it('closes the remaining websocket clients when closing one of them throws', async () => {
+    const bound = await bindOnAFreePort();
+    listener = bound.listener;
+    const first = await openClient(bound.port);
+    const second = await openClient(bound.port);
+    const firstClosed = closeOf(first);
+    const secondClosed = closeOf(second);
+    // The server-side socket that is asked to close first fails; the other must still be closed
+    const closeSocket = vi.spyOn(WebSocket.prototype, 'close');
+    closeSocket.mockImplementationOnce(() => {
+      throw new Error('close failed');
+    });
+
+    try {
+      expect(() =>
+        listener?.closeWebSocketClients(INTENTIONAL_CLOSE_CODE, 'app shutdown'),
+      ).not.toThrow();
+    } finally {
+      closeSocket.mockRestore();
+    }
+
+    // Whichever client's server-side socket failed to close stays open; the other one is closed
+    await expect(Promise.race([firstClosed, secondClosed])).resolves.toEqual({
+      code: INTENTIONAL_CLOSE_CODE,
+      reason: 'app shutdown',
+    });
+    first.terminate();
+    second.terminate();
+  });
+
+  it('leaves a local client open, since whoever handed its socket over owns closing it', async () => {
+    const bound = await bindOnAFreePort();
+    listener = bound.listener;
+    const renderer = createFakeWebSocket();
+    const closeRenderer = vi.spyOn(renderer.webSocket, 'close');
+    listener.acceptLocalClient(renderer.webSocket, 'renderer:w1');
+
+    listener.closeWebSocketClients(INTENTIONAL_CLOSE_CODE, 'app shutdown');
+
+    expect(closeRenderer).not.toHaveBeenCalled();
   });
 });
