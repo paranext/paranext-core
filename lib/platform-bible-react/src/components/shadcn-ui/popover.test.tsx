@@ -116,6 +116,29 @@ describe('PopoverContent window blur', () => {
     consoleError.mockRestore();
   });
 
+  it('ignores window blur for a closed popover, leaving an open dialog alone', async () => {
+    const handleOpenChange = vi.fn();
+    render(
+      <>
+        <Popover>
+          <PopoverTrigger>open</PopoverTrigger>
+          <PopoverContent>body</PopoverContent>
+        </Popover>
+        <Dialog open onOpenChange={handleOpenChange}>
+          <DialogContent>
+            <DialogTitle>dialog title</DialogTitle>
+          </DialogContent>
+        </Dialog>
+      </>,
+    );
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+
+    blurWindow();
+
+    expect(handleOpenChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
   it('closes a popover inside a dialog but leaves the dialog open', async () => {
     function Host() {
       // React's ref callback API hands over null when the element unmounts
