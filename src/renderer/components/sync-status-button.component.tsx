@@ -172,14 +172,6 @@ export function SyncStatusButton() {
    * their own request back to them as an error.
    */
   const [wasCancelRequested, setWasCancelRequested] = useState(false);
-  /**
-   * The popover's rendered content node. Radix portals it to `document.body`, so it is NOT a
-   * descendant of the trigger — which is why {@link handleWindowBlur} measures containment against
-   * this rather than against the trigger.
-   */
-  // React's useRef requires null as the initial value for DOM refs
-  // eslint-disable-next-line no-null/no-null
-  const popoverContentRef = useRef<HTMLDivElement>(null);
   const {
     ref: labelRef,
     open: isTooltipTruncated,
@@ -366,49 +358,6 @@ export function SyncStatusButton() {
     // This episode is over, so a cancel request still in flight from it must not reach the next one.
     cancelGenerationRef.current += 1;
   }, [status]);
-
-  /**
-   * Dismiss when focus leaves the popover's content for a foreign browsing context — a
-   * scripture-editor WebView, say. Those WebViews are cross-origin sandboxed iframes, so a click
-   * into one delivers no `pointerdown` to this document at all: Radix's outside-press detection
-   * never fires and the popover would sit open over a view the user has already moved into. A
-   * `blur` on this window is the only signal that arrives.
-   *
-   * `document.hasFocus()` is what separates the two things that blur reports. It stays true while
-   * focus is anywhere in this top-level page — including inside a child iframe — and flips to false
-   * only when the OS window itself loses focus, so a plain alt-tab or a DevTools click leaves the
-   * popover open. Containment is measured against the portaled content node because Radix renders
-   * it under `document.body`; asking the trigger instead would read the popover's own content as
-   * "outside" and dismiss it the moment the user clicked inside it.
-   *
-   * Closing through the controlled `open` prop keeps Radix's own close lifecycle — and with it the
-   * focus restore — rather than tearing the surface down behind its back. See the
-   * `Guidelines/Dismissal Patterns` Storybook page; no shared hook for this exists yet, so each
-   * Click-away surface implements it itself.
-   *
-   * What the tests here pin is this handler's logic given the values it reads, by spying
-   * `document.activeElement` rather than moving focus into a real cross-origin iframe — which jsdom
-   * has no way to reproduce. So the load-bearing assumption, that Electron has already moved focus
-   * to the `<iframe>` element by the time `blur` fires on this window, is asserted from the spec
-   * and not observed. It needs one manual pass in a Paratext 10 build with a scripture-editor
-   * WebView open.
-   */
-  useEffect(() => {
-    if (!isOpen) return undefined;
-    const handleWindowBlur = () => {
-      // The whole window lost focus, not a crossing within the page.
-      if (!document.hasFocus()) return;
-      const contentEl = popoverContentRef.current;
-      const focusedEl = document.activeElement;
-      // Nothing to measure against, so there is no evidence focus went anywhere foreign.
-      if (!contentEl || !focusedEl) return;
-      // For a cross-origin WebView the element holding focus is the `<iframe>` itself.
-      if (contentEl.contains(focusedEl)) return;
-      setIsOpen(false);
-    };
-    window.addEventListener('blur', handleWindowBlur);
-    return () => window.removeEventListener('blur', handleWindowBlur);
-  }, [isOpen]);
 
   // Re-arm Cancel each time the popover is reopened, so a rejected-then-abandoned attempt doesn't
   // leave the button dead for the rest of the session. Not while a cancel is still pending, though:
@@ -797,7 +746,6 @@ export function SyncStatusButton() {
          */}
         <PopoverContent
           align="end"
-          ref={popoverContentRef}
           // Withheld until the strings load, for the same reason as `buttonAccessibleName`: an
           // `aria-label` of `%toolbar_sync_open_status%` would be spoken verbatim.
           aria-label={areStringsLoaded ? localizedStrings['%toolbar_sync_open_status%'] : undefined}
