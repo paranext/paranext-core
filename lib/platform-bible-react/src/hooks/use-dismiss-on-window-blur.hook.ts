@@ -1,4 +1,4 @@
-import { RefObject, useEffect } from 'react';
+import { Ref, RefCallback, useCallback, useEffect, useRef } from 'react';
 
 /**
  * Treats the window losing focus as a press outside the calling surface, so an open menu or popover
@@ -27,15 +27,22 @@ import { RefObject, useEffect } from 'react';
  * harmless no-op and there is deliberately no catch-up logic. See
  * `.claude/rules/cross-view-sync-hidden-views.md`.
  *
- * @param contentRef Ref to the surface's content element. It holds `null` while the surface is
- *   closed, which makes the blur a no-op.
+ * @param forwardedRef The caller's own ref for the content element (function or object), if any. It
+ *   receives the element too, so wiring this hook does not take the ref away from the caller.
+ * @returns Ref callback to attach to the surface's content element. The element is `null` while the
+ *   surface is closed, which makes the blur a no-op. Its identity is stable unless `forwardedRef`
+ *   changes.
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export function useDismissOnWindowBlur(contentRef: RefObject<HTMLElement | null>): void {
+export function useDismissOnWindowBlur<T extends HTMLElement>(
+  forwardedRef?: Ref<T>,
+): RefCallback<T> {
+  const elementRef = useRef<T | undefined>(undefined);
+
   useEffect(() => {
     const handleWindowBlur = () => {
       // A closed surface has no content node: ignore the blur rather than press on something else
-      const parent = contentRef.current?.parentElement;
+      const parent = elementRef.current?.parentElement;
       if (!parent) return;
       const eventInit = { bubbles: true, pointerType: 'mouse' };
       // jsdom and older engines have no PointerEvent
@@ -48,5 +55,14 @@ export function useDismissOnWindowBlur(contentRef: RefObject<HTMLElement | null>
 
     window.addEventListener('blur', handleWindowBlur);
     return () => window.removeEventListener('blur', handleWindowBlur);
-  }, [contentRef]);
+  }, []);
+
+  return useCallback(
+    (element: T | null) => {
+      elementRef.current = element ?? undefined;
+      if (typeof forwardedRef === 'function') forwardedRef(element);
+      else if (forwardedRef) forwardedRef.current = element;
+    },
+    [forwardedRef],
+  );
 }
