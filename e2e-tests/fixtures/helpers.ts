@@ -205,6 +205,14 @@ export interface LaunchElectronAppOptions {
    */
   isolatedProjectRoot?: boolean;
   /**
+   * Fills the isolated project root before the app starts, for a spec that needs project data the
+   * bundled sample does not hold (a project setting, characters a book does not contain). Called
+   * with the root folder, which exists and is empty. The backend installs the sample only into a
+   * root that holds no project, so a seed that writes a `WEB` folder must write the whole project.
+   * Requires {@link LaunchElectronAppOptions.isolatedProjectRoot}.
+   */
+  seedIsolatedProjectRoot?: (projectRoot: string) => void;
+  /**
    * Absolute path of an existing user-data directory to launch into, instead of creating a fresh
    * temp one. For relaunch tests: pass the `userDataDir` a previous {@link launchElectronApp}
    * returned (launched with {@link LaunchElectronAppOptions.preserveUserDataDir}) so the new
@@ -809,6 +817,12 @@ export async function launchElectronApp(
 
   let electronApp: ElectronApplication;
   try {
+    if (opts.seedIsolatedProjectRoot) {
+      if (!isolatedProjectRootDir)
+        throw new Error('seedIsolatedProjectRoot needs isolatedProjectRoot: true');
+      fs.mkdirSync(isolatedProjectRootDir, { recursive: true });
+      opts.seedIsolatedProjectRoot(isolatedProjectRootDir);
+    }
     electronApp = await electron.launch({
       args: [`--user-data-dir=${userDataDir}`, rootDir],
       cwd: rootDir,

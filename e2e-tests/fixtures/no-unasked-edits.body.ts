@@ -2,8 +2,10 @@
  * The running app makes no edit to Scripture that the user did not ask for — the shared body of the
  * `no-unasked-edits-*` specs, one spec per editable view (isolated specs are one test() per file,
  * so each view needs its own file; the spec files only pick the view), plus
- * {@link runPreviewWritesNothing} for Power mode's read-only Preview and
- * {@link runFootnotesPaneRowEdits} for the footnotes pane's row editor.
+ * {@link runPreviewWritesNothing} for Power mode's read-only Preview,
+ * {@link runFootnotesPaneRowEdits} for the footnotes pane's row editor and
+ * {@link runInvisibleCharacters} for whitespace and invisible characters under either setting of the
+ * project's `AllowInvisibleChars`.
  *
  * Every other fidelity test exercises one leg of the save path in isolation. This one drives the
  * whole composition in the real app — C# USFM → USX, the USX parse into the editor, the editor's
@@ -103,14 +105,24 @@ export const SIMPLE_PARAGRAPH_STRUCTURE_VIEW: EditableViewCase = {
   areMarkersText: false,
 };
 
-/** The `test.use()` options a spec for a view in `view.interfaceMode` needs. */
-export function noUnaskedEditsTestOptions(view: Pick<EditableViewCase, 'interfaceMode'>) {
+/**
+ * The `test.use()` options a spec for a view in `view.interfaceMode` needs; `seedProjectRoot` fills
+ * the isolated project root before the app starts (`seedIsolatedProjectRoot`).
+ */
+export function noUnaskedEditsTestOptions(
+  view: Pick<EditableViewCase, 'interfaceMode'>,
+  seedProjectRoot?: (projectRoot: string) => void,
+) {
   return {
     interfaceMode: view.interfaceMode,
     // Past first run, so Simple mode starts in the app rather than the setup wizard.
     seedSettings: view.interfaceMode === 'simple' ? { 'platform.firstRunComplete': true } : {},
     // DEV_NOISY=false keeps the normal layouts.
-    electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+    electronLaunchOptions: {
+      isolatedProjectRoot: true,
+      envOverrides: { DEV_NOISY: 'false' },
+      ...(seedProjectRoot ? { seedIsolatedProjectRoot: seedProjectRoot } : {}),
+    },
   };
 }
 
@@ -1260,10 +1272,15 @@ async function expectInstalledBytes(
  * project with this baseline after every step. Making it editable is one save of the settings file,
  * which keeps the file it replaced as a `.BAK`; every other file keeps its bytes and its
  * modification time.
+ *
+ * `seededFiles`, by file name, are the files a spec wrote over the bundled ones before the app
+ * started (`seedIsolatedProjectRoot`): those bytes are expected in their place.
  */
-async function makeSampleProjectEditableExpectingOnlyThat(): Promise<ProjectSnapshot> {
+async function makeSampleProjectEditableExpectingOnlyThat(
+  seededFiles: ReadonlyMap<string, Buffer> = new Map(),
+): Promise<ProjectSnapshot> {
   await waitForSampleProjectMetadata();
-  const bundled = readBundledProject();
+  const bundled = new Map([...readBundledProject(), ...seededFiles]);
   const bundledSettings = bundled.get(SETTINGS_FILE);
   if (!bundledSettings) throw new Error(`The bundled sample has no ${SETTINGS_FILE}`);
   await expectInstalledBytes(bundled, 'after the app started', true);
@@ -1946,6 +1963,554 @@ export async function runFootnotesPaneRowEdits(
         `${chapter.bookFile}: the book file changed after its own step finished`,
       );
     }),
+  );
+}
+
+// #endregion
+
+// #region Whitespace and invisible characters
+
+/**
+ * The project's `AllowInvisibleChars` (`platformScripture.allowInvisibleCharacters`, Paratext 9's
+ * "allow invisible characters"): `on` stores a no-break space in the USFM as U+00A0 itself and `~`
+ * as an ordinary tilde; `off`, the default, spells a no-break space `~`.
+ */
+export type InvisibleCharactersSetting = 'on' | 'off';
+
+const NO_BREAK_SPACE = ' ';
+
+/** Each character the run seeds, types and pastes, by the name its messages use. */
+const INVISIBLE_CHARACTERS = {
+  'no-break space U+00A0': NO_BREAK_SPACE,
+  'tilde ~': '~',
+  'zero-width space U+200B': '​',
+  'zero-width non-joiner U+200C': '‌',
+  'zero-width joiner U+200D': '‍',
+  'word joiner U+2060': '⁠',
+  'narrow no-break space U+202F': ' ',
+  'thin space U+2009': ' ',
+  'en space U+2002': ' ',
+  'em space U+2003': ' ',
+  'hair space U+200A': ' ',
+  'ideographic space U+3000': '　',
+  'left-to-right mark U+200E': '‎',
+  'right-to-left mark U+200F': '‏',
+  'soft hyphen U+00AD': '­',
+  'zero-width no-break space U+FEFF': '﻿',
+} as const;
+
+type InvisibleCharacterName = keyof typeof INVISIBLE_CHARACTERS;
+
+/** The editor's internal stand-in for a stored no-break space; it must never leave the editor. */
+const NBSP_STAND_IN = '\u001A';
+
+/** Escapes every character outside printable ASCII, so a message shows which one it is. */
+function visible(text: string): string {
+  return text.replace(
+    /[^\x20-\x7E]/g,
+    (character) => `<U+${character.codePointAt(0)?.toString(16).toUpperCase().padStart(4, '0')}>`,
+  );
+}
+
+/** How the project's USFM spells a no-break space under `setting`. */
+function noBreakSpaceSpelling(setting: InvisibleCharactersSetting): string {
+  return setting === 'on' ? NO_BREAK_SPACE : '~';
+}
+
+/**
+ * The book the run seeds and the chapter it edits: Jonah 3 is plain prose — paragraphs and verses,
+ * no notes or character spans — so every difference is about the characters.
+ */
+const INVISIBLE_CHAPTER: ChapterCase = {
+  label: 'Jonah 3 — seeded with whitespace and invisible characters',
+  reference: 'Jonah 3:1',
+  chapterNum: 3,
+  bookFile: '32JONengWEBUS.SFM',
+  renderedText: 'he didn',
+  localEdits: [],
+};
+
+/** Another chapter of the same book, to navigate to and back. */
+const INVISIBLE_OTHER_CHAPTER = { reference: 'Jonah 4:1', renderedText: 'sun beat on' };
+
+/**
+ * Where the seeded characters go: each verse of the bundled Jonah 3 whose text is replaced, with
+ * the replacement for `setting`. Every seeded character sits between two non-space characters, so
+ * no whitespace run forms around it and Paratext's whitespace regularization leaves it alone. With
+ * the setting off, `~` is the file's no-break space; with it on, the no-break space is U+00A0 and
+ * the second `~` is an ordinary tilde.
+ */
+function seededVerses(
+  setting: InvisibleCharactersSetting,
+): Array<{ unit: string; bundled: string; seeded: string }> {
+  const c = INVISIBLE_CHARACTERS;
+  return [
+    {
+      unit: '3:5',
+      bundled:
+        'The people of Nineveh believed God; and they proclaimed a fast and put on sackcloth, from their greatest even to their least.',
+      seeded:
+        `The people${noBreakSpaceSpelling(setting)}of${c['zero-width space U+200B']}Nineveh ` +
+        `believed${c['narrow no-break space U+202F']}God; and${c['thin space U+2009']}they ` +
+        `proclaimed${c['en space U+2002']}a fast and${c['em space U+2003']}put ` +
+        `on${c['hair space U+200A']}sackcloth, from${c['ideographic space U+3000']}their greatest even to their least.`,
+    },
+    {
+      unit: '3:6',
+      bundled:
+        'The news reached the king of Nineveh, and he arose from his throne, took off his royal robe, covered himself with sackcloth, and sat in ashes.',
+      seeded:
+        `The news reached the king of Nine${c['zero-width non-joiner U+200C']}veh, and he ` +
+        `a${c['zero-width joiner U+200D']}rose from his throne, took${c['word joiner U+2060']}off ` +
+        `his royal${c['tilde ~']}robe, covered him${c['soft hyphen U+00AD']}self ` +
+        `with${c['left-to-right mark U+200E']} sackcloth, and sat${c['right-to-left mark U+200F']} ` +
+        `in a${c['zero-width no-break space U+FEFF']}shes.`,
+    },
+  ];
+}
+
+/** The bundled book with {@link seededVerses} in place. */
+function seededBook(setting: InvisibleCharactersSetting): Buffer {
+  const text = seededVerses(setting).reduce(
+    (book, { bundled, seeded }) => {
+      if (book.split(bundled).length !== 2)
+        throw new Error(`The bundled book should hold ${JSON.stringify(bundled)} exactly once`);
+      return book.replace(bundled, seeded);
+    },
+    fs.readFileSync(path.join(BUNDLED_WEB_DIR, INVISIBLE_CHAPTER.bookFile), 'utf8'),
+  );
+  return Buffer.from(text, 'utf8');
+}
+
+/** The bundled settings file with `AllowInvisibleChars` turned on, as Paratext 9 writes it. */
+function settingsAllowingInvisibleCharacters(): Buffer {
+  const text = fs.readFileSync(path.join(BUNDLED_WEB_DIR, SETTINGS_FILE), 'utf8');
+  if (text.includes('AllowInvisibleChars'))
+    throw new Error(`The bundled ${SETTINGS_FILE} should not set AllowInvisibleChars`);
+  return Buffer.from(
+    text.replace(
+      '<Editable>F</Editable>\n',
+      '<Editable>F</Editable>\n  <AllowInvisibleChars>T</AllowInvisibleChars>\n',
+    ),
+    'utf8',
+  );
+}
+
+/** The files the run writes over the bundled sample before the app starts, by file name. */
+function invisibleCharactersSeededFiles(setting: InvisibleCharactersSetting): Map<string, Buffer> {
+  const files = new Map([[INVISIBLE_CHAPTER.bookFile, seededBook(setting)]]);
+  if (setting === 'on') files.set(SETTINGS_FILE, settingsAllowingInvisibleCharacters());
+  return files;
+}
+
+/**
+ * The `test.use()` options of an invisible-characters spec: {@link noUnaskedEditsTestOptions}, and
+ * the sample installed into the isolated root before the app starts with the seeded book (and, for
+ * `on`, the setting) in place. The backend installs the sample only into a root with no project, so
+ * this writes the whole project.
+ */
+export function invisibleCharactersTestOptions(
+  view: Pick<EditableViewCase, 'interfaceMode'>,
+  setting: InvisibleCharactersSetting,
+) {
+  return noUnaskedEditsTestOptions(view, (projectRoot) => {
+    const projectDir = path.join(projectRoot, INSTALLED_WEB_FOLDER);
+    fs.mkdirSync(projectDir);
+    const seeded = invisibleCharactersSeededFiles(setting);
+    readBundledProject().forEach((bytes, file) =>
+      fs.writeFileSync(path.join(projectDir, file), seeded.get(file) ?? bytes),
+    );
+  });
+}
+
+/**
+ * Where each character is typed and pasted: the middle of a word of Jonah 3 (each point's text
+ * occurs once in the chapter), so no whitespace run forms around it.
+ */
+const INSERTION_POINTS: Array<{ name: InvisibleCharacterName; unit: string; point: TextPoint }> = [
+  { name: 'no-break space U+00A0', unit: '3:1', point: 'the sec|ond time' },
+  { name: 'tilde ~', unit: '3:2', point: 'and pre|ach to it' },
+  { name: 'zero-width space U+200B', unit: '3:3', point: 'an exceed|ingly great' },
+  { name: 'zero-width non-joiner U+200C', unit: '3:4', point: 'be over|thrown' },
+  { name: 'zero-width joiner U+200D', unit: '3:7', point: 'a procla|mation' },
+  { name: 'word joiner U+2060', unit: '3:7', point: 'and pub|lished' },
+  { name: 'narrow no-break space U+202F', unit: '3:7', point: 'his no|bles' },
+  { name: 'thin space U+2009', unit: '3:7', point: 'nor fl|ock' },
+  { name: 'en space U+2002', unit: '3:8', point: 'cry might|ily' },
+  { name: 'em space U+2003', unit: '3:8', point: 'the vio|lence' },
+  { name: 'hair space U+200A', unit: '3:8', point: 'turn every|one' },
+  { name: 'ideographic space U+3000', unit: '3:9', point: 'his fi|erce' },
+  { name: 'left-to-right mark U+200E', unit: '3:9', point: 'not per|ish' },
+  { name: 'right-to-left mark U+200F', unit: '3:10', point: 'their wor|ks' },
+  { name: 'soft hyphen U+00AD', unit: '3:10', point: 'the disas|ter' },
+];
+
+/** The gesture that puts a character into the text. */
+type InsertionGesture = 'typed' | 'pasted';
+
+/**
+ * A recorded finding where the app saves an inserted character differently from what the user
+ * entered, pinned exactly: any other result fails, and so does the fix — remove the pin then, with
+ * the finding.
+ */
+interface InsertionDeviation {
+  /** The finding's ID, as the data-fidelity catalog records it. */
+  finding: string;
+  /** One line: what happens. */
+  summary: string;
+  /** What the file holds at the insertion point while the finding stands. */
+  saved: string;
+  applies(
+    view: EditableViewCase,
+    setting: InvisibleCharactersSetting,
+    gesture: InsertionGesture,
+    name: InvisibleCharacterName,
+  ): boolean;
+}
+
+const INSERTION_DEVIATIONS: InsertionDeviation[] = [
+  {
+    // Standard view takes a typed U+00A0 for display spacing, as Paratext 9's editor does (it saves
+    // every U+00A0 left in its view as a space unless the project allows invisible characters);
+    // the no-break space is typed as `~` there. Pasted, the same U+00A0 saves as `~`.
+    finding: 'T-4',
+    summary:
+      'Standard view, AllowInvisibleChars off: a typed U+00A0 saves as a space, as in Paratext 9',
+    saved: ' ',
+    applies: (view, setting, gesture, name) =>
+      view.areMarkersText &&
+      setting === 'off' &&
+      gesture === 'typed' &&
+      name === 'no-break space U+00A0',
+  },
+];
+
+/**
+ * What the file must hold where `name` was entered: the project's spelling of it, or what a pinned
+ * finding saves instead.
+ */
+function savedInsertion(
+  view: EditableViewCase,
+  setting: InvisibleCharactersSetting,
+  gesture: InsertionGesture,
+  name: InvisibleCharacterName,
+): { saved: string; deviation?: InsertionDeviation } {
+  const deviation = INSERTION_DEVIATIONS.find((pin) => pin.applies(view, setting, gesture, name));
+  if (deviation) return { saved: deviation.saved, deviation };
+  const character = INVISIBLE_CHARACTERS[name];
+  return { saved: character === NO_BREAK_SPACE ? noBreakSpaceSpelling(setting) : character };
+}
+
+/**
+ * Selects the one character the editor's text holds between `point`'s two halves — what was entered
+ * there — by setting the DOM selection, which the editor adopts. The halves may sit in different
+ * text nodes. Returns how many places matched; selects only when exactly one did.
+ */
+async function selectEnteredCharacter(editorInput: Locator, point: TextPoint): Promise<number> {
+  const [before, after] = splitPoint(point);
+  const matches = await editorInput.evaluate(
+    (root, halves) => {
+      const nodes: Text[] = [];
+      const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode())
+        // SHOW_TEXT yields only Text nodes.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        nodes.push(node as Text);
+      const text = nodes.map((node) => node.data).join('');
+      const starts: number[] = [];
+      for (let at = text.indexOf(halves.before); at >= 0; at = text.indexOf(halves.before, at + 1))
+        if (text.startsWith(halves.after, at + halves.before.length + 1)) starts.push(at);
+      if (starts.length !== 1) return starts.length;
+      // Maps an offset in the joined text to a node and an offset in it.
+      const locate = (offset: number) => {
+        let remaining = offset;
+        const index = nodes.findIndex((node) => {
+          if (remaining < node.data.length) return true;
+          remaining -= node.data.length;
+          return false;
+        });
+        return { node: nodes[index], offset: remaining };
+      };
+      const start = locate(starts[0] + halves.before.length);
+      const end = locate(starts[0] + halves.before.length + 1);
+      if (root instanceof HTMLElement) root.focus({ preventScroll: true });
+      root.ownerDocument
+        .getSelection()
+        ?.setBaseAndExtent(start.node, start.offset, end.node, end.offset);
+      return 1;
+    },
+    { before, after },
+  );
+  await editorInput.page().waitForTimeout(SELECTION_ADOPTED_MS);
+  return matches;
+}
+
+/**
+ * Enters every character of {@link INSERTION_POINTS} at its point by `gesture` — typed through the
+ * keyboard (`~` as a key press; the others as the text input a keyboard layout or an input method
+ * delivers) or pasted as plain text from the OS clipboard — and checks the save: each aimed verse
+ * gains exactly the character's expected bytes at its point, and nothing else in the book moves.
+ * Then deletes each one again with the Delete key and checks the file is back to its bytes.
+ */
+async function enterAndDeleteEachCharacter(
+  context: GestureContext,
+  view: EditableViewCase,
+  setting: InvisibleCharactersSetting,
+  gesture: InsertionGesture,
+  before: Buffer,
+): Promise<Buffer> {
+  const { mainPage, electronApp, editorInput } = context;
+  const bookPath = installedBookPath(INVISIBLE_CHAPTER.bookFile);
+  const where = `${INVISIBLE_CHAPTER.bookFile} (${view.name}, AllowInvisibleChars ${setting})`;
+
+  const startedAt = Date.now();
+  // Chained: each character is entered at its own point before the next is aimed.
+  await INSERTION_POINTS.reduce(async (previous, { name, point }) => {
+    await previous;
+    const character = INVISIBLE_CHARACTERS[name];
+    if (gesture === 'pasted')
+      await electronApp.evaluate(({ clipboard }, plain) => clipboard.writeText(plain), character);
+    await selectInEditor(editorInput, point);
+    if (gesture === 'pasted') await mainPage.keyboard.press(PASTE_KEY);
+    else await mainPage.keyboard.type(character);
+  }, Promise.resolve());
+
+  const enteredAt = Date.now();
+  const afterEntry = await waitForSaveToSettle(mainPage, bookPath, before);
+  const savedAt = Date.now();
+  if (!afterEntry) {
+    expect
+      .soft(afterEntry, `${where}: the ${gesture} characters never saved to disk`)
+      .toBeDefined();
+    return before;
+  }
+  const units = [...new Set(INSERTION_POINTS.map(({ unit }) => unit))];
+  await expectChangesOnlyIn(
+    INVISIBLE_CHAPTER.bookFile,
+    before,
+    afterEntry,
+    units,
+    'before-entering',
+    `after-${gesture}`,
+    `${where}: entering the ${gesture} characters changed text outside ${units.join(', ')}`,
+  );
+  const beforeText = before.toString('utf8');
+  const afterText = afterEntry.toString('utf8');
+  INSERTION_POINTS.forEach(({ name, unit, point }) => {
+    const { saved, deviation } = savedInsertion(view, setting, gesture, name);
+    if (deviation)
+      test.info().annotations.push({
+        type: 'known deviation',
+        description: `${where}: ${gesture} ${name}: ${deviation.finding} — ${deviation.summary}`,
+      });
+    const unitBefore = getUsfmUnit(beforeText, unit) ?? '';
+    if (unitBefore.split(pointText(point)).length !== 2)
+      throw new Error(`${where}: ${JSON.stringify(pointText(point))} is not once in ${unit}`);
+    const unitAfter = getUsfmUnit(afterText, unit) ?? '';
+    const [head, tail] = splitPoint(point);
+    // What now lies between the point's two halves.
+    const headAt = unitAfter.indexOf(head);
+    const tailAt = headAt < 0 ? -1 : unitAfter.indexOf(tail, headAt + head.length);
+    const savedThere =
+      tailAt < 0 ? '(the point is gone)' : unitAfter.slice(headAt + head.length, tailAt);
+    expect
+      .soft(
+        visible(savedThere),
+        deviation
+          ? `${where}: ${gesture} ${name} no longer saves as finding ${deviation.finding} pins it (${deviation.summary}); if it now saves as entered, the finding is fixed — remove the pin`
+          : `${where}: ${gesture} ${name} should save as ${visible(saved)} at ${JSON.stringify(point)}`,
+      )
+      .toBe(visible(saved));
+  });
+  // Exactly: every aimed verse reads as its insertions imply, and nothing else in it moved.
+  const expectedUnits = new Map<string, string>();
+  INSERTION_POINTS.forEach(({ name, unit, point }) => {
+    const text = expectedUnits.get(unit) ?? getUsfmUnit(beforeText, unit) ?? '';
+    expectedUnits.set(
+      unit,
+      text.replace(
+        pointText(point),
+        insertAtPoint(point, savedInsertion(view, setting, gesture, name).saved),
+      ),
+    );
+  });
+  expectedUnits.forEach((expectedUnit, unit) =>
+    expect
+      .soft(
+        visible(getUsfmUnit(afterText, unit) ?? ''),
+        `${where}: ${unit} does not read as the ${gesture} characters imply`,
+      )
+      .toBe(visible(expectedUnit)),
+  );
+
+  // Delete each one again.
+  const notFound: string[] = [];
+  const deletingAt = Date.now();
+  // Chained: each deletion is aimed at the text the one before it left.
+  await INSERTION_POINTS.reduce(async (previous, { name, point }) => {
+    await previous;
+    const matches = await selectEnteredCharacter(editorInput, point);
+    if (matches === 1) await mainPage.keyboard.press('Delete');
+    else notFound.push(`${name} at ${JSON.stringify(point)}: ${matches} matches`);
+  }, Promise.resolve());
+  expect
+    .soft(notFound.join('\n'), `${where}: some ${gesture} characters could not be found to delete`)
+    .toBe('');
+  const deletedAt = Date.now();
+  const afterDelete = await waitForSaveToSettle(mainPage, bookPath, afterEntry);
+  test.info().annotations.push({
+    type: 'timing',
+    description: `${where}: ${gesture}: entering ${enteredAt - startedAt}ms, its save settled ${savedAt - enteredAt}ms later, checks ${deletingAt - savedAt}ms, deleting ${deletedAt - deletingAt}ms, its save settled ${Date.now() - deletedAt}ms later`,
+  });
+  const current = afterDelete ?? afterEntry;
+  await expectSameBytes(
+    INVISIBLE_CHAPTER.bookFile,
+    before,
+    current,
+    'before-entering',
+    `after-deleting-${gesture}`,
+    afterDelete
+      ? `${where}: deleting the ${gesture} characters did not restore the file byte for byte`
+      : `${where}: deleting the ${gesture} characters never saved to disk`,
+  );
+  return current;
+}
+
+/**
+ * Copies a seeded verse's text through the OS clipboard and checks what reached it: the seeded
+ * characters as the view gives them out, and never the editor's internal stand-in.
+ */
+async function copySeededVerse(
+  context: GestureContext,
+  view: EditableViewCase,
+  setting: InvisibleCharactersSetting,
+  copy: { unit: string; from: TextPoint; to: TextPoint },
+  bookText: string,
+): Promise<void> {
+  const { electronApp, editorInput } = context;
+  const where = `${view.name}, AllowInvisibleChars ${setting}: copying ${copy.unit}`;
+  const unitText = getUsfmUnit(bookText, copy.unit);
+  if (unitText === undefined) throw new Error(`The book has no unit ${copy.unit}`);
+  const usfm = usfmBetween(unitText, copy.from, copy.to);
+  // Standard view copies the USFM bytes. A hidden-marker view copies the text as shown, where a
+  // no-break space is the character itself in either setting.
+  const expected = view.areMarkersText
+    ? usfm
+    : usfm.replaceAll(noBreakSpaceSpelling(setting), NO_BREAK_SPACE);
+
+  await electronApp.evaluate(
+    ({ clipboard }, sentinel) => clipboard.writeText(sentinel),
+    CLIPBOARD_SENTINEL,
+  );
+  await selectInEditor(editorInput, copy.from, copy.to);
+  await editorInput.press(COPY_KEY);
+  await expect
+    .poll(() => electronApp.evaluate(({ clipboard }) => clipboard.readText()), {
+      message: `${where} never reached the OS clipboard`,
+      timeout: 15_000,
+    })
+    .not.toBe(CLIPBOARD_SENTINEL);
+  const { text, html } = await electronApp.evaluate(({ clipboard }) => ({
+    text: clipboard.readText(),
+    html: clipboard.readHTML(),
+  }));
+  expect.soft(visible(text), `${where}: the copied plain text`).toBe(visible(expected));
+  expect
+    .soft(text.includes(NBSP_STAND_IN), `${where}: the plain text holds the editor's stand-in`)
+    .toBe(false);
+  expect
+    .soft(html.includes(NBSP_STAND_IN), `${where}: the html holds the editor's stand-in`)
+    .toBe(false);
+}
+
+/** The copies {@link copySeededVerse} makes: each spans one seeded verse's characters. */
+const SEEDED_COPIES = [
+  { unit: '3:5', from: 'The |people', to: 'even to |their least' },
+  { unit: '3:6', from: 'king of |Nine', to: '|shes.' },
+];
+
+/**
+ * The whitespace-and-invisible-characters run's whole test body, for `view` with the project's
+ * `AllowInvisibleChars` `setting`. The bundled WEB has none of these characters, so the run seeds
+ * them into Jonah 3 before the app starts ({@link invisibleCharactersTestOptions}), then:
+ *
+ * 1. **Opening and navigating writes nothing.** Open the chapter, go to another and back: no file of
+ *    the project changes.
+ * 2. **An edit elsewhere keeps every seeded character.** The first save and an undo, then the same at
+ *    rest ({@link runLoadAndUndoSteps}): the seeded characters come back exactly as seeded, with
+ *    only the known first-save normalization around them.
+ * 3. **Each character typed, then pasted, saves as entered.** In the middle of a word, so no
+ *    whitespace rule applies: a no-break space saves as the project spells it (`~` with the setting
+ *    off, U+00A0 with it on), every other character as itself; deleting each restores the file.
+ * 4. **Copying gives the characters out.** A copy of each seeded verse puts them on the clipboard as
+ *    the view gives them out, never as the editor's internal stand-in (U+001A).
+ */
+export async function runInvisibleCharacters(
+  { mainPage, electronApp }: { mainPage: Page; electronApp: ElectronApplication },
+  view: EditableViewCase,
+  setting: InvisibleCharactersSetting,
+): Promise<void> {
+  test.setTimeout(600_000);
+
+  if (view.interfaceMode === 'power') await waitForHomeTab(mainPage);
+  else await waitForAppReady(mainPage);
+  const seeded = invisibleCharactersSeededFiles(setting);
+  const baseline = await makeSampleProjectEditableExpectingOnlyThat(seeded);
+  const installed = seeded.get(INVISIBLE_CHAPTER.bookFile);
+  if (!installed) throw new Error('No seeded book');
+
+  const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
+  const editorFrame = mainPage.frameLocator(`iframe[data-web-view-id="${editorId}"]`);
+  await editorFrame.locator('.editor-container').waitFor({ timeout: 60_000 });
+  const editorInput = editorFrame.locator('.editor-input').first();
+  const context: GestureContext = { mainPage, electronApp, editorInput };
+  const where = `${view.name}, AllowInvisibleChars ${setting}`;
+
+  const goTo = async (reference: string, renderedText: string) => {
+    await navigateToolbarBcv(mainPage, reference);
+    await expect(editorInput).toContainText(renderedText, { timeout: 60_000 });
+  };
+
+  await test.step(`${where}: opening and navigating writes nothing`, async () => {
+    await goTo(INVISIBLE_CHAPTER.reference, INVISIBLE_CHAPTER.renderedText);
+    await expect
+      .poll(
+        () => editorInput.evaluate((root, selector) => root.matches(selector), view.rootSelector),
+        { message: `the editor should be showing ${view.name}`, timeout: 30_000 },
+      )
+      .toBe(true);
+    await mainPage.waitForTimeout(LOAD_QUIET_MS);
+    await goTo(INVISIBLE_OTHER_CHAPTER.reference, INVISIBLE_OTHER_CHAPTER.renderedText);
+    await mainPage.waitForTimeout(LOAD_QUIET_MS);
+    await goTo(INVISIBLE_CHAPTER.reference, INVISIBLE_CHAPTER.renderedText);
+    await mainPage.waitForTimeout(LOAD_QUIET_MS);
+    await expectProjectUnchanged(baseline, 'opening and navigating');
+  });
+
+  const atRest = await test.step(`${where}: an edit elsewhere keeps every seeded character`, () =>
+    runLoadAndUndoSteps(mainPage, editorInput, INVISIBLE_CHAPTER, installed));
+
+  const afterTyped = await test.step(`${where}: each character typed saves as entered`, () =>
+    enterAndDeleteEachCharacter(context, view, setting, 'typed', atRest));
+  const afterPasted = await test.step(`${where}: each character pasted saves as entered`, () =>
+    enterAndDeleteEachCharacter(context, view, setting, 'pasted', afterTyped));
+
+  await test.step(`${where}: copying gives the characters out`, async () => {
+    // Chained: both copies go through the one OS clipboard.
+    await SEEDED_COPIES.reduce(async (previous, copy) => {
+      await previous;
+      await copySeededVerse(context, view, setting, copy, afterPasted.toString('utf8'));
+    }, Promise.resolve());
+  });
+
+  await mainPage.waitForTimeout(LOAD_QUIET_MS);
+  await expectSameBytes(
+    INVISIBLE_CHAPTER.bookFile,
+    afterPasted,
+    fs.readFileSync(installedBookPath(INVISIBLE_CHAPTER.bookFile)),
+    'after-the-edits',
+    'at-the-end-of-the-run',
+    `${where}: copying changed the book file`,
   );
 }
 

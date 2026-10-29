@@ -30,6 +30,11 @@ As of 2026-10-27 every `accept` in this catalog carries TJ's ruling and date. St
   Paratext text can never hold, drawn as a blank the width of a space (row AI-1).
 - **O-12**: whether an author's literal `~` in an attribute value must survive a Standard-view
   settle (`needs-decision`; candidate fix and alternative in the row).
+- **T-4, re-asked 2026-10-29**: with `AllowInvisibleChars` off, a U+00A0 typed in Standard view
+  saves as a space (Paratext 9 parity, accepted 2026-10-26), while TJ's brief for the
+  invisible-characters e2e expected `~`, which is what Simple's view and every paste save. Pinned
+  as `knownDeviation` `T-4`; a ruling for `~` means changing `registerTypedNbspSpelling` in
+  scripture-editors and removing the pin.
 
 Nothing else is unruled.
 
@@ -151,7 +156,7 @@ behavior; it is not a ruling by TJ.
 | T-1 | formatted, paragraph-structure | Delete just before a collapsed note threw (`Expected node N to have a parent.` in `$noteNodeTransform`) and the keystroke was discarded | **FIXED** — scripture-editors#29 (return after removing the note) |
 | T-2 | formatted | Joining a paragraph into an empty `\b` (Backspace at the paragraph's start, or a range into it) deleted the joined paragraph's text: the `\b` rule "an empty blank line takes no text" cleared joined-in content | **FIXED** — scripture-editors#29 (cleared only when nothing was joined in; the joined paragraph keeps the `\b` marker). Follow-up FIXED to match Paratext 9 (scripture-editors#29): joining into an empty `\b` keeps the joined paragraph and its marker, as PT9's editor (Gecko joining two blocks keeps the second) does. |
 | T-3 | formatted | Undo could not take back Enter in front of a char span or a note (Lexical history folds an update whose only dirty leaf kept its text into the previous entry) | **FIXED** — scripture-editors#29 (the new paragraph's first leaf is marked dirty) |
-| T-4 | formatted, paragraph-structure, visible | An author's lone NBSP in a span was saved as nothing once an edit stranded it (load `\nd ~x\nd*`, delete `x`; or type an NBSP into an empty span) | **FIXED** — scripture-editors#29 (the adaptor marks every span text holding an NBSP; `CharNodePlugin` marks a typed one). Standard-view observation resolved (2026-10-26): a literally typed U+00A0 saving as a space matches Paratext 9 for default projects (`~` is the authored no-break space; pinned); projects with `AllowInvisibleChars` on are AI-1 |
+| T-4 | formatted, paragraph-structure, visible | An author's lone NBSP in a span was saved as nothing once an edit stranded it (load `\nd ~x\nd*`, delete `x`; or type an NBSP into an empty span) | **FIXED** — scripture-editors#29 (the adaptor marks every span text holding an NBSP; `CharNodePlugin` marks a typed one). Standard-view observation resolved (2026-10-26): a literally typed U+00A0 saving as a space matches Paratext 9 for default projects (`~` is the authored no-break space; pinned, and pinned in the real app as `knownDeviation` `T-4` by `no-unasked-edits-invisible-characters-off-power-standard.spec.ts`); projects with `AllowInvisibleChars` on are AI-1 |
 | T-5 | formatted, paragraph-structure | Typing over a range across a char span's edge or a collapsed note moved text into the span, reordered it, or lost it (Lexical `RangeSelection.insertText`) | **FIXED** for hidden-marker views — scripture-editors#29 (`InlineRangeEditPlugin`). Not covered (follow-up): Standard and visible views, and paste over a range, cut, and Enter over a range |
 | T-6 | formatted, paragraph-structure | Enter inside a char span with attributes (`\w grace\|lemma="g"\w*`): the second half has no attributes (`CharNode.insertNewAfter` copies only `closed`, so as not to double the visible `\|name="value"` bytes) | **accept** (TJ, 2026-10-26): same in all three views; Paratext 9 never copies the attributes either, and copying would claim both halves share one lemma |
 | T-7 | formatted, paragraph-structure | Two adjacent same-attribute spans are combined after what separated them is deleted (`CharNodePlugin`). For `\w` (word-level, lemma attributes) two adjacent spans are two words, so combining changes word segmentation | **FIXED** — scripture-editors#29: formatted and paragraph-structure keep alike spans apart, as Standard view and Paratext 9 do; spans an edit creates still combine |
@@ -232,7 +237,31 @@ place in that note, with the book's `.BAK` holding the book as it was before the
 other file untouched; deleting it again restores the book byte for byte; copying the 4:10 note's
 own text and pasting it back in the row saves exactly the pasted bytes, and deleting them restores
 the book. As of 2026-10-28 every assertion passes in both modes; no loss found. The WEB sample has
-no no-break space (`~`), so that case is not covered.
+no no-break space (`~`), so these specs do not cover it; the invisible-characters specs below do.
+
+Whitespace and invisible characters are checked by `runInvisibleCharacters` from the same body, in
+four specs: `no-unasked-edits-invisible-characters-{on,off}-{power-standard,simple-paragraph-structure}.spec.ts`
+(`AllowInvisibleChars` on and off, each in Power's Standard view and Simple's paragraph-structure
+view). The WEB has none of these characters, so each spec seeds Jonah 3:5–6 before the app starts
+(and, for `on`, `<AllowInvisibleChars>T</AllowInvisibleChars>` in `Settings.xml`): a no-break space
+(`~` off, U+00A0 on), a `~` (a literal tilde when on), U+200B, U+200C, U+200D, U+2060, U+202F,
+U+2009, U+2002, U+2003, U+200A, U+3000, U+200E, U+200F, U+00AD and U+FEFF, each between two
+non-space characters. Per spec: opening, navigating away and back write nothing to any project file;
+an edit elsewhere in the chapter and its undo leave every seeded character as seeded (first save and
+at rest); each of the first fifteen typed, then pasted as plain text, in the middle of a word saves
+exactly its expected bytes there and nothing else in the book moves, and deleting each restores
+the file byte for byte; a copy of each seeded verse puts the characters on the clipboard (Standard:
+the USFM bytes, so `~` off and U+00A0 on; paragraph-structure: the text as shown, a no-break space
+as U+00A0 in both settings), never the U+001A stand-in in either flavor. Every assertion was shown
+red with a deliberate break. As of 2026-10-29 all four pass; no loss found. Recorded differences
+from Paratext 9, none a loss:
+
+- Typed U+00A0 with the setting off: Standard saves a space, as Paratext 9 does in every view (T-4,
+  pinned); paragraph-structure saves `~`. A pasted plain-text U+00A0 saves `~` in both, as in
+  Paratext 9.
+- U+FEFF is kept. Paratext 9's editor drops every U+FEFF on save, in either setting.
+- A paragraph-structure copy gives a no-break space out as U+00A0 with the setting off, where
+  Paratext 9's views show and copy it as `~`.
 
 | ID | View(s) | Finding | Status |
 | --- | --- | --- | --- |
