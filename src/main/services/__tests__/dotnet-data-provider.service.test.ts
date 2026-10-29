@@ -219,15 +219,23 @@ describe('dotnetDataProvider.waitForClose', () => {
     expect(child.kill).toHaveBeenCalledTimes(1);
   });
 
-  test('does not kill the data provider when it exits by itself in time', async () => {
+  test('stops waiting as soon as the data provider exits by itself, without killing it', async () => {
     const { service, child, exit } = await startFreshDataProvider();
 
-    const waiting = service.waitForClose(2000);
+    let waitEnded = false;
+    const waiting = (async () => {
+      await service.waitForClose(2000);
+      waitEnded = true;
+    })();
     // As the provider does once main closes its PAPI connection
     exit();
-    await vi.advanceTimersByTimeAsync(2000);
-    await waiting;
+    // Lets pending promise callbacks run but moves the clock nowhere near the 2000 ms limit, so
+    // the wait can only have ended because of the exit. (Once the provider has exited, the kill
+    // step has nothing left to kill, so `child.kill` alone cannot tell the two causes apart.)
+    await vi.advanceTimersByTimeAsync(0);
 
+    expect(waitEnded).toBe(true);
     expect(child.kill).not.toHaveBeenCalled();
+    await waiting;
   });
 });
