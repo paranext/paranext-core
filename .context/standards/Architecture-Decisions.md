@@ -2036,6 +2036,39 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   public audience. **Amended 2026-09-09:** the document `paratext-10-studio` packs is now its own,
   generated from the patched clone - see adr-notices-overlay-for-downstream-products.
 - **Source:** the multi-agent review of #2654, finding 1.
+## adr-cross-frame-dismissal-by-synthetic-press: Menus and popovers close across WebView frames through one host module that replays an outside press into the other frames
+
+- **Date:** 2026-10-14
+- **Status:** Proposed
+- **Context:** Radix (shadcn) surfaces detect an outside press with a `pointerdown` listener on
+  their own document. The main window and every WebView iframe are separate documents, so a Menubar
+  menu, the toolbar's book/chapter popover or project selector stays open while the user clicks into
+  a WebView, and a WebView's tab menu or popover stays open while the user clicks the main window or
+  another WebView (PT-2989). Until now the only fix was per-surface (the sync-status popover's
+  window-`blur` handler; the "Dismissal Patterns" Storybook guideline prescribes that).
+- **Decision:** `src/renderer/services/cross-frame-dismissal.util.ts`
+  (`registerFrameForCrossFrameDismissal`) registers the main window at renderer startup and every
+  same-origin WebView iframe on load (`web-view.component.tsx`). A press in one registered frame
+  dispatches a synthetic, non-bubbling `pointerdown` at the document of every OTHER registered frame
+  that has open popper content (`[data-radix-popper-content-wrapper]`), so Radix closes those
+  surfaces through its own outside-press path and per-surface opt-outs (`onInteractOutside`
+  `preventDefault`) keep working. The synthetic press uses the secondary button, because Radix's
+  modal DropdownMenu and modal Popover return focus to their trigger after a primary-button outside
+  press, which would pull focus back out of the frame the user just clicked. Focus entering a child
+  iframe without a registered press (a URL WebView, keyboard focus) closes surfaces too, unless the
+  iframe is embedded in an open surface; a whole-window blur closes nothing.
+- **Alternatives:** per-surface focus supplements (the current guideline) — every surface must
+  remember to add one, and surfaces inside WebViews cannot see presses in the main window at all;
+  driving dismissal from `platform.onDidAppWindowInput` — it carries no frame identity, so each frame
+  must correlate it with its own pointerdown under a timing window (see the overlay service), where
+  same-origin frames can be observed synchronously; dispatching Escape — Radix restores focus to the
+  trigger on Escape and only the topmost layer reacts.
+- **Consequences:** surfaces in URL (cross-origin) WebViews are not reached. A Radix Select inside a
+  WebView still restores focus to its trigger regardless of button. The behavior leans on two Radix
+  internals (the popper wrapper attribute and the right-click focus rule); a Radix upgrade should
+  re-run `cross-frame-dismissal.radix.test.tsx`. Revisit the "Dismissal Patterns" guideline (UX-owned)
+  once this is accepted, since its per-surface iframe supplement becomes redundant for Radix surfaces.
+
 ## adr-cross-project-comment-list-follows-scroll-group: A cross-project comment list follows the window's scroll group, not a coerced all-books scope
 
 - **Date:** 2026-09-21
