@@ -3,6 +3,8 @@ import { ContextMenu as ContextMenuPrimitive } from 'radix-ui';
 
 import { cn } from '@/utils/shadcn-ui/utils';
 import { IconChevronRight, IconCheck } from '@tabler/icons-react';
+// CUSTOM: Dismiss the menu when the window blurs (a click into another iframe)
+import { useDismissOnWindowBlur } from '@/hooks/use-dismiss-on-window-blur.hook';
 // CUSTOM: Import shared z-index constant to ensure context menus stack above the dock
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
 
@@ -60,14 +62,23 @@ function ContextMenuContent({
   className,
   // CUSTOM: Destructure style so we can merge the shared z-index constant into it
   style,
+  // CUSTOM: Destructure ref (a regular prop in React 19) so useDismissOnWindowBlur can compose it
+  ref,
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.Content> & {
   side?: 'top' | 'right' | 'bottom' | 'left';
 }) {
+  // CUSTOM: Added useDismissOnWindowBlur so the menu closes when the window loses focus. A click
+  // into another iframe never reaches this document, so the window's blur stands in for the outside
+  // press; see the hook's TSDoc. ContextMenuSubContent is not wired: a sub-menu closes with its
+  // root menu. The returned ref callback also forwards the caller's ref.
+  const contentRef = useDismissOnWindowBlur(ref);
   return (
     <ContextMenuPrimitive.Portal>
       <ContextMenuPrimitive.Content
         data-slot="context-menu-content"
+        // CUSTOM: Ref from useDismissOnWindowBlur so it can find the content's parent
+        ref={contentRef}
         className={cn(
           // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
           // CUSTOM: Fixed tw: prefix not being on some classes and removed erroneous empty tw: tokens
