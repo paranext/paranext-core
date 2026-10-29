@@ -102,11 +102,6 @@ export class RpcWebSocketListener
   private nextSocketNumber = 1;
   private readonly connectionMutex = new Mutex();
   private readonly rpcServerBySocket = new Map<ServerSocketLike, RpcServer>();
-  /**
-   * The sockets the websocket server accepted, as opposed to local clients handed over through
-   * {@link acceptLocalClient}. Kept apart so {@link closeWebSocketClients} closes only these.
-   */
-  private readonly webSocketClients = new Set<ServerSocketLike>();
   private readonly rpcMethodDetailsByMethodName = new Map<string, RegisteredRpcMethodDetails>();
   private readonly localMethodsByMethodName = new Map<string, InternalRequestHandler>();
   private readonly rpcEventDetailsByEventName = new RpcEventRegistry();
@@ -385,10 +380,20 @@ export class RpcWebSocketListener
    * @experimental
    */
   closeWebSocketClients(code: number, reason: string): void {
-    if (this.webSocketClients.size === 0) return;
-    logger.info(`Closing ${this.webSocketClients.size} PAPI websocket clients (${reason})`);
-    // Copied first: a socket's close handler removes it from the set
-    [...this.webSocketClients].forEach((socket) => socket.close(code, reason));
+    // `WebSocketServer.clients` holds exactly the sockets the server accepted; local clients never
+    // enter it. It is unreachable once `disconnect()` has cleared the server, so this has to run
+    // first. Copied before iterating because a socket's close handler removes it from the set.
+    const sockets = [...(this.webSocketServer?.clients ?? [])];
+    if (sockets.length === 0) return;
+    logger.info(`Closing ${sockets.length} PAPI websocket clients (${reason})`);
+    sockets.forEach((socket) => {
+      // One socket failing to close must not leave the others, possibly the data provider, open
+      try {
+        socket.close(code, reason);
+      } catch (error) {
+        logger.warn(`Could not close a PAPI websocket client: ${getErrorMessage(error)}`);
+      }
+    });
   }
 
   generateOpenRpcSchema(): OpenRpc {
@@ -661,7 +666,6 @@ export class RpcWebSocketListener
       socketId,
       !!upgradeRequest && upgradeRequest.headers.origin === undefined,
     );
-    this.webSocketClients.add(webSocket);
     // Note: `webSocket.url` is always undefined for server-side sockets, so log the socket id
     logger.info(`Websocket client ${socketId} connected`);
   }
@@ -705,7 +709,6 @@ export class RpcWebSocketListener
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const webSocket = ev.target as unknown as ServerSocketLike;
     webSocket.removeEventListener('close', this.onClientDisconnect);
-    this.webSocketClients.delete(webSocket);
     if (!this.rpcServerBySocket.delete(webSocket)) {
       logger.warn('Close called on a websocket, but no rpc server handler was found for it');
     }

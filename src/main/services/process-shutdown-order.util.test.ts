@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { stopChildProcessesInOrder } from '@main/services/process-shutdown-order.util';
 
+vi.mock('@shared/services/logger.service', () => ({
+  logger: { warn: vi.fn(), info: vi.fn(), debug: vi.fn(), error: vi.fn() },
+}));
+
 /** A promise the test settles by hand, so it can look at what has happened before it settles */
 function createDeferred() {
   let resolveDeferred: () => void = () => {};
@@ -53,5 +57,19 @@ describe('stopChildProcessesInOrder', () => {
     expect(steps.closeWebSocketClients.mock.invocationCallOrder[0]).toBeLessThan(
       steps.waitForDataProviderToClose.mock.invocationCallOrder[0],
     );
+  });
+
+  it('still waits for the data provider when closing the websocket clients throws', async () => {
+    const { steps, extensionHostClosed, dataProviderClosed } = createSteps();
+    steps.closeWebSocketClients.mockImplementation(() => {
+      throw new Error('close failed');
+    });
+
+    const stopping = stopChildProcessesInOrder(steps);
+    extensionHostClosed.resolve();
+    await vi.waitFor(() => expect(steps.waitForDataProviderToClose).toHaveBeenCalledTimes(1));
+    dataProviderClosed.resolve();
+
+    await expect(stopping).resolves.toBeUndefined();
   });
 });

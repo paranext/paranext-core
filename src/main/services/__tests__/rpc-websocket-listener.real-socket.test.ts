@@ -314,6 +314,36 @@ describe('closing the websocket clients on the way down', () => {
     });
   });
 
+  it('closes the remaining websocket clients when closing one of them throws', async () => {
+    const bound = await bindOnAFreePort();
+    listener = bound.listener;
+    const first = await openClient(bound.port);
+    const second = await openClient(bound.port);
+    const firstClosed = closeOf(first);
+    const secondClosed = closeOf(second);
+    // The server-side socket that is asked to close first fails; the other must still be closed
+    const closeSocket = vi.spyOn(WebSocket.prototype, 'close');
+    closeSocket.mockImplementationOnce(() => {
+      throw new Error('close failed');
+    });
+
+    try {
+      expect(() =>
+        listener?.closeWebSocketClients(INTENTIONAL_CLOSE_CODE, 'app shutdown'),
+      ).not.toThrow();
+    } finally {
+      closeSocket.mockRestore();
+    }
+
+    // Whichever client's server-side socket failed to close stays open; the other one is closed
+    await expect(Promise.race([firstClosed, secondClosed])).resolves.toEqual({
+      code: INTENTIONAL_CLOSE_CODE,
+      reason: 'app shutdown',
+    });
+    first.terminate();
+    second.terminate();
+  });
+
   it('leaves a local client open, since whoever handed its socket over owns closing it', async () => {
     const bound = await bindOnAFreePort();
     listener = bound.listener;

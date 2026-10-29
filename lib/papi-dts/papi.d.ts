@@ -3317,11 +3317,6 @@ declare module 'main/services/rpc-websocket-listener' {
     private nextSocketNumber;
     private readonly connectionMutex;
     private readonly rpcServerBySocket;
-    /**
-     * The sockets the websocket server accepted, as opposed to local clients handed over through
-     * {@link acceptLocalClient}. Kept apart so {@link closeWebSocketClients} closes only these.
-     */
-    private readonly webSocketClients;
     private readonly rpcMethodDetailsByMethodName;
     private readonly localMethodsByMethodName;
     private readonly rpcEventDetailsByEventName;

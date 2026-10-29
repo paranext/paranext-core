@@ -1,3 +1,6 @@
+import { logger } from '@shared/services/logger.service';
+import { getErrorMessage } from 'platform-bible-utils';
+
 /** The steps that stop main's child processes on quit, passed in so their order can be tested */
 export type ChildProcessShutdownSteps = {
   /** Waits for the extension host to exit, killing it if it takes too long */
@@ -12,16 +15,23 @@ export type ChildProcessShutdownSteps = {
  * Stops the extension host and the .NET data provider, in the order their dependencies need.
  *
  * The extension host goes first, while the data provider is still connected: its extensions may
- * still call the data provider as they shut down. The data provider runs until its PAPI connection
- * drops and only then does its own shutdown work, such as releasing the Send/Receive locks it
- * holds, so its connection is closed before waiting for it to exit; the wait kills it if it does
- * not exit in time. With the extension host gone, the websocket clients still connected are the
- * data provider and any external tool, and the network is going down anyway.
+ * still call the data provider as they shut down. The data provider may do its own shutdown work,
+ * such as releasing resources it holds, once its PAPI connection drops, so its connection is closed
+ * before waiting for it to exit; the wait kills it if it does not exit in time. With the extension
+ * host gone, the websocket clients still connected are the data provider and any external tool, and
+ * the network is going down anyway.
+ *
+ * A failure to close the websocket clients is logged and does not stop the sequence: the wait for
+ * the data provider is what kills it, so skipping that wait would leave it running.
  *
  * @param steps How to carry out each step
  */
 export async function stopChildProcessesInOrder(steps: ChildProcessShutdownSteps): Promise<void> {
   await steps.waitForExtensionHostToClose();
-  steps.closeWebSocketClients();
+  try {
+    steps.closeWebSocketClients();
+  } catch (error) {
+    logger.warn(`Could not close the PAPI websocket clients on quit: ${getErrorMessage(error)}`);
+  }
   await steps.waitForDataProviderToClose();
 }
