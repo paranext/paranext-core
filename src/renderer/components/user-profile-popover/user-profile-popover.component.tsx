@@ -122,7 +122,7 @@ const SERVER_BADGE_KEYS: Record<
 /**
  * The network object id `paratextRegistration.internetSettingsDataProvider` registers under.
  * Compared against `onDidCreateNetworkObject` events to catch the moment it first registers — see
- * `NetworkSettingsRow`.
+ * `NetworkSettingsRow` and `NonProductionServerDot`.
  */
 const INTERNET_SETTINGS_DATA_PROVIDER_OBJECT_ID = getDataProviderObjectId(
   INTERNET_SETTINGS_DATA_PROVIDER,
@@ -157,8 +157,14 @@ function sortLanguageEntries<T>(entries: [string, T][]): [string, T][] {
 }
 
 /**
- * Small primary dot marking something that needs attention. Decorative on purpose — every caller
- * pairs it with text carrying the same meaning, so assistive tech is never told twice.
+ * Small dot marking something that needs attention. Decorative on purpose — callers should pair it
+ * with text carrying the same meaning, so assistive tech is never told twice, unless a caller
+ * documents its own reason for using it as a purely informational (non-actionable) indicator
+ * instead.
+ *
+ * `urgency` lets callers give visually distinct conditions visually distinct colors rather than one
+ * ambiguous dot: `needsAttention` for something the user should act on, `informational` for
+ * something merely worth noting.
  *
  * Local rather than from `platform-bible-react` because neither existing option fits: `Badge`'s
  * `blueIndicator`/`mutedIndicator` variants hardcode `bg-blue-400`/`bg-zinc-400` and so ignore the
@@ -170,7 +176,15 @@ function sortLanguageEntries<T>(entries: [string, T][]): [string, T][] {
  * TODO(PT-4493): promote a themed, exported indicator into `platform-bible-react` and fix the
  * `Badge` `blueIndicator`/`mutedIndicator` variants, then delete this local copy.
  */
-function ReminderDot({ testId, className }: { testId: string; className?: string }) {
+function ReminderDot({
+  testId,
+  className,
+  urgency = 'needsAttention',
+}: {
+  testId: string;
+  className?: string;
+  urgency?: 'needsAttention' | 'informational';
+}) {
   return (
     <span
       data-testid={testId}
@@ -179,12 +193,78 @@ function ReminderDot({ testId, className }: { testId: string; className?: string
         // `shrink-0` is in the base because callers place the dot in a flex row beside text (e.g.
         // the toolbar trigger, the "Registration information" row), where a fixed 8px circle must
         // never be the item that gives.
-        'tw:size-2 tw:shrink-0 tw:rounded-full tw:bg-primary',
+        'tw:size-2 tw:shrink-0 tw:rounded-full',
+        urgency === 'informational' ? 'tw:bg-warning' : 'tw:bg-primary',
         // Raw class, not a `tw:forced-colors:` utility — that variant emits no CSS in this build
         // (verified against the built stylesheet). See the rule in the companion .css file.
         'user-profile-popover-reminder-dot',
         className,
       )}
+    />
+  );
+}
+
+/**
+ * Resolves the server `ParatextData.dll` currently targets, or `undefined` while that is unknown
+ * (the provider has not registered, the first read is still loading, or the read failed). Each
+ * caller gets its own call — and so its own subscription — rather than sharing one: a caller that
+ * must be live before the popover is ever opened needs its own independent lookup, not one shared
+ * with content that only exists once the popover is mounted.
+ */
+function useSelectedServer(): ServerType | undefined {
+  const internetSettingsProvider = useDataProvider(INTERNET_SETTINGS_DATA_PROVIDER);
+  const [internetSettings, , isLoadingInternetSettings] = useData(
+    internetSettingsProvider,
+  ).InternetSettings(undefined, DEFAULT_INTERNET_SETTINGS);
+  // The explicit annotation here is load-bearing, not decorative: `internetSettings` actually
+  // resolves to `any` here (confirmed by probe — assigning it to a `string` const compiles with no
+  // error), not `InternetSettings | PlatformError`. Indexing `SERVER_BADGE_KEYS` directly with
+  // `internetSettings.selectedServer` would compile today only by accident, since an `any` value
+  // defeats the point of the Record's key type. Keep this named, annotated intermediate.
+  const selectedServer: ServerType | undefined =
+    isLoadingInternetSettings || isPlatformError(internetSettings)
+      ? undefined
+      : internetSettings.selectedServer;
+  return selectedServer;
+}
+
+/**
+ * Toolbar-trigger dot marking that the selected server is anything other than Production — its own
+ * indicator, distinct in color from the registration reminder dot, per UX decisions on PT-4647
+ * (Jira comments 28444/28455): a "warning"-colored dot shown only for a non-Production server, so a
+ * normal user on Production never sees it.
+ *
+ * `suppressed` hides it even if the current server is not production. This allows it to be hidden
+ * when a more urgent indicator (e.g., the registration reminder) is also showing, so that it does
+ * not detract from the one most likely to require a normal user's attention.
+ *
+ * Isolated into its own component for the same PT-4417 reason `NetworkSettingsRow` is: it calls
+ * `useSelectedServer` independently of `NetworkSettingsRow` so the parent's retry key can force a
+ * remount if `paratextRegistration.internetSettingsDataProvider` registers after this component's
+ * first mount. Unlike `NetworkSettingsRow` — which exists only while the popover's content is
+ * mounted — this dot must be visible on the toolbar _before_ the user ever opens the popover, so it
+ * keeps its own, independent subscription rather than sharing that row's.
+ *
+ * Decorative, like `ReminderDot` itself: the same information is available as text from the
+ * "Internet & connectivity" row's badge and tooltip once the popover is open.
+ */
+function NonProductionServerDot({
+  className,
+  suppressed,
+}: {
+  className?: string;
+  suppressed: boolean;
+}) {
+  const selectedServer = useSelectedServer();
+
+  if (suppressed || selectedServer === undefined || selectedServer === 'Production')
+    return undefined;
+
+  return (
+    <ReminderDot
+      testId="user-profile-non-production-dot"
+      urgency="informational"
+      className={className}
     />
   );
 }
@@ -199,7 +279,7 @@ function ReminderDot({ testId, className }: { testId: string; className?: string
  * very first attempt — the data provider has not registered yet — has nothing to dispose, so it is
  * never retried on its own and the badge would otherwise stay hidden for the rest of the session.
  * Remounting runs that first lookup again from scratch. Tracked generically at PT-4417; this is a
- * local workaround for this one consumer, not a fix to the shared hook.
+ * local workaround for callers that need it, not a fix to the shared hook.
  */
 function NetworkSettingsRow({
   localizedStrings,
@@ -208,19 +288,7 @@ function NetworkSettingsRow({
   localizedStrings: LanguageStrings;
   onNetworkSettingsClick: (requestDeveloperSettings: boolean) => void;
 }) {
-  const internetSettingsProvider = useDataProvider(INTERNET_SETTINGS_DATA_PROVIDER);
-  const [internetSettings, , isLoadingInternetSettings] = useData(
-    internetSettingsProvider,
-  ).InternetSettings(undefined, DEFAULT_INTERNET_SETTINGS);
-  // The explicit annotation here is load-bearing, not decorative: `internetSettings` actually
-  // resolves to `any` here (confirmed by probe — assigning it to a `string` const compiles with no
-  // error), not `InternetSettings | PlatformError`. Indexing `SERVER_BADGE_KEYS` directly with
-  // `internetSettings.selectedServer` would compile today only by accident, since an `any` value
-  // defeats the point of the Record's key type. Keep this named, annotated intermediate.
-  const selectedServer: ServerType | undefined =
-    isLoadingInternetSettings || isPlatformError(internetSettings)
-      ? undefined
-      : internetSettings.selectedServer;
+  const selectedServer = useSelectedServer();
   // `undefined` both while the server is unknown and when it's Production — Production never gets a
   // badge (see `SERVER_BADGE_KEYS`).
   const serverBadge = selectedServer === undefined ? undefined : SERVER_BADGE_KEYS[selectedServer];
@@ -305,6 +373,12 @@ function NetworkSettingsRow({
  * on the toolbar trigger and on the "Registration information" row. The dot is never the only
  * signal: the trigger's accessible label and tooltip change to match, and the popover row carries
  * screen-reader-only text.
+ *
+ * A second, distinctly-colored dot (see `NonProductionServerDot`) appears on the same trigger
+ * whenever the selected server is not Production, except when suppressed to allow the registration
+ * reminder dot to take precedence. The server dot is purely decorative (not exposed for
+ * accessibility) — the corresponding text is visible on the "Internet connectivity" row's badge and
+ * tooltip instead of on the trigger itself.
  */
 export function UserProfilePopover() {
   const [isOpen, setIsOpen] = useState(false);
@@ -366,9 +440,9 @@ export function UserProfilePopover() {
     }
   };
 
-  // Bumped to force a fresh mount of NetworkSettingsRow — see its doc comment for why that is the
-  // recovery path when the internet settings data provider registers after this popover's first
-  // render of that row.
+  // Bumped to force a fresh mount of NetworkSettingsRow and NonProductionServerDot — see their doc
+  // comments for why that is the recovery path when the internet settings data provider registers
+  // after either one's first mount.
   const [internetSettingsRetryKey, setInternetSettingsRetryKey] = useState(0);
   useEvent(
     onDidCreateNetworkObject,
@@ -542,6 +616,14 @@ export function UserProfilePopover() {
                     className="tw:absolute tw:end-1 tw:top-1 tw:ring-2 tw:ring-background tw:group-hover/button:ring-muted tw:group-aria-expanded/button:ring-muted"
                   />
                 )}
+                {/* Bottom corner, mirroring the registration dot's top corner above. Hidden
+                    whenever that dot is showing — see NonProductionServerDot's doc comment for why
+                    the two never appear together. */}
+                <NonProductionServerDot
+                  key={internetSettingsRetryKey}
+                  suppressed={showRegistrationReminder}
+                  className="tw:absolute tw:end-1 tw:bottom-1 tw:ring-2 tw:ring-background tw:group-hover/button:ring-muted tw:group-aria-expanded/button:ring-muted"
+                />
               </Button>
             </PopoverTrigger>
           </TooltipTrigger>
