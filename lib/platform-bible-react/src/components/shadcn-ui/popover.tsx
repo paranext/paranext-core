@@ -104,8 +104,8 @@ function PopoverContent({
     <PopoverPrimitive.Portal container={portalContainer}>
       <PopoverPrimitive.Content
         data-slot="popover-content"
-        // CUSTOM: ref and onCloseAutoFocus from useDismissOnWindowBlur (it finds the content's parent
-        // and keeps focus off the trigger after a blur dismissal)
+        // CUSTOM: ref and onCloseAutoFocus from useDismissOnWindowBlur (it finds the content's
+        // parent and keeps focus off the trigger after a blur dismissal)
         {...blurDismissProps}
         align={align}
         sideOffset={sideOffset}

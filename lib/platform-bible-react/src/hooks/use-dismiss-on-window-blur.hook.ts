@@ -36,9 +36,14 @@ export type DismissOnWindowBlurProps<T extends HTMLElement> = {
  * close-auto-focus would pull it back. That matters most across frames: a menu closing in one frame
  * by returning focus to its trigger blurs the main window, which would close the menu the user just
  * opened in another frame. The returned `onCloseAutoFocus` calls `preventDefault()` on the
- * close-auto-focus event of a blur dismissal (Radix runs it from a zero-delay timer queued while
- * unmounting, so the hook's flag outlives the press by one timer) and leaves every other close,
- * such as Escape or a click outside, restoring focus as usual.
+ * close-auto-focus event of a blur dismissal and leaves every other close, such as Escape or a
+ * click outside, restoring focus as usual. Radix runs close-auto-focus from a zero-delay timer
+ * queued while unmounting, so the hook's "blur dismissal in flight" flag is one-shot: the first
+ * close-auto-focus consumes it, which also covers an exit animation that delays the unmount. A
+ * zero-delay backstop timer clears it otherwise, which assumes the menu contents' `animate-none!`
+ * exit (no animation, so the unmount is not deferred). An animated non-modal popover is covered
+ * anyway: Radix skips the trigger refocus after an outside interaction, which the synthetic press
+ * is.
  *
  * Hidden-view case: an inactive-tab pane cannot hold an open menu, so a stray blur there is a
  * harmless no-op and there is deliberately no catch-up logic. See
@@ -57,7 +62,9 @@ export function useDismissOnWindowBlur<T extends HTMLElement>({
   ref: forwardedRef,
   onCloseAutoFocus: forwardedOnCloseAutoFocus,
 }: DismissOnWindowBlurProps<T>): {
+  /** Ref callback for the Radix Content; also forwards the caller's ref */
   ref: RefCallback<T>;
+  /** Close-auto-focus handler for the Radix Content; also calls the caller's handler */
   onCloseAutoFocus: (event: Event) => void;
 } {
   const elementRef = useRef<T | undefined>(undefined);
@@ -77,8 +84,9 @@ export function useDismissOnWindowBlur<T extends HTMLElement>({
           ? new MouseEvent('pointerdown', eventInit)
           : new PointerEvent('pointerdown', eventInit);
       // Radix handles the discrete press synchronously and unmounts the content, but its focus scope
-      // runs close-auto-focus from a `setTimeout(0)` queued during that unmount. The flag is cleared
-      // by a timer queued after the dispatch, so it runs after the focus scope's timer.
+      // runs close-auto-focus from a `setTimeout(0)` queued during that unmount. The flag is
+      // consumed by that close-auto-focus; the backstop timer is queued after the dispatch so it
+      // runs after the focus scope's timer, and keeps the flag from ever staying set.
       isBlurDismissalInFlightRef.current = true;
       parent.dispatchEvent(syntheticPress);
       setTimeout(() => {
@@ -101,7 +109,10 @@ export function useDismissOnWindowBlur<T extends HTMLElement>({
 
   const onCloseAutoFocus = useCallback((event: Event) => {
     onCloseAutoFocusRef.current?.(event);
-    if (isBlurDismissalInFlightRef.current && !event.defaultPrevented) event.preventDefault();
+    if (!isBlurDismissalInFlightRef.current) return;
+    // One-shot: the flag belongs to this dismissal only, so a later close restores focus as usual
+    isBlurDismissalInFlightRef.current = false;
+    if (!event.defaultPrevented) event.preventDefault();
   }, []);
 
   return { ref, onCloseAutoFocus };

@@ -238,23 +238,28 @@ describe('PopoverContent focus after dismissal', () => {
   it('does not move focus back to the trigger after a window-blur dismissal', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     render(
-      <>
-        <Popover>
-          <PopoverTrigger>open</PopoverTrigger>
-          <PopoverContent>body</PopoverContent>
-        </Popover>
-        <button type="button">other</button>
-      </>,
+      <Popover modal>
+        <PopoverTrigger>open</PopoverTrigger>
+        <PopoverContent>body</PopoverContent>
+      </Popover>,
     );
     await user.click(screen.getByText('open'));
     expect(await screen.findByText('body')).toBeInTheDocument();
-    const otherButton = screen.getByText('other');
-    act(() => otherButton.focus());
+    // Focus leaves the document, as when the user clicks into another iframe. A modal popover's
+    // focus trap pulls focus back from any other element in this document, so the focus is dropped
+    // instead.
+    act(() => {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    });
 
     blurWindow();
 
     await waitFor(() => expect(screen.queryByText('body')).not.toBeInTheDocument());
-    expect(document.activeElement).toBe(otherButton);
+    // Let FocusScope's own zero-delay close-auto-focus timer run before asserting
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    expect(document.activeElement).not.toBe(screen.getByText('open'));
   });
 
   it('returns focus to the trigger after Escape', async () => {
