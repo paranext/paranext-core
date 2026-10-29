@@ -102,6 +102,7 @@
   "%firstRun_step_syncConsent_body%": "When working on shared projects, syncing updates your local copy and shares your changes with others.",
   "%firstRun_step_syncConsent_heading%": "Sync your projects",
   "%firstRun_step_syncConsent_internetBlocked%": "Your internet setting doesn’t allow sync. Choose “Don’t sync yet” for now, then turn on internet access in “Internet & connectivity” and sync later.",
+  "%firstRun_step_syncConsent_untilFirstSync%": "This step will show on startup until you have synced your first project.",
   "%firstRun_step_syncProgress_body%": "Setting up your projects. This may take a few minutes.",
   "%firstRun_step_syncProgress_complete_body%": "Your projects are ready.",
   "%firstRun_step_syncProgress_complete_heading%": "Sync complete",

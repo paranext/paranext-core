@@ -19,6 +19,7 @@ const KEYS: LocalizeKey[] = [
   '%firstRun_button_back%',
   '%firstRun_step_syncProgress_heading%',
   '%firstRun_step_syncConsent_internetBlocked%',
+  '%firstRun_step_syncConsent_untilFirstSync%',
 ];
 
 // Demo/UX mode: resolve immediately without touching the real S/R backend so the wizard
@@ -45,6 +46,9 @@ const defaultSyncFn = (): Promise<void> =>
  * sync yet" is withdrawn while a sync is in flight, and the footer is disabled while the shell is
  * busy finishing the wizard.
  *
+ * When `firstSyncRequired` is set, an extra line says the step returns on startup until the user
+ * has synced.
+ *
  * `onSync` is injectable for Storybook and unit-test isolation.
  */
 function SyncConsentStep({
@@ -55,6 +59,7 @@ function SyncConsentStep({
   setCanDeclineSync,
   setManagesOwnFooter,
   isBusy = false,
+  firstSyncRequired,
   onSync = defaultSyncFn,
 }: FirstRunStepProps & { onSync?: () => Promise<void> }) {
   const [strings] = useLocalizedStrings(KEYS);
@@ -122,6 +127,11 @@ function SyncConsentStep({
       <p className="tw:text-sm tw:text-muted-foreground">
         {strings['%firstRun_step_syncConsent_body%']}
       </p>
+      {firstSyncRequired && (
+        <p className="tw:text-sm tw:text-muted-foreground">
+          {strings['%firstRun_step_syncConsent_untilFirstSync%']}
+        </p>
+      )}
       {/* Otherwise the in-flight sync is visible only as the button's spinner. */}
       <p className="tw:sr-only" aria-live="polite">
         {isSyncing ? strings['%firstRun_step_syncProgress_heading%'] : ''}
