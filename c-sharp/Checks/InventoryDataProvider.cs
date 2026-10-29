@@ -114,7 +114,8 @@ internal sealed class InventoryDataProvider(
         ScrText scrText = GetOpenableProject(selector.ProjectId);
         ArgumentException.ThrowIfNullOrEmpty(selector.InventoryId);
 
-        var inventory = InventoryFactory.CreateInventory(
+        var inventory = InventoryFactory.CreateInventoryInItsOwnWriteScope(
+            selector.ProjectId,
             selector.InventoryId,
             new ChecksDataSource(scrText)
         );
@@ -269,7 +270,8 @@ internal sealed class InventoryDataProvider(
         ScrText scrText = GetOpenableProject(selector.ProjectId);
         ArgumentException.ThrowIfNullOrEmpty(selector.InventoryId);
 
-        var inventory = InventoryFactory.CreateInventory(
+        var inventory = InventoryFactory.CreateInventoryInItsOwnWriteScope(
+            selector.ProjectId,
             selector.InventoryId,
             new ChecksDataSource(scrText)
         );

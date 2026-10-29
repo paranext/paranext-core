@@ -1,3 +1,4 @@
+using Paranext.DataProvider.Projects.SendReceive;
 using Paratext.Checks;
 using Paratext.Checks.Checks;
 using Paratext.Data.Checking;
@@ -87,6 +88,32 @@ internal static class InventoryFactory
         return constructor();
     }
 
+    /// <summary>
+    /// <see cref="CreateInventory"/> for a caller that is not already inside the project's write
+    /// scope. Initializing an inventory can save the project's settings — <c>CharactersCheck</c>
+    /// saves the project's default characters the first time it is initialized, and
+    /// <c>ChapterVerseCheck</c> can save the project's verse segment order — so the inventory is
+    /// initialized inside its own write scope, and is refused while a Send/Receive of the project
+    /// is armed.
+    /// </summary>
+    public static ScriptureInventoryBase CreateInventoryInItsOwnWriteScope(
+        string projectId,
+        string inventoryId,
+        ChecksDataSource dataSource
+    )
+    {
+        // TODO(PT-XXXX): wait for the sync to end instead of refusing, as Paratext 9 does
+        using var _ = SendReceiveWriteLock.EnterWrite(projectId);
+        return CreateInventory(inventoryId, dataSource);
+    }
+
+    /// <summary>
+    /// Creates and initializes an inventory. Initializing can save the project's settings, so a
+    /// caller that does not already hold the project's write scope uses
+    /// <see cref="CreateInventoryInItsOwnWriteScope"/> instead.
+    /// (<see cref="CreateInventoryToDescribe"/> calls this directly: the only inventory it
+    /// initializes saves nothing.)
+    /// </summary>
     public static ScriptureInventoryBase CreateInventory(
         string inventoryId,
         ChecksDataSource dataSource

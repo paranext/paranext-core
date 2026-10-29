@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Paranext.DataProvider.Projects;
+using Paranext.DataProvider.Projects.SendReceive;
 using Paratext.Checks;
 using Paratext.Data.Checking;
 using Paratext.Data.ProjectFileAccess;
@@ -87,13 +88,35 @@ internal sealed class CheckCache
         };
     }
 
-    public CheckForProject GetCheck(string checkId, string projectId)
+    /// <summary>
+    /// Returns the project's check, creating it if needed. Creating initializes the check, which
+    /// can save the project's settings (see
+    /// <see cref="InventoryFactory.CreateInventoryInItsOwnWriteScope"/>), so a check that is not
+    /// cached yet is created inside its own write scope and is refused while a Send/Receive of the
+    /// project is armed. A cached check is returned either way. A caller that already holds the
+    /// project's write scope uses <see cref="GetCheckInWriteScope"/> instead.
+    /// </summary>
+    public CheckForProject GetCheck(string checkId, string projectId) =>
+        GetOrCreateCheck(checkId, projectId, enterWriteScope: true);
+
+    /// <summary>
+    /// <see cref="GetCheck"/> for a caller that already holds the project's write scope, which
+    /// therefore covers creating the check.
+    /// </summary>
+    public CheckForProject GetCheckInWriteScope(string checkId, string projectId) =>
+        GetOrCreateCheck(checkId, projectId, enterWriteScope: false);
+
+    private CheckForProject GetOrCreateCheck(string checkId, string projectId, bool enterWriteScope)
     {
         return _checksByIds.GetOrAdd(
             (checkId, projectId),
             _ =>
             {
                 var dataSource = GetChecksDataSource(projectId);
+                // TODO(PT-XXXX): wait for the sync to end instead of refusing, as Paratext 9 does
+                using IDisposable? writeScope = enterWriteScope
+                    ? SendReceiveWriteLock.EnterWrite(projectId)
+                    : null;
                 return new CheckForProject(_createCheck(checkId, dataSource), checkId, projectId);
             }
         );
@@ -155,7 +178,10 @@ internal sealed class CheckCache
                     check.SettingsChanged = false;
                     try
                     {
-                        check.Check.Initialize(dataSource);
+                        // Initializing can save the project's settings, as creating a check can
+                        // TODO(PT-XXXX): wait for the sync to end instead of refusing, as Paratext 9 does
+                        using (SendReceiveWriteLock.EnterWrite(projectId))
+                            check.Check.Initialize(dataSource);
                         check.ClearResults();
                     }
                     catch
