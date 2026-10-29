@@ -263,6 +263,24 @@ describe('useEventSeededState', () => {
     expect(read).toHaveBeenCalledTimes(1);
   });
 
+  it('drops the answer of a seed read that is still in flight when the hook is disabled', async () => {
+    const deferred = createDeferred<unknown>();
+    const read = vi.fn(() => deferred.promise);
+    const { result, rerender } = renderHook(
+      ({ enabled }) =>
+        useEventSeededState({ read, event: undefined, isValid: isSnapshot, enabled }),
+      { initialProps: { enabled: true } },
+    );
+    await flush();
+    expect(read).toHaveBeenCalledTimes(1);
+
+    rerender({ enabled: false });
+    await act(async () => deferred.resolve({ n: 1 }));
+
+    expect(result.current.value).toBeUndefined();
+    expect(result.current.hasSeedFailed).toBe(false);
+  });
+
   it('does not read at all when it starts disabled', async () => {
     const read = vi.fn(async () => ({ n: 1 }));
     renderHook(() =>
