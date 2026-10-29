@@ -108,21 +108,25 @@ function MenubarContent({
   sideOffset = 8,
   // CUSTOM: Pull `style` out so the shared z-index can be applied under any caller-supplied style
   style,
-  // CUSTOM: Destructure ref (a regular prop in React 19) so useDismissOnWindowBlur can compose it
+  // CUSTOM: Destructure ref (a regular prop in React 19) and onCloseAutoFocus so
+  // useDismissOnWindowBlur can compose them with its own
   ref,
+  onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof MenubarPrimitive.Content>) {
   // CUSTOM: Added useDismissOnWindowBlur so the menu closes when the window loses focus. A click
   // into another iframe never reaches this document, so the window's blur stands in for the outside
   // press; see the hook's TSDoc. MenubarSubContent is not wired: a sub-menu closes with its root
-  // menu. The returned ref callback also forwards the caller's ref.
-  const contentRef = useDismissOnWindowBlur(ref);
+  // menu. The returned ref callback also forwards the caller's ref, and the returned onCloseAutoFocus keeps focus
+  // where the user put it after a blur dismissal while still calling the caller's handler.
+  const blurDismissProps = useDismissOnWindowBlur({ ref, onCloseAutoFocus });
   return (
     <MenubarPortal>
       <MenubarPrimitive.Content
         data-slot="menubar-content"
-        // CUSTOM: Ref from useDismissOnWindowBlur so it can find the content's parent
-        ref={contentRef}
+        // CUSTOM: ref and onCloseAutoFocus from useDismissOnWindowBlur (it finds the content's parent
+        // and keeps focus off the trigger after a blur dismissal)
+        {...blurDismissProps}
         align={align}
         alignOffset={alignOffset}
         sideOffset={sideOffset}

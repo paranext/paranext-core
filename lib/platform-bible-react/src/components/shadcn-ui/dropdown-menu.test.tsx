@@ -108,3 +108,48 @@ describe('DropdownMenuContent window blur', () => {
     expect(screen.getByRole('menu')).toBeInTheDocument();
   });
 });
+
+describe('DropdownMenuContent focus after dismissal', () => {
+  it('does not move focus back to the trigger after a window-blur dismissal', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <DropdownMenu>
+        <DropdownMenuTrigger>open</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem>item</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>,
+    );
+    await user.click(screen.getByText('open'));
+    expect(await screen.findByRole('menu')).toBeInTheDocument();
+    // Focus leaves the document, as when the user clicks into another iframe. A modal menu's focus
+    // trap pulls focus back from any other element in this document, so the focus is dropped instead.
+    act(() => {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    });
+
+    blurWindow();
+
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+    expect(document.activeElement).not.toBe(screen.getByText('open'));
+  });
+
+  it('returns focus to the trigger after Escape', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <DropdownMenu>
+        <DropdownMenuTrigger>open</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem>item</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>,
+    );
+    await user.click(screen.getByText('open'));
+    expect(await screen.findByRole('menu')).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+    expect(document.activeElement).toBe(screen.getByText('open'));
+  });
+});
