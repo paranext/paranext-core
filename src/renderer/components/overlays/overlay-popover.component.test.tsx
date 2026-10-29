@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { OverlayEntry } from '@renderer/services/overlays/overlay.service-model';
 import { OverlayPopover, OverlayPopoverPresentational } from './overlay-popover.component';
@@ -78,6 +78,40 @@ describe('OverlayPopoverPresentational', () => {
 
       expect(screen.getByText('Card Title')).toBeInTheDocument();
       expect(screen.getByText('Card body text')).toBeInTheDocument();
+    });
+  });
+
+  describe('outside presses', () => {
+    it('should ignore the untrusted outside press a window blur produces', async () => {
+      const onDismiss = vi.fn();
+
+      render(
+        <OverlayPopoverPresentational
+          content={{ type: 'text', body: 'Some details here' }}
+          position={position}
+          onDismiss={onDismiss}
+        />,
+      );
+
+      // Radix attaches its outside-press listener on the next tick
+      await act(async () => {
+        await new Promise((resolve) => {
+          setTimeout(resolve, 20);
+        });
+      });
+
+      // The shared wrapper answers a window blur with an untrusted outside press
+      fireEvent.blur(window);
+      expect(onDismiss).not.toHaveBeenCalled();
+
+      // Positive control: the popover is live and still dismisses (jsdom cannot produce a trusted
+      // press)
+      const popover = document.querySelector('[data-overlay-popover]');
+      expect(popover).toBeInTheDocument();
+      // querySelector returns Element | null; the expect above guards null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      fireEvent.keyDown(popover as Element, { key: 'Escape' });
+      expect(onDismiss).toHaveBeenCalled();
     });
   });
 

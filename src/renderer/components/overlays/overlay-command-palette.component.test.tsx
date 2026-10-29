@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import {
   getMarkerPaletteClaimedKeys,
@@ -184,6 +184,35 @@ describe('OverlayCommandPalettePresentational', () => {
 
       expect(onSelect).toHaveBeenCalledWith('close');
       expect(onDismiss).not.toHaveBeenCalled();
+    });
+
+    it('should ignore the untrusted outside press a window blur produces', async () => {
+      const onDismiss = vi.fn();
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          position={{ x: 100, y: 200 }}
+          onSelect={vi.fn()}
+          onDismiss={onDismiss}
+        />,
+      );
+
+      // Radix attaches its outside-press listener on the next tick
+      await act(async () => {
+        await new Promise((resolve) => {
+          setTimeout(resolve, 20);
+        });
+      });
+
+      // The shared wrapper answers a window blur with an untrusted outside press
+      fireEvent.blur(window);
+      expect(onDismiss).not.toHaveBeenCalled();
+
+      // Positive control: the palette is live and still dismisses (jsdom cannot produce a trusted
+      // press)
+      fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
+      expect(onDismiss).toHaveBeenCalled();
     });
   });
 

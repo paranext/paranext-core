@@ -48,6 +48,34 @@ describe('OverlayContextMenuPresentational', () => {
     expect(onSelect).toHaveBeenCalledWith({ itemId: 'paste' } satisfies OverlayContextMenuResult);
   });
 
+  it('should ignore the untrusted outside press a window blur produces', async () => {
+    const onDismiss = vi.fn();
+
+    render(
+      <OverlayContextMenuPresentational
+        items={[{ type: 'item', id: 'copy', label: 'Copy' }]}
+        position={position}
+        onSelect={vi.fn()}
+        onDismiss={onDismiss}
+      />,
+    );
+
+    // Radix attaches its outside-press listener on the next tick
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 20);
+      });
+    });
+
+    // The shared wrapper answers a window blur with an untrusted outside press
+    fireEvent.blur(window);
+    expect(onDismiss).not.toHaveBeenCalled();
+
+    // Positive control: the menu is live and still dismisses (jsdom cannot produce a trusted press)
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+    expect(onDismiss).toHaveBeenCalled();
+  });
+
   it('should not call onSelect when a disabled item is clicked', () => {
     const onSelect = vi.fn();
     const onDismiss = vi.fn();
