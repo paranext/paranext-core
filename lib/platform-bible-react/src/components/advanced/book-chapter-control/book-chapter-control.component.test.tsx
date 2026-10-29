@@ -179,6 +179,30 @@ describe('BookChapterControl imperative handle', () => {
     });
   });
 
+  test('reopens from the trigger after a window blur closed it', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+      />,
+    );
+
+    await user.click(getTrigger());
+    await waitFor(() => expect(document.querySelector('[cmdk-input]')).not.toBeNull());
+
+    // A click into another frame never reaches this document; the window's blur stands in for it.
+    act(() => {
+      window.dispatchEvent(new Event('blur'));
+    });
+    await waitFor(() => expect(getTrigger()).toHaveAttribute('aria-expanded', 'false'));
+    expect(document.querySelector('[cmdk-input]')).toBeNull();
+
+    await user.click(getTrigger());
+
+    await waitFor(() => expect(document.querySelector('[cmdk-input]')).toBeVisible());
+  });
+
   test('does not render a chevron by default', () => {
     render(
       <BookChapterControl
