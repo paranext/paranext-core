@@ -41,6 +41,7 @@ beforeAll(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 function blurWindow() {
@@ -115,6 +116,9 @@ describe('DropdownMenuContent window blur', () => {
 
 describe('DropdownMenuContent focus after dismissal', () => {
   it('does not move focus back to the trigger after a window-blur dismissal', async () => {
+    // In a Paratext web view `window.top` is deleted, which is what makes an unfocused document
+    // ambiguous there; the hook reads it once, on mount
+    vi.stubGlobal('top', undefined);
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     render(
       <DropdownMenu>
