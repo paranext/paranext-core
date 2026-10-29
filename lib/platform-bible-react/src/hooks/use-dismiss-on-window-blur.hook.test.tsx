@@ -116,6 +116,17 @@ describe('useDismissOnWindowBlur', () => {
     expect(forwardedRef).toHaveBeenLastCalledWith(null);
   });
 
+  it("runs a function ref's returned cleanup on unmount instead of calling it with null", () => {
+    const cleanup = vi.fn();
+    const forwardedRef = vi.fn(() => cleanup);
+    const { getByTestId, unmount } = render(<Host forwardedRef={forwardedRef} />);
+    expect(forwardedRef).toHaveBeenCalledTimes(1);
+    expect(forwardedRef).toHaveBeenCalledWith(getByTestId('content'));
+    unmount();
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    expect(forwardedRef).toHaveBeenCalledTimes(1);
+  });
+
   it('forwards the element to an object ref, and null on unmount', () => {
     const forwardedRef = createRef<HTMLDivElement>();
     const { getByTestId, unmount } = render(<Host forwardedRef={forwardedRef} />);
