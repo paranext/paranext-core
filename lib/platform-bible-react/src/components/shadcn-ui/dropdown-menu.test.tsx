@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom';
 import {
   DropdownMenu,
@@ -37,6 +37,10 @@ beforeAll(() => {
   if (typeof globalThis.ResizeObserver === 'undefined') {
     globalThis.ResizeObserver = NoopResizeObserver;
   }
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 function blurWindow() {
@@ -128,6 +132,8 @@ describe('DropdownMenuContent focus after dismissal', () => {
       if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     });
 
+    // A window blur in a real browser means the document no longer has focus
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
     blurWindow();
 
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
@@ -139,6 +145,8 @@ describe('DropdownMenuContent focus after dismissal', () => {
   });
 
   it('returns focus to the trigger after Escape', async () => {
+    // jsdom reports no document focus by default; a browser tab the user is working in has it
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     render(
       <DropdownMenu>
