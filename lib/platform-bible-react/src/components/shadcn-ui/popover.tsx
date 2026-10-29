@@ -78,9 +78,8 @@ function PopoverContent({
   sideOffset = 4,
   // CUSTOM: Destructure style so we can merge the shared z-index constant into it
   style,
-  // CUSTOM: Destructure ref (a regular prop in React 19) so it can be composed with the local ref
-  // that useDismissOnWindowBlur reads
-  ref: forwardedRef,
+  // CUSTOM: Destructure ref (a regular prop in React 19) so useDismissOnWindowBlur can compose it
+  ref,
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
   // CUSTOM: Read document direction to support RTL layouts
@@ -93,28 +92,17 @@ function PopoverContent({
   // CUSTOM: Added useDismissOnWindowBlur so the popover closes when the window loses focus. A click
   // into another iframe never reaches this document, so the window's blur stands in for the outside
   // press; see the hook's TSDoc. The press targets the content's parent, so a dialog hosting this
-  // popover (via PopoverPortalContainerProvider) sees an inside press and stays open.
-  // React's ref API uses null as the empty value
-  // eslint-disable-next-line no-null/no-null
-  const contentRef = React.useRef<HTMLDivElement>(null);
-  useDismissOnWindowBlur(contentRef);
-  // CUSTOM: Compose the local ref with the caller's ref
-  const setContentRef = React.useCallback(
-    (node: HTMLDivElement | null) => {
-      contentRef.current = node;
-      if (typeof forwardedRef === 'function') forwardedRef(node);
-      else if (forwardedRef) forwardedRef.current = node;
-    },
-    [forwardedRef],
-  );
+  // popover (via PopoverPortalContainerProvider) sees an inside press and stays open. The returned
+  // ref callback also forwards the caller's ref.
+  const contentRef = useDismissOnWindowBlur(ref);
   return (
     // CUSTOM: When a PopoverPortalContainerProvider is in scope, portal into its container
     // instead of the default document.body so nested popovers stay inside modal dialogs.
     <PopoverPrimitive.Portal container={portalContainer}>
       <PopoverPrimitive.Content
         data-slot="popover-content"
-        // CUSTOM: Composed ref so useDismissOnWindowBlur can find the content's parent
-        ref={setContentRef}
+        // CUSTOM: Ref from useDismissOnWindowBlur so it can find the content's parent
+        ref={contentRef}
         align={align}
         sideOffset={sideOffset}
         className={cn(
