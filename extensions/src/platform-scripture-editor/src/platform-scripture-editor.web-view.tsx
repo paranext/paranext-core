@@ -3057,8 +3057,12 @@ function PlatformScriptureEditor({
   // Apply annotation styles from extensions
   useAnnotationStyleSheet();
 
-  // Apply the project stylesheet-derived CSS (standard view only)
-  useProjectStylesheet(styleInfo, textDirectionEffective === 'rtl', viewType === 'standard');
+  // Apply the project stylesheet: whole sheet in Standard view, fonts only elsewhere
+  useProjectStylesheet(
+    styleInfo,
+    textDirectionEffective === 'rtl',
+    viewType === 'standard' ? 'full' : 'fonts',
+  );
 
   // Load PT9-derived marker styles when the open project is a supported commentary
   useCommentaryMarkerStyles(projectId);
