@@ -298,6 +298,10 @@ import {
   SyncBlockedBanner,
   SYNC_BLOCKED_BANNER_STRING_KEYS,
 } from './sync-blocked-banner.component';
+import {
+  SettingUnreadableBanner,
+  SETTING_UNREADABLE_BANNER_STRING_KEYS,
+} from './setting-unreadable-banner.component';
 import { COPYRIGHT_NOTICE_STRING_KEYS } from './copyright-notice/copyright-notice.const';
 import { ProjectCopyrightNotice } from './copyright-notice/project-copyright-notice.component';
 import {
@@ -340,6 +344,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...NO_PROJECT_VIEW_STRING_KEYS,
   ...TEAM_LAYOUT_BUTTON_STRING_KEYS,
   ...SYNC_BLOCKED_BANNER_STRING_KEYS,
+  ...SETTING_UNREADABLE_BANNER_STRING_KEYS,
   ...COPYRIGHT_NOTICE_STRING_KEYS,
   HIDDEN_CONTENT_DELETE_PROMPT_KEY,
   // Not read by this file. Loaded here so that whichever component mounts the character-marker menu
@@ -5581,6 +5586,11 @@ function PlatformScriptureEditor({
       {/* Slim, non-covering banner while an automatic Send/Receive freezes editing. Shown only when
           sync-blocked and not genuinely read-only (a real viewer shouldn't say "editing paused"). */}
       {isSyncBlocked && !isReadOnly && <SyncBlockedBanner localizedStrings={localizedStrings} />}
+      {/* The editor goes read-only when this setting cannot be read; say why, unless the view is
+          read-only anyway. */}
+      {allowInvisibleCharactersSetting.isUnreadable && !isDurablyReadOnly && (
+        <SettingUnreadableBanner localizedStrings={localizedStrings} />
+      )}
       {/* Outside the zoomed, scrolling text area, so the notice stays put while the text scrolls.
           Every project is asked, because a "Notification:" copyright shows its banner on any text,
           as in Paratext 9. */}
