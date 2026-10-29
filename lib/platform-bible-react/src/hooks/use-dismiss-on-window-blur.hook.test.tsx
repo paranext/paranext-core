@@ -113,61 +113,49 @@ describe('useDismissOnWindowBlur', () => {
     }
     const cancelable = () => new Event('focus', { cancelable: true });
 
-    it('prevents close-auto-focus while a blur dismissal is in flight', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+      document.querySelectorAll('iframe').forEach((iframe) => iframe.remove());
+    });
+
+    it('prevents close-auto-focus when the document is not focused', () => {
+      vi.spyOn(document, 'hasFocus').mockReturnValue(false);
       const onCloseAutoFocus = renderProbe();
-      window.dispatchEvent(new Event('blur'));
       const event = cancelable();
       onCloseAutoFocus(event);
       expect(event.defaultPrevented).toBe(true);
     });
 
-    it('stops preventing close-auto-focus once the blur dismissal task has ended', async () => {
+    it('prevents close-auto-focus when focus is inside an iframe', () => {
+      vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+      const iframe = document.createElement('iframe');
+      document.body.appendChild(iframe);
+      iframe.focus();
+      expect(document.activeElement).toBe(iframe);
       const onCloseAutoFocus = renderProbe();
-      window.dispatchEvent(new Event('blur'));
-      await new Promise((resolve) => {
-        setTimeout(resolve, 0);
-      });
       const event = cancelable();
       onCloseAutoFocus(event);
-      expect(event.defaultPrevented).toBe(false);
+      expect(event.defaultPrevented).toBe(true);
     });
 
-    it('consumes the flag on the first close-auto-focus call', () => {
-      const onCloseAutoFocus = renderProbe();
-      window.dispatchEvent(new Event('blur'));
-      const first = cancelable();
-      const second = cancelable();
-      onCloseAutoFocus(first);
-      onCloseAutoFocus(second);
-      expect(first.defaultPrevented).toBe(true);
-      expect(second.defaultPrevented).toBe(false);
-    });
-
-    it('leaves close-auto-focus alone otherwise', () => {
+    it('leaves close-auto-focus alone when the document is focused and focus is not in an iframe', () => {
+      vi.spyOn(document, 'hasFocus').mockReturnValue(true);
       const onCloseAutoFocus = renderProbe();
       const event = cancelable();
       onCloseAutoFocus(event);
       expect(event.defaultPrevented).toBe(false);
     });
 
-    it("calls the caller's onCloseAutoFocus first", () => {
-      const order: string[] = [];
-      const callerHandler = vi.fn(() => order.push('caller'));
-      const onCloseAutoFocus = renderProbe(callerHandler);
-      const event = cancelable();
-      event.preventDefault = vi.fn(() => order.push('hook'));
-      window.dispatchEvent(new Event('blur'));
-      onCloseAutoFocus(event);
-      expect(callerHandler).toHaveBeenCalledWith(event);
-      expect(order).toEqual(['caller', 'hook']);
-    });
-
-    it('does not undo a default the caller already prevented', () => {
+    it("calls the caller's handler first and does not undo a default it already prevented", () => {
+      vi.spyOn(document, 'hasFocus').mockReturnValue(false);
       const callerHandler = vi.fn((event: Event) => event.preventDefault());
       const onCloseAutoFocus = renderProbe(callerHandler);
       const event = cancelable();
+      const preventDefault = vi.spyOn(event, 'preventDefault');
       onCloseAutoFocus(event);
-      expect(callerHandler).toHaveBeenCalledTimes(1);
+      expect(callerHandler).toHaveBeenCalledWith(event);
+      // Only the caller's call: the hook sees the default already prevented and leaves it alone
+      expect(preventDefault).toHaveBeenCalledTimes(1);
       expect(event.defaultPrevented).toBe(true);
     });
   });
