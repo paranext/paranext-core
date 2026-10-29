@@ -29,8 +29,11 @@ import fs from 'fs';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import { waitForAppReady } from '../../../fixtures/helpers';
 import {
+  COPY_KEY,
+  CUT_KEY,
   installedBookPath,
   noUnaskedEditsTestOptions,
+  PASTE_KEY,
   selectInEditor,
   SIMPLE_PARAGRAPH_STRUCTURE_VIEW,
   waitForSaveToSettle,
@@ -49,11 +52,6 @@ import {
 } from '../../../fixtures/toast-recorder';
 
 test.use(noUnaskedEditsTestOptions(SIMPLE_PARAGRAPH_STRUCTURE_VIEW));
-
-const isMac = process.platform === 'darwin';
-const COPY_KEY = isMac ? 'Meta+C' : 'Control+C';
-const CUT_KEY = isMac ? 'Meta+X' : 'Control+X';
-const PASTE_KEY = isMac ? 'Meta+V' : 'Control+V';
 
 const JONAH_BOOK_FILE = '32JONengWEBUS.SFM';
 

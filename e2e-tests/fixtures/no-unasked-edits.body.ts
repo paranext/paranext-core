@@ -154,8 +154,12 @@ const CLIPBOARD_SENTINEL = 'NOUNASKEDEDITSSENTINELNOTCOPIED';
 
 // The OS's own editing chords, spelled per platform (macOS uses Meta).
 const isMac = process.platform === 'darwin';
-const COPY_KEY = isMac ? 'Meta+C' : 'Control+C';
-const PASTE_KEY = isMac ? 'Meta+V' : 'Control+V';
+/** The OS's copy chord. */
+export const COPY_KEY = isMac ? 'Meta+C' : 'Control+C';
+/** The OS's cut chord. */
+export const CUT_KEY = isMac ? 'Meta+X' : 'Control+X';
+/** The OS's paste chord. */
+export const PASTE_KEY = isMac ? 'Meta+V' : 'Control+V';
 const UNDO_KEY = isMac ? 'Meta+Z' : 'Control+Z';
 const DOC_END_KEY = isMac ? 'Meta+ArrowDown' : 'Control+End';
 
