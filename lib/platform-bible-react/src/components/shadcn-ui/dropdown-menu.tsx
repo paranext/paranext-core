@@ -119,8 +119,10 @@ function DropdownMenuContent({
   // CUSTOM: Destructure style so we can merge the shared z-index constant into it
   style,
   children,
-  // CUSTOM: Destructure ref (a regular prop in React 19) so useDismissOnWindowBlur can compose it
+  // CUSTOM: Destructure ref (a regular prop in React 19) and onCloseAutoFocus so
+  // useDismissOnWindowBlur can compose them with its own
   ref,
+  onCloseAutoFocus,
   ...props
 }: DropdownMenuContentProps) {
   // CUSTOM: Use readDirection for RTL support — wraps children in dir div to mirror layout
@@ -128,14 +130,16 @@ function DropdownMenuContent({
   // CUSTOM: Added useDismissOnWindowBlur so the menu closes when the window loses focus. A click
   // into another iframe never reaches this document, so the window's blur stands in for the outside
   // press; see the hook's TSDoc. DropdownMenuSubContent is not wired: a sub-menu closes with its
-  // root menu. The returned ref callback also forwards the caller's ref.
-  const contentRef = useDismissOnWindowBlur(ref);
+  // root menu. The returned ref callback also forwards the caller's ref, and the returned onCloseAutoFocus keeps focus
+  // where the user put it after a blur dismissal while still calling the caller's handler.
+  const blurDismissProps = useDismissOnWindowBlur({ ref, onCloseAutoFocus });
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
         data-slot="dropdown-menu-content"
-        // CUSTOM: Ref from useDismissOnWindowBlur so it can find the content's parent
-        ref={contentRef}
+        // CUSTOM: ref and onCloseAutoFocus from useDismissOnWindowBlur (it finds the content's parent
+        // and keeps focus off the trigger after a blur dismissal)
+        {...blurDismissProps}
         sideOffset={sideOffset}
         align={align}
         className={cn(
