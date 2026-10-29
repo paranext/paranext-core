@@ -10981,8 +10981,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     content-zoom bootstrap, editor selection snapshot); these were judged benign, and a listener that
     must ignore it can filter on `isTrusted`. The overlay service's own surfaces ignore it and keep
     their own blur rule and creation grace period.
-- **Source:** PT ticket (key filled in before the PR opens); design document in the team's PRD
-  folder, menu-dismissal.
+- **Source:** the menu-dismissal design in the team's PRD folder and its pull request (no Jira ticket; agreed with the product owner 2026-10-29).
 
 ## adr-unresolvable-spdx-operators-drop-the-dependency: A declaration carrying an SPDX operator this pipeline cannot resolve drops the dependency
 
