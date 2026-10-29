@@ -2143,62 +2143,33 @@ const INSERTION_POINTS: Array<{ name: InvisibleCharacterName; unit: string; poin
   { name: 'left-to-right mark U+200E', unit: '3:9', point: 'not per|ish' },
   { name: 'right-to-left mark U+200F', unit: '3:10', point: 'their wor|ks' },
   { name: 'soft hyphen U+00AD', unit: '3:10', point: 'the disas|ter' },
+  { name: 'zero-width no-break space U+FEFF', unit: '3:10', point: 'God sa|w their' },
 ];
 
 /** The gesture that puts a character into the text. */
 type InsertionGesture = 'typed' | 'pasted';
 
 /**
- * A recorded finding where the app saves an inserted character differently from what the user
- * entered, pinned exactly: any other result fails, and so does the fix — remove the pin then, with
- * the finding.
- */
-interface InsertionDeviation {
-  /** The finding's ID, as the data-fidelity catalog records it. */
-  finding: string;
-  /** One line: what happens. */
-  summary: string;
-  /** What the file holds at the insertion point while the finding stands. */
-  saved: string;
-  applies(
-    view: EditableViewCase,
-    setting: InvisibleCharactersSetting,
-    gesture: InsertionGesture,
-    name: InvisibleCharacterName,
-  ): boolean;
-}
-
-const INSERTION_DEVIATIONS: InsertionDeviation[] = [
-  {
-    // Standard view takes a typed U+00A0 for display spacing, as Paratext 9's editor does (it saves
-    // every U+00A0 left in its view as a space unless the project allows invisible characters);
-    // the no-break space is typed as `~` there. Pasted, the same U+00A0 saves as `~`.
-    finding: 'T-4',
-    summary:
-      'Standard view, AllowInvisibleChars off: a typed U+00A0 saves as a space, as in Paratext 9',
-    saved: ' ',
-    applies: (view, setting, gesture, name) =>
-      view.areMarkersText &&
-      setting === 'off' &&
-      gesture === 'typed' &&
-      name === 'no-break space U+00A0',
-  },
-];
-
-/**
- * What the file must hold where `name` was entered: the project's spelling of it, or what a pinned
- * finding saves instead.
+ * What the file must hold where `name` was entered by `gesture`, as Paratext 9 saves it, in either
+ * view:
+ *
+ * - A zero-width no-break space (U+FEFF) is dropped, in either setting: Paratext 9's editor uses it
+ *   only to position its caret and removes every one when it saves.
+ * - A no-break space typed as a character with the setting off is a space: the author's no-break
+ *   space is typed as `~`, and Paratext 9 saves every U+00A0 left in its view as a space unless the
+ *   project allows invisible characters. Pasted, it is the project's no-break space.
+ * - Any other no-break space is spelled as the project stores one (`~` off, U+00A0 on), and every
+ *   other character is saved as itself.
  */
 function savedInsertion(
-  view: EditableViewCase,
   setting: InvisibleCharactersSetting,
   gesture: InsertionGesture,
   name: InvisibleCharacterName,
-): { saved: string; deviation?: InsertionDeviation } {
-  const deviation = INSERTION_DEVIATIONS.find((pin) => pin.applies(view, setting, gesture, name));
-  if (deviation) return { saved: deviation.saved, deviation };
+): string {
   const character = INVISIBLE_CHARACTERS[name];
-  return { saved: character === NO_BREAK_SPACE ? noBreakSpaceSpelling(setting) : character };
+  if (name === 'zero-width no-break space U+FEFF') return '';
+  if (character !== NO_BREAK_SPACE) return character;
+  return setting === 'off' && gesture === 'typed' ? ' ' : noBreakSpaceSpelling(setting);
 }
 
 /**
@@ -2249,8 +2220,9 @@ async function selectEnteredCharacter(editorInput: Locator, point: TextPoint): P
  * Enters every character of {@link INSERTION_POINTS} at its point by `gesture` — typed through the
  * keyboard (`~` as a key press; the others as the text input a keyboard layout or an input method
  * delivers) or pasted as plain text from the OS clipboard — and checks the save: each aimed verse
- * gains exactly the character's expected bytes at its point, and nothing else in the book moves.
- * Then deletes each one again with the Delete key and checks the file is back to its bytes.
+ * gains exactly the bytes Paratext 9 would save for it at its point ({@link savedInsertion}), and
+ * nothing else in the book moves. Then deletes each one that was saved with the Delete key and
+ * checks the file is back to its bytes.
  */
 async function enterAndDeleteEachCharacter(
   context: GestureContext,
@@ -2297,12 +2269,7 @@ async function enterAndDeleteEachCharacter(
   const beforeText = before.toString('utf8');
   const afterText = afterEntry.toString('utf8');
   INSERTION_POINTS.forEach(({ name, unit, point }) => {
-    const { saved, deviation } = savedInsertion(view, setting, gesture, name);
-    if (deviation)
-      test.info().annotations.push({
-        type: 'known deviation',
-        description: `${where}: ${gesture} ${name}: ${deviation.finding} — ${deviation.summary}`,
-      });
+    const saved = savedInsertion(setting, gesture, name);
     const unitBefore = getUsfmUnit(beforeText, unit) ?? '';
     if (unitBefore.split(pointText(point)).length !== 2)
       throw new Error(`${where}: ${JSON.stringify(pointText(point))} is not once in ${unit}`);
@@ -2316,9 +2283,7 @@ async function enterAndDeleteEachCharacter(
     expect
       .soft(
         visible(savedThere),
-        deviation
-          ? `${where}: ${gesture} ${name} no longer saves as finding ${deviation.finding} pins it (${deviation.summary}); if it now saves as entered, the finding is fixed — remove the pin`
-          : `${where}: ${gesture} ${name} should save as ${visible(saved)} at ${JSON.stringify(point)}`,
+        `${where}: ${gesture} ${name} should save as ${JSON.stringify(visible(saved))} at ${JSON.stringify(point)}`,
       )
       .toBe(visible(saved));
   });
@@ -2328,10 +2293,7 @@ async function enterAndDeleteEachCharacter(
     const text = expectedUnits.get(unit) ?? getUsfmUnit(beforeText, unit) ?? '';
     expectedUnits.set(
       unit,
-      text.replace(
-        pointText(point),
-        insertAtPoint(point, savedInsertion(view, setting, gesture, name).saved),
-      ),
+      text.replace(pointText(point), insertAtPoint(point, savedInsertion(setting, gesture, name))),
     );
   });
   expectedUnits.forEach((expectedUnit, unit) =>
@@ -2343,12 +2305,13 @@ async function enterAndDeleteEachCharacter(
       .toBe(visible(expectedUnit)),
   );
 
-  // Delete each one again.
+  // Delete each one again; one that was dropped left nothing to delete.
   const notFound: string[] = [];
   const deletingAt = Date.now();
   // Chained: each deletion is aimed at the text the one before it left.
   await INSERTION_POINTS.reduce(async (previous, { name, point }) => {
     await previous;
+    if (savedInsertion(setting, gesture, name) === '') return;
     const matches = await selectEnteredCharacter(editorInput, point);
     if (matches === 1) await mainPage.keyboard.press('Delete');
     else notFound.push(`${name} at ${JSON.stringify(point)}: ${matches} matches`);
@@ -2391,12 +2354,10 @@ async function copySeededVerse(
   const where = `${view.name}, AllowInvisibleChars ${setting}: copying ${copy.unit}`;
   const unitText = getUsfmUnit(bookText, copy.unit);
   if (unitText === undefined) throw new Error(`The book has no unit ${copy.unit}`);
-  const usfm = usfmBetween(unitText, copy.from, copy.to);
-  // Standard view copies the USFM bytes. A hidden-marker view copies the text as shown, where a
-  // no-break space is the character itself in either setting.
-  const expected = view.areMarkersText
-    ? usfm
-    : usfm.replaceAll(noBreakSpaceSpelling(setting), NO_BREAK_SPACE);
+  // Every view copies a no-break space as the project spells it, as Paratext 9 does: Standard view
+  // copies the USFM bytes, and a hidden-marker view, which copies the text as shown, writes a
+  // stored no-break space as `~` with the setting off and as U+00A0 with it on.
+  const expected = usfmBetween(unitText, copy.from, copy.to);
 
   await electronApp.evaluate(
     ({ clipboard }, sentinel) => clipboard.writeText(sentinel),
@@ -2439,11 +2400,14 @@ const SEEDED_COPIES = [
  * 2. **An edit elsewhere keeps every seeded character.** The first save and an undo, then the same at
  *    rest ({@link runLoadAndUndoSteps}): the seeded characters come back exactly as seeded, with
  *    only the known first-save normalization around them.
- * 3. **Each character typed, then pasted, saves as entered.** In the middle of a word, so no
- *    whitespace rule applies: a no-break space saves as the project spells it (`~` with the setting
- *    off, U+00A0 with it on), every other character as itself; deleting each restores the file.
+ * 3. **Each character typed, then pasted, saves as Paratext 9 saves it.** In the middle of a word, so
+ *    no whitespace rule applies: a no-break space saves as the project spells it (`~` with the
+ *    setting off, U+00A0 with it on) — but one typed with the setting off is a space — a zero-width
+ *    no-break space is dropped, and every other character saves as itself ({@link savedInsertion});
+ *    deleting each restores the file.
  * 4. **Copying gives the characters out.** A copy of each seeded verse puts them on the clipboard as
- *    the view gives them out, never as the editor's internal stand-in (U+001A).
+ *    Paratext 9 does — a no-break space as the project spells it — never as the editor's internal
+ *    stand-in (U+001A).
  */
 export async function runInvisibleCharacters(
   { mainPage, electronApp }: { mainPage: Page; electronApp: ElectronApplication },
@@ -2490,10 +2454,12 @@ export async function runInvisibleCharacters(
   const atRest = await test.step(`${where}: an edit elsewhere keeps every seeded character`, () =>
     runLoadAndUndoSteps(mainPage, editorInput, INVISIBLE_CHAPTER, installed));
 
-  const afterTyped = await test.step(`${where}: each character typed saves as entered`, () =>
-    enterAndDeleteEachCharacter(context, view, setting, 'typed', atRest));
-  const afterPasted = await test.step(`${where}: each character pasted saves as entered`, () =>
-    enterAndDeleteEachCharacter(context, view, setting, 'pasted', afterTyped));
+  const afterTyped =
+    await test.step(`${where}: each character typed saves as Paratext 9 saves it`, () =>
+      enterAndDeleteEachCharacter(context, view, setting, 'typed', atRest));
+  const afterPasted =
+    await test.step(`${where}: each character pasted saves as Paratext 9 saves it`, () =>
+      enterAndDeleteEachCharacter(context, view, setting, 'pasted', afterTyped));
 
   await test.step(`${where}: copying gives the characters out`, async () => {
     // Chained: both copies go through the one OS clipboard.

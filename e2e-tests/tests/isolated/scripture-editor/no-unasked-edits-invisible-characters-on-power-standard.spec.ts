@@ -23,7 +23,7 @@ import {
 test.use(invisibleCharactersTestOptions(POWER_STANDARD_VIEW, 'on'));
 
 test.describe('whitespace and invisible characters survive the whole app', () => {
-  test('Standard view, allow invisible characters on: opening writes nothing, an edit keeps the seeded characters, typed and pasted characters save as entered, and a copy gives them out', async ({
+  test('Standard view, allow invisible characters on: opening writes nothing, an edit keeps the seeded characters, typed and pasted characters save as Paratext 9 saves them, and a copy gives them out', async ({
     mainPage,
     electronApp,
   }) => {
