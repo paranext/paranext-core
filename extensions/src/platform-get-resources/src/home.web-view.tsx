@@ -211,8 +211,8 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
   // current when shown.
   const syncActivity = useSyncActivity();
 
-  // Two flags because a sync started elsewhere must disable Home's rows but never reload its lists:
-  // the fetch gates below follow only Home's own sync, and only what Home shows follows both.
+  // Two flags because a sync started elsewhere pauses only the server-list fetch, which queues
+  // behind it; the local list keeps loading, and only Home's own sync pauses that.
   const isAnySendReceiveInProgress = isOwnSendReceiveInProgress || syncActivity.isSyncing;
   const activeSendReceiveProjects = useMemo(
     () => Array.from(new Set([...ownActiveSendReceiveProjects, ...syncActivity.projectIds])),
@@ -377,7 +377,10 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
       }
     };
 
-    if (isOwnSendReceiveInProgress) {
+    // The request queues behind a running sync and the default request timeout would turn the wait
+    // into a failure, so nothing is requested while one runs. The effect runs again when the sync
+    // ends, whichever path started it.
+    if (isAnySendReceiveInProgress) {
       return;
     }
     // Each run starts over: without this the gate stays down through a re-fetch, and on the first
@@ -393,7 +396,7 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
     };
   }, [
     isSendReceiveAvailable,
-    isOwnSendReceiveInProgress,
+    isAnySendReceiveInProgress,
     sharedProjectErrorNotificationId,
     syncsCompletedCount, // triggers a re-fetch each time a sync completes
   ]);

@@ -533,21 +533,67 @@ describe('HomeWebView sync started elsewhere', () => {
     });
   });
 
-  it('does not re-fetch shared projects for an outside sync', async () => {
+  it('holds the shared-projects fetch while an outside sync runs and refetches once when it ends', async () => {
     const home = await renderSubscribed();
     const callsBefore = getSharedProjectsCallCount();
     expect(callsBefore).toBeGreaterThan(0);
 
     await emitSyncActivity({ isSyncing: true, projectIds: ['RH3'] });
     expect(home).toHaveAttribute('data-send-receive-in-progress', 'true');
+    // The request queues behind the sync, so none is made until it ends.
+    expect(getSharedProjectsCallCount()).toBe(callsBefore);
+
+    // Only the activity event announces the end: a startup or project-switch sync never emits
+    // `onSyncStateChanged`.
     await emitSyncActivity({ isSyncing: false, projectIds: [] });
     expect(home).toHaveAttribute('data-send-receive-in-progress', 'false');
-
-    expect(getSharedProjectsCallCount()).toBe(callsBefore);
-    // The local list keeps loading too: only Home's own sync pauses it.
+    await waitFor(() => {
+      expect(getSharedProjectsCallCount()).toBe(callsBefore + 1);
+    });
+    // The local list keeps loading: only Home's own sync pauses it.
     expect(vi.mocked(useLocalProjects)).not.toHaveBeenCalledWith(
       expect.objectContaining({ enabled: false }),
     );
+  });
+
+  it('does not retry a failing shared-projects fetch into an outside sync', async () => {
+    vi.useFakeTimers();
+    try {
+      mockSendCommand.mockImplementation(async (commandName: string) => {
+        if (commandName === IS_AVAILABLE) return true;
+        if (commandName === GET_SHARED_PROJECTS) throw new Error('socket hang up');
+        if (commandName === GET_SYNC_ACTIVITY) return { isSyncing: false, projectIds: [] };
+        return undefined;
+      });
+      const HomeWebView = getHomeWebView();
+      render(<HomeWebView useWebViewState={makeUseWebViewState({})} />);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(getSharedProjectsCallCount()).toBe(1);
+
+      // A sync starts while the first attempt's retry is pending.
+      await emitSyncActivity({ isSyncing: true, projectIds: [] });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(SEND_RECEIVE_RETRY_MS * SEND_RECEIVE_ATTEMPTS);
+      });
+      expect(getSharedProjectsCallCount()).toBe(1);
+      expect(screen.getByTestId('home')).not.toHaveAttribute('data-remote-state', 'unreachable');
+
+      mockSendCommand.mockImplementation(async (commandName: string) => {
+        if (commandName === IS_AVAILABLE) return true;
+        if (commandName === GET_SHARED_PROJECTS) return {};
+        return undefined;
+      });
+      await emitSyncActivity({ isSyncing: false, projectIds: [] });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(getSharedProjectsCallCount()).toBe(2);
+      expect(screen.getByTestId('home')).toHaveAttribute('data-remote-state', 'loaded');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('re-enables when the activity event says idle', async () => {
@@ -574,7 +620,7 @@ describe('HomeWebView sync started elsewhere', () => {
     ).toHaveLength(0);
   });
 
-  it('reports the running sync to Home while the shared projects are still loading', async () => {
+  it('keeps the list loading through an outside sync that began mid-fetch, then loads it', async () => {
     let resolveFetch: (value: unknown) => void = () => {};
     mockSendCommand.mockImplementation(async (commandName: string) => {
       if (commandName === IS_AVAILABLE) return true;
@@ -598,13 +644,24 @@ describe('HomeWebView sync started elsewhere', () => {
     expect(home).toHaveAttribute('data-remote-state', 'loading');
     expect(home).toHaveAttribute('data-send-receive-in-progress', 'true');
 
+    // The answer of the request that began before the sync is dropped: the list is asked for again
+    // once the sync ends.
+    await act(async () => {
+      resolveFetch({});
+    });
+    expect(home).toHaveAttribute('data-remote-state', 'loading');
+
+    await emitSyncActivity({ isSyncing: false, projectIds: [] });
+    await waitFor(() => {
+      expect(getSharedProjectsCallCount()).toBe(2);
+    });
     await act(async () => {
       resolveFetch({});
     });
     await waitFor(() => {
       expect(home).toHaveAttribute('data-remote-state', 'loaded');
     });
-    expect(home).toHaveAttribute('data-send-receive-in-progress', 'true');
+    expect(home).toHaveAttribute('data-send-receive-in-progress', 'false');
   });
 });
 

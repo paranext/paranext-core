@@ -1143,10 +1143,10 @@ export function Home({
       {isLoading ? (
         <CardContent className="tw:flex tw:flex-grow tw:flex-col tw:items-center tw:justify-center tw:gap-2">
           <Spinner />
-          {/* The server list queues behind a running sync. The web view holds its own fetches while
-              Home's own sync runs, so normally this shows only for a sync started elsewhere. Briefly,
-              when Home's own sync ends, the refetch can start before the backend's closing activity
-              event arrives, and the line can show for a moment. */}
+          {/* The server list queues behind a running sync, so the web view asks for it only once no
+              sync runs, whichever path started it. Briefly, when a sync ends, the refetch can start
+              before the backend's closing activity event arrives, and the line can show for a
+              moment. */}
           {isSyncRunningLineShown && (
             <p className="tw:text-sm tw:text-muted-foreground">{syncRunningListLoadsText}</p>
           )}
