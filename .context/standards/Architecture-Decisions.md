@@ -10906,8 +10906,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Decision:** A transient surface treats "my window lost focus" as an outside click, whichever
   frame the focus went to, including another application. `useDismissOnWindowBlur`
   (`lib/platform-bible-react/src/hooks/use-dismiss-on-window-blur.hook.ts`) listens for `blur` on
-  `window` for the lifetime of the content and dispatches a synthetic `pointerdown` on the content
-  element's parent, so Radix's normal outside-press path runs. The shared wrappers `PopoverContent`,
+  `window` for the lifetime of the mounted wrapper, ignoring blur while the content is closed or
+  animating out (`data-state="closed"`), and dispatches a synthetic `pointerdown` on the content
+  element's parent (not `document.body`, so a dialog hosting a portaled popover sees an inside press
+  and stays open), so Radix's normal outside-press path runs. Focus return follows a rule read from
+  document state at close time (`shouldSuppressFocusReturn`): focus is not returned to the trigger
+  when `activeElement` is an iframe or, inside a web view, when the document is not focused, because
+  returning focus across frames blurs the window the user moved to and closes the menu they opened
+  there. This departs from WCAG 2.4.3 (return focus to the opener) only in that cross-frame case;
+  every other close, including Escape, restores focus. The shared wrappers `PopoverContent`,
   `DropdownMenuContent`, `MenubarContent` and `ContextMenuContent` call it, so every consumer, in
   sibling repos too, gets the behavior with no per-surface code. There is no opt-out prop: a surface
   that must survive blur says so the same way it survives a real outside click, by calling
@@ -10925,6 +10932,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     for Escape across frames, but it has more moving parts and needs cooperation from cross-origin
     `src` web views, while the blur rule already covers every reported case. Worth revisiting if
     cross-frame keyboard forwarding is ever built; the two should share a channel.
+  - *Reuse the main process's app-window input broadcast.* The main process already broadcasts
+    app-window mouse-down and Escape across frames (`EVENT_NAME_ON_DID_APP_WINDOW_INPUT`, consumed
+    by `handleAppWindowInput`). It is not reused here because the component library has no PAPI
+    access to subscribe to it; relevant to PT-4627 if cross-frame keyboard forwarding is built.
   - *Transparent backdrop while a menu is open.* It would swallow the dismissing click like a native
     menu, but only for main-document surfaces (a web view cannot cover the rest of the window), and
     it changes the feel of every popover.
@@ -10940,6 +10951,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     dialog stays open.
   - Escape still does not work across frames, and scroll inside a web view still cannot dismiss a
     Light surface.
+  - Alt-tab and keyboard users: in the main document an unfocused document can only mean the OS
+    window was deactivated, so the trigger gets focus back and a keyboard user returning from
+    another application keeps their place. Inside a web view the same signal is ambiguous (alt-tab
+    versus a click into another frame), so web views cannot restore focus there.
+  - The synthetic press is untrusted (`isTrusted === false`) and other document-level `pointerdown`
+    listeners see it (focus modality tracker, window service gesture tracking, overlay correlation,
+    content-zoom bootstrap, editor selection snapshot); these were judged benign, and a listener that
+    must ignore it can filter on `isTrusted`. The overlay service's own surfaces ignore it and keep
+    their own blur rule and creation grace period.
 - **Source:** PT ticket (key filled in before the PR opens); design document in the team's PRD
   folder, menu-dismissal.
 
