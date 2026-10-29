@@ -402,6 +402,17 @@ Platform.Bible keeps its own copy of the registration and internet settings in a
 
 To click through the wizard without changing any settings or your registration at all, use demo mode instead: run `localStorage.setItem('platform-bible.firstRunDemoMode', 'true')` in the Console and reload. Demo mode starts the wizard at the first step on every launch and saves nothing; run `localStorage.removeItem('platform-bible.firstRunDemoMode')` and reload to leave it.
 
+### Starting from a fresh install
+
+The reset above keeps your settings, projects and window layout. To test what a Paratext 9 user sees the first time they launch a newly installed Paratext 10 or Platform.Bible, delete everything the app has left behind instead. Close the app, uninstall it if it is installed, and run one of these from the repo root on Windows, macOS or Linux:
+
+| Run                                | Deletes what is left by                                                         |
+| ---------------------------------- | ------------------------------------------------------------------------------- |
+| `npm run reset-fresh-install:p10`  | Installed Paratext 10 builds (including the `paratext-10-studio` snap)          |
+| `npm run reset-fresh-install:core` | Dev builds from this repo (including `dev-appdata`) and packaged Platform.Bible |
+
+The script refuses to run while any build is running, lists the folders it found with their sizes, and deletes nothing unless you answer `y`. Both delete the shared `Paratext100` folder, so the next launch of either kind of build copies the registration from Paratext 9 again. The core one also deletes `~/.platform.bible`, which holds dev builds' projects, and Electron's default `Electron` data folder, which dev builds use (on Windows and Linux it also holds their `main.log`; macOS keeps logs in `~/Library/Logs`, which neither script deletes). Paratext 9's own folders are never touched. On Linux, a snap's data folder is skipped until that snap is removed.
+
 ### Analytics test-environment override
 
 Platform.Bible's analytics abstraction (`src/extension-host/services/analytics.service.ts`) normally decides whether events target the "test" or "production" analytics audience by checking whether the build is packaged and which Send/Receive server it's configured against. Developers and testers who need to force "test" targeting regardless of build/server configuration — so their activity never lands in production analytics — can set the `PT_ANALYTICS_TEST_OVERRIDE=true` environment variable when launching:
