@@ -4585,6 +4585,33 @@ export declare const useViewVisibility: () => boolean;
  *   effect re-firing on every visibility flip.
  */
 export declare function useRunWhenVisible(isViewVisible: boolean, run: () => void): () => void;
+/**
+ * Whether this window is a web view, meaning it is not the top window. In Paratext web views
+ * `window.top` is deleted (`undefined`), which also counts as a web view; the main document is its
+ * own top window.
+ *
+ * @returns `true` inside a web view (or when `window.top` cannot be read), `false` in the main
+ *   document
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function isRunningInWebView(): boolean;
+/**
+ * Decides whether closing a menu or popover must not return focus to its trigger.
+ *
+ * Returning focus across frames closes the menu the user just opened elsewhere, so focus stays
+ * where the user put it when that is a web view (`activeElement` is an `<iframe>`) or, inside a web
+ * view, when the window no longer has focus. In the main document `!hasFocus()` can only mean the
+ * OS window was deactivated (a click into a web view leaves the document focused with the iframe as
+ * active element), so restoring the trigger there is safe and helps keyboard users returning from
+ * another application. Inside a web view it is ambiguous (switching applications versus clicking
+ * into another frame) and stays suppressed.
+ *
+ * @param doc The document the surface renders in
+ * @param isInWebView Whether that document's window is a web view; see {@link isRunningInWebView}
+ * @returns `true` when focus must not be returned to the trigger
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function shouldSuppressFocusReturn(doc: Document, isInWebView: boolean): boolean;
 type DismissOnWindowBlurProps<T extends HTMLElement> = {
 	/** The caller's own ref for the content element (function or object), if any */
 	ref?: React$1.Ref<T>;
@@ -4599,7 +4626,8 @@ type DismissOnWindowBlurProps<T extends HTMLElement> = {
  * a `pointerdown` in this document and Radix's outside-press detection never runs. Native menus
  * close when their application is deactivated; this hook gives Radix surfaces the same behavior.
  * From mount until unmount, a `blur` on `window` dispatches a synthetic `pointerdown` on the
- * content's parent element. A closed surface has no content node and the blur is ignored, so a
+ * content's parent element. A closed surface has no content node (unmounted) or a content node
+ * marked `data-state="closed"` (animating out), and the blur is ignored in both cases, so a
  * mounted-but-closed surface never presses on an unrelated open layer. Radix's `DismissableLayer`
  * listens for `pointerdown` on the owner document and does not check `isTrusted`, so the event
  * takes its normal outside-press path: `onPointerDownOutside` runs and can call `preventDefault()`
@@ -4618,17 +4646,23 @@ type DismissOnWindowBlurProps<T extends HTMLElement> = {
  * already put focus somewhere else, and Radix's default close-auto-focus would pull it back. That
  * matters most across frames: a menu closing in one frame by returning focus to its trigger blurs
  * the main window, which would close the menu the user just opened in another frame. The returned
- * `onCloseAutoFocus` calls `preventDefault()` when this document's window no longer has focus
- * (`!document.hasFocus()`: the user clicked into another frame from inside this one, or switched
- * applications) or when the active element is an `<iframe>` (the user clicked into a web view from
- * this document). Any other close, such as Escape or a click elsewhere in this document, restores
- * focus as usual. The rule reads state at close time rather than remembering that a blur dismissal
- * happened: Radix runs close-auto-focus from its own timer after an asynchronous unmount, so a flag
- * cleared by a timeout loses that race under load.
+ * `onCloseAutoFocus` calls `preventDefault()` per {@link shouldSuppressFocusReturn}: when the active
+ * element is an `<iframe>` (the user clicked into a web view from this document), or when this
+ * window is a web view whose document no longer has focus (the user clicked into another frame, or
+ * switched applications). In the main document a lost `document.hasFocus()` can only mean the OS
+ * window was deactivated, so focus returns to the trigger there. Any other close, such as Escape or
+ * a click elsewhere in this document, restores focus as usual. The rule reads state at close time
+ * rather than remembering that a blur dismissal happened: Radix runs close-auto-focus from its own
+ * timer after an asynchronous unmount, so a flag cleared by a timeout loses that race under load.
  *
- * Hidden-view case: an inactive-tab pane cannot hold an open menu, so a stray blur there is a
- * harmless no-op and there is deliberately no catch-up logic. See
- * `.claude/rules/cross-view-sync-hidden-views.md`.
+ * The synthetic press is untrusted (`isTrusted === false`). Other document-level `pointerdown`
+ * listeners see it too (the focus modality tracker, window service gesture tracking, overlay
+ * correlation, content-zoom bootstrap, the editor's selection snapshot) and were judged benign; a
+ * listener that must ignore it can filter on `isTrusted`.
+ *
+ * Hidden-view case (the repo's rule on hidden views): a keyboard tab switch can hide a pane that
+ * holds an open menu. The blur listener then dismisses it on the next window blur, which is
+ * harmless, so there is deliberately no catch-up logic.
  *
  * @param props The caller's `ref` and `onCloseAutoFocus` for the Radix Content. Both still work:
  *   the ref receives the element too, and the caller's handler runs first and can itself prevent
