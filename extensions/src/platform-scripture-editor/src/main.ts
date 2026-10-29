@@ -1109,7 +1109,12 @@ export function createResourceTextPanelProvider(
         iconName: interfaceMode === 'simple' ? iconName : undefined,
         iconUrl: undefined,
         // Also selects a resource opened elsewhere — from Home in Simple mode — when one is passed.
-        state: buildResourceTextPanelState(savedWebView.state, resourceType, openWebViewOptions),
+        state: buildResourceTextPanelState(
+          savedWebView,
+          projectId,
+          resourceType,
+          openWebViewOptions,
+        ),
         // This webview only ever appears in the fixed 3-column simple-mode layout (Column 3) and
         // must always remain open there, so it's non-closable in simple mode.
         isClosable: interfaceMode === 'power',

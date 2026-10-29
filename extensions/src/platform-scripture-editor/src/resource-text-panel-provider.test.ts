@@ -3,6 +3,7 @@ import { LUCIDE_ICON_NAMES } from 'platform-bible-react/experimental';
 import type { SavedWebViewDefinition } from '@papi/core';
 import { createResourceTextPanelProvider } from './main';
 import type { ResourceTextPanelOptions } from './show-resource-in-panel.util';
+import { getResourceSelection, withResourceSelection } from './resource-selection-state.utils';
 
 // `main.ts` pulls in webpack-only `?inline` imports that only resolve under webpack — stub them so
 // the module loads. Vitest hoists these above the imports, wherever they are written.
@@ -29,7 +30,7 @@ const savedPanel = (webViewType: string): SavedWebViewDefinition => ({
   id: 'panel-1',
   webViewType,
   projectId: 'my-project',
-  state: { selectedResourceId: 'dbl:previous' },
+  state: withResourceSelection(undefined, 'my-project', { selectedResourceId: 'dbl:previous' }),
 });
 
 /*
@@ -47,10 +48,34 @@ describe('reference panel providers', () => {
     const options: ResourceTextPanelOptions = { selectedResourceId: 'dbl:uid-byz' };
     const built = await provider.getWebView(savedPanel(webViewType), options, 'nonce-1');
 
-    expect(built?.state).toEqual(
-      expect.objectContaining({ selectedResourceId: 'dbl:uid-byz', resourceType }),
-    );
+    expect(getResourceSelection(built?.state, 'my-project')).toMatchObject({
+      selectedResourceId: 'dbl:uid-byz',
+    });
+    expect(built?.state).toEqual(expect.objectContaining({ resourceType }));
     expect(built?.projectId).toBe('my-project');
+  });
+
+  it('selects the resource its rebuild asks for under the project it is rebuilt for', async () => {
+    const provider = createResourceTextPanelProvider(
+      'platformScriptureEditor.bibleTexts',
+      'title',
+      'ScriptureResource',
+      'icon',
+    );
+
+    const built = await provider.getWebView(
+      { ...savedPanel('platformScriptureEditor.bibleTexts'), projectId: undefined },
+      { projectId: 'other-project', selectedResourceId: 'dbl:uid-byz' },
+      'nonce-1',
+    );
+
+    expect(built?.projectId).toBe('other-project');
+    expect(getResourceSelection(built?.state, 'other-project')).toMatchObject({
+      selectedResourceId: 'dbl:uid-byz',
+    });
+    expect(getResourceSelection(built?.state, 'my-project')).toEqual({
+      selectedResourceId: 'dbl:previous',
+    });
   });
 
   it("keeps the panel's own selection when its rebuild asks for none", async () => {
@@ -67,7 +92,9 @@ describe('reference panel providers', () => {
       'nonce-1',
     );
 
-    expect(built?.state).toEqual(expect.objectContaining({ selectedResourceId: 'dbl:previous' }));
+    expect(getResourceSelection(built?.state, 'my-project')).toEqual({
+      selectedResourceId: 'dbl:previous',
+    });
   });
 });
 

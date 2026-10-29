@@ -6,6 +6,8 @@ import { buildPickerResources, type DownloadedResource } from './downloaded-reso
 import { getResourceReferenceRowId, isSameResource } from './resource-reference.utils';
 import { findSelectedRow, resolveResourceSelection } from './resource-selection.utils';
 import { toResourceReference } from './select-dbl-resource';
+import { getResourceSelection } from './resource-selection-state.utils';
+import { buildResourceTextPanelState } from './show-resource-in-panel.util';
 
 // Hoisted above the imports by Vitest, wherever it is written.
 vi.mock('@papi/frontend', () => ({ default: {}, logger: { warn: vi.fn() } }));
@@ -31,6 +33,23 @@ const ENTRY: DblResourceData = {
 
 const OTHER: DownloadedResource = { projectId: 'other', name: 'OTHER', language: 'en' };
 
+/** The project the panel shows. */
+const PANEL_PROJECT_ID = 'panel-project';
+
+/**
+ * The selection the panel reads for its project once the provider has built it with `queued`, from
+ * a panel that held another project's pick.
+ */
+function queuedSelection(queued: string) {
+  const state = buildResourceTextPanelState(
+    { projectId: 'previous-project', state: { selectedResourceId: 'dbl:previous' } },
+    PANEL_PROJECT_ID,
+    'ScriptureResource',
+    { selectedResourceId: queued },
+  );
+  return getResourceSelection(state, PANEL_PROJECT_ID);
+}
+
 /** The row the panel shows when the command queued `entry`'s reference. */
 function selectedProjectId(
   entry: DblResourceData,
@@ -46,10 +65,10 @@ function selectedProjectId(
   const queued = getResourceReferenceRowId(queuedReference);
   // Matched, not fallen back to: a fallback picks the first row, which could be this one by luck.
   if (!findSelectedRow(rows, queued)) return undefined;
-  // `buildResourceTextPanelState` queues the id as both the selection and the user's pick.
+  const { selectedResourceId, userPickedResourceId } = queuedSelection(queued);
   return resolveResourceSelection(rows, {
-    selectedResourceId: queued,
-    userPickedResourceId: queued,
+    selectedResourceId,
+    userPickedResourceId,
     pendingResourceId: undefined,
     heldFallbackRowId: undefined,
     isListComplete: true,
@@ -83,11 +102,13 @@ describe('the selection queued for a resource is a row its panel lists', () => {
       ],
       [teamEntry, ENTRY],
     );
-    const queued = getResourceReferenceRowId(toResourceReference(ENTRY));
+    const { selectedResourceId, userPickedResourceId } = queuedSelection(
+      getResourceReferenceRowId(toResourceReference(ENTRY)),
+    );
     expect(
       resolveResourceSelection(rows, {
-        selectedResourceId: queued,
-        userPickedResourceId: queued,
+        selectedResourceId,
+        userPickedResourceId,
         pendingResourceId: undefined,
         heldFallbackRowId: undefined,
         isListComplete: true,

@@ -6469,6 +6469,47 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4350 (NN 5B Opening a resource always correctly loads it) and PT-4470, the
   catalog-window regression, found in review of the fix for the loading window.
 
+## adr-panel-selection-per-project-in-web-view-state: A reference panel keeps its selection per project in its own web view state, keyed by project id
+
+- **Date:** 2026-10-29
+- **Status:** Accepted
+- **Context:** In Simple mode the Bible texts and Commentaries panels follow the project in the middle
+  column. A project switch does not open new panels: `openResourceText` (`main.ts`) reloads the open
+  panel in place with the new `projectId`, and the provider builds it from the state it already had.
+  The selection lived in two flat web view state keys, so a pick made in one project carried over to
+  the next. It stayed on screen wherever the picked resource was also listed, and a downloaded or
+  shared resource is listed in every project (PT-4950).
+- **Decision:** Each panel keeps one record in its web view state,
+  `resourceSelectionByProjectId: { [projectId]: { selectedResourceId, userPickedResourceId } }`,
+  with an empty-string key for "no project open" (`resource-selection-state.utils.ts`). The panel
+  reads and writes only its own project's entry, through `useProjectResourceSelection`. Both ids are
+  written in one update, so no render sees the selection without the pick. A project with no entry
+  falls through to `resolveResourceSelection` unchanged. "No project" gets its own entry, so a
+  project's pick never shows with no project open. The provider's `buildResourceTextPanelState`
+  files a resource asked for from Home under the project the panel is being built for. It also moves
+  a selection saved under the old flat keys into the entry of the project the layout was saved with.
+  That move happens in the provider, not the panel, because only the provider knows both the saved
+  project and the incoming one. A panel that adopted the flat keys on first render could be reloaded
+  for another project first and file them there.
+- **Alternatives:**
+  - *Per-user project settings* (`setUserReferencedProjectsAndResources`, which already puts a
+    picker pick first): rejected. Dropdown picks do not write there, and writing on every pick would
+    turn a view preference into project data. That data travels with Send/Receive, is gated by the
+    write lock, and for a resource project is written into the resource folder itself (PT-4895).
+  - *Tag one selection with its owning project*, as `usePublishNavigableProjectIds` tags
+    `navigableProjectIds` with `navigableProjectIdsOwningProjectId`: rejected for this case. An owner
+    tag can only discard a foreign value, so switching A → B → A would forget A's pick. The record
+    applies the same idea (state is labelled with the project it belongs to) to every project.
+  - *Reset the selection on project change*: rejected for the same reason. It loses the pick in the
+    project the user returns to.
+  - *Drop the old flat keys on upgrade*: rejected. Every Simple-mode panel would reset to its first
+    configured resource on first launch after the upgrade.
+- **Consequences:** The record grows by one small entry per project a panel has shown; entries are
+  not pruned. A hidden panel needs no catch-up: the switch reloads it like a visible one, and picking
+  the selection is data, not layout. The Model text panel and the Text Collection keep no selection
+  in web view state today. If either comes to keep a per-project choice there, it should key it by
+  project the same way rather than in flat keys.
+
 ## adr-papi-websocket-hostname-bind: The PAPI websocket binds by hostname, and readiness is awaited rather than assumed
 
 - **Date:** 2026-08-29

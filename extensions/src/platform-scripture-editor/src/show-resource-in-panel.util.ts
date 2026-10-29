@@ -12,6 +12,11 @@ import {
 } from './resource-reference.utils';
 import { addToUserTextConnections, toResourceReference } from './select-dbl-resource';
 import {
+  adoptLegacyResourceSelection,
+  getResourceSelection,
+  withResourceSelection,
+} from './resource-selection-state.utils';
+import {
   BIBLE_TEXTS_PANEL_WEBVIEW_TYPE,
   COMMENTARIES_PANEL_WEBVIEW_TYPE,
   warnTabCouldNotOpen,
@@ -31,31 +36,31 @@ export interface ResourceTextPanelOptions extends OpenWebViewOptions {
 
 /**
  * The web view state a Bible texts or Commentaries panel is built with: its saved state, the kind
- * of resource it lists, and — when one was asked for — the resource to select, marked as the user's
- * own pick.
+ * of resource it lists, and — when one was asked for — the resource to select for the project it is
+ * built for, marked as the user's own pick. Each project keeps its own selection (see
+ * `resource-selection-state.utils.ts`); a selection saved before that is filed under the project it
+ * was saved with.
  *
- * @param savedState The panel's saved state
+ * @param saved The panel's definition as saved: its state, and the project it was built for
+ * @param projectId The project the panel is being built for, if one is open
  * @param resourceType The kind of resource the panel lists
  * @param options The options the panel is being built with
  * @returns The state to build the panel with
  */
 export function buildResourceTextPanelState(
-  savedState: Record<string, unknown> | undefined,
+  saved: { state?: Record<string, unknown>; projectId?: string },
+  projectId: string | undefined,
   resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
   options: ResourceTextPanelOptions,
 ): Record<string, unknown> {
+  const state = { ...adoptLegacyResourceSelection(saved.state, saved.projectId), resourceType };
+  if (options.selectedResourceId === undefined) return state;
   // A resource asked for is recorded as the user's own pick, so the panel never replaces it with a
   // configured resource the way it replaces a fallback (see `resolveResourceSelection`).
-  return {
-    ...savedState,
-    resourceType,
-    ...(options.selectedResourceId !== undefined
-      ? {
-          selectedResourceId: options.selectedResourceId,
-          userPickedResourceId: options.selectedResourceId,
-        }
-      : {}),
-  };
+  return withResourceSelection(state, projectId, {
+    selectedResourceId: options.selectedResourceId,
+    userPickedResourceId: options.selectedResourceId,
+  });
 }
 
 /** What {@link findCatalogEntry} learned about a resource. */
@@ -438,7 +443,7 @@ async function showResourceNow(
   let shownWebViewId: string | undefined;
   try {
     shownWebViewId =
-      panel.state?.selectedResourceId === selectedResourceId
+      getResourceSelection(panel.state, panelProjectId).selectedResourceId === selectedResourceId
         ? // Already showing it: raised, not reloaded, so it keeps its scroll position and anything
           // in progress in it.
           await papi.webViews.openWebView(webViewType, undefined, {

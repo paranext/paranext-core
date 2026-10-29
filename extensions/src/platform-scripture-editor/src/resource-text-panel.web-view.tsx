@@ -58,6 +58,7 @@ import {
 import { ResourceTextPanel } from './resource-text-panel.component';
 import { RESOURCE_PANEL_STRING_KEYS } from './resource-text-panel.const';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
+import { useProjectResourceSelection } from './use-project-resource-selection.hook';
 import { COPYRIGHT_NOTICE_STRING_KEYS } from './copyright-notice/copyright-notice.const';
 import { ProjectCopyrightNotice } from './copyright-notice/project-copyright-notice.component';
 
@@ -99,17 +100,13 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
 
   // resourceType is injected by the web view provider at open time
   const [resourceType] = useWebViewState<ResourceType>('resourceType', 'ScriptureResource');
-  const [selectedResourceId, setSelectedResourceId] = useWebViewState<string | undefined>(
-    'selectedResourceId',
-    undefined,
-  );
-  // The resource the user last chose themselves, so a selection the panel fell back to can be told
-  // apart from one the user picked. See `resolveResourceSelection` for why a fallback must not
-  // outlive a configured resource arriving. Written also by `buildResourceTextPanelState`.
-  const [userPickedResourceId, setUserPickedResourceId] = useWebViewState<string | undefined>(
-    'userPickedResourceId',
-    undefined,
-  );
+  // Kept per project: a Simple-mode project switch reloads this panel in place, with the state it
+  // already had. `userPickedResourceId` is the resource the user last chose themselves, so a
+  // selection the panel fell back to can be told apart from one the user picked. See
+  // `resolveResourceSelection` for why a fallback must not outlive a configured resource arriving.
+  // Written also by `buildResourceTextPanelState`.
+  const [{ selectedResourceId, userPickedResourceId }, updateSelection] =
+    useProjectResourceSelection(useWebViewState, projectId);
 
   // #endregion
 
@@ -280,33 +277,35 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
 
   const { nextSelectedResourceId, nextUserPickedResourceId, shownFallbackRowId } = selection;
 
-  // The user's pick is written before the selection, so no render sees the new selection without
-  // it and takes it for a fallback (see `handleSelectResourceFromList`).
+  // The user's pick and the selection are written together, so no render sees the new selection
+  // without the pick and takes it for a fallback.
   useEffect(() => {
-    if (nextUserPickedResourceId !== undefined) setUserPickedResourceId(nextUserPickedResourceId);
-    if (nextSelectedResourceId !== undefined) setSelectedResourceId(nextSelectedResourceId);
+    if (nextUserPickedResourceId !== undefined || nextSelectedResourceId !== undefined)
+      updateSelection({
+        ...(nextUserPickedResourceId !== undefined
+          ? { userPickedResourceId: nextUserPickedResourceId }
+          : {}),
+        ...(nextSelectedResourceId !== undefined
+          ? { selectedResourceId: nextSelectedResourceId }
+          : {}),
+      });
     if (selection.shouldClearPending) setPendingResourceId(undefined);
   }, [
     nextSelectedResourceId,
     nextUserPickedResourceId,
     selection.shouldClearPending,
-    setSelectedResourceId,
-    setUserPickedResourceId,
+    updateSelection,
   ]);
 
   useEffect(() => {
     if (shownFallbackRowId !== undefined) setHeldFallbackRowId(shownFallbackRowId);
   }, [shownFallbackRowId]);
 
-  // The pick is written before the selection so no render sees the user's pick taken for a
-  // fallback. Each web view state key comes back as its own web view update, in the order it was
-  // written, so the two setters are not applied together; keep the pick first.
+  // Written together, so no render sees the user's pick taken for a fallback.
   const handleSelectResourceFromList = useCallback(
-    (resourceId: string) => {
-      setUserPickedResourceId(resourceId);
-      setSelectedResourceId(resourceId);
-    },
-    [setUserPickedResourceId, setSelectedResourceId],
+    (resourceId: string) =>
+      updateSelection({ userPickedResourceId: resourceId, selectedResourceId: resourceId }),
+    [updateSelection],
   );
 
   const [isSelecting, setIsSelecting] = useState(false);
