@@ -83,7 +83,7 @@ Radix (shadcn) primitives expose the triggers as props on the content element:
 | Outside press      | `onPointerDownOutside` / `onInteractOutside` (portal-aware — see the iframe section)                                                 |
 | Escape             | `onEscapeKeyDown`                                                                                                                    |
 | Outside scroll     | **No Radix prop.** Add a `scroll`/`wheel` listener on the scroll container and close. `onInteractOutside` does *not* fire on scroll. |
-| Window loses focus | Nothing to wire — the shared wrappers turn it into an outside press (see the iframe section)                                         |
+| Window loses focus | Nothing to wire — the shared wrappers turn it into an outside press (see the iframe section); controlled surfaces without `onOpenChange` need their own `window` blur listener |
 
 - **Light:** accept Radix's defaults (outside press + Escape), and add a scroll listener to close on
   ancestor/page scroll.
@@ -105,9 +105,18 @@ Radix (shadcn) primitives expose the triggers as props on the content element:
 Dismissal is a keyboard and screen-reader concern, not just a pointer one:
 
 - **Restore focus on close.** When a surface closes, return focus to the element that opened it
-  (WCAG 2.4.3). Radix primitives do this automatically; a hand-rolled dismissal (a `window` listener that
-  sets your own state) runs *outside* Radix's lifecycle, so it must call `trigger.focus()` on
-  dismiss — otherwise keyboard users are stranded on a closed surface's dead anchor. Restoring focus is not the same as showing a
+  (WCAG 2.4.3). Radix primitives do this, with one deliberate departure in the shared wrappers:
+  focus is **not** returned when it is already in a web view (`activeElement` is an iframe) or,
+  inside a web view, when the window is not focused. Returning focus across frames blurs the window
+  the user just moved to and closes the menu they opened there. In the main document an unfocused
+  window can only mean the OS window was deactivated, so focus still returns to the trigger for
+  keyboard users coming back from another application. A hand-rolled dismissal (a `window` listener
+  that sets your own state) runs *outside* Radix's lifecycle: it must NOT focus the trigger on a
+  blur dismissal, and must call `trigger.focus()` on other dismissals (Escape, a choice) —
+  otherwise keyboard users are stranded on a closed surface's dead anchor. A consumer
+  `onCloseAutoFocus` that calls `preventDefault()` and then focuses something explicitly bypasses
+  the rule, so it must gate that focus call with `shouldSuppressFocusReturn` (exported by this
+  library, together with `isRunningInWebView`). Restoring focus is not the same as showing a
   focus ring: after a close the user drove with the pointer, the ring would sit on a control the
   pointer has left. Suppress the ring for that case rather than withholding the focus — see
   `TabDropdownMenu`, which marks its trigger with `data-quiet-focus` and clears the mark on the next
@@ -148,7 +157,9 @@ window fires `blur`. `PopoverContent`, `DropdownMenuContent`, `MenubarContent` a
 `ContextMenuContent` listen for it through `useDismissOnWindowBlur` and dispatch a synthetic
 `pointerdown` just outside the surface, so Radix runs its normal outside-press path. Every surface
 built on those components gets the behavior with nothing to wire, in the main window and inside
-every WebView alike. Because it is the ordinary outside-press path, the opt-outs in
+every WebView alike. The exception is a controlled surface without an `onOpenChange` handler that
+should still close on blur: it needs its own `window` blur listener (the inline markers menus are
+the example). Because it is the ordinary outside-press path, the opt-outs in
 [How to wire each pattern](#how-to-wire-each-pattern) keep working, and a popover portaled into a
 dialog through `PopoverPortalContainerProvider` closes while the dialog stays open.
 
