@@ -603,7 +603,33 @@ describe('first sync (Simple mode with Send/Receive available)', () => {
     expect(localStorage.getItem('platform-bible.firstSyncPending')).not.toBe('true');
   });
 
-  it('shows the app to a finished setup whose first sync is pending when availability cannot be read', async () => {
+  it('reopens the Sync step for a finished setup whose first sync is pending when only the early availability question rejects', async () => {
+    stubSettings({
+      firstRunComplete: true,
+      firstSyncState: 'pending',
+      internetUseChoiceAsked: true,
+    });
+    stubSendReceive();
+    mockSendCommand.mockRejectedValueOnce(new Error('not registered yet'));
+    mockResolveReg.mockResolvedValue('valid');
+    await resolveFirstRunState();
+    expect(
+      mockSendCommand.mock.calls.filter(
+        ([command]) => command === 'paratextBibleSendReceive.isAvailable',
+      ),
+    ).toHaveLength(2);
+    expect(getFirstRunStatus()).toMatchObject({
+      kind: 'wizard',
+      step: 'syncConsent',
+      firstSyncRequired: true,
+    });
+    expect(localStorage.getItem('platform-bible.firstSyncPending')).toBe('true');
+  });
+
+  it('shows the app to a finished setup whose first sync is pending when availability cannot be read, and keeps it pending for the next launch', async () => {
+    localStorage.setItem('platform-bible.firstRunComplete', 'true');
+    localStorage.setItem('platform-bible.firstSyncPending', 'true');
+    resetFirstRunStore();
     stubSettings({
       firstRunComplete: true,
       firstSyncState: 'pending',
@@ -613,8 +639,41 @@ describe('first sync (Simple mode with Send/Receive available)', () => {
     stubSendReceive({ available: new Error('not registered yet') });
     mockResolveReg.mockResolvedValue('valid');
     await resolveFirstRunState();
+    expect(
+      mockSendCommand.mock.calls.filter(
+        ([command]) => command === 'paratextBibleSendReceive.isAvailable',
+      ),
+    ).toHaveLength(2);
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
     expect(pendingWrites()).toEqual([]);
+    expect(localStorage.getItem('platform-bible.firstSyncPending')).toBe('true');
+    resetFirstRunStore();
+    expect(getFirstRunStatus()).toEqual({ kind: 'loading' });
+  });
+
+  it('does not ask again when the registration probe cannot resolve either', async () => {
+    stubSettings({ firstSyncState: 'unknown', internetUseChoiceAsked: true });
+    stubSendReceive({ available: new Error('not registered yet') });
+    mockResolveReg.mockResolvedValue('unknown');
+    await resolveFirstRunState();
+    expect(
+      mockSendCommand.mock.calls.filter(
+        ([command]) => command === 'paratextBibleSendReceive.isAvailable',
+      ),
+    ).toHaveLength(1);
+    expect(getFirstRunStatus()).toEqual({ kind: 'error' });
+  });
+
+  it('shows the app to a finished setup that is not waiting for a first sync without asking whether Send/Receive is available', async () => {
+    stubSettings({ firstRunComplete: true, firstSyncState: 'synced', showReminder: false });
+    stubSendReceive();
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(
+      mockSendCommand.mock.calls.filter(
+        ([command]) => command === 'paratextBibleSendReceive.isAvailable',
+      ),
+    ).toEqual([]);
   });
 
   it('treats unreadable internet settings as unable to sync', async () => {

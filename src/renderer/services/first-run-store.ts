@@ -343,10 +343,14 @@ async function resolveInternal(generation: number): Promise<void> {
         writeBooleanFlag(FIRST_RUN_COMPLETE_CACHE_KEY, firstRunComplete);
       }
     }
-    const [earlySendReceiveAnswer, firstSyncState] = await Promise.all([
-      askSendReceiveAvailable(),
-      readFirstSyncState(),
-    ]);
+    const firstSyncState = await readFirstSyncState();
+    // Availability can change the outcome only for an unfinished setup or a finished one whose
+    // first sync is pending; everyone else goes to the app without waiting for the backend to
+    // register the question. `undefined` here means either not asked or the request rejected.
+    const earlySendReceiveAnswer =
+      !firstRunComplete || firstSyncState === 'pending'
+        ? await askSendReceiveAvailable()
+        : undefined;
     let sendReceiveAvailable = earlySendReceiveAnswer === true;
     // A user who finished setup is held in the wizard only while a first sync is recorded as
     // pending. 'unknown' means setup finished before the first-sync state existed: that counts as
@@ -354,12 +358,18 @@ async function resolveInternal(generation: number): Promise<void> {
     const isFirstSyncRequired = (available: boolean): boolean =>
       available && (firstRunComplete ? firstSyncState === 'pending' : firstSyncState !== 'synced');
     // Unguarded by isSuperseded, unlike the durable writes below: this cache only mirrors the
-    // durable state just read, so writing it after a bail is still correct.
-    writeBooleanFlag(
-      FIRST_SYNC_PENDING_CACHE_KEY,
-      sendReceiveAvailable && firstSyncState === 'pending',
-    );
-    if (firstRunComplete && !isFirstSyncRequired(sendReceiveAvailable)) {
+    // durable state just read, so writing it after a bail is still correct. A pending state with no
+    // availability answer leaves the cache as it was, so a rejected question cannot seed the app
+    // for the next launch of a user still waiting for a first sync.
+    const rememberFirstSyncPending = (available: boolean | undefined): void => {
+      if (firstSyncState !== 'pending') writeBooleanFlag(FIRST_SYNC_PENDING_CACHE_KEY, false);
+      else if (available !== undefined) writeBooleanFlag(FIRST_SYNC_PENDING_CACHE_KEY, available);
+    };
+    rememberFirstSyncPending(earlySendReceiveAnswer);
+    // A finished setup whose first sync is pending but whose availability question rejected falls
+    // through to the registration probe and asks again below, rather than being let into the app
+    // where the tour could be shown and spent before the first sync.
+    if (firstRunComplete && (firstSyncState !== 'pending' || earlySendReceiveAnswer === false)) {
       applyStatus({ kind: 'app' });
       // Completed Simple-mode user: re-check registration in the background (not awaited) so a
       // registration that has since become invalid can re-raise the wizard without regressing
@@ -389,13 +399,17 @@ async function resolveInternal(generation: number): Promise<void> {
     // before publishing would spend the suppression without anyone acting on it, and the dot would
     // then contradict a registration the user really did just complete.
     if (effectiveValidity !== registrationValidity) publishRegistrationValidity(effectiveValidity);
-    // A cold start can reject the early question before the backend registers it. Only an
-    // unfinished setup gets here after a rejection (a finished one went to the app above), and the
-    // registration probe has just proven the backend is up, so ask again. Treating the rejection as
-    // final would leave this setup unmarked, and finishing it would then look like a setup from
-    // before the first-sync state existed — exempt for good.
-    if (earlySendReceiveAnswer === undefined)
-      sendReceiveAvailable = (await askSendReceiveAvailable()) === true;
+    // A cold start can reject the early question before the backend registers it. A registration
+    // probe that resolved has just proven the backend is up, so ask again. Treating the rejection as
+    // final would leave an unfinished setup unmarked, and finishing it would then look like a setup
+    // from before the first-sync state existed — exempt for good. When the probe could not resolve
+    // either, the backend is not answering: an unfinished setup waits for the registration whatever
+    // the answer, and a finished one goes to the app as it would without Send/Receive.
+    if (earlySendReceiveAnswer === undefined && effectiveValidity !== 'unknown') {
+      const laterSendReceiveAnswer = await askSendReceiveAvailable();
+      sendReceiveAvailable = laterSendReceiveAnswer === true;
+      rememberFirstSyncPending(laterSendReceiveAnswer);
+    }
     const firstSyncRequired = isFirstSyncRequired(sendReceiveAvailable);
     const canSyncNow =
       sendReceiveAvailable && effectiveValidity === 'valid' && (await canUseInternetForFirstSync());

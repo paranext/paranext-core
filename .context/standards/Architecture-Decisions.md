@@ -3719,11 +3719,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   saved an internet-use choice in this app (`platform.internetUseChoiceAsked === true`, whether from
   the wizard or Power mode's internet prompt), the internet settings the registration provider
   reports allow internet use (`permittedInternetUse === 'Enabled'`), and the registration is valid —
-  whether or not setup was ever finished (`decideFirstRun` in `first-run.reducer.ts`, fed by
-  `resolveInternal` in `first-run-store.ts`). Otherwise the full wizard starts at the first step, as
-  before. The reason this entry gave still holds and is what the first condition preserves: a user
-  who carried over only a Paratext 9 registration never answered the internet question in this app,
-  so they still see the language, internet-settings and identify steps before consenting to sync.
+  whether or not setup was ever finished (a finished setup only while its first sync is pending;
+  see `decideFirstRun` in `first-run.reducer.ts`, fed by `resolveInternal` in `first-run-store.ts`).
+  Otherwise the full wizard starts at the first step, as before. The reason this entry gave still
+  holds and is what the first condition preserves: a user who carried over only a Paratext 9
+  registration never answered the internet question in this app, so they still see the language,
+  internet-settings and identify steps before consenting to sync.
   The user decided that a Power user who switches to Simple has already set the app up, so with
   internet on and a valid registration they go straight to the Sync step rather than repeating
   setup. Requiring the current internet setting and registration, not only what was once saved, is
@@ -3930,8 +3931,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   success — rare, and the cost is one extra sync. Writing `'pending'` and the consent gate's
   `notYetSynced` (`adr-first-run-sync-consent`) together mean a never-synced user gets no automatic
   sync; the switch-to-Power sync is the exception. The Studio patch must override
-  `IsSendReceiveAvailable` and re-apply over the recorder's `Program.cs` wiring; core's PR merges
-  first. When the wizard opens straight at the Sync step instead of step 1 is
+  `IsSendReceiveAvailable` and re-apply over the recorder's `Program.cs` wiring; core's PR must
+  merge first. When the wizard opens straight at the Sync step instead of step 1 is
   `adr-first-run-existing-registration-is-prefill` (amended 2026-10-29). Offering the sample project
   to never-synced users (PT-4333) builds on this state.
 - **Source:** PT-4327 (sub-task of PT-4323); design reviewed with the developer 2026-10-28.
