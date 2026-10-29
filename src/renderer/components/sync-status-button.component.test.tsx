@@ -2295,8 +2295,8 @@ describe('SyncStatusButton — dismissal across a WebView boundary', () => {
    * Real focus is deliberately NOT moved. Doing so also drives Radix's own focus-outside machinery,
    * and that machinery is exactly what a cross-origin sandboxed WebView defeats in the app: jsdom
    * has no such boundary, so a focus call there produces parent-document focus events that a real
-   * WebView never delivers, and the popover would close for a reason the supplement had no part in.
-   * Stubbing the two signals keeps the test about the supplement.
+   * WebView never delivers, and the popover would close for a reason the shared wrappers' blur
+   * dismissal had no part in. Stubbing the two signals keeps the test about that dismissal.
    */
   const mockFocus = ({ hasFocus, focusedEl }: { hasFocus: boolean; focusedEl: Element }) => {
     vi.spyOn(document, 'hasFocus').mockReturnValue(hasFocus);

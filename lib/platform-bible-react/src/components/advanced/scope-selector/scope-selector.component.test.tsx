@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeAll } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { ScopeSelector } from '@/components/advanced/scope-selector/scope-selector.component';
@@ -56,6 +56,8 @@ interface RenderArgs {
   rangeEnd?: SerializedVerseRef;
   selectedBookIds?: string[];
   disabledScopeExplanations?: Partial<Record<ScopeWithRange, string>>;
+  /** Renders the dropdown's "Navigate" footer row, which hosts a nested book chapter picker */
+  withNavigateRow?: boolean;
 }
 
 function renderDropdown(args: RenderArgs = {}) {
@@ -81,6 +83,8 @@ function renderDropdown(args: RenderArgs = {}) {
       onRangeStartChange={onRangeStartChange}
       onRangeEndChange={onRangeEndChange}
       disabledScopeExplanations={args.disabledScopeExplanations}
+      currentScrRef={args.withNavigateRow ? REF_GEN_1_1 : undefined}
+      onCurrentScrRefChange={args.withNavigateRow ? vi.fn() : undefined}
       hideLabel
     />,
   );
@@ -400,5 +404,53 @@ describe('ScopeSelector — disabled scope explanations', () => {
       '[role="menuitem"]',
     );
     expect(chapterItem).not.toHaveTextContent(BOOK_UNAVAILABLE);
+  });
+});
+
+describe('ScopeSelector — focus after the nested book chapter picker closes', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    // Remove the instance override so later tests read the prototype getter again
+    Reflect.deleteProperty(document, 'activeElement');
+    document.querySelectorAll('iframe').forEach((frame) => frame.remove());
+  });
+
+  async function openNestedPicker() {
+    const { user, getByRole } = renderDropdown({ withNavigateRow: true });
+    await user.click(getByRole('combobox'));
+    const trigger = await screen.findByLabelText('book-chapter-trigger');
+    const menuItem = trigger.closest('[role="menuitem"]');
+    if (!(menuItem instanceof HTMLElement)) throw new Error('expected the navigate menu item');
+    await user.click(trigger);
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'true'));
+    return { user, trigger, menuItem };
+  }
+
+  it('closing the picker with Escape in a focused document focuses the navigate menu item', async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    const { user, trigger, menuItem } = await openNestedPicker();
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'));
+    await waitFor(() => expect(menuItem).toHaveFocus());
+  });
+
+  it('closing the picker while an iframe is the active element leaves focus on the iframe', async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    const { trigger, menuItem } = await openNestedPicker();
+    // The overridden `activeElement` below hides any real focus move, so watch the call itself
+    const focusSpy = vi.spyOn(menuItem, 'focus');
+    const iframe = document.createElement('iframe');
+    document.body.appendChild(iframe);
+    // Report the frame as focused without moving real focus: a real focus move also drives
+    // Radix's focus-outside dismissal, which a cross-origin frame never triggers.
+    Object.defineProperty(document, 'activeElement', { configurable: true, get: () => iframe });
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'));
+    // Radix runs its close-auto-focus handler from a timer after the unmount
+    await new Promise((resolve) => {
+      setTimeout(resolve, 50);
+    });
+    expect(document.activeElement).toBe(iframe);
+    expect(focusSpy).not.toHaveBeenCalled();
   });
 });
