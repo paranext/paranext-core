@@ -1530,7 +1530,7 @@ describe('FootnotesLayout copy reaching into the row editor', () => {
       });
     }
 
-    it("writes the row editor's part as its USFM and keeps the read-only row's no-break spaces", () => {
+    it("writes the row editor's part as its USFM and the read-only row's stored no-break space as the project spells it", () => {
       const { container } = renderPaneEditingFirstRow(undefined);
 
       const { setData, isCancelled, selectedText } = copyWholePane(container);
@@ -1542,7 +1542,9 @@ describe('FootnotesLayout copy reaching into the row editor', () => {
       expect(setData).toHaveBeenCalledTimes(1);
       const [format, text] = setData.mock.calls[0];
       expect(format).toBe('text/plain');
-      expect(text).toBe(selectedText.replace(editorDisplay, editorUsfm));
+      expect(text).toBe(
+        selectedText.replace(editorDisplay, editorUsfm).replace(`be${NBSP}ta`, `be${copied}ta`),
+      );
     });
 
     it('shortens the written copy to the copy limit', () => {

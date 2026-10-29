@@ -533,10 +533,11 @@ function FootnotesPane({
   }, [selectedFootnote, onSelectedFootnoteChange]);
 
   // The pane is outside the editor, whose own copy guard handles only selections that reach into
-  // the editor, so the pane shortens its own copies and writes what a selection takes from the row
-  // editor's display the way the row editor's own copy would (see `getFootnotesPaneCopyText`). A
-  // copy that needs neither is left to the browser, with all its usual clipboard formats; only one
-  // that needs either is written, as plain text. A copy inside a row editor has already been
+  // the editor, so the pane shortens its own copies, writes what a selection takes from the row
+  // editor's display the way the row editor's own copy would, and writes a no-break space a
+  // read-only row stores as the project spells it (see `getFootnotesPaneCopyText`). A
+  // copy that needs none of these is left to the browser, with all its usual clipboard formats;
+  // only one that needs any is written, as plain text. A copy inside a row editor has already been
   // handled by that editor's own copy guard, so it is left as the editor wrote it.
   const handleFootnotesCopy = useCallback(
     (event: ClipboardEvent<HTMLDivElement>) => {

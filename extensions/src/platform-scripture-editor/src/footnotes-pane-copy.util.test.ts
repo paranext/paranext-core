@@ -60,6 +60,8 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
+// A stored no-break space is written as the project spells it, as Paratext 9 copies one: `~` with
+// the setting off, U+00A0 with it on. A marker's separator in a read-only row stays a U+00A0.
 describe.each([
   { setting: 'off', viewOptions: notAllowing, shown: '~', copied: '~' },
   { setting: 'on', viewOptions: allowing, shown: STAND_IN, copied: NBSP },
@@ -68,12 +70,12 @@ describe.each([
   ({ viewOptions, shown, copied }) => {
     const editorUsfm = `\\f + \\ft see${copied}x \\+nd L\\+nd*${copied}z  w\\f*`;
 
-    it("writes the row editor's display spacing as spaces and leaves the read-only rows as they are", () => {
+    it("writes the row editor's display spacing as spaces and the rows' stored no-break spaces as the project spells them", () => {
       const { rowEditorRoot, firstRow, lastRow } = renderPane(shown);
       const selection = selectFrom(firstRow, 0, lastRow, lastRow.childNodes.length);
 
       expect(getFootnotesPaneCopyText(selection, rowEditorRoot, viewOptions)).toBe(
-        `\\ft${NBSP}one${NBSP}two${editorUsfm}\\ft${NBSP}three${NBSP}four`,
+        `\\ft${NBSP}one${copied}two${editorUsfm}\\ft${NBSP}three${copied}four`,
       );
     });
 
@@ -86,7 +88,7 @@ describe.each([
       const selection = selectFrom(firstRow, 0, editorText, end + 1);
 
       expect(getFootnotesPaneCopyText(selection, rowEditorRoot, viewOptions)).toBe(
-        `\\ft${NBSP}one${NBSP}two\\f + \\ft see${copied}x \\+nd L`,
+        `\\ft${NBSP}one${copied}two\\f + \\ft see${copied}x \\+nd L`,
       );
     });
 
@@ -98,7 +100,7 @@ describe.each([
       const selection = selectFrom(editorText, start, lastRow, lastRow.childNodes.length);
 
       expect(getFootnotesPaneCopyText(selection, rowEditorRoot, viewOptions)).toBe(
-        `L\\+nd*${copied}z  w\\f*\\ft${NBSP}three${NBSP}four`,
+        `L\\+nd*${copied}z  w\\f*\\ft${NBSP}three${copied}four`,
       );
     });
 
@@ -121,7 +123,7 @@ describe.each([
       );
 
       expect(getFootnotesPaneCopyText(selection, rowEditorRoot, viewOptions)).toBe(
-        `\\ft${NBSP}one${NBSP}two\n${editorUsfm}\n\\ft${NBSP}three${NBSP}four`,
+        `\\ft${NBSP}one${copied}two\n${editorUsfm}\n\\ft${NBSP}three${copied}four`,
       );
       expect(logger.debug).not.toHaveBeenCalled();
     });
@@ -143,12 +145,22 @@ describe.each([
       );
     });
 
-    it('leaves a selection of read-only rows alone', () => {
+    it('writes a selection of read-only rows with their stored no-break spaces as the project spells them', () => {
       const { rowEditorRoot, firstRow } = renderPane(shown);
       const selection = selectFrom(firstRow, 0, firstRow, firstRow.childNodes.length);
 
       expect(getFootnotesPaneCopyText(selection, rowEditorRoot, viewOptions)).toBe(
-        `\\ft${NBSP}one${NBSP}two`,
+        `\\ft${NBSP}one${copied}two`,
+      );
+    });
+
+    it('writes the read-only rows the same way when the pane has no row editor', () => {
+      const { firstRow, lastRow } = renderPane(shown);
+      document.querySelector('.editor-input')?.closest('li')?.remove();
+      const selection = selectFrom(firstRow, 0, lastRow, lastRow.childNodes.length);
+
+      expect(getFootnotesPaneCopyText(selection, undefined, viewOptions)).toBe(
+        `\\ft${NBSP}one${copied}two\\ft${NBSP}three${copied}four`,
       );
     });
   },
@@ -181,7 +193,7 @@ describe("getFootnotesPaneCopyText placing the row editor's part", () => {
     );
 
     expect(getFootnotesPaneCopyText(selection, rowEditorRoot, notAllowing)).toBe(
-      `\\ft${NBSP}a${NBSP}b${NBSP}c\n\\f + \\ft see\n\\fp more\\f*\n\\ft${NBSP}d${NBSP}e`,
+      `\\ft${NBSP}a~b~c\n\\f + \\ft see\n\\fp more\\f*\n\\ft${NBSP}d~e`,
     );
   });
 
@@ -194,16 +206,16 @@ describe("getFootnotesPaneCopyText placing the row editor's part", () => {
     serializeAs(selection, `b${NBSP}c\n\\f +${NBSP}\\ft${NBSP}see\n\\fp${NBSP}`);
 
     expect(getFootnotesPaneCopyText(selection, rowEditorRoot, notAllowing)).toBe(
-      `b${NBSP}c\n\\f + \\ft see\n\\fp `,
+      `b~c\n\\f + \\ft see\n\\fp `,
     );
   });
 
-  it('leaves the rows of a selection that ends where the row editor starts as they are', () => {
+  it('writes only the rows of a selection that ends where the row editor starts', () => {
     const { rowEditorRoot, firstRow, firstParagraph } = renderUnevenPane();
     const selection = selectFrom(firstRow, 0, firstParagraph, 0);
 
     expect(getFootnotesPaneCopyText(selection, rowEditorRoot, notAllowing)).toBe(
-      `\\ft${NBSP}a${NBSP}b${NBSP}c`,
+      `\\ft${NBSP}a~b~c`,
     );
   });
 });

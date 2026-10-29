@@ -3,8 +3,34 @@ import { toUsfmNbspSpelling, ViewOptions } from '@eten-tech-foundation/platform-
 
 const NBSP = '\u00A0';
 
-function countNbsps(text: string): number {
-  return text.split(NBSP).length - 1;
+/** What a no-break space a copy takes from the pane is: see {@link getFootnotesPaneCopyText}. */
+type NbspKind = 'row-editor-display' | 'marker-separator' | 'stored';
+
+/**
+ * The kind of each no-break space the text nodes `range` covers hold, in document order: the order
+ * the browser's text of the range writes them in.
+ */
+function nbspKindsIn(range: Range, rowEditorRoot: Element | undefined): NbspKind[] {
+  const kinds: NbspKind[] = [];
+  const root = range.commonAncestorContainer;
+  const ownerDocument = root instanceof Document ? root : root.ownerDocument;
+  if (!ownerDocument) return kinds;
+  const walker = ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  // The walker starts at `root`, which is itself the one text node when the range is inside one.
+  const textNodes: Node[] = [];
+  for (let node: Node | undefined = walker.currentNode; node; node = walker.nextNode() ?? undefined)
+    if (node.nodeType === Node.TEXT_NODE && range.intersectsNode(node)) textNodes.push(node);
+  textNodes.forEach((node) => {
+    const text = node.textContent ?? '';
+    const from = node === range.startContainer ? range.startOffset : 0;
+    const to = node === range.endContainer ? range.endOffset : text.length;
+    const nbsps = text.slice(from, to).split(NBSP).length - 1;
+    let kind: NbspKind = 'stored';
+    if (rowEditorRoot?.contains(node)) kind = 'row-editor-display';
+    else if (node.parentElement?.closest('.marker')) kind = 'marker-separator';
+    for (let i = 0; i < nbsps; i++) kinds.push(kind);
+  });
+  return kinds;
 }
 
 /**
@@ -13,9 +39,11 @@ function countNbsps(text: string): number {
  *
  * The pane holds two kinds of text, and a no-break space means something different in each:
  *
- * - A read-only row renders its note's text straight from USJ, so a U+00A0 there is a no-break space
- *   the text stores, or the one PT9 puts after a marker it shows (which a paste reads as the
- *   marker's separator). Its text is left as the selection's own text has it.
+ * - A read-only row renders its note's text straight from USJ, so a U+00A0 there is either the
+ *   separator it shows after a marker (inside the marker's `.marker` span), which stays as it is (a
+ *   paste reads it as the marker's separator), or a no-break space the text stores, which is
+ *   written as the project spells it, as Paratext 9 copies one: `~`, or U+00A0 itself when the
+ *   project allows invisible characters (`ViewOptions.allowInvisibleCharacters`).
  * - The row editor is a Standard-view editor, which shows a stored no-break space as `~` or as an
  *   internal stand-in, and shows a U+00A0 only as display spacing: each space of a run of spaces,
  *   the separator after a marker, a note's layout spacers. Each U+00A0 the selection takes from it
@@ -24,17 +52,16 @@ function countNbsps(text: string): number {
  *
  * The selection's own text (`Selection.toString()`) is the base, so the rows keep the line breaks
  * the browser puts between them; a `Range`'s text has none, so the parts' texts cannot simply be
- * joined. The row editor's part of the selection's text is found by the order of its no-break
- * spaces: the selection is split at the row editor's boundaries, and the browser's text of a
- * selection adds line breaks and collapses ASCII whitespace but never adds, moves or reorders a
- * U+00A0. So when the selection's text holds as many U+00A0s as its parts do, its n-th U+00A0 is
- * the parts' n-th, and those that come from the row editor's part become spaces. When it holds
- * fewer — the browser left out some content, such as content that is not rendered — which part each
- * belongs to cannot be told, and every U+00A0 is left as it is.
+ * joined. Each U+00A0 of it is matched to the text node it came from by order: the browser's text
+ * of a selection adds line breaks and collapses ASCII whitespace but never adds, moves or reorders
+ * a U+00A0. So when the selection's text holds as many U+00A0s as the text nodes it covers do, its
+ * n-th U+00A0 is theirs. When it holds fewer — the browser left out some content, such as content
+ * that is not rendered — which is which cannot be told, and every U+00A0 is left as it is.
  *
  * @param selection The page selection being copied
  * @param rowEditorRoot The row editor's content-editable root, if the pane has a row editor
- * @param rowEditorViewOptions The view options the row editor renders with
+ * @param rowEditorViewOptions The view options the row editor renders with, which carry the
+ *   project's `allowInvisibleCharacters`
  * @returns The text to copy
  */
 export function getFootnotesPaneCopyText(
@@ -44,42 +71,28 @@ export function getFootnotesPaneCopyText(
 ): string {
   const selectedText = selection?.toString() ?? '';
   const range = selection?.rangeCount === 1 ? selection.getRangeAt(0) : undefined;
-  if (!range || !rowEditorRoot || !range.intersectsNode(rowEditorRoot))
-    return toUsfmNbspSpelling(selectedText, rowEditorViewOptions);
+  if (!range) return toUsfmNbspSpelling(selectedText, rowEditorViewOptions);
 
-  const rowEditorRange = rowEditorRoot.ownerDocument.createRange();
-  rowEditorRange.selectNodeContents(rowEditorRoot);
-  const before = range.cloneRange();
-  const inRowEditor = range.cloneRange();
-  const after = range.cloneRange();
-  if (range.compareBoundaryPoints(Range.START_TO_START, rowEditorRange) < 0) {
-    before.setEnd(rowEditorRange.startContainer, rowEditorRange.startOffset);
-    inRowEditor.setStart(rowEditorRange.startContainer, rowEditorRange.startOffset);
-  } else before.collapse(true);
-  if (range.compareBoundaryPoints(Range.END_TO_END, rowEditorRange) > 0) {
-    inRowEditor.setEnd(rowEditorRange.endContainer, rowEditorRange.endOffset);
-    after.setStart(rowEditorRange.endContainer, rowEditorRange.endOffset);
-  } else after.collapse(false);
-
-  const nbspsBefore = countNbsps(before.toString());
-  const nbspsInRowEditor = countNbsps(inRowEditor.toString());
-  const nbspsInParts = nbspsBefore + nbspsInRowEditor + countNbsps(after.toString());
-  const nbspsInSelectedText = countNbsps(selectedText);
-  if (nbspsInParts !== nbspsInSelectedText) {
+  const kinds = nbspKindsIn(range, rowEditorRoot);
+  const nbspsInSelectedText = selectedText.split(NBSP).length - 1;
+  if (kinds.length !== nbspsInSelectedText) {
     logger.debug(
-      `Footnotes pane copy left the row editor's display spacing as no-break spaces: the ` +
-        `selection's text holds ${nbspsInSelectedText} no-break spaces, its parts ${nbspsInParts}`,
+      `Footnotes pane copy left every no-break space as it is: the selection's text holds ` +
+        `${nbspsInSelectedText} no-break spaces, the text it covers ${kinds.length}`,
     );
     return toUsfmNbspSpelling(selectedText, rowEditorViewOptions);
   }
 
+  const storedSpelling = rowEditorViewOptions?.allowInvisibleCharacters ? NBSP : '~';
   // Code units, not graphemes: a display no-break space is one code unit wherever it sits, even in
   // front of a combining mark, and the editor's own copy writes a space for it the same way.
   let nbspIndex = 0;
-  const withSpaces = selectedText.replace(/\u00A0/g, (nbsp) => {
-    const isInRowEditor = nbspIndex >= nbspsBefore && nbspIndex < nbspsBefore + nbspsInRowEditor;
+  const respelled = selectedText.replace(/\u00A0/g, (nbsp) => {
+    const kind = kinds[nbspIndex];
     nbspIndex += 1;
-    return isInRowEditor ? ' ' : nbsp;
+    if (kind === 'row-editor-display') return ' ';
+    if (kind === 'stored') return storedSpelling;
+    return nbsp;
   });
-  return toUsfmNbspSpelling(withSpaces, rowEditorViewOptions);
+  return toUsfmNbspSpelling(respelled, rowEditorViewOptions);
 }
