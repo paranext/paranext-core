@@ -309,6 +309,9 @@ async function resolveInternal(generation: number): Promise<void> {
       wizardActive,
       registrationValidity: effectiveValidity,
       wizardJustRestarted,
+      firstSyncRequired: false,
+      sendReceiveAvailable: false,
+      canSyncNow: false,
     });
 
     // The registration probe above is the long await where the watchdog reveals the escape hatch, so

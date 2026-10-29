@@ -7,6 +7,9 @@ const facts = (overrides: Partial<FirstRunFacts>): FirstRunFacts => ({
   wizardActive: false,
   registrationValidity: 'invalid',
   wizardJustRestarted: false,
+  firstSyncRequired: false,
+  sendReceiveAvailable: false,
+  canSyncNow: false,
   ...overrides,
 });
 
@@ -74,6 +77,80 @@ describe('decideFirstRun', () => {
     expect(decideFirstRun(facts({ wizardActive: true, wizardJustRestarted: true }))).toEqual({
       action: 'startWizard',
       step: 'language',
+    });
+  });
+
+  describe('first successful sync', () => {
+    it('reopens a completed first run at the sync step when the first sync is still required', () => {
+      expect(
+        decideFirstRun(
+          facts({
+            firstRunComplete: true,
+            firstSyncRequired: true,
+            sendReceiveAvailable: true,
+            canSyncNow: true,
+            registrationValidity: 'valid',
+          }),
+        ),
+      ).toEqual({ action: 'startWizard', step: 'syncConsent' });
+    });
+
+    it('reopens a completed first run at the language step when it cannot sync yet', () => {
+      expect(
+        decideFirstRun(
+          facts({
+            firstRunComplete: true,
+            firstSyncRequired: true,
+            sendReceiveAvailable: true,
+            canSyncNow: false,
+            registrationValidity: 'valid',
+          }),
+        ),
+      ).toEqual({ action: 'startWizard', step: 'language' });
+    });
+
+    it('starts an unfinished first run at the sync step when it can sync now', () => {
+      expect(
+        decideFirstRun(
+          facts({ sendReceiveAvailable: true, canSyncNow: true, registrationValidity: 'valid' }),
+        ),
+      ).toEqual({ action: 'startWizard', step: 'syncConsent' });
+    });
+
+    it('starts an unfinished first run at the language step when Send/Receive is unavailable', () => {
+      expect(
+        decideFirstRun(
+          facts({ sendReceiveAvailable: false, canSyncNow: true, registrationValidity: 'valid' }),
+        ),
+      ).toEqual({ action: 'startWizard', step: 'language' });
+    });
+
+    it('shows the app when first run is complete and no first sync is required', () => {
+      expect(
+        decideFirstRun(
+          facts({
+            firstRunComplete: true,
+            firstSyncRequired: false,
+            sendReceiveAvailable: true,
+            canSyncNow: true,
+            registrationValidity: 'valid',
+          }),
+        ),
+      ).toEqual({ action: 'showApp' });
+    });
+
+    it('waits for registration when the first sync is required but validity is unknown', () => {
+      expect(
+        decideFirstRun(
+          facts({
+            firstRunComplete: true,
+            firstSyncRequired: true,
+            sendReceiveAvailable: true,
+            canSyncNow: true,
+            registrationValidity: 'unknown',
+          }),
+        ),
+      ).toEqual({ action: 'waitForRegistration' });
     });
   });
 });
