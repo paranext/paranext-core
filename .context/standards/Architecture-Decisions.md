@@ -2984,7 +2984,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 ## adr-editor-nbsp-spelling-follows-project-setting: The editor learns the project's `AllowInvisibleChars` through `ViewOptions`, and Standard view holds a stored U+00A0 as an internal U+001A stand-in, drawn as a blank, where `~` is an ordinary character
 
 - **Date:** 2026-10-26
-- **Status:** Proposed
+- **Status:** Accepted (2026-10-29) as the interim design; PT-4931 is meant to replace it.
 - **Context:** Paratext's per-project `AllowInvisibleChars` (`platformScripture.allowInvisibleCharacters`)
   decides how the USFM spells a no-break space. Measured with ParatextData 9.5: off, the file spells
   U+00A0 as `~` and a literal tilde cannot exist; on, the file, the USX/USJ and the save all carry
