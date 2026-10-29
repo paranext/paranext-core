@@ -4619,9 +4619,14 @@ type DismissOnWindowBlurProps<T extends HTMLElement> = {
  * close-auto-focus would pull it back. That matters most across frames: a menu closing in one frame
  * by returning focus to its trigger blurs the main window, which would close the menu the user just
  * opened in another frame. The returned `onCloseAutoFocus` calls `preventDefault()` on the
- * close-auto-focus event of a blur dismissal (Radix runs it from a zero-delay timer queued while
- * unmounting, so the hook's flag outlives the press by one timer) and leaves every other close,
- * such as Escape or a click outside, restoring focus as usual.
+ * close-auto-focus event of a blur dismissal and leaves every other close, such as Escape or a
+ * click outside, restoring focus as usual. Radix runs close-auto-focus from a zero-delay timer
+ * queued while unmounting, so the hook's "blur dismissal in flight" flag is one-shot: the first
+ * close-auto-focus consumes it, which also covers an exit animation that delays the unmount. A
+ * zero-delay backstop timer clears it otherwise, which assumes the menu contents' `animate-none!`
+ * exit (no animation, so the unmount is not deferred). An animated non-modal popover is covered
+ * anyway: Radix skips the trigger refocus after an outside interaction, which the synthetic press
+ * is.
  *
  * Hidden-view case: an inactive-tab pane cannot hold an open menu, so a stray blur there is a
  * harmless no-op and there is deliberately no catch-up logic. See
@@ -4637,7 +4642,9 @@ type DismissOnWindowBlurProps<T extends HTMLElement> = {
  * @experimental This export is unstable and may change shape or disappear without notice
  */
 export declare function useDismissOnWindowBlur<T extends HTMLElement>({ ref: forwardedRef, onCloseAutoFocus: forwardedOnCloseAutoFocus, }: DismissOnWindowBlurProps<T>): {
+	/** Ref callback for the Radix Content; also forwards the caller's ref */
 	ref: React$1.RefCallback<T>;
+	/** Close-auto-focus handler for the Radix Content; also calls the caller's handler */
 	onCloseAutoFocus: (event: Event) => void;
 };
 /**
