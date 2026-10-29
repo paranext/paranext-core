@@ -84,8 +84,10 @@ export type EventSeededState<T> = {
    */
   value: T | undefined;
   /**
-   * Whether every seed read was rejected and retries ran out. Clears as soon as a value arrives
-   * from an event.
+   * Whether every seed read was rejected and retries ran out. Clears whenever a value is applied,
+   * from an event or from a recheck. A seed whose last retry is rejected after a recheck has
+   * supplied a value sets it again, so do not read it as "no value is held", nor a held value as
+   * "the seed was never rejected".
    *
    * @experimental This property is unstable and may change or disappear without notice
    */
@@ -104,7 +106,8 @@ const NEVER_RECHECK = () => false;
  * example while the service behind it is still starting) and then follows `event`.
  *
  * An event is always newer than a read that was already in flight when the event arrived, so the
- * event wins: such a read result is dropped, and an event also ends any pending seed retries.
+ * event wins: such a read result is dropped, and an event also ends any pending seed retries. A
+ * recheck does not end them, so a seed read can still follow a value a recheck supplied.
  *
  * Some values can go stale without a further event (for example when the emitter is restarted). For
  * those, `shouldRecheck` plus `recheckIntervalMs` re-read the value on a timer for as long as it
