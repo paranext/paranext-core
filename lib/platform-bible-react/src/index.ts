@@ -367,6 +367,11 @@ export { default as usePromise } from './hooks/use-promise.hook';
 export type { UsePromiseOptions } from './hooks/use-promise.hook';
 export { default as useRetryablePromise } from './hooks/use-retryable-promise.hook';
 export type { RetryablePromiseState } from './hooks/use-retryable-promise.hook';
+export { default as useEventSeededState } from './hooks/use-event-seeded-state.hook';
+export type {
+  EventSeededState,
+  EventSeededStateOptions,
+} from './hooks/use-event-seeded-state.hook';
 export { useStylesheet } from './hooks/use-stylesheet.hook';
 export { useExtraValidMarkers } from './hooks/use-extra-valid-markers.hook';
 export { useViewVisibility } from './hooks/use-view-visibility.hook';

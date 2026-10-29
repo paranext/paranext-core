@@ -37,3 +37,12 @@ export {
   isNavigableProjectIds,
   NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY,
 } from './navigable-project-ids';
+export {
+  IDLE_SYNC_ACTIVITY,
+  isSyncActivitySnapshot,
+  shouldRecheckSyncActivity,
+  SYNC_ACTIVITY_RECHECK_INTERVAL_MS,
+  toSyncActivity,
+  type SyncActivity,
+  type SyncActivityValue,
+} from './sync-activity.util';

@@ -19,7 +19,8 @@ vi.mock('@papi/frontend', () => ({
     },
     commands: { sendCommand: vi.fn() },
     networkObjects: { get: getNetworkObject },
-    network: { getNetworkEvent: vi.fn((eventName: string) => eventName) },
+    // Events never fire here; each is a subscribe function so the real `useEvent` can subscribe
+    network: { getNetworkEvent: vi.fn(() => () => () => true) },
   },
   logger: { warn: vi.fn(), debug: vi.fn() },
 }));

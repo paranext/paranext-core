@@ -17,10 +17,10 @@
 // crashes an older Paratext 10 build on the missing value:
 //   * `SyncState.syncingProjectIds` — required in the upstream file above.
 //   * `SyncActivitySnapshot.projectIds` and `SyncActivitySnapshot.outcome` — no upstream declaration
-//     to diverge from yet; this whole type, `SyncOutcome`, `getSyncActivity` and
-//     `onSyncActivityChanged` are declared here ahead of the Paratext 10 patch that raises the
-//     signal, the same way the write-gate seam (`getAutoSyncBlocking` /
-//     `onSyncWriteLockChanged`) is.
+//     to diverge from yet; core registers `getSyncActivity` and `onSyncActivityChanged` in every
+//     build, but the shape may lag the Paratext 10 patch that reports real activity, and an older
+//     Paratext 10 build may omit these two fields, the same way as for the write-gate seam
+//     (`getAutoSyncBlocking` / `onSyncWriteLockChanged`).
 // Also declared here with no upstream counterpart yet, though not a divergence in optionality:
 //   * `isAvailable` — ahead of the Paratext 10 patch that overrides core's answer to it.
 //
@@ -385,9 +385,10 @@ declare module 'paratext-bible-send-receive' {
    * (`main/startup-tasks.ts` and `syncOnProjectSwitch`). That is what makes a Simple-mode startup
    * sync visible.
    *
-   * Only a Paratext 10 build emits this. Public Platform.Bible carries this declaration but no
-   * implementation behind it, so both surfaces are absent there and a consumer must fall back
-   * rather than assume idle.
+   * Every build registers both surfaces (`getSyncActivity` and `onSyncActivityChanged`), but only a
+   * Paratext 10 build carries the run bracket that reports real activity. A plain Platform.Bible
+   * build only ever reports the idle baseline, and an older Paratext 10 build may omit `projectIds`
+   * and `outcome`.
    *
    * @experimental This type is unstable and may change shape or disappear without notice
    */

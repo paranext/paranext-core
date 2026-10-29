@@ -248,6 +248,18 @@ describe('initSyncActivityService', () => {
       expect(getSyncActivityState().outcome).toBeUndefined();
     });
 
+    it('reads a null project list as absent rather than dropping the snapshot', async () => {
+      // Parsed from JSON because that is how a serializer that writes an unset list as `null`
+      // really delivers it, and `SyncActivitySnapshot` cannot express one.
+      dispose = initSyncActivityService();
+      await flushSeeding();
+
+      emit?.(JSON.parse('{"isSyncing":true,"projectIds":null}'));
+
+      expect(getSyncActivityState().isSyncing).toBe(true);
+      expect(getSyncActivityState().projectIds).toEqual([]);
+    });
+
     it('reads a null outcome as absent', async () => {
       // Parsed from JSON because that is how a serializer that writes omitted optionals as `null`
       // really delivers it, and `SyncActivitySnapshot` cannot express one.
