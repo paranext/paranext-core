@@ -2,7 +2,10 @@ import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { getErrorMessage, isString } from 'platform-bible-utils';
-import { isSyncActivitySnapshot } from 'platform-bible-utils/experimental';
+import {
+  isSyncActivitySnapshot,
+  SYNC_ACTIVITY_RECHECK_INTERVAL_MS,
+} from 'platform-bible-utils/experimental';
 import type { SyncActivitySnapshot, SyncOutcome } from 'paratext-bible-send-receive';
 import { seedWithRetry } from './seed-with-retry.util';
 import {
@@ -43,8 +46,10 @@ const GET_SYNC_ACTIVITY_COMMAND = 'paratextBibleSendReceive.getSyncActivity';
  * the drift that lets this disagree with the backend. Nothing here forms an opinion — it asks, and
  * the backend's answer wins. Spare on purpose, since a sync runs for minutes and the read is an
  * in-memory one: this bounds how long a lost snapshot can strand the UI, it does not drive the UI.
+ *
+ * The interval is the one every reader of the sync activity shares.
  */
-const SYNC_ACTIVITY_WATCHDOG_INTERVAL_MS = 30_000;
+const SYNC_ACTIVITY_WATCHDOG_INTERVAL_MS = SYNC_ACTIVITY_RECHECK_INTERVAL_MS;
 
 /**
  * Every outcome this build can read. A `Record` rather than a list so that adding a member to
