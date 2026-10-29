@@ -1883,9 +1883,8 @@ describe('Home while a sync runs', () => {
       1,
     );
     // Only the waiting row explains why it is disabled; the syncing row needs no reason.
-    expect(
-      screen.getAllByRole('group', { name: 'Wait for the current sync to finish' }),
-    ).toHaveLength(1);
+    expect(screen.getAllByRole('group', { name: /: waiting$/ })).toHaveLength(1);
+    expect(screen.getByRole('group', { name: 'Get WAI: waiting' })).toBeInTheDocument();
   });
 
   it('matches the syncing project whatever the casing of its id', () => {
@@ -1896,9 +1895,43 @@ describe('Home while a sync runs', () => {
     expect(getButtons.filter((button) => button.getAttribute('aria-busy') === 'true')).toHaveLength(
       1,
     );
-    expect(
-      screen.getAllByRole('group', { name: 'Wait for the current sync to finish' }),
-    ).toHaveLength(1);
+    expect(screen.getAllByRole('group', { name: /: waiting$/ })).toHaveLength(1);
+    expect(screen.getByRole('group', { name: 'Get WAI: waiting' })).toBeInTheDocument();
+  });
+
+  it('names a waiting Sync stop after the action and project, and keeps the reason as its tooltip', async () => {
+    // A downloaded project with local edits has Sync as a button of its own
+    render(
+      <Home
+        headerContent={undefined}
+        localProjectsInfo={[
+          {
+            projectId: 'localProject',
+            isPublished: false,
+            fullName: 'LOC full name',
+            name: 'LOC',
+            language: 'en',
+          },
+        ]}
+        sharedProjectsInfo={{
+          syncingProject: sharedProject('syncingProject', 'SYN'),
+          waitingProject: sharedProject('waitingProject', 'WAI'),
+          localProject: { ...sharedProject('localProject', 'LOC'), editedStatus: 'edited' },
+        }}
+        remoteProjectsState="loaded"
+        isSendReceiveInProgress
+        activeSendReceiveProjects={['syncingProject']}
+        onSendReceiveProject={() => {}}
+        localizedStringsWithLoadingState={[EN_STRINGS, false]}
+      />,
+    );
+    const stop = screen.getByRole('group', { name: 'Sync LOC: waiting' });
+    // Every waiting stop has a name of its own, so a screen reader can tell them apart
+    const names = screen.getAllByRole('group').map((group) => group.getAttribute('aria-label'));
+    expect(names).toEqual(expect.arrayContaining(['Sync LOC: waiting', 'Get WAI: waiting']));
+    expect(new Set(names).size).toBe(names.length);
+    stop.focus();
+    expect(await screen.findAllByText('Wait for the current sync to finish')).not.toHaveLength(0);
   });
 
   it('enables every Get button when no sync runs', () => {
@@ -1940,7 +1973,7 @@ describe('Home while a sync runs', () => {
       />,
     );
     expect(screen.getByRole('group', { name: unsupportedReasonText })).toBeInTheDocument();
-    expect(screen.queryByRole('group', { name: 'Wait for the current sync to finish' })).toBeNull();
+    expect(screen.queryByRole('group', { name: /: waiting$/ })).toBeNull();
   });
 
   it("gives a waiting row's Sync menu item the reason while another project syncs", async () => {

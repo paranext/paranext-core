@@ -19,6 +19,7 @@ import {
   CardHeader,
   cn,
   DisabledActionTooltip,
+  DisabledTooltipWrapper,
   DropdownMenuItem,
   Label,
   SearchBar,
@@ -99,6 +100,8 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_serverUnreachable_title%',
   '%resources_syncFailed_title%',
   '%resources_syncWaiting_reason%',
+  '%resources_syncWaiting_stopGet_format%',
+  '%resources_syncWaiting_stopSync_format%',
   '%resources_sync%',
   '%resources_syncRunning_listLoads%',
 ] as const);
@@ -468,6 +471,12 @@ export function Home({
   // contextual title ("Sync failed") communicates what failed better than the generic "Error".
   const syncFailedTitleText: string = getLocalizedString('%resources_syncFailed_title%');
   const syncWaitingReasonText: string = getLocalizedString('%resources_syncWaiting_reason%');
+  const syncWaitingStopSyncFormat: string = getLocalizedString(
+    '%resources_syncWaiting_stopSync_format%',
+  );
+  const syncWaitingStopGetFormat: string = getLocalizedString(
+    '%resources_syncWaiting_stopGet_format%',
+  );
   const syncRunningListLoadsText: string = getLocalizedString('%resources_syncRunning_listLoads%');
   const serverUnreachableDescriptionText: string = getLocalizedString(
     '%resources_serverUnreachable_description%',
@@ -987,13 +996,33 @@ export function Home({
     isBlocked: boolean,
     reasonText: string | undefined,
     button: ReactNode,
-  ) => (
+    stopName?: string,
+  ) => {
+    // A stop whose name differs from the reason it shows: every row waits for the same sync, so
+    // the shared reason would give each stop the same name.
+    if (stopName && isBlocked && reasonText)
+      return (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DisabledTooltipWrapper isDisabled disabledExplanation={stopName}>
+                {button}
+              </DisabledTooltipWrapper>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p className="tw:max-w-xs tw:whitespace-pre-line">{reasonText}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
     // Without reason text the wrapper would be a nameless tab stop with an empty bubble; the button
     // stays disabled either way.
-    <DisabledActionTooltip disabled={isBlocked && !!reasonText} tooltipText={reasonText ?? ''}>
-      {button}
-    </DisabledActionTooltip>
-  );
+    return (
+      <DisabledActionTooltip disabled={isBlocked && !!reasonText} tooltipText={reasonText ?? ''}>
+        {button}
+      </DisabledActionTooltip>
+    );
+  };
 
   const syncOrGetButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
     // Home reuses `unsupportedReason` (the can't-open signal) to block Sync and Get too. Today that
@@ -1009,6 +1038,14 @@ export function Home({
     const isWaitingForOtherSync = isSendReceiveInProgress && !isThisProjectSyncing;
     const waitingReasonText = isWaitingForOtherSync ? syncWaitingReasonText : undefined;
     const sendReceiveLabel = project.isLocallyAvailable ? syncText : getText;
+    // The unsupported reason, which already names why this project is blocked, wins.
+    const waitingStopName =
+      !unsupportedReasonText && waitingReasonText
+        ? formatReplacementString(
+            project.isLocallyAvailable ? syncWaitingStopSyncFormat : syncWaitingStopGetFormat,
+            { name: project.name },
+          )
+        : undefined;
     if (isMenuItem)
       return blockableMenuItem({
         label: getSendReceiveButtonContent(project),
@@ -1032,6 +1069,7 @@ export function Home({
       >
         {getSendReceiveButtonContent(project)}
       </Button>,
+      waitingStopName,
     );
   };
 
