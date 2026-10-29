@@ -12,10 +12,8 @@ function Host({
   forwardedRef?: Ref<HTMLDivElement>;
   open?: boolean;
 }) {
-  const contentRef = useDismissOnWindowBlur(forwardedRef);
-  return (
-    <section data-testid="parent">{open && <div data-testid="content" ref={contentRef} />}</section>
-  );
+  const { ref } = useDismissOnWindowBlur({ ref: forwardedRef });
+  return <section data-testid="parent">{open && <div data-testid="content" ref={ref} />}</section>;
 }
 
 describe('useDismissOnWindowBlur', () => {
@@ -87,12 +85,79 @@ describe('useDismissOnWindowBlur', () => {
   it('returns a stable ref callback across renders', () => {
     const callbacks: unknown[] = [];
     function Probe({ tick }: { tick: number }) {
-      callbacks.push(useDismissOnWindowBlur<HTMLDivElement>());
+      callbacks.push(useDismissOnWindowBlur<HTMLDivElement>({}).ref);
       return <span>{tick}</span>;
     }
     const { rerender } = render(<Probe tick={0} />);
     rerender(<Probe tick={1} />);
     expect(callbacks.length).toBeGreaterThan(1);
     expect(new Set(callbacks).size).toBe(1);
+  });
+
+  describe('close-auto-focus', () => {
+    function renderProbe(callerHandler?: (event: Event) => void) {
+      let handler: ((event: Event) => void) | undefined;
+      function Probe() {
+        const blurDismissal = useDismissOnWindowBlur<HTMLDivElement>({
+          onCloseAutoFocus: callerHandler,
+        });
+        handler = blurDismissal.onCloseAutoFocus;
+        return (
+          <section>
+            <div ref={blurDismissal.ref} />
+          </section>
+        );
+      }
+      render(<Probe />);
+      return (event: Event) => handler?.(event);
+    }
+    const cancelable = () => new Event('focus', { cancelable: true });
+
+    it('prevents close-auto-focus while a blur dismissal is in flight', () => {
+      const onCloseAutoFocus = renderProbe();
+      window.dispatchEvent(new Event('blur'));
+      const event = cancelable();
+      onCloseAutoFocus(event);
+      expect(event.defaultPrevented).toBe(true);
+    });
+
+    it('stops preventing close-auto-focus once the blur dismissal task has ended', async () => {
+      const onCloseAutoFocus = renderProbe();
+      window.dispatchEvent(new Event('blur'));
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
+      const event = cancelable();
+      onCloseAutoFocus(event);
+      expect(event.defaultPrevented).toBe(false);
+    });
+
+    it('leaves close-auto-focus alone otherwise', () => {
+      const onCloseAutoFocus = renderProbe();
+      const event = cancelable();
+      onCloseAutoFocus(event);
+      expect(event.defaultPrevented).toBe(false);
+    });
+
+    it("calls the caller's onCloseAutoFocus first", () => {
+      const order: string[] = [];
+      const callerHandler = vi.fn(() => order.push('caller'));
+      const onCloseAutoFocus = renderProbe(callerHandler);
+      const event = cancelable();
+      event.preventDefault = vi.fn(() => order.push('hook'));
+      window.dispatchEvent(new Event('blur'));
+      onCloseAutoFocus(event);
+      expect(callerHandler).toHaveBeenCalledWith(event);
+      expect(order).toEqual(['caller', 'hook']);
+    });
+
+    it('does not undo a default the caller already prevented', () => {
+      const callerHandler = vi.fn((event: Event) => event.preventDefault());
+      const onCloseAutoFocus = renderProbe(callerHandler);
+      const event = cancelable();
+      onCloseAutoFocus(event);
+      expect(callerHandler).toHaveBeenCalledTimes(1);
+      expect(event.defaultPrevented).toBe(true);
+    });
   });
 });

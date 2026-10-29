@@ -233,3 +233,44 @@ describe('PopoverContent window blur', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 });
+
+describe('PopoverContent focus after dismissal', () => {
+  it('does not move focus back to the trigger after a window-blur dismissal', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <>
+        <Popover>
+          <PopoverTrigger>open</PopoverTrigger>
+          <PopoverContent>body</PopoverContent>
+        </Popover>
+        <button type="button">other</button>
+      </>,
+    );
+    await user.click(screen.getByText('open'));
+    expect(await screen.findByText('body')).toBeInTheDocument();
+    const otherButton = screen.getByText('other');
+    act(() => otherButton.focus());
+
+    blurWindow();
+
+    await waitFor(() => expect(screen.queryByText('body')).not.toBeInTheDocument());
+    expect(document.activeElement).toBe(otherButton);
+  });
+
+  it('returns focus to the trigger after Escape', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <Popover>
+        <PopoverTrigger>open</PopoverTrigger>
+        <PopoverContent>body</PopoverContent>
+      </Popover>,
+    );
+    await user.click(screen.getByText('open'));
+    expect(await screen.findByText('body')).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => expect(screen.queryByText('body')).not.toBeInTheDocument());
+    expect(document.activeElement).toBe(screen.getByText('open'));
+  });
+});

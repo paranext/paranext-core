@@ -1,5 +1,13 @@
 import { Ref, RefCallback, useCallback, useEffect, useRef } from 'react';
 
+/** The Radix Content props {@link useDismissOnWindowBlur} composes with the caller's. */
+export type DismissOnWindowBlurProps<T extends HTMLElement> = {
+  /** The caller's own ref for the content element (function or object), if any */
+  ref?: Ref<T>;
+  /** The caller's own close-auto-focus handler, if any */
+  onCloseAutoFocus?: (event: Event) => void;
+};
+
 /**
  * Treats the window losing focus as a press outside the calling surface, so an open menu or popover
  * dismisses itself.
@@ -23,21 +31,39 @@ import { Ref, RefCallback, useCallback, useEffect, useRef } from 'react';
  * Radix anyway: a layer below the top-most layer that disables outside pointer events does not
  * dismiss.
  *
+ * Focus rule: a dismissal caused by window blur does not return focus to the trigger. The user has
+ * already put focus somewhere else (another frame, another application), and Radix's default
+ * close-auto-focus would pull it back. That matters most across frames: a menu closing in one frame
+ * by returning focus to its trigger blurs the main window, which would close the menu the user just
+ * opened in another frame. The returned `onCloseAutoFocus` calls `preventDefault()` on the
+ * close-auto-focus event of a blur dismissal (Radix runs it from a zero-delay timer queued while
+ * unmounting, so the hook's flag outlives the press by one timer) and leaves every other close,
+ * such as Escape or a click outside, restoring focus as usual.
+ *
  * Hidden-view case: an inactive-tab pane cannot hold an open menu, so a stray blur there is a
  * harmless no-op and there is deliberately no catch-up logic. See
  * `.claude/rules/cross-view-sync-hidden-views.md`.
  *
- * @param forwardedRef The caller's own ref for the content element (function or object), if any. It
- *   receives the element too, so wiring this hook does not take the ref away from the caller.
- * @returns Ref callback to attach to the surface's content element. The element is `null` while the
- *   surface is closed, which makes the blur a no-op. Its identity is stable unless `forwardedRef`
- *   changes.
+ * @param props The caller's `ref` and `onCloseAutoFocus` for the Radix Content. Both still work:
+ *   the ref receives the element too, and the caller's handler runs first and can itself prevent
+ *   the default.
+ * @returns `ref`: ref callback to attach to the surface's content element. The element is `null`
+ *   while the surface is closed, which makes the blur a no-op. Its identity is stable unless
+ *   `props.ref` changes. `onCloseAutoFocus`: handler to pass to the content. Spread both onto the
+ *   Radix Content.
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export function useDismissOnWindowBlur<T extends HTMLElement>(
-  forwardedRef?: Ref<T>,
-): RefCallback<T> {
+export function useDismissOnWindowBlur<T extends HTMLElement>({
+  ref: forwardedRef,
+  onCloseAutoFocus: forwardedOnCloseAutoFocus,
+}: DismissOnWindowBlurProps<T>): {
+  ref: RefCallback<T>;
+  onCloseAutoFocus: (event: Event) => void;
+} {
   const elementRef = useRef<T | undefined>(undefined);
+  const isBlurDismissalInFlightRef = useRef(false);
+  const onCloseAutoFocusRef = useRef(forwardedOnCloseAutoFocus);
+  onCloseAutoFocusRef.current = forwardedOnCloseAutoFocus;
 
   useEffect(() => {
     const handleWindowBlur = () => {
@@ -50,14 +76,21 @@ export function useDismissOnWindowBlur<T extends HTMLElement>(
         typeof PointerEvent === 'undefined'
           ? new MouseEvent('pointerdown', eventInit)
           : new PointerEvent('pointerdown', eventInit);
+      // Radix handles the discrete press synchronously and unmounts the content, but its focus scope
+      // runs close-auto-focus from a `setTimeout(0)` queued during that unmount. The flag is cleared
+      // by a timer queued after the dispatch, so it runs after the focus scope's timer.
+      isBlurDismissalInFlightRef.current = true;
       parent.dispatchEvent(syntheticPress);
+      setTimeout(() => {
+        isBlurDismissalInFlightRef.current = false;
+      }, 0);
     };
 
     window.addEventListener('blur', handleWindowBlur);
     return () => window.removeEventListener('blur', handleWindowBlur);
   }, []);
 
-  return useCallback(
+  const ref = useCallback(
     (element: T | null) => {
       elementRef.current = element ?? undefined;
       if (typeof forwardedRef === 'function') forwardedRef(element);
@@ -65,4 +98,11 @@ export function useDismissOnWindowBlur<T extends HTMLElement>(
     },
     [forwardedRef],
   );
+
+  const onCloseAutoFocus = useCallback((event: Event) => {
+    onCloseAutoFocusRef.current?.(event);
+    if (isBlurDismissalInFlightRef.current && !event.defaultPrevented) event.preventDefault();
+  }, []);
+
+  return { ref, onCloseAutoFocus };
 }
