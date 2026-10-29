@@ -3713,6 +3713,24 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   they are not re-onboarded. Installs seeded before the copy was recorded never show the banner.
   `platform.resetFirstRun` is callable by any PAPI client and can delete the registration; it is
   documented as a developer and tester tool.
+- **Amended 2026-10-29 (PT-4327, wizard reopens at the Sync step):** "An unfinished first run always
+  starts at the first step" no longer holds without a condition. When Send/Receive is available,
+  the wizard opens straight at the Sync step whenever a first sync could run right now — the user
+  saved an internet-use choice in this app (`platform.internetUseChoiceAsked === true`, whether from
+  the wizard or Power mode's internet prompt), the internet settings the registration provider
+  reports allow internet use (`permittedInternetUse === 'Enabled'`), and the registration is valid —
+  whether or not setup was ever finished (`decideFirstRun` in `first-run.reducer.ts`, fed by
+  `resolveInternal` in `first-run-store.ts`). Otherwise the full wizard starts at the first step, as
+  before. The reason this entry gave still holds and is what the first condition preserves: a user
+  who carried over only a Paratext 9 registration never answered the internet question in this app,
+  so they still see the language, internet-settings and identify steps before consenting to sync.
+  The user decided that a Power user who switches to Simple has already set the app up, so with
+  internet on and a valid registration they go straight to the Sync step rather than repeating
+  setup. Requiring the current internet setting and registration, not only what was once saved, is
+  deliberate: a user whose sync failed and whose internet then read as off must be sent to the step
+  that fixes it, not to a Sync step that errors. The surrounding first-sync gate is
+  `adr-first-sync-state-recorded-by-backend`.
+
 ## adr-first-run-sync-consent: Sync consent is enforced per sync trigger, never by one global gate
 
 - **Date:** 2026-08-16 (decline scope revised 2026-09-11)
@@ -3817,6 +3835,106 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   is not gated here (PT-4606).
 - **Source:** PT-4369; adversarial review of the initial fix plan, which refuted the ticket's stated
   cause and both first-draft fixes; PR #2700 review (2026-09-09).
+- **Amended 2026-10-29 (PT-4327, first successful sync):** the gate now also needs a first
+  successful Send/Receive. `getAutomaticSyncConsent` answers `granted` only when
+  `platform.firstRunComplete` is literally `true`, there is no session deferral, **and**
+  `platform.firstSyncState` is not `'pending'`; a `'pending'` state answers the new withheld value
+  `notYetSynced`, which has its own line in `WITHHELD_SYNC_CONSENT_REASONS` so the skip log explains
+  it. Any other value — `'synced'`, or `'unknown'` from a setup that predates the state — grants, so
+  users who finished setup before this shipped keep their automatic syncs. It still fails closed:
+  a first-sync state that cannot be read answers `unreadable`. So the startup, shutdown,
+  window-close and project-switch syncs all stay off for a user whose first sync has not
+  succeeded; that first sync can only come from the wizard's Sync step, the Send/Receive dialog or
+  Home, which are user-initiated and ungated. The gate reads the setting on every call, so the
+  first success opens it for the rest of the session with no restart. The switch-to-Power sync lets
+  `notYetSynced` through, as it does `unconfirmed` (see the amendment to
+  `adr-switch-to-power-sends-unsent-changes`). Where the state comes from is
+  `adr-first-sync-state-recorded-by-backend`.
+
+## adr-first-sync-state-recorded-by-backend: The first successful sync is recorded by the .NET backend from the sync-activity outcome, as a three-valued hidden setting
+
+- **Date:** 2026-10-29
+- **Status:** Accepted
+- **Context:** PT-4327: a Simple-mode user who finished the first-run wizard without syncing (for
+  example with "Don't sync yet") can land in an app with no projects and no idea how to get one. The
+  product rule is that, when Send/Receive is available, the wizard keeps reopening at its Sync step
+  on every launch until the user's first Send/Receive succeeds, no automatic sync runs before then,
+  and the onboarding tour shows once after that first sync, because before it there is no project
+  to tour. That needs a durable "has synced at least once" fact that the renderer can read at
+  startup, that the consent gate can read in main, and that is recorded however the sync ran: the
+  wizard, the Send/Receive dialog, Home, a project switch, startup, window close or shutdown. It
+  also needs a way to tell at startup whether this build has Send/Receive at all, because public
+  Platform.Bible, CI and dev builds have only core's stub and must behave exactly as before.
+  Existing users who finished setup before this shipped must not be sent back to the Sync step,
+  lose their automatic syncs, or see the tour again.
+- **Decision:**
+  - **A three-valued hidden core setting, `platform.firstSyncState`** (`papi-shared-types.ts`,
+    validated in `core-settings-info.data.ts`, mirrored in C# as `Settings.FIRST_SYNC_STATE`):
+    `'unknown'` (the default, never written), `'pending'` (a first run started on this version and
+    no sync has succeeded) and `'synced'`. "Has synced" means `!== 'pending'`, so an upgrading user
+    — `'unknown'` with `platform.firstRunComplete === true` — counts as synced with no migration
+    step, and the e2e fixtures that seed only `firstRunComplete: true` keep working. A string is used
+    because core settings have no `null` default that could tell "never written" apart from
+    `false`. The renderer writes `'pending'` whenever it starts the wizard for a setup that still
+    needs a first sync, re-reading first and never overwriting `'synced'` (`markFirstSyncPending` in
+    `first-run-store.ts`); the developer reset `platform.resetFirstRun` writes `'pending'` too.
+  - **The backend records `'synced'`.** `FirstSyncRecorder`
+    (`c-sharp/Projects/SendReceive/FirstSyncRecorder.cs`, started in `Program.cs`) subscribes
+    in-process to `ParatextProjectSendReceiveService.SyncActivityChanged`, as
+    `UnsyncedChangesTracker` and `RemoteChangesPoller` do. On a snapshot that has stopped syncing
+    with `SyncOutcome.Succeeded` (the PT-4570 rule: every covered project succeeded, and a run with
+    nothing to sync counts), it writes `'synced'` unless the state already reads `'synced'`. The
+    event is raised from the sync worker's `finally` and `SettingsService.SetSetting` blocks on a
+    PAPI round trip, so the read and write run on a background task; a failed write, including one
+    lost at shutdown, is logged and retried on the next success. Any successful sync counts,
+    Power mode included: the state is only read in Simple mode, and "synced once" means synced once.
+    It is a user setting, not project data, so the Send/Receive write gate does not apply.
+  - **A backend answer to "is Send/Receive available?"**: the `paratextBibleSendReceive.isAvailable`
+    command, registered next to the other Send/Receive commands. Core's stub service answers
+    `false`; the Paratext 10 Studio patch makes it answer `true`. A rejection or missing command
+    counts as unavailable, which fails toward today's behavior rather than toward "wizard on every
+    launch".
+  - **The renderer's startup decision** (`resolveInternal` and `decideFirstRun`) consults the state
+    and availability only in Simple mode. A completed setup goes to the app unless Send/Receive is
+    available and the state is `'pending'`. Because the store seeds its first status synchronously
+    from localStorage, a localStorage mirror, `platform-bible.firstSyncPending`, makes a
+    completed-but-unsynced user start on the loading gate rather than flash the app before the
+    wizard returns. On a cold start the early availability question can reject before the backend
+    registers the command; for an unfinished setup it is asked again after the registration probe
+    has proven the backend is up, because treating that rejection as final would leave the setup
+    unmarked, and finishing it would then read as a pre-existing setup, exempt for good.
+  - **The tour waits while the state is `'pending'`** (`useTourHeldForFirstSync`), and otherwise
+    keeps its existing one-time localStorage marker. It holds conservatively: while the setting is
+    loading or availability is unanswered a possibly-pending user stays held, only a definite
+    "not available" releases them, and availability is asked again once the first-run status
+    reaches `app`, when a rejection then counts as "not available" rather than holding the tour
+    forever. The hook subscribes to the setting, so the tour can show in the same session once the
+    backend records the first sync.
+- **Alternatives:** **Record the success in the renderer**, when the wizard's own sync or the
+  dialog's sync reports success — rejected: syncs run from many places, some (the shutdown sync, a
+  sync while no window is listening) have no renderer to hear them, so the fact would be missed;
+  only the backend sees every run's outcome. **Reuse `platformGetResources.isSendReceiveAvailable`**
+  (and `use-send-receive-availability.hook.ts`) to decide whether the gate applies — rejected: it is
+  privileged, hosted in an extension, and briefly reports `false` early in startup, which is exactly
+  when the startup decision is made. **A second tour marker, "tour done since the first sync"** —
+  rejected: users who finished setup before this shipped would not have it, so the tour would come
+  back for them after their next sync; holding the existing marker while `'pending'` already gives
+  "show once after the first sync". **A boolean setting** — rejected: a `false` default cannot tell
+  an upgrading user from one whose first sync is outstanding, so it would need a migration that
+  races startup.
+- **Consequences:** Builds without Send/Receive behave exactly as before, CI e2e included. A user
+  who can never sync (no internet, a registration for an unsupported server) sees the wizard on
+  every launch; the Sync step's added line that it returns until the first sync is the accepted
+  mitigation. The renderer's `'pending'` write is a read-then-write, so a sync that finishes while
+  the wizard is starting can be overwritten and the wizard reopens once more until the next
+  success — rare, and the cost is one extra sync. Writing `'pending'` and the consent gate's
+  `notYetSynced` (`adr-first-run-sync-consent`) together mean a never-synced user gets no automatic
+  sync; the switch-to-Power sync is the exception. The Studio patch must override
+  `IsSendReceiveAvailable` and re-apply over the recorder's `Program.cs` wiring; core's PR merges
+  first. When the wizard opens straight at the Sync step instead of step 1 is
+  `adr-first-run-existing-registration-is-prefill` (amended 2026-10-29). Offering the sample project
+  to never-synced users (PT-4333) builds on this state.
+- **Source:** PT-4327 (sub-task of PT-4323); design reviewed with the developer 2026-10-28.
 
 ## adr-focus-in-a-background-window-is-latent: A `focus()` call inside a backgrounded window sets the active element without raising the window
 
@@ -10029,6 +10147,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   decided by the Send/Receive implementation, not by this trigger; as of 2026-10-23 both are
   verified only by hand in a Paratext 10 build.
 - **Source:** PT-4826.
+- **Amended 2026-10-29 (PT-4327, first successful sync):** the gate gained a withheld answer,
+  `notYetSynced`, for a Simple-mode user whose first Send/Receive has not succeeded
+  (`adr-first-run-sync-consent`). This sync lets it through alongside `unconfirmed`
+  (`getSwitchToPowerSyncConsent` in `platform-scripture-editor.utils.ts`): the switch is the user's
+  own act, the sync only runs when there are unsent changes, and a never-synced user who moves to
+  Power should get Power mode's normal behavior. `deferred`, `unreadable`, a rejected request and
+  any answer the function does not know still stop it.
 
 ## adr-sync-activity-outcome-is-coarse: The all-paths sync-activity signal reports a coarse outcome, not per-project results
 

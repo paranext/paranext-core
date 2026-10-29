@@ -109,11 +109,12 @@ describe('platform.firstSyncState setting', () => {
     await expect(validator?.('synced', 'unknown', {})).resolves.toBe(true);
     // Feed values outside the compile-time union past the validator to prove the runtime guard rejects them.
     // eslint-disable-next-line no-type-assertion/no-type-assertion -- deliberately violating the compile-time type to exercise the runtime type guard
-    await expect(validator?.('done' as never, 'unknown', {})).resolves.toBe(false);
-    // eslint-disable-next-line no-type-assertion/no-type-assertion -- deliberately violating the compile-time type to exercise the runtime type guard
-    await expect(validator?.(true as never, 'unknown', {})).resolves.toBe(false);
-    // eslint-disable-next-line no-type-assertion/no-type-assertion -- deliberately violating the compile-time type to exercise the runtime type guard
-    await expect(validator?.(undefined as never, 'unknown', {})).resolves.toBe(false);
+    const valuesOutsideTheUnion = ['done', true, undefined] as never[];
+    await Promise.all(
+      valuesOutsideTheUnion.map((value) =>
+        expect(validator?.(value, 'unknown', {})).resolves.toBe(false),
+      ),
+    );
   });
 });
 

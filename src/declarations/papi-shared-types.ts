@@ -376,7 +376,9 @@ declare module 'papi-shared-types' {
      * Forget first-run progress and restart into the first-run wizard, in Simple mode, as a new
      * user — or a Paratext 9 user launching Platform.Bible for the first time — would see it. Also
      * clears the orientation tour's completion and whether the user was asked for an internet-use
-     * choice (`platform.internetUseChoiceAsked`), and turns `platform.syncOnStartup` and
+     * choice (`platform.internetUseChoiceAsked`), sets `platform.firstSyncState` to `pending` so
+     * the wizard's Sync step returns and automatic syncs wait until a sync succeeds again (a later
+     * successful Send/Receive sets it back to `synced`), and turns `platform.syncOnStartup` and
      * `platform.showRegistrationReminderOnStartup` back on. Works in installed builds: press F12
      * and run `await papi.commands.sendCommand('platform.resetFirstRun')` in the console.
      *
