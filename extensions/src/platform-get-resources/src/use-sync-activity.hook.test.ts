@@ -2,11 +2,8 @@
 /* eslint-disable no-null/no-null -- the wire may send null, which the guard must accept */
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  isSyncActivitySnapshot,
-  SYNC_ACTIVITY_RECHECK_INTERVAL_MS,
-  useSyncActivity,
-} from './use-sync-activity.hook';
+import { SYNC_ACTIVITY_RECHECK_INTERVAL_MS } from 'platform-bible-utils/experimental';
+import { useSyncActivity } from './use-sync-activity.hook';
 
 const { mockSendCommand, emitter } = vi.hoisted(() => {
   const listeners = new Set<(payload: unknown) => void>();
@@ -30,22 +27,6 @@ vi.mock('@papi/frontend', () => ({
   },
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
-
-describe('isSyncActivitySnapshot', () => {
-  it.each([
-    [{ isSyncing: true }, true],
-    [{ isSyncing: false, projectIds: ['A'] }, true],
-    [{ isSyncing: true, projectIds: null }, true],
-    [{ isSyncing: true, projectIds: [1] }, false],
-    [{ isSyncing: true, projectIds: 'A' }, false],
-    [{ isSyncing: 'yes' }, false],
-    [{}, false],
-    [null, false],
-    ['text', false],
-  ])('judges %j as %s', (value, expected) => {
-    expect(isSyncActivitySnapshot(value)).toBe(expected);
-  });
-});
 
 describe('useSyncActivity', () => {
   beforeEach(() => {

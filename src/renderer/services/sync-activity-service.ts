@@ -2,6 +2,7 @@ import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { getErrorMessage, isString } from 'platform-bible-utils';
+import { isSyncActivitySnapshot } from 'platform-bible-utils/experimental';
 import type { SyncActivitySnapshot, SyncOutcome } from 'paratext-bible-send-receive';
 import { seedWithRetry } from './seed-with-retry.util';
 import {
@@ -66,9 +67,10 @@ function isKnownSyncOutcome(outcome: unknown): outcome is SyncOutcome {
  * running, and a `null` payload would throw inside the event emitter's dispatch loop, costing every
  * later subscriber the delivery.
  *
- * `projectIds` is accepted when ABSENT — the seam declares it required, but a Paratext 10 build
- * predating that field answers without it, and "the projects are unknown" is a usable snapshot
- * while "malformed" is not.
+ * `projectIds` is accepted when ABSENT or `null` — the seam declares it required, but a Paratext 10
+ * build predating that field answers without it, a default snapshot carries `null`, and "the
+ * projects are unknown" is a usable snapshot while "malformed" is not. The check of `isSyncing` and
+ * `projectIds` is the shared one in `platform-bible-utils`.
  *
  * `outcome` is read field by field rather than all-or-nothing. Absent or `null` means "cannot say"
  * and is left off. A value this build does not recognize is logged and left off too, while the rest
@@ -84,15 +86,10 @@ function readSyncActivitySnapshot(
   payload: unknown,
   reportedUnknownOutcomes: Set<string>,
 ): SyncActivitySnapshot | undefined {
-  if (typeof payload !== 'object' || !payload) return undefined;
-  if (!('isSyncing' in payload) || typeof payload.isSyncing !== 'boolean') return undefined;
+  if (!isSyncActivitySnapshot(payload)) return undefined;
   const snapshot: SyncActivitySnapshot = { isSyncing: payload.isSyncing };
-
-  const projectIds = 'projectIds' in payload ? payload.projectIds : undefined;
-  if (projectIds !== undefined) {
-    if (!Array.isArray(projectIds) || !projectIds.every(isString)) return undefined;
-    snapshot.projectIds = projectIds;
-  }
+  // Absent and `null` both mean the projects are not named.
+  if (Array.isArray(payload.projectIds)) snapshot.projectIds = payload.projectIds;
 
   const outcome = 'outcome' in payload ? payload.outcome : undefined;
   // Loose on purpose, so a `null` is caught alongside an absent field without naming `null` here.

@@ -2,7 +2,11 @@ import papi, { logger } from '@papi/frontend';
 import type { IProjectDataProviderFactory, NetworkObjectDetails } from '@papi/core';
 import { useEvent, useEventSeededState } from 'platform-bible-react';
 import { getErrorMessage } from 'platform-bible-utils';
-import type { SyncActivitySnapshot } from 'paratext-bible-send-receive';
+import {
+  isSyncActivitySnapshot,
+  SYNC_ACTIVITY_RECHECK_INTERVAL_MS as SHARED_SYNC_ACTIVITY_RECHECK_INTERVAL_MS,
+  type SyncActivityValue,
+} from 'platform-bible-utils/experimental';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 /**
@@ -74,7 +78,7 @@ const MAX_SYNC_ACTIVITY_SEED_RETRIES = 10;
  * app sends no event to recover a seed that ran out of retries or got a malformed reply. Same
  * interval as core's `sync-activity-service.ts` watchdog.
  */
-export const SYNC_ACTIVITY_RECHECK_INTERVAL_MS = 30 * 1000;
+export const SYNC_ACTIVITY_RECHECK_INTERVAL_MS = SHARED_SYNC_ACTIVITY_RECHECK_INTERVAL_MS;
 
 /**
  * ID of the sample WEB project, which `LocalParatextProjects.Initialize` (C#) installs into an
@@ -114,19 +118,6 @@ function isOwnProject(metadata: {
     metadata.isPublished !== true &&
     !metadata.unsupportedReason &&
     metadata.id.toUpperCase() !== SAMPLE_PROJECT_ID
-  );
-}
-
-type SyncActivityValue = Pick<SyncActivitySnapshot, 'isSyncing'>;
-
-// Checked rather than trusted: the payload comes from another process, and only `isSyncing` is
-// relied on.
-function isSyncActivitySnapshot(value: unknown): value is SyncActivityValue {
-  return (
-    typeof value === 'object' &&
-    !!value &&
-    'isSyncing' in value &&
-    typeof value.isSyncing === 'boolean'
   );
 }
 

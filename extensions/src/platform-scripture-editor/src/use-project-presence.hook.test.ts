@@ -645,6 +645,29 @@ describe('useProjectPresence', () => {
     expect(result.current).toBe('none');
   });
 
+  it('ignores a sync-activity snapshot whose project list is malformed', async () => {
+    lookUpProjects.mockResolvedValue([SAMPLE_WEB]);
+    const { result } = renderHook(() => useProjectPresence({ enabled: true }));
+    await waitFor(() => expect(result.current).toBe('none'));
+
+    fire('paratextBibleSendReceive.onSyncActivityChanged', { isSyncing: true, projectIds: 'A' });
+    await act(async () => {});
+
+    expect(result.current).toBe('none');
+  });
+
+  it('reads a null project list in a sync-activity snapshot as valid', async () => {
+    lookUpProjects.mockResolvedValue([SAMPLE_WEB]);
+    const { result } = renderHook(() => useProjectPresence({ enabled: true }));
+    await waitFor(() => expect(result.current).toBe('none'));
+
+    // A running sync that names no projects yet
+    // eslint-disable-next-line no-null/no-null
+    fire('paratextBibleSendReceive.onSyncActivityChanged', { isSyncing: true, projectIds: null });
+
+    await waitFor(() => expect(result.current).toBe('unknown'));
+  });
+
   it('refetches when the set of projects changes', async () => {
     lookUpProjects.mockResolvedValue([SAMPLE_WEB]);
     const { result } = renderHook(() => useProjectPresence({ enabled: true }));
