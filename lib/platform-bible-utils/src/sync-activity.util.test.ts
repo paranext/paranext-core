@@ -1,3 +1,5 @@
+// The wire may send null, which the guard must handle, so these cases need a real null
+/* eslint-disable no-null/no-null */
 import { describe, expect, test } from 'vitest';
 import {
   IDLE_SYNC_ACTIVITY,
@@ -14,16 +16,13 @@ describe('isSyncActivitySnapshot', () => {
     ['projectIds absent', { isSyncing: true }, true],
     ['projectIds undefined', { isSyncing: true, projectIds: undefined }, true],
     // A real null: the wire writes `null` for a list it cannot name
-    // eslint-disable-next-line no-null/no-null
     ['projectIds null', { isSyncing: true, projectIds: null }, true],
     ['extra fields', { isSyncing: false, projectIds: [], outcome: 'failed' }, true],
     ['isSyncing a string', { isSyncing: 'yes' }, false],
     ['isSyncing missing', {}, false],
     ['projectIds a string', { isSyncing: true, projectIds: 'A' }, false],
     ['projectIds with a number', { isSyncing: true, projectIds: [1] }, false],
-    // eslint-disable-next-line no-null/no-null
     ['projectIds with a null entry', { isSyncing: true, projectIds: [null] }, false],
-    // eslint-disable-next-line no-null/no-null
     ['a null payload', null, false],
     ['undefined', undefined, false],
     ['a string', 'text', false],
@@ -47,7 +46,6 @@ describe('toSyncActivity', () => {
 
   test('reads an absent or null list of a running sync as empty', () => {
     expect(toSyncActivity({ isSyncing: true })).toEqual({ isSyncing: true, projectIds: [] });
-    // eslint-disable-next-line no-null/no-null
     expect(toSyncActivity({ isSyncing: true, projectIds: null })).toEqual({
       isSyncing: true,
       projectIds: [],
