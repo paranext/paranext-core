@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeAll } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import {
   ContextMenu,
@@ -88,6 +88,33 @@ describe('ContextMenuContent', () => {
       .find((menu) => menu.dataset.slot === 'context-menu-sub-content');
     expect(subContent).toBeDefined();
     expect(Number(subContent?.style.zIndex)).toBeGreaterThanOrEqual(Z_INDEX_ABOVE_DOCK);
+  });
+});
+
+describe('ContextMenuContent window blur', () => {
+  it('closes an open context menu when the window blurs', async () => {
+    render(
+      <ContextMenu>
+        <ContextMenuTrigger>Tab header</ContextMenuTrigger>
+        <ContextMenuContent>
+          <ContextMenuItem>Zoom in</ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>,
+    );
+    fireEvent.contextMenu(screen.getByText('Tab header'));
+    // Radix attaches its outside-press listener on a later tick, so wait for the open menu to settle
+    expect(await screen.findByRole('menu')).toBeInTheDocument();
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
+    });
+
+    act(() => {
+      window.dispatchEvent(new Event('blur'));
+    });
+
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
   });
 });
 
