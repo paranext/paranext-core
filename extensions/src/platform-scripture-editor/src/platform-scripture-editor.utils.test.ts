@@ -2160,6 +2160,79 @@ describe('openDefaultActiveProjectIfApplicable', () => {
     ).toEqual(['p1']);
   });
 
+  it('opens a recent project whose published setting cannot be read', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      mockProjectDataProvidersGet,
+      mockWarn,
+      setRecentProjects,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    setRecentProjects(['p1']);
+    mockProjectDataProvidersGet.mockRejectedValue(new Error('pdp unavailable'));
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'platformScriptureEditor.openScriptureEditor') return undefined;
+      throw new Error(`Unexpected command in test: ${commandName}`);
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(
+      mockSendCommand.mock.calls
+        .filter(([cmd]) => cmd === 'platformScriptureEditor.openScriptureEditor')
+        .map(([, id]) => id),
+    ).toEqual(['p1']);
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('pdp unavailable'));
+  });
+
+  it('falls through to the shared projects when every recent project is a published resource', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      setRecentProjects,
+      setPublishedIds,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    setRecentProjects(['res1', 'res2']);
+    setPublishedIds(['res1', 'res2']);
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          p1: {
+            id: 'p1',
+            name: 'P1',
+            fullName: 'P1',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-01-01T00:00:00Z',
+          },
+        };
+      }
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(
+      mockSendCommand.mock.calls
+        .filter(([cmd]) => cmd === 'platformScriptureEditor.openScriptureEditor')
+        .map(([, id]) => id),
+    ).toEqual(['p1']);
+  });
+
   it('opens the first recent project when none is unsupported (positive control)', async () => {
     const {
       papi,

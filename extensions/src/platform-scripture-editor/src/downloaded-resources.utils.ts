@@ -45,10 +45,10 @@ export type PickerResource = {
 };
 
 /**
- * Enumerate every locally-installed read-only reference resource and resolve its display metadata.
- * Filters to `isEditable === false` to exclude the user's own editable translation projects while
- * including every resource, DBL-published or locally installed (e.g. VULGP83, TNN, TND, HBK). A
- * plain project marked `Editable=F`, such as the WEB sample, is included too.
+ * Enumerate every locally-installed project that is not editable and resolve its display metadata:
+ * every resource, DBL-published or locally installed (e.g. VULGP83, TNN, TND, HBK), and any plain
+ * project marked `Editable=F`, such as the WEB sample. Filters to `isEditable === false`, which
+ * excludes the user's own editable translation projects.
  *
  * Note: the renderer uses a similar enumerate-and-resolve pattern in
  * `src/renderer/hooks/use-project-picker-data.hook.ts`. A shared utility isn't possible here
