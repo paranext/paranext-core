@@ -294,6 +294,12 @@ export function OverlayContextMenuPresentational({
         align="start"
         side="bottom"
         sideOffset={0}
+        // The shared wrappers turn a window blur into an untrusted outside press. The overlay
+        // service owns blur dismissal for this surface (creation grace period,
+        // `dismissOnClickOutside`), so the untrusted press is ignored here.
+        onPointerDownOutside={(event) => {
+          if (!event.detail.originalEvent.isTrusted) event.preventDefault();
+        }}
       >
         {renderMenuItems(items, onSelect)}
       </DropdownMenuContent>

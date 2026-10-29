@@ -223,6 +223,12 @@ export function OverlayPopoverPresentational({
           width: 'auto',
         }}
         onKeyDown={handleKeyDown}
+        // The shared wrappers turn a window blur into an untrusted outside press. The overlay
+        // service owns blur dismissal for this surface (creation grace period,
+        // `dismissOnClickOutside`), so the untrusted press is ignored here.
+        onPointerDownOutside={(event) => {
+          if (!event.detail.originalEvent.isTrusted) event.preventDefault();
+        }}
         onOpenAutoFocus={(e) => e.preventDefault()}
         onCloseAutoFocus={(e) => e.preventDefault()}
       >
