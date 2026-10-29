@@ -228,6 +228,9 @@ const BACKSTOP_QUIET_MS = 5_000;
 /** How long a gesture's save gets to reach the disk. */
 const SAVE_LANDED_TIMEOUT_MS = 30_000;
 
+/** A file counts as settled once it has not changed for this long ({@link waitForSaveToSettle}). */
+const SETTLED_QUIET_MS = 3_000;
+
 /**
  * How often the {@link ProjectWriteRecorder} samples the project's files, on top of a sample
  * whenever the folder reports a change (which WSL and Windows do not report reliably).
@@ -281,7 +284,7 @@ const DOC_END_KEY = isMac ? 'Meta+ArrowDown' : 'Control+End';
  * text, `|` removed, must occur in the book's USFM for the verse, so expectations can be computed
  * from the bytes.
  */
-type TextPoint = string;
+export type TextPoint = string;
 
 /** What a gesture needs to act on the open editor. */
 interface GestureContext {
@@ -396,7 +399,7 @@ function usfmBetween(unitText: string, from: TextPoint, to: TextPoint): string {
  * than once, naming it, so an anchor that stops being unique fails loudly instead of aiming the
  * gesture somewhere else.
  */
-async function selectInEditor(editorInput: Locator, from: TextPoint, to: TextPoint = from) {
+export async function selectInEditor(editorInput: Locator, from: TextPoint, to: TextPoint = from) {
   await editorInput.evaluate(
     async (root, { fallbackMs, ...points }) => {
       // Runs in the page, so it cannot call `splitPoint`; the points were checked by it below.
@@ -768,7 +771,7 @@ function expectedAfterFirstSave(installed: Buffer, chapterNum: number): Buffer {
   );
 }
 
-function installedBookPath(bookFile: string): string {
+export function installedBookPath(bookFile: string): string {
   return path.join(requireIsolatedProjectRoot(), INSTALLED_WEB_FOLDER, bookFile);
 }
 
@@ -857,6 +860,38 @@ function withUnitTexts(book: string, unitTexts: ReadonlyMap<string, string>): st
   return splitUsfmUnits(book)
     .map((unit) => unitTexts.get(unit.label) ?? unit.text)
     .join('');
+}
+
+/**
+ * Waits until the file's bytes stop matching `previous` — a save reached the disk — and then until
+ * they have held still for {@link SETTLED_QUIET_MS}, so a second write still in flight is not
+ * missed. Returns the settled bytes, or `undefined` if no write landed within the timeout.
+ */
+export async function waitForSaveToSettle(
+  page: Page,
+  filePath: string,
+  previous: Buffer,
+): Promise<Buffer | undefined> {
+  const deadline = Date.now() + SAVE_LANDED_TIMEOUT_MS;
+  let current = fs.readFileSync(filePath);
+  // Sequential polling of the file: each read decides whether to read again.
+  /* eslint-disable no-await-in-loop */
+  while (current.equals(previous)) {
+    if (Date.now() > deadline) return undefined;
+    await page.waitForTimeout(250);
+    current = fs.readFileSync(filePath);
+  }
+  let quietSince = Date.now();
+  while (Date.now() - quietSince < SETTLED_QUIET_MS) {
+    await page.waitForTimeout(250);
+    const next = fs.readFileSync(filePath);
+    if (!next.equals(current)) {
+      current = next;
+      quietSince = Date.now();
+    }
+  }
+  /* eslint-enable no-await-in-loop */
+  return current;
 }
 
 /**
