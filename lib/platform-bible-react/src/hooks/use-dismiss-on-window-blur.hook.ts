@@ -37,7 +37,11 @@ export function shouldSuppressFocusReturn(doc: Document, isInWebView: boolean): 
   return doc.activeElement instanceof HTMLIFrameElement || (!doc.hasFocus() && isInWebView);
 }
 
-/** The Radix Content props {@link useDismissOnWindowBlur} composes with the caller's. */
+/**
+ * The Radix Content props {@link useDismissOnWindowBlur} composes with the caller's.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
 export type DismissOnWindowBlurProps<T extends HTMLElement> = {
   /** The caller's own ref for the content element (function or object), if any */
   ref?: Ref<T>;
@@ -82,9 +86,14 @@ export type DismissOnWindowBlurProps<T extends HTMLElement> = {
  * rather than remembering that a blur dismissal happened: Radix runs close-auto-focus from its own
  * timer after an asynchronous unmount, so a flag cleared by a timeout loses that race under load.
  *
- * Hidden-view case: an inactive-tab pane cannot hold an open menu, so a stray blur there is a
- * harmless no-op and there is deliberately no catch-up logic. See
- * `.claude/rules/cross-view-sync-hidden-views.md`.
+ * The synthetic press is untrusted (`isTrusted === false`). Other document-level `pointerdown`
+ * listeners see it too (the focus modality tracker, window service gesture tracking, overlay
+ * correlation, content-zoom bootstrap, the editor's selection snapshot) and were judged benign; a
+ * listener that must ignore it can filter on `isTrusted`.
+ *
+ * Hidden-view case (the repo's rule on hidden views): a keyboard tab switch can hide a pane that
+ * holds an open menu. The blur listener then dismisses it on the next window blur, which is
+ * harmless, so there is deliberately no catch-up logic.
  *
  * @param props The caller's `ref` and `onCloseAutoFocus` for the Radix Content. Both still work:
  *   the ref receives the element too, and the caller's handler runs first and can itself prevent
@@ -117,7 +126,7 @@ export function useDismissOnWindowBlur<T extends HTMLElement>({
       if (!element || element.dataset.state === 'closed') return;
       const parent = element.parentElement;
       if (!parent) return;
-      const eventInit = { bubbles: true, pointerType: 'mouse' };
+      const eventInit: PointerEventInit = { bubbles: true, pointerType: 'mouse' };
       // jsdom and older engines have no PointerEvent
       const syntheticPress =
         typeof PointerEvent === 'undefined'
@@ -133,8 +142,18 @@ export function useDismissOnWindowBlur<T extends HTMLElement>({
   const ref = useCallback(
     (element: T | null) => {
       elementRef.current = element ?? undefined;
-      if (typeof forwardedRef === 'function') forwardedRef(element);
-      else if (forwardedRef) forwardedRef.current = element;
+      if (typeof forwardedRef === 'function') {
+        const forwardedCleanup = forwardedRef(element);
+        // React 19 calls a cleanup returned from a callback ref instead of calling the ref with
+        // `null`, so the caller's cleanup must run from ours
+        if (typeof forwardedCleanup === 'function') {
+          return () => {
+            elementRef.current = undefined;
+            forwardedCleanup();
+          };
+        }
+      } else if (forwardedRef) forwardedRef.current = element;
+      return undefined;
     },
     [forwardedRef],
   );
