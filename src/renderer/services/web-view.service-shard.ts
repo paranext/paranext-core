@@ -1150,7 +1150,8 @@ async function loadLayout(
       return;
     }
     if (enabledEntries.length === 0) {
-      // Nothing to merge (the common/vanilla case) — load the base layout directly and skip the clone.
+      // Nothing to merge (an empty supplement, or every entry's flag off) — load the base layout
+      // directly and skip the clone.
       dockLayoutVar.loadLayout(layoutToLoad);
       layoutLoadGenerationInDock = thisGeneration;
       emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layoutToLoad);
@@ -1996,8 +1997,8 @@ async function getMostRecentUsableProjectId(): Promise<
     // of that candidate adds a full round trip - `getMetadataForProject` waits on a PDP factory and
     // then retries - and the whole walk shares one {@link COLD_START_LOOKUP_TIMEOUT_MS} budget. A
     // run of unusable candidates at the head of the list could therefore exhaust the budget and
-    // leave Simple mode with no project at all - a real case, since the title bar picker opens
-    // read-only resources and each one opened goes to the head of the list. It is capped at
+    // leave Simple mode with no project at all - a real case, since a build whose title bar picker
+    // offered resources put each one opened at the head of the list. It is capped at
     // `MAX_RECENT_PROJECTS`, so the extra lookups are bounded, and concurrently they cost about
     // what one costs.
     const usabilities = await Promise.all(recents.map(resolveSimpleSwitchCandidateUsability));
