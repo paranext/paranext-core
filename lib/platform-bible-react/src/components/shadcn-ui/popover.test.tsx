@@ -2,7 +2,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, test, vi } from 'vitest';
 import '@testing-library/jest-dom';
 import { Dialog, DialogContent, DialogTitle } from '@/components/shadcn-ui/dialog';
 import {
@@ -43,6 +43,69 @@ function blurWindow() {
     window.dispatchEvent(new Event('blur'));
   });
 }
+
+function PopoverUnderTest() {
+  return (
+    <Popover>
+      <PopoverTrigger>Trigger</PopoverTrigger>
+      <PopoverContent>Popover body</PopoverContent>
+    </Popover>
+  );
+}
+
+/**
+ * Mirrors the ScopeSelector wiring: a host element captured by a ref callback and handed to the
+ * provider, with the popover rendered inside. `container` starts null (before the host mounts) and
+ * becomes the element on the second render, exactly as it does in the real consumer.
+ */
+function HostedPopover() {
+  // React ref-callback state must be initialized to null, not undefined.
+  // eslint-disable-next-line no-null/no-null
+  const [hostEl, setHostEl] = useState<HTMLDivElement | null>(null);
+  return (
+    <div data-testid="host" ref={setHostEl}>
+      <PopoverPortalContainerProvider container={hostEl}>
+        <PopoverUnderTest />
+      </PopoverPortalContainerProvider>
+    </div>
+  );
+}
+
+async function openPopover() {
+  await userEvent.click(screen.getByText('Trigger'));
+  return waitFor(() => {
+    const content = document.querySelector<HTMLElement>('[data-slot="popover-content"]');
+    if (!content) throw new Error('popover content did not open');
+    return content;
+  });
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+// Pins the popover half of the shared portal-container factory. Both primitives build their own
+// context from `createPortalContainerContext`, so a regression there would otherwise only be caught
+// by the tooltip tests.
+describe('PopoverContent portal target', () => {
+  test('portals to document.body when no PopoverPortalContainerProvider is in scope', async () => {
+    render(<PopoverUnderTest />);
+    const popover = await openPopover();
+
+    expect(document.body).toContainElement(popover);
+    expect(screen.getByText('Trigger').parentElement).not.toContainElement(popover);
+  });
+
+  // Without this, a popover whose trigger sits inside a focus trap or dismiss layer (a Dialog, a
+  // modal DropdownMenu) has its content mounted outside that subtree — the trap pulls focus back
+  // out, and a click inside the popover reads as an outside click that dismisses the parent.
+  test('portals into the provider container so it stays inside that ancestor', async () => {
+    render(<HostedPopover />);
+    const popover = await openPopover();
+
+    expect(screen.getByTestId('host')).toContainElement(popover);
+  });
+});
 
 describe('PopoverContent window blur', () => {
   it('closes an open popover when the window blurs', async () => {
@@ -93,6 +156,8 @@ describe('PopoverContent window blur', () => {
     expect(screen.getByText('body')).toBeInTheDocument();
   });
 
+  // jsdom has no exit animation, so this covers "blur after close is a no-op", not the animated
+  // closing window.
   it('does not reopen when blur fires while closing, and the trigger still reopens it', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     const user = userEvent.setup({ pointerEventsCheck: 0 });
@@ -113,7 +178,6 @@ describe('PopoverContent window blur', () => {
 
     await user.click(screen.getByText('open'));
     expect(await screen.findByText('body')).toBeInTheDocument();
-    consoleError.mockRestore();
   });
 
   it('ignores window blur for a closed popover, leaving an open dialog alone', async () => {
