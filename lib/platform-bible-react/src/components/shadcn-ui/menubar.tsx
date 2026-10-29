@@ -10,6 +10,8 @@ import {
   menuVariants,
   useMenuContext,
 } from '@/context/menu.context';
+// CUSTOM: Dismiss the menu when the window blurs (a click into another iframe)
+import { useDismissOnWindowBlur } from '@/hooks/use-dismiss-on-window-blur.hook';
 // CUSTOM: Import the shared z-index constant so the menubar joins the same overlay tier as popover,
 // select, dropdown-menu and context-menu instead of falling back to Tailwind's tw:z-50. The tooltip
 // tier is documented as sitting above "the menubar", which is only true once the menubar is
@@ -106,12 +108,21 @@ function MenubarContent({
   sideOffset = 8,
   // CUSTOM: Pull `style` out so the shared z-index can be applied under any caller-supplied style
   style,
+  // CUSTOM: Destructure ref (a regular prop in React 19) so useDismissOnWindowBlur can compose it
+  ref,
   ...props
 }: React.ComponentProps<typeof MenubarPrimitive.Content>) {
+  // CUSTOM: Added useDismissOnWindowBlur so the menu closes when the window loses focus. A click
+  // into another iframe never reaches this document, so the window's blur stands in for the outside
+  // press; see the hook's TSDoc. MenubarSubContent is not wired: a sub-menu closes with its root
+  // menu. The returned ref callback also forwards the caller's ref.
+  const contentRef = useDismissOnWindowBlur(ref);
   return (
     <MenubarPortal>
       <MenubarPrimitive.Content
         data-slot="menubar-content"
+        // CUSTOM: Ref from useDismissOnWindowBlur so it can find the content's parent
+        ref={contentRef}
         align={align}
         alignOffset={alignOffset}
         sideOffset={sideOffset}
