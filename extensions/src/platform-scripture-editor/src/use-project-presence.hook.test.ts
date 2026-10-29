@@ -123,6 +123,9 @@ function fire(eventName: string, payload?: unknown) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // A listener left by a hook that was never unmounted would receive later tests' events and make
+  // `fire`'s did-not-subscribe check pass without the hook under test having subscribed.
+  emitters.forEach((emitter) => emitter.listeners.clear());
   answerSyncActivity(false);
   setParatextFactoryReachable(true);
   getParatextFactoryProjects.mockResolvedValue([]);
