@@ -1825,7 +1825,7 @@ describe('Home while a sync runs', () => {
     name,
     fullName: `${name} full name`,
     language: 'en',
-    editedStatus: 'notEdited',
+    editedStatus: '',
     lastSendReceiveDate: '2026-08-16T00:00:00.000Z',
   });
 
@@ -1974,7 +1974,7 @@ describe('Home while a sync holds the project list', () => {
       name: 'ONE',
       fullName: 'ONE full name',
       language: 'en',
-      editedStatus: 'notEdited',
+      editedStatus: '',
       lastSendReceiveDate: '2026-08-16T00:00:00.000Z',
     },
     projectTwo: {
@@ -1982,7 +1982,7 @@ describe('Home while a sync holds the project list', () => {
       name: 'TWO',
       fullName: 'TWO full name',
       language: 'en',
-      editedStatus: 'notEdited',
+      editedStatus: '',
       lastSendReceiveDate: '2026-08-16T00:00:00.000Z',
     },
   };
