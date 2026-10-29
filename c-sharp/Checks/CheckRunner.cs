@@ -205,7 +205,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         var dataSource = new ChecksDataSource(scrText);
         ScriptureCheckBase check;
         // Creating the check initializes it, which can save the project's settings
-        // TODO(PT-XXXX): wait for the sync to end instead of refusing, as Paratext 9 does
+        // TODO(PT-4971): wait for the sync to end instead of refusing, as Paratext 9 does
         using (SendReceiveWriteLock.EnterWrite(projectId))
             check = _createCheck(checkId, dataSource);
         return CheckSetupStatusLookup.Lookup(checkId, check, scrText);

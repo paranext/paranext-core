@@ -102,7 +102,7 @@ internal static class InventoryFactory
         ChecksDataSource dataSource
     )
     {
-        // TODO(PT-XXXX): wait for the sync to end instead of refusing, as Paratext 9 does
+        // TODO(PT-4971): wait for the sync to end instead of refusing, as Paratext 9 does
         using var _ = SendReceiveWriteLock.EnterWrite(projectId);
         return CreateInventory(inventoryId, dataSource);
     }

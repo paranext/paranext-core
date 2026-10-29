@@ -113,7 +113,7 @@ internal sealed class CheckCache
             _ =>
             {
                 var dataSource = GetChecksDataSource(projectId);
-                // TODO(PT-XXXX): wait for the sync to end instead of refusing, as Paratext 9 does
+                // TODO(PT-4971): wait for the sync to end instead of refusing, as Paratext 9 does
                 using IDisposable? writeScope = enterWriteScope
                     ? SendReceiveWriteLock.EnterWrite(projectId)
                     : null;
@@ -179,7 +179,7 @@ internal sealed class CheckCache
                     try
                     {
                         // Initializing can save the project's settings, as creating a check can
-                        // TODO(PT-XXXX): wait for the sync to end instead of refusing, as Paratext 9 does
+                        // TODO(PT-4971): wait for the sync to end instead of refusing, as Paratext 9 does
                         using (SendReceiveWriteLock.EnterWrite(projectId))
                             check.Check.Initialize(dataSource);
                         check.ClearResults();
