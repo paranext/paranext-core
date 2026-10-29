@@ -12,7 +12,7 @@ import { CommentStatus, ConflictResolutionOptions, LanguageStrings, LegacyCommen
 import { PaletteDriver, PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
-import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithRef, ComponentPropsWithoutRef, FC, FocusEventHandler, HTMLAttributes, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, Ref, RefObject } from 'react';
+import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithRef, ComponentPropsWithoutRef, FC, FocusEventHandler, HTMLAttributes, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, Ref, RefCallback, RefObject } from 'react';
 import * as ResizablePrimitive from 'react-resizable-panels';
 import { ToasterProps, toast as sonner } from 'sonner';
 import { Drawer as DrawerPrimitive } from 'vaul';
@@ -2895,7 +2895,7 @@ export declare const PopoverPortalContainerProvider: ({ container, children, }: 
 	children: React$1.ReactNode;
 }) => import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Popover */
-export declare function PopoverContent({ className, align, sideOffset, style, ...props }: React$1.ComponentProps<typeof PopoverPrimitive.Content>): import("react/jsx-runtime").JSX.Element;
+export declare function PopoverContent({ className, align, sideOffset, style, ref, ...props }: React$1.ComponentProps<typeof PopoverPrimitive.Content>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Popover */
 export declare function PopoverAnchor({ ...props }: React$1.ComponentProps<typeof PopoverPrimitive.Anchor>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Popover */
@@ -3597,7 +3597,7 @@ export declare function ContextMenuSub({ ...props }: React$1.ComponentProps<type
 /** @inheritdoc ContextMenu */
 export declare function ContextMenuRadioGroup({ ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.RadioGroup>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc ContextMenu */
-export declare function ContextMenuContent({ className, style, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.Content> & {
+export declare function ContextMenuContent({ className, style, ref, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.Content> & {
 	side?: "top" | "right" | "bottom" | "left";
 }): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc ContextMenu */
@@ -3752,7 +3752,7 @@ export declare function DropdownMenuPortal({ ...props }: React$1.ComponentProps<
 /** @inheritdoc DropdownMenuProps */
 export declare function DropdownMenuTrigger({ ...props }: React$1.ComponentProps<typeof DropdownMenuPrimitive.Trigger>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuContent({ className, align, sideOffset, style, children, ...props }: DropdownMenuContentProps): import("react/jsx-runtime").JSX.Element;
+export declare function DropdownMenuContent({ className, align, sideOffset, style, children, ref, ...props }: DropdownMenuContentProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
 export declare function DropdownMenuGroup({ ...props }: React$1.ComponentProps<typeof DropdownMenuPrimitive.Group>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
@@ -4585,6 +4585,41 @@ export declare const useViewVisibility: () => boolean;
  *   effect re-firing on every visibility flip.
  */
 export declare function useRunWhenVisible(isViewVisible: boolean, run: () => void): () => void;
+/**
+ * Treats the window losing focus as a press outside the calling surface, so an open menu or popover
+ * dismisses itself.
+ *
+ * Web views are iframes, so a click in another web view, or in another application, never produces
+ * a `pointerdown` in this document and Radix's outside-press detection never runs. Native menus
+ * close when their application is deactivated; this hook gives Radix surfaces the same behavior.
+ * From mount until unmount, a `blur` on `window` dispatches a synthetic `pointerdown` on the
+ * content's parent element. A closed surface has no content node and the blur is ignored, so a
+ * mounted-but-closed surface never presses on an unrelated open layer. Radix's `DismissableLayer`
+ * listens for `pointerdown` on the owner document and does not check `isTrusted`, so the event
+ * takes its normal outside-press path: `onPointerDownOutside` runs and can call `preventDefault()`
+ * to keep the surface open, and a surface whose `open` is controlled without an `onOpenChange`
+ * stays open.
+ *
+ * The press lands "outside this surface, but inside whatever hosts it". A popover portaled into a
+ * dialog (via `PopoverPortalContainerProvider`) closes while the dialog's own `DismissableLayer`
+ * sees an inside press and stays open. A popover or menu portaled to `document.body` is pressed on
+ * from its own Radix popper wrapper (`data-radix-popper-content-wrapper`, what `parentElement`
+ * resolves to there), which is outside it. A modal menu opened from inside a dialog is protected by
+ * Radix anyway: a layer below the top-most layer that disables outside pointer events does not
+ * dismiss.
+ *
+ * Hidden-view case: an inactive-tab pane cannot hold an open menu, so a stray blur there is a
+ * harmless no-op and there is deliberately no catch-up logic. See
+ * `.claude/rules/cross-view-sync-hidden-views.md`.
+ *
+ * @param forwardedRef The caller's own ref for the content element (function or object), if any. It
+ *   receives the element too, so wiring this hook does not take the ref away from the caller.
+ * @returns Ref callback to attach to the surface's content element. The element is `null` while the
+ *   surface is closed, which makes the blur a no-op. Its identity is stable unless `forwardedRef`
+ *   changes.
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function useDismissOnWindowBlur<T extends HTMLElement>(forwardedRef?: React$1.Ref<T>): React$1.RefCallback<T>;
 /**
  * Tracks whether `scrollerRef`'s element still has content below the fold.
  *
