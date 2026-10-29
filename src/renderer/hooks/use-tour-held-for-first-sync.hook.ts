@@ -1,20 +1,27 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useSetting } from '@renderer/hooks/papi-hooks';
+import { getFirstRunStatus, subscribeToFirstRun } from '@renderer/services/first-run-store';
 import { sendCommand } from '@shared/services/command.service';
 
 /**
- * Whether the onboarding tour should wait for the user's first Send/Receive: `true` while
- * Send/Receive is available and `platform.firstSyncState` is `'pending'`, `false` otherwise. The
- * setting is subscribed to, so the hold lifts the moment the backend records the first sync.
+ * Whether the onboarding tour should wait for the user's first Send/Receive: `true` while the first
+ * sync is pending (`platform.firstSyncState` is `'pending'`) and Send/Receive is not known to be
+ * unavailable. The setting is subscribed to, so the hold lifts the moment the backend records the
+ * first sync.
  *
- * Fails open: while availability is still loading, or if asking for it rejects, this is `false`, so
- * a tour is never held on an answer that may never arrive. Availability is only asked once the
- * state is `'pending'`, since no other state can hold the tour.
+ * Holds conservatively. While the setting is loading, or while availability is unanswered, a user
+ * who may be pending stays held; only a definite "not available" releases a pending user. The
+ * availability command can reject before the backend registers it, so it is asked again once the
+ * first-run status reaches `app` — by then the backend is up, and a rejection from that second ask
+ * counts as "not available" rather than holding the tour forever.
  */
 export function useTourHeldForFirstSync(): boolean {
-  const [firstSyncState] = useSetting('platform.firstSyncState', 'unknown');
+  const [firstSyncState, , , isSettingLoading] = useSetting('platform.firstSyncState', 'unknown');
   const isPending = firstSyncState === 'pending';
-  const [isSendReceiveAvailable, setIsSendReceiveAvailable] = useState(false);
+  const isBackendUp = useSyncExternalStore(subscribeToFirstRun, getFirstRunStatus).kind === 'app';
+  const [isSendReceiveAvailable, setIsSendReceiveAvailable] = useState<boolean | undefined>(
+    undefined,
+  );
 
   useEffect(() => {
     if (!isPending) return undefined;
@@ -25,14 +32,14 @@ export function useTourHeldForFirstSync(): boolean {
         return undefined;
       })
       .catch(() => {
-        if (isCurrent) setIsSendReceiveAvailable(false);
+        if (isCurrent) setIsSendReceiveAvailable(isBackendUp ? false : undefined);
       });
     return () => {
       isCurrent = false;
     };
-  }, [isPending]);
+  }, [isPending, isBackendUp]);
 
-  return isPending && isSendReceiveAvailable;
+  return (isSettingLoading || isPending) && isSendReceiveAvailable !== false;
 }
 
 export default useTourHeldForFirstSync;
