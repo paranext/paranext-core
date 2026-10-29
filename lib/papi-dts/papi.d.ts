@@ -5449,7 +5449,9 @@ declare module 'shared/services/window.service-model' {
    *
    * Shared so every consumer that projects a focus subject to a web view id (e.g. the window
    * service's last-selected tracking and `platform.openBookChapterControl`) stays in lockstep when
-   * focus subject shapes change.
+   * focus subject shapes change. Extensions cannot import this at runtime, so the Scripture editor
+   * keeps its own copy (`getEditorFocusLocation` in `platform-scripture-editor.web-view.utils.ts`):
+   * update it too.
    */
   export function getWebViewIdFromFocusSubject(focusSubject: FocusSubject): string | undefined;
   /**

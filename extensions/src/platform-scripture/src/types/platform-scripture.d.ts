@@ -536,6 +536,12 @@ declare module 'platform-scripture' {
      */
     text: string;
     /**
+     * The USFM between {@link FindResult.start} and {@link FindResult.end} at search time. Pass it
+     * back as the matching entry of `expectedUsfm` in `replace()` so a range whose USFM has since
+     * changed is skipped instead of overwritten.
+     */
+    matchedUsfm: string;
+    /**
      * Markers (paragraph, verse, chapter, table, sidebar, and note markers) that lie inside this
      * result's USFM span and would therefore be deleted by replacing it with plain text. Absent
      * when the span contains none, which is the common case.
@@ -765,7 +771,16 @@ declare module 'platform-scripture' {
        *   {@link UsfmVerseLocation}. Overlapping ranges will cause an error.
        * @param usfmToInsert - The USFM content to insert at each range. Can be a single string
        *   (used for all ranges) or an array of strings (one per range).
-       * @throws Error if `usfmToInsert` array length doesn't match `rangesToReplace` length
+       * @param expectedUsfm - Optional. The USFM each range is expected to currently contain, one
+       *   entry per range ({@link FindResult.matchedUsfm}). A range whose current USFM differs, or
+       *   whose location can no longer be found (including a chapter or book that no longer
+       *   exists), is never written and is reported in the returned
+       *   {@link ReplaceOutcome.changedIndexes}. When omitted, ranges are written as given and a
+       *   location that can no longer be found rejects.
+       * @returns A {@link ReplaceOutcome} whose `changedIndexes` lists, ascending, the ranges that
+       *   were not written.
+       * @throws Error if `usfmToInsert` or `expectedUsfm` array length doesn't match
+       *   `rangesToReplace` length
        * @throws Error if any range spans multiple books
        * @throws Error if any ranges overlap
        * @throws Error whose message is the `STRUCTURE_PROTECTED_ERROR` sentinel
@@ -783,8 +798,18 @@ declare module 'platform-scripture' {
       replace(
         rangesToReplace: ScriptureRangeUsjChapterOrUsfmVerseLocation[],
         usfmToInsert: string | string[],
-      ): Promise<void>;
+        expectedUsfm?: string[],
+      ): Promise<ReplaceOutcome>;
     };
+
+  /** The result of a `replace()` call. */
+  export type ReplaceOutcome = {
+    /**
+     * Indexes into `rangesToReplace`, ascending, of ranges not written because their text changed
+     * after the search, or their location is gone.
+     */
+    changedIndexes: number[];
+  };
 
   // #endregion Replace Types
 

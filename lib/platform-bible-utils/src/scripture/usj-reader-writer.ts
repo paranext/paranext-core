@@ -1801,6 +1801,31 @@ export class UsjReaderWriter implements IUsjReaderWriter {
   }
 
   /**
+   * True when either end of an NFD match falls between two NFD code units that came from the same
+   * original code point.
+   *
+   * The position map sends every part of a split character to that character's start, so such a
+   * match would be shorter than, or shifted from, what Find displays, and Replace would insert
+   * instead of replacing. Widening the match to the whole character is wrong: the leftover parts
+   * can be letters (Hangul jamo), not diacritics.
+   *
+   * @param matchStart Index of the match start in the NFD text
+   * @param matchEnd Index just past the match end in the NFD text
+   * @param nfdToOriginalMap Position map from {@link buildNFDToOriginalPositionMap}
+   */
+  private static isMatchInsideCharacter(
+    matchStart: number,
+    matchEnd: number,
+    nfdToOriginalMap: number[],
+  ): boolean {
+    const isInsideCharacter = (index: number) =>
+      index > 0 &&
+      index < nfdToOriginalMap.length - 1 &&
+      nfdToOriginalMap[index - 1] === nfdToOriginalMap[index];
+    return isInsideCharacter(matchStart) || isInsideCharacter(matchEnd);
+  }
+
+  /**
    * True when a match must be discarded because one of its whitespace groups matched zero
    * characters somewhere other than a block boundary. A group that matched real whitespace is
    * always acceptable, and so is a group that did not participate in the match.
@@ -2130,32 +2155,48 @@ export class UsjReaderWriter implements IUsjReaderWriter {
             searchRegex.lastIndex,
           );
           match = searchRegex.exec(searchText);
-        } else if (
+        } else {
           // Same condition as the bookkeeping above: with no whitespace group there is nothing to
           // filter, and `hasWhitespaceGapAwayFromBoundary` would demand a `d` flag that was
           // deliberately not added.
-          shouldRecordBoundaries &&
-          UsjReaderWriter.hasWhitespaceGapAwayFromBoundary(
-            match,
-            blockBoundaryOffsets,
-            nfdToOriginalMap,
-          )
-        ) {
-          // Resume one code point on rather than at `lastIndex`, so a legitimate match that
-          // overlaps this rejected one is still reachable. Only rejected matches rewind: doing
-          // this for accepted matches would return overlapping duplicates, which Replace All
-          // refuses outright.
-          if (!searchRegex.global) break;
-          searchRegex.lastIndex = UsjReaderWriter.advancePastCodePoint(searchText, match.index);
-          match = searchRegex.exec(searchText);
-        } else {
-          retVal.push(
-            UsjReaderWriter.buildSearchResult(match, fullText, fullTextIndexMap, nfdToOriginalMap),
-          );
+          const isWhitespaceGapRejected =
+            shouldRecordBoundaries &&
+            UsjReaderWriter.hasWhitespaceGapAwayFromBoundary(
+              match,
+              blockBoundaryOffsets,
+              nfdToOriginalMap,
+            );
+          const isInsideCharacter =
+            nfdToOriginalMap !== undefined &&
+            UsjReaderWriter.isMatchInsideCharacter(
+              match.index,
+              match.index + match[0].length,
+              nfdToOriginalMap,
+            );
 
-          // If the regex is not global, then running `exec` again will return the same match
-          if (!searchRegex.global) break;
-          match = searchRegex.exec(searchText);
+          if (isWhitespaceGapRejected || isInsideCharacter) {
+            // Resume one code point on rather than at `lastIndex`, so a legitimate match that
+            // overlaps this rejected one is still reachable, whether it was rejected for a
+            // whitespace gap or for starting or ending inside a character. Only rejected matches
+            // rewind: doing this for accepted matches would return overlapping duplicates, which
+            // Replace All refuses outright.
+            if (!searchRegex.global) break;
+            searchRegex.lastIndex = UsjReaderWriter.advancePastCodePoint(searchText, match.index);
+            match = searchRegex.exec(searchText);
+          } else {
+            retVal.push(
+              UsjReaderWriter.buildSearchResult(
+                match,
+                fullText,
+                fullTextIndexMap,
+                nfdToOriginalMap,
+              ),
+            );
+
+            // If the regex is not global, then running `exec` again will return the same match
+            if (!searchRegex.global) break;
+            match = searchRegex.exec(searchText);
+          }
         }
       }
     } finally {

@@ -200,6 +200,8 @@ import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useSelectionSnapshot } from './use-selection-snapshot.hook';
 import { usePauseEditing } from './use-pause-editing.hook';
 import { EditorDocumentSelector, useEditorPdpSync } from './use-editor-pdp-sync.hook';
+import { useEditorFocusLocation } from './use-editor-focus-location.hook';
+import { useForgetEditsOnSyncBlock } from './use-forget-edits-on-sync-block.hook';
 import { toBookChapterKey, useScrollToRange } from './use-scroll-to-range.hook';
 import { applyEditorScrRefReport } from './editor-scr-ref-report.util';
 import { useProjectStylesheet } from './use-project-stylesheet.hook';
@@ -4827,6 +4829,10 @@ function PlatformScriptureEditor({
     [scrRef, webViewId],
   );
 
+  // Where focus is decides whether `useEditorPdpSync` may apply an incoming same-chapter update,
+  // and whether the footnotes pane still claims the text (`isEditingSessionActive`).
+  const { getFocusLocation, focusLocationKey } = useEditorFocusLocation(webViewId);
+
   // Sync editor content with PDP data. The write-in-flight guard (`currentlyWritingUsjToPdp`) is
   // owned entirely by the save path (`withWriteInFlightGuard`), so it is not passed here.
   // The editor owns its content while a marker-palette session (this editor's, or a note editor's)
@@ -4842,10 +4848,10 @@ function PlatformScriptureEditor({
   // until the user happened to click another note caller. `resolveEditingSessionActivity` makes
   // the live/stale call; a stale session is closed through the normal footnote-editor close path
   // (popover state stays consistent) and stops deferring.
-  // Wrapped in useCallback (reads only refs; `closeFootnoteEditor` is itself stable) so its
-  // identity is stable; a fresh arrow each render would re-run useEditorPdpSync's effect on every
-  // render, firing an immediate non-debounced push-back save that partially defeats the 700ms
-  // save debounce.
+  // Wrapped in useCallback (reads only refs; `closeFootnoteEditor` and `getFocusLocation` are
+  // themselves stable) so its identity is stable; a fresh arrow each render would re-run
+  // useEditorPdpSync's effect on every render, firing an immediate non-debounced push-back save
+  // that partially defeats the 700ms save debounce.
   const isEditingSessionActive = useCallback(() => {
     const activity = resolveEditingSessionActivity({
       hasPaletteSession: paletteSession.current !== undefined || noteEditorPalettesOpen.current > 0,
@@ -4858,6 +4864,7 @@ function PlatformScriptureEditor({
               // The row editor keeps DOM focus while the window itself is away (`paneHasFocusRef`
               // does not: it tracks the visible caret), and its typing is what deferral protects.
               hasFocus: paneHasFocusRef.current || !!paneNoteEditorRef.current?.containsFocus(),
+              focusLocation: getFocusLocation(),
               lastEditAtMs: lastPaneNoteEditAt.current,
             }
           : undefined,
@@ -4871,7 +4878,11 @@ function PlatformScriptureEditor({
       closeFootnoteEditor(false);
     }
     return activity.isActive;
-  }, [closeFootnoteEditor]);
+  }, [closeFootnoteEditor, getFocusLocation]);
+  // A Send/Receive replaces the chapter with its merge, so the footnotes pane gives up its claim
+  // to the text as soon as one starts, as `useEditorPdpSync` does for the Scripture editor. Called
+  // before `useEditorPdpSync` so its effect runs first when a block and a delivery share a render.
+  useForgetEditsOnSyncBlock(isSyncBlocked, lastPaneNoteEditAt);
   useEditorPdpSync({
     usjFromPdp,
     documentSelector: chapterUsjSelector,
@@ -4883,6 +4894,9 @@ function PlatformScriptureEditor({
     isEditingSessionActive,
     lastLocalEditTimestamp,
     editorDocumentSelector,
+    getFocusLocation,
+    focusLocationKey,
+    isSyncBlocked,
   });
 
   // On loading the first time, scroll the selected verse into view and set focus to the editor

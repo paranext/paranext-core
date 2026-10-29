@@ -25,6 +25,7 @@ import {
   FindOptions,
   FindResult,
   FindScope,
+  ReplaceOutcome,
   ReplaceWithUsfmProjectInterfaceDataTypes,
   ScriptureRangeUsjChapterOrUsfmVerseLocation,
 } from 'platform-scripture';
@@ -437,7 +438,16 @@ export class ScriptureFinderProjectDataProviderEngine
    * @param rangesToReplace - Array of non-overlapping scripture ranges to replace. Overlapping
    *   ranges will cause an error.
    * @param usfmToInsert - The USFM content to insert at each range (string or array of strings)
-   * @throws Error if usfmToInsert array length doesn't match rangesToReplace length
+   * @param expectedUsfm - Optional USFM each range is expected to contain now, one entry per range
+   *   (`FindResult.matchedUsfm`). A range whose current USFM differs, or whose location can no
+   *   longer be found (including a chapter or book that no longer exists), is never written and is
+   *   reported in the returned outcome. When omitted, ranges are written as given and a location
+   *   that can no longer be found rejects.
+   * @returns A {@link ReplaceOutcome} whose `changedIndexes` lists, ascending, the ranges that were
+   *   not written.
+   * @throws Error if usfmToInsert or expectedUsfm array length doesn't match rangesToReplace length
+   * @throws Error if any range's start or end offset is negative, whether or not `expectedUsfm` is
+   *   given
    * @throws Error if any range spans multiple books
    * @throws Error if any ranges overlap within the same book
    * @throws Error with message {@link STRUCTURE_PROTECTED_ERROR} when structure protection is active
@@ -450,8 +460,9 @@ export class ScriptureFinderProjectDataProviderEngine
   async replace(
     rangesToReplace: ScriptureRangeUsjChapterOrUsfmVerseLocation[],
     usfmToInsert: string | string[],
-  ): Promise<void> {
-    if (rangesToReplace.length === 0) return;
+    expectedUsfm?: string[],
+  ): Promise<ReplaceOutcome> {
+    if (rangesToReplace.length === 0) return { changedIndexes: [] };
 
     // Serialize all replace operations with a single mutex
     return this.#replaceMutex.runExclusive(async () => {
@@ -459,6 +470,11 @@ export class ScriptureFinderProjectDataProviderEngine
       if (Array.isArray(usfmToInsert) && usfmToInsert.length !== rangesToReplace.length) {
         throw new Error(
           `usfmToInsert array length (${usfmToInsert.length}) must match rangesToReplace length (${rangesToReplace.length})`,
+        );
+      }
+      if (expectedUsfm && expectedUsfm.length !== rangesToReplace.length) {
+        throw new Error(
+          `expectedUsfm array length (${expectedUsfm.length}) must match rangesToReplace length (${rangesToReplace.length})`,
         );
       }
       const replacements: string[] = Array.isArray(usfmToInsert)
@@ -512,6 +528,11 @@ export class ScriptureFinderProjectDataProviderEngine
         // Recompute per attempt so a cache-invalidation retry re-derives protection on fresh state.
         const isStructureProtected = await this.#computeIsStructureProtected();
 
+        // Ranges left unwritten because their USFM no longer matches what Find reported, or their
+        // location can no longer be found. Collected per attempt so a retry starts from an empty
+        // list.
+        const changedIndexes: number[] = [];
+
         // Track pending writes so we can execute all USFM writes together at the end
         const pendingWrites: Array<{
           bookId: string;
@@ -534,10 +555,22 @@ export class ScriptureFinderProjectDataProviderEngine
             const singleChapter = chapters.size === 1 ? [...chapters][0] : undefined;
 
             try {
-              const usjReaderWriter = await this.#getOrCreateCachedReaderWriter(
-                bookId,
-                singleChapter,
-              );
+              let usjReaderWriter: UsjReaderWriter;
+              try {
+                usjReaderWriter = await this.#getOrCreateCachedReaderWriter(bookId, singleChapter);
+              } catch (e) {
+                // A chapter or book that no longer exists is a location that can no longer be
+                // found: when the caller says what each range should contain, report every range
+                // in it as changed and write nothing to this book.
+                if (!expectedUsfm || !isScriptureNotFoundError(e)) throw e;
+                logger.info(
+                  `Scripture Finder: not replacing in ${bookId}${
+                    singleChapter !== undefined ? ` chapter ${singleChapter}` : ''
+                  } — it can no longer be found: ${getErrorMessage(e)}`,
+                );
+                rangeInfos.forEach(({ originalIndex }) => changedIndexes.push(originalIndex));
+                return;
+              }
 
               // Check again after the async fetch - another task may have errored while we were waiting
               if (firstError) return;
@@ -568,15 +601,55 @@ export class ScriptureFinderProjectDataProviderEngine
 
               if (activeRanges.length === 0) return;
 
-              // Convert all ranges to USFM indices and sort in descending order
-              const rangesWithIndices = activeRanges
-                .map((rangeInfo) => ({
-                  ...rangeInfo,
-                  startIndex: usjReaderWriter.usfmVerseLocationToIndexInUsfm(
-                    rangeInfo.startLocation,
-                  ),
-                  endIndex: usjReaderWriter.usfmVerseLocationToIndexInUsfm(rangeInfo.endLocation),
-                }))
+              const originalUsfm = usjReaderWriter.toUsfm();
+
+              // Convert all ranges to USFM indices. When the caller says what each range should
+              // contain, a range whose location can no longer be found is skipped rather than
+              // fatal. A negative offset is a caller bug, never a skip, so it is rejected before
+              // the lookup whose failures can be skipped.
+              const indexedRanges = activeRanges.flatMap((rangeInfo) => {
+                if (
+                  (rangeInfo.startLocation.offset ?? 0) < 0 ||
+                  (rangeInfo.endLocation.offset ?? 0) < 0
+                )
+                  throw new Error('offset must be >= 0');
+                try {
+                  return [
+                    {
+                      ...rangeInfo,
+                      startIndex: usjReaderWriter.usfmVerseLocationToIndexInUsfm(
+                        rangeInfo.startLocation,
+                      ),
+                      endIndex: usjReaderWriter.usfmVerseLocationToIndexInUsfm(
+                        rangeInfo.endLocation,
+                      ),
+                    },
+                  ];
+                } catch (e) {
+                  if (!expectedUsfm) throw e;
+                  const { verseRef } = rangeInfo.startLocation;
+                  logger.info(
+                    `Scripture Finder: not replacing at ${verseRef.book} ${verseRef.chapterNum}:${
+                      verseRef.verseNum
+                    } — its location can no longer be found: ${getErrorMessage(e)}`,
+                  );
+                  changedIndexes.push(rangeInfo.originalIndex);
+                  return [];
+                }
+              });
+
+              // Drop ranges whose current USFM differs from what Find reported, before the overlap
+              // check and the guards: a stale range is neither written nor allowed to fail the rest.
+              // Sort the survivors in descending order.
+              const rangesWithIndices = indexedRanges
+                .filter((rangeInfo) => {
+                  if (!expectedUsfm) return true;
+                  const isUnchanged =
+                    originalUsfm.substring(rangeInfo.startIndex, rangeInfo.endIndex) ===
+                    expectedUsfm[rangeInfo.originalIndex];
+                  if (!isUnchanged) changedIndexes.push(rangeInfo.originalIndex);
+                  return isUnchanged;
+                })
                 .sort((a, b) => b.startIndex - a.startIndex);
 
               // Validate that no ranges overlap. Since ranges are sorted descending by startIndex,
@@ -595,8 +668,7 @@ export class ScriptureFinderProjectDataProviderEngine
               }
 
               // Perform string replacements in reverse index order
-              let modifiedUsfm = usjReaderWriter.toUsfm();
-              const originalUsfm = modifiedUsfm;
+              let modifiedUsfm = originalUsfm;
               rangesWithIndices.forEach((rangeWithIndex) => {
                 const replacement = replacements[rangeWithIndex.originalIndex];
                 // Block any structural (paragraph-level or verse) marker change while protected.
@@ -694,7 +766,7 @@ export class ScriptureFinderProjectDataProviderEngine
         });
 
         // Success - exit the retry loop
-        return;
+        return { changedIndexes: changedIndexes.sort((a, b) => a - b) };
         /* eslint-enable no-await-in-loop */
       }
 
@@ -1001,6 +1073,7 @@ export class ScriptureFinderProjectDataProviderEngine
         ...match,
         start,
         end,
+        matchedUsfm: removedUsfm,
         ...(removedMarkers.length > 0 ? { removedMarkers } : {}),
       };
     });

@@ -566,7 +566,8 @@ class WindowDataProviderEngine
 
   /**
    * Debounced version of {@link #setDetectFocusInternal}. Debounced because because it takes a sec
-   * for the focus to change in the DOM
+   * for the focus to change in the DOM. The Scripture editor's `FOCUS_SETTLE_GRACE_MS` is sized
+   * against this debounce (`adr-editor-yields-to-window-focus-subject`).
    */
   #setDetectFocusInternalDebounced = debounce(this.#setDetectFocusInternal.bind(this), 250);
 

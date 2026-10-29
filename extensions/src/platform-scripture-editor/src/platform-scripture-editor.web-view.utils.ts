@@ -15,6 +15,7 @@
  * graph from `main.ts` and enforces this.
  */
 
+import type { FocusSubject } from '@papi/core';
 import { logger } from '@papi/frontend';
 import {
   isBlockMarker,
@@ -46,7 +47,7 @@ import {
   showsReadOnlyPreview,
   type NoteSessionUpdateDecision,
 } from './platform-scripture-editor.utils';
-import { EDITOR_OWNERSHIP_WINDOW_MS } from './use-editor-pdp-sync.hook';
+import { EDITOR_OWNERSHIP_WINDOW_MS, type EditorFocusLocation } from './use-editor-pdp-sync.hook';
 import { WRITE_GUARD_RELEASE_AFTER_MS } from './write-in-flight-guard.util';
 
 /**
@@ -288,6 +289,11 @@ export interface EditingSessionActivityInput {
   paneSession?: {
     /** Whether DOM focus is inside the footnotes pane. */
     hasFocus: boolean;
+    /**
+     * Where the window's focus is. DOM focus in the pane survives a click into another web view, so
+     * `'anotherWebView'` ends the pane's claim however recent its last edit.
+     */
+    focusLocation: EditorFocusLocation;
     /** `Date.now()` of the last edit made in the pane's row editor, or `undefined` if none was. */
     lastEditAtMs: number | undefined;
   };
@@ -348,7 +354,9 @@ export function resolveEditingSessionActivity({
       paneSession.lastEditAtMs !== undefined &&
       nowMs - paneSession.lastEditAtMs < EDITOR_OWNERSHIP_WINDOW_MS;
     return {
-      isActive: hasPaletteSession || (paneSession.hasFocus && ownsContent),
+      isActive:
+        hasPaletteSession ||
+        (paneSession.hasFocus && paneSession.focusLocation !== 'anotherWebView' && ownsContent),
       isNoteSessionStale: false,
     };
   }
@@ -750,4 +758,34 @@ export function createInsertContextMenuItems(
  */
 export function isEditorContextMenuOpen(editorContainer: Element | null | undefined): boolean {
   return isEditorContextMenuOpenFor(editorContainer);
+}
+
+/**
+ * Where keyboard focus is, from this editor's point of view (see {@link EditorFocusLocation}).
+ * Projects the subject to a web view id as core's `getWebViewIdFromFocusSubject` does (extensions
+ * cannot import it at runtime).
+ *
+ * - Another web view, by its iframe or its tab: `'anotherWebView'`.
+ * - This editor's iframe while its document lacks focus: `'settling'` (the subject is stale).
+ * - Anything else is `'thisEditor'`, including `'other'` (menus outside the dock), dialog tabs and
+ *   unknown focus, so the editor's own menus and confirm dialogs never release its hold.
+ *
+ * @param focusSubject The window's current focus subject, `undefined` if unknown
+ * @param ownWebViewId This editor's web view id
+ * @param doesEditorDocumentHaveFocus Whether this editor's document currently has focus
+ */
+export function getEditorFocusLocation(
+  focusSubject: FocusSubject | undefined,
+  ownWebViewId: string,
+  doesEditorDocumentHaveFocus: boolean,
+): EditorFocusLocation {
+  let subjectWebViewId: string | undefined;
+  if (focusSubject?.focusType === 'webView') subjectWebViewId = focusSubject.id;
+  else if (focusSubject?.focusType === 'tab' && focusSubject.tabType === 'webView')
+    subjectWebViewId = focusSubject.id;
+
+  if (subjectWebViewId === undefined) return 'thisEditor';
+  if (subjectWebViewId !== ownWebViewId) return 'anotherWebView';
+  if (focusSubject?.focusType === 'webView' && !doesEditorDocumentHaveFocus) return 'settling';
+  return 'thisEditor';
 }

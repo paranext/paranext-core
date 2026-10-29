@@ -106,6 +106,7 @@ const RESULT: HidableFindResult = {
   text: RESULT_MATCH_TEXT,
   start: { verseRef: VERSE_REF, offset: 0 },
   end: { verseRef: VERSE_REF, offset: RESULT_MATCH_TEXT.length },
+  matchedUsfm: RESULT_MATCH_TEXT,
 };
 
 const RESULTS_BY_BOOK = new Map<string, BookResultEntry[]>([
@@ -669,6 +670,7 @@ const FAKE_RESULT = {
   start: { verseRef: { book: 'GEN', chapterNum: 1, verseNum: 1 }, offset: 0 },
   end: { verseRef: { book: 'GEN', chapterNum: 1, verseNum: 1 }, offset: 3 },
   text: 'God',
+  matchedUsfm: 'God',
 };
 
 describe('Find — search errors', () => {

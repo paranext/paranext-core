@@ -4,7 +4,10 @@ import { describe, expect, it } from 'vitest';
 
 type LocalizedStringsFile = {
   localizedStrings: Record<string, Record<string, string>>;
-  metadata: Record<string, { fallbackKey?: string; deprecationInfo?: { message: string } }>;
+  metadata: Record<
+    string,
+    { fallbackKey?: string; deprecationInfo?: { message: string }; notes?: string }
+  >;
 };
 
 function readLocalizedStringsFile(): LocalizedStringsFile {
@@ -142,5 +145,30 @@ describe('not-yet-available toolbar tooltip', () => {
   it('Spanish string differs from English', () => {
     const key = '%manageBooks_view_disabledStub_notYetAvailable_2%';
     expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+/**
+ * The toasts Find shows when Replace or Replace All leaves results unwritten because their text
+ * changed after the search. Their wording depends on counts a translator cannot see from the string
+ * alone, so each carries translator notes.
+ */
+const TEXT_CHANGED_TOAST_KEYS = [
+  '%webView_find_replacedNOfMResultsTextChanged%',
+  '%webView_find_replacedNOfMResultsTextChangedOrMarker%',
+  '%webView_find_replace_textChangedAllResults%',
+  '%webView_find_replace_textChangedError%',
+  '%webView_find_replace_textChangedOrMarkerAllResults%',
+];
+
+describe.each(TEXT_CHANGED_TOAST_KEYS)('text-changed toast %s', (key) => {
+  it('has an English string and translator notes', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+    expect(metadata[key]?.notes).toBeTruthy();
+  });
+
+  it('notes explain every placeholder the string uses', () => {
+    const placeholders = localizedStrings.en[key].match(/\{\w+\}/g) ?? [];
+    placeholders.forEach((placeholder) => expect(metadata[key]?.notes).toContain(placeholder));
   });
 });
