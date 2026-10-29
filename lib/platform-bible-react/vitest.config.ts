@@ -23,7 +23,7 @@ const workspace = defineConfig({
           exclude: ['src/**/*.stories.{js,ts,jsx,tsx}', 'src/components/shadcn-ui-old/*'],
           globals: true,
           environment: 'jsdom',
-          setupFiles: [intlWarmupSetup],
+          setupFiles: [intlWarmupSetup, path.resolve(__dirname, 'vitest.unit.setup.ts')],
           // Timing-sensitive component tests here wait on React state settling, and on a contended
           // windows-latest runner that wait crosses the 5 s default while the assertion itself is
           // sound. 15 s absorbs the contention and still bounds a genuine hang.
