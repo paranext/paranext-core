@@ -4615,18 +4615,16 @@ type DismissOnWindowBlurProps<T extends HTMLElement> = {
  * dismiss.
  *
  * Focus rule: a dismissal caused by window blur does not return focus to the trigger. The user has
- * already put focus somewhere else (another frame, another application), and Radix's default
- * close-auto-focus would pull it back. That matters most across frames: a menu closing in one frame
- * by returning focus to its trigger blurs the main window, which would close the menu the user just
- * opened in another frame. The returned `onCloseAutoFocus` calls `preventDefault()` on the
- * close-auto-focus event of a blur dismissal and leaves every other close, such as Escape or a
- * click outside, restoring focus as usual. Radix runs close-auto-focus from a zero-delay timer
- * queued while unmounting, so the hook's "blur dismissal in flight" flag is one-shot: the first
- * close-auto-focus consumes it, which also covers an exit animation that delays the unmount. A
- * zero-delay backstop timer clears it otherwise, which assumes the menu contents' `animate-none!`
- * exit (no animation, so the unmount is not deferred). An animated non-modal popover is covered
- * anyway: Radix skips the trigger refocus after an outside interaction, which the synthetic press
- * is.
+ * already put focus somewhere else, and Radix's default close-auto-focus would pull it back. That
+ * matters most across frames: a menu closing in one frame by returning focus to its trigger blurs
+ * the main window, which would close the menu the user just opened in another frame. The returned
+ * `onCloseAutoFocus` calls `preventDefault()` when this document's window no longer has focus
+ * (`!document.hasFocus()`: the user clicked into another frame from inside this one, or switched
+ * applications) or when the active element is an `<iframe>` (the user clicked into a web view from
+ * this document). Any other close, such as Escape or a click elsewhere in this document, restores
+ * focus as usual. The rule reads state at close time rather than remembering that a blur dismissal
+ * happened: Radix runs close-auto-focus from its own timer after an asynchronous unmount, so a flag
+ * cleared by a timeout loses that race under load.
  *
  * Hidden-view case: an inactive-tab pane cannot hold an open menu, so a stray blur there is a
  * harmless no-op and there is deliberately no catch-up logic. See
