@@ -4057,6 +4057,38 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   text like any other text.
 - **Source:** PT-4189.
 
+## adr-formatted-view-project-fonts-only: The formatted view gets the project's fonts only, not its layout
+
+- **Date:** 2026-10-29
+- **Status:** Accepted
+- **Context:** The scripture editor applied the project stylesheet CSS only in Standard view. Outside
+  Power mode the editor always shows the formatted view, so Simple mode never showed the project
+  font, and neither did Power's Preview. The formatted view has its own marker layout rules in
+  `_usj-nodes.scss`, tuned and tested without project layout layered over them. Paratext 10 does not
+  install project fonts, so a project font that is missing on the machine must degrade to the
+  Scripture font stack (Gentium Plus, Charis SIL, ...), not to the browser default.
+- **Decision:** In the formatted view, inject a fonts-only stylesheet built from the same
+  `StyleInfo` (`generateProjectFontCss`): the project's default font family followed by the
+  `--usj-font-fallback` stack, the default font size in points, and one `font-family` rule per
+  marker that names a font. Nothing else from a marker entry (weight, style, colour, size, margins,
+  indent, line height, alignment) is emitted. Standard view keeps the whole generated sheet.
+  `useProjectStylesheet` takes a `'full' | 'fonts'` mode.
+- **Alternatives:**
+  - **The full sheet in the formatted view.** Rejected: it would layer project layout over the
+    view's own marker rules, an interaction nothing tests.
+  - **Font family only, without the size.** Rejected: the project's default size is part of how
+    its text is meant to look, and the Standard view already applies it.
+  - **The base font only, without per-marker fonts.** Rejected: a project that sets a different
+    font on a marker (for example a transliteration marker) would lose it in exactly the views
+    this fixes.
+  - **Leave the formatted view as it is.** Rejected: Simple mode and Preview then never show the
+    project's font.
+- **Consequences:** The formatted view shows project fonts with the platform fallback; its layout
+  stays the platform's. The Standard view's generated sheet still emits a single font family
+  without a fallback stack, so a missing project font there falls back to the browser default: a
+  known gap.
+- **Source:** PT-4966.
+
 ## adr-generic-name-routing-proxies: Generic-name service routers in main forward to the focused/owning window's scoped service
 
 - **Formerly:** ADR-0008
