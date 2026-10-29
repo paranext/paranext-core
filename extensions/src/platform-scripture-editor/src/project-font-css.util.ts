@@ -1,7 +1,7 @@
 import type { StyleInfo } from '@eten-tech-foundation/platform-editor';
 
 /** Scope the project stylesheet package uses: the editor's content element carries both classes. */
-const DEFAULT_CONTAINER_SELECTOR = '.editor-input.usfm';
+const CONTAINER_SELECTOR = '.editor-input.usfm';
 
 /**
  * Font fallbacks after a project font. `--usj-font-fallback` is defined on `.usfm` in
@@ -39,21 +39,18 @@ function fontFamilyDeclaration(fontName: string): string {
  * deliberately left out.
  *
  * @param styleInfo Project stylesheet info, or `undefined` when not loaded
- * @param options.containerSelector Scope the rules apply under
  * @returns CSS text, empty when there is nothing to emit
  */
-export function generateProjectFontCss(
-  styleInfo: StyleInfo | undefined,
-  options: { containerSelector?: string } = {},
-): string {
+export function generateProjectFontCss(styleInfo: StyleInfo | undefined): string {
   if (!styleInfo) return '';
-  const scope = options.containerSelector ?? DEFAULT_CONTAINER_SELECTOR;
+  const scope = CONTAINER_SELECTOR;
   const rules: string[] = [];
 
   const baseDeclarations: string[] = [];
   if (styleInfo.defaultFont) baseDeclarations.push(fontFamilyDeclaration(styleInfo.defaultFont));
-  if (typeof styleInfo.defaultFontSize === 'number' && styleInfo.defaultFontSize > 0)
-    baseDeclarations.push(`font-size: ${styleInfo.defaultFontSize}pt`);
+  const size = styleInfo.defaultFontSize;
+  if (typeof size === 'number' && Number.isFinite(size) && size > 0)
+    baseDeclarations.push(`font-size: ${size}pt`);
   if (baseDeclarations.length > 0) rules.push(`${scope} { ${baseDeclarations.join('; ')}; }`);
 
   Object.entries(styleInfo.markers ?? {}).forEach(([marker, entry]) => {
