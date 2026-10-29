@@ -17,7 +17,30 @@ import {
 } from './use-project-presence.hook';
 
 // Untyped, so a test can hand the hook a fake factory or none at all.
-const { getNetworkObject } = vi.hoisted(() => ({ getNetworkObject: vi.fn() }));
+const { getNetworkObject, getEmitter, emitters } = vi.hoisted(() => {
+  type Listener = (payload: unknown) => void;
+  type Emitter = { listeners: Set<Listener>; event: (listener: Listener) => () => boolean };
+  const emitterMap = new Map<string, Emitter>();
+  return {
+    getNetworkObject: vi.fn(),
+    emitters: emitterMap,
+    getEmitter: (eventName: string): Emitter => {
+      let emitter = emitterMap.get(eventName);
+      if (!emitter) {
+        const listeners = new Set<Listener>();
+        emitter = {
+          listeners,
+          event: (listener) => {
+            listeners.add(listener);
+            return () => listeners.delete(listener);
+          },
+        };
+        emitterMap.set(eventName, emitter);
+      }
+      return emitter;
+    },
+  };
+});
 
 vi.mock('@papi/frontend', () => ({
   default: {
@@ -27,18 +50,10 @@ vi.mock('@papi/frontend', () => ({
     },
     commands: { sendCommand: vi.fn() },
     networkObjects: { get: getNetworkObject },
-    // The event's name doubles as its token, so the `useEvent` mock below can route by name.
-    network: { getNetworkEvent: vi.fn((eventName: string) => eventName) },
+    // Each event is a subscribe function, as PAPI's are, so the real `useEvent` can subscribe to it.
+    network: { getNetworkEvent: vi.fn((eventName: string) => getEmitter(eventName).event) },
   },
   logger: { warn: vi.fn(), debug: vi.fn() },
-}));
-
-// The latest handler the hook registered for each event, so a test can fire that event.
-const eventHandlers = new Map<string, (payload: unknown) => void>();
-vi.mock('platform-bible-react', () => ({
-  useEvent: vi.fn((event: string, handler: (payload: unknown) => void) => {
-    eventHandlers.set(event, handler);
-  }),
 }));
 
 const lookUpProjects = vi.mocked(papi.projectLookup.getMetadataForAllProjectsWithoutRetries);
@@ -100,14 +115,17 @@ function answerSyncActivity(isSyncing: boolean) {
 }
 
 function fire(eventName: string, payload?: unknown) {
-  const handler = eventHandlers.get(eventName);
-  if (!handler) throw new Error(`The hook did not subscribe to ${eventName}`);
-  act(() => handler(payload));
+  const emitter = emitters.get(eventName);
+  if (!emitter || emitter.listeners.size === 0)
+    throw new Error(`The hook did not subscribe to ${eventName}`);
+  act(() => emitter.listeners.forEach((listener) => listener(payload)));
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  eventHandlers.clear();
+  // A listener left by a hook that was never unmounted would receive later tests' events and make
+  // `fire`'s did-not-subscribe check pass without the hook under test having subscribed.
+  emitters.forEach((emitter) => emitter.listeners.clear());
   answerSyncActivity(false);
   setParatextFactoryReachable(true);
   getParatextFactoryProjects.mockResolvedValue([]);
@@ -625,6 +643,29 @@ describe('useProjectPresence', () => {
     await act(async () => {});
 
     expect(result.current).toBe('none');
+  });
+
+  it('ignores a sync-activity snapshot whose project list is malformed', async () => {
+    lookUpProjects.mockResolvedValue([SAMPLE_WEB]);
+    const { result } = renderHook(() => useProjectPresence({ enabled: true }));
+    await waitFor(() => expect(result.current).toBe('none'));
+
+    fire('paratextBibleSendReceive.onSyncActivityChanged', { isSyncing: true, projectIds: 'A' });
+    await act(async () => {});
+
+    expect(result.current).toBe('none');
+  });
+
+  it('reads a null project list in a sync-activity snapshot as valid', async () => {
+    lookUpProjects.mockResolvedValue([SAMPLE_WEB]);
+    const { result } = renderHook(() => useProjectPresence({ enabled: true }));
+    await waitFor(() => expect(result.current).toBe('none'));
+
+    // A running sync that names no projects yet
+    // eslint-disable-next-line no-null/no-null
+    fire('paratextBibleSendReceive.onSyncActivityChanged', { isSyncing: true, projectIds: null });
+
+    await waitFor(() => expect(result.current).toBe('unknown'));
   });
 
   it('refetches when the set of projects changes', async () => {
