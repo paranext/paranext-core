@@ -3,7 +3,11 @@
 import { render } from '@testing-library/react';
 import { createRef, Ref } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useDismissOnWindowBlur } from './use-dismiss-on-window-blur.hook';
+import {
+  isRunningInWebView,
+  shouldSuppressFocusReturn,
+  useDismissOnWindowBlur,
+} from './use-dismiss-on-window-blur.hook';
 
 function Host({
   forwardedRef,
@@ -15,6 +19,39 @@ function Host({
   const { ref } = useDismissOnWindowBlur({ ref: forwardedRef });
   return <section data-testid="parent">{open && <div data-testid="content" ref={ref} />}</section>;
 }
+
+describe('shouldSuppressFocusReturn', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    document.querySelectorAll('iframe').forEach((iframe) => iframe.remove());
+  });
+
+  const focusIframe = () => {
+    const iframe = document.createElement('iframe');
+    document.body.appendChild(iframe);
+    iframe.focus();
+    expect(document.activeElement).toBe(iframe);
+  };
+
+  it('does not suppress when the document is focused and no iframe is active', () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    expect(shouldSuppressFocusReturn(document, false)).toBe(false);
+    expect(shouldSuppressFocusReturn(document, true)).toBe(false);
+  });
+
+  it('suppresses when an iframe is active, in the main document or a web view', () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    focusIframe();
+    expect(shouldSuppressFocusReturn(document, false)).toBe(true);
+    expect(shouldSuppressFocusReturn(document, true)).toBe(true);
+  });
+
+  it('suppresses an unfocused document inside a web view only', () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    expect(shouldSuppressFocusReturn(document, true)).toBe(true);
+    expect(shouldSuppressFocusReturn(document, false)).toBe(false);
+  });
+});
 
 describe('useDismissOnWindowBlur', () => {
   let seen: Event[];
@@ -46,6 +83,13 @@ describe('useDismissOnWindowBlur', () => {
     // jsdom has no PointerEvent, so the hook falls back to MouseEvent there, which has no pointerType
     const expectedPointerType = typeof PointerEvent === 'undefined' ? undefined : 'mouse';
     expect(Reflect.get(seen[0], 'pointerType')).toBe(expectedPointerType);
+  });
+
+  it('does nothing while the content animates out (data-state="closed")', () => {
+    const { getByTestId } = render(<Host />);
+    getByTestId('content').dataset.state = 'closed';
+    window.dispatchEvent(new Event('blur'));
+    expect(seen).toHaveLength(0);
   });
 
   it('does nothing once the content element has unmounted', () => {
@@ -115,11 +159,25 @@ describe('useDismissOnWindowBlur', () => {
 
     afterEach(() => {
       vi.restoreAllMocks();
+      vi.unstubAllGlobals();
       document.querySelectorAll('iframe').forEach((iframe) => iframe.remove());
     });
 
-    it('prevents close-auto-focus when the document is not focused', () => {
+    // The main document is its own top window, so an unfocused document there means the OS window
+    // was deactivated
+    it('restores focus in the main document even when the document is not focused', () => {
       vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+      expect(isRunningInWebView()).toBe(false);
+      const onCloseAutoFocus = renderProbe();
+      const event = cancelable();
+      onCloseAutoFocus(event);
+      expect(event.defaultPrevented).toBe(false);
+    });
+
+    it('prevents close-auto-focus in a web view whose document is not focused', () => {
+      vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+      // Paratext web views have no `window.top`
+      vi.stubGlobal('top', undefined);
       const onCloseAutoFocus = renderProbe();
       const event = cancelable();
       onCloseAutoFocus(event);
@@ -147,7 +205,7 @@ describe('useDismissOnWindowBlur', () => {
     });
 
     it("calls the caller's handler first and does not undo a default it already prevented", () => {
-      vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+      vi.spyOn(document, 'hasFocus').mockReturnValue(true);
       const callerHandler = vi.fn((event: Event) => event.preventDefault());
       const onCloseAutoFocus = renderProbe(callerHandler);
       const event = cancelable();
