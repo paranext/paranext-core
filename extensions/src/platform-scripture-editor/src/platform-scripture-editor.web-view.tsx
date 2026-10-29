@@ -320,6 +320,7 @@ import {
   SettingUnreadableBanner,
   SETTING_UNREADABLE_BANNER_STRING_KEYS,
 } from './setting-unreadable-banner.component';
+import { createUnstorableTextNotifier } from './unstorable-text-notice.utils';
 import { COPYRIGHT_NOTICE_STRING_KEYS } from './copyright-notice/copyright-notice.const';
 import { ProjectCopyrightNotice } from './copyright-notice/project-copyright-notice.component';
 import {
@@ -587,6 +588,12 @@ function PlatformScriptureEditor({
         (confirmOptions) => papi.dialogs.showDialog('platform.confirm', confirmOptions),
       ),
     [],
+  );
+
+  /** Tells the user when the editor removes `\` or `//` from text they pasted, dropped or typed. */
+  const handleUnstorableTextRemoved = useMemo(
+    () => createUnstorableTextNotifier(papi.notifications.send, webViewId),
+    [webViewId],
   );
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
@@ -2204,6 +2211,7 @@ function PlatformScriptureEditor({
       structureProtectionMode,
       // A read-only editor makes no edits, so there is nothing to ask about.
       onHiddenContentDelete: isReadOnlyEffective ? undefined : handleHiddenContentDelete,
+      onUnstorableTextRemoved: isReadOnlyEffective ? undefined : handleUnstorableTextRemoved,
       hasSpellCheck: false,
       nodes: nodeOptions,
       textDirection: textDirectionEffective,
@@ -2238,6 +2246,7 @@ function PlatformScriptureEditor({
       isReadOnlyEffective,
       structureProtectionMode,
       handleHiddenContentDelete,
+      handleUnstorableTextRemoved,
       canUserCreateComments,
       isSyncBlocked,
       isResource,
