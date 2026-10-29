@@ -22,6 +22,8 @@ const BCV_TRIGGER = '[aria-label="book-chapter-trigger"]';
 // The control's search box is a plain input inside the Radix popper (it renders no cmdk input)
 const BCV_SEARCH_INPUT = '[data-radix-popper-content-wrapper] input';
 const OPEN_MENU = '[role=menu][data-state=open]';
+// Long enough for a late close or focus return to land before a "stays open" assertion repeats
+const SETTLE_MS = 300;
 
 test.use({ commentAppOwner: 'menu-dismissal' });
 
@@ -160,6 +162,9 @@ test.describe('menus dismiss when the click lands in another frame', () => {
     await mainPage.getByRole('menuitem', { name: 'Platform' }).first().click();
     await expect(editorFrame.locator(OPEN_MENU)).toHaveCount(0);
     await expect(mainPage.locator(OPEN_MENU)).toHaveCount(1);
+    // Settle, then assert again so a late close or refocus would be caught
+    await mainPage.waitForTimeout(SETTLE_MS);
+    await expect(mainPage.locator(OPEN_MENU)).toHaveCount(1);
   });
 
   test.describe('controls', () => {
@@ -171,6 +176,9 @@ test.describe('menus dismiss when the click lands in another frame', () => {
       await expect(searchInput).toBeVisible();
 
       await searchInput.click();
+      await expect(searchInput).toBeVisible();
+      // Settle, then assert again so a late close or refocus would be caught
+      await mainPage.waitForTimeout(SETTLE_MS);
       await expect(searchInput).toBeVisible();
     });
 
