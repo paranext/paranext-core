@@ -15,9 +15,13 @@ export function useProjectStylesheet(
   rtl: boolean,
   mode: 'full' | 'fonts',
 ): void {
+  // The fonts-only sheet has no direction-dependent rules, so `rtl` must not rebuild it.
+  const effectiveRtl = mode === 'full' && rtl;
   const css = useMemo(() => {
     if (!styleInfo) return '';
-    return mode === 'full' ? generateUsjCss(styleInfo, { rtl }) : generateProjectFontCss(styleInfo);
-  }, [styleInfo, rtl, mode]);
+    return mode === 'full'
+      ? generateUsjCss(styleInfo, { rtl: effectiveRtl })
+      : generateProjectFontCss(styleInfo);
+  }, [styleInfo, effectiveRtl, mode]);
   useStylesheet(css);
 }

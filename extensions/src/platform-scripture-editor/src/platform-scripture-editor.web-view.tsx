@@ -1007,8 +1007,9 @@ function PlatformScriptureEditor({
   // not offer verse selection (the picker falls back to chapter-level submission).
   const currentBookNum = useMemo(() => Canon.bookIdToNumber(scrRef.book), [scrRef.book]);
 
-  // Project stylesheet-derived style info for the current book; feeds
-  // `generateUsjCss` via `useProjectStylesheet` below and `EditorOptions.styleInfo`.
+  // Project stylesheet-derived style info for the current book; feeds `useProjectStylesheet` below
+  // (`generateUsjCss` in the Standard view, `generateProjectFontCss` in the formatted view) and
+  // `EditorOptions.styleInfo`.
   // Disabled (undefined source, the hook's no-subscription state) while `currentBookNum` is not a
   // real book: an unrecognized book id resolves to 0, which the backend rejects, so an enabled
   // subscription delivered nothing but PlatformErrors — same guard as the versification fetch

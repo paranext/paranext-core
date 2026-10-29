@@ -4070,7 +4070,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Decision:** In the formatted view, inject a fonts-only stylesheet built from the same
   `StyleInfo` (`generateProjectFontCss`): the project's default font family followed by the
   `--usj-font-fallback` stack, the default font size in points, and one `font-family` rule per
-  marker that names a font. Nothing else from a marker entry (weight, style, colour, size, margins,
+  marker that names a font: the marker's font, then the project's default font, then the
+  `--usj-font-fallback` stack. Nothing else from a marker entry (weight, style, colour, size, margins,
   indent, line height, alignment) is emitted. Standard view keeps the whole generated sheet.
   `useProjectStylesheet` takes a `'full' | 'fonts'` mode.
 - **Alternatives:**
@@ -4084,9 +4085,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - **Leave the formatted view as it is.** Rejected: Simple mode and Preview then never show the
     project's font.
 - **Consequences:** The formatted view shows project fonts with the platform fallback; its layout
-  stays the platform's. The Standard view's generated sheet still emits a single font family
-  without a fallback stack, so a missing project font there falls back to the browser default: a
-  known gap.
+  stays the platform's. `generateProjectFontCss` repeats private helpers of the editor package's
+  `generateUsjCss`; tests pin its output to the package's until PT-4974 moves the fonts-only sheet
+  into the package.
 - **Source:** PT-4966.
 
 ## adr-generic-name-routing-proxies: Generic-name service routers in main forward to the focused/owning window's scoped service
