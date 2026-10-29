@@ -131,15 +131,15 @@ function DropdownMenuContent({
   // into another iframe never reaches this document, so the window's blur stands in for the outside
   // press; see the hook's TSDoc. DropdownMenuSubContent is not wired: a sub-menu closes with its
   // root menu. The returned ref callback also forwards the caller's ref, and the returned
-  // onCloseAutoFocus keeps focus where the user put it after a blur dismissal while still calling
-  // the caller's handler.
+  // onCloseAutoFocus also decides, from document focus state, whether Radix may return focus to
+  // the trigger on close, while still calling the caller's handler.
   const blurDismissProps = useDismissOnWindowBlur({ ref, onCloseAutoFocus });
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
         data-slot="dropdown-menu-content"
         // CUSTOM: ref and onCloseAutoFocus from useDismissOnWindowBlur (it finds the content's
-        // parent and keeps focus off the trigger after a blur dismissal)
+        // parent and decides, from document focus state, whether focus returns to the trigger on close)
         {...blurDismissProps}
         sideOffset={sideOffset}
         align={align}
