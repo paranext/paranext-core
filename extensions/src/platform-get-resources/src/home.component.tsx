@@ -19,6 +19,7 @@ import {
   CardHeader,
   cn,
   DisabledActionTooltip,
+  DisabledTooltipWrapper,
   DropdownMenuItem,
   Label,
   SearchBar,
@@ -44,10 +45,11 @@ import {
   hasDistinctFullName,
   isLocalizeKey,
   normalizeFullName,
+  normalizeProjectId,
   PROJECT_OPEN_BLOCKED_FALLBACK_KEY,
 } from 'platform-bible-utils';
 import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
-import { ReactNode, useMemo, useRef, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { HomeItemDropdownMenu } from './home-item-menu';
 import {
   isShownByProjectResourceFilter,
@@ -97,7 +99,11 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_serverUnreachable_description%',
   '%resources_serverUnreachable_title%',
   '%resources_syncFailed_title%',
+  '%resources_syncWaiting_reason%',
+  '%resources_syncWaiting_stopGet_format%',
+  '%resources_syncWaiting_stopSync_format%',
   '%resources_sync%',
+  '%resources_syncRunning_listLoads%',
 ] as const);
 
 type HomeLocalizedStringKey = (typeof HOME_STRING_KEYS)[number];
@@ -140,6 +146,12 @@ export type RemoteProjectsState =
 const NO_LOCAL_PROJECTS: LocalProjectInfo[] = [];
 const NO_SHARED_PROJECTS: SharedProjectsInfo = {};
 const NO_ACTIVE_SEND_RECEIVE_PROJECTS: string[] = [];
+
+/**
+ * How long the "a sync is running" line must stay before a screen reader is told. Longer than the
+ * moment the line can flash when a refetch starts just before the sync's closing event arrives.
+ */
+export const SYNC_RUNNING_ANNOUNCEMENT_DELAY_MS = 1000;
 const NO_LOCALIZED_UNSUPPORTED_REASONS: LanguageStrings = {};
 
 export type SortConfig = {
@@ -169,6 +181,17 @@ const TOOLTIP_TRIGGER_BUTTON_CLASS =
 const BUNDLED_SAMPLE_PROJECT_SHORT_NAME = 'WEB';
 
 const DEFAULT_SORT_CONFIG: SortConfig = { key: 'language', direction: 'ascending' };
+
+/**
+ * Removes the `JSON-RPC Request error (<code>): ` prefix the network layer puts on every backend
+ * error. The prefix is transport detail that tells the user nothing; the message after it is the
+ * backend's own, already localized. The format is produced by `getJsonRpcRequestErrorMessagePrefix`
+ * in `src/shared/data/rpc.model.ts`, which an extension cannot import, so this pattern must change
+ * with it.
+ */
+function withoutJsonRpcErrorPrefix(message: string): string {
+  return message.replace(/^JSON-RPC Request error \(-?\d+\): /, '');
+}
 
 /**
  * A last send/receive date as a timestamp, or `undefined` for a row with none. Compared as time,
@@ -305,6 +328,12 @@ export type HomeProps = {
    */
   remoteProjectsState?: RemoteProjectsState;
   /**
+   * Whether the server's list is known to be coming and is waiting for a running sync to end, as
+   * opposed to still waiting for Send/Receive to report whether it is available at all. Only then
+   * does the loading spinner say that a sync is the reason. Defaults to `false`.
+   */
+  isServerListExpectedAfterSync?: boolean;
+  /**
    * Which items the type filter starts on. The user can change it from there. The Home web view
    * passes the filter it last showed, which an opener's preset replaces — the title bar's project
    * picker footer asks for `paratextProject`. Unset starts on `all`. Read once, on mount: a later
@@ -347,6 +376,8 @@ export type HomeProps = {
  * @param {isSendReceiveInProgress} - Whether a send/receive operation is in progress.
  * @param {isLoadingLocalProjects} - Whether loading local projects is in progress.
  * @param {remoteProjectsState} - What is known about the send/receive server's half of the list.
+ * @param {isServerListExpectedAfterSync} - Whether the server's list is waiting for a running sync
+ *   to end.
  * @param {initialProjectResourceFilter} - Which items the type filter starts on.
  * @param {onProjectResourceFilterChange} - Called with the new filter each time the user changes
  *   it.
@@ -373,6 +404,7 @@ export function Home({
   unsyncedProjectIds,
   isLoadingLocalProjects = false,
   remoteProjectsState = 'absent',
+  isServerListExpectedAfterSync = false,
   initialProjectResourceFilter = 'all',
   onProjectResourceFilterChange = () => {},
   localProjectsInfo = NO_LOCAL_PROJECTS,
@@ -385,6 +417,14 @@ export function Home({
     return localizedStringsWithLoadingState[0][localizeKey] ?? localizeKey;
   };
   const isLocalizedStringsLoading = localizedStringsWithLoadingState[1];
+  // Ids reach Home from more than one source (the backend's sync activity, the project list), so
+  // they are compared in their normalized form.
+  const normalizedActiveProjectIds = useMemo(
+    () => new Set(activeSendReceiveProjects.map(normalizeProjectId)),
+    [activeSendReceiveProjects],
+  );
+  const isProjectSyncing = (projectId: string) =>
+    normalizedActiveProjectIds.has(normalizeProjectId(projectId));
   const actionText: string = getLocalizedString('%resources_action%');
   const activityText: string = getLocalizedString('%resources_activity%');
   const clearFiltersText: string = getLocalizedString('%resources_clearFilters%');
@@ -430,6 +470,14 @@ export function Home({
   // Specific title for failed sync/get attempts — the alert is only shown for that flow, so a
   // contextual title ("Sync failed") communicates what failed better than the generic "Error".
   const syncFailedTitleText: string = getLocalizedString('%resources_syncFailed_title%');
+  const syncWaitingReasonText: string = getLocalizedString('%resources_syncWaiting_reason%');
+  const syncWaitingStopSyncFormat: string = getLocalizedString(
+    '%resources_syncWaiting_stopSync_format%',
+  );
+  const syncWaitingStopGetFormat: string = getLocalizedString(
+    '%resources_syncWaiting_stopGet_format%',
+  );
+  const syncRunningListLoadsText: string = getLocalizedString('%resources_syncRunning_listLoads%');
   const serverUnreachableDescriptionText: string = getLocalizedString(
     '%resources_serverUnreachable_description%',
   );
@@ -460,7 +508,7 @@ export function Home({
     try {
       await onSendReceiveProject(projectId);
     } catch (e) {
-      setActionError(getErrorMessage(e));
+      setActionError(withoutJsonRpcErrorPrefix(getErrorMessage(e)));
     }
   };
 
@@ -693,6 +741,29 @@ export function Home({
       setFilteredToNothingAnnouncement(settledAnnouncement);
   }
 
+  const isSyncRunningLineShown =
+    isLoading &&
+    remoteProjectsState === 'loading' &&
+    isServerListExpectedAfterSync &&
+    isSendReceiveInProgress;
+  // The line is announced through its own always-mounted region, apart from the filter-results one:
+  // that one holds its last message through a reload, so sharing it would announce that message
+  // again when the list returned. Held back until the line has stayed, so a line that flashes for
+  // a moment while a refetch overlaps the end of a sync is never read out. Hidden case: a hidden
+  // tab announces nothing either way, so nothing is deferred for it.
+  const [syncRunningAnnouncement, setSyncRunningAnnouncement] = useState('');
+  useEffect(() => {
+    if (!isSyncRunningLineShown) {
+      setSyncRunningAnnouncement('');
+      return undefined;
+    }
+    const timer = setTimeout(
+      () => setSyncRunningAnnouncement(syncRunningListLoadsText),
+      SYNC_RUNNING_ANNOUNCEMENT_DELAY_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [isSyncRunningLineShown, syncRunningListLoadsText]);
+
   // React element refs start out as `null`.
   // eslint-disable-next-line no-null/no-null
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -838,7 +909,7 @@ export function Home({
     event.target instanceof Node && event.currentTarget.contains(event.target);
 
   const getSendReceiveButtonContent = (project: MergedProjectInfo) => {
-    if (isSendReceiveInProgress && activeSendReceiveProjects.includes(project.projectId)) {
+    if (isSendReceiveInProgress && isProjectSyncing(project.projectId)) {
       return <Spinner className="tw:h-5 tw:py-[1px]" />;
     }
 
@@ -877,17 +948,24 @@ export function Home({
     isBlocked,
     reasonText,
     isDisabled,
+    ariaLabel,
+    isBusy,
     onActivate,
   }: {
     label: ReactNode;
     isBlocked: boolean;
     reasonText: string | undefined;
     isDisabled?: boolean;
+    /** The item's name when its label has no text, such as a spinner. Otherwise omit it. */
+    ariaLabel?: string;
+    isBusy?: boolean;
     onActivate: () => void;
   }) => (
     <DropdownMenuItem
       disabled={isDisabled}
       aria-disabled={isBlocked || undefined}
+      aria-label={ariaLabel}
+      aria-busy={isBusy || undefined}
       className={cn({ 'tw:opacity-50': isBlocked })}
       onSelect={(event) => {
         if (isBlocked) {
@@ -918,13 +996,33 @@ export function Home({
     isBlocked: boolean,
     reasonText: string | undefined,
     button: ReactNode,
-  ) => (
+    stopName?: string,
+  ) => {
+    // A stop whose name differs from the reason it shows: every row waits for the same sync, so
+    // the shared reason would give each stop the same name.
+    if (stopName && isBlocked && reasonText)
+      return (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DisabledTooltipWrapper isDisabled disabledExplanation={stopName}>
+                {button}
+              </DisabledTooltipWrapper>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p className="tw:max-w-xs tw:whitespace-pre-line">{reasonText}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
     // Without reason text the wrapper would be a nameless tab stop with an empty bubble; the button
     // stays disabled either way.
-    <DisabledActionTooltip disabled={isBlocked && !!reasonText} tooltipText={reasonText ?? ''}>
-      {button}
-    </DisabledActionTooltip>
-  );
+    return (
+      <DisabledActionTooltip disabled={isBlocked && !!reasonText} tooltipText={reasonText ?? ''}>
+        {button}
+      </DisabledActionTooltip>
+    );
+  };
 
   const syncOrGetButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
     // Home reuses `unsupportedReason` (the can't-open signal) to block Sync and Get too. Today that
@@ -934,25 +1032,44 @@ export function Home({
     // check instead of `unsupportedReason`.
     const isBlocked = !!project.unsupportedReason;
     const unsupportedReasonText = getUnsupportedReasonText(project);
+    // The sync service runs one sync at a time and refuses a second one, so every row is gated while
+    // any sync runs, not just the active one. The active row shows the spinner and needs no reason.
+    const isThisProjectSyncing = isProjectSyncing(project.projectId);
+    const isWaitingForOtherSync = isSendReceiveInProgress && !isThisProjectSyncing;
+    const waitingReasonText = isWaitingForOtherSync ? syncWaitingReasonText : undefined;
+    const sendReceiveLabel = project.isLocallyAvailable ? syncText : getText;
+    // The unsupported reason, which already names why this project is blocked, wins.
+    const waitingStopName =
+      !unsupportedReasonText && waitingReasonText
+        ? formatReplacementString(
+            project.isLocallyAvailable ? syncWaitingStopSyncFormat : syncWaitingStopGetFormat,
+            { name: project.name },
+          )
+        : undefined;
     if (isMenuItem)
       return blockableMenuItem({
         label: getSendReceiveButtonContent(project),
-        isBlocked,
-        reasonText: unsupportedReasonText,
+        isBlocked: isBlocked || isSendReceiveInProgress,
+        reasonText: unsupportedReasonText ?? waitingReasonText,
+        // The spinner has no text, so the item keeps its name while it shows.
+        ariaLabel: isThisProjectSyncing ? sendReceiveLabel : undefined,
+        isBusy: isThisProjectSyncing,
         onActivate: () => handleSendReceiveProject(project.projectId),
       });
     return blockableTooltip(
-      isBlocked,
-      unsupportedReasonText,
+      isBlocked || isWaitingForOtherSync,
+      unsupportedReasonText ?? waitingReasonText,
       <Button
-        disabled={
-          isBlocked ||
-          (isSendReceiveInProgress && activeSendReceiveProjects.includes(project.projectId))
-        }
+        disabled={isBlocked || isSendReceiveInProgress}
+        aria-busy={isThisProjectSyncing}
+        // The spinner has no text, so the button keeps its name while it shows; otherwise its
+        // visible text is the name.
+        aria-label={isThisProjectSyncing ? sendReceiveLabel : undefined}
         onClick={() => handleSendReceiveProject(project.projectId)}
       >
         {getSendReceiveButtonContent(project)}
       </Button>,
+      waitingStopName,
     );
   };
 
@@ -1067,9 +1184,19 @@ export function Home({
       <div role="status" aria-live="polite" aria-atomic="true" className="tw:sr-only">
         {filteredToNothingAnnouncement}
       </div>
+      <div role="status" aria-live="polite" aria-atomic="true" className="tw:sr-only">
+        {syncRunningAnnouncement}
+      </div>
       {isLoading ? (
         <CardContent className="tw:flex tw:flex-grow tw:flex-col tw:items-center tw:justify-center tw:gap-2">
           <Spinner />
+          {/* The server list queues behind a running sync, so the web view asks for it only once no
+              sync runs, whichever path started it. Briefly, when a sync ends, the refetch can start
+              before the backend's closing activity event arrives, and the line can show for a
+              moment. */}
+          {isSyncRunningLineShown && (
+            <p className="tw:text-sm tw:text-muted-foreground">{syncRunningListLoadsText}</p>
+          )}
         </CardContent>
       ) : (
         <CardContent className="tw:flex-grow tw:overflow-auto tw:min-h-32 tw:px-0">
