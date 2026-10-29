@@ -10888,6 +10888,61 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4262 review (PR #2632), where the Help entry was found to ship Simple-only against
   an explicit request for both modes.
 
+## adr-transient-surfaces-close-on-window-blur: Transient surfaces close on window blur, in every frame
+
+- **Date:** 2026-10-29
+- **Status:** Accepted
+- **Context:** Menus, dropdowns and pickers close on an outside press because Radix's
+  `DismissableLayer` listens for `pointerdown` on the document that owns the surface. Panes are
+  `<iframe>`s (web views), and a click inside an iframe never produces a `pointerdown` in any other
+  document, in either direction. A menu in the main toolbar stayed open when the user clicked into a
+  web view, and the editor's hamburger menu (inside its own iframe) stayed open when the user clicked
+  the toolbar or another pane. The follow-on symptom: the stray click moved keyboard focus into the
+  other frame, so Escape went there too. The Storybook "Dismissal Patterns" guideline prescribed a
+  per-surface focus supplement guarded by `document.hasFocus()`, but no surface implemented it and the
+  recipe cannot work inside a web view: a click from a web view onto the main toolbar fires
+  `window.blur` with `document.hasFocus() === false`, which the recipe reads as a plain window switch,
+  and web views cannot ask the host where focus went.
+- **Decision:** A transient surface treats "my window lost focus" as an outside click, whichever
+  frame the focus went to, including another application. `useDismissOnWindowBlur`
+  (`lib/platform-bible-react/src/hooks/use-dismiss-on-window-blur.hook.ts`) listens for `blur` on
+  `window` for the lifetime of the content and dispatches a synthetic `pointerdown` on the content
+  element's parent, so Radix's normal outside-press path runs. The shared wrappers `PopoverContent`,
+  `DropdownMenuContent`, `MenubarContent` and `ContextMenuContent` call it, so every consumer, in
+  sibling repos too, gets the behavior with no per-surface code. There is no opt-out prop: a surface
+  that must survive blur says so the same way it survives a real outside click, by calling
+  `event.preventDefault()` in `onPointerDownOutside`, or by controlling `open` without
+  `onOpenChange`. Not wired: `Select` (modal; it already swallows clicks into an iframe), `Tooltip`
+  and `Dialog` (not on this axis), and sub-menu contents (dismissing the root closes them). This
+  matches native menus, which close on app deactivation, and the overlay service's own context menus
+  and popovers.
+- **Alternatives:**
+  - *Per-surface focus supplement* (the old guideline recipe). Wrong inside web views, and it stayed
+    unbuilt because every author had to remember to add it.
+  - *Host forwards pointer events between frames.* The renderer would inject a `pointerdown` listener
+    into every same-origin web view and the host would re-dispatch synthetic presses in all other
+    frames. It makes Radix's own detection work with no wrapper change and could carry a keydown twin
+    for Escape across frames, but it has more moving parts and needs cooperation from cross-origin
+    `src` web views, while the blur rule already covers every reported case. Worth revisiting if
+    cross-frame keyboard forwarding is ever built; the two should share a channel.
+  - *Transparent backdrop while a menu is open.* It would swallow the dismissing click like a native
+    menu, but only for main-document surfaces (a web view cannot cover the rest of the window), and
+    it changes the feel of every popover.
+- **Consequences:**
+  - Menus and pickers close when the user alt-tabs away and when DevTools takes focus; developers
+    will notice this while debugging.
+  - The dismissing click is not swallowed: the pane it lands on receives it before the menu's frame
+    hears the `blur`, so the click acts there (places a caret, focuses a pane) and the menu closes.
+  - Surfaces holding typed text survive by controlling `open` without `onOpenChange` or by preventing
+    the outside press (the first-run overlay and the editor's comment and footnote popovers already
+    do). Pickers with a search box close; a half-typed filter is not lost work.
+  - A popover portaled into a dialog through `PopoverPortalContainerProvider` closes on blur while the
+    dialog stays open.
+  - Escape still does not work across frames, and scroll inside a web view still cannot dismiss a
+    Light surface.
+- **Source:** PT ticket (key filled in before the PR opens); design document in the team's PRD
+  folder, menu-dismissal.
+
 ## adr-unresolvable-spdx-operators-drop-the-dependency: A declaration carrying an SPDX operator this pipeline cannot resolve drops the dependency
 
 - **Date:** 2026-08-27
