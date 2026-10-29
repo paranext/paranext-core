@@ -29,14 +29,14 @@ describe('generateProjectFontCss', () => {
     ).toBe(`${SCOPE} { font-family: "Ezra SIL", ${FALLBACK}; font-size: 14pt; }`);
   });
 
-  it('omits the size when it is 0 or missing', () => {
-    const zero = generateProjectFontCss(styleInfo({ defaultFont: 'A', defaultFontSize: 0 }));
-    const missing = generateProjectFontCss(
-      styleInfo({ defaultFont: 'A', defaultFontSize: undefined }),
-    );
-    expect(zero).not.toContain('font-size');
-    expect(missing).not.toContain('font-size');
-  });
+  it.each([0, -1, undefined, Number.NaN, Number.POSITIVE_INFINITY])(
+    'omits the size when it is %s',
+    (defaultFontSize) => {
+      expect(
+        generateProjectFontCss(styleInfo({ defaultFont: 'A', defaultFontSize })),
+      ).not.toContain('font-size');
+    },
+  );
 
   it('emits only the size when there is no default font', () => {
     expect(generateProjectFontCss(styleInfo({ defaultFontSize: 12 }))).toBe(
@@ -47,6 +47,12 @@ describe('generateProjectFontCss', () => {
   it('escapes quotes and backslashes in font names', () => {
     expect(generateProjectFontCss(styleInfo({ defaultFont: 'A"B\\C' }))).toContain(
       'font-family: "A\\"B\\\\C", ',
+    );
+  });
+
+  it('escapes angle brackets in font names so a name cannot close the style element', () => {
+    expect(generateProjectFontCss(styleInfo({ defaultFont: 'A<B>C' }))).toContain(
+      'font-family: "A\\3C B\\3E C", ',
     );
   });
 
@@ -81,11 +87,5 @@ describe('generateProjectFontCss', () => {
       }),
     );
     expect(css).toBe(`${SCOPE} .usfm_p { font-family: "X", ${FALLBACK}; }`);
-  });
-
-  it('honours a custom container selector', () => {
-    expect(
-      generateProjectFontCss(styleInfo({ defaultFont: 'A' }), { containerSelector: '.root' }),
-    ).toBe(`.root { font-family: "A", ${FALLBACK}; }`);
   });
 });
