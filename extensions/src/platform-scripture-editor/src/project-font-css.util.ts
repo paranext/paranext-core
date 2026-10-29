@@ -11,6 +11,9 @@ const CONTAINER_SELECTOR = '.editor-input.usfm';
  */
 const FONT_FALLBACK = 'var(--usj-font-fallback, serif)';
 
+// TODO(PT-4974): Use the editor package's generateUsjFontCss and delete this file. Until then the
+// parity tests in project-font-css.util.test.ts pin this output to generateUsjCss.
+
 /** Escape a value for a double-quoted CSS string. */
 function escapeCssString(value: string): string {
   return value.replace(/["\\\n\r\f<>]/g, (ch) => {
@@ -29,8 +32,15 @@ function escapeCssIdentifier(value: string): string {
   return value.replace(/[^\w-]/g, (ch) => `\\${ch}`);
 }
 
-function fontFamilyDeclaration(fontName: string): string {
-  return `font-family: "${escapeCssString(fontName)}", ${FONT_FALLBACK}`;
+/**
+ * A `font-family` declaration: the font, then the project's default font when it differs, then the
+ * fallback stack.
+ */
+function fontFamilyDeclaration(fontName: string, projectDefaultFont?: string): string {
+  const families = [fontName];
+  if (projectDefaultFont && projectDefaultFont !== fontName) families.push(projectDefaultFont);
+  const quoted = families.map((family) => `"${escapeCssString(family)}"`).join(', ');
+  return `font-family: ${quoted}, ${FONT_FALLBACK}`;
 }
 
 /**
@@ -56,7 +66,9 @@ export function generateProjectFontCss(styleInfo: StyleInfo | undefined): string
   Object.entries(styleInfo.markers ?? {}).forEach(([marker, entry]) => {
     const identifier = escapeCssIdentifier(marker);
     if (!identifier || !entry?.fontName) return;
-    rules.push(`${scope} .usfm_${identifier} { ${fontFamilyDeclaration(entry.fontName)}; }`);
+    rules.push(
+      `${scope} .usfm_${identifier} { ${fontFamilyDeclaration(entry.fontName, styleInfo.defaultFont)}; }`,
+    );
   });
 
   return rules.join('\n');

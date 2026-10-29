@@ -1,3 +1,4 @@
+import { generateUsjCss } from '@eten-tech-foundation/platform-editor';
 import type { MarkerStyleInfo, StyleInfo } from '@eten-tech-foundation/platform-editor';
 import { describe, expect, it } from 'vitest';
 import { generateProjectFontCss } from './project-font-css.util';
@@ -87,5 +88,77 @@ describe('generateProjectFontCss', () => {
       }),
     );
     expect(css).toBe(`${SCOPE} .usfm_p { font-family: "X", ${FALLBACK}; }`);
+  });
+
+  it('follows a marker font with the project default font, then the fallback', () => {
+    const css = generateProjectFontCss(
+      styleInfo({ defaultFont: 'Ezra SIL', markers: { nd: marker('nd', { fontName: 'Noto' }) } }),
+    );
+    expect(css).toContain(`.usfm_nd { font-family: "Noto", "Ezra SIL", ${FALLBACK}; }`);
+  });
+
+  it('does not repeat the default font after a marker font equal to it', () => {
+    const css = generateProjectFontCss(
+      styleInfo({
+        defaultFont: 'Ezra SIL',
+        markers: { nd: marker('nd', { fontName: 'Ezra SIL' }) },
+      }),
+    );
+    expect(css).toContain(`.usfm_nd { font-family: "Ezra SIL", ${FALLBACK}; }`);
+  });
+
+  it('escapes the default font inside a marker chain', () => {
+    const css = generateProjectFontCss(
+      styleInfo({ defaultFont: 'A"B', markers: { nd: marker('nd', { fontName: 'X' }) } }),
+    );
+    expect(css).toContain('.usfm_nd { font-family: "X", "A\\"B", ');
+  });
+});
+
+describe('matches the editor package for font-only input', () => {
+  const fixtures: [string, StyleInfo][] = [
+    ['default font and size', styleInfo({ defaultFont: 'Ezra SIL', defaultFontSize: 14 })],
+    [
+      'marker font and a different default',
+      styleInfo({
+        defaultFont: 'Ezra SIL',
+        defaultFontSize: 12,
+        markers: { nd: marker('nd', { fontName: 'Noto' }) },
+      }),
+    ],
+    [
+      'marker font equal to the default',
+      styleInfo({
+        defaultFont: 'Ezra SIL',
+        markers: { nd: marker('nd', { fontName: 'Ezra SIL' }) },
+      }),
+    ],
+    ['marker font, no default', styleInfo({ markers: { nd: marker('nd', { fontName: 'Noto' }) } })],
+    [
+      'dotted marker name',
+      styleInfo({
+        defaultFont: 'Ezra SIL',
+        markers: { 'x.y': marker('x.y', { fontName: 'Dotted' }) },
+      }),
+    ],
+    [
+      'quote, backslash and angle brackets as default and as marker font',
+      styleInfo({
+        defaultFont: 'A"B\\C<D>E',
+        markers: { nd: marker('nd', { fontName: 'X"Y\\Z<W>V' }) },
+      }),
+    ],
+    [
+      'a marker with no font beside one with a font',
+      styleInfo({
+        defaultFont: 'Ezra SIL',
+        markers: { bd: marker('bd'), nd: marker('nd', { fontName: 'Noto' }) },
+      }),
+    ],
+    ['size only', styleInfo({ defaultFontSize: 12 })],
+  ];
+
+  it.each(fixtures)('%s', (_name, info) => {
+    expect(generateProjectFontCss(info)).toBe(generateUsjCss(info));
   });
 });
