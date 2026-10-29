@@ -32,18 +32,16 @@ export type DismissOnWindowBlurProps<T extends HTMLElement> = {
  * dismiss.
  *
  * Focus rule: a dismissal caused by window blur does not return focus to the trigger. The user has
- * already put focus somewhere else (another frame, another application), and Radix's default
- * close-auto-focus would pull it back. That matters most across frames: a menu closing in one frame
- * by returning focus to its trigger blurs the main window, which would close the menu the user just
- * opened in another frame. The returned `onCloseAutoFocus` calls `preventDefault()` on the
- * close-auto-focus event of a blur dismissal and leaves every other close, such as Escape or a
- * click outside, restoring focus as usual. Radix runs close-auto-focus from a zero-delay timer
- * queued while unmounting, so the hook's "blur dismissal in flight" flag is one-shot: the first
- * close-auto-focus consumes it, which also covers an exit animation that delays the unmount. A
- * zero-delay backstop timer clears it otherwise, which assumes the menu contents' `animate-none!`
- * exit (no animation, so the unmount is not deferred). An animated non-modal popover is covered
- * anyway: Radix skips the trigger refocus after an outside interaction, which the synthetic press
- * is.
+ * already put focus somewhere else, and Radix's default close-auto-focus would pull it back. That
+ * matters most across frames: a menu closing in one frame by returning focus to its trigger blurs
+ * the main window, which would close the menu the user just opened in another frame. The returned
+ * `onCloseAutoFocus` calls `preventDefault()` when this document's window no longer has focus
+ * (`!document.hasFocus()`: the user clicked into another frame from inside this one, or switched
+ * applications) or when the active element is an `<iframe>` (the user clicked into a web view from
+ * this document). Any other close, such as Escape or a click elsewhere in this document, restores
+ * focus as usual. The rule reads state at close time rather than remembering that a blur dismissal
+ * happened: Radix runs close-auto-focus from its own timer after an asynchronous unmount, so a flag
+ * cleared by a timeout loses that race under load.
  *
  * Hidden-view case: an inactive-tab pane cannot hold an open menu, so a stray blur there is a
  * harmless no-op and there is deliberately no catch-up logic. See
@@ -68,7 +66,6 @@ export function useDismissOnWindowBlur<T extends HTMLElement>({
   onCloseAutoFocus: (event: Event) => void;
 } {
   const elementRef = useRef<T | undefined>(undefined);
-  const isBlurDismissalInFlightRef = useRef(false);
   const onCloseAutoFocusRef = useRef(forwardedOnCloseAutoFocus);
   onCloseAutoFocusRef.current = forwardedOnCloseAutoFocus;
 
@@ -83,15 +80,7 @@ export function useDismissOnWindowBlur<T extends HTMLElement>({
         typeof PointerEvent === 'undefined'
           ? new MouseEvent('pointerdown', eventInit)
           : new PointerEvent('pointerdown', eventInit);
-      // Radix handles the discrete press synchronously and unmounts the content, but its focus scope
-      // runs close-auto-focus from a `setTimeout(0)` queued during that unmount. The flag is
-      // consumed by that close-auto-focus; the backstop timer is queued after the dispatch so it
-      // runs after the focus scope's timer, and keeps the flag from ever staying set.
-      isBlurDismissalInFlightRef.current = true;
       parent.dispatchEvent(syntheticPress);
-      setTimeout(() => {
-        isBlurDismissalInFlightRef.current = false;
-      }, 0);
     };
 
     window.addEventListener('blur', handleWindowBlur);
@@ -109,10 +98,12 @@ export function useDismissOnWindowBlur<T extends HTMLElement>({
 
   const onCloseAutoFocus = useCallback((event: Event) => {
     onCloseAutoFocusRef.current?.(event);
-    if (!isBlurDismissalInFlightRef.current) return;
-    // One-shot: the flag belongs to this dismissal only, so a later close restores focus as usual
-    isBlurDismissalInFlightRef.current = false;
-    if (!event.defaultPrevented) event.preventDefault();
+    if (event.defaultPrevented) return;
+    // Decided from state at close time: the user has put focus outside this document's own
+    // elements (another frame, another application), or into a web view of the main document
+    if (!document.hasFocus() || document.activeElement instanceof HTMLIFrameElement) {
+      event.preventDefault();
+    }
   }, []);
 
   return { ref, onCloseAutoFocus };

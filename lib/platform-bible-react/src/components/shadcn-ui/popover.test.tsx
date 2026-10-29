@@ -252,6 +252,8 @@ describe('PopoverContent focus after dismissal', () => {
       if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     });
 
+    // A window blur in a real browser means the document no longer has focus
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
     blurWindow();
 
     await waitFor(() => expect(screen.queryByText('body')).not.toBeInTheDocument());
@@ -263,6 +265,8 @@ describe('PopoverContent focus after dismissal', () => {
   });
 
   it('returns focus to the trigger after Escape', async () => {
+    // jsdom reports no document focus by default; a browser tab the user is working in has it
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     render(
       <Popover>
