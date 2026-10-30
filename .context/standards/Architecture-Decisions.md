@@ -4098,6 +4098,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     pane-scoped fonts-only sheet (`FOOTNOTE_ROWS_SELECTOR`), so a row keeps its font and size when it
     is opened for editing. Rows take fonts only (family, size, per-marker family). Standard view's row
     editor still applies per-marker size and style that read-only rows do not; this is accepted.
+- **Amended 2026-10-30 (PT-4974):** the fonts-only sheet now comes from the editor package's
+  `generateUsjFontCss` (scripture-editors #42), which shares its font helpers with
+  `generateUsjCss`; core's copy (`generateProjectFontCss`) and the parity tests that pinned it are
+  deleted. `useProjectStylesheet` and `useFootnotePaneFontStylesheet` call it, the latter with
+  `FOOTNOTE_ROWS_SELECTOR` as `containerSelector`. The decision itself is unchanged. The
+  `release-prep` branch keeps core's copy.
 - **Source:** PT-4966.
 
 ## adr-generic-name-routing-proxies: Generic-name service routers in main forward to the focused/owning window's scoped service
