@@ -12392,24 +12392,6 @@ declare module 'renderer/services/overlays/window-blur-press.util' {
    */
   export function isWindowBlurPress(event: Event): boolean;
 }
-declare module 'renderer/services/overlays/overlay-focus-return.util' {
-  /**
-   * Marks an overlay's coming close as one that returns focus to the opener, provided focus is inside
-   * the overlay's own content when the overlay settles. Call it right before resolving the overlay.
-   *
-   * @param overlayId Id of the overlay about to close
-   * @experimental This function is unstable and may change or disappear without notice
-   */
-  export function markOverlayFocusReturnIfFocusInside(overlayId: string): void;
-  /**
-   * Reads and clears an overlay's mark set by {@link markOverlayFocusReturnIfFocusInside}.
-   *
-   * @param overlayId Id of the overlay that is settling
-   * @returns Whether the overlay was marked
-   * @experimental This function is unstable and may change or disappear without notice
-   */
-  export function takeOverlayFocusReturnMark(overlayId: string): boolean;
-}
 declare module 'renderer/services/overlays/overlay-store' {
   /**
    * Simple overlay store using a Map and listeners pattern. Manages active overlay entries (context
@@ -12521,6 +12503,31 @@ declare module 'renderer/services/overlays/overlay-store' {
       itemCount: number;
     },
   ): boolean;
+}
+declare module 'renderer/services/overlays/overlay-focus-return.util' {
+  /**
+   * Marks an overlay's coming close as one that returns focus to the opener, provided focus is inside
+   * the overlay's own content when the overlay settles. Call it right before resolving the overlay.
+   *
+   * @param overlayId Id of the overlay about to close
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function markOverlayFocusReturnIfFocusInside(overlayId: string): void;
+  /**
+   * Clears every mark. For tests, so one test's mark cannot reach the next.
+   *
+   * @experimental This function is unstable and may change or disappear without notice
+   * @internal
+   */
+  export function resetOverlayFocusReturnMarks(): void;
+  /**
+   * Reads and clears an overlay's mark set by {@link markOverlayFocusReturnIfFocusInside}.
+   *
+   * @param overlayId Id of the overlay that is settling
+   * @returns Whether the overlay was marked
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function takeOverlayFocusReturnMark(overlayId: string): boolean;
 }
 declare module 'renderer/components/overlays/overlay-context-menu-localization.util' {
   import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';

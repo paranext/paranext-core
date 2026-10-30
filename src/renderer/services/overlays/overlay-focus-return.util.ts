@@ -5,6 +5,8 @@
  * mark when it settles the overlay.
  */
 
+import { getOverlayById } from './overlay-store';
+
 /** Ids of overlays whose close is a candidate for returning focus to the opener */
 const overlayIdsMarkedForFocusReturn = new Set<string>();
 
@@ -16,7 +18,19 @@ const overlayIdsMarkedForFocusReturn = new Set<string>();
  * @experimental This function is unstable and may change or disappear without notice
  */
 export function markOverlayFocusReturnIfFocusInside(overlayId: string): void {
+  // A mark on an overlay that is no longer open would never be consumed
+  if (!getOverlayById(overlayId)) return;
   overlayIdsMarkedForFocusReturn.add(overlayId);
+}
+
+/**
+ * Clears every mark. For tests, so one test's mark cannot reach the next.
+ *
+ * @experimental This function is unstable and may change or disappear without notice
+ * @internal
+ */
+export function resetOverlayFocusReturnMarks(): void {
+  overlayIdsMarkedForFocusReturn.clear();
 }
 
 /**
