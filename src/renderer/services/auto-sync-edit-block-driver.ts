@@ -14,7 +14,7 @@
  * A web view is flagged iff its `projectId` is in the store's blocked set; web views with no
  * `projectId` are never flagged. The driver reacts to SET CHANGES (backend snapshots), not a
  * boolean raise/clear: on each store notification it re-applies the current blocked set to every
- * open web view. The store (see auto-sync-blocking-store.ts) provides the 200 ms show-grace, so
+ * open web view. The store (see auto-sync-blocking-store.ts) provides the show and hide graces, so
  * this driver just mirrors the store's derived visible set onto the web views.
  *
  * While a set is blocking it also flags web views opened mid-block (via `onDidOpenWebView`) and

@@ -149,6 +149,7 @@ export function useEditorPdpSync({
   saveUsjToPdpIfUpdated,
   flushPendingDebouncedSave,
   isEditingSessionActive,
+  isFootnotesPaneOwner,
   lastLocalEditTimestamp,
   editorDocumentSelector,
   getFocusLocation,
@@ -197,6 +198,13 @@ export function useEditorPdpSync({
    */
   isEditingSessionActive?: () => boolean;
   /**
+   * Whether the footnotes pane owns the chapter's content: focus in the pane and an edit there
+   * within {@link EDITOR_OWNERSHIP_WINDOW_MS}. Its edits never stamp `lastLocalEditTimestamp`, and
+   * `editorRef` reports no focus while the pane has it, so without this the pane would not get the
+   * settle hold the Scripture text gets. Must be stable and free of side effects.
+   */
+  isFootnotesPaneOwner?: () => boolean;
+  /**
    * `Date.now()` of the last LOCAL editor edit (a change the user originated in this editor —
    * stamped where the web view schedules the debounced PDP save for a `'local'`-source change), or
    * `undefined` when none has happened yet. Applying an incoming PDP update must NOT refresh this:
@@ -217,9 +225,9 @@ export function useEditorPdpSync({
    */
   editorDocumentSelector?: MutableRefObject<EditorDocumentSelector | undefined>;
   /**
-   * Where keyboard focus is right now, read when a focused editor that edited recently receives a
-   * differing update. Omitted, focus is taken to be in this editor. See {@link EditorFocusLocation}
-   * and the CONTRACT comment in the effect.
+   * Where keyboard focus is right now, read when a focused editor or footnotes pane that edited
+   * recently receives a differing update. Omitted, focus is taken to be in this editor. See
+   * {@link EditorFocusLocation} and the CONTRACT comment in the effect.
    */
   getFocusLocation?: () => EditorFocusLocation;
   /**
@@ -230,10 +238,11 @@ export function useEditorPdpSync({
   focusLocationKey?: unknown;
   /**
    * True while a Send/Receive blocks this editor. When it turns true the editor gives up its claim
-   * to the chapter (the last local edit is forgotten), so the merge is applied whenever it arrives.
-   * While it is true, a pending debounced save is not flushed before an incoming update replaces
-   * the editor: the write gate would reject it, and the save-failure path would put the pre-merge
-   * text back on screen.
+   * to the chapter (the last local edit is forgotten), so the merge is applied unless the user has
+   * typed again since the block ended or a footnote popover is still open. While it is true, a
+   * pending debounced save is not flushed before an incoming update replaces the editor: it holds
+   * pre-merge text. The write gate would reject it, and the save-failure path would put that text
+   * back on screen; in the moment the block outlasts the gate, it would be written over the merge.
    */
   isSyncBlocked?: boolean;
 }): void {
@@ -303,9 +312,12 @@ export function useEditorPdpSync({
   useEffect(() => () => releaseHeldDelivery(heldDelivery), []);
 
   // A Send/Receive replaces the chapter on disk with its merge. Forget the last local edit as soon
-  // as it starts, so the merge is applied however its delivery is ordered against the end of the
-  // block. Called before the sync effect so a block and a delivery in the same render are handled
-  // in that order.
+  // as it starts, so the merge is applied during the block or after it. Two exceptions push the
+  // pre-merge text over the merge once writes are accepted again: a footnote popover still open
+  // (`isEditingSessionActive`), and a merge delivered after the user has typed again. The block
+  // outlasts the write gate by the store's `HIDE_GRACE_MS` to make the second unlikely, but nothing
+  // here rules it out. Called before the sync effect so a block and a delivery in the same render
+  // are handled in that order.
   useForgetEditsOnSyncBlock(isSyncBlocked, lastLocalEditTimestamp);
 
   useEffect(() => {
@@ -339,18 +351,22 @@ export function useEditorPdpSync({
       return;
     }
 
-    // Whether the focused editor claims this delivery, and where focus really is (see THE CONTRACT
-    // below). Worked out before anything is recorded, because a delivery held while focus settles
-    // must leave every piece of state as it was so it is decided again from scratch.
+    // Whether the focused editor or footnotes pane claims this delivery, and where focus really is
+    // (see THE CONTRACT below). Worked out before anything is recorded, because a delivery held
+    // while focus settles must leave every piece of state as it was so it is decided again from
+    // scratch.
     //
     // Hidden case: this is data-driven, so a hidden editor tab decides deliveries the same way.
-    // Once another tab is active the focus subject names it, so the update is applied (at worst
-    // after FOCUS_SETTLE_GRACE_MS).
+    // Once another web view's tab is active, the focus subject names it, so the update is applied
+    // (at worst after FOCUS_SETTLE_GRACE_MS). A non-web-view tab such as Settings or About keeps the
+    // claim, but none of them write Scripture.
     const isNewFromPdp = !areUsjContentsEqualExceptWhitespace(usjFromPdp, usjSentToPdp.current);
     const lastLocalEditAt = lastLocalEditTimestamp.current;
     const editorOwnsContent =
       lastLocalEditAt !== undefined && Date.now() - lastLocalEditAt < EDITOR_OWNERSHIP_WINDOW_MS;
-    const isFocusedOwner = isNewFromPdp && editorRef.current.isFocused() && editorOwnsContent;
+    const isFocusedOwner =
+      isNewFromPdp &&
+      ((editorRef.current.isFocused() && editorOwnsContent) || (isFootnotesPaneOwner?.() ?? false));
     let focusLocation: EditorFocusLocation = isFocusedOwner
       ? (getFocusLocation?.() ?? 'thisEditor')
       : 'thisEditor';
@@ -439,7 +455,8 @@ export function useEditorPdpSync({
       // `'anotherWebView'` applies the update. The focus subject lags a click by its debounce, so
       // `'settling'` holds the delivery (above) until the subject moves; if it has not moved within
       // FOCUS_SETTLE_GRACE_MS the user has left the window, and the update is applied. A
-      // Send/Receive (`isSyncBlocked`) ends the claim.
+      // Send/Receive (`isSyncBlocked`) ends the claim. The footnotes pane claims on the same terms
+      // (`isFootnotesPaneOwner`).
       //
       // Once the last local edit is OLDER than the window, focus alone confers nothing: the
       // incoming update is applied exactly as if the editor were unfocused, and nothing is pushed
@@ -626,8 +643,9 @@ export function useEditorPdpSync({
       //     that. After navigation, a save pending here was scheduled for the NEW chapter while the
       //     editor was still showing the old one, and the web view drops it rather than write one
       //     chapter's content into another.
-      //   - Not while a Send/Receive blocks the editor: the write gate would reject the save, and
-      //     the save-failure path would put the pre-merge text back on screen over this update.
+      //   - Not while a Send/Receive blocks the editor: the save holds pre-merge text. The write
+      //     gate would reject it, and the save-failure path would put that text back on screen over
+      //     this update; in the moment the block outlasts the gate, it would overwrite the merge.
       if (!isSyncBlocked && flushPendingDebouncedSave?.() !== undefined)
         usjSentToPdp.current = usjFromPdp;
       lastAppliedDocumentSelector.current = documentSelector;
@@ -659,7 +677,7 @@ export function useEditorPdpSync({
     // `usjFromPdp` and `documentSelector` carry the deliveries; `saveUsjToPdpIfUpdated` changes
     // with the chapter. `focusLocationKey`, `graceExpiryCount` and `isSyncBlocked` re-decide a held
     // delivery; a re-run with nothing new or held returns at the processed-delivery guard. The
-    // refs and `getFocusLocation` are stable, listed for exhaustive-deps.
+    // refs, `getFocusLocation` and `isFootnotesPaneOwner` are stable, listed for exhaustive-deps.
     documentSelector,
     editorRef,
     flushPendingDebouncedSave,
@@ -667,6 +685,7 @@ export function useEditorPdpSync({
     getFocusLocation,
     graceExpiryCount,
     isEditingSessionActive,
+    isFootnotesPaneOwner,
     isSyncBlocked,
     lastAppliedDocumentSelector,
     lastLocalEditTimestamp,

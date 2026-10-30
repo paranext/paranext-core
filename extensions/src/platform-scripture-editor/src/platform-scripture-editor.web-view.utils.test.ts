@@ -29,6 +29,8 @@ import {
   forgetCaretSnapshotIfParaMarkerSelected,
   parseCallerSequenceSetting,
   type ReadOnlyInputs,
+  doesPaneSessionOwnContent,
+  type PaneEditingSession,
   resolveEditingSessionActivity,
   restoreSelectionIfLost,
   returnFocusToScriptureTextIfDocumentFocused,
@@ -539,12 +541,14 @@ describe('resolveEditingSessionActivity', () => {
       expect(activity).toEqual({ isActive: false, isNoteSessionStale: false });
     });
 
-    it('keeps holding updates back while the focus subject is still settling', () => {
+    // Claiming the chapter here would defer the update and push this view's copy over it. While
+    // focus settles, `useEditorPdpSync` holds the delivery instead.
+    it('makes no claim while the focus subject is still settling', () => {
       const activity = resolveEditingSessionActivity({
         ...paneSessionInput,
         paneSession: { hasFocus: true, focusLocation: 'settling', lastEditAtMs: NOW },
       });
-      expect(activity).toEqual({ isActive: true, isNoteSessionStale: false });
+      expect(activity).toEqual({ isActive: false, isNoteSessionStale: false });
     });
 
     it('lets updates through for a row that was opened but never edited', () => {
@@ -574,6 +578,54 @@ describe('resolveEditingSessionActivity', () => {
       });
       expect(activity).toEqual({ isActive: true, isNoteSessionStale: false });
     });
+  });
+});
+
+describe('doesPaneSessionOwnContent', () => {
+  const NOW = 2_000_000;
+  const NOTE_KEY = 'note-key-1';
+  const editedSession: PaneEditingSession = {
+    hasFocus: true,
+    focusLocation: 'thisEditor',
+    lastEditAtMs: NOW - (EDITOR_OWNERSHIP_WINDOW_MS - 1),
+  };
+
+  it('is true with focus in the pane and an edit within the ownership window, wherever the window focus is', () => {
+    expect(doesPaneSessionOwnContent(NOTE_KEY, editedSession, NOW)).toBe(true);
+    expect(
+      doesPaneSessionOwnContent(NOTE_KEY, { ...editedSession, focusLocation: 'settling' }, NOW),
+    ).toBe(true);
+    expect(
+      doesPaneSessionOwnContent(
+        NOTE_KEY,
+        { ...editedSession, focusLocation: 'anotherWebView' },
+        NOW,
+      ),
+    ).toBe(true);
+  });
+
+  it('is false once the last edit is as old as the window', () => {
+    expect(
+      doesPaneSessionOwnContent(
+        NOTE_KEY,
+        { ...editedSession, lastEditAtMs: NOW - EDITOR_OWNERSHIP_WINDOW_MS },
+        NOW,
+      ),
+    ).toBe(false);
+  });
+
+  it('is false without focus in the pane, or without an edit', () => {
+    expect(doesPaneSessionOwnContent(NOTE_KEY, { ...editedSession, hasFocus: false }, NOW)).toBe(
+      false,
+    );
+    expect(
+      doesPaneSessionOwnContent(NOTE_KEY, { ...editedSession, lastEditAtMs: undefined }, NOW),
+    ).toBe(false);
+  });
+
+  it('is false without an open note session, or without a pane session', () => {
+    expect(doesPaneSessionOwnContent(undefined, editedSession, NOW)).toBe(false);
+    expect(doesPaneSessionOwnContent(NOTE_KEY, undefined, NOW)).toBe(false);
   });
 });
 

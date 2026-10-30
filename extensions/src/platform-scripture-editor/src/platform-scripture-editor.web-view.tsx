@@ -272,6 +272,8 @@ import {
   NOTE_INSERT_CONFIG,
   resolvePaletteItemStrings,
   parseCallerSequenceSetting,
+  doesPaneSessionOwnContent,
+  type PaneEditingSession,
   resolveEditingSessionActivity,
   restoreSelectionIfLost,
   returnFocusToScriptureTextIfDocumentFocused,
@@ -4841,8 +4843,9 @@ function PlatformScriptureEditor({
   // Lexical key and kills the session (live-observed: the popover's Save no-oping, the editor
   // "jumping to the top" mid-insert). A footnotes-pane session claims less. Its row editor saves as it goes, like the Scripture
   // editor, so it holds updates back only on the Scripture editor's terms: focus in the pane and an
-  // edit there within the ownership window. Past that, a differing update replaces the document and
-  // ends the session (`setEditorUsj`) rather than being overwritten by this view's older copy.
+  // edit there within the ownership window, with the same settle hold while focus may be moving
+  // (`isFootnotesPaneOwner`). Past that, a differing update replaces the document and ends the
+  // session (`setEditorUsj`) rather than being overwritten by this view's older copy.
   // A note session past its staleness bound is the exception — that key is orphaned bookkeeping
   // from a popover that died without cleanup, and until the time bound existed it wedged sync
   // until the user happened to click another note caller. `resolveEditingSessionActivity` makes
@@ -4852,22 +4855,30 @@ function PlatformScriptureEditor({
   // themselves stable) so its identity is stable; a fresh arrow each render would re-run
   // useEditorPdpSync's effect on every render, firing an immediate non-debounced push-back save
   // that partially defeats the 700ms save debounce.
+  const getPaneEditingSession = useCallback(
+    (): PaneEditingSession | undefined =>
+      paneEditingIndexRef.current !== undefined
+        ? {
+            // The row editor keeps DOM focus while the window itself is away (`paneHasFocusRef`
+            // does not: it tracks the visible caret), and its typing is what deferral protects.
+            hasFocus: paneHasFocusRef.current || !!paneNoteEditorRef.current?.containsFocus(),
+            focusLocation: getFocusLocation(),
+            lastEditAtMs: lastPaneNoteEditAt.current,
+          }
+        : undefined,
+    [getFocusLocation],
+  );
+  const isFootnotesPaneOwner = useCallback(
+    () => doesPaneSessionOwnContent(editingNoteKey.current, getPaneEditingSession(), Date.now()),
+    [getPaneEditingSession],
+  );
   const isEditingSessionActive = useCallback(() => {
     const activity = resolveEditingSessionActivity({
       hasPaletteSession: paletteSession.current !== undefined || noteEditorPalettesOpen.current > 0,
       editingNoteKey: editingNoteKey.current,
       noteSessionRefreshedAtMs: editingNoteSessionRefreshedAt.current,
       nowMs: Date.now(),
-      paneSession:
-        paneEditingIndexRef.current !== undefined
-          ? {
-              // The row editor keeps DOM focus while the window itself is away (`paneHasFocusRef`
-              // does not: it tracks the visible caret), and its typing is what deferral protects.
-              hasFocus: paneHasFocusRef.current || !!paneNoteEditorRef.current?.containsFocus(),
-              focusLocation: getFocusLocation(),
-              lastEditAtMs: lastPaneNoteEditAt.current,
-            }
-          : undefined,
+      paneSession: getPaneEditingSession(),
     });
     if (activity.isNoteSessionStale) {
       logger.warn(
@@ -4878,7 +4889,7 @@ function PlatformScriptureEditor({
       closeFootnoteEditor(false);
     }
     return activity.isActive;
-  }, [closeFootnoteEditor, getFocusLocation]);
+  }, [closeFootnoteEditor, getPaneEditingSession]);
   // A Send/Receive replaces the chapter with its merge, so the footnotes pane gives up its claim
   // to the text as soon as one starts, as `useEditorPdpSync` does for the Scripture editor. Called
   // before `useEditorPdpSync` so its effect runs first when a block and a delivery share a render.
@@ -4892,6 +4903,7 @@ function PlatformScriptureEditor({
     saveUsjToPdpIfUpdated,
     flushPendingDebouncedSave,
     isEditingSessionActive,
+    isFootnotesPaneOwner,
     lastLocalEditTimestamp,
     editorDocumentSelector,
     getFocusLocation,

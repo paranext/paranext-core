@@ -203,7 +203,7 @@ export { MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR, ZOOM_STEP };
  * waits on its final sync. It also conceptually matches the C# write gate's stall watchdog, which
  * bounds the same "one automatic Send/Receive" window. The renderer does not time blocking locally
  * — it reads the backend write gate's snapshot (`auto-sync-blocking-store.ts`), so blocking clears
- * when the backend says so rather than on a renderer-side timer.
+ * only once the backend says so rather than on a renderer-side timeout.
  *
  * @experimental
  */

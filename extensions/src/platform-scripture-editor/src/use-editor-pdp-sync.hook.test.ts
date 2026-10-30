@@ -1976,6 +1976,7 @@ describe('useEditorPdpSync', () => {
         getFocusLocation,
         isFocused = true,
         isEditingSessionActive,
+        isFootnotesPaneOwner,
         flushPendingDebouncedSave,
         initialIsSyncBlocked,
         omitFocusAndSyncParams = false,
@@ -1983,6 +1984,7 @@ describe('useEditorPdpSync', () => {
         getFocusLocation?: () => EditorFocusLocation;
         isFocused?: boolean;
         isEditingSessionActive?: () => boolean;
+        isFootnotesPaneOwner?: () => boolean;
         flushPendingDebouncedSave?: () => Promise<void> | undefined;
         initialIsSyncBlocked?: boolean;
         omitFocusAndSyncParams?: boolean;
@@ -2018,6 +2020,7 @@ describe('useEditorPdpSync', () => {
               saveUsjToPdpIfUpdated,
               flushPendingDebouncedSave,
               isEditingSessionActive,
+              isFootnotesPaneOwner,
               ...(omitFocusAndSyncParams
                 ? {}
                 : { getFocusLocation, focusLocationKey, isSyncBlocked }),
@@ -2143,6 +2146,99 @@ describe('useEditorPdpSync', () => {
         expect(vi.getTimerCount()).toBe(0);
       });
 
+      // The pane's edits stamp their own clock rather than `lastLocalEditTimestamp`, and its focus
+      // does not count as the text having focus, so it reaches the hold through its own predicate.
+      describe('while the footnotes pane owns the chapter', () => {
+        // The web view's session check claims the chapter for the pane only at `'thisEditor'`.
+        const paneSession = (getFocusLocation: () => EditorFocusLocation) => ({
+          getFocusLocation,
+          isFocused: false,
+          isFootnotesPaneOwner: () => true,
+          isEditingSessionActive: () => getFocusLocation() === 'thisEditor',
+        });
+
+        it('holds without saving while focus settles, then applies once focus lands in another web view', () => {
+          let focusLocation: EditorFocusLocation = 'settling';
+          const { update, setUsjSpy, saveUsjToPdpIfUpdated } = renderWithFocusLocation(
+            paneSession(() => focusLocation),
+          );
+
+          update({ usjFromPdp: externalChange });
+          expect(setUsjSpy).not.toHaveBeenCalled();
+          expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled();
+
+          focusLocation = 'anotherWebView';
+          update({ focusLocationKey: {} });
+          expect(setUsjSpy).toHaveBeenCalledOnce();
+          expect(setUsjSpy).toHaveBeenCalledWith(externalChange);
+          expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled();
+        });
+
+        it('applies the update, flushing pending saves first, once the grace period passes', async () => {
+          const flushPendingDebouncedSave = vi.fn(() => Promise.resolve());
+          const { update, setUsjSpy, saveUsjToPdpIfUpdated } = renderWithFocusLocation({
+            ...paneSession(() => 'settling'),
+            flushPendingDebouncedSave,
+          });
+          flushPendingDebouncedSave.mockClear();
+
+          update({ usjFromPdp: externalChange });
+          await act(async () => {
+            await vi.advanceTimersByTimeAsync(FOCUS_SETTLE_GRACE_MS - 1);
+          });
+          expect(setUsjSpy).not.toHaveBeenCalled();
+
+          await act(async () => {
+            await vi.advanceTimersByTimeAsync(1);
+          });
+          expect(flushPendingDebouncedSave).toHaveBeenCalledOnce();
+          expect(setUsjSpy).toHaveBeenCalledOnce();
+          expect(setUsjSpy).toHaveBeenCalledWith(externalChange);
+          expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled();
+        });
+
+        it('defers and saves once focus settles back in this editor', () => {
+          let focusLocation: EditorFocusLocation = 'settling';
+          const { update, setUsjSpy, saveUsjToPdpIfUpdated } = renderWithFocusLocation(
+            paneSession(() => focusLocation),
+          );
+
+          update({ usjFromPdp: externalChange });
+          expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled();
+
+          focusLocation = 'thisEditor';
+          update({ focusLocationKey: {} });
+          expect(setUsjSpy).not.toHaveBeenCalled();
+          expect(saveUsjToPdpIfUpdated).toHaveBeenCalledOnce();
+        });
+
+        it('applies at once when the pane does not own the chapter', () => {
+          const { update, setUsjSpy } = renderWithFocusLocation({
+            ...paneSession(() => 'settling'),
+            isFootnotesPaneOwner: () => false,
+          });
+
+          update({ usjFromPdp: externalChange });
+
+          expect(setUsjSpy).toHaveBeenCalledOnce();
+          expect(setUsjSpy).toHaveBeenCalledWith(externalChange);
+          expect(vi.getTimerCount()).toBe(0);
+        });
+
+        it('asks about the editing session once per decision, because asking has side effects', () => {
+          const isEditingSessionActive = vi.fn(() => true);
+          const { update } = renderWithFocusLocation({
+            ...paneSession(() => 'settling'),
+            isEditingSessionActive,
+          });
+          isEditingSessionActive.mockClear();
+
+          update({ usjFromPdp: externalChange });
+
+          expect(isEditingSessionActive).toHaveBeenCalledOnce();
+        });
+      });
+
       it('applies a held delivery without saving or flushing once a Send/Receive blocks the editor', () => {
         const flushPendingDebouncedSave = vi.fn(() => Promise.resolve());
         const { update, setUsjSpy, saveUsjToPdpIfUpdated } = renderWithFocusLocation({
@@ -2199,7 +2295,7 @@ describe('useEditorPdpSync', () => {
         expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled();
       });
 
-      it('stops owning the chapter once a Send/Receive blocks the editor, whenever the merge arrives', () => {
+      it('stops owning the chapter once a Send/Receive blocks the editor, even if the merge arrives after the block', () => {
         const { update, setUsjSpy, saveUsjToPdpIfUpdated } = renderWithFocusLocation({
           getFocusLocation: () => 'thisEditor',
           initialIsSyncBlocked: false,

@@ -3132,13 +3132,26 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     window, and the incoming chapter is applied.
   - An automatic Send/Receive (`isSyncBlocked`) ends the claim, and no pending save is flushed over
     its merge.
-  - The footnotes pane gives up its claim when another web view has focus (it has no settle hold).
+  - The block outlasts the write gate by `HIDE_GRACE_MS` (1000 ms, in
+    `auto-sync-blocking-store.ts`), because the merged chapter's delivery and the gate's clear race
+    to the web view, and a keystroke between them would claim the chapter again.
+  - The footnotes pane claims on the same terms (`isFootnotesPaneOwner`): another web view ends its
+    claim, and a delivery is held while focus settles.
 - **Alternatives:** `document.hasFocus()` as the release test: rejected, because menus and overlays
   outside the iframe also clear it, so the editor would give up its copy while the user is still
-  working in it.
+  working in it. Keeping the editor read-only until the merged chapter arrives, rather than for a
+  fixed time: not done, because a sync that changes nothing in the chapter may deliver nothing, so
+  it still needs a time limit, and every sync whose delivery beat the clear would wait out that
+  limit anyway.
 - **Consequences:** A pending save (typed in the last ~700 ms) and an open marker palette or
   footnote popover can still overwrite a replacement: out of scope, tracked by PT-4970. A manual
   Send/Receive started outside the editor does not set `isSyncBlocked`, so it is not covered.
+  A merged chapter delivered more than `HIDE_GRACE_MS` after the gate clears can still lose to a
+  keystroke, and that grace is unmeasured because the gate only arms in Paratext 10 builds. An open
+  footnote popover survives a Send/Receive, so its session still pushes the pre-merge text over the
+  merge once writes are accepted again.
+  Alt-tabbing away mid-edit in the footnotes pane applies a delivery once the grace period ends,
+  after flushing pending saves, as the text editor does.
   Revisit the grace period if the window service's focus debounce changes.
 - **Source:** PT-4968
 
