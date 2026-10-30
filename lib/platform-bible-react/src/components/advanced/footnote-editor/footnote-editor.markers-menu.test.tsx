@@ -18,6 +18,7 @@ import {
   installPopoverJsdomStubs,
   REAL_EDITOR_TEST_TIMEOUT_MS,
   renderPopoverAndWaitForInit,
+  hiddenView,
   settle,
   visibleView,
 } from './footnote-editor.test-harness';
@@ -40,6 +41,26 @@ function markerMenuSearchBox() {
 }
 
 describe('FootnoteEditor inline markers menu', () => {
+  it('opens on the trigger typed into a hidden-marker view without the "can\'t be typed" notice', async () => {
+    const onUnstorableTextRemoved = vi.fn();
+    const { editorInput } = await renderPopoverAndWaitForInit(hiddenView, {
+      onUnstorableTextRemoved,
+    });
+    editorInput.focus();
+
+    // Typed into the editor, so its own keydown handling sees the key before the document does:
+    // a hidden-marker view's editor refuses a typed `\` and says so, unless the menu takes it first.
+    act(() => {
+      editorInput.dispatchEvent(
+        new KeyboardEvent('keydown', { key: MARKER_MENU_TRIGGER, bubbles: true, cancelable: true }),
+      );
+    });
+    await settle();
+
+    expect(markerMenuSearchBox()).not.toBeNull();
+    expect(onUnstorableTextRemoved).not.toHaveBeenCalled();
+  });
+
   it('opens from the trigger key with the caret in the note text, and closes on Escape', async () => {
     const { editorInput, lexical } = await renderPopoverAndWaitForInit(visibleView);
     editorInput.focus();
