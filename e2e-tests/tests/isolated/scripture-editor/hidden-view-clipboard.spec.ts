@@ -16,8 +16,8 @@
  * `.context/standards/Scripture-Data-Fidelity-Catalog.md`); step 3 compares bytes, from a file the
  * app has already saved.
  *
- * The pasted footnote's own markup is not pinned here: it gains `\fr*`/`\ft*` closers (catalog row
- * CB-3), which `no-unasked-edits.body.ts` pins.
+ * The pasted footnote's own markup is not pinned here; `native-paste.spec.ts` and
+ * `no-unasked-edits.body.ts` pin it byte for byte.
  *
  * ONE test() per spec file on purpose (the isolated fixture is test-scoped); the steps share the
  * one Electron instance, in order.

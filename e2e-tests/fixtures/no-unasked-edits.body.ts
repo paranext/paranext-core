@@ -530,26 +530,6 @@ const CHAPTERS: ChapterCase[] = [
             NOTE_COPY_TO,
             NOTE_PASTE_POINT,
           ),
-        // TODO(PT-4921): the html flavor carries `closed="false"`; then remove this pin.
-        knownDeviation: {
-          finding: 'CB-3',
-          summary:
-            'a footnote pasted in a hidden-marker view gains explicit `\\fr*`/`\\ft*` closers: the paste reads the copy\'s text/html, whose char spans do not carry `closed="false"`',
-          applies: (view) => !view.areMarkersText,
-          expected: (bookBefore) =>
-            copyPasteExpectation(
-              '3:14',
-              bookBefore,
-              '3:13',
-              NOTE_COPY_FROM,
-              NOTE_COPY_TO,
-              NOTE_PASTE_POINT,
-              (copied) =>
-                copied
-                  .replace('\\fr 3:13 \\ft ', '\\fr 3:13 \\fr*\\ft ')
-                  .replace('River\\f*', 'River\\ft*\\f*'),
-            ),
-        },
       },
       {
         label: 'deleting a selection that runs into the \\wj span (3:15)',
