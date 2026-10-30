@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import {
   getMarkerPaletteClaimedKeys,
@@ -18,6 +18,7 @@ import {
   OverlayCommandPalettePresentational,
 } from './overlay-command-palette.component';
 import { CommandPaletteItem, OverlayEntry } from '../../services/overlays/overlay.service-model';
+import { takeOverlayFocusReturnMark } from '../../services/overlays/overlay-focus-return.util';
 
 // The store-connected component resolves LocalizeKeys via useLocalizedStrings; an empty map makes
 // every value fall back to its raw text, so tests assert against the literal item labels.
@@ -96,6 +97,46 @@ describe('OverlayCommandPalettePresentational', () => {
 
       expect(onDismiss).toHaveBeenCalled();
       expect(onSelect).not.toHaveBeenCalled();
+    });
+
+    it('reports Escape before it dismisses, and does not report a backdrop click as Escape', () => {
+      const calls: string[] = [];
+
+      const { container } = render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={vi.fn()}
+          onDismiss={() => calls.push('dismiss')}
+          onEscape={() => calls.push('escape')}
+        />,
+      );
+
+      fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
+      expect(calls).toEqual(['escape', 'dismiss']);
+
+      calls.length = 0;
+      const backdrop = container.querySelector('[data-overlay-command-palette-backdrop]');
+      expect(backdrop).toBeInTheDocument();
+      // querySelector returns Element | null; the expect above guards null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      fireEvent.click(backdrop as Element);
+      expect(calls).toEqual(['dismiss']);
+    });
+
+    it('writes the overlay id to its content', () => {
+      const { container } = render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+          overlayId="palette-x"
+        />,
+      );
+
+      expect(container.querySelector('[data-overlay-command-palette]')).toHaveAttribute(
+        'data-overlay-id',
+        'palette-x',
+      );
     });
 
     it('should call onDismiss when clicking the backdrop', () => {
@@ -184,6 +225,34 @@ describe('OverlayCommandPalettePresentational', () => {
 
       expect(onSelect).toHaveBeenCalledWith('close');
       expect(onDismiss).not.toHaveBeenCalled();
+    });
+
+    it('should ignore the outside press a window blur produces', async () => {
+      const onDismiss = vi.fn();
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          position={{ x: 100, y: 200 }}
+          onSelect={vi.fn()}
+          onDismiss={onDismiss}
+        />,
+      );
+
+      // Radix attaches its outside-press listener on the next tick
+      await act(async () => {
+        await new Promise((resolve) => {
+          setTimeout(resolve, 20);
+        });
+      });
+
+      // The shared wrapper answers a window blur with a marked outside press
+      fireEvent.blur(window);
+      expect(onDismiss).not.toHaveBeenCalled();
+
+      // Positive control: an ordinary outside press still dismisses
+      fireEvent.pointerDown(document.body);
+      expect(onDismiss).toHaveBeenCalled();
     });
   });
 
@@ -1595,6 +1664,23 @@ describe('OverlayCommandPalette (store-connected)', () => {
     expect(entry.resolve).toHaveBeenCalledTimes(1);
     expect(entry.resolve).toHaveBeenCalledWith(undefined);
     expect(getOverlayById('palette-1')).toBeUndefined();
+  });
+
+  it('marks the overlay for a focus return on Escape, and not on a click', () => {
+    const escaped = createPaletteEntry();
+    addOverlay(escaped);
+    const { unmount } = render(<OverlayCommandPalette overlay={escaped} />);
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
+    expect(takeOverlayFocusReturnMark(escaped.id)).toBe(true);
+    // Nothing is left behind by the key handler's own Escape report after the dismissal
+    expect(takeOverlayFocusReturnMark(escaped.id)).toBe(false);
+    unmount();
+
+    const picked = createPaletteEntry();
+    addOverlay(picked);
+    render(<OverlayCommandPalette overlay={picked} />);
+    fireEvent.click(screen.getByText('Save File'));
+    expect(takeOverlayFocusReturnMark(picked.id)).toBe(false);
   });
 
   it('never settles the store again after the first resolve (later select/dismiss are no-ops)', () => {

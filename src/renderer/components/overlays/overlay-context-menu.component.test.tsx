@@ -48,6 +48,34 @@ describe('OverlayContextMenuPresentational', () => {
     expect(onSelect).toHaveBeenCalledWith({ itemId: 'paste' } satisfies OverlayContextMenuResult);
   });
 
+  it('should ignore the outside press a window blur produces', async () => {
+    const onDismiss = vi.fn();
+
+    render(
+      <OverlayContextMenuPresentational
+        items={[{ type: 'item', id: 'copy', label: 'Copy' }]}
+        position={position}
+        onSelect={vi.fn()}
+        onDismiss={onDismiss}
+      />,
+    );
+
+    // Radix attaches its outside-press listener on the next tick
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 20);
+      });
+    });
+
+    // The shared wrapper answers a window blur with a marked outside press
+    fireEvent.blur(window);
+    expect(onDismiss).not.toHaveBeenCalled();
+
+    // Positive control: an ordinary outside press still dismisses
+    fireEvent.pointerDown(document.body);
+    expect(onDismiss).toHaveBeenCalled();
+  });
+
   it('should not call onSelect when a disabled item is clicked', () => {
     const onSelect = vi.fn();
     const onDismiss = vi.fn();
@@ -200,6 +228,104 @@ describe('OverlayContextMenuPresentational', () => {
 
       expect(onDismiss).toHaveBeenCalled();
       expect(onSelect).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('reporting Escape', () => {
+    it('reports Escape in the menu before it dismisses', () => {
+      const calls: string[] = [];
+
+      render(
+        <OverlayContextMenuPresentational
+          items={[{ type: 'item', id: 'copy', label: 'Copy' }]}
+          position={position}
+          onSelect={vi.fn()}
+          onDismiss={() => calls.push('dismiss')}
+          onEscape={() => calls.push('escape')}
+        />,
+      );
+
+      fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+
+      expect(calls).toEqual(['escape', 'dismiss']);
+    });
+
+    it('reports Escape pressed inside a submenu, which closes the whole menu', () => {
+      const calls: string[] = [];
+
+      render(
+        <OverlayContextMenuPresentational
+          items={[
+            {
+              type: 'submenu',
+              label: 'More',
+              items: [{ type: 'item', id: 'inner', label: 'Inner' }],
+            },
+          ]}
+          position={position}
+          onSelect={vi.fn()}
+          onDismiss={() => calls.push('dismiss')}
+          onEscape={() => calls.push('escape')}
+        />,
+      );
+
+      const trigger = screen.getByRole('menuitem', { name: 'More' });
+      trigger.focus();
+      fireEvent.keyDown(trigger, { key: 'ArrowRight' });
+      const inner = screen.getByRole('menuitem', { name: 'Inner' });
+      fireEvent.keyDown(inner, { key: 'Escape' });
+
+      expect(calls).toEqual(['escape', 'dismiss']);
+    });
+
+    it('writes the overlay id to the menu content and to its submenu content', () => {
+      render(
+        <OverlayContextMenuPresentational
+          items={[
+            {
+              type: 'submenu',
+              label: 'More',
+              items: [{ type: 'item', id: 'inner', label: 'Inner' }],
+            },
+          ]}
+          position={position}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+          overlayId="menu-x"
+        />,
+      );
+
+      expect(screen.getByRole('menu')).toHaveAttribute('data-overlay-id', 'menu-x');
+      const trigger = screen.getByRole('menuitem', { name: 'More' });
+      trigger.focus();
+      fireEvent.keyDown(trigger, { key: 'ArrowRight' });
+      const inner = screen.getByRole('menuitem', { name: 'Inner' });
+      expect(inner.closest('[data-overlay-id="menu-x"]')).not.toBeNull();
+    });
+
+    it('does not report an outside press as Escape', async () => {
+      const onEscape = vi.fn();
+      const onDismiss = vi.fn();
+
+      render(
+        <OverlayContextMenuPresentational
+          items={[{ type: 'item', id: 'copy', label: 'Copy' }]}
+          position={position}
+          onSelect={vi.fn()}
+          onDismiss={onDismiss}
+          onEscape={onEscape}
+        />,
+      );
+      await act(async () => {
+        await new Promise((resolve) => {
+          setTimeout(resolve, 20);
+        });
+      });
+
+      fireEvent.pointerDown(document.body);
+
+      expect(onDismiss).toHaveBeenCalled();
+      expect(onEscape).not.toHaveBeenCalled();
     });
   });
 

@@ -10952,6 +10952,144 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4262 review (PR #2632), where the Help entry was found to ship Simple-only against
   an explicit request for both modes.
 
+## adr-transient-surfaces-close-on-window-blur: Transient surfaces close on window blur, in every frame
+
+- **Date:** 2026-10-29
+- **Status:** Accepted
+- **Context:** Menus, dropdowns and pickers close on an outside press because Radix's
+  `DismissableLayer` listens for `pointerdown` on the document that owns the surface. Panes are
+  `<iframe>`s (web views), and a click inside an iframe never produces a `pointerdown` in any other
+  document, in either direction. A menu in the main toolbar stayed open when the user clicked into a
+  web view, and the editor's hamburger menu (inside its own iframe) stayed open when the user clicked
+  the toolbar or another pane. The follow-on symptom: the stray click moved keyboard focus into the
+  other frame, so Escape went there too. The Storybook "Dismissal Patterns" guideline prescribed a
+  per-surface focus supplement guarded by `document.hasFocus()`, and only `SyncStatusButton` carried a
+  hand-rolled copy (removed by this decision, which covers it through the shared wrappers); the
+  recipe cannot work inside a web view: a click from a web view onto the main toolbar fires
+  `window.blur` with `document.hasFocus() === false`, which the recipe reads as a plain window switch,
+  and web views cannot ask the host where focus went. The product owner agreed the behaviour on
+  2026-10-29.
+- **Decision:** A transient surface treats "my window lost focus" as an outside click, whichever
+  frame the focus went to, including another application. `useDismissOnWindowBlur`
+  (`lib/platform-bible-react/src/hooks/use-dismiss-on-window-blur.hook.ts`) listens for `blur` on
+  `window` for the lifetime of the mounted wrapper, ignoring blur while the content is closed or
+  animating out (`data-state="closed"`), and dispatches a synthetic `pointerdown` on the content
+  element's parent (not `document.body`, so a dialog hosting a portaled popover sees an inside press
+  and stays open), so Radix's normal outside-press path runs. Focus return follows a rule read from
+  document state at close time (`shouldSuppressFocusReturn`): focus is not returned to the trigger
+  when `activeElement` is an iframe or, inside a web view, when the document is not focused, because
+  returning focus across frames blurs the window the user moved to and closes the menu they opened
+  there. This departs from WCAG 2.4.3 (return focus to the opener) only in that cross-frame case;
+  every other close, including Escape, restores focus. The shared wrappers `PopoverContent`,
+  `DropdownMenuContent`, `MenubarContent` and `ContextMenuContent` call it, so every consumer, in
+  sibling repos too, gets the behavior with no per-surface code. There is no opt-out prop: a surface
+  that must survive blur says so the same way it survives a real outside click, by calling
+  `event.preventDefault()` in `onPointerDownOutside`, or by controlling `open` without
+  `onOpenChange`. Not wired: `Select` (it already closes on window blur by itself; `SelectContent`
+  applies the same focus-return rule), `Tooltip` and `Dialog` (not on this axis), sub-menu contents
+  (dismissing the root closes them), and the Scripture editor's right-click menu (the editor
+  package's `ContextMenuPlugin`, not Radix), which gets its own window-blur close in the
+  scripture-editors repository and reaches Platform.Bible through the editor package (as of
+  2026-10-30 that fix is a separate scripture-editors change, not yet merged). This matches native
+  menus, which close on app deactivation, and the overlay service's own context menus
+  and popovers.
+- **Alternatives:**
+  - *Per-surface focus supplement* (the old guideline recipe). Wrong inside web views, and it was
+    built once (`SyncStatusButton`) and nowhere else, because every author had to remember to add it.
+  - *Host forwards pointer events between frames.* The renderer would inject a `pointerdown` listener
+    into every same-origin web view and the host would re-dispatch synthetic presses in all other
+    frames. It makes Radix's own detection work with no wrapper change and could carry a keydown twin
+    for Escape across frames, but it has more moving parts and needs cooperation from cross-origin
+    `src` web views, while the blur rule already covers every reported case. Sebastian prototyped
+    this route for PT-2989 in PR #2887 (draft as of 2026-10-29), including a title-bar drag-region
+    toggle that this decision does not adopt (the toolbar keeps its drag behaviour, as in VS Code).
+    Worth revisiting if cross-frame keyboard forwarding is ever built; the two should share a channel.
+  - *Reuse the main process's app-window input broadcast.* The main process already broadcasts
+    app-window mouse-down and Escape across frames (`EVENT_NAME_ON_DID_APP_WINDOW_INPUT`, consumed
+    by `handleAppWindowInput`). It is not reused here because the component library has no PAPI
+    access to subscribe to it; relevant to PT-4627 if cross-frame keyboard forwarding is built.
+  - *Transparent backdrop while a menu is open.* It would swallow the dismissing click like a native
+    menu, but only for main-document surfaces (a web view cannot cover the rest of the window), and
+    it changes the feel of every popover.
+- **Consequences:**
+  - Menus and pickers close when the user alt-tabs away and when DevTools takes focus; developers
+    will notice this while debugging.
+  - The dismissing click is not swallowed: the pane it lands on receives it before the menu's frame
+    hears the `blur`, so the click acts there (places a caret, focuses a pane) and the menu closes.
+  - Surfaces holding typed text survive by controlling `open` without `onOpenChange` or by preventing
+    the outside press (the first-run overlay and the editor's comment and footnote popovers already
+    do). Pickers with a search box close; a half-typed filter is not lost work.
+  - A popover portaled into a dialog through `PopoverPortalContainerProvider` closes on blur while the
+    dialog stays open.
+  - Escape still does not work across frames, and scroll inside a web view still cannot dismiss a
+    Light surface.
+  - Alt-tab and keyboard users: in the main document an unfocused document can only mean the OS
+    window was deactivated, so the shared wrappers focus the trigger themselves and prevent Radix's
+    default. After an outside interaction (which the synthetic press is) the non-modal `Popover` and
+    the `Menubar` would skip their own restore, while a modal `DropdownMenu` would restore anyway, so
+    the outcome is the same for all three: a keyboard user returning from another application keeps
+    their place. The trigger is the element whose `aria-controls` names the content's `id`, or the
+    element the content's `aria-labelledby` names; a context menu has neither and restores nothing.
+    The restore happens only while nothing else holds focus. Inside a web view the same signal is
+    ambiguous (alt-tab versus a click into another frame), so web views do not restore focus there.
+  - The synthetic press is untrusted and carries a window-blur marker. The focus modality tracker
+    and the overlay service's press recorder skip it, and the overlay service's own surfaces ignore
+    it and keep their own blur rule and creation grace period. Window service gesture tracking, the
+    content-zoom bootstrap and the editor's selection snapshot see it and were judged benign. A
+    listener in the library that must ignore it uses the internal `isWindowBlurPress`; the renderer
+    reads the same `Symbol.for` key through
+    `src/renderer/services/overlays/window-blur-press.util.ts`, pinned by a contract test.
+  - A modal menu opened inside a wired surface takes a blur alone: the outer surface stays open until
+    the next outside press or blur, as for a real click outside both.
+  - Inside a web view, a focus trap (a dialog or a modal menu) does not take focus back from another
+    frame while its document is unfocused. Radix's trap focuses its container whenever the focused
+    node is removed, and a `focus()` in an unfocused iframe takes the frame's focus, so a nested
+    picker closing on blur would pull focus back from the pane the user clicked. A `patch-package`
+    patch (`patches/@radix-ui+react-focus-scope+1.1.7.patch`) makes that observer do nothing while
+    `document.hasFocus()` is false. A Radix upgrade must re-make the patch, and web views bundled by
+    other repositories carry their own Radix copy and need the same patch; an upstream Radix fix
+    would end both.
+  - The patch's guard applies in the main document too: if a trapped dialog's focused child is
+    removed while the OS window is deactivated, focus stays on `body` when the user comes back
+    instead of moving to the dialog. Accepted as rare.
+- **Amended 2026-10-30 (UX ruling, Sebastian and Ian for UX):** the non-modal `BookChapterControl`
+  in compact mode is an explicit-dismissal surface. Compact mode starts when a quick-nav arrow
+  (previous or next chapter or verse) hides the book list and ends when the list returns (the search
+  input takes focus, or the user types); a fresh open always starts with the full picker. While
+  compact it survives a window blur, a real press elsewhere in the document, focus leaving and other
+  menus opening, by calling `preventDefault()` in `onInteractOutside`; the press is not swallowed,
+  only the dismissal is prevented. Only a click on its trigger, or Escape with focus inside the
+  popover or on the trigger, closes it (`onEscapeKeyDown` declines Escape pressed with focus
+  elsewhere in the document, because Radix listens for it on the whole document). Closing with its
+  container, becoming disabled, unmounting and submitting a reference are unchanged. The reason: the
+  user steps through chapters with the arrows while working in another pane. With the list showing,
+  the picker follows the rule above (it closes). A modal picker makes everything outside inert, its
+  trigger included, so it never enters compact stay-open and closes on an outside press and on Escape
+  as before. A compact picker whose tab becomes hidden stays open on purpose (a UX decision); it
+  closes through its trigger once the tab is visible again, or on Escape with focus in it. The rule
+  lives in the component, so every non-modal instance gets it.
+- **Overlay focus restore:** the renderer's overlay service decides whether focus returns to the
+  opener from how the overlay closed, synchronously when it settles, without reading where focus
+  currently is (apart from the one containment check below). For the command palette (passive
+  included), the context menu (submenus included) and the popover: picking an item (a resolve
+  carrying a result) returns focus; Escape (reported by the component, or the app-window Escape
+  signal), the opener's own dismiss (`dismissPopover`, `dismissCommandPalette`) and app
+  deactivation (parent window blur while `document.hasFocus()` is false) return focus only if the
+  focused element is inside that overlay's own content (its content roots carry
+  `data-overlay-id`, so another overlay of the same type does not count) at that moment; a click elsewhere, a pane
+  or tab switch, a parent blur while the app keeps focus (a click into a pane), a replacement, a
+  timeout and a scroll never do. Modal dialogs return focus on every answer: any resolve, and any
+  reject other than the ABORTED one used for replacement and shutdown. The opener is the
+  requesting web view when its iframe exists; otherwise the last focused tab (modal dialogs; a
+  host-local tracker fed by the focus subscription and seeded from the focus read at open, because
+  importing the window service shard would pull it into the `papi.d.ts` build) or the focus subject
+  saved at open. A target that no longer exists is skipped; with multi-window routing the tracked
+  tab can belong to another window, in which case the lookup fails harmlessly. Closes that qualify are marked through
+  `markOverlayFocusReturnIfFocusInside` (`overlay-focus-return.util.ts`) before the overlay is
+  resolved. Rejected alternative: deferring the decision one task and guessing from the active
+  element, which could not tell a click elsewhere from Escape.
+- **Source:** PT-2989 (PR #2963); related PT-2205, PT-4627; prototype PR #2887.
+
 ## adr-unresolvable-spdx-operators-drop-the-dependency: A declaration carrying an SPDX operator this pipeline cannot resolve drops the dependency
 
 - **Date:** 2026-08-27

@@ -10,6 +10,9 @@ import { type Direction, readDirection } from '@/utils/dir-helper.util';
 // CUSTOM: Added Z_INDEX_ABOVE_DOCK import so SelectContent can render above modal dialogs (see
 // its usage below) — matches the fix already applied to PopoverContent for the same reason.
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
+// CUSTOM: Added useGatedCloseAutoFocus import so SelectContent can skip Radix's trigger refocus
+// when that focus would cross frames (see its usage below)
+import { useGatedCloseAutoFocus } from '@/hooks/use-dismiss-on-window-blur.hook';
 
 /**
  * Select components display a list of options for the user to pick from—triggered by a button.
@@ -89,8 +92,14 @@ function SelectContent({
   align = 'center',
   // CUSTOM: Destructure style to merge with the shared z-index constant below
   style,
+  // CUSTOM: Destructure onCloseAutoFocus so the caller's handler runs inside the gated handler below
+  onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {
+  // CUSTOM: Select closes itself on window blur and then focuses its trigger; a focus across frames
+  // blurs the window the user moved to and closes the menu they opened there, so the
+  // close-auto-focus follows the same rule as the wrappers that close on blur.
+  const handleCloseAutoFocus = useGatedCloseAutoFocus(onCloseAutoFocus);
   // CUSTOM: Added readDirection() call; children wrapped in <div dir={dir}> for RTL text direction
   const dir: Direction = readDirection();
   return (
@@ -123,6 +132,9 @@ function SelectContent({
         style={{ zIndex: Z_INDEX_ABOVE_DOCK, ...style }}
         position={position}
         align={align}
+        // CUSTOM: Gated close-auto-focus (see handleCloseAutoFocus above); placed before the spread
+        // so the caller's onCloseAutoFocus, destructured above, cannot replace it
+        onCloseAutoFocus={handleCloseAutoFocus}
         {...props}
       >
         <SelectScrollUpButton />

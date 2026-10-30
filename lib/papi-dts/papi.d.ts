@@ -12376,6 +12376,22 @@ declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useWebViewController } from 'renderer/hooks/papi-hooks/use-web-view-controller.hook';
   export { default as useRecentScriptureRefs } from 'renderer/hooks/papi-hooks/use-recent-scripture-refs.hook';
 }
+declare module 'renderer/services/overlays/window-blur-press.util' {
+  /**
+   * Property key under which the library's `useDismissOnWindowBlur` marks the `pointerdown` it
+   * dispatches for a window blur. It must equal the library's key; `window-blur-press.util.test.tsx`
+   * fails if the two differ.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const WINDOW_BLUR_PRESS_MARKER: unique symbol;
+  /**
+   * Whether this event is the press `useDismissOnWindowBlur` dispatches for a window blur.
+   *
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function isWindowBlurPress(event: Event): boolean;
+}
 declare module 'renderer/services/overlays/overlay-store' {
   /**
    * Simple overlay store using a Map and listeners pattern. Manages active overlay entries (context
@@ -12488,6 +12504,31 @@ declare module 'renderer/services/overlays/overlay-store' {
     },
   ): boolean;
 }
+declare module 'renderer/services/overlays/overlay-focus-return.util' {
+  /**
+   * Marks an overlay's coming close as one that returns focus to the opener, provided focus is inside
+   * the overlay's own content when the overlay settles. Call it right before resolving the overlay.
+   *
+   * @param overlayId Id of the overlay about to close
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function markOverlayFocusReturnIfFocusInside(overlayId: string): void;
+  /**
+   * Clears every mark. For tests, so one test's mark cannot reach the next.
+   *
+   * @experimental This function is unstable and may change or disappear without notice
+   * @internal
+   */
+  export function resetOverlayFocusReturnMarks(): void;
+  /**
+   * Reads and clears an overlay's mark set by {@link markOverlayFocusReturnIfFocusInside}.
+   *
+   * @param overlayId Id of the overlay that is settling
+   * @returns Whether the overlay was marked
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function takeOverlayFocusReturnMark(overlayId: string): boolean;
+}
 declare module 'renderer/components/overlays/overlay-context-menu-localization.util' {
   import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
   import type { OverlayContextMenuItem } from 'renderer/components/overlays/overlay-context-menu.component';
@@ -12575,6 +12616,20 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
     onSelect: (result: OverlayContextMenuResult) => void;
     /** Called when the menu is dismissed without a selection */
     onDismiss: () => void;
+    /**
+     * Called when the user presses Escape in the menu or one of its submenus, just before
+     * {@link onDismiss}. Lets the owner tell an Escape close apart from a click away.
+     *
+     * @experimental This property is unstable and may change or disappear without notice
+     */
+    onEscape?: () => void;
+    /**
+     * Id of the overlay this renders, written to the content as `data-overlay-id` so the overlay
+     * service can tell whether focus is inside this overlay's own content rather than another's.
+     *
+     * @experimental This property is unstable and may change or disappear without notice
+     */
+    overlayId?: string;
   };
   /**
    * Pure presentational context menu component. Renders a context menu at a fixed position using
@@ -12589,6 +12644,8 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
     position,
     onSelect,
     onDismiss,
+    onEscape,
+    overlayId,
   }: OverlayContextMenuPresentationalProps): import('react/jsx-runtime').JSX.Element;
   type OverlayContextMenuProps = {
     overlay: Extract<
@@ -15498,8 +15555,11 @@ declare module 'renderer/services/overlays/overlay.service-host' {
   /** The overlay service instance exposed on papi */
   export const overlayService: IOverlayService;
   /**
-   * Resets the parent-document pointerdown record. Exported for use in tests only, so one test's
-   * recorded click cannot correlate with the next test's input signal. @internal
+   * Resets the parent-document pointerdown record and the focus-return state (open overlays' focus
+   * records and the last focused tab). Exported for use in tests only, so one test's recorded click
+   * cannot correlate with the next test's input signal and no test inherits another's focus state.
+   *
+   * @internal
    */
   export function resetAppWindowInputState(): void;
   /** Initialize the overlay service. Called during renderer startup. */

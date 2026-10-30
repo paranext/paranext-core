@@ -171,6 +171,9 @@ export function BookChapterControl({
   // own `onOpenToggle` handler runs — `composeEventHandlers` skips `onOpenToggle` when
   // `defaultPrevented` is true, so the popover stays closed instead of toggling back open.
   const justClosedByTriggerRef = useRef(false);
+  // Reference to the popover content, so Escape handling can tell whether focus is inside it
+  // eslint-disable-next-line no-null/no-null
+  const contentRef = useRef<HTMLDivElement | null>(null);
   // Reference to the Command component
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const commandRef = useRef<HTMLDivElement>(undefined!);
@@ -461,6 +464,9 @@ export function BookChapterControl({
         setInputValue('');
         setHasPreviewGridKeyboardControl(false);
         setIsHeaderControlFocused(false);
+        // A fresh open shows the full picker. Compact mode normally ends when the search input takes
+        // focus, but a window without focus gives that input no focus event to end it with.
+        setIsCommandListHidden(false);
         // Seed, don't force: the list opens expanded when the current book is outside the project so
         // that book is visible, and the toggle still collapses from there.
         setIsShowingMoreBooks(isCurrentBookOutsideProject);
@@ -1300,6 +1306,7 @@ export function BookChapterControl({
           variant={triggerVariant}
           role="combobox"
           aria-expanded={isCommandOpen}
+          {...(id !== undefined ? { 'aria-controls': id } : {})}
           disabled={disabled}
           // `tw:shrink` overrides the `tw:shrink-0` in the shadcn Button base, and it is what makes
           // the abbreviation ladder above worth anything: `tw:w-full` gives this a flex base of the
@@ -1345,7 +1352,12 @@ export function BookChapterControl({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        id={id}
+        // Radix names the content by its own id and puts that id in the trigger's `aria-controls`.
+        // The content id and the trigger's `aria-controls` must agree (assistive technology and the
+        // window-blur focus return both follow the link), so a given id is applied to both, and
+        // only when one is given.
+        {...(id !== undefined ? { id } : {})}
+        ref={contentRef}
         forceMount
         className="tw:w-[280px] tw:p-0"
         align={align}
@@ -1392,6 +1404,28 @@ export function BookChapterControl({
             justClosedByTriggerRef.current = true;
             handleOpenChange(false);
           }
+        }}
+        // Compact mode (a quick-nav arrow hid the book list) is a stepper the user keeps open while
+        // working elsewhere, so only a deliberate close dismisses it: a click on the trigger
+        // (closed above, before this runs) or Escape with focus in the picker or on the trigger.
+        // Everything Radix would treat as an outside interaction — a press elsewhere in the
+        // document, focus leaving, a window blur's synthetic press — is prevented here. Only the
+        // dismissal is prevented: the press itself still reaches whatever the user clicked.
+        // A modal picker makes everything outside inert, its trigger included, so "stays open"
+        // would leave no way out: compact mode applies only when the picker is non-modal.
+        onInteractOutside={(event) => {
+          if (!modal && isCommandOpen && isCommandListHidden) event.preventDefault();
+        }}
+        // Radix listens for Escape on the whole document, so compact mode keeps it from closing the
+        // picker unless focus is in the picker or on the trigger. Escape pressed while focus is in
+        // another frame never reaches this document.
+        onEscapeKeyDown={(event) => {
+          if (modal || !isCommandOpen || !isCommandListHidden) return;
+          const { target } = event;
+          const isFocusInPicker =
+            target instanceof Node &&
+            (!!contentRef.current?.contains(target) || !!triggerRef.current?.contains(target));
+          if (!isFocusInPicker) event.preventDefault();
         }}
         onCloseAutoFocus={onCloseAutoFocus}
       >
@@ -1481,10 +1515,17 @@ export function BookChapterControl({
                           variant="ghost"
                           size="sm"
                           onClick={() => {
+                            // `aria-disabled` does not stop activation, so the guard lives here;
+                            // it also covers Enter, which the browser turns into a click.
+                            if (isQuickNavDisabled) return;
                             setIsCommandListHidden(true);
                             onClick();
                           }}
-                          disabled={isQuickNavDisabled}
+                          // `aria-disabled` rather than `disabled`: see the tooltip wrapper below.
+                          // The `aria-disabled:` classes match Button's `disabled:` look and drop the
+                          // ghost variant's hover and pressed styling, which only `disabled:` would
+                          // otherwise suppress; `!` wins over the variant's own (dark) hover rules.
+                          aria-disabled={isQuickNavDisabled}
                           // `rounded-lg!` re-asserts all four corners against `ButtonGroup`'s
                           // horizontal variant, which squares off the inner edges so that flush
                           // buttons read as one bar. These four are not flush — `gap-1` on the
@@ -1493,7 +1534,7 @@ export function BookChapterControl({
                           // the row produced a ring that changed shape from button to button. The
                           // radius matches what `size="sm"` already applies inside a button group,
                           // so only the corners the group removed come back.
-                          className="tw:h-8.5 tw:w-6 tw:rounded-lg! tw:p-0"
+                          className="tw:h-8.5 tw:w-6 tw:rounded-lg! tw:p-0 tw:aria-disabled:cursor-default tw:aria-disabled:opacity-50 tw:aria-disabled:hover:bg-transparent! tw:aria-disabled:hover:text-inherit! tw:dark:aria-disabled:hover:bg-transparent! tw:aria-disabled:active:transform-none!"
                           aria-label={title}
                           onKeyDown={handleQuickNavButtonKeyDown}
                         >
@@ -1512,23 +1553,17 @@ export function BookChapterControl({
                           {index > 0 && group !== quickNavButtons[index - 1].group && (
                             <ButtonGroupSeparator />
                           )}
-                          {isQuickNavDisabled ? (
-                            // A disabled Button carries `pointer-events: none` from its own base
-                            // variants, so it is not hit-tested: neither a Radix tooltip nor a
-                            // `title` ON THE BUTTON can ever fire. These arrows come back disabled
-                            // at the edges of the canon — Genesis 1:1 is the default state of a
-                            // freshly opened project — which is exactly where a user asks what the
-                            // button was for. The wrapper is still hit-tested, so the native
-                            // tooltip it carries is the one hover explanation available here.
-                            <span title={title} className="tw:inline-flex">
-                              {quickNavButton}
-                            </span>
-                          ) : (
-                            <Tooltip>
-                              <TooltipTrigger asChild>{quickNavButton}</TooltipTrigger>
-                              <TooltipContent>{title}</TooltipContent>
-                            </Tooltip>
-                          )}
+                          {/* The arrows at the edges of the canon (Genesis 1:1 is the default
+                              state of a freshly opened project) use `aria-disabled`, not
+                              `disabled`, for two reasons. They stay focusable, so stepping onto
+                              an edge never drops focus out of the picker, which would stop
+                              Escape from closing a compact picker. And they stay hit-tested (a
+                              disabled Button carries `pointer-events: none`), so the hover
+                              tooltip still explains what the button is for. */}
+                          <Tooltip>
+                            <TooltipTrigger asChild>{quickNavButton}</TooltipTrigger>
+                            <TooltipContent>{title}</TooltipContent>
+                          </Tooltip>
                         </Fragment>
                       );
                     },

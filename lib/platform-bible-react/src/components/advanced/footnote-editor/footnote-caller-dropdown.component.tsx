@@ -14,6 +14,7 @@ import {
 } from '@/components/shadcn-ui/tooltip';
 import { Button } from '@/components/shadcn-ui/button';
 import { GENERATOR_NOTE_CALLER, HIDDEN_NOTE_CALLER } from '@eten-tech-foundation/platform-editor';
+import { focusUnlessSuppressed } from '@/hooks/use-dismiss-on-window-blur.hook';
 import { Input } from '@/components/shadcn-ui/input';
 import { KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { Z_INDEX_ABOVE_POPOVER } from '@/components/z-index';
@@ -208,7 +209,9 @@ export function FootnoteCallerDropdown({
           if (!committedCaller.current) return;
           committedCaller.current = false;
           event.preventDefault();
-          focusNoteText();
+          // Explicit focus bypasses the shared focus-return rule, so gate it on that rule: focus
+          // must stay where the user put it when that is a web view.
+          focusUnlessSuppressed(focusNoteText);
         }}
         onClick={() => {
           if (isCustomCallerInputFocused.current) isCustomCallerInputFocused.current = false;

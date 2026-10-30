@@ -2,7 +2,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createRef, useState } from 'react';
-import { beforeAll, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest';
 import '@testing-library/jest-dom';
 import {
   DropdownMenu,
@@ -55,6 +55,10 @@ beforeAll(() => {
 const getTrigger = () => screen.getByRole('combobox', { name: 'book-chapter-trigger' });
 
 describe('BookChapterControl imperative handle', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   test('open() opens the dropdown and focuses the search input', async () => {
     const handleRef = createRef<BookChapterControlHandle>();
     render(
@@ -177,6 +181,93 @@ describe('BookChapterControl imperative handle', () => {
     await waitFor(() => {
       expect(getTrigger()).toHaveAttribute('aria-expanded', 'false');
     });
+  });
+
+  test('reopens from the trigger after a window blur closed it', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+      />,
+    );
+
+    await user.click(getTrigger());
+    await waitFor(() => expect(document.querySelector('[cmdk-input]')).not.toBeNull());
+
+    // A click into another frame never reaches this document; the window's blur stands in for it.
+    act(() => {
+      window.dispatchEvent(new Event('blur'));
+    });
+    await waitFor(() => expect(getTrigger()).toHaveAttribute('aria-expanded', 'false'));
+    expect(document.querySelector('[cmdk-input]')).toBeNull();
+
+    await user.click(getTrigger());
+
+    await waitFor(() => expect(document.querySelector('[cmdk-input]')).toBeVisible());
+  });
+
+  test('returns focus to the trigger after an alt-tab close in the main document', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+      />,
+    );
+
+    await user.click(getTrigger());
+    await waitFor(() => expect(document.querySelector('[cmdk-input]')).not.toBeNull());
+    expect(getTrigger()).not.toHaveFocus();
+
+    // The OS window was deactivated: the main document no longer has focus
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    act(() => {
+      window.dispatchEvent(new Event('blur'));
+    });
+    await waitFor(() => expect(getTrigger()).toHaveAttribute('aria-expanded', 'false'));
+    // Let FocusScope's own zero-delay close-auto-focus timer run before asserting
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(getTrigger()).toHaveFocus();
+  });
+
+  test('names the content by the id it is given, on the content and in the trigger aria-controls', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        id="bcv-under-test"
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+      />,
+    );
+
+    await user.click(getTrigger());
+    await waitFor(() => expect(document.querySelector('[cmdk-input]')).not.toBeNull());
+
+    expect(getTrigger()).toHaveAttribute('aria-controls', 'bcv-under-test');
+    expect(document.getElementById('bcv-under-test')).toBe(
+      document.querySelector('[data-slot="popover-content"]'),
+    );
+  });
+
+  test("the trigger's aria-controls names the open content when no id is given", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+      />,
+    );
+
+    await user.click(getTrigger());
+    await waitFor(() => expect(document.querySelector('[cmdk-input]')).not.toBeNull());
+
+    const content = document.querySelector('[data-slot="popover-content"]');
+    expect(content).not.toBeNull();
+    expect(document.getElementById(getTrigger().getAttribute('aria-controls') ?? '')).toBe(content);
   });
 
   test('does not render a chevron by default', () => {
@@ -782,7 +873,10 @@ describe('BookChapterControl additional books', () => {
 
     // Quick navigation spans the project's books only, so the current book offers no next chapter.
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Next chapter' })).toBeDisabled(),
+      expect(screen.getByRole('button', { name: 'Next chapter' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      ),
     );
 
     // Searching spans the same books. A fragment several books match keeps the list rendered.
@@ -854,7 +948,10 @@ describe('BookChapterControl additional books', () => {
     // MAT 28 is the last chapter of the project's last book, so stepping forward from here would
     // have to leave the project — which the collapsed list does not offer.
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Next chapter' })).toBeDisabled(),
+      expect(screen.getByRole('button', { name: 'Next chapter' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      ),
     );
   });
 
@@ -874,7 +971,7 @@ describe('BookChapterControl additional books', () => {
     await user.click(await screen.findByRole('button', { name: 'Show more books' }));
 
     const nextChapter = await screen.findByRole('button', { name: 'Next chapter' });
-    await waitFor(() => expect(nextChapter).toBeEnabled());
+    await waitFor(() => expect(nextChapter).not.toHaveAttribute('aria-disabled', 'true'));
 
     await user.click(nextChapter);
 
@@ -1799,5 +1896,372 @@ describe('BookChapterControl hands the arrows to the preview grid once entered',
     await user.keyboard('{ArrowLeft}');
 
     expect(input.selectionStart).toBe(caretBeforeArrow - 1);
+  });
+});
+
+/**
+ * Compact mode: after a quick-nav arrow hides the book list, the popover is a small stepper the
+ * user keeps beside their work, so only its trigger or Escape with focus in it may close it.
+ * Everything else (window blur, a press elsewhere in the document, focus leaving) leaves it open
+ * without swallowing the press.
+ */
+describe('BookChapterControl compact mode stays open', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const scrRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
+
+  function renderWithOutsideButton() {
+    const onOutsidePointerDown = vi.fn();
+    const onOutsideClick = vi.fn();
+    const ui = (disabled?: boolean) => (
+      <div>
+        <BookChapterControl scrRef={scrRef} handleSubmit={vi.fn()} disabled={disabled} />
+        <button type="button" onPointerDown={onOutsidePointerDown} onClick={onOutsideClick}>
+          outside
+        </button>
+      </div>
+    );
+    const result = render(ui());
+    return {
+      ...result,
+      rerenderDisabled: () => result.rerender(ui(true)),
+      onOutsidePointerDown,
+      onOutsideClick,
+    };
+  }
+
+  const getOutside = () => screen.getByRole('button', { name: 'outside' });
+  const isOpen = () => getTrigger().getAttribute('aria-expanded') === 'true';
+  const settle = () =>
+    act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 50);
+      });
+    });
+  const getSearchInputElement = () => {
+    const input = document.querySelector('[cmdk-input]');
+    if (!(input instanceof HTMLElement)) throw new Error('expected the search input');
+    return input;
+  };
+
+  async function openCompact() {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const utils = renderWithOutsideButton();
+    await user.click(getTrigger());
+    await waitFor(() => expect(document.querySelector('[cmdk-input]')).not.toBeNull());
+    await user.click(screen.getByRole('button', { name: 'Next chapter' }));
+    // The list is gone: that is compact mode
+    await waitFor(() => expect(screen.queryByRole('option')).toBeNull());
+    expect(isOpen()).toBe(true);
+    return { user, ...utils };
+  }
+
+  async function openFull() {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const utils = renderWithOutsideButton();
+    await user.click(getTrigger());
+    await waitFor(() => expect(screen.queryAllByRole('option').length).toBeGreaterThan(0));
+    return { user, ...utils };
+  }
+
+  test('a quick-nav arrow click does not itself close the popover', async () => {
+    await openCompact();
+    await settle();
+    expect(isOpen()).toBe(true);
+  });
+
+  test('a window blur leaves it open', async () => {
+    await openCompact();
+    act(() => {
+      window.dispatchEvent(new Event('blur'));
+    });
+    await settle();
+    expect(isOpen()).toBe(true);
+  });
+
+  test('a press elsewhere in the document leaves it open and still reaches its target', async () => {
+    const { user, onOutsidePointerDown, onOutsideClick } = await openCompact();
+    await user.click(getOutside());
+    await settle();
+    expect(isOpen()).toBe(true);
+    expect(onOutsidePointerDown).toHaveBeenCalledTimes(1);
+    expect(onOutsideClick).toHaveBeenCalledTimes(1);
+  });
+
+  test('focus moving outside leaves it open', async () => {
+    await openCompact();
+    act(() => {
+      getOutside().focus();
+    });
+    await settle();
+    expect(isOpen()).toBe(true);
+  });
+
+  test('Escape with focus elsewhere in the document leaves it open', async () => {
+    const { user } = await openCompact();
+    act(() => {
+      getOutside().focus();
+    });
+    await user.keyboard('{Escape}');
+    await settle();
+    expect(isOpen()).toBe(true);
+  });
+
+  test('Escape with focus on the page body leaves it open', async () => {
+    const { user } = await openCompact();
+    act(() => {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    });
+    expect(document.activeElement).toBe(document.body);
+    await user.keyboard('{Escape}');
+    await settle();
+    expect(isOpen()).toBe(true);
+  });
+
+  test('Escape with focus inside the popover closes it', async () => {
+    const { user } = await openCompact();
+    const content = document.querySelector('[data-slot="popover-content"]');
+    expect(content?.contains(document.activeElement)).toBe(true);
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(isOpen()).toBe(false));
+  });
+
+  test('Escape with focus on the trigger closes it', async () => {
+    const { user } = await openCompact();
+    act(() => {
+      getTrigger().focus();
+    });
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(isOpen()).toBe(false));
+  });
+
+  test('a click on the trigger closes it and does not reopen it', async () => {
+    const { user } = await openCompact();
+    await user.click(getTrigger());
+    await waitFor(() => expect(isOpen()).toBe(false));
+    await settle();
+    expect(isOpen()).toBe(false);
+  });
+
+  test('becoming disabled closes it', async () => {
+    const { rerenderDisabled } = await openCompact();
+    rerenderDisabled();
+    await waitFor(() => expect(isOpen()).toBe(false));
+  });
+
+  test('leaving compact mode through the search input restores the normal outside-press rules', async () => {
+    const { user } = await openCompact();
+    await user.click(getSearchInputElement());
+    await waitFor(() => expect(screen.queryAllByRole('option').length).toBeGreaterThan(0));
+    await user.click(getOutside());
+    await waitFor(() => expect(isOpen()).toBe(false));
+  });
+
+  test('a fresh open after a compact close shows the full picker, which closes on a window blur', async () => {
+    const { user } = await openCompact();
+    await user.click(getTrigger());
+    await waitFor(() => expect(isOpen()).toBe(false));
+    await user.click(getTrigger());
+    await waitFor(() => expect(screen.queryAllByRole('option').length).toBeGreaterThan(0));
+    act(() => {
+      window.dispatchEvent(new Event('blur'));
+    });
+    await waitFor(() => expect(isOpen()).toBe(false));
+  });
+
+  test('controls: with the list showing, a window blur closes it', async () => {
+    await openFull();
+    act(() => {
+      window.dispatchEvent(new Event('blur'));
+    });
+    await waitFor(() => expect(isOpen()).toBe(false));
+  });
+
+  test('controls: with the list showing, a press elsewhere closes it', async () => {
+    const { user } = await openFull();
+    await user.click(getOutside());
+    await waitFor(() => expect(isOpen()).toBe(false));
+  });
+
+  test('controls: with the list showing, Escape with focus on the page body closes it', async () => {
+    const { user } = await openFull();
+    act(() => {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    });
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(isOpen()).toBe(false));
+  });
+
+  describe('when modal', () => {
+    // A modal picker makes everything outside inert, its trigger included, so compact mode must
+    // still let an outside press or Escape dismiss it. Radix hides everything outside a modal
+    // popover from the accessibility tree, so these queries opt in to hidden elements.
+    const isModalOpen = () =>
+      screen
+        .getByRole('combobox', { name: 'book-chapter-trigger', hidden: true })
+        .getAttribute('aria-expanded') === 'true';
+    async function openModalCompact() {
+      const user = userEvent.setup({ pointerEventsCheck: 0 });
+      render(
+        <div>
+          <BookChapterControl modal scrRef={scrRef} handleSubmit={vi.fn()} />
+          <button type="button">outside</button>
+        </div>,
+      );
+      await user.click(getTrigger());
+      await waitFor(() => expect(document.querySelector('[cmdk-input]')).not.toBeNull());
+      await user.click(screen.getByRole('button', { name: 'Next chapter' }));
+      await waitFor(() => expect(screen.queryByRole('option')).toBeNull());
+      expect(isModalOpen()).toBe(true);
+      return { user };
+    }
+
+    test('an outside press closes a modal picker after a quick-nav step', async () => {
+      const { user } = await openModalCompact();
+      await user.click(screen.getByRole('button', { name: 'outside', hidden: true }));
+      await waitFor(() => expect(isModalOpen()).toBe(false));
+    });
+
+    test('Escape with focus on the page body closes a modal picker after a quick-nav step', async () => {
+      const { user } = await openModalCompact();
+      act(() => {
+        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+      });
+      expect(document.activeElement).toBe(document.body);
+      await user.keyboard('{Escape}');
+      await waitFor(() => expect(isModalOpen()).toBe(false));
+    });
+  });
+});
+
+describe('BookChapterControl quick-nav arrows at the edge of the canon', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  type Ref = { book: string; chapterNum: number; verseNum: number };
+
+  const isOpen = () => getTrigger().getAttribute('aria-expanded') === 'true';
+  const getArrow = (name: string) => screen.getByRole('button', { name });
+
+  // The last book of the offered list is the edge a forward step runs into.
+  const LAST_BOOK_LIST = ['MAT'];
+  const getLastBookList = () => LAST_BOOK_LIST;
+
+  function ControlledControl({
+    initial,
+    onSubmit,
+    limitBooks,
+  }: {
+    initial: Ref;
+    onSubmit: () => void;
+    limitBooks?: boolean;
+  }) {
+    const [scrRef, setScrRef] = useState(initial);
+    return (
+      <BookChapterControl
+        scrRef={scrRef}
+        getActiveBookIds={limitBooks ? getLastBookList : undefined}
+        handleSubmit={(newRef) => {
+          onSubmit();
+          setScrRef(newRef);
+        }}
+      />
+    );
+  }
+
+  async function openAt(initial: Ref, limitBooks = false) {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onSubmit = vi.fn();
+    render(<ControlledControl initial={initial} onSubmit={onSubmit} limitBooks={limitBooks} />);
+    await user.click(getTrigger());
+    await waitFor(() => expect(document.querySelector('[cmdk-input]')).not.toBeNull());
+    return { user, onSubmit };
+  }
+
+  async function stepOntoEdge(initial: Ref, name: string, limitBooks = false) {
+    const { user, onSubmit } = await openAt(initial, limitBooks);
+    act(() => {
+      getArrow(name).focus();
+    });
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(getArrow(name)).toHaveAttribute('aria-disabled', 'true'));
+    return { user, onSubmit };
+  }
+
+  test('stepping back to the first chapter keeps focus on the Previous chapter arrow', async () => {
+    await stepOntoEdge({ book: 'GEN', chapterNum: 2, verseNum: 1 }, 'Previous chapter');
+    expect(document.activeElement).toBe(getArrow('Previous chapter'));
+  });
+
+  test('Escape then closes the compact picker', async () => {
+    const { user } = await stepOntoEdge(
+      { book: 'GEN', chapterNum: 2, verseNum: 1 },
+      'Previous chapter',
+    );
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(isOpen()).toBe(false));
+  });
+
+  test('stepping forward to the last chapter of the last book keeps focus on the Next chapter arrow', async () => {
+    const { user } = await stepOntoEdge(
+      { book: 'MAT', chapterNum: 27, verseNum: 1 },
+      'Next chapter',
+      true,
+    );
+    expect(document.activeElement).toBe(getArrow('Next chapter'));
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(isOpen()).toBe(false));
+  });
+
+  test('a click on an aria-disabled arrow does nothing', async () => {
+    const { user, onSubmit } = await openAt({ book: 'GEN', chapterNum: 1, verseNum: 1 });
+    expect(getArrow('Previous chapter')).toHaveAttribute('aria-disabled', 'true');
+    await user.click(getArrow('Previous chapter'));
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.queryAllByRole('option').length).toBeGreaterThan(0);
+  });
+
+  test('Enter on an aria-disabled arrow does nothing', async () => {
+    const { user, onSubmit } = await openAt({ book: 'GEN', chapterNum: 1, verseNum: 1 });
+    act(() => {
+      getArrow('Previous chapter').focus();
+    });
+    await user.keyboard('{Enter}');
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.queryAllByRole('option').length).toBeGreaterThan(0);
+  });
+});
+
+describe('BookChapterControl fresh open after a compact close', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  test('shows the full picker even when the search input does not take focus', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+      />,
+    );
+    await user.click(getTrigger());
+    await waitFor(() => expect(screen.queryAllByRole('option').length).toBeGreaterThan(0));
+    await user.click(screen.getByRole('button', { name: 'Next chapter' }));
+    await waitFor(() => expect(screen.queryByRole('option')).toBeNull());
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(getTrigger()).toHaveAttribute('aria-expanded', 'false'));
+
+    // An unfocused window gives the search input no focus event to leave compact mode with
+    vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(() => {});
+    act(() => {
+      getTrigger().click();
+    });
+
+    await waitFor(() => expect(getTrigger()).toHaveAttribute('aria-expanded', 'true'));
+    await waitFor(() => expect(screen.queryAllByRole('option').length).toBeGreaterThan(0));
   });
 });

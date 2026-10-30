@@ -1,0 +1,254 @@
+// @vitest-environment jsdom
+import { act, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import '@testing-library/jest-dom';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '@/components/shadcn-ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
+
+// jsdom doesn't ship a ResizeObserver, which Radix's Popper-positioned content instantiates on
+// mount. A no-op stub is sufficient since the tests inspect presence, not layout. The
+// hasPointerCapture / scrollIntoView shims are installed repo-wide by vitest.setup.ts.
+class NoopResizeObserver implements ResizeObserver {
+  // Touch `this` so the no-op methods don't trip @typescript-eslint/class-methods-use-this.
+  private readonly targets = new Set<Element>();
+
+  observe(target: Element) {
+    this.targets.add(target);
+  }
+
+  unobserve(target: Element) {
+    this.targets.delete(target);
+  }
+
+  disconnect() {
+    this.targets.clear();
+  }
+}
+
+beforeAll(() => {
+  if (typeof globalThis.ResizeObserver === 'undefined') {
+    globalThis.ResizeObserver = NoopResizeObserver;
+  }
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
+function blurWindow() {
+  act(() => {
+    window.dispatchEvent(new Event('blur'));
+  });
+}
+
+describe('DropdownMenuContent window blur', () => {
+  it('closes an open dropdown menu when the window blurs', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <DropdownMenu>
+        <DropdownMenuTrigger>open</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem>item</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>,
+    );
+    await user.click(screen.getByText('open'));
+    expect(await screen.findByRole('menu')).toBeInTheDocument();
+
+    blurWindow();
+
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+  });
+
+  it('closes the sub-menu and the root menu on one blur', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <DropdownMenu>
+        <DropdownMenuTrigger>open</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>more</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuItem>nested item</DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        </DropdownMenuContent>
+      </DropdownMenu>,
+    );
+    await user.click(screen.getByText('open'));
+    await screen.findByRole('menu');
+    // jsdom has no PointerEvent, so open the sub-menu with the keyboard
+    await user.keyboard('{ArrowDown}');
+    await user.keyboard('{ArrowRight}');
+    await waitFor(() => expect(screen.getAllByRole('menu')).toHaveLength(2));
+
+    blurWindow();
+
+    await waitFor(() => expect(screen.queryAllByRole('menu')).toHaveLength(0));
+  });
+
+  // Regression guard: passes without the blur wiring too, because it asserts the opt-out path.
+  it('keeps a controlled menu without onOpenChange open', async () => {
+    render(
+      <DropdownMenu open>
+        <DropdownMenuTrigger>open</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem>item</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>,
+    );
+    expect(await screen.findByRole('menu')).toBeInTheDocument();
+
+    blurWindow();
+
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+  });
+
+  // Deliberate: a blur is an outside press, and Radix ignores outside presses on a layer beneath a
+  // modal one, exactly as for a real click outside both. The first blur therefore closes only the
+  // modal menu; the second closes the popover.
+  it('a modal menu inside a popover takes a blur alone; the next blur closes the popover', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <Popover>
+        <PopoverTrigger>pick</PopoverTrigger>
+        <PopoverContent>
+          popover body
+          <DropdownMenu>
+            <DropdownMenuTrigger>group</DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem>item</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </PopoverContent>
+      </Popover>,
+    );
+    await user.click(screen.getByText('pick'));
+    await user.click(await screen.findByText('group'));
+    expect(await screen.findByRole('menu')).toBeInTheDocument();
+
+    blurWindow();
+
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+    expect(screen.getByText('popover body')).toBeInTheDocument();
+
+    blurWindow();
+
+    await waitFor(() => expect(screen.queryByText('popover body')).not.toBeInTheDocument());
+  });
+});
+
+describe('DropdownMenuContent focus after dismissal', () => {
+  it('does not move focus back to the trigger after a window-blur dismissal', async () => {
+    // A web view's `top` is its host window, not itself; the hook reads it once, on mount
+    vi.stubGlobal('top', {});
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <DropdownMenu>
+        <DropdownMenuTrigger>open</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem>item</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>,
+    );
+    await user.click(screen.getByText('open'));
+    expect(await screen.findByRole('menu')).toBeInTheDocument();
+    // Focus leaves the document, as when the user clicks into another iframe. A modal menu's focus
+    // trap pulls focus back from any other element in this document, so the focus is dropped instead.
+    act(() => {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    });
+
+    // A window blur in a real browser means the document no longer has focus
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    blurWindow();
+
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+    // Let FocusScope's own zero-delay close-auto-focus timer run before asserting
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    expect(document.activeElement).not.toBe(screen.getByText('open'));
+  });
+
+  async function closeByAltTab() {
+    const trigger = screen.getByText('open');
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    await user.click(trigger);
+    expect(await screen.findByRole('menu')).toBeInTheDocument();
+    expect(document.activeElement).not.toBe(trigger);
+
+    // The OS window was deactivated: the main document no longer has focus
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    blurWindow();
+
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+    // Let FocusScope's own zero-delay close-auto-focus timer run before asserting
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  }
+
+  it('returns focus to the trigger of a non-modal menu after an alt-tab close in the main document', async () => {
+    render(
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger>open</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem>item</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>,
+    );
+
+    await closeByAltTab();
+
+    expect(screen.getByText('open')).toHaveFocus();
+  });
+
+  // Regression guard: Radix restores a modal menu's trigger itself, so this passes without the
+  // hook's own restore too
+  it('returns focus to the trigger of a modal menu after an alt-tab close in the main document', async () => {
+    render(
+      <DropdownMenu>
+        <DropdownMenuTrigger>open</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem>item</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>,
+    );
+
+    await closeByAltTab();
+
+    expect(screen.getByText('open')).toHaveFocus();
+  });
+
+  it('returns focus to the trigger after Escape', async () => {
+    // jsdom reports no document focus by default; a browser tab the user is working in has it
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <DropdownMenu>
+        <DropdownMenuTrigger>open</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem>item</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>,
+    );
+    await user.click(screen.getByText('open'));
+    expect(await screen.findByRole('menu')).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+    expect(document.activeElement).toBe(screen.getByText('open'));
+  });
+});

@@ -12,7 +12,7 @@ import { CommentStatus, ConflictResolutionOptions, LanguageStrings, LegacyCommen
 import { PaletteDriver, PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
-import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithRef, ComponentPropsWithoutRef, FC, FocusEventHandler, HTMLAttributes, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, Ref, RefObject } from 'react';
+import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithRef, ComponentPropsWithoutRef, FC, FocusEventHandler, HTMLAttributes, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, Ref, RefCallback, RefObject } from 'react';
 import * as ResizablePrimitive from 'react-resizable-panels';
 import { ToasterProps, toast as sonner } from 'sonner';
 import { Drawer as DrawerPrimitive } from 'vaul';
@@ -198,7 +198,9 @@ export type BookChapterControlProps = {
 	 * or DropdownMenu) — the transient focus blip that happens when the picker transitions between
 	 * book/chapter/verse views would otherwise collide with the outer scope's focus trap and dismiss
 	 * the popover. Modal mode gives the popover its own FocusScope that pauses the outer scope while
-	 * it's open, avoiding the collision.
+	 * it's open, avoiding the collision. A modal picker makes everything outside inert, its trigger
+	 * included, so it does not use the compact stay-open behavior after a quick-nav step: it closes
+	 * on an outside press and on Escape like any other modal popover.
 	 */
 	modal?: boolean;
 	/**
@@ -2895,7 +2897,7 @@ export declare const PopoverPortalContainerProvider: ({ container, children, }: 
 	children: React$1.ReactNode;
 }) => import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Popover */
-export declare function PopoverContent({ className, align, sideOffset, style, ...props }: React$1.ComponentProps<typeof PopoverPrimitive.Content>): import("react/jsx-runtime").JSX.Element;
+export declare function PopoverContent({ className, align, sideOffset, style, ref, onCloseAutoFocus, ...props }: React$1.ComponentProps<typeof PopoverPrimitive.Content>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Popover */
 export declare function PopoverAnchor({ ...props }: React$1.ComponentProps<typeof PopoverPrimitive.Anchor>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Popover */
@@ -3597,7 +3599,7 @@ export declare function ContextMenuSub({ ...props }: React$1.ComponentProps<type
 /** @inheritdoc ContextMenu */
 export declare function ContextMenuRadioGroup({ ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.RadioGroup>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc ContextMenu */
-export declare function ContextMenuContent({ className, style, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.Content> & {
+export declare function ContextMenuContent({ className, style, ref, onCloseAutoFocus, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.Content> & {
 	side?: "top" | "right" | "bottom" | "left";
 }): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc ContextMenu */
@@ -3752,7 +3754,7 @@ export declare function DropdownMenuPortal({ ...props }: React$1.ComponentProps<
 /** @inheritdoc DropdownMenuProps */
 export declare function DropdownMenuTrigger({ ...props }: React$1.ComponentProps<typeof DropdownMenuPrimitive.Trigger>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuContent({ className, align, sideOffset, style, children, ...props }: DropdownMenuContentProps): import("react/jsx-runtime").JSX.Element;
+export declare function DropdownMenuContent({ className, align, sideOffset, style, children, ref, onCloseAutoFocus, ...props }: DropdownMenuContentProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
 export declare function DropdownMenuGroup({ ...props }: React$1.ComponentProps<typeof DropdownMenuPrimitive.Group>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
@@ -3897,7 +3899,7 @@ export type SelectTriggerProps = React$1.ComponentProps<typeof SelectPrimitive.T
 /** @inheritdoc Select */
 export declare function SelectTrigger({ className, size, children, ...props }: SelectTriggerProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Select */
-export declare function SelectContent({ className, children, position, align, style, ...props }: React$1.ComponentProps<typeof SelectPrimitive.Content>): import("react/jsx-runtime").JSX.Element;
+export declare function SelectContent({ className, children, position, align, style, onCloseAutoFocus, ...props }: React$1.ComponentProps<typeof SelectPrimitive.Content>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Select */
 export declare function SelectLabel({ className, ...props }: React$1.ComponentProps<typeof SelectPrimitive.Label>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Select */
@@ -4585,6 +4587,115 @@ export declare const useViewVisibility: () => boolean;
  *   effect re-firing on every visibility flip.
  */
 export declare function useRunWhenVisible(isViewVisible: boolean, run: () => void): () => void;
+/**
+ * Whether this window is a web view, meaning it is not the top window. In a web view `window.top`
+ * is the host window: the web view's setup script deletes it, but `top` cannot be deleted, so the
+ * deletion does nothing (`web-view.service-shard.ts`, the `imports` string). The main document is
+ * its own top window. A missing or unreadable `top` also counts as a web view.
+ *
+ * @returns `true` inside a web view (or when `window.top` is missing or unreadable), `false` in the
+ *   main document
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function isRunningInWebView(): boolean;
+/**
+ * Decides whether closing a menu or popover must not return focus to its trigger.
+ *
+ * Returning focus across frames closes the menu the user just opened elsewhere, so focus stays
+ * where the user put it when that is a web view (`activeElement` is an `<iframe>`) or, inside a web
+ * view, when the window no longer has focus. In the main document `!hasFocus()` can only mean the
+ * OS window was deactivated (a click into a web view leaves the document focused with the iframe as
+ * active element), so restoring the trigger there is safe and helps keyboard users returning from
+ * another application. Inside a web view it is ambiguous (switching applications versus clicking
+ * into another frame) and stays suppressed.
+ *
+ * It decides only whether to suppress; {@link useDismissOnWindowBlur} restores the trigger itself in
+ * the main-document case.
+ *
+ * @param doc The document the surface renders in
+ * @param isInWebView Whether that document's window is a web view; see {@link isRunningInWebView}
+ * @returns `true` when focus must not be returned to the trigger
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function shouldSuppressFocusReturn(doc: Document, isInWebView: boolean): boolean;
+type DismissOnWindowBlurProps<T extends HTMLElement> = {
+	/** The caller's own ref for the content element (function or object), if any */
+	ref?: React$1.Ref<T>;
+	/** The caller's own close-auto-focus handler, if any */
+	onCloseAutoFocus?: (event: Event) => void;
+};
+/**
+ * Treats the window losing focus as a press outside the calling surface, so an open menu or popover
+ * dismisses itself.
+ *
+ * Web views are iframes, so a click in another web view, or in another application, never produces
+ * a `pointerdown` in this document and Radix's outside-press detection never runs. Native menus
+ * close when their application is deactivated; this hook gives Radix surfaces the same behavior.
+ * From mount until unmount, a `blur` on `window` dispatches a synthetic `pointerdown` on the
+ * content's parent element. A closed surface has no content node (unmounted) or a content node
+ * marked `data-state="closed"` (animating out), and the blur is ignored in both cases, so a
+ * mounted-but-closed surface never presses on an unrelated open layer. Radix's `DismissableLayer`
+ * listens for `pointerdown` on the owner document and does not check `isTrusted`, so the event
+ * takes its normal outside-press path: `onPointerDownOutside` runs and can call `preventDefault()`
+ * to keep the surface open, and a surface whose `open` is controlled without an `onOpenChange`
+ * stays open.
+ *
+ * The press lands "outside this surface, but inside whatever hosts it". A popover portaled into a
+ * dialog (via `PopoverPortalContainerProvider`) closes while the dialog's own `DismissableLayer`
+ * sees an inside press and stays open. A popover or menu portaled to `document.body` is pressed on
+ * from its own Radix popper wrapper (`data-radix-popper-content-wrapper`, what `parentElement`
+ * resolves to there), which is outside it. A modal menu opened from inside a dialog is protected by
+ * Radix anyway: a layer below the top-most layer that disables outside pointer events does not
+ * dismiss.
+ *
+ * Focus rule: a dismissal caused by a click into another frame does not return focus to the
+ * trigger. The user has already put focus somewhere else, and Radix's default close-auto-focus
+ * would pull it back: a menu closing in one frame by returning focus to its trigger blurs the main
+ * window, which would close the menu the user just opened in another frame. The returned
+ * `onCloseAutoFocus` calls `preventDefault()` per {@link shouldSuppressFocusReturn}: when the active
+ * element is an `<iframe>` (the user clicked into a web view from this document), or when this
+ * window is a web view whose document has lost focus (the user clicked into another frame, or
+ * switched applications). In the main document a lost `document.hasFocus()` can only mean the OS
+ * window was deactivated, so the hook focuses the trigger itself and prevents Radix's default.
+ * After an outside interaction, which the synthetic press is, the non-modal Popover and the Menubar
+ * would skip their own restore, while a modal DropdownMenu would restore anyway; the outcome is the
+ * same for all three. The trigger is the element whose `aria-controls` names the content's `id`,
+ * looked up at close and, failing that, as found when the content mounted; else the element the
+ * content's `aria-labelledby` names. A surface without either (a context menu) restores nothing.
+ * Focus is never taken from an element the user focused elsewhere. Any other close, such as Escape
+ * or a click elsewhere in this document, restores focus as usual. The rule reads state at close
+ * time rather than remembering that a blur dismissal happened: Radix runs close-auto-focus from its
+ * own timer after an asynchronous unmount, so a flag cleared by a timeout loses that race under
+ * load.
+ *
+ * The synthetic press is untrusted and carries a window-blur marker (checked by the internal
+ * `isWindowBlurPress`). The focus modality tracker and the overlay service's press recorder skip
+ * it, and the overlay service's own surfaces ignore it. Window service gesture tracking, the
+ * content-zoom bootstrap and the editor's selection snapshot see it and were judged benign. Another
+ * document-level `pointerdown` listener that must ignore it can check the marker the same way.
+ *
+ * Hidden-view case (the repo's rule on hidden views): a keyboard tab switch can hide a pane that
+ * holds an open menu. The blur listener then dismisses it on the next window blur, which is
+ * harmless, so there is deliberately no catch-up logic. The one deliberate exception is a non-modal
+ * compact `BookChapterControl`: its `onInteractOutside` prevents this hook's synthetic press from
+ * dismissing it, so it stays open while its tab is hidden and closes through its trigger once the
+ * tab is visible again, or on Escape with focus in it.
+ *
+ * @param props The caller's `ref` and `onCloseAutoFocus` for the Radix Content. Both still work:
+ *   the ref receives the element too, and the caller's handler runs first and can itself prevent
+ *   the default.
+ * @returns `ref`: ref callback to attach to the surface's content element. The element is `null`
+ *   while the surface is closed, which makes the blur a no-op. Its identity is stable unless
+ *   `props.ref` changes. `onCloseAutoFocus`: handler to pass to the content. Spread both onto the
+ *   Radix Content.
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function useDismissOnWindowBlur<T extends HTMLElement>({ ref: forwardedRef, onCloseAutoFocus: forwardedOnCloseAutoFocus, }: DismissOnWindowBlurProps<T>): {
+	/** Ref callback for the Radix Content; also forwards the caller's ref */
+	ref: React$1.RefCallback<T>;
+	/** Close-auto-focus handler for the Radix Content; also calls the caller's handler */
+	onCloseAutoFocus: (event: Event) => void;
+};
 /**
  * Tracks whether `scrollerRef`'s element still has content below the fold.
  *

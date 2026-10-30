@@ -112,6 +112,28 @@ describe('RecentSearches', () => {
     expect(await screen.findByRole('menu', { name: 'Recent' })).toBeInTheDocument();
   });
 
+  test("the trigger's aria-controls names the open list", async () => {
+    const { user } = renderRecentSearches(RECENT);
+    const trigger = screen.getByRole('button', { name: TRIGGER_NAME });
+
+    await user.click(trigger);
+    const menu = await screen.findByRole('menu');
+
+    expect(menu.id).not.toBe('');
+    expect(trigger.getAttribute('aria-controls')).toBe(menu.id);
+  });
+
+  test("the trigger's aria-controls names the open list when an id is given", async () => {
+    const { user } = renderRecentSearches(RECENT, { id: 'recent-under-test' });
+    const trigger = screen.getByRole('button', { name: TRIGGER_NAME });
+
+    await user.click(trigger);
+    const menu = await screen.findByRole('menu');
+
+    expect(menu.id).toBe('recent-under-test');
+    expect(trigger.getAttribute('aria-controls')).toBe(menu.id);
+  });
+
   test('a raw localization key never reaches the screen', async () => {
     // `useLocalizedStrings` yields `{ [key]: key }` while loading and permanently on a provider
     // error, so consumers really do hand these through. A key is harmless in an `aria-label` and

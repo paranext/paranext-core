@@ -8,6 +8,8 @@
  */
 
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { isWindowBlurPress } from '@renderer/services/overlays/window-blur-press.util';
+import { markOverlayFocusReturnIfFocusInside } from '@renderer/services/overlays/overlay-focus-return.util';
 import { resolveAndRemoveOverlay } from '@renderer/services/overlays/overlay-store';
 import { OverlayEntry } from '@renderer/services/overlays/overlay.service-model';
 import {
@@ -91,6 +93,20 @@ export type OverlayContextMenuPresentationalProps = {
   onSelect: (result: OverlayContextMenuResult) => void;
   /** Called when the menu is dismissed without a selection */
   onDismiss: () => void;
+  /**
+   * Called when the user presses Escape in the menu or one of its submenus, just before
+   * {@link onDismiss}. Lets the owner tell an Escape close apart from a click away.
+   *
+   * @experimental This property is unstable and may change or disappear without notice
+   */
+  onEscape?: () => void;
+  /**
+   * Id of the overlay this renders, written to the content as `data-overlay-id` so the overlay
+   * service can tell whether focus is inside this overlay's own content rather than another's.
+   *
+   * @experimental This property is unstable and may change or disappear without notice
+   */
+  overlayId?: string;
 };
 
 // ── Constants ──
@@ -123,10 +139,14 @@ function HoverableSubmenu({
   label,
   items,
   onSelect,
+  onEscape,
+  overlayId,
 }: {
   label: string;
   items: OverlayContextMenuItem[];
   onSelect: (result: OverlayContextMenuResult) => void;
+  onEscape?: () => void;
+  overlayId?: string;
 }) {
   const [open, setOpen] = useState(false);
   const openTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -166,13 +186,16 @@ function HoverableSubmenu({
       <DropdownMenuPortal>
         <DropdownMenuSubContent
           className="overlay-context-menu-content"
+          data-overlay-id={overlayId}
           style={{ zIndex: Z_INDEX_OVERLAY }}
           onPointerEnter={cancelClose}
           onPointerLeave={scheduleClose}
+          // Escape in a submenu closes the whole menu through the root's open state
+          onEscapeKeyDown={() => onEscape?.()}
         >
           {/* renderMenuItems and HoverableSubmenu call each other; forward reference is unavoidable */}
           {/* eslint-disable-next-line no-use-before-define */}
-          {renderMenuItems(items, onSelect)}
+          {renderMenuItems(items, onSelect, onEscape, overlayId)}
         </DropdownMenuSubContent>
       </DropdownMenuPortal>
     </DropdownMenuSub>
@@ -186,6 +209,8 @@ function HoverableSubmenu({
 function renderMenuItems(
   items: OverlayContextMenuItem[],
   onSelect: (result: OverlayContextMenuResult) => void,
+  onEscape?: () => void,
+  overlayId?: string,
 ): ReactNode[] {
   const result: ReactNode[] = [];
   let i = 0;
@@ -228,6 +253,8 @@ function renderMenuItems(
           label={typeof item.label === 'string' ? item.label : String(item.label)}
           items={item.items}
           onSelect={onSelect}
+          onEscape={onEscape}
+          overlayId={overlayId}
         />,
       );
       i += 1;
@@ -254,6 +281,8 @@ export function OverlayContextMenuPresentational({
   position,
   onSelect,
   onDismiss,
+  onEscape,
+  overlayId,
 }: OverlayContextMenuPresentationalProps) {
   // React refs passed to DOM elements must be initialized with null, not undefined
   // eslint-disable-next-line no-null/no-null
@@ -290,12 +319,20 @@ export function OverlayContextMenuPresentational({
       </DropdownMenuTrigger>
       <DropdownMenuContent
         className="overlay-context-menu-content"
+        data-overlay-id={overlayId}
         style={{ zIndex: Z_INDEX_OVERLAY }}
         align="start"
         side="bottom"
         sideOffset={0}
+        onEscapeKeyDown={() => onEscape?.()}
+        // The shared wrappers turn a window blur into an outside press. The overlay
+        // service owns blur dismissal for this surface (creation grace period,
+        // `dismissOnClickOutside`), so that press is ignored here.
+        onPointerDownOutside={(event) => {
+          if (isWindowBlurPress(event.detail.originalEvent)) event.preventDefault();
+        }}
       >
-        {renderMenuItems(items, onSelect)}
+        {renderMenuItems(items, onSelect, onEscape, overlayId)}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -342,12 +379,21 @@ export function OverlayContextMenu({ overlay }: OverlayContextMenuProps) {
     resolveAndRemoveOverlay(overlay.id, overlay.type, undefined);
   }, [overlay]);
 
+  const handleEscape = useCallback(() => {
+    // Radix reports Escape first and the dismissal settles the overlay; a later report from the
+    // key handler must not leave a mark behind
+    if (hasResolved.current) return;
+    markOverlayFocusReturnIfFocusInside(overlay.id);
+  }, [overlay]);
+
   return (
     <OverlayContextMenuPresentational
       items={localizedItems}
       position={overlay.position}
       onSelect={handleSelect}
       onDismiss={handleDismiss}
+      onEscape={handleEscape}
+      overlayId={overlay.id}
     />
   );
 }

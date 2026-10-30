@@ -1,0 +1,44 @@
+diff --git a/node_modules/@radix-ui/react-focus-scope/dist/index.js b/node_modules/@radix-ui/react-focus-scope/dist/index.js
+index c91ae91..58931d4 100644
+--- a/node_modules/@radix-ui/react-focus-scope/dist/index.js
++++ b/node_modules/@radix-ui/react-focus-scope/dist/index.js
+@@ -87,6 +87,17 @@ var FocusScope = React.forwardRef((props, forwardedRef) => {
+         }
+       }, handleMutations2 = function(mutations) {
+         const focusedElement = document.activeElement;
++        /**
++         * patch-package notes:
++         *
++         * A trapped scope focuses its container whenever nodes are removed while `activeElement` is
++         * `body`, even while a nested scope has paused it. In a document without focus (a web view
++         * after the user clicked into another frame, or a window the user switched away from), a
++         * `focus()` inside an iframe takes the frame's focus back from where the user put it. So
++         * the observer does nothing while the document is unfocused; containment resumes when focus
++         * next lands on an element inside the trap.
++         */
++        if (!document.hasFocus()) return;
+         if (focusedElement !== document.body) return;
+         for (const mutation of mutations) {
+           if (mutation.removedNodes.length > 0) focus(container);
+diff --git a/node_modules/@radix-ui/react-focus-scope/dist/index.mjs b/node_modules/@radix-ui/react-focus-scope/dist/index.mjs
+index e39d5c9..48e4efa 100644
+--- a/node_modules/@radix-ui/react-focus-scope/dist/index.mjs
++++ b/node_modules/@radix-ui/react-focus-scope/dist/index.mjs
+@@ -51,6 +51,17 @@ var FocusScope = React.forwardRef((props, forwardedRef) => {
+         }
+       }, handleMutations2 = function(mutations) {
+         const focusedElement = document.activeElement;
++        /**
++         * patch-package notes:
++         *
++         * A trapped scope focuses its container whenever nodes are removed while `activeElement` is
++         * `body`, even while a nested scope has paused it. In a document without focus (a web view
++         * after the user clicked into another frame, or a window the user switched away from), a
++         * `focus()` inside an iframe takes the frame's focus back from where the user put it. So
++         * the observer does nothing while the document is unfocused; containment resumes when focus
++         * next lands on an element inside the trap.
++         */
++        if (!document.hasFocus()) return;
+         if (focusedElement !== document.body) return;
+         for (const mutation of mutations) {
+           if (mutation.removedNodes.length > 0) focus(container);

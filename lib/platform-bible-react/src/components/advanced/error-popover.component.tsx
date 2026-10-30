@@ -59,8 +59,17 @@ export function ErrorPopover({
 
   return (
     <Popover onOpenChange={handleOpenChange}>
-      <PopoverTrigger asChild>{children}</PopoverTrigger>
-      <PopoverContent id={id} className={cn('tw:min-w-80 tw:max-w-96', className)}>
+      {/* Radix names the content by its own id and puts that id in the trigger's `aria-controls`.
+          The content id and the trigger's `aria-controls` must agree, so a given id is applied to
+          both, and only when one is given. The trigger is the consumer's child, so the mirror goes
+          on `PopoverTrigger`, whose props override Radix's own `aria-controls`. */}
+      <PopoverTrigger asChild {...(id !== undefined ? { 'aria-controls': id } : {})}>
+        {children}
+      </PopoverTrigger>
+      <PopoverContent
+        {...(id !== undefined ? { id } : {})}
+        className={cn('tw:min-w-80 tw:max-w-96', className)}
+      >
         {isCopySuccess && localizedStrings['%webView_error_dump_copied_message%'] && (
           <Label>{localizedStrings['%webView_error_dump_copied_message%']}</Label>
         )}
