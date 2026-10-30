@@ -10141,6 +10141,73 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   4. *"Has this user ever synced"* (PT-4327) — the outcome lasts one backend process, so answering
      that across restarts still needs persistence.
 
+## adr-sync-queue-one-run-at-a-time: Sync requests from the Send/Receive extension queue and run one run at a time; nothing is disabled because another sync is running
+
+- **Date:** 2026-10-30
+- **Status:** Accepted
+- **Context:** One Send/Receive run may hold the backend at a time. Before this decision the surfaces
+  prevented a second request by refusal: Home, the Sync dialog and the sync-status view disabled
+  their controls while any sync ran. That guarded against two real failures — a second sync
+  clobbering the first's progress state, and a server repository lock left behind when two runs
+  overlapped on a project. The cost was that a click during a sync (often the automatic one the user
+  never started) did nothing, and a user could not line up several projects and walk away. A DBL
+  resource install or uninstall could also overlap a sync's connected-resource update of the same
+  resource, with no ordering between them.
+- **Decision:**
+  - **The queue lives in the Send/Receive extension** and is the one path for extension-side
+    requests (`paratextBibleSendReceive.requestSync`, `removeFromSyncQueue`). Home, the Sync dialog,
+    the editor's menu and project-switch syncs, the sync-status view, lock-prompt retries and the
+    auto-sync interval all request through it; every click is accepted. A project clicked while it
+    is running is queued for the next run; clicking a waiting row removes it.
+  - **A run never mixes the two sync kinds** — plain (`sendReceiveProjects`: only the projects
+    asked for) and with-connected (`syncProjects`: also each project's connected projects and
+    resources). A run takes the kind of the oldest waiting request and only the projects requested
+    with that kind; the other kind runs next. A project requested both ways runs once, in the oldest
+    request's kind.
+  - **Results are per project.** `requestSync` resolves with the results for the ids it asked about
+    when the run containing them ends, and rejects if the user removed them or they were dropped at
+    quit.
+  - **The automatic sync never re-queues a project that is running or already waiting**, so it
+    cannot become a continuous re-sync loop; it raises no same-user lock prompt.
+  - **Two snapshots.** C# serves the activity snapshot (`getSyncActivity` / `onSyncActivityChanged`,
+    including the resource ids the running run will update); the extension serves the queue snapshot
+    (`getSyncQueue` / `onSyncQueueChanged`, the waiting project ids). Home reads both.
+  - **Cancel asks.** Every Cancel (toast, toolbar, Sync dialog) goes through `cancelSyncPrompt`:
+    "Stop this sync?" and, if something is waiting, "Drop them too?". A run counter keeps a late
+    answer from cancelling or clearing for a run that started while the question was open.
+  - **Startup and shutdown boundary syncs stay direct** — core's startup/shutdown tasks and the
+    extension's session-boundary syncs call the C# commands without the queue. The queue waits for
+    them through the activity signal and also re-reads `getSyncActivity` every 30 s while anything is
+    waiting, so a missed idle edge delays the next run by at most 30 s and cannot hang it. A shutdown
+    run starting means the app is quitting, so the queue is dropped.
+  - **A public C# `SyncRunResourceGuard`** makes a DBL resource install/uninstall and a sync run's
+    connected-resource window wait for each other, bounded by a timeout that restarts for each run
+    that holds the resource. The sync side's wait is cancellable (Cancel); the install side's is not.
+    An install waits only for the running run, never a waiting one.
+  - **The queue is in memory** and is dropped silently at quit; rows are plain again on restart.
+- **Alternatives:**
+  - *Queue in C#.* Would make it authoritative for every path, but puts UI-shaped policy (source
+    kinds, per-project result routing, the Cancel question) in the backend and needs a Studio build
+    for every change. Rejected; the activity snapshot already gives C# authority over "a run is
+    active".
+  - *Queue in Home.* Only Home would queue; the dialog, the editor and the auto-sync would still
+    collide. Rejected.
+  - *Per-surface queues.* Each surface would order only its own clicks, so cross-surface overlap —
+    the case that caused the failures — would remain. Rejected.
+  - *Mixing the kinds in one run* (any with-connected request upgrades the whole run). One toast
+    instead of two, but an unrelated auto-sync would pull connected projects into a run the user
+    started, syncing projects nobody chose. Rejected.
+  - *Keep disabling controls.* Prevents the failures but drops the user's click. Rejected.
+- **Consequences:**
+  - Home is the only surface with waiting UI (waiting rows, per-row results). The Sync dialog and
+    the editor menu are thin callers, which keeps the way open to merge sync into Home later.
+  - Every new automatic trigger must request through the queue AND still ask the first-run consent
+    gate (`.claude/rules/first-run-sync-consent.md`); the queue is not a consent chokepoint.
+  - When both kinds are waiting at once, two progress toasts appear back to back.
+  - A waiting queue is lost at quit; a missed run is picked up at the next opportunity.
+  - Revisit if a core-authoritative "a sync is running" signal (PT-4214) lands — the 30 s recheck
+    could then be dropped.
+
 ## adr-sync-surface-per-interface-mode: Each sync gets one persistent progress surface per interface mode, chosen by its caller
 
 - **Date:** 2026-10-13

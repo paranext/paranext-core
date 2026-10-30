@@ -37,6 +37,12 @@ started in Power mode reads `unconfirmed` for the whole session — see
 `adr-switch-to-power-sends-unsent-changes`. It still skips on `deferred`, on `unreadable`, and on a
 rejected request.
 
+## The sync queue is not a consent chokepoint
+
+Automatic callers that request through `paratextBibleSendReceive.requestSync` (the sync queue; see
+`adr-sync-queue-one-run-at-a-time`) still ask the consent gate first and skip on any answer but
+`granted`; the queue runs whatever it is given. A user's click is still the consent.
+
 ## What is NOT gated
 
 User-initiated syncs — the wizard's own Sync button, the Send/Receive dialog, a toolbar action. The

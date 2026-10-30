@@ -291,24 +291,22 @@ declare module 'paratext-bible-send-receive' {
    * consumer that mounts mid-sync (or after a renderer reload) seed its state instead of waiting
    * for the next `onSyncStateChanged` event, which may not arrive for the rest of the sync.
    *
-   * Reflects only syncs run through the Send/Receive extension's own wrappers (`runManualSync`,
-   * `syncOpenProjects`, `runScheduledSessionSync`, and the auto-sync engine), which claim through
-   * its state controller. Callers that reach the dotnet `syncProjects`/`sendReceiveProjects`
-   * commands directly are invisible here — nothing in `c-sharp/` emits `onSyncStateChanged` — so
-   * treat this as best-effort rather than ground truth. Making this authoritative would take a
-   * signal derived from the C# sync semaphore itself, which is upstream work in the Send/Receive
-   * extension; see `adr-toolbar-sync-status-is-local` in
-   * `.context/standards/Architecture-Decisions.md`.
+   * Reflects only syncs run through the Send/Receive extension, which claim through its state
+   * controller. Extension-side requests (Home, the Sync dialog, the editor's menu and
+   * project-switch syncs, the sync-status view, the auto-sync interval, lock-prompt retries) go
+   * through the sync queue (`paratextBibleSendReceive.requestSync`), whose executor claims once per
+   * run. What still calls the dotnet `syncProjects`/`sendReceiveProjects` commands directly: that
+   * executor, the session-boundary syncs (`runScheduledSessionSync`, whose claim is visible here),
+   * and core's Simple-mode startup and shutdown tasks, which take no claim — nothing in `c-sharp/`
+   * emits `onSyncStateChanged` — so treat this as best-effort rather than ground truth. Making this
+   * authoritative would take a signal derived from the C# sync semaphore itself, which is upstream
+   * work in the Send/Receive extension; see `adr-toolbar-sync-status-is-local` and
+   * `adr-sync-queue-one-run-at-a-time` in `.context/standards/Architecture-Decisions.md`.
    *
-   * Two core paths are on the invisible side today, both worth knowing before relying on this for a
-   * startup status:
-   *
-   * - **Simple mode startup sync** (`main/startup-tasks.ts`) calls `syncProjects` directly, with its
-   *   progress toast suppressed — `onSyncActivityChanged` is its surface.
-   * - **The picker's per-project sync** (`syncOnProjectSwitch` in `platform-scripture-editor`) calls
-   *   `syncProjects`/`sendReceiveProjects` directly.
-   *
-   * Power mode's session-boundary sync IS visible: it goes through `runScheduledSessionSync`.
+   * The Simple mode startup sync (`main/startup-tasks.ts`) is the path worth knowing before relying
+   * on this for a startup status: it calls `syncProjects` directly, with its progress toast
+   * suppressed — `onSyncActivityChanged` is its surface, and the queue waits for it through that
+   * signal.
    */
   export type SyncState = {
     /** Whether any sync is running right now */
@@ -327,7 +325,7 @@ declare module 'paratext-bible-send-receive' {
     lastRequestedProjectIds: string[];
     /**
      * The latest completed result for each project synced through this extension's wrappers this
-     * session. Syncs core runs directly (startup, project switch) are not included. Keyed by
+     * session. Syncs core runs directly (startup, shutdown) are not included. Keyed by
      * `normalizeProjectId(projectId)`; a fresh object is built on every `getSyncState` call. Absent
      * from older Send/Receive extension builds.
      */
@@ -380,8 +378,8 @@ declare module 'paratext-bible-send-receive' {
    * Unlike {@link SyncState}, this is derived from the C# sync run marker rather than the
    * Send/Receive extension's claim map, so it covers EVERY sync path — including callers that reach
    * the dotnet `syncProjects`/`sendReceiveProjects` commands directly and raise no claim
-   * (`main/startup-tasks.ts` and `syncOnProjectSwitch`). That is what makes a Simple-mode startup
-   * sync visible.
+   * (`main/startup-tasks.ts`, the extension's queue executor). That is what makes a Simple-mode
+   * startup sync visible.
    *
    * Every build registers both surfaces (`getSyncActivity` and `onSyncActivityChanged`), but only a
    * Paratext 10 build carries the run bracket that reports real activity. A plain Platform.Bible
