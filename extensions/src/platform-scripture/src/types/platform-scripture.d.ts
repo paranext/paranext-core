@@ -1842,9 +1842,9 @@ declare module 'platform-scripture' {
        * read over the ceiling throws with the message prefix `PT9 interlinear data is too large`; a
        * selector naming an unknown path throws with the prefix `Unknown PT9 interlinear paths`, and
        * one naming no paths at all throws with a message naming `Pt9InterlinearDataSelector.Paths`.
-       * Branch on the message rather than on a code: these carry `RESOURCE_EXHAUSTED` and
-       * `INVALID_ARGUMENT` on the provider side, but a C# platform error code does not reach a
-       * consumer across the RPC boundary today.
+       * The rejection is a `PlatformError` whose `code` is `RESOURCE_EXHAUSTED` for the ceiling and
+       * `INVALID_ARGUMENT` for a selector it cannot read; the message prefixes identify the same
+       * failures for a consumer that sees only the message.
        *
        * @param selector Which interlinear files to read; omit to read all of them. See
        *   {@link Pt9InterlinearDataSelector}.

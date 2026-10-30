@@ -7206,6 +7206,40 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4551 (Ian NN-3.3 (a) and (d)), with the overflow mechanism measured in the running
   app rather than inferred.
 
+## adr-platform-error-code-crosses-json-rpc: A C# exception's platform error code travels in `error.data.data.platformErrorCode`, and main relays error responses whole
+
+- **Date:** 2026-10-30
+- **Status:** Accepted
+- **Context:** C# services throw `PlatformErrorCodes.WithCode(code, message)`, which stores the
+  code in `Exception.Data`, and `doRequest` in `network.service.ts` was written to read it from
+  `error.data.data.platformErrorCode`. It never arrived: StreamJsonRpc's default
+  `ExceptionStrategy` (`CommonErrorData`) serializes the exception's type, message, stack, HResult
+  and inner exception but not `Exception.Data`, and `RpcServer.processMessage` in main rebuilt
+  every relayed error response from its message and JSON-RPC code. So TypeScript callers matched
+  localized message text instead, which works only in the languages the matcher lists (the
+  Send/Receive queue's "backend busy, retry" check was the case that surfaced it).
+- **Decision:** `PapiJsonRpc` (`c-sharp/PapiJsonRpc.cs`), the `JsonRpc` subclass `PapiClient`
+  uses, overrides `CreateErrorDetails`: when the exception carries a code (`TryFindCode`, which
+  also looks through a `TargetInvocationException` and a single-exception `AggregateException`),
+  the `CommonErrorData` is replaced by `PlatformCodedErrorData` — the same fields plus
+  `data: { platformErrorCode }`. An exception without a code keeps the default shape. Main relays
+  an error response object whole, so `error.data` reaches whichever process asked.
+- **Alternatives:**
+  - *`ExceptionStrategy = ISerializable`.* Serializes the whole exception, `Data` included, but
+    changes the JSON-RPC error code and the shape of every error for every caller, and couples the
+    wire to .NET's exception serialization. Rejected.
+  - *Throw `LocalRpcException` with `ErrorData` at each site.* Works without a subclass, but every
+    `WithCode` call site (Manage Books, Enhanced Resources, Send/Receive) would change, and the
+    common error fields would be lost unless each site rebuilt them. Rejected.
+  - *Encode the code in the message.* That is the message matching this replaces. Rejected.
+- **Consequences:** Every `WithCode` throw now reaches TypeScript as a `PlatformError` with
+  `.code`, so a TypeScript branch on a code from C# fires for real; the TypeScript code that read
+  these codes was checked when this landed. A code thrown by a TypeScript handler still does not
+  cross a process boundary: the layers that answer a throwing TypeScript handler (the `json-rpc-2.0`
+  server inside `RpcClient`, `RpcWebSocketListener.request` in main) send its message, not its
+  `code`. Message matching stays as a fallback where a caller may run
+  against a core build without this change.
+
 ## adr-platform-minted-window-ids: Window ids are minted by main, never reused, and numeric on every surface
 
 - **Date:** 2026-08-26
@@ -11146,6 +11180,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     - Deferred to a follow-up: each editor build adds a `getMetadataForProject` fan-out, and
       auto-open its own metadata lookup, rather than reusing lookups they already make.
 - **Source:** PT-4685.
+- **Amended 2026-10-30:** the C# refusal's `FAILED_PRECONDITION` code now reaches TypeScript too
+  (`adr-platform-error-code-crosses-json-rpc`), so "for C# callers only" above no longer holds. The
+  TypeScript callers still detect the sentinel, which also identifies this refusal among other
+  `FAILED_PRECONDITION` failures.
 
 ## adr-unsynced-changes-signal-is-backend-read: "Unsynced changes" is read from the project's local Mercurial state in the backend and pushed as a snapshot
 
