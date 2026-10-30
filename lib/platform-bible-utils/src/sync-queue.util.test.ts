@@ -1,7 +1,12 @@
 // The wire may send null, which the guard must handle, so these cases need a real null
 /* eslint-disable no-null/no-null */
 import { describe, expect, test } from 'vitest';
-import { IDLE_SYNC_QUEUE, isSyncQueueSnapshot, toSyncQueue } from './sync-queue.util';
+import {
+  IDLE_SYNC_QUEUE,
+  isSyncQueueSnapshot,
+  SYNC_REQUEST_REMOVED_MARKER,
+  toSyncQueue,
+} from './sync-queue.util';
 
 describe('isSyncQueueSnapshot', () => {
   test.each([
@@ -36,6 +41,12 @@ describe('toSyncQueue', () => {
   test('reads an absent or null list as empty', () => {
     expect(toSyncQueue({})).toEqual({ waitingProjectIds: [] });
     expect(toSyncQueue({ waitingProjectIds: null })).toEqual({ waitingProjectIds: [] });
+  });
+});
+
+describe('SYNC_REQUEST_REMOVED_MARKER', () => {
+  test("is the token the Send/Receive extension ends a removed request's message with", () => {
+    expect(SYNC_REQUEST_REMOVED_MARKER).toBe(' (SR_REMOVED)');
   });
 });
 
