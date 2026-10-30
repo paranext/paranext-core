@@ -258,6 +258,45 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
         /\.psc-active-focus \.psc-active-text::before/,
       );
     });
+    describe('Simple-mode text sizes follow the project font size', () => {
+      const code = scss.replace(/\/\*[\s\S]*?\*\//g, '');
+      const gutterSection = code.slice(code.indexOf('@property --psc-base-font-size'));
+      const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const ruleBody = (selectors: string[]) => {
+        const match = new RegExp(
+          `(?:^|\\}|;)\\s*${selectors.map(escapeRegExp).join(',\\s*')}\\s*\\{([^}]*)\\}`,
+        ).exec(code);
+        return match?.[1] ?? '';
+      };
+
+      it('registers --psc-base-font-size as an inherited length defaulting to 16px', () => {
+        expect(code).toMatch(
+          /@property --psc-base-font-size\s*\{[^}]*syntax:\s*'<length>'[^}]*inherits:\s*true[^}]*initial-value:\s*16px/,
+        );
+        expect(ruleBody(['.psc-gutter-markers'])).toContain('--psc-base-font-size: 1em;');
+      });
+
+      it('sizes Simple verse numbers and headings from the base size', () => {
+        const verseSize = 'font-size: calc(var(--psc-base-font-size) * 13 / 16)';
+        expect(
+          ruleBody(['.psc-gutter-markers .usfm_v', '.psc-gutter-markers span.verse']),
+        ).toContain(verseSize);
+        expect(ruleBody(['.psc-gutter-markers .verse.marker::after'])).toContain(verseSize);
+        expect(
+          ruleBody([
+            '.psc-gutter-markers .usfm_s',
+            '.psc-gutter-markers .usfm_s1',
+            '.psc-gutter-markers .usfm_s2',
+            '.psc-gutter-markers .usfm_s3',
+          ]),
+        ).toContain('font-size: calc(var(--psc-base-font-size) * 0.8)');
+        // The chapter numeral is decorative and deliberately stays a fixed size.
+        expect(ruleBody(['.psc-gutter-markers .usfm_c::after'])).toContain('font-size: 5rem');
+        expect(gutterSection).not.toContain('font-size: 13px');
+        expect(gutterSection).not.toContain('font-size: 0.8rem');
+      });
+    });
+
     describe('empty-verse caret', () => {
       // The caret rules only show in layout, so what is pinned is that each load-bearing
       // declaration stays on exactly the selector list the editor renders for. A rule is matched
@@ -272,7 +311,9 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
       const host = `${activeVerse} + [data-caret-host]`;
 
       it('sizes the ellipsis box from one variable', () => {
-        expect(rules).toContain('--psc-empty-verse-ellipsis-width: 13px;');
+        expect(rules).toContain(
+          '--psc-empty-verse-ellipsis-width: calc(var(--psc-base-font-size) * 13 / 16);',
+        );
         const box = [
           '.psc-gutter-markers .verse:not(.marker).psc-empty-text::after',
           `${activeVerse}::after`,

@@ -8,8 +8,11 @@
    invariant usj-nodes-scss-coverage.test.ts enforces on this file and the demo copy.
    The empty-verse caret rules (`.psc-empty-text-active`, `[data-caret-host]`) come from
    scripture-editors#34, unmerged when copied. Deliberately different from it: the ellipsis box
-   (`--psc-empty-verse-ellipsis-width`) is 13px rather than 18px, closer to this copy's
-   previous ellipsis, which had no padding around the glyph.
+   (`--psc-empty-verse-ellipsis-width`) is 13/16 of the base size (13px at the default) rather
+   than 18px, closer to this copy's previous ellipsis, which had no padding around the glyph.
+   The Simple-mode verse, heading and ellipsis sizes are base-relative here
+   (`--psc-base-font-size`, in the gutter section) and intentionally not in the demo copy, where
+   no project stylesheet is injected.
    The source's four `local()`-only Charis SIL @font-face rules are dropped. */
 
 /* stylelint-disable */
@@ -2751,7 +2754,18 @@ span.read img {
    chapter numbers, and sets --para-indent / --verse-text-start for each paragraph
    type (the latter is also consumed by the active focus box for alignment). */
 
+/* The editor's own font size, as an absolute length computed once on `.psc-gutter-markers`
+   (registered, so `1em` resolves there rather than in each descendant's font size). Every Simple
+   text size below is a multiple of it, so a project font size scales them together and none can
+   compound with an ancestor's size. 16px is the size at the 12pt default. */
+@property --psc-base-font-size {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 16px;
+}
+
 .psc-gutter-markers {
+  --psc-base-font-size: 1em;
   --scripture-accent: #c4956a;
   --scripture-accent-chapter: rgba(196, 149, 106, 0.55);
   --scripture-accent-marker: rgba(196, 149, 106, 0.45);
@@ -2760,12 +2774,12 @@ span.read img {
   --psc-gutter-width: 4em;
   /* An empty verse's ellipsis placeholder is a box of this fixed width, so a hidden one can be
      cancelled out exactly (see the caret host rule below). */
-  --psc-empty-verse-ellipsis-width: 13px;
+  --psc-empty-verse-ellipsis-width: calc(var(--psc-base-font-size) * 13 / 16);
 }
 
 .psc-gutter-markers .usfm_v,
 .psc-gutter-markers span.verse {
-  font-size: 13px;
+  font-size: calc(var(--psc-base-font-size) * 13 / 16);
   font-weight: 700;
   color: var(--scripture-accent);
   vertical-align: unset;
@@ -2846,7 +2860,7 @@ span.read img {
   text-align: center;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  font-size: 0.8rem;
+  font-size: calc(var(--psc-base-font-size) * 0.8);
   font-weight: 400;
   color: var(--muted-foreground, #6b7280);
   border-top: none;
@@ -2918,7 +2932,7 @@ span.read img {
 }
 .psc-gutter-markers .verse.marker::after {
   content: attr(data-number);
-  font-size: 13px;
+  font-size: calc(var(--psc-base-font-size) * 13 / 16);
   font-weight: 700;
   color: var(--scripture-accent);
   vertical-align: unset;

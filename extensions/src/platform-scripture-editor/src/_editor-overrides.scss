@@ -408,7 +408,7 @@ button {
 // The gutter width is a registered length so it computes once, on `.psc-gutter-markers`. The
 // gutter's own `--psc-gutter-width` is an unregistered `4em`, which would otherwise resolve in each
 // paragraph's own font size: on a `\mt1` (166%) the bar would overshoot the editor's edge and be
-// clipped, and on an `\s1` (0.8rem) it would stop short inside the gutter. `--para-indent` stays per
+// clipped, and on an `\s1` (0.8 of the base size) it would stop short inside the gutter. `--para-indent` stays per
 // paragraph, since it is that paragraph's own indent compensation.
 @property --psc-para-marker-gutter-width {
   syntax: '<length>';
