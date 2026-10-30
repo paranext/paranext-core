@@ -237,9 +237,8 @@ describe('PopoverContent window blur', () => {
 
 describe('PopoverContent focus after dismissal', () => {
   it('does not move focus back to the trigger after a window-blur dismissal', async () => {
-    // In a Paratext web view `window.top` is deleted, which is what makes an unfocused document
-    // ambiguous there; the hook reads it once, on mount
-    vi.stubGlobal('top', undefined);
+    // A web view's `top` is its host window, not itself; the hook reads it once, on mount
+    vi.stubGlobal('top', {});
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     render(
       <Popover modal>
