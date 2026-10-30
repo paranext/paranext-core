@@ -261,8 +261,8 @@ export function SyncStatusButton() {
       // drop them too. It is served by the Send/Receive extension, which is also what reports the
       // running sync this button offers to cancel.
       const isCancelSent = await sendCommand('paratextBibleSendReceive.cancelSyncPrompt');
-      // The user answered that the sync should go on: nothing is pending, so Cancel is offered
-      // again and the sync's outcome is not reported as one they asked for.
+      // Nothing was cancelled (the user chose to keep syncing): nothing is pending, so Cancel is
+      // offered again and the sync's outcome is not reported as one they asked for.
       if (isCancelSent === false && generation === cancelGenerationRef.current) {
         setIsCancelEnabled(true);
         setIsCancelling(false);
