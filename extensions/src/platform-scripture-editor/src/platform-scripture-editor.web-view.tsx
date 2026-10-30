@@ -202,7 +202,7 @@ import { usePauseEditing } from './use-pause-editing.hook';
 import { EditorDocumentSelector, useEditorPdpSync } from './use-editor-pdp-sync.hook';
 import { toBookChapterKey, useScrollToRange } from './use-scroll-to-range.hook';
 import { applyEditorScrRefReport } from './editor-scr-ref-report.util';
-import { useProjectStylesheet } from './use-project-stylesheet.hook';
+import { useFootnotePaneFontStylesheet, useProjectStylesheet } from './use-project-stylesheet.hook';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import {
   availableScrollGroupIds,
@@ -3064,6 +3064,10 @@ function PlatformScriptureEditor({
     textDirectionEffective === 'rtl',
     viewType === 'standard' ? 'full' : 'fonts',
   );
+
+  // The footnotes pane's read-only rows need the project fonts in every view. This is pure CSS, so a
+  // hidden tab needs no catch-up when it becomes visible.
+  useFootnotePaneFontStylesheet(styleInfo);
 
   // Load PT9-derived marker styles when the open project is a supported commentary
   useCommentaryMarkerStyles(projectId);

@@ -1,7 +1,7 @@
 import { generateUsjCss, StyleInfo } from '@eten-tech-foundation/platform-editor';
 import { useStylesheet } from 'platform-bible-react';
 import { useMemo } from 'react';
-import { generateProjectFontCss } from './project-font-css.util';
+import { FOOTNOTE_ROWS_SELECTOR, generateProjectFontCss } from './project-font-css.util';
 
 /**
  * Injects project-stylesheet-derived CSS layered after the static usj-nodes.css base, so project
@@ -23,5 +23,17 @@ export function useProjectStylesheet(
       ? generateUsjCss(styleInfo, { rtl: effectiveRtl })
       : generateProjectFontCss(styleInfo);
   }, [styleInfo, effectiveRtl, mode]);
+  useStylesheet(css);
+}
+
+/**
+ * Injects the project's fonts for the footnotes pane's read-only rows. The pane sits in the same
+ * document in every view, so unlike {@link useProjectStylesheet} this never varies with the view.
+ */
+export function useFootnotePaneFontStylesheet(styleInfo: StyleInfo | undefined): void {
+  const css = useMemo(
+    () => generateProjectFontCss(styleInfo, { containerSelector: FOOTNOTE_ROWS_SELECTOR }),
+    [styleInfo],
+  );
   useStylesheet(css);
 }

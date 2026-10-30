@@ -9,6 +9,7 @@ import { createPortal } from 'react-dom';
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import { FOOTNOTES_PANE_ATTRIBUTE } from './editor-dom.util';
+import { FOOTNOTE_ROWS_SELECTOR } from './project-font-css.util';
 
 vi.mock('@papi/frontend', () => ({
   logger: { warn: vi.fn(), debug: vi.fn(), info: vi.fn(), error: vi.fn() },
@@ -120,6 +121,33 @@ describe('FootnotesLayout pane element', () => {
     const paneElement = document.querySelector(`[${FOOTNOTES_PANE_ATTRIBUTE}]`);
     expect(paneElement).not.toBeNull();
     expect(paneElement).toContainElement(screen.getByRole('listbox'));
+  });
+});
+
+describe('FootnotesLayout rows the project font reaches', () => {
+  // The project font sheet for the pane (`FOOTNOTE_ROWS_SELECTOR`) relies on this markup: the pane
+  // attribute, the list's `formatted-font` class and the editing row's `data-state`.
+  it('matches the read-only rows only, never the editing row or a list outside the pane', () => {
+    const { container } = renderPane({
+      editingFootnoteIndex: 1,
+      renderEditingFootnote: () => <div data-testid="row-editor" />,
+    });
+    const rows = container.querySelectorAll(FOOTNOTE_ROWS_SELECTOR);
+    const staticRows = screen
+      .getAllByRole('option')
+      .filter((row) => !row.closest('[data-state="editing"]'));
+    expect(staticRows).toHaveLength(1);
+    expect([...rows]).toEqual(staticRows);
+    const editingRow = container.querySelector('li[data-state="editing"]');
+    expect(editingRow).not.toBeNull();
+    expect(editingRow).toContainElement(screen.getByTestId('row-editor'));
+
+    const outside = document.createElement('ul');
+    outside.className = 'formatted-font';
+    outside.innerHTML = '<li>outside the pane</li>';
+    document.body.appendChild(outside);
+    expect(document.querySelectorAll(FOOTNOTE_ROWS_SELECTOR)).toHaveLength(rows.length);
+    outside.remove();
   });
 });
 
