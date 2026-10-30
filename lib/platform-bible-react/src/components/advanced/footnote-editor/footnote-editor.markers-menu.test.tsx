@@ -61,6 +61,64 @@ describe('FootnoteEditor inline markers menu', () => {
     expect(onUnstorableTextRemoved).not.toHaveBeenCalled();
   });
 
+  it("leaves the trigger to a hidden-marker view's editor, which refuses it and says so, when there is no menu to open", async () => {
+    const onUnstorableTextRemoved = vi.fn();
+    const { editorInput } = await renderPopoverAndWaitForInit(hiddenView, {
+      onUnstorableTextRemoved,
+    });
+    editorInput.focus();
+    // The menu has no selection to anchor to.
+    window.getSelection()?.removeAllRanges();
+
+    act(() => {
+      editorInput.dispatchEvent(
+        new KeyboardEvent('keydown', { key: MARKER_MENU_TRIGGER, bubbles: true, cancelable: true }),
+      );
+    });
+    await settle();
+
+    expect(markerMenuSearchBox()).toBeNull();
+    expect(onUnstorableTextRemoved).toHaveBeenCalledTimes(1);
+    expect(onUnstorableTextRemoved).toHaveBeenCalledWith(
+      expect.objectContaining({ source: 'typing' }),
+    );
+  });
+
+  it('swallows the trigger in a hidden-marker view while the right-click menu is open: no markers menu and no notice', async () => {
+    const onUnstorableTextRemoved = vi.fn();
+    const { editorInput } = await renderPopoverAndWaitForInit(hiddenView, {
+      onUnstorableTextRemoved,
+    });
+    editorInput.focus();
+    await act(async () => {
+      (editorInput.querySelector('span.note') ?? editorInput).dispatchEvent(
+        new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 10,
+          clientY: 10,
+        }),
+      );
+      await Promise.resolve();
+    });
+    // The editor package marks its own root while its menu is up.
+    expect(editorInput.getAttribute('aria-controls')).toBe('editor-context-menu');
+
+    const event = new KeyboardEvent('keydown', {
+      key: MARKER_MENU_TRIGGER,
+      bubbles: true,
+      cancelable: true,
+    });
+    act(() => {
+      editorInput.dispatchEvent(event);
+    });
+    await settle();
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(markerMenuSearchBox()).toBeNull();
+    expect(onUnstorableTextRemoved).not.toHaveBeenCalled();
+  });
+
   it('opens from the trigger key with the caret in the note text, and closes on Escape', async () => {
     const { editorInput, lexical } = await renderPopoverAndWaitForInit(visibleView);
     editorInput.focus();

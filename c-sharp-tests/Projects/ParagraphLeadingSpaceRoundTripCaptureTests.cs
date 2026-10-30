@@ -36,11 +36,7 @@ namespace TestParanextDataProvider.Projects
             _scrText?.Dispose();
         }
 
-        private static string WrapUsx(string paraXml) =>
-            "<usx version=\"3.0\"><book code=\"GEN\" style=\"id\">- test</book>"
-            + "<chapter number=\"1\" style=\"c\" sid=\"GEN 1\" />"
-            + paraXml
-            + "<chapter eid=\"GEN 1\" /></usx>";
+        private static string WrapUsx(string paraXml) => UsxPrefix + paraXml + UsxSuffix;
 
         // Marks spaces as '.' and NBSP as '~' so the pins show the bytes.
         private static string Visible(string s) =>
@@ -66,7 +62,8 @@ namespace TestParanextDataProvider.Projects
         private const string UsxSuffix = "<chapter eid=\"GEN 1\" /></usx>";
 
         // Each case pins what ParatextData produced: the USFM saved from the authored USX, and the
-        // USX read back afterwards. A plain leading space does not survive; an NBSP survives (saved as USFM `~`, read back as U+00A0).
+        // USX read back afterwards. A plain leading space does not survive; an NBSP survives (saved
+        // as USFM `~`, read back as U+00A0).
         [TestCase(
             "<para style=\"p\"> leading text</para>",
             "\\id GEN - test\r\n\\c 1\r\n\\p leading text\r\n",
