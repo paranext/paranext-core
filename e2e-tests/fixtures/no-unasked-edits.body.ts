@@ -429,8 +429,7 @@ function typingExpectation(unit: string, point: TextPoint, typed: string): UnitR
 
 /**
  * The copy-and-paste gestures' exact expectation: the destination verse gains the source range's
- * USFM bytes at the paste point, character span or footnote included. `transformCopied` rewrites
- * those bytes for a {@link KnownDeviation} pin.
+ * USFM bytes at the paste point, character span or footnote included.
  */
 function copyPasteExpectation(
   destinationUnit: string,
@@ -439,16 +438,12 @@ function copyPasteExpectation(
   from: TextPoint,
   to: TextPoint,
   destination: TextPoint,
-  transformCopied: (copied: string) => string = (copied) => copied,
 ): UnitReplacements {
   const source = getUsfmUnit(bookBefore, sourceUnit);
   if (source === undefined) throw new Error(`The book has no unit ${sourceUnit}`);
   return {
     [destinationUnit]: [
-      [
-        pointText(destination),
-        insertAtPoint(destination, transformCopied(usfmBetween(source, from, to))),
-      ],
+      [pointText(destination), insertAtPoint(destination, usfmBetween(source, from, to))],
     ],
   };
 }
