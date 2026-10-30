@@ -2103,10 +2103,12 @@ async function requestAutoSync(
  * Simple-mode replace-tab project switch, and by `finalizeProjectSwitch` after a Power -> Simple
  * mode switch — by which time the user may be back in Power mode.
  *
- * Uses `paratextBibleSendReceive.syncProjects` for the incoming project because it also pulls
- * connected resources and translation partners (deep sync). Uses the shallower
- * `paratextBibleSendReceive.sendReceiveProjects` for the outgoing project because we only need to
- * flush any local edits — a full deep sync is unnecessary on the way out.
+ * Both syncs request through `paratextBibleSendReceive.requestSync` (the sync queue) and fall back
+ * to the direct `paratextBibleSendReceive.syncProjects` / `sendReceiveProjects` commands only when
+ * the Send/Receive extension is not present. The incoming project asks for a deep sync (it also
+ * pulls connected resources and translation partners). The outgoing project asks for the shallower
+ * plain sync because we only need to flush any local edits — a full deep sync is unnecessary on the
+ * way out.
  *
  * The incoming project syncs LAST because these are two separate backend runs and the sync
  * indicator reports the most recent one. Whichever runs last is the verdict the user is shown, and
