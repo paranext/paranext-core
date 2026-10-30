@@ -10,6 +10,7 @@ import { logger } from '@shared/services/logger.service';
 import { RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE } from '@main/scheduled-session-sync.util';
 import type { SettingTypes } from 'papi-shared-types';
 import {
+  DROP_SYNC_QUEUE_TIMEOUT_MS,
   performShutdownTasks,
   performWindowCloseTasks,
   startWindowCloseTasksWithoutWaiting,
@@ -144,13 +145,96 @@ describe('performShutdownTasks', () => {
     vi.useFakeTimers();
     try {
       const shutdownPromise = performShutdownTasks();
-      await vi.advanceTimersByTimeAsync(AUTO_SYNC_MAX_DURATION_MS);
+      // The queue drop never answers either, so it gives up first
+      await vi.advanceTimersByTimeAsync(DROP_SYNC_QUEUE_TIMEOUT_MS + AUTO_SYNC_MAX_DURATION_MS);
       await expect(shutdownPromise).resolves.toBeUndefined();
     } finally {
       vi.useRealTimers();
     }
     expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('timed out'));
     expect(mockLoggerInfo).not.toHaveBeenCalledWith(expect.stringContaining('complete'));
+  });
+
+  describe('the sync queue at quit', () => {
+    const commandsSent = () => mockRequestNoRetry.mock.calls.map(([command]) => String(command));
+    const indexOfCommand = (name: string) =>
+      commandsSent().findIndex((command) => command.endsWith(`.${name}`));
+
+    it('drops the sync queue before cancelling the running sync', async () => {
+      stubSettings({ mode: 'simple' });
+      mockGetOpenWebViews.mockResolvedValue(
+        openWebViews([
+          {
+            webViewType: 'platformScriptureEditor.react',
+            state: { isReadOnly: false },
+            projectId: 'p1',
+          },
+        ]),
+      );
+
+      await performShutdownTasks();
+
+      expect(indexOfCommand('dropSyncQueue')).toBe(0);
+      expect(indexOfCommand('cancelSync')).toBeGreaterThan(0);
+      expect(indexOfCommand('sendReceiveProjects')).toBeGreaterThan(indexOfCommand('cancelSync'));
+    });
+
+    it('drops the sync queue before the power-mode session sync', async () => {
+      mockSettingsGet.mockResolvedValue('power');
+
+      await performShutdownTasks();
+
+      expect(indexOfCommand('dropSyncQueue')).toBe(0);
+      expect(commandsSent()[1]).toBe(RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE);
+    });
+
+    it('a missing Send/Receive extension does not block quit', async () => {
+      stubSettings({ mode: 'simple' });
+      mockGetOpenWebViews.mockResolvedValue(
+        openWebViews([
+          {
+            webViewType: 'platformScriptureEditor.react',
+            state: { isReadOnly: false },
+            projectId: 'p1',
+          },
+        ]),
+      );
+      mockRequestNoRetry.mockImplementation(async (command: string) => {
+        if (command.endsWith('.dropSyncQueue')) throw new Error('Method not found');
+        return undefined;
+      });
+
+      await expect(performShutdownTasks()).resolves.toBeUndefined();
+
+      expect(indexOfCommand('sendReceiveProjects')).toBeGreaterThan(0);
+      expect(mockLoggerDebug).toHaveBeenCalledWith(
+        expect.stringContaining('Could not drop the sync queue'),
+      );
+      expect(mockLoggerWarn).not.toHaveBeenCalled();
+    });
+
+    it('an extension host that does not answer the drop does not hold quit open', async () => {
+      stubSettings({ mode: 'simple' });
+      mockGetOpenWebViews.mockResolvedValue(openWebViews([]));
+      mockRequestNoRetry.mockImplementation(async (command: string) => {
+        if (command.endsWith('.dropSyncQueue')) return new Promise(() => {});
+        return undefined;
+      });
+      vi.useFakeTimers();
+      try {
+        const shutdownPromise = performShutdownTasks();
+        await vi.advanceTimersByTimeAsync(DROP_SYNC_QUEUE_TIMEOUT_MS - 1);
+        expect(indexOfCommand('cancelSync')).toBe(-1);
+        await vi.advanceTimersByTimeAsync(1);
+        await expect(shutdownPromise).resolves.toBeUndefined();
+      } finally {
+        vi.useRealTimers();
+      }
+      expect(indexOfCommand('cancelSync')).toBeGreaterThan(0);
+      expect(mockLoggerWarn).toHaveBeenCalledWith(
+        expect.stringContaining('Dropping the sync queue did not answer'),
+      );
+    });
   });
 
   it('cancels sync but skips S/R when no Scripture Editor is open', async () => {
@@ -419,7 +503,10 @@ describe('performShutdownTasks', () => {
       ]),
     );
     await performShutdownTasks();
-    expect(mockRequestNoRetry).not.toHaveBeenCalled();
+    // Only the queue drop, which runs in every mode and starts no sync
+    expect(mockRequestNoRetry.mock.calls.map(([command]) => command)).toEqual([
+      expect.stringMatching(/\.dropSyncQueue$/),
+    ]);
     expect(mockGetOpenWebViews).not.toHaveBeenCalled();
     expect(mockLoggerWarn).toHaveBeenCalledWith(
       expect.stringContaining('Could not read platform.interfaceMode'),

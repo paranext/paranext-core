@@ -727,7 +727,10 @@ declare module 'papi-shared-types' {
      * @param options Optional {@link SyncRequestOptions}
      * @returns The results for the requested ids only, once the run containing them ends. Rejects
      *   if the projects are removed from the queue before they run (see
-     *   `paratextBibleSendReceive.removeFromSyncQueue`) or are dropped when the app quits.
+     *   `paratextBibleSendReceive.removeFromSyncQueue`) or are dropped when the app quits; that
+     *   rejection's message contains the marker ` (SR_REMOVED)`, which callers match to tell a
+     *   request that never ran from a failed sync (the error crosses the network as its message
+     *   only, so the marker is the contract, not the error's type).
      * @experimental This command is unstable and may change or disappear without notice
      */
     'paratextBibleSendReceive.requestSync': (
@@ -745,6 +748,16 @@ declare module 'papi-shared-types' {
      * @experimental This command is unstable and may change or disappear without notice
      */
     'paratextBibleSendReceive.removeFromSyncQueue': (projectIds: string[]) => Promise<void>;
+
+    /**
+     * Drops every project waiting in the sync queue because the app is quitting, and starts no
+     * further run from the queue. The promise returned to each dropped project's requester rejects
+     * (with the ` (SR_REMOVED)` marker; see `paratextBibleSendReceive.requestSync`). A run already
+     * in progress is not cancelled; use `paratextBibleSendReceive.cancelSync` for that.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.dropSyncQueue': () => Promise<void>;
 
     /**
      * Returns the current {@link SyncQueueSnapshot} so a consumer can seed its view of the sync

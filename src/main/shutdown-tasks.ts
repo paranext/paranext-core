@@ -74,6 +74,9 @@ type BoundedSyncSettlement<T> =
 /**
  * Runs cleanup tasks (e.g., syncing projects) when the user closes the main window.
  *
+ * First, in every mode: drops the projects waiting in the Send/Receive extension's sync queue, so
+ * none of them starts a run while the app quits.
+ *
  * In Simple mode: cancels any in-progress sync, then — if the first-run sync consent gate allows it
  * (see {@link getAutomaticSyncConsent}) — S/Rs the projects of all open writable Scripture Editors
  * across every window. All errors are swallowed — extension may not be installed, or may fail —
@@ -101,6 +104,11 @@ export async function performShutdownTasks(): Promise<void> {
 }
 
 async function performShutdownTasksInternal(): Promise<void> {
+  // First, so nothing waiting in the queue starts a run while the app quits: the extension host is
+  // killed after these tasks without deactivating, and a run started now would make the shutdown
+  // sync below fail as busy.
+  await dropSyncQueue();
+
   // Drained before the mode is even read, not just before either branch: a closing window's sync
   // belongs to no mode, since it was started under whichever mode was in force when that window
   // closed and the mode can have changed since. An unreadable mode must not skip this wait either —
@@ -131,6 +139,44 @@ async function performShutdownTasksInternal(): Promise<void> {
   // is the only value left here — Simple mode is the fall-through, not a checked branch. A future
   // third mode would be a compile error here, not a silent no-S/R.
   await performSimpleModeShutdownSync();
+}
+
+/**
+ * How long a quit waits for the Send/Receive extension to drop its sync queue. The drop is an
+ * in-memory change in the extension, so this only bounds an extension host that stopped answering.
+ */
+export const DROP_SYNC_QUEUE_TIMEOUT_MS = 5_000;
+
+/**
+ * Drops everything waiting in the Send/Receive extension's sync queue, so no queued run starts
+ * while the app quits (the queue is in memory only and is not carried to the next session). A run
+ * already in progress is left to the shutdown sync's own cancel. Never throws and never waits
+ * longer than {@link DROP_SYNC_QUEUE_TIMEOUT_MS}: without the extension the command is missing,
+ * which only means there is no queue to drop.
+ */
+async function dropSyncQueue(): Promise<void> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<'timedOut'>((resolve) => {
+    timeout = setTimeout(() => resolve('timedOut'), DROP_SYNC_QUEUE_TIMEOUT_MS);
+  });
+  try {
+    const outcome = await Promise.race([
+      networkService
+        .requestNoRetry(
+          serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.dropSyncQueue'),
+        )
+        .then(() => 'dropped' as const),
+      timedOut,
+    ]);
+    if (outcome === 'timedOut')
+      logger.warn(
+        `Dropping the sync queue did not answer within ${DROP_SYNC_QUEUE_TIMEOUT_MS} ms; continuing shutdown`,
+      );
+  } catch (e) {
+    logger.debug(`Could not drop the sync queue at quit: ${getErrorMessage(e)}`);
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 /**
