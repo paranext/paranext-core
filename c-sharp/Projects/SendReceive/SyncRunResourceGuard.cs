@@ -29,14 +29,22 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// draining means a stream of new installs cannot starve the run.
 /// </description></item>
 /// </list>
-/// Both waits are bounded by <see cref="WaitTimeout"/>. On timeout the waiter logs a warning and
-/// proceeds: an install or uninstall is a request the user still wants, installs are idempotent,
-/// and a counterpart that outlived the bound is most likely one whose end was never signalled.
+/// Both waits are bounded by <see cref="WaitTimeout"/>, measured per counterpart: a write passed
+/// over by back-to-back runs on its resource restarts the bound with each new run, so a timeout
+/// always means one run (or one set of writes) outlived <see cref="WaitTimeout"/>. On timeout the
+/// waiter logs a warning and proceeds: an install or uninstall is a request the user still wants,
+/// installs are idempotent, and a counterpart that outlived the bound is most likely one whose end
+/// was never signalled.
 /// </para>
 /// <para>
-/// <b>Lifecycle for the sync implementation</b> (the Paratext 10 patch; nothing in open-source
-/// Platform.Bible runs a sync, so there <see cref="BeginRun"/> is never called and every
-/// <see cref="EnterResourceWrite"/> returns at once):
+/// <b>Each waiting write blocks a thread-pool thread</b> for up to <see cref="WaitTimeout"/>, so
+/// only user-started, one-at-a-time writes belong on this path; a bulk or automatic install loop
+/// must not route through <see cref="EnterResourceWrite"/>.
+/// </para>
+/// <para>
+/// <b>Lifecycle for the sync implementation</b> (nothing in open-source Platform.Bible runs a sync,
+/// so there <see cref="BeginRun"/> is never called and every <see cref="EnterResourceWrite"/>
+/// returns at once):
 /// <list type="bullet">
 /// <item><description>
 /// Call <see cref="BeginRun"/> with the DBL entry uids of every resource the run will update,
@@ -79,23 +87,32 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// </remarks>
 internal static class SyncRunResourceGuard
 {
-    // Declared before WaitTimeout: static initializers run in textual order, and WaitTimeout's
-    // initializer reads this.
+    // Declared before s_waitTimeoutTicks: static initializers run in textual order, and that
+    // field's initializer reads this.
     private static readonly TimeSpan s_defaultWaitTimeout = TimeSpan.FromMinutes(30);
 
+    // Ticks rather than a TimeSpan so reads and writes from different threads are atomic and
+    // visible: a TimeSpan field cannot be volatile.
+    private static long s_waitTimeoutTicks = s_defaultWaitTimeout.Ticks;
+
     /// <summary>
-    /// How long a write waits for a run, and a starting run waits for writes, before logging a
+    /// How long a write waits for one run, and a starting run waits for writes, before logging a
     /// warning and proceeding. Bounded so a handle that is never disposed (a hung sync, a bracket
     /// that skipped its <c>finally</c>) cannot block the other side for the rest of the session.
     /// Generous because a write may wait out a whole run, and a sync that downloads its connected
     /// resources over a slow link can legitimately take many minutes — giving up while it is still
-    /// writing would let the two writers race after all. Settable so tests can shorten it.
+    /// writing would let the two writers race after all. Settable so tests can shorten it; each wait
+    /// reads it once, when it starts.
     /// </summary>
-    internal static TimeSpan WaitTimeout { get; set; } = s_defaultWaitTimeout;
+    internal static TimeSpan WaitTimeout
+    {
+        get => TimeSpan.FromTicks(Volatile.Read(ref s_waitTimeoutTicks));
+        set => Volatile.Write(ref s_waitTimeoutTicks, value.Ticks);
+    }
 
     /// <summary>
     /// Guards every field below, and is the monitor waiters block on: every state change that can
-    /// release a waiter ends with <see cref="Monitor.PulseAll"/>.
+    /// release a waiter ends with <see cref="Monitor.PulseAll"/>. Nothing is logged while it is held.
     /// </summary>
     private static readonly object s_lock = new();
 
@@ -141,6 +158,7 @@ internal static class SyncRunResourceGuard
             .Where(id => !string.IsNullOrWhiteSpace(id))
             .ToImmutableHashSet(StringComparer.OrdinalIgnoreCase);
 
+        Run run;
         lock (s_lock)
         {
             if (s_activeRun != null)
@@ -149,65 +167,84 @@ internal static class SyncRunResourceGuard
                 );
             // Registered before draining, so a write of these uids arriving from now on waits for the
             // run rather than adding to the writes the run is waiting for.
-            var run = new Run(ids);
+            run = new Run(ids);
             s_activeRun = run;
+            if (!ids.Any(s_writeCounts.ContainsKey))
+                return run;
+        }
 
-            bool timedOut;
+        Console.WriteLine(
+            "A sync is waiting for an install or removal of one of its DBL resources to finish."
+        );
+
+        var budget = WaitTimeout;
+        string? warning = null;
+        lock (s_lock)
+        {
             try
             {
-                timedOut = !WaitWhileLocked(
-                    () => ids.Any(s_writeCounts.ContainsKey),
-                    () =>
-                        Console.WriteLine(
-                            "A sync is waiting for an install or removal of one of its DBL resources to finish."
-                        )
-                );
+                // The run is the blocker's identity: once registered, no new write of its uids can
+                // open, so the writes it waits for are one set and one budget covers them.
+                if (!WaitWhileLocked(() => ids.Any(s_writeCounts.ContainsKey) ? run : null, budget))
+                    warning =
+                        $"Warning: gave up after {budget} waiting for an install or removal of DBL resources {string.Join(", ", ids.Where(s_writeCounts.ContainsKey))} to finish; syncing anyway.";
             }
             catch
             {
                 // The caller never receives the handle, so nothing else could ever end this run.
-                s_activeRun = null;
-                Monitor.PulseAll(s_lock);
+                if (ReferenceEquals(s_activeRun, run))
+                {
+                    s_activeRun = null;
+                    Monitor.PulseAll(s_lock);
+                }
                 throw;
             }
-            if (timedOut)
-                Console.WriteLine(
-                    $"Warning: gave up after {WaitTimeout} waiting for an install or removal of DBL resources {string.Join(", ", ids.Where(s_writeCounts.ContainsKey))} to finish; syncing anyway."
-                );
-            return run;
         }
+        if (warning != null)
+            Console.WriteLine(warning);
+        return run;
     }
 
     /// <summary>
     /// Waits while the open run holds <paramref name="dblEntryUid"/>, then marks it as being written
     /// until the returned scope is disposed, so a run that starts meanwhile waits for this write.
     /// Returns at once when no run holds the uid. If one run ends and the next one also holds it,
-    /// keeps waiting, within the same <see cref="WaitTimeout"/>; on timeout logs a warning and
-    /// proceeds. Wrap the whole write — including any refresh of the project collection it needs —
-    /// and nothing else.
+    /// keeps waiting, and the <see cref="WaitTimeout"/> bound starts again for the new run; when one
+    /// run outlives the bound, logs a warning and proceeds. Wrap the whole write — including any
+    /// refresh of the project collection it needs — and nothing else.
     /// </summary>
     /// <param name="dblEntryUid">The DBL entry uid about to be installed or removed.</param>
     /// <returns>A scope whose <c>Dispose</c> ends the write and releases a waiting run.</returns>
     public static IDisposable EnterResourceWrite(string dblEntryUid)
     {
         ArgumentNullException.ThrowIfNull(dblEntryUid);
+        Run? HoldingRun() =>
+            s_activeRun?.ResourceIds.Contains(dblEntryUid) == true ? s_activeRun : null;
+
         lock (s_lock)
         {
-            var timedOut = !WaitWhileLocked(
-                () => s_activeRun?.ResourceIds.Contains(dblEntryUid) == true,
-                () =>
-                    Console.WriteLine(
-                        $"DBL resource {dblEntryUid} is being updated by the running sync; waiting for the sync to finish."
-                    )
-            );
-            if (timedOut)
-                Console.WriteLine(
-                    $"Warning: gave up after {WaitTimeout} waiting for the running sync to finish updating DBL resource {dblEntryUid}; writing it anyway."
-                );
-
-            s_writeCounts[dblEntryUid] = s_writeCounts.GetValueOrDefault(dblEntryUid) + 1;
-            return new WriteScope(dblEntryUid, s_generation);
+            if (HoldingRun() == null)
+                return OpenWriteScopeLocked(dblEntryUid);
         }
+
+        Console.WriteLine(
+            $"DBL resource {dblEntryUid} is being updated by the running sync; waiting for the sync to finish."
+        );
+
+        var budget = WaitTimeout;
+        string? warning = null;
+        IDisposable scope;
+        lock (s_lock)
+        {
+            if (!WaitWhileLocked(HoldingRun, budget))
+                warning =
+                    $"Warning: gave up after {budget} waiting for the running sync to finish updating DBL resource {dblEntryUid}; writing it anyway.";
+            // Under the same lock hold as the last check, so no run can begin in between.
+            scope = OpenWriteScopeLocked(dblEntryUid);
+        }
+        if (warning != null)
+            Console.WriteLine(warning);
+        return scope;
     }
 
     /// <summary>
@@ -227,27 +264,51 @@ internal static class SyncRunResourceGuard
     }
 
     /// <summary>
-    /// Waits on <see cref="s_lock"/> — which the caller holds — while <paramref name="mustWait"/> is
-    /// true, for at most <see cref="WaitTimeout"/> in total. <see cref="Monitor.Wait(object, TimeSpan)"/>
-    /// releases the lock while waiting and retakes it before returning, so the condition is always
-    /// evaluated under the lock.
+    /// Runs <paramref name="action"/> while holding the guard's lock, so a test can make several
+    /// changes — such as ending one run and beginning the next — that no waiter can observe between.
+    /// The lock is reentrant, so the guard's own methods may be called inside.
     /// </summary>
-    /// <param name="mustWait">The condition to wait out; evaluated under the lock.</param>
-    /// <param name="onFirstWait">Called once, only if a wait actually starts.</param>
-    /// <returns>True when the condition cleared; false on timeout.</returns>
-    private static bool WaitWhileLocked(Func<bool> mustWait, Action onFirstWait)
+    internal static void InsideGuardLockForTests(Action action)
     {
-        if (!mustWait())
-            return true;
-        onFirstWait();
-        var budget = WaitTimeout;
+        lock (s_lock)
+            action();
+    }
+
+    /// <summary>Records one more open write of <paramref name="dblEntryUid"/>. Call holding the lock.</summary>
+    private static WriteScope OpenWriteScopeLocked(string dblEntryUid)
+    {
+        s_writeCounts[dblEntryUid] = s_writeCounts.GetValueOrDefault(dblEntryUid) + 1;
+        return new WriteScope(dblEntryUid, s_generation);
+    }
+
+    /// <summary>
+    /// Waits on <see cref="s_lock"/> — which the caller holds — while <paramref name="blocker"/>
+    /// names something. <see cref="Monitor.Wait(object, TimeSpan)"/> releases the lock while waiting
+    /// and retakes it before returning, so the blocker is always read under the lock.
+    /// <para>
+    /// <paramref name="budget"/> bounds the wait on ONE blocker: whenever the blocker changes to a
+    /// different object (by reference), the budget starts again. So a write passed over by
+    /// back-to-back runs on its resource times out only if one of those runs outlives the budget,
+    /// never because their durations added up.
+    /// </para>
+    /// </summary>
+    /// <param name="blocker">What the caller is waiting for, or null when it may proceed.</param>
+    /// <param name="budget">How long one blocker may hold the caller up.</param>
+    /// <returns>True when the blocker cleared; false when one blocker outlived the budget.</returns>
+    private static bool WaitWhileLocked(Func<object?> blocker, TimeSpan budget)
+    {
+        var seen = blocker();
         var elapsed = Stopwatch.StartNew();
-        while (mustWait())
+        while (seen != null)
         {
             var remaining = budget - elapsed.Elapsed;
             if (remaining <= TimeSpan.Zero)
                 return false;
             Monitor.Wait(s_lock, remaining);
+            var current = blocker();
+            if (current != null && !ReferenceEquals(current, seen))
+                elapsed.Restart();
+            seen = current;
         }
         return true;
     }

@@ -133,7 +133,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
         [Test]
         public async Task EnterResourceWrite_MatchesIdsIgnoringCase()
         {
-            using var run = SyncRunResourceGuard.BeginRun([HeldUid.ToUpperInvariant()]);
+            var run = SyncRunResourceGuard.BeginRun([HeldUid.ToUpperInvariant()]);
 
             var write = Task.Run(() => SyncRunResourceGuard.EnterResourceWrite(HeldUid).Dispose());
 
@@ -141,6 +141,64 @@ namespace TestParanextDataProvider.Projects.SendReceive
                 await FinishesWithin(write, s_stillBlockedWindow),
                 Is.False,
                 "the same id in another case is the same resource, so it is held"
+            );
+            run.Dispose();
+            Assert.That(await FinishesWithin(write, s_shouldReturnBound), Is.True);
+        }
+
+        [Test]
+        public async Task EnterResourceWrite_RestartsItsTimeoutForEachRunThatHoldsItsResource()
+        {
+            // Timeline, from when the write starts waiting on run A:
+            //   1.2 s  A ends and B begins on the same uid, with no moment between them
+            //   2.0 s  a single budget spanning both runs would expire here
+            //   2.6 s  checked: the write must still be waiting, now on B
+            //   3.2 s  B's own budget would expire; B ends at 2.6 s, before that
+            var budget = TimeSpan.FromSeconds(2);
+            SyncRunResourceGuard.WaitTimeout = budget;
+            var runA = SyncRunResourceGuard.BeginRun([HeldUid]);
+            IDisposable? runB = null;
+
+            using var output = new StringWriter();
+            TextWriter previousOut = Console.Out;
+            Console.SetOut(output);
+            try
+            {
+                var started = Stopwatch.StartNew();
+                var write = Task.Run(
+                    () => SyncRunResourceGuard.EnterResourceWrite(HeldUid).Dispose()
+                );
+
+                await Task.Delay(TimeSpan.FromMilliseconds(1200));
+                // Under the guard's lock, so the write cannot slip in between the two runs.
+                SyncRunResourceGuard.InsideGuardLockForTests(() =>
+                {
+                    runA.Dispose();
+                    runB = SyncRunResourceGuard.BeginRun([HeldUid]);
+                });
+
+                var untilCheck = budget + TimeSpan.FromMilliseconds(600) - started.Elapsed;
+                if (untilCheck > TimeSpan.Zero)
+                    await Task.Delay(untilCheck);
+                Assert.That(
+                    write.IsCompleted,
+                    Is.False,
+                    "past one budget in total, but B has held the uid for less than one budget"
+                );
+
+                runB!.Dispose();
+                Assert.That(await FinishesWithin(write, s_shouldReturnBound), Is.True);
+                await write;
+            }
+            finally
+            {
+                Console.SetOut(previousOut);
+            }
+
+            Assert.That(
+                output.ToString(),
+                Does.Contain("waiting").And.Not.Contain("gave up"),
+                "the write ended because the runs ended, not because it timed out"
             );
         }
 
@@ -306,7 +364,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
         {
             var first = SyncRunResourceGuard.BeginRun([HeldUid]);
             first.Dispose();
-            using var second = SyncRunResourceGuard.BeginRun([OtherUid]);
+            var second = SyncRunResourceGuard.BeginRun([OtherUid]);
 
             first.Dispose();
 
@@ -321,6 +379,8 @@ namespace TestParanextDataProvider.Projects.SendReceive
                 Is.False,
                 "the newer run must still hold its ids"
             );
+            second.Dispose();
+            Assert.That(await FinishesWithin(write, s_shouldReturnBound), Is.True);
         }
 
         [Test]
@@ -380,6 +440,8 @@ namespace TestParanextDataProvider.Projects.SendReceive
             SyncRunResourceGuard.ResetForTests();
 
             Assert.That(await FinishesWithin(begin, s_shouldReturnBound), Is.True);
+            (await begin).Dispose();
+            (await write).Dispose();
         }
 
         #endregion
