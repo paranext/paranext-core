@@ -303,10 +303,14 @@ export function useDismissOnWindowBlur<T extends HTMLElement>({
     const content = lastContentRef.current;
     // Looked up again at close, as the trigger may have been replaced; the trigger found on attach
     // covers menus, whose trigger drops `aria-controls` once the menu closes, and is preferred to
-    // `aria-labelledby`, which a caller can point at any label
+    // `aria-labelledby`, which a caller can point at any label. A captured trigger that has left
+    // the document is skipped so the `aria-labelledby` lookup still gets its turn
+    const capturedTrigger = capturedTriggerRef.current?.isConnected
+      ? capturedTriggerRef.current
+      : undefined;
     const trigger =
       (content && findControllerOf(content)) ??
-      capturedTriggerRef.current ??
+      capturedTrigger ??
       (content && findLabellerOf(content));
     return trigger?.isConnected ? trigger : undefined;
   }, []);
