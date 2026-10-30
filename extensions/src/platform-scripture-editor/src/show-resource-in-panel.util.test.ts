@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   warn: vi.fn(),
   error: vi.fn(),
   notify: vi.fn(async () => 'notification-1'),
+  getSetting: vi.fn(),
+  setSetting: vi.fn(),
 }));
 vi.mock('@papi/backend', () => ({
   default: {
@@ -27,6 +29,7 @@ vi.mock('@papi/backend', () => ({
     projectDataProviders: { get: mocks.getPdp },
     notifications: { send: mocks.notify },
     localization: { getLocalizedString: vi.fn(async () => "That tab couldn't be opened.") },
+    settings: { get: mocks.getSetting, set: mocks.setSetting },
   },
   logger: { warn: mocks.warn, debug: vi.fn(), info: vi.fn(), error: mocks.error },
 }));
@@ -42,11 +45,10 @@ import {
 } from './show-resource-in-panel.util';
 // Follows the vi.mock calls for the same reason as the import above.
 // eslint-disable-next-line import/first
-import {
-  getResourceSelection,
-  getResourceSelections,
-  withResourceSelection,
-} from './resource-selection-state.utils';
+import { getStoredResourceSelection } from './resource-selection-store';
+// Follows the vi.mock calls for the same reason as the import above.
+// eslint-disable-next-line import/first
+import type { ResourceSelectionsByPanel } from './resource-selection-state.utils';
 
 const BIBLE_TEXTS = 'platformScriptureEditor.bibleTexts';
 const COMMENTARIES = 'platformScriptureEditor.commentaries';
@@ -84,23 +86,25 @@ function catalogHas(dblEntries: DblResourceData[], localEntries: DblResourceData
   });
 }
 
+/** The value of the resource selection setting, as the settings service holds it */
+let storedSelections: ResourceSelectionsByPanel;
+
+/** Answers the resource selection setting from {@link storedSelections}. */
+function settingsHoldSelections(initial: ResourceSelectionsByPanel) {
+  storedSelections = initial;
+  mocks.getSetting.mockImplementation(async () => storedSelections);
+  mocks.setSetting.mockImplementation(async (_key: string, value: ResourceSelectionsByPanel) => {
+    storedSelections = value;
+  });
+}
+
 /** The selection the provider would apply when the reload asks it to build the panel. */
 let selectionSeenByProvider: unknown;
 
 /** The selection the panel is built with, given the reload's options and an earlier selection. */
-function providerSelection(options: ResourceTextPanelOptions): unknown {
-  const savedState = withResourceSelection(undefined, 'my-project', {
-    selectedResourceId: 'dbl:previous',
-  });
-  return getResourceSelection(
-    buildResourceTextPanelState(
-      { projectId: 'my-project', state: savedState },
-      'my-project',
-      'ScriptureResource',
-      options,
-    ),
-    'my-project',
-  ).selectedResourceId;
+async function providerSelection(options: ResourceTextPanelOptions): Promise<unknown> {
+  await buildResourceTextPanelState({}, 'my-project', 'ScriptureResource', options);
+  return (await getStoredResourceSelection('ScriptureResource', 'my-project')).selectedResourceId;
 }
 
 describe('showResourceInReferencePanel', () => {
@@ -113,6 +117,9 @@ describe('showResourceInReferencePanel', () => {
     vi.resetAllMocks();
     savedUserList = undefined;
     selectionSeenByProvider = undefined;
+    settingsHoldSelections({
+      ScriptureResource: { 'my-project': { selectedResourceId: 'dbl:previous' } },
+    });
     catalogHas([catalogEntry({})]);
     mocks.getAllOpenWebViewDefinitions.mockResolvedValue(OPEN_PANELS);
     mocks.getUserList.mockImplementation(async () => savedUserList);
@@ -135,7 +142,7 @@ describe('showResourceInReferencePanel', () => {
     );
     mocks.reloadWebView.mockImplementation(
       async (_webViewType: string, id: string, options: ResourceTextPanelOptions) => {
-        selectionSeenByProvider = providerSelection(options);
+        selectionSeenByProvider = await providerSelection(options);
         return id;
       },
     );
@@ -552,15 +559,9 @@ describe('showResourceInReferencePanel', () => {
 
   it('raises the tab, without reloading it, when it already shows the resource', async () => {
     // A reload would lose the tab's scroll position and anything in progress in it.
-    mocks.getAllOpenWebViewDefinitions.mockResolvedValue([
-      {
-        ...OPEN_PANELS[0],
-        state: withResourceSelection(undefined, 'my-project', {
-          selectedResourceId: 'dbl:uid-byz',
-        }),
-      },
-      OPEN_PANELS[1],
-    ]);
+    settingsHoldSelections({
+      ScriptureResource: { 'my-project': { selectedResourceId: 'dbl:uid-byz' } },
+    });
     mocks.openWebView.mockResolvedValue('bible-texts-tab');
 
     await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(
@@ -576,15 +577,9 @@ describe('showResourceInReferencePanel', () => {
   });
 
   it('reloads the tab when it shows the resource only for another project', async () => {
-    mocks.getAllOpenWebViewDefinitions.mockResolvedValue([
-      {
-        ...OPEN_PANELS[0],
-        state: withResourceSelection(undefined, 'other-project', {
-          selectedResourceId: 'dbl:uid-byz',
-        }),
-      },
-      OPEN_PANELS[1],
-    ]);
+    settingsHoldSelections({
+      ScriptureResource: { 'other-project': { selectedResourceId: 'dbl:uid-byz' } },
+    });
 
     await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(
       SHOWN_IN_BIBLE_TEXTS,
@@ -802,6 +797,8 @@ describe('showResourceInReferencePanel', () => {
     it('waits for a show that committed, even once the show between them was abandoned', async () => {
       // Two shows saving at once would race over the same personal list.
       mocks.setUserList.mockImplementation(() => holdUntilReleased(true));
+      // The first show selects the resource, so the third finds the tab showing it and raises it.
+      mocks.openWebView.mockResolvedValue('bible-texts-tab');
       const first = showResourceInReferencePanel('byz-project');
       await vi.advanceTimersByTimeAsync(0);
       held.splice(0).forEach((release) => release());
@@ -923,7 +920,7 @@ describe('showResourceInReferencePanel', () => {
         await new Promise((resolve) => {
           setTimeout(resolve, 0);
         });
-        selections.push(providerSelection(options));
+        selections.push(await providerSelection(options));
         return id;
       },
     );
@@ -942,155 +939,98 @@ describe('showResourceInReferencePanel', () => {
 });
 
 describe('buildResourceTextPanelState', () => {
-  /** A panel last built for `project-a`, holding a selection for it and for `project-c`. */
-  const SAVED = {
-    projectId: 'project-a',
-    state: {
-      other: 'kept',
-      ...withResourceSelection(
-        withResourceSelection(undefined, 'project-a', { selectedResourceId: 'dbl:previous' }),
-        'project-c',
-        { selectedResourceId: 'dbl:in-c', userPickedResourceId: 'dbl:in-c' },
-      ),
-    },
-  };
+  beforeEach(() => {
+    vi.resetAllMocks();
+    settingsHoldSelections({
+      ScriptureResource: {
+        'project-a': { selectedResourceId: 'dbl:previous' },
+        'project-c': { selectedResourceId: 'dbl:in-c', userPickedResourceId: 'dbl:in-c' },
+      },
+      CommentaryResource: { 'project-a': { selectedResourceId: 'dbl:commentary' } },
+    });
+  });
 
-  it('selects the resource a reload asks for under the project it is reloaded for', () => {
-    const state = buildResourceTextPanelState(SAVED, 'project-b', 'CommentaryResource', {
+  it('builds the saved state with the kind of resource the panel lists', async () => {
+    const state = await buildResourceTextPanelState(
+      { other: 'kept' },
+      'project-b',
+      'CommentaryResource',
+      {
+        selectedResourceId: 'dbl:uid-byz',
+      },
+    );
+
+    expect(state).toEqual({ other: 'kept', resourceType: 'CommentaryResource' });
+  });
+
+  it('stores the resource a reload asks for, in its panel, under the project it is reloaded for', async () => {
+    await buildResourceTextPanelState({}, 'project-b', 'CommentaryResource', {
       selectedResourceId: 'dbl:uid-byz',
     });
 
-    expect(getResourceSelection(state, 'project-b')).toEqual({
+    expect(await getStoredResourceSelection('CommentaryResource', 'project-b')).toEqual({
       selectedResourceId: 'dbl:uid-byz',
       userPickedResourceId: 'dbl:uid-byz',
     });
-    expect(state).toMatchObject({ other: 'kept', resourceType: 'CommentaryResource' });
+    expect(await getStoredResourceSelection('ScriptureResource', 'project-b')).toEqual({});
   });
 
-  it('keeps every other project’s selection when a reload asks for a resource', () => {
-    const state = buildResourceTextPanelState(SAVED, 'project-b', 'ScriptureResource', {
+  it('keeps every other project’s selection when a reload asks for a resource', async () => {
+    await buildResourceTextPanelState({}, 'project-b', 'ScriptureResource', {
       selectedResourceId: 'dbl:uid-byz',
     });
 
-    expect(getResourceSelection(state, 'project-a')).toEqual(
-      getResourceSelection(SAVED.state, 'project-a'),
-    );
-    expect(getResourceSelection(state, 'project-c')).toEqual(
-      getResourceSelection(SAVED.state, 'project-c'),
-    );
+    expect(await getStoredResourceSelection('ScriptureResource', 'project-a')).toMatchObject({
+      selectedResourceId: 'dbl:previous',
+    });
+    expect(await getStoredResourceSelection('ScriptureResource', 'project-c')).toEqual({
+      selectedResourceId: 'dbl:in-c',
+      userPickedResourceId: 'dbl:in-c',
+    });
+    expect(await getStoredResourceSelection('CommentaryResource', 'project-a')).toMatchObject({
+      selectedResourceId: 'dbl:commentary',
+    });
   });
 
-  it('records the resource a reload asks for as the user’s own pick', () => {
+  it('records the resource a reload asks for as the user’s own pick', async () => {
     // A resource opened from Home was asked for, not fallen back to, so a configured resource must
     // not replace it — including when the show could not add it to the user's list.
-    const state = buildResourceTextPanelState(SAVED, 'project-c', 'ScriptureResource', {
+    await buildResourceTextPanelState({}, 'project-c', 'ScriptureResource', {
       selectedResourceId: 'project:byz-project',
     });
 
-    expect(getResourceSelection(state, 'project-c')).toEqual({
-      selectedResourceId: 'project:byz-project',
-      userPickedResourceId: 'project:byz-project',
-    });
-  });
-
-  it('selects the resource a reload asks for with no project open', () => {
-    const state = buildResourceTextPanelState(
-      { projectId: undefined, state: {} },
-      undefined,
-      'ScriptureResource',
-      { selectedResourceId: 'project:byz-project' },
-    );
-
-    expect(getResourceSelection(state, undefined)).toEqual({
+    expect(await getStoredResourceSelection('ScriptureResource', 'project-c')).toEqual({
       selectedResourceId: 'project:byz-project',
       userPickedResourceId: 'project:byz-project',
     });
   });
 
-  it('keeps the saved selections when the build asks for none', () => {
-    // An ordinary rebuild — a project switch, a layout restore — must not lose any project's pick.
-    const state = buildResourceTextPanelState(SAVED, 'project-b', 'ScriptureResource', {});
+  it('stores the resource a reload asks for with no project open', async () => {
+    await buildResourceTextPanelState({}, undefined, 'ScriptureResource', {
+      selectedResourceId: 'project:byz-project',
+    });
 
-    expect(getResourceSelections(state)).toEqual(getResourceSelections(SAVED.state));
-    expect(getResourceSelection(state, 'project-b')).toEqual({});
+    expect(await getStoredResourceSelection('ScriptureResource', undefined)).toEqual({
+      selectedResourceId: 'project:byz-project',
+      userPickedResourceId: 'project:byz-project',
+    });
   });
 
-  describe('a layout saved before selections were kept per project', () => {
-    const LEGACY = {
-      projectId: 'project-a',
-      state: {
-        other: 'kept',
-        selectedResourceId: 'dbl:legacy',
-        userPickedResourceId: 'dbl:legacy-pick',
-      },
-    };
+  it('stores nothing when the build asks for no resource', async () => {
+    // An ordinary rebuild — a project switch, a layout restore — must not touch any project's pick.
+    await buildResourceTextPanelState({}, 'project-b', 'ScriptureResource', {});
 
-    it('files its selection under the project it was saved with', () => {
-      // The user last saw that resource in that project, so they see it again after upgrading.
-      const state = buildResourceTextPanelState(LEGACY, 'project-a', 'ScriptureResource', {});
+    expect(mocks.setSetting).not.toHaveBeenCalled();
+  });
 
-      expect(getResourceSelection(state, 'project-a')).toEqual({
-        selectedResourceId: 'dbl:legacy',
-        userPickedResourceId: 'dbl:legacy-pick',
-      });
-      expect(state).not.toHaveProperty('selectedResourceId');
-      expect(state).not.toHaveProperty('userPickedResourceId');
-      expect(state).toMatchObject({ other: 'kept' });
+  it('still builds the panel, and warns, when the resource cannot be stored', async () => {
+    mocks.setSetting.mockRejectedValueOnce(new Error('disk full'));
+
+    const state = await buildResourceTextPanelState({}, 'project-b', 'ScriptureResource', {
+      selectedResourceId: 'dbl:uid-byz',
     });
 
-    it('files its selection under the project it was saved with when reloaded for another', () => {
-      const state = buildResourceTextPanelState(LEGACY, 'project-b', 'ScriptureResource', {});
-
-      expect(getResourceSelection(state, 'project-a')).toMatchObject({
-        selectedResourceId: 'dbl:legacy',
-      });
-      expect(getResourceSelection(state, 'project-b')).toEqual({});
-    });
-
-    it('files its selection under no project when it was saved with none', () => {
-      const state = buildResourceTextPanelState(
-        { ...LEGACY, projectId: undefined },
-        'project-b',
-        'ScriptureResource',
-        {},
-      );
-
-      expect(getResourceSelection(state, undefined)).toMatchObject({
-        selectedResourceId: 'dbl:legacy',
-      });
-      expect(getResourceSelection(state, 'project-b')).toEqual({});
-    });
-
-    it('keeps a selection already kept for the project it was saved with', () => {
-      const state = buildResourceTextPanelState(
-        {
-          projectId: 'project-a',
-          state: {
-            ...LEGACY.state,
-            ...withResourceSelection(undefined, 'project-a', { selectedResourceId: 'dbl:newer' }),
-          },
-        },
-        'project-a',
-        'ScriptureResource',
-        {},
-      );
-
-      expect(getResourceSelection(state, 'project-a')).toEqual({ selectedResourceId: 'dbl:newer' });
-      expect(state).not.toHaveProperty('selectedResourceId');
-    });
-
-    it('files its selection under the saved project and the resource asked for under the new one', () => {
-      const state = buildResourceTextPanelState(LEGACY, 'project-b', 'ScriptureResource', {
-        selectedResourceId: 'dbl:uid-byz',
-      });
-
-      expect(getResourceSelection(state, 'project-a')).toMatchObject({
-        selectedResourceId: 'dbl:legacy',
-      });
-      expect(getResourceSelection(state, 'project-b')).toEqual({
-        selectedResourceId: 'dbl:uid-byz',
-        userPickedResourceId: 'dbl:uid-byz',
-      });
-    });
+    expect(state).toEqual({ resourceType: 'ScriptureResource' });
+    expect(mocks.warn).toHaveBeenCalledWith(expect.stringContaining('disk full'));
   });
 });

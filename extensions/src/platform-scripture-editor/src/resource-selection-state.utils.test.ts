@@ -3,8 +3,9 @@ import {
   getResourceSelection,
   getResourceSelectionKey,
   NO_PROJECT_SELECTION_KEY,
-  RESOURCE_SELECTION_BY_PROJECT_STATE_KEY,
   toResourceSelections,
+  updateResourceSelections,
+  updateResourceSelectionsByPanel,
 } from './resource-selection-state.utils';
 
 describe('getResourceSelectionKey', () => {
@@ -70,9 +71,95 @@ describe('toResourceSelections', () => {
 });
 
 describe('getResourceSelection', () => {
-  it('gives an empty selection when the saved per-project value is malformed', () => {
+  const SAVED = {
+    ScriptureResource: { 'project-a': { selectedResourceId: 'bible-a' } },
+    CommentaryResource: { 'project-a': { selectedResourceId: 'commentary-a' } },
+  };
+
+  it("reads the project's selection in the given panel only", () => {
+    expect(getResourceSelection(SAVED, 'ScriptureResource', 'project-a')).toEqual({
+      selectedResourceId: 'bible-a',
+      userPickedResourceId: undefined,
+    });
+    expect(getResourceSelection(SAVED, 'CommentaryResource', 'project-a')).toEqual({
+      selectedResourceId: 'commentary-a',
+      userPickedResourceId: undefined,
+    });
+  });
+
+  it('gives an empty selection for a project with no entry', () => {
+    expect(getResourceSelection(SAVED, 'ScriptureResource', 'project-b')).toEqual({});
+  });
+
+  it.each([
+    ['null', 'null'],
+    ['a string', '"garbage"'],
+    ['a panel value that is a string', '{ "ScriptureResource": "garbage" }'],
+  ])('gives an empty selection when the saved value is %s', (_description, savedJson) => {
+    expect(getResourceSelection(JSON.parse(savedJson), 'ScriptureResource', 'project-a')).toEqual(
+      {},
+    );
+  });
+});
+
+describe('updateResourceSelections', () => {
+  it("changes only the given project's entry and keeps every other project", () => {
     expect(
-      getResourceSelection({ [RESOURCE_SELECTION_BY_PROJECT_STATE_KEY]: 'garbage' }, 'project-a'),
-    ).toEqual({});
+      updateResourceSelections(
+        { 'project-a': { selectedResourceId: 'a', userPickedResourceId: 'a' } },
+        'project-b',
+        { selectedResourceId: 'b' },
+      ),
+    ).toEqual({
+      'project-a': { selectedResourceId: 'a', userPickedResourceId: 'a' },
+      'project-b': { selectedResourceId: 'b' },
+    });
+  });
+
+  it('keeps a stored field the update leaves undefined', () => {
+    expect(
+      updateResourceSelections(
+        { 'project-a': { selectedResourceId: 'a', userPickedResourceId: 'a' } },
+        'project-a',
+        { selectedResourceId: 'fallback', userPickedResourceId: undefined },
+      ),
+    ).toEqual({ 'project-a': { selectedResourceId: 'fallback', userPickedResourceId: 'a' } });
+  });
+
+  it('files a panel with no project open under the no-project key', () => {
+    expect(updateResourceSelections({}, undefined, { selectedResourceId: 'x' })).toEqual({
+      [NO_PROJECT_SELECTION_KEY]: { selectedResourceId: 'x' },
+    });
+  });
+});
+
+describe('updateResourceSelectionsByPanel', () => {
+  it("changes one panel's entry and keeps the other panel's", () => {
+    const next = updateResourceSelectionsByPanel(
+      {
+        ScriptureResource: { 'project-a': { selectedResourceId: 'bible-a' } },
+        CommentaryResource: { 'project-a': { selectedResourceId: 'commentary-a' } },
+      },
+      'CommentaryResource',
+      'project-a',
+      { selectedResourceId: 'commentary-b' },
+    );
+    expect(getResourceSelection(next, 'ScriptureResource', 'project-a').selectedResourceId).toBe(
+      'bible-a',
+    );
+    expect(getResourceSelection(next, 'CommentaryResource', 'project-a').selectedResourceId).toBe(
+      'commentary-b',
+    );
+  });
+
+  it('starts from nothing when the saved value is malformed', () => {
+    expect(
+      updateResourceSelectionsByPanel(JSON.parse('"garbage"'), 'ScriptureResource', 'project-a', {
+        selectedResourceId: 'a',
+      }),
+    ).toEqual({
+      ScriptureResource: { 'project-a': { selectedResourceId: 'a' } },
+      CommentaryResource: {},
+    });
   });
 });

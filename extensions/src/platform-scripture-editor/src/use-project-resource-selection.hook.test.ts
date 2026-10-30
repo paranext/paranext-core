@@ -1,97 +1,112 @@
 // @vitest-environment jsdom
-import { describe, expect, test, vi } from 'vitest';
-import { act, renderHook } from '@testing-library/react';
-import { useState } from 'react';
+import papi, { logger } from '@papi/frontend';
+import { useSetting } from '@papi/frontend/react';
+import { renderHook } from '@testing-library/react';
+import { newPlatformError, type PlatformError } from 'platform-bible-utils';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
-  RESOURCE_SELECTION_BY_PROJECT_STATE_KEY,
-  toResourceSelections,
-  type ResourceSelectionByProject,
+  RESOURCE_SELECTION_SETTING_KEY,
+  type ResourceSelectionsByPanel,
 } from './resource-selection-state.utils';
 import { useProjectResourceSelection } from './use-project-resource-selection.hook';
 
+vi.mock('@papi/frontend', () => ({
+  default: { commands: { sendCommand: vi.fn(() => Promise.resolve()) } },
+  logger: { debug: vi.fn(), warn: vi.fn() },
+}));
+
+vi.mock('@papi/frontend/react', () => ({ useSetting: vi.fn() }));
+
 const PROJECT = 'project-a';
 
-/**
- * A stand-in for a web view's `useWebViewState` whose writes are not reported back until the test
- * says so, the way the real hook only changes its value when the web view service reports an
- * update. `written` records every value written; `report` renders a value as the web view state.
- */
-function createDeferredWebViewState(initialValue: ResourceSelectionByProject = {}) {
-  const written = vi.fn();
-  let setRendered: ((value: unknown) => void) | undefined;
+const SAVED: ResourceSelectionsByPanel = {
+  ScriptureResource: {
+    [PROJECT]: { selectedResourceId: 'bible-a', userPickedResourceId: 'bible-a' },
+  },
+  CommentaryResource: { [PROJECT]: { selectedResourceId: 'commentary-a' } },
+};
 
-  function useWebViewState<T>(
-    key: string,
-    defaultValue: T,
-  ): [T, (newValue: T) => void, () => void] {
-    expect(key).toBe(RESOURCE_SELECTION_BY_PROJECT_STATE_KEY);
-    // A double for a generic hook has to hand back the concrete value it stores as the caller's
-    // `T`; TypeScript cannot relate a stored value to an unresolved type parameter any other way.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const [value, setValue] = useState<T>(initialValue as T);
-    // A test reports values of its own choosing, malformed ones included, so they arrive untyped
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    setRendered = (newValue) => setValue(newValue as T);
-    return [value, written, () => setValue(defaultValue)];
-  }
-
-  return {
-    useWebViewState,
-    written,
-    report: (value: unknown) => act(() => setRendered?.(value)),
-    lastWritten: () => toResourceSelections(written.mock.calls.at(-1)?.[0])[PROJECT],
-  };
+/** Makes the setting read back `value`, loading or loaded. */
+function mockSetting(value: ResourceSelectionsByPanel | PlatformError, isLoading = false) {
+  vi.mocked(useSetting).mockImplementation((key) => {
+    expect(key).toBe(RESOURCE_SELECTION_SETTING_KEY);
+    return [value, vi.fn(), vi.fn(), isLoading];
+  });
 }
 
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockSetting(SAVED);
+});
+
 describe('useProjectResourceSelection', () => {
-  test('two changes made before either is reported back both survive', () => {
-    const { useWebViewState, lastWritten } = createDeferredWebViewState();
-    const { result } = renderHook(() => useProjectResourceSelection(useWebViewState, PROJECT));
+  test("reads the project's selection for the panel's kind of resource", () => {
+    const { result } = renderHook(() => useProjectResourceSelection('CommentaryResource', PROJECT));
 
-    act(() => {
-      result.current[1]({ userPickedResourceId: 'picked' });
-      result.current[1]({ selectedResourceId: 'selected' });
-    });
-
-    expect(lastWritten()).toEqual({
-      userPickedResourceId: 'picked',
-      selectedResourceId: 'selected',
+    expect(result.current[0]).toEqual({
+      selectedResourceId: 'commentary-a',
+      userPickedResourceId: undefined,
     });
   });
 
-  test('an earlier write reported back late does not undo a later write', () => {
-    const { useWebViewState, written, lastWritten, report } = createDeferredWebViewState();
-    const { result } = renderHook(() => useProjectResourceSelection(useWebViewState, PROJECT));
+  test('reads an empty selection for a project with no entry', () => {
+    const { result } = renderHook(() =>
+      useProjectResourceSelection('ScriptureResource', 'project-b'),
+    );
 
-    act(() => result.current[1]({ selectedResourceId: 'first' }));
-    act(() => result.current[1]({ selectedResourceId: 'second' }));
-    report(written.mock.calls[0][0]);
-    act(() => result.current[1]({ userPickedResourceId: 'picked' }));
-
-    expect(lastWritten()).toEqual({ selectedResourceId: 'second', userPickedResourceId: 'picked' });
+    expect(result.current[0]).toEqual({});
   });
 
-  test('a change made by another writer is built on once every write has been reported back', () => {
-    const { useWebViewState, written, lastWritten, report } = createDeferredWebViewState();
-    const { result } = renderHook(() => useProjectResourceSelection(useWebViewState, PROJECT));
+  test('says whether the setting is still loading', () => {
+    mockSetting({}, true);
 
-    act(() => result.current[1]({ selectedResourceId: 'mine' }));
-    report(written.mock.calls[0][0]);
-    report({ [PROJECT]: { selectedResourceId: 'theirs' } });
-    act(() => result.current[1]({ userPickedResourceId: 'picked' }));
+    const { result } = renderHook(() => useProjectResourceSelection('ScriptureResource', PROJECT));
 
-    expect(result.current[0].selectedResourceId).toBe('theirs');
-    expect(lastWritten()).toEqual({ selectedResourceId: 'theirs', userPickedResourceId: 'picked' });
+    expect(result.current[2]).toBe(true);
   });
 
-  test('a change that leaves the selection as it was is not written', () => {
-    const { useWebViewState, written } = createDeferredWebViewState({
-      [PROJECT]: { selectedResourceId: 'kept' },
-    });
-    const { result } = renderHook(() => useProjectResourceSelection(useWebViewState, PROJECT));
+  test('reads an empty selection, and warns, when the setting cannot be read', () => {
+    mockSetting(newPlatformError('settings unavailable'));
 
-    act(() => result.current[1]({ selectedResourceId: 'kept' }));
+    const { result } = renderHook(() => useProjectResourceSelection('ScriptureResource', PROJECT));
 
-    expect(written).not.toHaveBeenCalled();
+    expect(result.current[0]).toEqual({});
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('settings unavailable'));
+  });
+
+  test("stores a change for the panel's kind of resource and project", () => {
+    const { result } = renderHook(() => useProjectResourceSelection('CommentaryResource', PROJECT));
+
+    result.current[1]({ selectedResourceId: 'commentary-b', userPickedResourceId: 'commentary-b' });
+
+    expect(papi.commands.sendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.updateResourceSelection',
+      'CommentaryResource',
+      PROJECT,
+      { selectedResourceId: 'commentary-b', userPickedResourceId: 'commentary-b' },
+    );
+  });
+
+  test('stores nothing once rendered for a project other than the one it mounted with', () => {
+    const { result, rerender } = renderHook(
+      ({ projectId }) => useProjectResourceSelection('ScriptureResource', projectId),
+      { initialProps: { projectId: PROJECT } },
+    );
+
+    rerender({ projectId: 'project-b' });
+    result.current[1]({ selectedResourceId: 'bible-a' });
+
+    expect(papi.commands.sendCommand).not.toHaveBeenCalled();
+  });
+
+  test('logs a change that could not be stored instead of throwing', async () => {
+    vi.mocked(papi.commands.sendCommand).mockRejectedValueOnce(new Error('host gone'));
+    const { result } = renderHook(() => useProjectResourceSelection('ScriptureResource', PROJECT));
+
+    result.current[1]({ selectedResourceId: 'bible-b' });
+
+    await vi.waitFor(() =>
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('host gone')),
+    );
   });
 });

@@ -73,6 +73,7 @@ import {
   showResourceInReferencePanel,
   type ResourceTextPanelOptions,
 } from './show-resource-in-panel.util';
+import { updateStoredResourceSelection } from './resource-selection-store';
 
 logger.debug('Scripture Editor is importing!');
 
@@ -1109,8 +1110,8 @@ export function createResourceTextPanelProvider(
         iconName: interfaceMode === 'simple' ? iconName : undefined,
         iconUrl: undefined,
         // Also selects a resource opened elsewhere — from Home in Simple mode — when one is passed.
-        state: buildResourceTextPanelState(
-          savedWebView,
+        state: await buildResourceTextPanelState(
+          savedWebView.state,
           projectId,
           resourceType,
           openWebViewOptions,
@@ -1567,6 +1568,49 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
+  const updateResourceSelectionPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.updateResourceSelection',
+    updateStoredResourceSelection,
+    {
+      method: {
+        summary:
+          'Change the resource the Bible texts or Commentaries panel keeps for one project, keeping every other project',
+        params: [
+          {
+            name: 'resourceType',
+            required: true,
+            summary:
+              'The panel: ScriptureResource for Bible Texts, CommentaryResource for Commentaries',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'projectId',
+            required: false,
+            summary: 'The project; omitted for a panel with no project open',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'update',
+            required: true,
+            summary: 'The fields to change; a field left out keeps its value',
+            schema: {
+              type: 'object',
+              properties: {
+                selectedResourceId: { type: 'string' },
+                userPickedResourceId: { type: 'string' },
+              },
+            },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'Resolves once the change is stored',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
   const showBibleTextsPanelPromise = papi.commands.registerCommand(
     'platformScriptureEditor.showBibleTextsPanel',
     showBibleTextsTab,
@@ -1803,6 +1847,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     ...(scriptureTextGridRegistration ? [scriptureTextGridRegistration] : []),
     await openResourceTextPromise,
     await showResourceInReferencePanelPromise,
+    await updateResourceSelectionPromise,
     await showBibleTextsPanelPromise,
     await showCommentariesPanelPromise,
     await showTextCollectionPanelPromise,

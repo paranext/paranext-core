@@ -1,7 +1,7 @@
 import papi, { logger } from '@papi/backend';
 import type { OpenWebViewOptions, SavedWebViewDefinition } from '@papi/core';
 import { doesCatalogRowCoverProject, getErrorMessage } from 'platform-bible-utils';
-import type { DblResourceData, ResourceType } from 'platform-bible-utils';
+import type { DblResourceData } from 'platform-bible-utils';
 import type { DblResourceReference, ProjectReference, ResourceReference } from 'platform-scripture';
 import type { ShowResourceInReferencePanelResult } from 'platform-scripture-editor';
 import type { DblResourceCatalog } from 'platform-get-resources';
@@ -12,10 +12,10 @@ import {
 } from './resource-reference.utils';
 import { addToUserTextConnections, toResourceReference } from './select-dbl-resource';
 import {
-  adoptLegacyResourceSelection,
-  getResourceSelection,
-  withResourceSelection,
-} from './resource-selection-state.utils';
+  getStoredResourceSelection,
+  updateStoredResourceSelection,
+} from './resource-selection-store';
+import type { ResourcePanelType } from './resource-selection-state.utils';
 import {
   BIBLE_TEXTS_PANEL_WEBVIEW_TYPE,
   COMMENTARIES_PANEL_WEBVIEW_TYPE,
@@ -35,32 +35,43 @@ export interface ResourceTextPanelOptions extends OpenWebViewOptions {
 }
 
 /**
- * The web view state a Bible texts or Commentaries panel is built with: its saved state, the kind
- * of resource it lists, and — when one was asked for — the resource to select for the project it is
- * built for, marked as the user's own pick. Each project keeps its own selection (see
- * `resource-selection-state.utils.ts`); a selection saved before that is filed under the project it
- * was saved with.
+ * The web view state a Bible texts or Commentaries panel is built with: its saved state and the
+ * kind of resource it lists. When a resource was asked for, it is first stored as the selection for
+ * the project the panel is built for, marked as the user's own pick, so the panel shows it from its
+ * first render. The selection itself is kept per project in a setting (see
+ * `resource-selection-state.utils.ts`), not in the panel's state.
  *
- * @param saved The panel's definition as saved: its state, and the project it was built for
+ * A selection that cannot be stored is logged and the panel is built anyway: it then shows the
+ * project's earlier selection.
+ *
+ * @param savedState The panel's saved state
  * @param projectId The project the panel is being built for, if one is open
  * @param resourceType The kind of resource the panel lists
  * @param options The options the panel is being built with
  * @returns The state to build the panel with
  */
-export function buildResourceTextPanelState(
-  saved: { state?: Record<string, unknown>; projectId?: string },
+export async function buildResourceTextPanelState(
+  savedState: Record<string, unknown> | undefined,
   projectId: string | undefined,
-  resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
+  resourceType: ResourcePanelType,
   options: ResourceTextPanelOptions,
-): Record<string, unknown> {
-  const state = { ...adoptLegacyResourceSelection(saved.state, saved.projectId), resourceType };
-  if (options.selectedResourceId === undefined) return state;
-  // A resource asked for is recorded as the user's own pick, so the panel never replaces it with a
-  // configured resource the way it replaces a fallback (see `resolveResourceSelection`).
-  return withResourceSelection(state, projectId, {
-    selectedResourceId: options.selectedResourceId,
-    userPickedResourceId: options.selectedResourceId,
-  });
+): Promise<Record<string, unknown>> {
+  const { selectedResourceId } = options;
+  if (selectedResourceId !== undefined) {
+    try {
+      // A resource asked for is recorded as the user's own pick, so the panel never replaces it
+      // with a configured resource the way it replaces a fallback (see `resolveResourceSelection`).
+      await updateStoredResourceSelection(resourceType, projectId, {
+        selectedResourceId,
+        userPickedResourceId: selectedResourceId,
+      });
+    } catch (e) {
+      logger.warn(
+        `Could not store ${selectedResourceId} as the ${resourceType} selection for project ${projectId}: ${getErrorMessage(e)}`,
+      );
+    }
+  }
+  return { ...savedState, resourceType };
 }
 
 /** What {@link findCatalogEntry} learned about a resource. */
@@ -442,8 +453,14 @@ async function showResourceNow(
   const reloadOptions: ResourceTextPanelOptions = { bringToFront: true, selectedResourceId };
   let shownWebViewId: string | undefined;
   try {
+    const panelResourceType: ResourcePanelType =
+      webViewType === BIBLE_TEXTS_PANEL_WEBVIEW_TYPE ? 'ScriptureResource' : 'CommentaryResource';
+    const { selectedResourceId: shownResourceId } = await getStoredResourceSelection(
+      panelResourceType,
+      panelProjectId,
+    );
     shownWebViewId =
-      getResourceSelection(panel.state, panelProjectId).selectedResourceId === selectedResourceId
+      shownResourceId === selectedResourceId
         ? // Already showing it: raised, not reloaded, so it keeps its scroll position and anything
           // in progress in it.
           await papi.webViews.openWebView(webViewType, undefined, {

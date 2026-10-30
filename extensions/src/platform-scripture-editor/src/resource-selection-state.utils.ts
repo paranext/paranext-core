@@ -1,17 +1,19 @@
 /**
- * Where a Bible texts or Commentaries panel keeps its selection in web view state: one entry per
- * project the panel has shown. A Simple-mode project switch reloads the panel in place with the
- * state it already had, so a selection kept under flat keys would follow the user from project to
- * project.
+ * Where the Bible texts and Commentaries panels keep their selection: one entry per project, in a
+ * hidden user setting, so each project shows its own selection after a project switch and after a
+ * restart. A Simple-mode project switch reloads a panel in place, and Simple mode builds the panels
+ * afresh at every launch, so neither the panel's web view state nor flat keys could hold it.
  *
- * Shared by the panel, which reads and writes its own project's entry, and by the provider, which
- * builds the state a panel is reloaded with.
+ * Shared by the panel, which reads its own project's entry, and by the extension host, which writes
+ * every entry (see `resource-selection-store.ts`).
  */
 
+import type { ResourceType } from 'platform-bible-utils';
 import { isString } from 'platform-bible-utils';
 
-/** The web view state key the per-project selections are kept under. */
-export const RESOURCE_SELECTION_BY_PROJECT_STATE_KEY = 'resourceSelectionByProjectId';
+/** The hidden user setting the selections are kept in. */
+export const RESOURCE_SELECTION_SETTING_KEY =
+  'platformScriptureEditor.resourceSelectionByProjectId';
 
 /**
  * The entry for a panel with no project open. No project id is empty, so it cannot collide with
@@ -19,10 +21,10 @@ export const RESOURCE_SELECTION_BY_PROJECT_STATE_KEY = 'resourceSelectionByProje
  */
 export const NO_PROJECT_SELECTION_KEY = '';
 
-/**
- * One project's selection as kept in web view state. See `ResourceSelectionInputs` for what the two
- * ids mean.
- */
+/** The kinds of resource a panel lists, one panel each. */
+export type ResourcePanelType = Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>;
+
+/** One project's selection in one panel. See `ResourceSelectionInputs` for what the two ids mean. */
 export type StoredResourceSelection = {
   /** The persisted selection, namespaced or legacy-bare */
   selectedResourceId?: string;
@@ -30,8 +32,13 @@ export type StoredResourceSelection = {
   userPickedResourceId?: string;
 };
 
-/** Each project's selection, by project id ({@link NO_PROJECT_SELECTION_KEY} for none). */
+/** Each project's selection in one panel, by project id ({@link NO_PROJECT_SELECTION_KEY} for none). */
 export type ResourceSelectionByProject = Record<string, StoredResourceSelection>;
+
+/** The value of {@link RESOURCE_SELECTION_SETTING_KEY}: each panel's per-project selections. */
+export type ResourceSelectionsByPanel = Partial<
+  Record<ResourcePanelType, ResourceSelectionByProject>
+>;
 
 /**
  * The key a project's selection is kept under.
@@ -53,9 +60,9 @@ function toOptionalString(value: unknown): string | undefined {
 
 /**
  * Reads per-project selections out of a saved value. Anything that is not a string id is dropped,
- * since a saved layout is read without being validated.
+ * since a setting file is read without being validated.
  *
- * @param saved The value saved under {@link RESOURCE_SELECTION_BY_PROJECT_STATE_KEY}
+ * @param saved One panel's value in {@link ResourceSelectionsByPanel}
  * @returns Each project's selection
  */
 export function toResourceSelections(saved: unknown): ResourceSelectionByProject {
@@ -72,15 +79,20 @@ export function toResourceSelections(saved: unknown): ResourceSelectionByProject
 }
 
 /**
- * Reads the per-project selections out of a panel's web view state.
+ * One project's selection in one panel.
  *
- * @param state The panel's web view state
- * @returns Each project's selection
+ * @param saved The value of {@link RESOURCE_SELECTION_SETTING_KEY}
+ * @param resourceType The kind of resource the panel lists
+ * @param projectId The project, if one is open
+ * @returns The project's selection; empty if it has none
  */
-export function getResourceSelections(
-  state: Record<string, unknown> | undefined,
-): ResourceSelectionByProject {
-  return toResourceSelections(state?.[RESOURCE_SELECTION_BY_PROJECT_STATE_KEY]);
+export function getResourceSelection(
+  saved: unknown,
+  resourceType: ResourcePanelType,
+  projectId: string | undefined,
+): StoredResourceSelection {
+  const panelSelections = isRecord(saved) ? saved[resourceType] : undefined;
+  return toResourceSelections(panelSelections)[getResourceSelectionKey(projectId)] ?? {};
 }
 
 /**
@@ -105,73 +117,29 @@ export function updateResourceSelections(
 }
 
 /**
- * One project's selection in a panel's web view state.
+ * The setting's value with the given fields of one project's selection in one panel changed, as
+ * {@link updateResourceSelections} changes them. Every other panel and project is kept.
  *
- * @param state The panel's web view state
- * @param projectId The project, if one is open
- * @returns The project's selection; empty if it has none
- */
-export function getResourceSelection(
-  state: Record<string, unknown> | undefined,
-  projectId: string | undefined,
-): StoredResourceSelection {
-  return getResourceSelections(state)[getResourceSelectionKey(projectId)] ?? {};
-}
-
-/**
- * A panel's web view state with the given fields of one project's selection changed, as
- * {@link updateResourceSelections} changes them.
- *
- * @param state The panel's web view state
+ * @param saved The value of {@link RESOURCE_SELECTION_SETTING_KEY}
+ * @param resourceType The kind of resource the panel lists
  * @param projectId The project, if one is open
  * @param update The fields to change
- * @returns The state with that project's selection changed and every other project's kept
+ * @returns The new value of the setting
  */
-export function withResourceSelection(
-  state: Record<string, unknown> | undefined,
+export function updateResourceSelectionsByPanel(
+  saved: unknown,
+  resourceType: ResourcePanelType,
   projectId: string | undefined,
   update: StoredResourceSelection,
-): Record<string, unknown> {
+): ResourceSelectionsByPanel {
+  const panels = isRecord(saved) ? saved : {};
   return {
-    ...state,
-    [RESOURCE_SELECTION_BY_PROJECT_STATE_KEY]: updateResourceSelections(
-      getResourceSelections(state),
+    ScriptureResource: toResourceSelections(panels.ScriptureResource),
+    CommentaryResource: toResourceSelections(panels.CommentaryResource),
+    [resourceType]: updateResourceSelections(
+      toResourceSelections(panels[resourceType]),
       projectId,
       update,
     ),
   };
-}
-
-/** The flat keys a panel kept its selection under before it was kept per project. */
-const LEGACY_SELECTED_RESOURCE_ID_STATE_KEY = 'selectedResourceId';
-const LEGACY_USER_PICKED_RESOURCE_ID_STATE_KEY = 'userPickedResourceId';
-
-/**
- * Moves a selection saved under the old flat keys into the entry of the project the panel was saved
- * with, and removes the flat keys. That is the project the user last saw the selection in, so they
- * see the same resource after upgrading. An entry that project already has is kept.
- *
- * Done when the panel's state is built rather than in the panel itself: the provider knows which
- * project the state was saved with, while a panel reloaded for another project before it first
- * rendered would file the selection under that other project.
- *
- * @param state The panel's saved web view state
- * @param savedProjectId The project the state was saved with, if one was open
- * @returns The state with no flat selection keys
- */
-export function adoptLegacyResourceSelection(
-  state: Record<string, unknown> | undefined,
-  savedProjectId: string | undefined,
-): Record<string, unknown> {
-  const {
-    [LEGACY_SELECTED_RESOURCE_ID_STATE_KEY]: legacySelectedResourceId,
-    [LEGACY_USER_PICKED_RESOURCE_ID_STATE_KEY]: legacyUserPickedResourceId,
-    ...rest
-  } = state ?? {};
-  const selectedResourceId = toOptionalString(legacySelectedResourceId);
-  const userPickedResourceId = toOptionalString(legacyUserPickedResourceId);
-  const hasLegacySelection = selectedResourceId !== undefined || userPickedResourceId !== undefined;
-  const hasEntry = getResourceSelectionKey(savedProjectId) in getResourceSelections(state);
-  if (!hasLegacySelection || hasEntry) return rest;
-  return withResourceSelection(rest, savedProjectId, { selectedResourceId, userPickedResourceId });
 }

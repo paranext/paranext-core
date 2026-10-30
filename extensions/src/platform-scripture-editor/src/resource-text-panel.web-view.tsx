@@ -100,13 +100,16 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
 
   // resourceType is injected by the web view provider at open time
   const [resourceType] = useWebViewState<ResourceType>('resourceType', 'ScriptureResource');
-  // Kept per project: a Simple-mode project switch reloads this panel in place, with the state it
-  // already had. `userPickedResourceId` is the resource the user last chose themselves, so a
-  // selection the panel fell back to can be told apart from one the user picked. See
-  // `resolveResourceSelection` for why a fallback must not outlive a configured resource arriving.
-  // Written also by `buildResourceTextPanelState`.
-  const [{ selectedResourceId, userPickedResourceId }, updateSelection] =
-    useProjectResourceSelection(useWebViewState, projectId);
+  // Kept per project, in a user setting, so a project switch or a restart shows the project's own.
+  // `userPickedResourceId` is the resource the user last chose themselves, so a selection the panel
+  // fell back to can be told apart from one the user picked. See `resolveResourceSelection` for why
+  // a fallback must not outlive a configured resource arriving. Written also by
+  // `buildResourceTextPanelState`.
+  const [{ selectedResourceId, userPickedResourceId }, updateSelection, isSelectionLoading] =
+    useProjectResourceSelection(
+      resourceType === 'CommentaryResource' ? 'CommentaryResource' : 'ScriptureResource',
+      projectId,
+    );
 
   // #endregion
 
@@ -205,6 +208,8 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
     else if (hasCatalogError && !hasRowForSavedSelection) readiness = 'catalogError';
     else if (filteredResources.length > 0) readiness = 'configured';
   }
+  // Until the stored selection has arrived, any row shown could be the wrong one.
+  if (isSelectionLoading) readiness = 'loading';
 
   // #endregion
 
@@ -240,37 +245,49 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   // and never picks one by itself: there is no list of the user's texts to pick from, so a fallback
   // would put an arbitrary download on screen instead of "open a project".
   const arePanelRowsReady = pickerResources !== undefined;
-  const selection: ResourceSelectionResolution = projectId
-    ? resolveResourceSelection(filteredResources, {
-        selectedResourceId,
-        userPickedResourceId,
-        pendingResourceId,
-        heldFallbackRowId,
-        isListComplete:
-          effectiveResourcesState.status === 'ready' && !effectiveResourcesState.isUserLayerMissing,
-        areSourcesSettled: canResolveResourceSelection({
-          listState: effectiveResourcesState,
-          isCatalogReady,
-          hasCatalogError,
-          arePanelRowsReady,
-        }),
-        // Deliberately the stricter question. A failed catalog settles what the rows are well
-        // enough to display one, but its retry can still bring the selected row back, so a fallback
-        // derived from that absence must not be written over the stored pick. Committing a pick
-        // and migrating a legacy bare id still go through.
-        mayPersistCorrection: canPublishResourcePanelProjectIds(
-          effectiveResourcesState,
-          isCatalogReady,
-          arePanelRowsReady,
-        ),
-      })
-    : {
-        nextSelectedResourceId: undefined,
-        nextUserPickedResourceId: undefined,
-        shouldClearPending: false,
-        selectedRow: findSelectedRow(filteredResources, selectedResourceId),
-        shownFallbackRowId: undefined,
-      };
+  let selection: ResourceSelectionResolution;
+  // Nothing is shown, written or held until the stored selection has arrived: resolved without it,
+  // a stored pick would look absent and the panel would show a fallback in its place.
+  if (isSelectionLoading)
+    selection = {
+      nextSelectedResourceId: undefined,
+      nextUserPickedResourceId: undefined,
+      shouldClearPending: false,
+      selectedRow: undefined,
+      shownFallbackRowId: undefined,
+    };
+  else if (projectId)
+    selection = resolveResourceSelection(filteredResources, {
+      selectedResourceId,
+      userPickedResourceId,
+      pendingResourceId,
+      heldFallbackRowId,
+      isListComplete:
+        effectiveResourcesState.status === 'ready' && !effectiveResourcesState.isUserLayerMissing,
+      areSourcesSettled: canResolveResourceSelection({
+        listState: effectiveResourcesState,
+        isCatalogReady,
+        hasCatalogError,
+        arePanelRowsReady,
+      }),
+      // Deliberately the stricter question. A failed catalog settles what the rows are well
+      // enough to display one, but its retry can still bring the selected row back, so a fallback
+      // derived from that absence must not be written over the stored pick. Committing a pick
+      // and migrating a legacy bare id still go through.
+      mayPersistCorrection: canPublishResourcePanelProjectIds(
+        effectiveResourcesState,
+        isCatalogReady,
+        arePanelRowsReady,
+      ),
+    });
+  else
+    selection = {
+      nextSelectedResourceId: undefined,
+      nextUserPickedResourceId: undefined,
+      shouldClearPending: false,
+      selectedRow: findSelectedRow(filteredResources, selectedResourceId),
+      shownFallbackRowId: undefined,
+    };
   // Behind the catalog-error view nothing is on screen, so the first-row fallback must not keep a
   // chapter subscription open or become what Ctrl+F searches.
   const selectedRef = readiness === 'catalogError' ? undefined : selection.selectedRow;

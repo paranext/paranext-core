@@ -6469,46 +6469,69 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4350 (NN 5B Opening a resource always correctly loads it) and PT-4470, the
   catalog-window regression, found in review of the fix for the loading window.
 
-## adr-panel-selection-per-project-in-web-view-state: A reference panel keeps its selection per project in its own web view state, keyed by project id
+## adr-panel-selection-per-project-in-user-setting: A reference panel keeps its selection per project in a hidden user setting
 
-- **Date:** 2026-10-29
+- **Date:** 2026-10-30
 - **Status:** Accepted
 - **Context:** In Simple mode the Bible texts and Commentaries panels follow the project in the middle
   column. A project switch does not open new panels: `openResourceText` (`main.ts`) reloads the open
-  panel in place with the new `projectId`, and the provider builds it from the state it already had.
-  The selection lived in two flat web view state keys, so a pick made in one project carried over to
-  the next. It stayed on screen wherever the picked resource was also listed, and a downloaded or
-  shared resource is listed in every project (PT-4950).
-- **Decision:** Each panel keeps one record in its web view state,
-  `resourceSelectionByProjectId: { [projectId]: { selectedResourceId, userPickedResourceId } }`,
-  with an empty-string key for "no project open" (`resource-selection-state.utils.ts`). The panel
-  reads and writes only its own project's entry, through `useProjectResourceSelection`. Both ids are
-  written in one update, so no render sees the selection without the pick. A project with no entry
-  falls through to `resolveResourceSelection` unchanged. "No project" gets its own entry, so a
-  project's pick never shows with no project open. The provider's `buildResourceTextPanelState`
-  files a resource asked for from Home under the project the panel is being built for. It also moves
-  a selection saved under the old flat keys into the entry of the project the layout was saved with.
-  That move happens in the provider, not the panel, because only the provider knows both the saved
-  project and the incoming one. A panel that adopted the flat keys on first render could be reloaded
-  for another project first and file them there.
+  panel with the new `projectId`, and the provider builds it from the state it already had. The
+  selection lived in two flat web view state keys, so a pick made in one project carried over to the
+  next. It stayed on screen wherever the picked resource was also listed, and a downloaded or shared
+  resource is listed in every project (PT-4950). The selection was also lost at every restart:
+  Simple mode loads the baked `simpleLayout` with fresh web view ids at each launch and never saves
+  its layout, so no web view state survives. PT-4950 asks for both.
+- **Decision:** The selections live in one hidden user setting,
+  `platformScriptureEditor.resourceSelectionByProjectId`, holding
+  `{ [resourceType]: { [projectId]: { selectedResourceId, userPickedResourceId } } }`, with an
+  empty-string project key for "no project open" (`resource-selection-state.utils.ts`). This is the
+  store "Per-web-view state lives in the web view definition" in `Paranext-Core-Patterns.md` names
+  for per-project memory, and `adr-per-web-view-state-lives-in-the-definition` records why.
+  - **Reads.** The panel reads its own project's entry with `useSetting`, through
+    `useProjectResourceSelection`, and shows the loading view until the setting has arrived, so a
+    stored pick is never mistaken for an absent one and replaced with a fallback.
+  - **Writes.** Every write goes through the `platformScriptureEditor.updateResourceSelection`
+    command, which merges one project's entry into the setting in the extension host and runs
+    writes one at a time (`resource-selection-store.ts`). The setting is replaced whole on every
+    write, so two writers each reading it first would undo each other; one serialized
+    read-modify-write in one process rules that out for both panels and the provider alike. Both ids
+    are written in one update, so no render sees the selection without the pick.
+  - **Stale renders.** The hook writes only for the project the panel mounted with. During a switch
+    the outgoing document can render once more with the incoming project's id while it still holds
+    the outgoing project's resources; a fallback resolved from those would otherwise be stored as
+    the incoming project's selection.
+  - **Home.** `buildResourceTextPanelState` stores a resource asked for from Home as the incoming
+    project's selection, marked as the user's pick, before the provider returns the definition, so
+    the panel shows it from its first render. `showResourceNow` reads the same entry to decide
+    whether the tab already shows the resource.
+  - A project with no entry falls through to `resolveResourceSelection` unchanged.
 - **Alternatives:**
+  - *Web view state keyed by project* (`resourceSelectionByProjectId` in the panel's own state):
+    rejected. It fixes the project switch, but Simple mode keeps no web view state across a
+    restart, so every pick is forgotten at each launch.
+  - *`localStorage` keyed by project*, as the Comments panel keeps its filters
+    (`adr-comment-machine-local-storage`): rejected. It survives a restart, but it is a second store
+    for what the patterns doc puts in user settings. Each panel would also have to coordinate the
+    two panels' and the provider's writes itself, and the extension host — where the provider and
+    `showResourceNow` run — cannot read a web view's `localStorage`.
   - *Per-user project settings* (`setUserReferencedProjectsAndResources`, which already puts a
     picker pick first): rejected. Dropdown picks do not write there, and writing on every pick would
     turn a view preference into project data. That data travels with Send/Receive, is gated by the
     write lock, and for a resource project is written into the resource folder itself (PT-4895).
   - *Tag one selection with its owning project*, as `usePublishNavigableProjectIds` tags
     `navigableProjectIds` with `navigableProjectIdsOwningProjectId`: rejected for this case. An owner
-    tag can only discard a foreign value, so switching A → B → A would forget A's pick. The record
-    applies the same idea (state is labelled with the project it belongs to) to every project.
-  - *Reset the selection on project change*: rejected for the same reason. It loses the pick in the
-    project the user returns to.
-  - *Drop the old flat keys on upgrade*: rejected. Every Simple-mode panel would reset to its first
-    configured resource on first launch after the upgrade.
-- **Consequences:** The record grows by one small entry per project a panel has shown; entries are
-  not pruned. A hidden panel needs no catch-up: the switch reloads it like a visible one, and picking
-  the selection is data, not layout. The Model text panel and the Text Collection keep no selection
-  in web view state today. If either comes to keep a per-project choice there, it should key it by
-  project the same way rather than in flat keys.
+    tag can only discard a foreign value, so switching A → B → A would forget A's pick.
+  - *Reset the selection on project change*: rejected for the same reason.
+  - *Write the setting from the web view with `useSetting`'s setter*: rejected. The setter replaces
+    the whole value, so the hook would need its own copy of the latest write to build the next one
+    from, and the provider's Home writes would still race it.
+- **Consequences:** Picks survive project switches and restarts. Selections made before this change
+  are not carried over: in Simple mode they lived in web view state discarded at each launch, so
+  there is nothing to carry. A Power-mode layout can still hold the old flat keys; they are ignored,
+  and that panel shows its first configured resource once. The setting grows by one small entry per project a panel has shown; entries are not
+  pruned, including for deleted projects. A write shows once the setting reports it back, a round
+  trip to the extension host. A hidden panel needs no catch-up: the switch reloads it like a visible
+  one, and picking the selection is data, not layout.
 
 ## adr-papi-websocket-hostname-bind: The PAPI websocket binds by hostname, and readiness is awaited rather than assumed
 
