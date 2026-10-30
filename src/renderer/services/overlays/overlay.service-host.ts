@@ -153,20 +153,27 @@ const latestCommandPaletteRequestSeqByWebView = new Map<string, number>();
 
 // ── Focus Save/Restore ──
 
-/** Saved focus subject per overlay ID, captured via windowService.getFocus() */
-const savedFocusState = new Map<string, FocusSubject>();
+/** What was focused when an overlay opened, and which web view asked for the overlay. */
+interface SavedFocus {
+  subject: FocusSubject;
+  /** Id of the web view (or service) that requested the overlay */
+  requesterId: string;
+}
+
+/** Saved focus per overlay ID, captured via windowService.getFocus() */
+const savedFocusState = new Map<string, SavedFocus>();
 
 /**
  * Captures the current window focus subject and stores it for later restoration. Uses the window
  * service's getFocus API instead of postMessage to iframes.
  */
-async function saveFocus(overlayId: string): Promise<void> {
+async function saveFocus(overlayId: string, requesterId: string): Promise<void> {
   try {
     const focusSubject = await windowService.getFocus();
     // Guard against writing stale entries after the overlay has been dismissed.
     // saveFocus is called without await, so restoreFocus may delete the entry before we get here.
     if (focusSubject && getOverlayById(overlayId)) {
-      savedFocusState.set(overlayId, focusSubject);
+      savedFocusState.set(overlayId, { subject: focusSubject, requesterId });
     }
   } catch {
     // Best-effort focus save
@@ -180,44 +187,67 @@ async function saveFocus(overlayId: string): Promise<void> {
 let lastTrackedFocusId: string | undefined;
 
 /**
- * Whether focus already moved away from `saved` to somewhere other than this overlay: the page's
- * active element is a frame or shell control outside overlay content, or the tracked focus id
- * differs from the saved subject's.
+ * Surfaces the overlay service itself renders, as opposed to the generic popper wrapper that shell
+ * menus (Menubar, DropdownMenu) share. Focus inside one of these still belongs to the overlay that
+ * is closing, so a restore may proceed. The context menu's items are portalled into
+ * `.overlay-context-menu-content`; `[data-overlay-context-menu]` only marks its hidden trigger.
  */
-function hasFocusMovedElsewhere(saved: FocusSubject): boolean {
+const OVERLAY_FOCUS_SURFACE_SELECTOR =
+  '[data-overlay-host], [data-overlay-modal-dialog], [data-overlay-popover], [data-overlay-command-palette], [data-overlay-context-menu], .overlay-context-menu-content';
+
+/**
+ * Whether focus already moved away from the saved subject to somewhere other than the closing
+ * overlay: the page's active element is a frame or shell control outside the overlay's own
+ * surfaces, or the tracked focus id differs from both the saved subject's and the requester's. The
+ * requester counts as not moved, since the tracked focus can lag behind a right-click that changed
+ * which pane is focused.
+ */
+function hasFocusMovedElsewhere(saved: SavedFocus): boolean {
   const active = document.activeElement;
-  if (active && active !== document.body && !active.closest(OVERLAY_CONTENT_SELECTOR)) return true;
-  return (
-    saved.focusType !== 'other' &&
-    lastTrackedFocusId !== undefined &&
-    lastTrackedFocusId !== saved.id
-  );
+  if (active && active !== document.body && !active.closest(OVERLAY_FOCUS_SURFACE_SELECTOR)) {
+    return true;
+  }
+  if (saved.subject.focusType === 'other') return false;
+  if (lastTrackedFocusId === undefined) return false;
+  return lastTrackedFocusId !== saved.subject.id && lastTrackedFocusId !== saved.requesterId;
 }
 
 /**
  * Restores focus to the subject that was active when the overlay was created. Uses the window
  * service's setFocus API to return focus to the original webView or tab.
  *
- * Skipped when the user already moved focus elsewhere (clicked into another pane or onto a tab
- * header): returning focus across frames blurs the window they moved to and closes whatever they
- * opened there. Escape or picking an item still restores, because focus is then inside overlay
- * content or nowhere.
+ * Skipped when the user already moved focus elsewhere (clicked into another pane, onto a tab
+ * header, or onto a shell control): returning focus across frames blurs the window they moved to
+ * and closes whatever they opened there. Escape or picking an item still restores, because focus is
+ * then inside overlay content or nowhere.
+ *
+ * The saved entry is taken synchronously, but the decision waits one task. A press in the parent
+ * document dismisses a Radix-based overlay from its `pointerdown` listener, before the browser's
+ * default action for that press has moved focus; deciding immediately would see the overlay's own
+ * content still focused and then pull focus off what the user just clicked.
  */
 function restoreFocus(overlayId: string): void {
-  const focusSubject = savedFocusState.get(overlayId);
+  const saved = savedFocusState.get(overlayId);
   savedFocusState.delete(overlayId);
 
-  if (!focusSubject || focusSubject.focusType === 'other') return;
-  if (hasFocusMovedElsewhere(focusSubject)) return;
+  if (!saved || saved.subject.focusType === 'other') return;
 
-  // setFocus accepts SetFocusSubject (webView or tab with id) — pass only the fields it needs
-  const setFocusTarget =
-    focusSubject.focusType === 'webView'
-      ? focusSubject
-      : { focusType: focusSubject.focusType, id: focusSubject.id };
-  windowService.setFocus(setFocusTarget).catch(() => {
-    // Best-effort focus restore
-  });
+  setTimeout(() => {
+    if (hasFocusMovedElsewhere(saved)) return;
+
+    // When the requester's pane is the tracked focus but the saved subject is stale, restore to the
+    // requester instead.
+    const subject: FocusSubject =
+      lastTrackedFocusId === saved.requesterId && lastTrackedFocusId !== saved.subject.id
+        ? { focusType: 'webView', id: saved.requesterId }
+        : saved.subject;
+    // setFocus accepts SetFocusSubject (webView or tab with id) — pass only the fields it needs
+    const setFocusTarget =
+      subject.focusType === 'webView' ? subject : { focusType: subject.focusType, id: subject.id };
+    windowService.setFocus(setFocusTarget).catch(() => {
+      // Best-effort focus restore
+    });
+  }, 0);
 }
 
 // ── Aria-Live Announcements ──
@@ -506,7 +536,7 @@ async function showContextMenu(
   });
 
   const overlayId = newGuid();
-  saveFocus(overlayId);
+  saveFocus(overlayId, webViewId);
 
   const rawPosition = options?.position ?? { x: 0, y: 0 };
   const translatedPosition = translateCoordinates(webViewId, rawPosition);
@@ -582,7 +612,7 @@ export async function showModalDialogOverlay<TReturn>(
   const overlayId = newGuid();
 
   // Save current focus state for later restoration
-  saveFocus(overlayId);
+  saveFocus(overlayId, webViewId);
 
   const title = typeof props.title === 'string' ? props.title : 'Dialog';
   announceLocalizedToScreenReader('%overlay_aria_dialogOpened%', { title });
@@ -674,7 +704,7 @@ async function showPopover(request: PopoverRequest, webViewId: string): Promise<
   const overlayId = newGuid();
 
   // Save current focus state for later restoration
-  saveFocus(overlayId);
+  saveFocus(overlayId, webViewId);
 
   // Translate coordinates from iframe-relative to document-relative
   const translatedPosition = translateCoordinates(webViewId, request.anchor);
@@ -913,7 +943,7 @@ async function showCommandPalette(
   const overlayId = newGuid();
 
   // Save current focus state for later restoration
-  saveFocus(overlayId);
+  saveFocus(overlayId, webViewId);
 
   // Translate coordinates from iframe-relative to document-relative (if anchored)
   let position: { x: number; y: number } | undefined;
