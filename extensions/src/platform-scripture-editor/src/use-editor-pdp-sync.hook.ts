@@ -3,6 +3,7 @@ import type { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { areUsjContentsEqualExceptWhitespace } from 'platform-bible-utils';
 import { MutableRefObject, useEffect, useRef } from 'react';
+import { withoutZeroWidthNoBreakSpaces } from './debounced-pdp-save.util';
 import {
   areUsjContentDivergencesEquivalent,
   describeUsjContentDivergence,
@@ -58,14 +59,19 @@ export interface EditorDocumentSelector {
  * `areUsjContentsEqualExceptWhitespace` shallow-compares every top-level property except `content`
  * — `version` included. Convergence is a question about content: the editor reports the version of
  * the document it was loaded with, which normally is the PDP's, but a version-only difference must
- * not keep a round trip that converged from being reported as converged.
+ * not keep a round trip that converged from being reported as converged. Nor must a stored
+ * zero-width no-break space, which the editor goes on holding after a save has dropped it (see
+ * {@link withoutZeroWidthNoBreakSpaces}).
  */
 function areUsjContentsEqualIgnoringVersion(
   editorUsj: Usj | undefined,
   pdpUsj: Usj | undefined,
 ): boolean {
   if (!editorUsj || !pdpUsj) return areUsjContentsEqualExceptWhitespace(editorUsj, pdpUsj);
-  return areUsjContentsEqualExceptWhitespace({ ...editorUsj, version: pdpUsj.version }, pdpUsj);
+  return areUsjContentsEqualExceptWhitespace(
+    withoutZeroWidthNoBreakSpaces({ ...editorUsj, version: pdpUsj.version }),
+    withoutZeroWidthNoBreakSpaces(pdpUsj),
+  );
 }
 
 /** Whether two selectors identify the same chapter document (see {@link EditorDocumentSelector}). */

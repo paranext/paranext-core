@@ -1238,6 +1238,52 @@ describe('useEditorPdpSync', () => {
     expect(mockLoggerWarn).not.toHaveBeenCalled();
   });
 
+  // The editor keeps a stored U+FEFF on screen after a save has dropped it from the file, so the
+  // file's text differing by that character alone is a round trip that converged.
+  it('treats a round trip that differs only by a dropped zero-width no-break space as converged', () => {
+    const editorContent = makeChapterUsj('14', 'ma\uFEFFtch');
+    const differentInitial = makeChapterUsj('14', 'other');
+    const convergedEcho = makeChapterUsj('14', 'match');
+
+    const setUsjSpy = vi.fn();
+    const saveUsjToPdpIfUpdated = vi.fn();
+    const editorRef: { current: EditorRef | null } = {
+      // EditorRef has many members; casting from a minimal stub is intentional in tests
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      current: {
+        setUsj: setUsjSpy,
+        getUsj: () => editorContent,
+        isFocused: () => true,
+      } as unknown as EditorRef,
+    };
+    const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
+    const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
+
+    const { rerender } = renderHook(
+      ({ usjFromPdp }: { usjFromPdp: Usj }) => {
+        useEditorPdpSync({
+          usjFromPdp,
+          documentSelector: lev14Selector,
+          editorRef,
+          usjSentToPdp,
+          lastLocalEditTimestamp,
+          setEditorUsj,
+          saveUsjToPdpIfUpdated,
+        });
+      },
+      { initialProps: { usjFromPdp: differentInitial } },
+    );
+    setUsjSpy.mockClear();
+    saveUsjToPdpIfUpdated.mockClear();
+    mockLoggerWarn.mockClear();
+
+    act(() => rerender({ usjFromPdp: convergedEcho }));
+
+    expect(setUsjSpy).not.toHaveBeenCalled();
+    expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled();
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
+  });
+
   // Telemetry: if incoming Scripture keeps getting deferred without the round-trip ever converging,
   // that is worth a single warning (a non-idempotent round-trip or a concurrent external edit).
   it('logs a single warning once deferrals reach the non-convergence threshold', () => {

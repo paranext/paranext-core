@@ -810,12 +810,18 @@ async function editThenUndo(
   return { afterEdit, afterUndo };
 }
 
-/** Steps 1–3: loading writes nothing; the first save normalizes exactly; at rest, undo is exact. */
+/**
+ * Steps 1–3: loading writes nothing; the first save normalizes exactly; at rest, undo is exact.
+ *
+ * @param expectedFirstSave What the first save and its undo leave in the file, where that is more
+ *   than {@link expectedAfterFirstSave} says.
+ */
 async function runLoadAndUndoSteps(
   mainPage: Page,
   editorInput: Locator,
   chapter: ChapterCase,
   installed: Buffer,
+  expectedFirstSave: Buffer = expectedAfterFirstSave(installed, chapter.chapterNum),
 ): Promise<Buffer> {
   const bookPath = installedBookPath(chapter.bookFile);
   const installedMtimeMs = fs.statSync(bookPath).mtimeMs;
@@ -860,7 +866,7 @@ async function runLoadAndUndoSteps(
     .toBe(true);
   await expectSameBytes(
     chapter.bookFile,
-    expectedAfterFirstSave(installed, chapter.chapterNum),
+    expectedFirstSave,
     first.afterUndo,
     'installed-with-known-first-save-normalization',
     'after-first-edit-and-undo',
@@ -2030,7 +2036,7 @@ const INVISIBLE_CHAPTER: ChapterCase = {
   localEdits: [],
 };
 
-/** Another chapter of the same book, to navigate to and back. */
+/** Another chapter of the same book, to navigate to and back; the edits never touch it. */
 const INVISIBLE_OTHER_CHAPTER = { reference: 'Jonah 4:1', renderedText: 'sun beat on' };
 
 /**
@@ -2066,6 +2072,11 @@ function seededVerses(
         `with${c['left-to-right mark U+200E']} sackcloth, and sat${c['right-to-left mark U+200F']} ` +
         `in a${c['zero-width no-break space U+FEFF']}shes.`,
     },
+    {
+      unit: '4:1',
+      bundled: 'But it displeased Jonah exceedingly, and he was angry.',
+      seeded: `But it displeased Jonah exceed${c['zero-width no-break space U+FEFF']}ingly, and he was angry.`,
+    },
   ];
 }
 
@@ -2080,6 +2091,25 @@ function seededBook(setting: InvisibleCharactersSetting): Buffer {
     fs.readFileSync(path.join(BUNDLED_WEB_DIR, INVISIBLE_CHAPTER.bookFile), 'utf8'),
   );
   return Buffer.from(text, 'utf8');
+}
+
+/** `book` with every zero-width no-break space gone from chapter `chapterNum`, and only there. */
+function withoutZeroWidthNoBreakSpacesInChapter(book: Buffer, chapterNum: number): Buffer {
+  const lines = book.toString('utf8').split('\n');
+  const start = lines.findIndex((line) => new RegExp(`^\\\\c ${chapterNum}(?!\\d)`).test(line));
+  if (start < 0) throw new Error(`No \\c ${chapterNum} line in the book`);
+  const next = lines.findIndex((line, index) => index > start && /^\\c \d+/.test(line));
+  const end = next < 0 ? lines.length : next;
+  return Buffer.from(
+    lines
+      .map((line, index) =>
+        index >= start && index < end
+          ? line.replaceAll(INVISIBLE_CHARACTERS['zero-width no-break space U+FEFF'], '')
+          : line,
+      )
+      .join('\n'),
+    'utf8',
+  );
 }
 
 /** The bundled settings file with `AllowInvisibleChars` turned on, as Paratext 9 writes it. */
@@ -2154,7 +2184,7 @@ type InsertionGesture = 'typed' | 'pasted';
  * view:
  *
  * - A zero-width no-break space (U+FEFF) is dropped, in either setting: Paratext 9's editor uses it
- *   only to position its caret and removes every one when it saves.
+ *   only to position its caret and removes every one from the text it saves.
  * - A no-break space typed as a character with the setting off is a space: the author's no-break
  *   space is typed as `~`, and Paratext 9 saves every U+00A0 left in its view as a space unless the
  *   project allows invisible characters. Pasted, it is the project's no-break space.
@@ -2397,17 +2427,22 @@ const SEEDED_COPIES = [
  *
  * 1. **Opening and navigating writes nothing.** Open the chapter, go to another and back: no file of
  *    the project changes.
- * 2. **An edit elsewhere keeps every seeded character.** The first save and an undo, then the same at
- *    rest ({@link runLoadAndUndoSteps}): the seeded characters come back exactly as seeded, with
- *    only the known first-save normalization around them.
+ * 2. **An edit saves the chapter without a stored zero-width no-break space.** Copying first gives
+ *    every seeded character out, that one included. Then the first save and an undo, then the same
+ *    at rest ({@link runLoadAndUndoSteps}): as in Paratext 9, the save the edit caused drops U+FEFF
+ *    from the chapter it rewrites and no further, so the one in the next chapter stays. Every other
+ *    seeded character comes back exactly as seeded, with only the known first-save normalization
+ *    around them.
  * 3. **Each character typed, then pasted, saves as Paratext 9 saves it.** In the middle of a word, so
  *    no whitespace rule applies: a no-break space saves as the project spells it (`~` with the
  *    setting off, U+00A0 with it on) — but one typed with the setting off is a space — a zero-width
  *    no-break space is dropped, and every other character saves as itself ({@link savedInsertion});
  *    deleting each restores the file.
- * 4. **Copying gives the characters out.** A copy of each seeded verse puts them on the clipboard as
- *    Paratext 9 does — a no-break space as the project spells it — never as the editor's internal
- *    stand-in (U+001A).
+ * 4. **Copying gives the characters out.** With the chapter loaded again, so the editor holds what the
+ *    file does, a copy of each seeded verse puts them on the clipboard as Paratext 9 does — a
+ *    no-break space as the project spells it — never as the editor's internal stand-in (U+001A).
+ * 5. **Typing goes on at the caret through a save that drops one.** Two keys in the next chapter, its
+ *    save landing between them: both save side by side, and that chapter's U+FEFF goes.
  */
 export async function runInvisibleCharacters(
   { mainPage, electronApp }: { mainPage: Page; electronApp: ElectronApplication },
@@ -2451,8 +2486,26 @@ export async function runInvisibleCharacters(
     await expectProjectUnchanged(baseline, 'opening and navigating');
   });
 
-  const atRest = await test.step(`${where}: an edit elsewhere keeps every seeded character`, () =>
-    runLoadAndUndoSteps(mainPage, editorInput, INVISIBLE_CHAPTER, installed));
+  await test.step(`${where}: copying before any edit gives every stored character out`, async () => {
+    // Chained: both copies go through the one OS clipboard.
+    await SEEDED_COPIES.reduce(async (previous, copy) => {
+      await previous;
+      await copySeededVerse(context, view, setting, copy, installed.toString('utf8'));
+    }, Promise.resolve());
+  });
+
+  const atRest =
+    await test.step(`${where}: an edit drops a stored U+FEFF from the chapter it saves`, () =>
+      runLoadAndUndoSteps(
+        mainPage,
+        editorInput,
+        INVISIBLE_CHAPTER,
+        installed,
+        expectedAfterFirstSave(
+          withoutZeroWidthNoBreakSpacesInChapter(installed, INVISIBLE_CHAPTER.chapterNum),
+          INVISIBLE_CHAPTER.chapterNum,
+        ),
+      ));
 
   const afterTyped =
     await test.step(`${where}: each character typed saves as Paratext 9 saves it`, () =>
@@ -2462,6 +2515,9 @@ export async function runInvisibleCharacters(
       enterAndDeleteEachCharacter(context, view, setting, 'pasted', afterTyped));
 
   await test.step(`${where}: copying gives the characters out`, async () => {
+    // The editor holds a dropped U+FEFF until the chapter next loads.
+    await goTo(INVISIBLE_OTHER_CHAPTER.reference, INVISIBLE_OTHER_CHAPTER.renderedText);
+    await goTo(INVISIBLE_CHAPTER.reference, INVISIBLE_CHAPTER.renderedText);
     // Chained: both copies go through the one OS clipboard.
     await SEEDED_COPIES.reduce(async (previous, copy) => {
       await previous;
@@ -2478,6 +2534,36 @@ export async function runInvisibleCharacters(
     'at-the-end-of-the-run',
     `${where}: copying changed the book file`,
   );
+
+  await test.step(`${where}: typing goes on at the caret through a save that drops a U+FEFF`, async () => {
+    const bookPath = installedBookPath(INVISIBLE_CHAPTER.bookFile);
+    const zeroWidthNoBreakSpace = INVISIBLE_CHARACTERS['zero-width no-break space U+FEFF'];
+    await goTo(INVISIBLE_OTHER_CHAPTER.reference, INVISIBLE_OTHER_CHAPTER.renderedText);
+    await selectInEditor(editorInput, 'he was |angry.');
+    await mainPage.keyboard.type('x');
+    const afterFirstKey = await waitForSaveToSettle(mainPage, bookPath, afterPasted);
+    // The caret is not placed again: the second key lands wherever the save's echo left it.
+    await mainPage.keyboard.type('y');
+    const afterSecondKey = await waitForSaveToSettle(
+      mainPage,
+      bookPath,
+      afterFirstKey ?? afterPasted,
+    );
+    const text = (afterSecondKey ?? afterFirstKey ?? afterPasted).toString('utf8');
+    const beforeNextChapter = (book: string) => book.slice(0, book.indexOf('\\c 4'));
+    expect
+      .soft(visible(text), `${where}: both keys should save at the caret, one after the other`)
+      .toContain('exceedingly, and he was xyangry.');
+    expect
+      .soft(text.includes(zeroWidthNoBreakSpace), `${where}: the save should have dropped U+FEFF`)
+      .toBe(false);
+    expect
+      .soft(
+        visible(beforeNextChapter(text)),
+        `${where}: an edit in Jonah 4 should not change the chapters before it`,
+      )
+      .toBe(visible(beforeNextChapter(afterPasted.toString('utf8'))));
+  });
 }
 
 // #endregion

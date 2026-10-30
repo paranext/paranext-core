@@ -164,7 +164,11 @@ import {
   isEditMenuCommand,
 } from './edit-menu-actions.util';
 import { createFlushableDebouncer } from './flushable-debouncer.util';
-import { isEditorContentForChapter, performDebouncedPdpSave } from './debounced-pdp-save.util';
+import {
+  editorHoldsUnsavedChanges,
+  isEditorContentForChapter,
+  performDebouncedPdpSave,
+} from './debounced-pdp-save.util';
 import {
   PLATFORM_CARET_RESTORE_TIMERS,
   isCaretPlacedAt,
@@ -4146,7 +4150,8 @@ function PlatformScriptureEditor({
             return true;
           }
           const editorUsj = editorRef.current?.getUsj();
-          if (!deepEqualAcrossIframes(editorUsj, newUsj)) saveUsjToPdpIfUpdatedInternal(editorUsj);
+          if (editorHoldsUnsavedChanges(editorUsj, newUsj))
+            saveUsjToPdpIfUpdatedInternal(editorUsj);
         }
         return true;
       } catch (e) {
