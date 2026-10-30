@@ -7,6 +7,7 @@ using Paranext.DataProvider.Projects.SendReceive;
 using Paratext.Data;
 using Paratext.Data.Archiving;
 using PtxUtils;
+using TestParanextDataProvider.Projects.SendReceive;
 
 namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
 {
@@ -836,7 +837,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
         {
             using DummyScrText existing = new();
             var provider = ProviderWithInstalledResource(existing);
-            var run = SyncRunResourceGuard.BeginRun([WhitelistedUid]);
+            var run = SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([WhitelistedUid]);
 
             var install = provider.InstallDblResource(WhitelistedUid);
 
@@ -861,7 +862,9 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
         {
             using DummyScrText existing = new();
             var provider = ProviderWithInstalledResource(existing);
-            using var run = SyncRunResourceGuard.BeginRun(["6c21e835eb8ca3b2"]);
+            using var run = SyncRunResourceGuardTestHelpers.RegisterRunAndDrain(
+                ["6c21e835eb8ca3b2"]
+            );
 
             var install = provider.InstallDblResource(WhitelistedUid);
 
@@ -874,7 +877,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
         {
             using DummyScrText existing = new();
             var provider = ProviderWithInstalledResource(existing);
-            var run = SyncRunResourceGuard.BeginRun([WhitelistedUid]);
+            var run = SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([WhitelistedUid]);
             var install = provider.InstallDblResource(WhitelistedUid);
             Assert.That(await FinishesWithin(install, s_stillBlockedWindow), Is.False);
 
@@ -897,7 +900,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
             using DummyScrText existing = new();
             var provider = ProviderWithInstalledResource(existing);
             SyncRunResourceGuard.WaitTimeout = TimeSpan.FromMilliseconds(50);
-            using var run = SyncRunResourceGuard.BeginRun([WhitelistedUid]);
+            using var run = SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([WhitelistedUid]);
 
             using var output = new StringWriter();
             TextWriter previousOut = Console.Out;
@@ -929,7 +932,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
                 ParatextProjects,
                 () => [new InstalledResource(null!) { DBLEntryUid = HexId.FromStr(WhitelistedUid) }]
             );
-            var run = SyncRunResourceGuard.BeginRun([WhitelistedUid]);
+            var run = SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([WhitelistedUid]);
 
             var uninstall = provider.UninstallDblResource(WhitelistedUid);
 
@@ -971,7 +974,9 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
             var install = provider.InstallDblResource(WhitelistedUid);
             Assert.That(fetchEntered.Wait(s_shouldFinishBound), Is.True, "install never started");
 
-            var begin = Task.Run(() => SyncRunResourceGuard.BeginRun([WhitelistedUid]));
+            var begin = Task.Run(
+                () => SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([WhitelistedUid])
+            );
 
             Assert.That(
                 await FinishesWithin(begin, s_stillBlockedWindow),
