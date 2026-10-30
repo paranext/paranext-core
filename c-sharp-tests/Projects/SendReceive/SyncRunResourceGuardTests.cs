@@ -332,6 +332,123 @@ namespace TestParanextDataProvider.Projects.SendReceive
 
         #endregion
 
+        #region Registering and draining as two steps
+
+        [Test]
+        public async Task RegisterRun_NeverWaits()
+        {
+            var inFlight = SyncRunResourceGuard.EnterResourceWrite(HeldUid);
+
+            var register = Task.Run(() => SyncRunResourceGuard.RegisterRun([HeldUid]));
+
+            Assert.That(
+                await FinishesWithin(register, s_shouldReturnBound),
+                Is.True,
+                "registering does not wait for the write already open"
+            );
+            Assert.That(
+                SyncRunResourceGuard.CurrentResourceIds,
+                Is.EquivalentTo(new[] { HeldUid }),
+                "the run holds its resources from registration"
+            );
+            var arriving = Task.Run(
+                () => SyncRunResourceGuard.EnterResourceWrite(HeldUid).Dispose()
+            );
+            Assert.That(
+                await FinishesWithin(arriving, s_stillBlockedWindow),
+                Is.False,
+                "a write arriving after registration waits for the run"
+            );
+
+            (await register).Dispose();
+            inFlight.Dispose();
+            Assert.That(await FinishesWithin(arriving, s_shouldReturnBound), Is.True);
+        }
+
+        [Test]
+        public async Task WaitForResourceWrites_ThrowsWhenCancelledAndTheRunCanStillBeDisposed()
+        {
+            var inFlight = SyncRunResourceGuard.EnterResourceWrite(HeldUid);
+            var run = SyncRunResourceGuard.RegisterRun([HeldUid]);
+            using var cancellation = new CancellationTokenSource();
+
+            var wait = Task.Run(() => run.WaitForResourceWrites(cancellation.Token));
+            Assert.That(
+                await FinishesWithin(wait, s_stillBlockedWindow),
+                Is.False,
+                "waits while the write is open"
+            );
+
+            cancellation.Cancel();
+
+            Assert.That(
+                await FinishesWithin(wait, s_shouldReturnBound),
+                Is.True,
+                "the cancel ends the wait although the write is still open"
+            );
+            Assert.That(async () => await wait, Throws.InstanceOf<OperationCanceledException>());
+            Assert.That(
+                SyncRunResourceGuard.CurrentResourceIds,
+                Is.EquivalentTo(new[] { HeldUid }),
+                "the run stays registered until its owner disposes it"
+            );
+
+            run.Dispose();
+            Assert.That(SyncRunResourceGuard.CurrentResourceIds, Is.Empty);
+            inFlight.Dispose();
+        }
+
+        [Test]
+        public async Task WaitForResourceWrites_ReturnsTrueOnceTheWritesFinish()
+        {
+            var inFlight = SyncRunResourceGuard.EnterResourceWrite(HeldUid);
+            using var run = SyncRunResourceGuard.RegisterRun([HeldUid]);
+
+            var wait = Task.Run(() => run.WaitForResourceWrites(CancellationToken.None));
+            Assert.That(await FinishesWithin(wait, s_stillBlockedWindow), Is.False);
+            inFlight.Dispose();
+
+            Assert.That(await FinishesWithin(wait, s_shouldReturnBound), Is.True);
+            Assert.That(await wait, Is.True);
+        }
+
+        [Test]
+        public void WaitForResourceWrites_ReturnsFalseWhenItTimesOut()
+        {
+            SyncRunResourceGuard.WaitTimeout = TimeSpan.FromMilliseconds(50);
+            var stuck = SyncRunResourceGuard.EnterResourceWrite(HeldUid);
+            using var run = SyncRunResourceGuard.RegisterRun([HeldUid]);
+            bool drained = true;
+
+            var log = CaptureConsole(
+                () => drained = run.WaitForResourceWrites(CancellationToken.None)
+            );
+
+            Assert.That(drained, Is.False);
+            Assert.That(log, Does.Contain("Warning").And.Contain(HeldUid).And.Contain("anyway"));
+            stuck.Dispose();
+        }
+
+        [Test]
+        public async Task WaitForResourceWrites_StopsWaitingWhenTheRunIsDisposed()
+        {
+            var inFlight = SyncRunResourceGuard.EnterResourceWrite(HeldUid);
+            var run = SyncRunResourceGuard.RegisterRun([HeldUid]);
+
+            var wait = Task.Run(() => run.WaitForResourceWrites(CancellationToken.None));
+            Assert.That(await FinishesWithin(wait, s_stillBlockedWindow), Is.False);
+            run.Dispose();
+
+            Assert.That(
+                await FinishesWithin(wait, s_shouldReturnBound),
+                Is.True,
+                "an ended run has nothing left to wait for"
+            );
+            inFlight.Dispose();
+        }
+
+        #endregion
+
         #region Run lifecycle
 
         [Test]

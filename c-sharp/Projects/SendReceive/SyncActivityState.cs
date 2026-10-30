@@ -95,7 +95,7 @@ public readonly record struct SyncActivityState(
 
     /// <summary>
     /// DBL entry uids of the resources the running run will update — the set it declared through
-    /// <see cref="SyncRunResourceGuard.BeginRun"/>, which
+    /// <see cref="SyncRunResourceGuard.RegisterRun"/>, which
     /// <see cref="SyncRunResourceGuard.CurrentResourceIds"/> reads back. Lets a consumer show a
     /// resource install as waiting for the run; the DBL provider's own wait is what keeps the two
     /// writers apart. Empty when no run is open, and while a run has not named its resources yet.
