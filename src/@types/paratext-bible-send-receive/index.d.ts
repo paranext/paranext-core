@@ -759,16 +759,12 @@ declare module 'papi-shared-types' {
     'paratextBibleSendReceive.getSyncQueue': () => Promise<SyncQueueSnapshot>;
 
     /**
-     * Cancels the running sync. When projects are waiting in the sync queue, first asks the user
-     * whether to stop the running sync and, if so, whether to also drop the waiting projects; the
-     * user can instead choose to keep syncing, and closing either question counts as the safer
-     * answer (keep syncing, keep the waiting projects).
+     * Cancels the running sync. May first ask the user whether to stop it and whether to also drop
+     * the projects waiting in the sync queue, so a caller must not assume that a cancel follows.
      *
      * @param notificationId Id of the sync notification whose Cancel was clicked, if any, passed on
-     *   to `paratextBibleSendReceive.cancelSync`: a notification of a sync that has already ended
-     *   cancels nothing. Omit it to cancel whatever sync is running.
-     * @returns `false` when the user chose to keep syncing, so nothing was cancelled; otherwise
-     *   `true` once the cancel has been sent
+     *   to `paratextBibleSendReceive.cancelSync`. Omit it to cancel whatever sync is running.
+     * @returns `false` when nothing was cancelled; otherwise `true` once the cancel has been sent
      * @experimental This command is unstable and may change or disappear without notice
      */
     'paratextBibleSendReceive.cancelSyncPrompt': (
