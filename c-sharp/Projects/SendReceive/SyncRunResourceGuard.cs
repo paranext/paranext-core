@@ -23,10 +23,12 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// disposed. The check and the mark happen under one lock, so no run can slip in between them.
 /// </description></item>
 /// <item><description>
-/// <b>A starting run waits for in-flight writes of its resources.</b> <see cref="BeginRun"/>
-/// registers the run first — so a write of one of its resources that arrives from then on waits —
-/// and then waits for the write scopes already open on any of its uids to close. Registering before
-/// draining means a stream of new installs cannot starve the run.
+/// <b>A starting run waits for in-flight writes of its resources.</b> <see cref="RegisterRun"/>
+/// registers the run at once — so a write of one of its resources that arrives from then on waits —
+/// and <see cref="Run.WaitForResourceWrites"/> then waits for the write scopes already open on any
+/// of its uids to close. Registering before draining means a stream of new installs cannot starve
+/// the run. The drain is cancellable, so a sync waiting on a user's install still answers its
+/// Cancel.
 /// </description></item>
 /// </list>
 /// Both waits are bounded by <see cref="WaitTimeout"/>, measured per counterpart: a write passed
@@ -43,18 +45,19 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// </para>
 /// <para>
 /// <b>Lifecycle for the sync implementation</b> (nothing in open-source Platform.Bible runs a sync,
-/// so there <see cref="BeginRun"/> is never called and every <see cref="EnterResourceWrite"/>
-/// returns at once):
+/// so there no run is ever registered and every <see cref="EnterResourceWrite"/> returns at once):
 /// <list type="bullet">
 /// <item><description>
-/// Call <see cref="BeginRun"/> with the DBL entry uids of every resource the run will update,
+/// Call <see cref="RegisterRun"/> with the DBL entry uids of every resource the run will update,
 /// BEFORE the run's connected-resource update loop starts, and dispose the handle once the run has
-/// ended — success or failure — in a <c>finally</c> or <c>using</c>.
+/// ended — success, failure or cancel — in a <c>finally</c> or <c>using</c>. It never waits, so
+/// the run can announce the resources it holds before it starts waiting.
 /// </description></item>
 /// <item><description>
-/// Call it on a background thread: it can block for up to <see cref="WaitTimeout"/>. Never call it
-/// while holding a lock the DBL provider needs to finish a write, or the write it waits for cannot
-/// finish until the timeout.
+/// Then call <see cref="Run.WaitForResourceWrites"/> with the sync's cancellation token, before
+/// the first resource write. Call it on a background thread: it can block for up to
+/// <see cref="WaitTimeout"/>. Never call it while holding a lock the DBL provider needs to finish a
+/// write, or the write it waits for cannot finish until the timeout.
 /// </description></item>
 /// <item><description>
 /// The run's own resource updates must NOT go through <see cref="EnterResourceWrite"/> (or through
@@ -65,12 +68,13 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// </para>
 /// <para>
 /// <b>No thread affinity.</b> All state is guarded by one private monitor, released while waiting.
-/// <see cref="BeginRun"/>, <see cref="EnterResourceWrite"/> and the handles' <c>Dispose</c> may run on
-/// any threads — an <c>await</c> between opening and disposing a handle is fine.
+/// <see cref="RegisterRun"/>, <see cref="Run.WaitForResourceWrites"/>,
+/// <see cref="EnterResourceWrite"/> and the handles' <c>Dispose</c> may run on any threads — an
+/// <c>await</c> between opening and disposing a handle is fine.
 /// </para>
 /// <para>
 /// <b>One run at a time.</b> Send/Receive already admits one sync at a time, so a second
-/// <see cref="BeginRun"/> while a run is open is a programming error and throws. Write scopes are
+/// <see cref="RegisterRun"/> while a run is open is a programming error and throws. Write scopes are
 /// counted per uid: writes of different resources hold scopes at once, and two writes of the same
 /// resource are already serialized by the DBL provider's own lock. Every handle's <c>Dispose</c> is
 /// idempotent, and disposing a stale run handle never ends a newer run.
@@ -143,65 +147,57 @@ internal static class SyncRunResourceGuard
     }
 
     /// <summary>
-    /// Opens a run that holds <paramref name="dblEntryUids"/> until the returned handle is disposed,
-    /// once every write scope already open on one of them has closed (or <see cref="WaitTimeout"/>
-    /// has elapsed — then logs a warning and opens anyway). Blank ids are ignored, so a run with none
-    /// holds nothing and never waits. See the class remarks for when and where to call this.
+    /// Opens a run that holds <paramref name="dblEntryUids"/> until the returned handle is disposed.
+    /// Never waits: a write of one of these resources that starts from now on waits for the run,
+    /// while writes already open are drained by <see cref="Run.WaitForResourceWrites"/>, which the
+    /// caller makes before its first resource write. Blank ids are ignored, so a run with none holds
+    /// nothing. See the class remarks for when and where to call this.
     /// </summary>
     /// <param name="dblEntryUids">The DBL entry uids of the resources the run will update.</param>
     /// <returns>A handle whose <c>Dispose</c> ends the run and releases every waiting write.</returns>
     /// <exception cref="InvalidOperationException">A run is already open.</exception>
-    public static IDisposable BeginRun(IEnumerable<string> dblEntryUids)
+    public static Run RegisterRun(IEnumerable<string> dblEntryUids)
     {
         ArgumentNullException.ThrowIfNull(dblEntryUids);
         var ids = dblEntryUids
             .Where(id => !string.IsNullOrWhiteSpace(id))
             .ToImmutableHashSet(StringComparer.OrdinalIgnoreCase);
 
-        Run run;
         lock (s_lock)
         {
             if (s_activeRun != null)
                 throw new InvalidOperationException(
                     "A sync run already holds DBL resources; end it before beginning another."
                 );
-            // Registered before draining, so a write of these uids arriving from now on waits for the
-            // run rather than adding to the writes the run is waiting for.
-            run = new Run(ids);
+            var run = new Run(ids);
             s_activeRun = run;
-            if (!ids.Any(s_writeCounts.ContainsKey))
-                return run;
+            return run;
         }
+    }
 
-        Console.WriteLine(
-            "A sync is waiting for an install or removal of one of its DBL resources to finish."
-        );
-
-        var budget = WaitTimeout;
-        string? warning = null;
-        lock (s_lock)
+    /// <summary>
+    /// <see cref="RegisterRun"/> followed by an uncancellable
+    /// <see cref="Run.WaitForResourceWrites"/>: opens the run once every write scope already open on
+    /// one of its resources has closed, or <see cref="WaitTimeout"/> has elapsed. For callers with no
+    /// cancellation to honor; a sync uses the two steps, so it can announce its resources before
+    /// waiting and stop waiting when cancelled.
+    /// </summary>
+    /// <param name="dblEntryUids">The DBL entry uids of the resources the run will update.</param>
+    /// <returns>A handle whose <c>Dispose</c> ends the run and releases every waiting write.</returns>
+    /// <exception cref="InvalidOperationException">A run is already open.</exception>
+    public static IDisposable BeginRun(IEnumerable<string> dblEntryUids)
+    {
+        var run = RegisterRun(dblEntryUids);
+        try
         {
-            try
-            {
-                // The run is the blocker's identity: once registered, no new write of its uids can
-                // open, so the writes it waits for are one set and one budget covers them.
-                if (!WaitWhileLocked(() => ids.Any(s_writeCounts.ContainsKey) ? run : null, budget))
-                    warning =
-                        $"Warning: gave up after {budget} waiting for an install or removal of DBL resources {string.Join(", ", ids.Where(s_writeCounts.ContainsKey))} to finish; syncing anyway.";
-            }
-            catch
-            {
-                // The caller never receives the handle, so nothing else could ever end this run.
-                if (ReferenceEquals(s_activeRun, run))
-                {
-                    s_activeRun = null;
-                    Monitor.PulseAll(s_lock);
-                }
-                throw;
-            }
+            run.WaitForResourceWrites(CancellationToken.None);
         }
-        if (warning != null)
-            Console.WriteLine(warning);
+        catch
+        {
+            // The caller never receives the handle, so nothing else could ever end this run.
+            run.Dispose();
+            throw;
+        }
         return run;
     }
 
@@ -236,7 +232,7 @@ internal static class SyncRunResourceGuard
         IDisposable scope;
         lock (s_lock)
         {
-            if (!WaitWhileLocked(HoldingRun, budget))
+            if (!WaitWhileLocked(HoldingRun, budget, CancellationToken.None))
                 warning =
                     $"Warning: gave up after {budget} waiting for the running sync to finish updating DBL resource {dblEntryUid}; writing it anyway.";
             // Under the same lock hold as the last check, so no run can begin in between.
@@ -294,13 +290,22 @@ internal static class SyncRunResourceGuard
     /// </summary>
     /// <param name="blocker">What the caller is waiting for, or null when it may proceed.</param>
     /// <param name="budget">How long one blocker may hold the caller up.</param>
+    /// <param name="cancellationToken">Ends the wait with <see cref="OperationCanceledException"/>.
+    /// Only checked when the monitor wakes, so the caller must arrange for a cancel to pulse it.</param>
     /// <returns>True when the blocker cleared; false when one blocker outlived the budget.</returns>
-    private static bool WaitWhileLocked(Func<object?> blocker, TimeSpan budget)
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was
+    /// cancelled while the blocker still named something.</exception>
+    private static bool WaitWhileLocked(
+        Func<object?> blocker,
+        TimeSpan budget,
+        CancellationToken cancellationToken
+    )
     {
         var seen = blocker();
         var elapsed = Stopwatch.StartNew();
         while (seen != null)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var remaining = budget - elapsed.Elapsed;
             if (remaining <= TimeSpan.Zero)
                 return false;
@@ -313,10 +318,75 @@ internal static class SyncRunResourceGuard
         return true;
     }
 
-    /// <summary>One open run: the uids it holds.</summary>
-    private sealed class Run(ImmutableHashSet<string> resourceIds) : IDisposable
+    /// <summary>
+    /// One registered run: the uids it holds. Returned by <see cref="RegisterRun"/>; disposing it
+    /// ends the run.
+    /// </summary>
+    internal sealed class Run : IDisposable
     {
-        public ImmutableHashSet<string> ResourceIds { get; } = resourceIds;
+        internal Run(ImmutableHashSet<string> resourceIds) => ResourceIds = resourceIds;
+
+        /// <summary>The DBL entry uids this run holds, each once.</summary>
+        public ImmutableHashSet<string> ResourceIds { get; }
+
+        /// <summary>
+        /// Waits until no write scope is open on any of this run's uids — writes that started
+        /// before <see cref="RegisterRun"/>, since later ones wait for the run instead. Returns at
+        /// once when there are none, or when this run has already ended. Bounded by
+        /// <see cref="WaitTimeout"/>: when the writes outlive it, logs a warning and returns false,
+        /// and the run proceeds anyway.
+        /// </summary>
+        /// <param name="cancellationToken">The sync's cancellation: cancelling it ends the wait at
+        /// once.</param>
+        /// <returns>True when the writes finished; false when the wait timed out.</returns>
+        /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was
+        /// cancelled before the writes finished. The run stays registered; dispose it as
+        /// usual.</exception>
+        public bool WaitForResourceWrites(CancellationToken cancellationToken)
+        {
+            // The run is the blocker's identity: once registered, no new write of its uids can open,
+            // so the writes it waits for are one set and one budget covers them. A run that has
+            // ended has nothing left to protect, so it stops waiting.
+            object? Blocker() =>
+                ReferenceEquals(s_activeRun, this) && ResourceIds.Any(s_writeCounts.ContainsKey)
+                    ? this
+                    : null;
+
+            cancellationToken.ThrowIfCancellationRequested();
+            lock (s_lock)
+            {
+                if (Blocker() == null)
+                    return true;
+            }
+
+            Console.WriteLine(
+                "A sync is waiting for an install or removal of one of its DBL resources to finish."
+            );
+
+            var budget = WaitTimeout;
+            string? warning = null;
+            // Wakes the waiter when the token is cancelled. Registered and disposed outside the
+            // lock: the callback takes it, and disposing waits for a running callback to finish.
+            using (
+                cancellationToken.Register(() =>
+                {
+                    lock (s_lock)
+                        Monitor.PulseAll(s_lock);
+                })
+            )
+            {
+                lock (s_lock)
+                {
+                    if (!WaitWhileLocked(Blocker, budget, cancellationToken))
+                        warning =
+                            $"Warning: gave up after {budget} waiting for an install or removal of DBL resources {string.Join(", ", ResourceIds.Where(s_writeCounts.ContainsKey))} to finish; syncing anyway.";
+                }
+            }
+            if (warning == null)
+                return true;
+            Console.WriteLine(warning);
+            return false;
+        }
 
         public void Dispose()
         {
