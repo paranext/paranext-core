@@ -1095,7 +1095,8 @@ export function Home({
     const isBlocked = !!project.unsupportedReason;
     const unsupportedReasonText = getUnsupportedReasonText(project);
     // Never disabled for a running sync, this project's or another's: the click is queued, and one
-    // made while this project runs asks for its next run.
+    // made while this project runs asks for its next run. Only a repeat click before the queue has
+    // reported the first one as running or waiting is ignored (see `sendReceiveProject`).
     const isRunning = syncState === 'running';
     const sendReceiveLabel = project.isLocallyAvailable ? syncText : getText;
     if (isMenuItem)
