@@ -25,6 +25,12 @@ export type SyncActivityValue = {
    * @experimental This field is unstable and may change or disappear without notice
    */
   projectIds?: readonly string[] | null;
+  /**
+   * Entry uids of the resources the running sync will update, when the backend names them
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
+  resourceIds?: readonly string[] | null;
 };
 
 /**
@@ -46,6 +52,13 @@ export type SyncActivity = {
    * @experimental This field is unstable and may change or disappear without notice
    */
   projectIds: readonly string[];
+  /**
+   * Entry uids of the resources the running sync will update. Empty when no sync runs or the
+   * backend does not name them.
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
+  resourceIds: readonly string[];
 };
 
 /**
@@ -77,6 +90,7 @@ export function isSyncActivitySnapshot(value: unknown): value is SyncActivityVal
 export const IDLE_SYNC_ACTIVITY: SyncActivity = Object.freeze({
   isSyncing: false,
   projectIds: Object.freeze([]),
+  resourceIds: Object.freeze([]),
 });
 
 /**
@@ -93,6 +107,7 @@ export function toSyncActivity(value: SyncActivityValue | undefined): SyncActivi
   return {
     isSyncing: value.isSyncing,
     projectIds: value.isSyncing ? (value.projectIds ?? []) : [],
+    resourceIds: value.isSyncing ? (value.resourceIds ?? []) : [],
   };
 }
 

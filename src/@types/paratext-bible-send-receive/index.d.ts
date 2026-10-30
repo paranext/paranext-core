@@ -408,6 +408,15 @@ declare module 'paratext-bible-send-receive' {
      */
     projectIds?: string[];
     /**
+     * DBL entry uids of the resources the running sync will update. Empty when no sync runs.
+     *
+     * Optional: an implementation that does not report it answers without it, so a consumer treats
+     * an absent value as "not named".
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    resourceIds?: string[];
+    /**
      * How the most recently completed run in this backend process turned out.
      *
      * ABSENT means "cannot say" and must never be read as either verdict. Three situations produce
@@ -459,6 +468,57 @@ declare module 'paratext-bible-send-receive' {
    * @experimental The set of values in this type may change
    */
   export type SyncOutcome = 'succeeded' | 'failed';
+
+  /**
+   * The surface that asks for a sync through `paratextBibleSendReceive.requestSync`.
+   *
+   * @experimental This type is unstable and may change shape or disappear without notice
+   */
+  export type SyncRequestSource =
+    | 'home'
+    | 'syncDialog'
+    | 'syncStatus'
+    | 'editor'
+    | 'autoSync'
+    | 'lockRetry';
+
+  /**
+   * Options of `paratextBibleSendReceive.requestSync`.
+   *
+   * @experimental This type is unstable and may change shape or disappear without notice
+   */
+  export type SyncRequestOptions = {
+    /**
+     * Whether to suppress the progress notification of the run
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    suppressNotification?: boolean;
+    /**
+     * Whether the run also syncs connected projects and resources (`syncProjects` semantics) rather
+     * than only the requested projects (`sendReceiveProjects` semantics)
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    includeConnected?: boolean;
+  };
+
+  /**
+   * Snapshot of the sync queue, carried identically by the
+   * `paratextBibleSendReceive.onSyncQueueChanged` event and the
+   * `paratextBibleSendReceive.getSyncQueue` command return.
+   *
+   * @experimental This type is unstable and may change shape or disappear without notice
+   */
+  export type SyncQueueSnapshot = {
+    /**
+     * Ids of the projects waiting for a later run, in the order they will run. Projects that are
+     * running are not included.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    waitingProjectIds: string[];
+  };
 
   /**
    * Backend-authoritative snapshot of which projects an automatic Send/Receive is blocking edits on
@@ -526,6 +586,9 @@ declare module 'papi-shared-types' {
     SyncActivitySnapshot,
     SyncProgressDetail,
     SyncProgressEvent,
+    SyncQueueSnapshot,
+    SyncRequestOptions,
+    SyncRequestSource,
     SyncState,
     SyncWriteLockSnapshot,
     UnsyncedChangesSnapshot,
@@ -647,6 +710,59 @@ declare module 'papi-shared-types' {
      * @experimental This command is unstable and may change or disappear without notice
      */
     'paratextBibleSendReceive.getSyncActivity': () => Promise<SyncActivitySnapshot>;
+
+    /**
+     * Asks for the given projects to be synced through the sync queue. If no run is in progress the
+     * projects start a run right away; requests that arrive while a run is in progress wait and are
+     * combined into one following run.
+     *
+     * An `autoSync` request never re-queues a project that is running or already waiting; the other
+     * sources do not carry that rule. Set `options.includeConnected` to run with
+     * `paratextBibleSendReceive.syncProjects` semantics (which also syncs connected projects and
+     * resources) rather than `sendReceiveProjects` semantics; a combined run uses the former when
+     * any request in it asks for it.
+     *
+     * @param projectIds Ids of the projects to sync
+     * @param source Which surface asks, so the queue can apply the source's rules
+     * @param options Optional {@link SyncRequestOptions}
+     * @returns The results for the requested ids only, once the run containing them ends. Rejects
+     *   if the projects are removed from the queue before they run (see
+     *   `paratextBibleSendReceive.removeFromSyncQueue`) or are dropped when the app quits.
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.requestSync': (
+      projectIds: string[],
+      source: SyncRequestSource,
+      options?: SyncRequestOptions,
+    ) => Promise<ResultsData>;
+
+    /**
+     * Removes projects that are waiting in the sync queue. A project that is already running is not
+     * affected; use `paratextBibleSendReceive.cancelSyncPrompt` to stop the running sync. The
+     * promise returned to each removed project's requester rejects.
+     *
+     * @param projectIds Ids of the waiting projects to remove
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.removeFromSyncQueue': (projectIds: string[]) => Promise<void>;
+
+    /**
+     * Returns the current {@link SyncQueueSnapshot} so a consumer can seed its view of the sync
+     * queue on mount rather than waiting for the next `paratextBibleSendReceive.onSyncQueueChanged`
+     * event. An in-memory read; a caller keeps its existing state when it rejects.
+     *
+     * @returns The projects currently waiting for a run
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.getSyncQueue': () => Promise<SyncQueueSnapshot>;
+
+    /**
+     * Cancels the running sync. When projects are waiting in the sync queue, asks the user whether
+     * to also drop them.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.cancelSyncPrompt': () => Promise<void>;
 
     /**
      * Commits changes in the specified project to the version history. Unless `forceCommit` is
@@ -884,6 +1000,15 @@ declare module 'papi-shared-types' {
      * @experimental This event is unstable and may change or disappear without notice
      */
     'paratextBibleSendReceive.onSyncActivityChanged': SyncActivitySnapshot;
+    /**
+     * Emitted whenever the set of projects waiting in the sync queue changes, carrying the full
+     * current {@link SyncQueueSnapshot}. Projects that are running are not waiting, so a project
+     * leaves this list when its run starts. No replay: a subscriber that starts later seeds from
+     * `paratextBibleSendReceive.getSyncQueue`.
+     *
+     * @experimental This event is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.onSyncQueueChanged': SyncQueueSnapshot;
     /**
      * Emitted by the dotnet process whenever either list of out-of-step projects changes, carrying
      * the full current {@link UnsyncedChangesSnapshot}. Also emitted once as a baseline per backend

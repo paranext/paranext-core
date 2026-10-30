@@ -46,3 +46,10 @@ export {
   type SyncActivity,
   type SyncActivityValue,
 } from './sync-activity.util';
+export {
+  IDLE_SYNC_QUEUE,
+  isSyncQueueSnapshot,
+  toSyncQueue,
+  type SyncQueue,
+  type SyncQueueValue,
+} from './sync-queue.util';
