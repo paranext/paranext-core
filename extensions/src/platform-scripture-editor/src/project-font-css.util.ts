@@ -24,7 +24,8 @@ export const FOOTNOTE_ROWS_SELECTOR =
 const FONT_FALLBACK = 'var(--usj-font-fallback, serif)';
 
 // TODO(PT-4974): Use the editor package's generateUsjFontCss({ containerSelector }) for both the
-// editor scope and the footnote rows scope, and delete this file. Until then the parity tests in project-font-css.util.test.ts pin this output to generateUsjCss.
+// editor scope and the footnote rows scope, and delete this file. Until then the parity tests in
+// project-font-css.util.test.ts pin this output to generateUsjCss.
 
 /** Escape a value for a double-quoted CSS string. */
 function escapeCssString(value: string): string {

@@ -160,6 +160,7 @@ export async function ensureFootnotesVisible(
   }
   await footnotesRoot.waitFor({ state: 'attached', timeout: 20_000 });
 }
+
 const BUNDLED_SAMPLE_WEB_DIR = path.resolve(__dirname, '../../c-sharp/assets/WEB');
 
 /**
