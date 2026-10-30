@@ -3246,21 +3246,88 @@ function createSyncMockPapi(gate: SyncGateStub = {}, projectKind: ProjectKind = 
  * of the outgoing project, then a deep sync of the incoming one.
  */
 const PROJECT_SWITCH_SYNC_COMMANDS = [
-  'paratextBibleSendReceive.sendReceiveProjects',
-  'paratextBibleSendReceive.syncProjects',
+  'paratextBibleSendReceive.requestSync',
+  'paratextBibleSendReceive.requestSync',
 ];
 
+const REQUEST_SYNC = 'paratextBibleSendReceive.requestSync';
+const DIRECT_SEND_RECEIVE = 'paratextBibleSendReceive.sendReceiveProjects';
+const DIRECT_SYNC = 'paratextBibleSendReceive.syncProjects';
+
+/** What the network service throws when no handler is registered for `command`. */
+function notRegisteredError(command: string) {
+  return new Error(`JSON-RPC Request error (-32601): No handler found for ${command}`);
+}
+
+/** Makes `requestSync` reject with `error` while every other command resolves. */
+function rejectRequestSync(
+  mockSendCommand: { mockImplementation: (fn: (commandName: string) => Promise<void>) => unknown },
+  error: Error,
+) {
+  mockSendCommand.mockImplementation(async (commandName: string) => {
+    if (commandName === REQUEST_SYNC) throw error;
+  });
+}
+
 describe('syncOnProjectSwitch', () => {
-  it('calls syncProjects with the incoming project ID', async () => {
+  it('requests the outgoing and incoming projects through the queue with source autoSync', async () => {
     const { papi, mockSendCommand } = createSyncMockPapi();
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', undefined, 'simple');
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
-    expect(mockSendCommand).toHaveBeenCalledWith(
-      'paratextBibleSendReceive.syncProjects',
-      ['proj-incoming'],
-      true,
+    expect(mockSendCommand.mock.calls).toEqual([
+      [REQUEST_SYNC, ['proj-outgoing'], 'autoSync', { includeConnected: false }],
+      [
+        REQUEST_SYNC,
+        ['proj-incoming'],
+        'autoSync',
+        { includeConnected: true, suppressNotification: true },
+      ],
+    ]);
+  });
+
+  it('falls back to the direct commands when requestSync is not registered', async () => {
+    const { papi, mockSendCommand } = createSyncMockPapi();
+    rejectRequestSync(mockSendCommand, notRegisteredError(REQUEST_SYNC));
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
+
+    expect(mockSendCommand.mock.calls).toEqual([
+      [REQUEST_SYNC, ['proj-outgoing'], 'autoSync', { includeConnected: false }],
+      [DIRECT_SEND_RECEIVE, ['proj-outgoing']],
+      [
+        REQUEST_SYNC,
+        ['proj-incoming'],
+        'autoSync',
+        { includeConnected: true, suppressNotification: true },
+      ],
+      [DIRECT_SYNC, ['proj-incoming'], true],
+    ]);
+  });
+
+  it('does not fall back for a rejection that is not a missing registration', async () => {
+    const { papi, mockSendCommand, mockWarn } = createSyncMockPapi();
+    rejectRequestSync(mockSendCommand, new Error('Project is locked by another user'));
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
+
+    expect(mockSendCommand.mock.calls.map(([cmd]) => cmd)).toEqual(PROJECT_SWITCH_SYNC_COMMANDS);
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-outgoing'));
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-incoming'));
+  });
+
+  it('treats a removed request as quiet: info log, no warning, no fallback', async () => {
+    const { papi, mockSendCommand, mockWarn, mockInfo } = createSyncMockPapi();
+    rejectRequestSync(
+      mockSendCommand,
+      new Error('JSON-RPC Request error (-32000): Removed from the sync queue (SR_REMOVED)'),
     );
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
+
+    expect(mockWarn).not.toHaveBeenCalled();
+    expect(mockInfo).toHaveBeenCalledWith(expect.stringContaining('removed from the sync queue'));
+    expect(mockSendCommand.mock.calls.map(([cmd]) => cmd)).toEqual(PROJECT_SWITCH_SYNC_COMMANDS);
   });
 
   it('keeps the progress toast for the incoming sync in Power mode', async () => {
@@ -3268,9 +3335,9 @@ describe('syncOnProjectSwitch', () => {
 
     await syncOnProjectSwitch(papi, 'proj-incoming', undefined, 'power');
 
-    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
-      'proj-incoming',
-    ]);
+    expect(mockSendCommand).toHaveBeenCalledWith(REQUEST_SYNC, ['proj-incoming'], 'autoSync', {
+      includeConnected: true,
+    });
   });
 
   it('keeps the progress toast for the incoming sync when the mode is unknown', async () => {
@@ -3278,9 +3345,9 @@ describe('syncOnProjectSwitch', () => {
 
     await syncOnProjectSwitch(papi, 'proj-incoming', undefined, undefined);
 
-    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
-      'proj-incoming',
-    ]);
+    expect(mockSendCommand).toHaveBeenCalledWith(REQUEST_SYNC, ['proj-incoming'], 'autoSync', {
+      includeConnected: true,
+    });
   });
 
   it('calls sendReceiveProjects with only the outgoing project ID when provided, even in Simple mode', async () => {
@@ -3288,9 +3355,9 @@ describe('syncOnProjectSwitch', () => {
 
     await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
-    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
-      'proj-outgoing',
-    ]);
+    expect(mockSendCommand).toHaveBeenCalledWith(REQUEST_SYNC, ['proj-outgoing'], 'autoSync', {
+      includeConnected: false,
+    });
   });
 
   it('syncs the incoming project last, so its result is the one reported', async () => {
@@ -3299,42 +3366,37 @@ describe('syncOnProjectSwitch', () => {
     // switched to rather than the one they left.
     const { papi, mockSendCommand } = createSyncMockPapi();
     const callOrder: string[] = [];
-    mockSendCommand.mockImplementation(async (commandName: string) => {
-      callOrder.push(commandName);
+    mockSendCommand.mockImplementation(async (_commandName: string, projectIds: string[]) => {
+      callOrder.push(...projectIds);
     });
 
     await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
-    expect(callOrder).toEqual([
-      'paratextBibleSendReceive.sendReceiveProjects',
-      'paratextBibleSendReceive.syncProjects',
-    ]);
+    expect(callOrder).toEqual(['proj-outgoing', 'proj-incoming']);
   });
 
-  it('does not call sendReceiveProjects when outgoingProjectId is undefined', async () => {
+  it('requests no outgoing sync when outgoingProjectId is undefined', async () => {
     const { papi, mockSendCommand } = createSyncMockPapi();
 
     await syncOnProjectSwitch(papi, 'proj-incoming', undefined, 'simple');
 
-    expect(mockSendCommand.mock.calls.map(([cmd]) => cmd)).not.toContain(
-      'paratextBibleSendReceive.sendReceiveProjects',
-    );
+    expect(mockSendCommand.mock.calls.map(([, projectIds]) => projectIds)).toEqual([
+      ['proj-incoming'],
+    ]);
   });
 
   it('still syncs the incoming project when the outgoing flush throws', async () => {
     const { papi, mockSendCommand } = createSyncMockPapi();
-    mockSendCommand.mockImplementation(async (commandName: string) => {
-      if (commandName === 'paratextBibleSendReceive.sendReceiveProjects')
-        throw new Error('S/R failed');
+    mockSendCommand.mockImplementation(async (_commandName: string, projectIds: string[]) => {
+      if (projectIds[0] === 'proj-outgoing') throw new Error('S/R failed');
     });
 
     await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
-    expect(mockSendCommand).toHaveBeenCalledWith(
-      'paratextBibleSendReceive.syncProjects',
-      ['proj-incoming'],
-      true,
-    );
+    expect(mockSendCommand).toHaveBeenCalledWith(REQUEST_SYNC, ['proj-incoming'], 'autoSync', {
+      includeConnected: true,
+      suppressNotification: true,
+    });
   });
 
   it('resolves without throwing when both syncs fail', async () => {
@@ -3348,8 +3410,8 @@ describe('syncOnProjectSwitch', () => {
 
   it('logs a warning when the incoming sync fails', async () => {
     const { papi, mockSendCommand, mockWarn } = createSyncMockPapi();
-    mockSendCommand.mockImplementation(async (commandName: string) => {
-      if (commandName === 'paratextBibleSendReceive.syncProjects') throw new Error('sync failed');
+    mockSendCommand.mockImplementation(async (_commandName: string, projectIds: string[]) => {
+      if (projectIds[0] === 'proj-incoming') throw new Error('sync failed');
     });
 
     await syncOnProjectSwitch(papi, 'proj-incoming', undefined, 'simple');
@@ -3359,9 +3421,8 @@ describe('syncOnProjectSwitch', () => {
 
   it('logs a warning when the outgoing sync fails', async () => {
     const { papi, mockSendCommand, mockWarn } = createSyncMockPapi();
-    mockSendCommand.mockImplementation(async (commandName: string) => {
-      if (commandName === 'paratextBibleSendReceive.sendReceiveProjects')
-        throw new Error('S/R failed');
+    mockSendCommand.mockImplementation(async (_commandName: string, projectIds: string[]) => {
+      if (projectIds[0] === 'proj-outgoing') throw new Error('S/R failed');
     });
 
     await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
@@ -3375,9 +3436,9 @@ describe('syncOnProjectSwitch', () => {
 
     await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
-    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
-      'proj-outgoing',
-    ]);
+    expect(mockSendCommand).toHaveBeenCalledWith(REQUEST_SYNC, ['proj-outgoing'], 'autoSync', {
+      includeConnected: false,
+    });
   });
 
   it('skips the outgoing sync for a published resource but still syncs the incoming project', async () => {
@@ -3388,7 +3449,12 @@ describe('syncOnProjectSwitch', () => {
     await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
     expect(mockSendCommand.mock.calls).toEqual([
-      ['paratextBibleSendReceive.syncProjects', ['proj-incoming'], true],
+      [
+        REQUEST_SYNC,
+        ['proj-incoming'],
+        'autoSync',
+        { includeConnected: true, suppressNotification: true },
+      ],
     ]);
   });
 
@@ -3400,9 +3466,9 @@ describe('syncOnProjectSwitch', () => {
 
     await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
-    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
-      'proj-outgoing',
-    ]);
+    expect(mockSendCommand).toHaveBeenCalledWith(REQUEST_SYNC, ['proj-outgoing'], 'autoSync', {
+      includeConnected: false,
+    });
   });
 
   it('sends both sync commands once first-run sync consent is granted', async () => {
@@ -3811,10 +3877,50 @@ describe('syncOnSwitchToPower', () => {
 
     await syncOnSwitchToPower(papi, 'proj-1');
 
-    // Exactly one argument: no `suppressNotification`, so the progress and failure toasts show
+    // No `suppressNotification`, so the progress and failure toasts show
     expect(mockSendCommand.mock.calls).toEqual([
-      ['paratextBibleSendReceive.sendReceiveProjects', ['proj-1']],
+      [REQUEST_SYNC, ['proj-1'], 'autoSync', { includeConnected: false }],
     ]);
+  });
+
+  it('falls back to the direct command when requestSync is not registered', async () => {
+    const { papi, mockSendCommand } = createSwitchToPowerMockPapi({ seed: PROJ_1_UNSENT });
+    rejectRequestSync(mockSendCommand, notRegisteredError(REQUEST_SYNC));
+
+    await syncOnSwitchToPower(papi, 'proj-1');
+
+    expect(mockSendCommand.mock.calls).toEqual([
+      [REQUEST_SYNC, ['proj-1'], 'autoSync', { includeConnected: false }],
+      [DIRECT_SEND_RECEIVE, ['proj-1']],
+    ]);
+  });
+
+  it('does not fall back for a rejection that is not a missing registration', async () => {
+    const { papi, mockSendCommand, mockWarn } = createSwitchToPowerMockPapi({
+      seed: PROJ_1_UNSENT,
+    });
+    rejectRequestSync(mockSendCommand, new Error('offline'));
+
+    await syncOnSwitchToPower(papi, 'proj-1');
+
+    expect(mockSendCommand).toHaveBeenCalledTimes(1);
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-1'));
+  });
+
+  it('treats a removed request as quiet: info log, no warning', async () => {
+    const { papi, mockSendCommand, mockWarn, mockInfo } = createSwitchToPowerMockPapi({
+      seed: PROJ_1_UNSENT,
+    });
+    rejectRequestSync(
+      mockSendCommand,
+      new Error('JSON-RPC Request error (-32000): Removed from the sync queue (SR_REMOVED)'),
+    );
+
+    await syncOnSwitchToPower(papi, 'proj-1');
+
+    expect(mockSendCommand).toHaveBeenCalledTimes(1);
+    expect(mockWarn).not.toHaveBeenCalled();
+    expect(mockInfo).toHaveBeenCalledWith(expect.stringContaining('removed from the sync queue'));
   });
 
   it('starts no sync when the project holds nothing to send', async () => {
@@ -3894,9 +4000,9 @@ describe('syncOnSwitchToPower', () => {
 
     await syncOnSwitchToPower(papi, 'proj-1');
 
-    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
-      'proj-1',
-    ]);
+    expect(mockSendCommand).toHaveBeenCalledWith(REQUEST_SYNC, ['proj-1'], 'autoSync', {
+      includeConnected: false,
+    });
     // Every other automatic sync would skip here, so the log has to say why this one ran
     expect(mockInfo).toHaveBeenCalledWith(expect.stringContaining('does not stop this sync'));
   });
@@ -3964,7 +4070,7 @@ describe('syncOnSwitchToPower', () => {
     await Promise.all([first, second]);
 
     expect(mockSendCommand.mock.calls).toEqual([
-      ['paratextBibleSendReceive.sendReceiveProjects', ['proj-1']],
+      [REQUEST_SYNC, ['proj-1'], 'autoSync', { includeConnected: false }],
     ]);
   });
 
@@ -4028,9 +4134,9 @@ describe('syncOnSwitchToPower', () => {
 
     await syncOnSwitchToPower(papi, 'proj-1');
 
-    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
-      'proj-1',
-    ]);
+    expect(mockSendCommand).toHaveBeenCalledWith(REQUEST_SYNC, ['proj-1'], 'autoSync', {
+      includeConnected: false,
+    });
   });
 
   it.each([
@@ -4046,9 +4152,9 @@ describe('syncOnSwitchToPower', () => {
 
     await syncOnSwitchToPower(papi, 'proj-1');
 
-    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
-      'proj-1',
-    ]);
+    expect(mockSendCommand).toHaveBeenCalledWith(REQUEST_SYNC, ['proj-1'], 'autoSync', {
+      includeConnected: false,
+    });
     expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('internet setting'));
   });
 
@@ -4133,19 +4239,19 @@ function createFinalizeMockPapi(
 }
 
 describe('finalizeProjectSwitch', () => {
-  it('syncs the incoming project only via syncProjects (finalizeProjectSwitch has no outgoing project by design)', async () => {
+  it('requests only the incoming project through the queue (finalizeProjectSwitch has no outgoing project by design)', async () => {
     const { papi, mockSendCommand } = createFinalizeMockPapi();
 
     await finalizeProjectSwitch(papi, 'proj-1', undefined);
 
-    expect(mockSendCommand).toHaveBeenCalledWith(
-      'paratextBibleSendReceive.syncProjects',
-      ['proj-1'],
-      true,
-    );
-    expect(mockSendCommand.mock.calls.map(([cmd]) => cmd)).not.toContain(
-      'paratextBibleSendReceive.sendReceiveProjects',
-    );
+    expect(mockSendCommand.mock.calls).toEqual([
+      [
+        REQUEST_SYNC,
+        ['proj-1'],
+        'autoSync',
+        { includeConnected: true, suppressNotification: true },
+      ],
+    ]);
   });
 
   it('keeps the progress toast when the user has switched back to Power mode', async () => {
@@ -4153,9 +4259,9 @@ describe('finalizeProjectSwitch', () => {
 
     await finalizeProjectSwitch(papi, 'proj-1', undefined);
 
-    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
-      'proj-1',
-    ]);
+    expect(mockSendCommand).toHaveBeenCalledWith(REQUEST_SYNC, ['proj-1'], 'autoSync', {
+      includeConnected: true,
+    });
   });
 
   it('still syncs, with the progress toast, when the mode read rejects', async () => {
@@ -4163,9 +4269,9 @@ describe('finalizeProjectSwitch', () => {
 
     await finalizeProjectSwitch(papi, 'proj-1', undefined);
 
-    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
-      'proj-1',
-    ]);
+    expect(mockSendCommand).toHaveBeenCalledWith(REQUEST_SYNC, ['proj-1'], 'autoSync', {
+      includeConnected: true,
+    });
     expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('platform.interfaceMode'));
   });
 
