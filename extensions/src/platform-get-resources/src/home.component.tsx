@@ -19,7 +19,6 @@ import {
   CardHeader,
   cn,
   DisabledActionTooltip,
-  DisabledTooltipWrapper,
   DropdownMenuItem,
   Label,
   SearchBar,
@@ -51,6 +50,7 @@ import {
 import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { HomeItemDropdownMenu } from './home-item-menu';
+import { getRowSyncState } from './home-sync-queue.util';
 import {
   isShownByProjectResourceFilter,
   ProjectResourceFilter,
@@ -99,9 +99,8 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_serverUnreachable_description%',
   '%resources_serverUnreachable_title%',
   '%resources_syncFailed_title%',
-  '%resources_syncWaiting_reason%',
-  '%resources_syncWaiting_stopGet_format%',
-  '%resources_syncWaiting_stopSync_format%',
+  '%resources_syncWaiting_clickToRemove%',
+  '%resources_syncWaiting_label%',
   '%resources_sync%',
   '%resources_syncRunning_listLoads%',
 ] as const);
@@ -146,6 +145,8 @@ export type RemoteProjectsState =
 const NO_LOCAL_PROJECTS: LocalProjectInfo[] = [];
 const NO_SHARED_PROJECTS: SharedProjectsInfo = {};
 const NO_ACTIVE_SEND_RECEIVE_PROJECTS: string[] = [];
+const NO_WAITING_PROJECTS: readonly string[] = [];
+const NO_PROJECT_IDS: ReadonlySet<string> = new Set();
 
 /**
  * How long the "a sync is running" line must stay before a screen reader is told. Longer than the
@@ -298,11 +299,19 @@ export type HomeProps = {
   onOpenProject?: (projectId: string, isPublished: boolean) => void | Promise<unknown>;
   /**
    * Callback function to send/receive a project. May be async; if it rejects, the component shows
-   * the error message in a destructive alert.
+   * the error message in a destructive alert. Called for every Get and Sync click, including one
+   * made while another sync runs or while this project's own sync runs: the caller queues it.
    *
    * @param projectId - The ID of the project to send/receive.
    */
   onSendReceiveProject?: (projectId: string) => void | Promise<void>;
+  /**
+   * Callback function to take a waiting project out of the sync queue, called when the user clicks
+   * a row that shows it is waiting. The caller reports its own failures; a rejection is ignored.
+   *
+   * @param projectId - The ID of the waiting project.
+   */
+  onRemoveFromQueue?: (projectId: string) => void | Promise<void>;
   /**
    * Callback function to open the get started website of platform. Without one, the getting-started
    * prompt is not shown, since its button would do nothing.
@@ -349,6 +358,12 @@ export type HomeProps = {
   /** Array of project IDs that are currently being sent/received. */
   activeSendReceiveProjects?: string[];
   /**
+   * IDs of the projects waiting in the sync queue for a later run, in any casing. A waiting row
+   * shows that it waits, and clicking it calls `onRemoveFromQueue`. Waiting wins over running: a
+   * project asked for again while it runs is waiting for its next run.
+   */
+  waitingProjectIds?: readonly string[];
+  /**
    * Localized text for each `unsupportedReason` key in the list, plus
    * `%project_unsupported_generic%`, which is shown for a reason that is not a key or has no entry.
    * With neither, no reason text is shown.
@@ -371,6 +386,7 @@ export type HomeProps = {
  * @param {onOpenGetResources} - Callback function to open the Get Resources dialog.
  * @param {onOpenProject} - Callback function to open a project.
  * @param {onSendReceiveProject} - Callback function to send/receive a project.
+ * @param {onRemoveFromQueue} - Callback function to take a waiting project out of the sync queue.
  * @param {onGetStarted} - Callback function to get started with the platform.
  * @param {showGetResourcesButton} - Whether to show the Get Resources button.
  * @param {isSendReceiveInProgress} - Whether a send/receive operation is in progress.
@@ -386,6 +402,7 @@ export type HomeProps = {
  * @param {sharedProjectsInfo} - Object of shared project information, containing projects on the
  *   send/receive server.
  * @param {activeSendReceiveProjects} - Array of project IDs that are currently being sent/received.
+ * @param {waitingProjectIds} - IDs of the projects waiting in the sync queue.
  * @param {localizedUnsupportedReasons} - Localized text for each `unsupportedReason` key in the
  *   list, plus `%project_unsupported_generic%` for a reason that cannot be shown itself.
  * @param {headerContent} - Content for the header, e.g. <><HomeIcon
@@ -398,6 +415,7 @@ export function Home({
   onOpenGetResources = () => {},
   onOpenProject = () => {},
   onSendReceiveProject = () => {},
+  onRemoveFromQueue = () => {},
   onGetStarted,
   showGetResourcesButton = true,
   isSendReceiveInProgress = false,
@@ -410,6 +428,7 @@ export function Home({
   localProjectsInfo = NO_LOCAL_PROJECTS,
   sharedProjectsInfo = NO_SHARED_PROJECTS,
   activeSendReceiveProjects = NO_ACTIVE_SEND_RECEIVE_PROJECTS,
+  waitingProjectIds = NO_WAITING_PROJECTS,
   localizedUnsupportedReasons = NO_LOCALIZED_UNSUPPORTED_REASONS,
   headerContent,
 }: HomeProps) {
@@ -417,14 +436,21 @@ export function Home({
     return localizedStringsWithLoadingState[0][localizeKey] ?? localizeKey;
   };
   const isLocalizedStringsLoading = localizedStringsWithLoadingState[1];
-  // Ids reach Home from more than one source (the backend's sync activity, the project list), so
-  // they are compared in their normalized form.
-  const normalizedActiveProjectIds = useMemo(
-    () => new Set(activeSendReceiveProjects.map(normalizeProjectId)),
-    [activeSendReceiveProjects],
+  // Ids reach Home from more than one source (the backend's sync activity, the sync queue, the
+  // project list), so they are compared in their normalized form.
+  const normalizedRunningProjectIds = useMemo(
+    () =>
+      isSendReceiveInProgress
+        ? new Set(activeSendReceiveProjects.map(normalizeProjectId))
+        : NO_PROJECT_IDS,
+    [isSendReceiveInProgress, activeSendReceiveProjects],
   );
-  const isProjectSyncing = (projectId: string) =>
-    normalizedActiveProjectIds.has(normalizeProjectId(projectId));
+  const normalizedWaitingProjectIds = useMemo(
+    () => new Set(waitingProjectIds.map(normalizeProjectId)),
+    [waitingProjectIds],
+  );
+  const getProjectSyncState = (projectId: string) =>
+    getRowSyncState(projectId, normalizedRunningProjectIds, normalizedWaitingProjectIds);
   const actionText: string = getLocalizedString('%resources_action%');
   const activityText: string = getLocalizedString('%resources_activity%');
   const clearFiltersText: string = getLocalizedString('%resources_clearFilters%');
@@ -470,12 +496,9 @@ export function Home({
   // Specific title for failed sync/get attempts — the alert is only shown for that flow, so a
   // contextual title ("Sync failed") communicates what failed better than the generic "Error".
   const syncFailedTitleText: string = getLocalizedString('%resources_syncFailed_title%');
-  const syncWaitingReasonText: string = getLocalizedString('%resources_syncWaiting_reason%');
-  const syncWaitingStopSyncFormat: string = getLocalizedString(
-    '%resources_syncWaiting_stopSync_format%',
-  );
-  const syncWaitingStopGetFormat: string = getLocalizedString(
-    '%resources_syncWaiting_stopGet_format%',
+  const syncWaitingLabelText: string = getLocalizedString('%resources_syncWaiting_label%');
+  const syncWaitingClickToRemoveText: string = getLocalizedString(
+    '%resources_syncWaiting_clickToRemove%',
   );
   const syncRunningListLoadsText: string = getLocalizedString('%resources_syncRunning_listLoads%');
   const serverUnreachableDescriptionText: string = getLocalizedString(
@@ -509,6 +532,14 @@ export function Home({
       await onSendReceiveProject(projectId);
     } catch (e) {
       setActionError(withoutJsonRpcErrorPrefix(getErrorMessage(e)));
+    }
+  };
+
+  const handleRemoveFromQueue = async (projectId: string) => {
+    try {
+      await onRemoveFromQueue(projectId);
+    } catch {
+      // The caller reports its own failures; the row keeps showing what the queue says.
     }
   };
 
@@ -909,7 +940,7 @@ export function Home({
     event.target instanceof Node && event.currentTarget.contains(event.target);
 
   const getSendReceiveButtonContent = (project: MergedProjectInfo) => {
-    if (isSendReceiveInProgress && isProjectSyncing(project.projectId)) {
+    if (getProjectSyncState(project.projectId) === 'running') {
       return <Spinner className="tw:h-5 tw:py-[1px]" />;
     }
 
@@ -996,25 +1027,7 @@ export function Home({
     isBlocked: boolean,
     reasonText: string | undefined,
     button: ReactNode,
-    stopName?: string,
   ) => {
-    // A stop whose name differs from the reason it shows: every row waits for the same sync, so
-    // the shared reason would give each stop the same name.
-    if (stopName && isBlocked && reasonText)
-      return (
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <DisabledTooltipWrapper isDisabled disabledExplanation={stopName}>
-                {button}
-              </DisabledTooltipWrapper>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p className="tw:max-w-xs tw:whitespace-pre-line">{reasonText}</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      );
     // Without reason text the wrapper would be a nameless tab stop with an empty bubble; the button
     // stays disabled either way.
     return (
@@ -1024,7 +1037,45 @@ export function Home({
     );
   };
 
+  /**
+   * The action of a project waiting in the sync queue. Greyed but never disabled: clicking it takes
+   * the project out of the queue, which its tooltip (or, in a menu, its second line) says.
+   */
+  const waitingButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
+    if (isMenuItem)
+      return (
+        <DropdownMenuItem onSelect={() => handleRemoveFromQueue(project.projectId)}>
+          {/* `min-w-0` lets the explanation wrap instead of widening the menu. */}
+          <div className="tw:flex tw:min-w-0 tw:flex-col tw:text-muted-foreground">
+            <span>{syncWaitingLabelText}</span>
+            <span className="tw:text-xs tw:italic tw:whitespace-normal">
+              {syncWaitingClickToRemoveText}
+            </span>
+          </div>
+        </DropdownMenuItem>
+      );
+    // Under the list's `TooltipProvider`, so it opens with the same delay as the row tooltips.
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="secondary"
+            className="tw:text-muted-foreground"
+            onClick={() => handleRemoveFromQueue(project.projectId)}
+          >
+            {syncWaitingLabelText}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p className="tw:max-w-xs">{syncWaitingClickToRemoveText}</p>
+        </TooltipContent>
+      </Tooltip>
+    );
+  };
+
   const syncOrGetButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
+    const syncState = getProjectSyncState(project.projectId);
+    if (syncState === 'waiting') return waitingButton(project, isMenuItem);
     // Home reuses `unsupportedReason` (the can't-open signal) to block Sync and Get too. Today that
     // is only Study Bible Additions (see `adr-sba-not-syncable-from-dialog-or-home`). A project type
     // that becomes openable (removed from `ScrTextExtensions.GetOpenBlockedReason`) stops being
@@ -1032,44 +1083,33 @@ export function Home({
     // check instead of `unsupportedReason`.
     const isBlocked = !!project.unsupportedReason;
     const unsupportedReasonText = getUnsupportedReasonText(project);
-    // The sync service runs one sync at a time and refuses a second one, so every row is gated while
-    // any sync runs, not just the active one. The active row shows the spinner and needs no reason.
-    const isThisProjectSyncing = isProjectSyncing(project.projectId);
-    const isWaitingForOtherSync = isSendReceiveInProgress && !isThisProjectSyncing;
-    const waitingReasonText = isWaitingForOtherSync ? syncWaitingReasonText : undefined;
+    // Never disabled for a running sync, this project's or another's: the click is queued, and one
+    // made while this project runs asks for its next run.
+    const isRunning = syncState === 'running';
     const sendReceiveLabel = project.isLocallyAvailable ? syncText : getText;
-    // The unsupported reason, which already names why this project is blocked, wins.
-    const waitingStopName =
-      !unsupportedReasonText && waitingReasonText
-        ? formatReplacementString(
-            project.isLocallyAvailable ? syncWaitingStopSyncFormat : syncWaitingStopGetFormat,
-            { name: project.name },
-          )
-        : undefined;
     if (isMenuItem)
       return blockableMenuItem({
         label: getSendReceiveButtonContent(project),
-        isBlocked: isBlocked || isSendReceiveInProgress,
-        reasonText: unsupportedReasonText ?? waitingReasonText,
+        isBlocked,
+        reasonText: unsupportedReasonText,
         // The spinner has no text, so the item keeps its name while it shows.
-        ariaLabel: isThisProjectSyncing ? sendReceiveLabel : undefined,
-        isBusy: isThisProjectSyncing,
+        ariaLabel: isRunning ? sendReceiveLabel : undefined,
+        isBusy: isRunning,
         onActivate: () => handleSendReceiveProject(project.projectId),
       });
     return blockableTooltip(
-      isBlocked || isWaitingForOtherSync,
-      unsupportedReasonText ?? waitingReasonText,
+      isBlocked,
+      unsupportedReasonText,
       <Button
-        disabled={isBlocked || isSendReceiveInProgress}
-        aria-busy={isThisProjectSyncing}
+        disabled={isBlocked}
+        aria-busy={isRunning}
         // The spinner has no text, so the button keeps its name while it shows; otherwise its
         // visible text is the name.
-        aria-label={isThisProjectSyncing ? sendReceiveLabel : undefined}
+        aria-label={isRunning ? sendReceiveLabel : undefined}
         onClick={() => handleSendReceiveProject(project.projectId)}
       >
         {getSendReceiveButtonContent(project)}
       </Button>,
-      waitingStopName,
     );
   };
 
@@ -1285,7 +1325,9 @@ export function Home({
                               if (project.unsupportedReason) return;
                               if (project.isLocallyAvailable) {
                                 handleOpenProject(project);
-                              } else if (!isSendReceiveInProgress) {
+                              } else if (getProjectSyncState(project.projectId) === 'idle') {
+                                // Only an idle row: a double-click must not queue a project for
+                                // another run, nor take one out of the queue.
                                 handleSendReceiveProject(project.projectId);
                               }
                             }}
