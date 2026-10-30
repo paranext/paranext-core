@@ -95,19 +95,24 @@ describe('decideFirstRun', () => {
       ).toEqual({ action: 'startWizard', step: 'syncConsent' });
     });
 
-    it('reopens a completed first run at the language step when it cannot sync yet', () => {
-      expect(
-        decideFirstRun(
-          facts({
-            firstRunComplete: true,
-            firstSyncRequired: true,
-            sendReceiveAvailable: true,
-            canSyncNow: false,
-            registrationValidity: 'valid',
-          }),
-        ),
-      ).toEqual({ action: 'startWizard', step: 'language' });
-    });
+    // The earlier steps can trap a finished user: the internet step's only way forward turns
+    // internet on, and Identify needs a valid registration. Automatic syncs stay gated meanwhile.
+    it.each(['valid', 'invalid'] as const)(
+      'shows the app to a completed first run that cannot sync now (registration %s)',
+      (registrationValidity) => {
+        expect(
+          decideFirstRun(
+            facts({
+              firstRunComplete: true,
+              firstSyncRequired: true,
+              sendReceiveAvailable: true,
+              canSyncNow: false,
+              registrationValidity,
+            }),
+          ),
+        ).toEqual({ action: 'showApp' });
+      },
+    );
 
     it('starts an unfinished first run at the sync step when it can sync now', () => {
       expect(

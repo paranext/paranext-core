@@ -192,8 +192,9 @@ internal class ParatextProjectSendReceiveService(
                 "command:paratextBibleSendReceive.isAvailable",
                 IsSendReceiveAvailable,
                 documentation: Create(
-                    "Whether this build can run Send/Receive. Callers treat a rejection as "
-                        + "false.",
+                    "Whether this build can run Send/Receive. A rejection means the answer is "
+                        + "unknown (for example, the command is not registered yet on a cold "
+                        + "start). Do not treat it as false; ask again or stay conservative.",
                     [],
                     ResultOf("boolean", "True when this build can run Send/Receive")
                 )

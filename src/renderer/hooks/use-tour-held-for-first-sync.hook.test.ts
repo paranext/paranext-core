@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FirstSyncState } from 'papi-shared-types';
+import { newPlatformError, PlatformError } from 'platform-bible-utils';
 import { sendCommand } from '@shared/services/command.service';
 import { getFirstRunStatus, subscribeToFirstRun } from '@renderer/services/first-run-store';
 import { useSetting } from '@renderer/hooks/papi-hooks';
@@ -21,7 +22,7 @@ function setFirstRunStatus(kind: 'loading' | 'app') {
   firstRunListeners.forEach((listener) => listener());
 }
 
-function setFirstSyncState(state: FirstSyncState, isLoading = false) {
+function setFirstSyncState(state: FirstSyncState | PlatformError, isLoading = false) {
   vi.mocked(useSetting).mockReturnValue([state, undefined, () => {}, isLoading]);
 }
 
@@ -68,6 +69,21 @@ describe('useTourHeldForFirstSync', () => {
     setFirstSyncState('unknown', true);
     const { result } = renderHook(() => useTourHeldForFirstSync());
     expect(result.current).toBe(true);
+  });
+
+  it('stays held when the setting cannot be read and Send/Receive is available', async () => {
+    setFirstSyncState(newPlatformError('settings unavailable'));
+    const { result } = renderHook(() => useTourHeldForFirstSync());
+    await waitFor(() => expect(sendCommand).toHaveBeenCalled());
+    await act(async () => {});
+    expect(result.current).toBe(true);
+  });
+
+  it('is released when the setting cannot be read and Send/Receive is not available', async () => {
+    setFirstSyncState(newPlatformError('settings unavailable'));
+    mockAvailability(false);
+    const { result } = renderHook(() => useTourHeldForFirstSync());
+    await waitFor(() => expect(result.current).toBe(false));
   });
 
   it('is released when Send/Receive is not available', async () => {

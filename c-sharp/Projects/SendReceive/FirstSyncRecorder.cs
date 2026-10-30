@@ -15,6 +15,12 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// without any project having synced.
 /// </para>
 /// <para>
+/// A run in which any project fails ends <see cref="SyncOutcome.Failed"/> and does not count, even
+/// when other projects synced. So a project that keeps failing (for example one that is not
+/// upgraded yet) keeps the first sync unrecorded until a run without it succeeds, such as a
+/// single-project Send/Receive from Home.
+/// </para>
+/// <para>
 /// This writes a user setting, not project data, so it does not take the Send/Receive write gate.
 /// </para>
 /// <para>

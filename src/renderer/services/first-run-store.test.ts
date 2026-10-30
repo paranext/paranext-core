@@ -78,7 +78,8 @@ function stubSettings({
   firstRunComplete?: boolean;
   showReminder?: boolean;
   interfaceLanguage?: string[];
-  firstSyncState?: string;
+  /** An `Error` makes the read throw it. */
+  firstSyncState?: string | Error;
   internetUseChoiceAsked?: boolean;
 } = {}) {
   // @ts-expect-error ts(2345) - the mock's implicit-undefined fallthrough is not assignable to
@@ -90,7 +91,10 @@ function stubSettings({
     if (key === 'platform.showRegistrationReminderOnStartup') return showReminder;
     // Left undefined unless a test sets it, to exercise the seed's handling of an unset value.
     if (key === 'platform.interfaceLanguage') return interfaceLanguage;
-    if (key === 'platform.firstSyncState') return firstSyncState;
+    if (key === 'platform.firstSyncState') {
+      if (firstSyncState instanceof Error) throw firstSyncState;
+      return firstSyncState;
+    }
     if (key === 'platform.internetUseChoiceAsked') return internetUseChoiceAsked;
     return undefined;
   });
@@ -446,20 +450,53 @@ describe('first sync (Simple mode with Send/Receive available)', () => {
     });
   });
 
-  it('reopens the full wizard for a finished setup whose first sync is pending but internet is off', async () => {
+  it('shows the app to a finished setup whose first sync is pending but internet is off', async () => {
     stubSettings({
       firstRunComplete: true,
       firstSyncState: 'pending',
       internetUseChoiceAsked: true,
+      showReminder: false,
     });
     stubSendReceive({ permittedInternetUse: 'Disabled' });
     mockResolveReg.mockResolvedValue('valid');
     await resolveFirstRunState();
-    expect(getFirstRunStatus()).toMatchObject({
-      kind: 'wizard',
-      step: 'language',
-      firstSyncRequired: true,
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(pendingWrites()).toEqual([]);
+  });
+
+  it('asks a finished setup whose first sync is pending to re-register when its registration is invalid', async () => {
+    stubSettings({
+      firstRunComplete: true,
+      firstSyncState: 'pending',
+      internetUseChoiceAsked: true,
+      showReminder: true,
     });
+    stubSendReceive();
+    mockResolveReg.mockResolvedValue('invalid');
+    await resolveFirstRunState();
+    await vi.waitFor(() =>
+      expect(getFirstRunStatus()).toEqual({
+        kind: 'wizard',
+        step: 'identify',
+        allowContinueWithoutRegistration: true,
+      }),
+    );
+  });
+
+  it('shows the app to a finished setup whose first sync is pending and whose registration is invalid when the reminder is off', async () => {
+    stubSettings({
+      firstRunComplete: true,
+      firstSyncState: 'pending',
+      internetUseChoiceAsked: true,
+      showReminder: false,
+    });
+    stubSendReceive();
+    mockResolveReg.mockResolvedValue('invalid');
+    await resolveFirstRunState();
+    await vi.waitFor(() =>
+      expect(mockGet).toHaveBeenCalledWith('platform.showRegistrationReminderOnStartup'),
+    );
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
   });
 
   it('starts an unfinished setup that can sync at the Sync step and records the first sync as pending', async () => {
@@ -554,16 +591,36 @@ describe('first sync (Simple mode with Send/Receive available)', () => {
     expect(pendingWrites()).toEqual([]);
   });
 
-  it('waits for the registration when a finished setup has a pending first sync and the probe cannot resolve', async () => {
+  it('shows the app to a finished setup with a pending first sync when the registration probe cannot resolve', async () => {
     stubSettings({
       firstRunComplete: true,
       firstSyncState: 'pending',
       internetUseChoiceAsked: true,
+      showReminder: false,
     });
     stubSendReceive();
     mockResolveReg.mockResolvedValue('unknown');
     await resolveFirstRunState();
-    expect(getFirstRunStatus()).toEqual({ kind: 'error' });
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+  });
+
+  it('re-checks the registration of a finished setup with a pending first sync when availability cannot be read', async () => {
+    stubSettings({
+      firstRunComplete: true,
+      firstSyncState: 'pending',
+      internetUseChoiceAsked: true,
+      showReminder: true,
+    });
+    stubSendReceive({ available: new Error('not registered yet') });
+    mockResolveReg.mockResolvedValue('invalid');
+    await resolveFirstRunState();
+    await vi.waitFor(() =>
+      expect(getFirstRunStatus()).toEqual({
+        kind: 'wizard',
+        step: 'identify',
+        allowContinueWithoutRegistration: true,
+      }),
+    );
   });
 
   it('seeds the loading gate, not the app, for a finished setup whose first sync is pending', () => {
@@ -717,7 +774,24 @@ describe('first sync (Simple mode with Send/Receive available)', () => {
     });
     await resolveFirstRunState();
     expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'syncConsent' });
+    // Nothing was saved to bring the Sync step back, so the step must not say it will return.
+    expect(getFirstRunStatus()).not.toHaveProperty('firstSyncRequired');
     expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('firstSyncState'));
+  });
+
+  it('keeps the remembered pending first sync when the state cannot be read', async () => {
+    localStorage.setItem('platform-bible.firstRunComplete', 'true');
+    localStorage.setItem('platform-bible.firstSyncPending', 'true');
+    resetFirstRunStore();
+    stubSettings({
+      firstRunComplete: true,
+      firstSyncState: new Error('settings unavailable'),
+      showReminder: false,
+    });
+    stubSendReceive();
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(localStorage.getItem('platform-bible.firstSyncPending')).toBe('true');
   });
 });
 

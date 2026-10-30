@@ -221,7 +221,7 @@
   "%firstRun_step_syncConsent_body%": "Al trabajar en proyectos compartidos, la sincronización actualiza la copia local y comparte sus cambios con otras personas.",
   "%firstRun_step_syncConsent_heading%": "Sincronizar proyectos",
   "%firstRun_step_syncConsent_internetBlocked%": "Su configuración de Internet no permite la sincronización. Elija “No sincronizar todavía” por ahora; luego active el acceso a Internet en “Internet y conectividad” y sincronice más tarde.",
-  "%firstRun_step_syncConsent_untilFirstSync%": "Este paso se mostrará al iniciar hasta que haya sincronizado su primer proyecto.",
+  "%firstRun_step_syncConsent_untilFirstSync%": "Este paso se mostrará al iniciar la aplicación hasta que una sincronización se complete correctamente.",
   "%firstRun_step_syncProgress_body%": "Configurando sus proyectos. Esto puede tardar unos minutos.",
   "%firstRun_step_syncProgress_complete_body%": "Sus proyectos están listos.",
   "%firstRun_step_syncProgress_complete_heading%": "Sincronización completada",

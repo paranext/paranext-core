@@ -12,8 +12,8 @@ import { getErrorMessage } from 'platform-bible-utils';
  * - `unconfirmed`: the wizard has not been answered yet.
  * - `unreadable`: `platform.firstRunComplete` or `platform.firstSyncState` could not be read.
  * - `deferred`: the user chose "Don't sync yet" in the wizard earlier in this app session.
- * - `notYetSynced`: the wizard step that starts the first sync has begun (`platform.firstSyncState`
- *   is `pending`) and that sync has not succeeded, so an automatic sync would race it.
+ * - `notYetSynced`: the user has not completed a first successful sync (`platform.firstSyncState` is
+ *   `pending`); automatic syncs wait for it.
  *
  * Derived from the `platform.getAutomaticSyncConsent` command's declaration, which exposes the same
  * answer to the extension host, so the two cannot drift.

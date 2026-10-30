@@ -53,7 +53,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_step_syncConsent_body%':
         'When working on shared projects, syncing updates your local copy and shares your changes with others.',
       '%firstRun_step_syncConsent_untilFirstSync%':
-        'This step will show on startup until you have synced your first project.',
+        'This step will show when you start the app until a sync succeeds.',
       '%firstRun_button_sync%': 'Sync',
       '%firstRun_button_dontSyncYet%': "Don't sync yet",
       '%firstRun_step_syncProgress_heading%': 'Syncing your projects.',
@@ -258,7 +258,7 @@ describe('FirstRunOverlay', () => {
 
     expect(screen.getByText('Sync your projects')).toBeInTheDocument();
     expect(
-      screen.getByText('This step will show on startup until you have synced your first project.'),
+      screen.getByText('This step will show when you start the app until a sync succeeds.'),
     ).toBeInTheDocument();
   });
 

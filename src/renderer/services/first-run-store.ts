@@ -45,8 +45,8 @@ export type FirstRunStatus =
        */
       registrationPreexisting?: boolean;
       /**
-       * Send/Receive is available and the user's first sync has not succeeded yet, so the wizard
-       * keeps reopening at the Sync step on later launches until it does.
+       * Send/Receive is available and `platform.firstSyncState` is saved as `'pending'`, so the
+       * Sync step comes back on later launches when a sync can run, until a sync succeeds.
        */
       firstSyncRequired?: boolean;
     }
@@ -227,10 +227,11 @@ async function seedInterfaceLanguageFromOsLocale(): Promise<void> {
 }
 
 /**
- * Reads `platform.firstSyncState`. A failed read answers `'unknown'`, which counts as synced, so a
- * transient failure never reopens the wizard for a user who finished setup.
+ * Reads `platform.firstSyncState`. A failed read answers `undefined`, which the caller routes like
+ * `'unknown'` (counts as synced), so a transient failure never reopens the wizard for a user who
+ * finished setup.
  */
-async function readFirstSyncState(): Promise<FirstSyncState> {
+async function readFirstSyncState(): Promise<FirstSyncState | undefined> {
   try {
     const value = await settingsService.get('platform.firstSyncState');
     if (!isPlatformError(value)) return value;
@@ -238,7 +239,7 @@ async function readFirstSyncState(): Promise<FirstSyncState> {
   } catch (e) {
     logger.warn(`Could not read platform.firstSyncState: ${getErrorMessage(e)}`);
   }
-  return 'unknown';
+  return undefined;
 }
 
 /**
@@ -345,10 +346,11 @@ async function resolveInternal(generation: number): Promise<void> {
     const isFirstSyncRequired = (available: boolean): boolean =>
       available && (firstRunComplete ? firstSyncState === 'pending' : firstSyncState !== 'synced');
     // Unguarded by isSuperseded, unlike the durable writes below: this cache only mirrors the
-    // durable state just read, so writing it after a bail is still correct. A pending state with no
-    // availability answer leaves the cache as it was, so a rejected question cannot seed the app
-    // for the next launch of a user still waiting for a first sync.
+    // durable state just read, so writing it after a bail is still correct. A failed read, or a
+    // pending state with no availability answer, leaves the cache as it was, so neither can seed
+    // the app for the next launch of a user still waiting for a first sync.
     const rememberFirstSyncPending = (available: boolean | undefined): void => {
+      if (firstSyncState === undefined) return;
       if (firstSyncState !== 'pending') writeBooleanFlag(FIRST_SYNC_PENDING_CACHE_KEY, false);
       else if (available !== undefined) writeBooleanFlag(FIRST_SYNC_PENDING_CACHE_KEY, available);
     };
@@ -441,11 +443,14 @@ async function resolveInternal(generation: number): Promise<void> {
           // WIZARD_ACTIVE_KEY isn't persisted for a run the user already superseded.
           if (isSuperseded()) return;
         }
+        // Whether `'pending'` is actually saved, which is what brings the Sync step back on later
+        // launches; the step tells the user it will return only when it will.
+        let isFirstSyncPending = false;
         if (firstSyncRequired) {
-          const pending =
+          isFirstSyncPending =
             firstSyncState === 'pending' || (await markFirstSyncPending(isSuperseded));
           if (isSuperseded()) return;
-          if (pending) writeBooleanFlag(FIRST_SYNC_PENDING_CACHE_KEY, true);
+          if (isFirstSyncPending) writeBooleanFlag(FIRST_SYNC_PENDING_CACHE_KEY, true);
         }
         writeBooleanFlag(WIZARD_ACTIVE_KEY, true);
         applyStatus({
@@ -453,14 +458,16 @@ async function resolveInternal(generation: number): Promise<void> {
           step: decision.step,
           registrationValidAtStart,
           registrationPreexisting,
-          ...(firstSyncRequired && { firstSyncRequired: true }),
+          ...(isFirstSyncPending && { firstSyncRequired: true }),
         });
         break;
       }
       default:
-        // 'showApp' is unreachable here: a completed setup with no first sync required returned
-        // early above. Defensive fallback.
+        // 'showApp' (only ever for a finished setup): its first sync is pending but cannot start
+        // now, or availability could not be read. It gets the background re-check the early return
+        // starts.
         applyStatus({ kind: 'app' });
+        startBackgroundRegistrationRecheck();
         break;
     }
   } catch (e) {

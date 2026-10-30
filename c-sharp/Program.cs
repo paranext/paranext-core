@@ -215,7 +215,7 @@ public static class Program
             );
             unsyncedChangesTracker.Start();
 
-            // Record the first successful sync so the first-run wizard stops reopening its Sync step.
+            // Record the first successful sync so the first-run wizard's Sync step stops coming back.
             new FirstSyncRecorder(papi, paratextSendReceiveService).Start();
             var remoteChangesPoller = new RemoteChangesPoller(
                 paratextSendReceiveService,

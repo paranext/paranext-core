@@ -8,7 +8,9 @@ import { FirstRunDecision, FirstRunFacts } from './first-run.model';
  * The wizard opens straight at the Sync step whenever a first sync is possible right now (the
  * internet choice was saved, internet is on, and the registration is valid) and Send/Receive is
  * available — whether or not setup was ever finished (a finished setup only while its first sync is
- * pending). A completed first run with no required first sync goes to the app. Otherwise an
+ * pending). A completed first run goes to the app whenever it is not reopened at the Sync step: the
+ * earlier steps could trap it (the internet step's only way forward turns internet on, and Identify
+ * needs a valid registration), and the consent gate keeps automatic syncs waiting. Otherwise an
  * unfinished first run starts at the first step, even when a registration already exists (e.g.
  * copied from Paratext 9) — the wizard shows those values for the user to confirm; such a user
  * never answered the internet question in this app, so they cannot sync yet and still see the first
@@ -25,7 +27,7 @@ export function decideFirstRun({
   sendReceiveAvailable,
   canSyncNow,
 }: FirstRunFacts): FirstRunDecision {
-  if (firstRunComplete && !firstSyncRequired) return { action: 'showApp' };
+  if (firstRunComplete && !(firstSyncRequired && canSyncNow)) return { action: 'showApp' };
   if (registrationValidity === 'unknown') return { action: 'waitForRegistration' };
   if (sendReceiveAvailable && canSyncNow) return { action: 'startWizard', step: 'syncConsent' };
   if (registrationValidity === 'valid' && wizardActive && wizardJustRestarted)

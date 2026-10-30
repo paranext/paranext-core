@@ -655,8 +655,8 @@ declare module 'papi-shared-types' {
      * Paratext 10 patch answers `true`. Like `getSyncActivity`, it is registered by core's own
      * service, so plain Platform.Bible answers it too.
      *
-     * A caller must treat a rejection (for example the cold-start race before the dotnet process
-     * has registered the command) as `false`.
+     * A rejection means the answer is unknown (for example, the command is not registered yet on a
+     * cold start). Do not treat it as `false`; ask again or stay conservative.
      *
      * @returns `true` if this build can run Send/Receive
      * @experimental This command is unstable and may change or disappear without notice
