@@ -108,9 +108,12 @@ describe('MenubarContent focus after dismissal', () => {
 
   async function waitForCloseAutoFocus() {
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
-    // Let FocusScope's own zero-delay close-auto-focus timer run before asserting
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
+    // Let FocusScope's own zero-delay close-auto-focus timer run before asserting; inside act, as
+    // the focus move it makes updates the trigger's state
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
     });
   }
 
