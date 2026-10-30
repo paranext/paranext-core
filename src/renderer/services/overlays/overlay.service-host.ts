@@ -72,6 +72,7 @@ import {
 } from './overlay-coordinates';
 import {
   markOverlayFocusReturnIfFocusInside,
+  resetOverlayFocusReturnMarks,
   takeOverlayFocusReturnMark,
 } from './overlay-focus-return.util';
 import { isWindowBlurPress } from './window-blur-press.util';
@@ -1241,6 +1242,7 @@ export function resetAppWindowInputState(): void {
   lastParentPointerDown = undefined;
   lastFocusedTabId = undefined;
   focusRecords.clear();
+  resetOverlayFocusReturnMarks();
 }
 
 /**
