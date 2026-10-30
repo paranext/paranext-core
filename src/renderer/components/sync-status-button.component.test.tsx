@@ -1634,7 +1634,9 @@ describe('SyncStatusButton — popover and cancel', () => {
     fireEvent.click(screen.getByTestId('toolbar-sync-cancel-button'));
 
     await waitFor(() => {
-      expect(vi.mocked(sendCommand)).toHaveBeenCalledWith('paratextBibleSendReceive.cancelSync');
+      expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
+        'paratextBibleSendReceive.cancelSyncPrompt',
+      );
     });
   });
 
@@ -1668,14 +1670,14 @@ describe('SyncStatusButton — popover and cancel', () => {
     });
     const cancelCallCount = vi
       .mocked(sendCommand)
-      .mock.calls.filter(([name]) => name === 'paratextBibleSendReceive.cancelSync').length;
+      .mock.calls.filter(([name]) => name === 'paratextBibleSendReceive.cancelSyncPrompt').length;
 
     fireEvent.click(cancel);
 
     expect(
       vi
         .mocked(sendCommand)
-        .mock.calls.filter(([name]) => name === 'paratextBibleSendReceive.cancelSync'),
+        .mock.calls.filter(([name]) => name === 'paratextBibleSendReceive.cancelSyncPrompt'),
     ).toHaveLength(cancelCallCount);
   });
 
@@ -1688,7 +1690,7 @@ describe('SyncStatusButton — popover and cancel', () => {
         lastRequestedProjectIds: [],
         syncingProjectIds: ['a'],
       }),
-      'paratextBibleSendReceive.cancelSync': () => {
+      'paratextBibleSendReceive.cancelSyncPrompt': () => {
         throw new Error('send/receive is not answering');
       },
     });
@@ -1722,7 +1724,7 @@ describe('SyncStatusButton — popover and cancel', () => {
         lastRequestedProjectIds: [],
         syncingProjectIds: ['a'],
       }),
-      'paratextBibleSendReceive.cancelSync': () => {
+      'paratextBibleSendReceive.cancelSyncPrompt': () => {
         throw new Error('send/receive is not answering');
       },
     });
@@ -1759,7 +1761,7 @@ describe('SyncStatusButton — popover and cancel', () => {
           return { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a'] };
         return completedState({ a: 'succeeded' });
       },
-      'paratextBibleSendReceive.cancelSync': () =>
+      'paratextBibleSendReceive.cancelSyncPrompt': () =>
         new Promise((_resolve, reject) => {
           rejectCancel = reject;
         }),
@@ -1779,7 +1781,7 @@ describe('SyncStatusButton — popover and cancel', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Test Synced' })).toBeInTheDocument();
     });
-    if (!rejectCancel) throw new Error('cancelSync was never called');
+    if (!rejectCancel) throw new Error('cancelSyncPrompt was never called');
     rejectCancel(new Error('there is no sync to cancel'));
 
     await waitFor(() => {
@@ -1790,7 +1792,7 @@ describe('SyncStatusButton — popover and cancel', () => {
     expect(vi.mocked(notificationService.send)).not.toHaveBeenCalled();
   });
 
-  // `cancelSync` can reject long after it was sent — an unregistered handler rejects only after the
+  // `cancelSyncPrompt` can reject long after it was sent — an unregistered handler rejects only after the
   // RPC layer's retry budget — by which time the sync it targeted may have ended and another begun.
   it('does not let a cancel rejected after its sync ended disturb the next sync', async () => {
     const fireSyncStateChanged = captureSyncStateEvent();
@@ -1805,7 +1807,7 @@ describe('SyncStatusButton — popover and cancel', () => {
         if (getSyncStateCalls === 2) return completedState({ a: 'succeeded' });
         return { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['b'] };
       },
-      'paratextBibleSendReceive.cancelSync': () =>
+      'paratextBibleSendReceive.cancelSyncPrompt': () =>
         new Promise((_resolve, reject) => {
           rejectCancel = reject;
         }),
@@ -1819,7 +1821,7 @@ describe('SyncStatusButton — popover and cancel', () => {
     await waitFor(() => {
       expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent('Test Cancelling');
     });
-    if (!rejectCancel) throw new Error('cancelSync was never called');
+    if (!rejectCancel) throw new Error('cancelSyncPrompt was never called');
     const rejectSyncACancel = rejectCancel;
 
     // A ends, B begins.
@@ -1863,6 +1865,43 @@ describe('SyncStatusButton — popover and cancel', () => {
     await waitFor(() => {
       expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent('Test Cancelling');
     });
+  });
+
+  // Send/receive asks before cancelling when other projects are waiting, and the user can answer
+  // that the sync should go on. Nothing was cancelled then, so Cancel is offered again and the
+  // sync's outcome is not reported as one the user asked for.
+  it('re-arms Cancel when the user chooses to keep syncing', async () => {
+    const fireSyncStateChanged = captureSyncStateEvent();
+    let getSyncStateCalls = 0;
+    mockCommands({
+      'paratextBibleSendReceive.getSyncState': () => {
+        getSyncStateCalls += 1;
+        if (getSyncStateCalls === 1)
+          return { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a'] };
+        return completedState({ a: 'failed' });
+      },
+      'paratextBibleSendReceive.cancelSyncPrompt': () => false,
+    });
+    mockProjectNames({ a: 'AAA' });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
+    const cancel = await screen.findByTestId('toolbar-sync-cancel-button');
+    fireEvent.click(cancel);
+
+    expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
+      'paratextBibleSendReceive.cancelSyncPrompt',
+    );
+    await waitFor(() => {
+      expect(cancel).toHaveTextContent('Test Cancel sync');
+    });
+    expect(cancel).toHaveAttribute('aria-disabled', 'false');
+
+    fireSyncStateChanged(false);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Test Sync failed' })).toBeInTheDocument();
+    });
+    expect(vi.mocked(notificationService.send)).not.toHaveBeenCalled();
   });
 
   it('names the outcome rather than offering a bare Cancel', async () => {
@@ -1939,7 +1978,7 @@ describe('SyncStatusButton — popover and cancel', () => {
   // `isSyncing: true` fires again as the syncing set SHRINKS, so one project of a multi-project sync
   // finishing before the others is not a new sync — it is the same one, still running. Re-arming
   // there flips a pending "Cancelling…" back to an armed "Cancel sync" mid-request, and a second
-  // click fires a second `cancelSync`.
+  // click fires a second `cancelSyncPrompt`.
   it('keeps Cancel pending when a multi-project sync loses one of its projects', async () => {
     const fireSyncStateChanged = captureSyncStateEvent();
     mockSyncStateSequence([
