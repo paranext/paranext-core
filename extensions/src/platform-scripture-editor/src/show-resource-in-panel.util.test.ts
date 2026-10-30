@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   warn: vi.fn(),
   error: vi.fn(),
   notify: vi.fn(async () => 'notification-1'),
+  getSetting: vi.fn(),
+  setSetting: vi.fn(),
 }));
 vi.mock('@papi/backend', () => ({
   default: {
@@ -27,6 +29,7 @@ vi.mock('@papi/backend', () => ({
     projectDataProviders: { get: mocks.getPdp },
     notifications: { send: mocks.notify },
     localization: { getLocalizedString: vi.fn(async () => "That tab couldn't be opened.") },
+    settings: { get: mocks.getSetting, set: mocks.setSetting },
   },
   logger: { warn: mocks.warn, debug: vi.fn(), info: vi.fn(), error: mocks.error },
 }));
@@ -40,6 +43,12 @@ import {
   SHOW_DEADLINE_MS,
   type ResourceTextPanelOptions,
 } from './show-resource-in-panel.util';
+// Follows the vi.mock calls for the same reason as the import above.
+// eslint-disable-next-line import/first
+import { getStoredResourceSelection } from './resource-selection-store';
+// Follows the vi.mock calls for the same reason as the import above.
+// eslint-disable-next-line import/first
+import type { ResourceSelectionsByPanel } from './resource-selection-state.utils';
 
 const BIBLE_TEXTS = 'platformScriptureEditor.bibleTexts';
 const COMMENTARIES = 'platformScriptureEditor.commentaries';
@@ -77,16 +86,25 @@ function catalogHas(dblEntries: DblResourceData[], localEntries: DblResourceData
   });
 }
 
+/** The value of the resource selection setting, as the settings service holds it */
+let storedSelections: ResourceSelectionsByPanel;
+
+/** Answers the resource selection setting from {@link storedSelections}. */
+function settingsHoldSelections(initial: ResourceSelectionsByPanel) {
+  storedSelections = initial;
+  mocks.getSetting.mockImplementation(async () => storedSelections);
+  mocks.setSetting.mockImplementation(async (_key: string, value: ResourceSelectionsByPanel) => {
+    storedSelections = value;
+  });
+}
+
 /** The selection the provider would apply when the reload asks it to build the panel. */
 let selectionSeenByProvider: unknown;
 
 /** The selection the panel is built with, given the reload's options and an earlier selection. */
-function providerSelection(options: ResourceTextPanelOptions): unknown {
-  return buildResourceTextPanelState(
-    { selectedResourceId: 'dbl:previous' },
-    'ScriptureResource',
-    options,
-  ).selectedResourceId;
+async function providerSelection(options: ResourceTextPanelOptions): Promise<unknown> {
+  await buildResourceTextPanelState({}, 'my-project', 'ScriptureResource', options);
+  return (await getStoredResourceSelection('ScriptureResource', 'my-project')).selectedResourceId;
 }
 
 describe('showResourceInReferencePanel', () => {
@@ -99,6 +117,9 @@ describe('showResourceInReferencePanel', () => {
     vi.resetAllMocks();
     savedUserList = undefined;
     selectionSeenByProvider = undefined;
+    settingsHoldSelections({
+      ScriptureResource: { 'my-project': { selectedResourceId: 'dbl:previous' } },
+    });
     catalogHas([catalogEntry({})]);
     mocks.getAllOpenWebViewDefinitions.mockResolvedValue(OPEN_PANELS);
     mocks.getUserList.mockImplementation(async () => savedUserList);
@@ -121,7 +142,7 @@ describe('showResourceInReferencePanel', () => {
     );
     mocks.reloadWebView.mockImplementation(
       async (_webViewType: string, id: string, options: ResourceTextPanelOptions) => {
-        selectionSeenByProvider = providerSelection(options);
+        selectionSeenByProvider = await providerSelection(options);
         return id;
       },
     );
@@ -538,10 +559,9 @@ describe('showResourceInReferencePanel', () => {
 
   it('raises the tab, without reloading it, when it already shows the resource', async () => {
     // A reload would lose the tab's scroll position and anything in progress in it.
-    mocks.getAllOpenWebViewDefinitions.mockResolvedValue([
-      { ...OPEN_PANELS[0], state: { selectedResourceId: 'dbl:uid-byz' } },
-      OPEN_PANELS[1],
-    ]);
+    settingsHoldSelections({
+      ScriptureResource: { 'my-project': { selectedResourceId: 'dbl:uid-byz' } },
+    });
     mocks.openWebView.mockResolvedValue('bible-texts-tab');
 
     await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(
@@ -553,6 +573,22 @@ describe('showResourceInReferencePanel', () => {
       BIBLE_TEXTS,
       undefined,
       expect.objectContaining({ existingId: 'bible-texts-tab', bringToFront: true }),
+    );
+  });
+
+  it('reloads the tab when it shows the resource only for another project', async () => {
+    settingsHoldSelections({
+      ScriptureResource: { 'other-project': { selectedResourceId: 'dbl:uid-byz' } },
+    });
+
+    await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(
+      SHOWN_IN_BIBLE_TEXTS,
+    );
+
+    expect(mocks.reloadWebView).toHaveBeenCalledWith(
+      BIBLE_TEXTS,
+      'bible-texts-tab',
+      expect.objectContaining({ selectedResourceId: 'dbl:uid-byz' }),
     );
   });
 
@@ -761,6 +797,8 @@ describe('showResourceInReferencePanel', () => {
     it('waits for a show that committed, even once the show between them was abandoned', async () => {
       // Two shows saving at once would race over the same personal list.
       mocks.setUserList.mockImplementation(() => holdUntilReleased(true));
+      // The first show selects the resource, so the third finds the tab showing it and raises it.
+      mocks.openWebView.mockResolvedValue('bible-texts-tab');
       const first = showResourceInReferencePanel('byz-project');
       await vi.advanceTimersByTimeAsync(0);
       held.splice(0).forEach((release) => release());
@@ -882,7 +920,7 @@ describe('showResourceInReferencePanel', () => {
         await new Promise((resolve) => {
           setTimeout(resolve, 0);
         });
-        selections.push(providerSelection(options));
+        selections.push(await providerSelection(options));
         return id;
       },
     );
@@ -901,40 +939,98 @@ describe('showResourceInReferencePanel', () => {
 });
 
 describe('buildResourceTextPanelState', () => {
-  it('selects the resource a reload asks for, keeping the rest of the saved state', () => {
-    expect(
-      buildResourceTextPanelState(
-        { selectedResourceId: 'dbl:previous', other: 'kept' },
-        'CommentaryResource',
-        { selectedResourceId: 'dbl:uid-byz' },
-      ),
-    ).toEqual({
-      selectedResourceId: 'dbl:uid-byz',
-      userPickedResourceId: 'dbl:uid-byz',
-      other: 'kept',
-      resourceType: 'CommentaryResource',
+  beforeEach(() => {
+    vi.resetAllMocks();
+    settingsHoldSelections({
+      ScriptureResource: {
+        'project-a': { selectedResourceId: 'dbl:previous' },
+        'project-c': { selectedResourceId: 'dbl:in-c', userPickedResourceId: 'dbl:in-c' },
+      },
+      CommentaryResource: { 'project-a': { selectedResourceId: 'dbl:commentary' } },
     });
   });
 
-  it('records the resource a reload asks for as the user’s own pick', () => {
+  it('builds the saved state with the kind of resource the panel lists', async () => {
+    const state = await buildResourceTextPanelState(
+      { other: 'kept' },
+      'project-b',
+      'CommentaryResource',
+      {
+        selectedResourceId: 'dbl:uid-byz',
+      },
+    );
+
+    expect(state).toEqual({ other: 'kept', resourceType: 'CommentaryResource' });
+  });
+
+  it('stores the resource a reload asks for, in its panel, under the project it is reloaded for', async () => {
+    await buildResourceTextPanelState({}, 'project-b', 'CommentaryResource', {
+      selectedResourceId: 'dbl:uid-byz',
+    });
+
+    expect(await getStoredResourceSelection('CommentaryResource', 'project-b')).toEqual({
+      selectedResourceId: 'dbl:uid-byz',
+      userPickedResourceId: 'dbl:uid-byz',
+    });
+    expect(await getStoredResourceSelection('ScriptureResource', 'project-b')).toEqual({});
+  });
+
+  it('keeps every other project’s selection when a reload asks for a resource', async () => {
+    await buildResourceTextPanelState({}, 'project-b', 'ScriptureResource', {
+      selectedResourceId: 'dbl:uid-byz',
+    });
+
+    expect(await getStoredResourceSelection('ScriptureResource', 'project-a')).toMatchObject({
+      selectedResourceId: 'dbl:previous',
+    });
+    expect(await getStoredResourceSelection('ScriptureResource', 'project-c')).toEqual({
+      selectedResourceId: 'dbl:in-c',
+      userPickedResourceId: 'dbl:in-c',
+    });
+    expect(await getStoredResourceSelection('CommentaryResource', 'project-a')).toMatchObject({
+      selectedResourceId: 'dbl:commentary',
+    });
+  });
+
+  it('records the resource a reload asks for as the user’s own pick', async () => {
     // A resource opened from Home was asked for, not fallen back to, so a configured resource must
     // not replace it — including when the show could not add it to the user's list.
-    expect(
-      buildResourceTextPanelState(
-        { selectedResourceId: 'dbl:previous', userPickedResourceId: 'dbl:older' },
-        'ScriptureResource',
-        { selectedResourceId: 'project:byz-project' },
-      ),
-    ).toMatchObject({
+    await buildResourceTextPanelState({}, 'project-c', 'ScriptureResource', {
+      selectedResourceId: 'project:byz-project',
+    });
+
+    expect(await getStoredResourceSelection('ScriptureResource', 'project-c')).toEqual({
       selectedResourceId: 'project:byz-project',
       userPickedResourceId: 'project:byz-project',
     });
   });
 
-  it('keeps the saved selection when the build asks for none', () => {
-    // An ordinary rebuild — a project switch, a layout restore — must not lose the user's pick.
-    expect(
-      buildResourceTextPanelState({ selectedResourceId: 'dbl:previous' }, 'ScriptureResource', {}),
-    ).toEqual({ selectedResourceId: 'dbl:previous', resourceType: 'ScriptureResource' });
+  it('stores the resource a reload asks for with no project open', async () => {
+    await buildResourceTextPanelState({}, undefined, 'ScriptureResource', {
+      selectedResourceId: 'project:byz-project',
+    });
+
+    expect(await getStoredResourceSelection('ScriptureResource', undefined)).toEqual({
+      selectedResourceId: 'project:byz-project',
+      userPickedResourceId: 'project:byz-project',
+    });
+  });
+
+  it('stores nothing when the build asks for no resource', async () => {
+    // An ordinary rebuild — a project switch, a layout restore — must not touch any project's pick.
+    await buildResourceTextPanelState({}, 'project-b', 'ScriptureResource', {});
+
+    expect(mocks.setSetting).not.toHaveBeenCalled();
+  });
+
+  it('still builds the panel, and warns, when the resource cannot be stored', async () => {
+    mocks.setSetting.mockRejectedValueOnce(new Error('disk full'));
+
+    const state = await buildResourceTextPanelState({}, 'project-b', 'ScriptureResource', {
+      selectedResourceId: 'dbl:uid-byz',
+    });
+
+    expect(state).toEqual({ resourceType: 'ScriptureResource' });
+    expect(mocks.warn).toHaveBeenCalledWith(expect.stringContaining('disk full'));
   });
 });

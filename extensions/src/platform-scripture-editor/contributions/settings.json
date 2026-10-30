@@ -14,6 +14,12 @@
         "description": "%settings_platformScriptureEditor_markerSettleDelayMs_description%",
         "isHidden": true,
         "default": 1000
+      },
+      "platformScriptureEditor.resourceSelectionByProjectId": {
+        "label": "%settings_platformScriptureEditor_resourceSelectionByProjectId_label%",
+        "description": "%settings_platformScriptureEditor_resourceSelectionByProjectId_description%",
+        "isHidden": true,
+        "default": {}
       }
     }
   }

@@ -849,6 +849,22 @@ declare module 'papi-shared-types' {
      *   and value semantics are not yet a settled contract and may change.
      */
     'platformScriptureEditor.markerSettleDelayMs': number;
+    /**
+     * Hidden: the resource the Bible texts and Commentaries panels last showed for each project, so
+     * each project shows its own after a project switch or a restart. Keyed by the kind of resource
+     * the panel lists, then by project id (the empty string for no project open).
+     * `selectedResourceId` is what the panel shows; `userPickedResourceId` is the resource the user
+     * last chose themselves, which tells it apart from one the panel fell back to.
+     *
+     * Write it with `platformScriptureEditor.updateResourceSelection`, which merges one project's
+     * entry into it, rather than setting it whole.
+     */
+    'platformScriptureEditor.resourceSelectionByProjectId': Partial<
+      Record<
+        Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
+        Record<string, { selectedResourceId?: string; userPickedResourceId?: string }>
+      >
+    >;
   }
 
   export interface CommandHandlers {
@@ -1066,6 +1082,22 @@ declare module 'papi-shared-types' {
       resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
       projectId?: string,
     ) => Promise<string | undefined>;
+    /**
+     * Changes the resource the Bible texts or Commentaries panel keeps for one project, in the
+     * `platformScriptureEditor.resourceSelectionByProjectId` setting. Every other project's, and
+     * the other panel's, is kept. Writes run one at a time in the order they arrive, so two quick
+     * changes cannot undo each other.
+     *
+     * @param resourceType 'ScriptureResource' for the Bible Texts tab, 'CommentaryResource' for the
+     *   Commentaries tab
+     * @param projectId The project, or `undefined` for a panel with no project open
+     * @param update The fields to change; a field left `undefined` keeps its value
+     */
+    'platformScriptureEditor.updateResourceSelection': (
+      resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
+      projectId: string | undefined,
+      update: { selectedResourceId?: string; userPickedResourceId?: string },
+    ) => Promise<void>;
     /**
      * Shows a locally-installed resource in the tab for its kind — Commentaries for commentaries,
      * Bible texts for Bible texts and for resources the catalog does not describe — and brings that
