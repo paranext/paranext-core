@@ -550,6 +550,45 @@ describe('HomeWebView requests through the sync queue', () => {
     expect(removeFailure.notificationId).toEqual(expect.any(String));
   });
 
+  it('reports a failed removal under its own notification id, apart from the sync error id', async () => {
+    mockAvailableQueue(
+      async () => {
+        throw new Error('401 Unauthorized error while getting shared projects.');
+      },
+      {
+        waitingProjectIds: ['RH2'],
+        removeFromSyncQueue: async () => {
+          throw new Error('not registered');
+        },
+      },
+    );
+    await renderSubscribed();
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    await waitFor(() => {
+      expect(mockSendNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: '%data_loading_error_paratextData_auth_failure%',
+        }),
+      );
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'remove from queue' }));
+    await waitFor(() => {
+      expect(mockSendNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ message: '%resources_syncQueueRemoveFailed%' }),
+      );
+    });
+
+    const sent = mockSendNotification.mock.calls.map(([notification]) => notification);
+    const syncFailure = sent.find(
+      (n) => n.message === '%data_loading_error_paratextData_auth_failure%',
+    );
+    const removeFailure = sent.find((n) => n.message === '%resources_syncQueueRemoveFailed%');
+    expect(syncFailure.notificationId).toEqual(expect.any(String));
+    expect(removeFailure.notificationId).toEqual(expect.any(String));
+    expect(removeFailure.notificationId).not.toEqual(syncFailure.notificationId);
+  });
+
   it('a double-click requests once, and a click after the queue reports the run requests again', async () => {
     mockAvailableQueue(() => new Promise(() => {}));
     await renderSubscribed();
