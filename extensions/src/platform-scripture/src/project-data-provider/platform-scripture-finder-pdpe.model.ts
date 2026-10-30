@@ -25,17 +25,21 @@ import {
   FindOptions,
   FindResult,
   FindScope,
+  ReplaceOptions,
   ReplaceOutcome,
   ReplaceWithUsfmProjectInterfaceDataTypes,
   ScriptureRangeUsjChapterOrUsfmVerseLocation,
 } from 'platform-scripture';
-import { buildSearchRegex, CharacterCategorizer } from '../find/find.utils';
+import { buildSearchRegex, buildWordEdgeTests, CharacterCategorizer } from '../find/find.utils';
 import {
   extractGuardedMarkers,
   MARKER_DELETION_ERROR,
+  markersDeleteChapter,
+  ONE_ENDED_MARKER_ERROR,
   STRUCTURE_PROTECTED_ERROR,
   usfmChangesStructure,
   usfmDeletesMarkers,
+  usfmDeletesOneEndOfMarker,
 } from '../find/structure-protection.util';
 import { USFM_VERSE_TEXT_MARKERS_SET } from '../find/usfm-verse-text-markers';
 import { correctUsjVersion } from './scripture.util';
@@ -443,9 +447,11 @@ export class ScriptureFinderProjectDataProviderEngine
    *   longer be found (including a chapter or book that no longer exists), is never written and is
    *   reported in the returned outcome. When omitted, ranges are written as given and a location
    *   that can no longer be found rejects.
+   * @param options - Optional {@link ReplaceOptions}
    * @returns A {@link ReplaceOutcome} whose `changedIndexes` lists, ascending, the ranges that were
    *   not written.
    * @throws Error if usfmToInsert or expectedUsfm array length doesn't match rangesToReplace length
+   * @throws Error if `allowMarkerDeletion` is set without `expectedUsfm`
    * @throws Error if any range's start or end offset is negative, whether or not `expectedUsfm` is
    *   given
    * @throws Error if any range spans multiple books
@@ -453,16 +459,26 @@ export class ScriptureFinderProjectDataProviderEngine
    * @throws Error with message {@link STRUCTURE_PROTECTED_ERROR} when structure protection is active
    *   and a replacement would add, remove, change, or reorder a paragraph-level, verse, or chapter
    *   marker
+   * @throws Error with message {@link ONE_ENDED_MARKER_ERROR} when a replacement would delete only
+   *   one end of a marker pair. Checked in every interface mode, and `allowMarkerDeletion` does not
+   *   lift it
    * @throws Error with message {@link MARKER_DELETION_ERROR} when a replacement would delete a
-   *   structural marker or a note that the replacement does not put back. Checked in every
-   *   interface mode, independently of structure protection
+   *   marker that it does not put back, unless `allowMarkerDeletion` is set. Checked in every
+   *   interface mode, independently of structure protection. `allowMarkerDeletion` does not lift it
+   *   for a chapter marker
    */
   async replace(
     rangesToReplace: ScriptureRangeUsjChapterOrUsfmVerseLocation[],
     usfmToInsert: string | string[],
     expectedUsfm?: string[],
+    options?: ReplaceOptions,
   ): Promise<ReplaceOutcome> {
     if (rangesToReplace.length === 0) return { changedIndexes: [] };
+    const allowMarkerDeletion = options?.allowMarkerDeletion ?? false;
+    // A confirmation is about the text the user was shown, which only `expectedUsfm` can hold a
+    // range to.
+    if (allowMarkerDeletion && !expectedUsfm)
+      throw new Error('allowMarkerDeletion requires expectedUsfm');
 
     // Serialize all replace operations with a single mutex
     return this.#replaceMutex.runExclusive(async () => {
@@ -682,13 +698,23 @@ export class ScriptureFinderProjectDataProviderEngine
                 if (isStructureProtected && usfmChangesStructure(removed, replacement)) {
                   throw new Error(STRUCTURE_PROTECTED_ERROR);
                 }
+                // Deleting one end of a pair is never right, confirmed or not: what is left is a
+                // style that never ends or a note with no start.
+                if (usfmDeletesOneEndOfMarker(removed, replacement)) {
+                  throw new Error(ONE_ENDED_MARKER_ERROR);
+                }
                 // Marker deletion is guarded in every interface mode, including where structure
                 // protection is on: a match may span a block boundary, and replacing across one
-                // would drop the `\p`/`\q1`/`\tc2` or footnote that sat in the gap with no way to
-                // get it back. The two guards are sequential rather than exclusive because
+                // would drop the `\p`/`\q1`/`\tc2` or footnote that sat in the gap. It takes the
+                // caller's explicit word that the user saw and agreed to that, and no word covers
+                // merging two chapters. The guards are sequential rather than exclusive because
                 // `usfmChangesStructure` deliberately ignores notes, so it cannot see a swallowed
                 // `\f …\f*` that this one refuses.
-                if (usfmDeletesMarkers(removed, replacement)) {
+                const removedMarkers = extractGuardedMarkers(removed);
+                if (
+                  (!allowMarkerDeletion && usfmDeletesMarkers(removed, replacement)) ||
+                  markersDeleteChapter(removedMarkers, replacement)
+                ) {
                   throw new Error(MARKER_DELETION_ERROR);
                 }
                 modifiedUsfm =
@@ -1038,21 +1064,31 @@ export class ScriptureFinderProjectDataProviderEngine
     }
     const characterCategorizer = await this.#getOrCreateCachedCharacterCategorizer();
 
-    const matches = usj.search(buildSearchRegex(job.options, characterCategorizer), {
+    // A word at a block's edge is a whole word, which only `search` can tell: the regex sees its
+    // neighboring blocks joined. A regex-mode pattern keeps its lookarounds, since a lazy pattern
+    // relies on the engine backtracking to satisfy them.
+    const { useRegex, wordRestriction } = job.options;
+    const shouldTestWordEdges = !useRegex && !!wordRestriction && wordRestriction !== 'none';
+
+    const regex = buildSearchRegex(job.options, characterCategorizer, !shouldTestWordEdges);
+    const matches = usj.search(regex, {
       markerStylesToInclude: job.options.verseTextOnly ? USFM_VERSE_TEXT_MARKERS_SET : undefined,
       normalizationForm: job.options.ignoreDiacritics && !job.options.useRegex ? 'NFD' : undefined,
       // A regex-mode pattern means exactly what the user wrote: no whitespace groups are emitted
       // for it, and its regex must not be rebuilt to add the `d` flag.
       flexibleWhitespaceAtBlockBoundaries: !job.options.useRegex,
+      wordEdges: shouldTestWordEdges
+        ? buildWordEdgeTests(job.options, characterCategorizer)
+        : undefined,
     });
 
     if (matches.length === 0) return [];
 
     // A match may span markers — always at a block boundary, and sometimes mid-paragraph across a
-    // `\v`. Replacing such a match with plain text would delete those markers, which `replace()`
-    // refuses. Record them per result so the UI can disable Replace on exactly those results
-    // instead of letting the user click a button that can only fail. One USFM conversion serves
-    // every match in the scope.
+    // `\v`, a note, or a character style. Replacing such a match with plain text would delete those
+    // markers, which `replace()` refuses unless the user agreed to it. Record them per result so the
+    // UI can show them and ask before Replace rather than after it fails. One USFM conversion
+    // serves every match in the scope.
     const scopeUsfm = usj.toUsfm();
 
     return matches.map((match) => {

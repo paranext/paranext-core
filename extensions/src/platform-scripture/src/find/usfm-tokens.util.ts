@@ -1,15 +1,18 @@
 import { isBlockMarker, USFM_MARKERS_MAP_3_0 } from 'platform-bible-utils';
 
 /**
- * Matches a USFM backslash marker token: optional `+` nesting, a marker name with optional numeric
- * suffix, and an optional suffix that is either a `-N` column span (`thc3-4`) or a milestone's
- * `-s`/`-e` start/end marker (`qt-s`), followed by an optional closing `*`.
+ * Matches a USFM backslash marker token: optional `+` nesting, a marker name, and an optional
+ * suffix that is either a `-N` column span (`thc3-4`) or a milestone's `-s`/`-e` start/end marker
+ * (`qt-s`), followed by an optional closing `*`.
+ *
+ * The name allows uppercase letters and interior digits because a project's custom `\z` marker can
+ * use them, and a marker this cannot read is a marker Replace would delete without noticing.
  *
  * Exported so that every consumer in the Find folder tokenizes USFM the same way. Use
  * {@link forEachMarkerToken} rather than this constant directly unless you need the raw pattern — a
  * `g`-flagged regex carries `lastIndex` state and must not be shared between loops.
  */
-export const MARKER_TOKEN_PATTERN = String.raw`\\\+?([a-z]+\d*(?:-(?:\d+|[se]))?)\*?`;
+export const MARKER_TOKEN_PATTERN = String.raw`\\\+?([A-Za-z][A-Za-z0-9]*(?:-(?:\d+|[se]))?)\*?`;
 
 /** Calls `callback` for each USFM marker token in `usfm`, in order. */
 export function forEachMarkerToken(
@@ -95,15 +98,42 @@ export function isStructuralMarker(marker: string): boolean {
   return mapType !== undefined && BLOCK_MARKER_MAP_TYPES.has(mapType);
 }
 
+/** The markers map's node type for a milestone. */
+const MILESTONE_MAP_TYPE = 'ms';
+
 /**
- * True when a marker opens a note — a footnote, endnote, or cross reference.
+ * The marker that `token` closes, or `undefined` when it closes nothing. `token` is spelled as
+ * `extractGuardedMarkers` spells it, so a closing marker keeps its `*`.
  *
- * Driven entirely by the shared markers map, which types `f`, `fe`, `x` and the study-Bible
- * extended variants `ef`, `efe` and `ex` alike as notes. Deriving from the map rather than naming
- * the extended variants by hand is what keeps `\efe` covered.
+ * Three kinds of closer exist: a normal one (`nd*`), an independent one the map links to its opener
+ * (`esbe`), and a milestone's end, which the map does not link and which pairs by suffix (`qt-e`).
  */
-export function isNoteMarker(marker: string): boolean {
-  return lookupMarkerMapType(marker) === NOTE_MAP_TYPE;
+export function getMarkerClosedBy(token: string): string | undefined {
+  if (token.endsWith('*')) return token.slice(0, -1);
+  if (token.endsWith('-e') && lookupMarkerMapType(token) === MILESTONE_MAP_TYPE)
+    return `${token.slice(0, -2)}-s`;
+  return USFM_MARKERS_MAP_3_0.markers[token]?.isIndependentClosingMarkerFor?.[0];
+}
+
+/**
+ * True when a marker's effect runs on past the marker until something ends it, so a match that
+ * holds this end alone holds only part of it.
+ *
+ * That includes a marker whose closer is optional, such as a note's `\fq`: with or without a closer
+ * in the USFM, the text after the match is still in that style, and deleting the opener would
+ * restyle it.
+ *
+ * A marker the map does not know answers `false`: it may be a paragraph-like marker that never had
+ * a closer. A milestone with no `-s`/`-e` suffix answers `true` because the map's `[Zz].+` entry
+ * types every custom `\z` marker as a milestone, and those are closed like character markers. A
+ * real suffixless milestone closes itself with a bare `\*` and never reaches this question.
+ */
+export function mustMarkerBeClosed(marker: string): boolean {
+  if (USFM_MARKERS_MAP_3_0.markers[marker]?.independentClosingMarkers?.length) return true;
+  const type = lookupMarkerMapType(marker);
+  if (type === undefined) return false;
+  if (type === MILESTONE_MAP_TYPE) return !marker.endsWith('-e');
+  return !!USFM_MARKERS_MAP_3_0.markerTypes[type]?.isCloseable;
 }
 
 /**
@@ -144,7 +174,7 @@ const ORPHAN_NOTE_HEAD_REGEX = new RegExp(
   String.raw`^[\s\S]*?\\\+?(?:${NOTE_MARKER_NAMES.join('|')})\*`,
 );
 /** A marker's `|attribute` payload, which ends where the closing marker begins. */
-const MARKER_ATTRIBUTES_REGEX = /\|[^\\]*(?=\\)/g;
+export const MARKER_ATTRIBUTES_REGEX = /\|[^\\]*(?=\\)/g;
 /**
  * A marker token, capturing its name, or a bare `\*` closer — the form a milestone closes with.
  *
@@ -181,6 +211,61 @@ function trimTrailingSeparatorWhitespace(pieces: string[]): void {
     }
     pieces.pop();
   }
+}
+
+/** A piece of a USFM span as {@link splitUsfmForMarkerDisplay} shows it. */
+export type UsfmDisplaySegment = { text: string; isMarker: boolean };
+
+/** A line break in USFM, with the whitespace around it. It separates, and reads as one space. */
+const LINE_BREAK_RUN_REGEX = /[ \t\r\n]*[\r\n][ \t\r\n]*/g;
+/** A milestone's empty closer, which reads as part of the milestone. */
+const EMPTY_CLOSER_REGEX = /^[ \t]*\\\*/;
+/** How USFM spells an optional line break, the one marker with no backslash. */
+export const OPTIONAL_BREAK_MARKER = '//';
+
+/**
+ * Splits a USFM span into text and markers, so a result can show the user which markers its match
+ * includes. Unlike {@link collapseUsfmMarkersForDisplay} this keeps every marker and everything
+ * inside a note, because this is what Replace would delete. Attributes are left out, as they are
+ * not something the user wrote as text.
+ *
+ * This is display only, like {@link collapseUsfmMarkersForDisplay}.
+ */
+export function splitUsfmForMarkerDisplay(usfm: string): UsfmDisplaySegment[] {
+  const withoutAttributes = usfm.replace(MARKER_ATTRIBUTES_REGEX, '');
+  const segments: UsfmDisplaySegment[] = [];
+  const pushText = (text: string) => {
+    if (text) segments.push({ text: text.replace(LINE_BREAK_RUN_REGEX, ' '), isMarker: false });
+  };
+
+  let cursor = 0;
+  const regex = new RegExp(`${MARKER_TOKEN_PATTERN}|${OPTIONAL_BREAK_MARKER}`, 'g');
+  let match = regex.exec(withoutAttributes);
+  // regex.exec() returns null (not undefined) when there is no match
+  // eslint-disable-next-line no-null/no-null
+  while (match !== null) {
+    pushText(withoutAttributes.slice(cursor, match.index));
+    let markerText = match[0];
+    let end = match.index + match[0].length;
+    const rest = withoutAttributes.slice(end);
+    const operand =
+      match[1] === 'v' || match[1] === 'c' ? rest.match(VERSE_OR_CHAPTER_OPERAND_REGEX) : undefined;
+    const emptyCloser = rest.match(EMPTY_CLOSER_REGEX);
+    if (operand) {
+      markerText += operand[0].replace(LINE_BREAK_RUN_REGEX, ' ');
+      end += operand[0].length;
+    } else if (emptyCloser) {
+      markerText += emptyCloser[0].trim();
+      end += emptyCloser[0].length;
+    }
+    segments.push({ text: markerText, isMarker: true });
+    cursor = end;
+    regex.lastIndex = end;
+    match = regex.exec(withoutAttributes);
+  }
+
+  pushText(withoutAttributes.slice(cursor));
+  return segments;
 }
 
 /**

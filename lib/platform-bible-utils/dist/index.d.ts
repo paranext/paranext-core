@@ -3535,6 +3535,20 @@ export declare const SEARCH_WHITESPACE_GROUP_PREFIX = "ws";
 /** Options controlling how {@link IUsjReaderWriter.search} performs its search */
 export type UsjSearchOptions = {
 	/**
+	 * Zero-width tests that a match's start and end must each pass, unless that end sits where the
+	 * block changes: an offset in the concatenated text where the adjacent text nodes belong to
+	 * different block-level markers. A match failing one is discarded.
+	 *
+	 * This is how a word restriction reaches a word at a block's edge. The regex itself sees
+	 * neighboring blocks joined with nothing between them, so a lookaround in it reads `Isaac` at the
+	 * end of a paragraph and `And` at the start of the next as `IsaacAnd`, which is no word boundary.
+	 * Unlike a lookaround, a test here cannot make the regex try a different length of match.
+	 */
+	wordEdges?: {
+		start?: RegExp;
+		end?: RegExp;
+	};
+	/**
 	 * Optional set of marker styles (e.g., 'p', 'q1', 'nd') to include in the search. When provided,
 	 * only text within markers whose style is in this set will be searched. Text inside markers not
 	 * in this set (e.g., footnotes, cross-references) will be excluded. When omitted, all text is
@@ -6935,6 +6949,23 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 */
 	private static hasWhitespaceGapAwayFromBoundary;
 	/**
+	 * True when a match fails a word edge test at one of its ends. An end on a block change passes
+	 * whatever the test says, because the text it would look at belongs to another block.
+	 *
+	 * @param match Match to inspect
+	 * @param searchText Text the match was found in
+	 * @param wordEdges Sticky word edge tests
+	 * @param blockChangeOffsets Offsets into the original concatenated text where the block changes
+	 * @param nfdToOriginalMap Position map when the search text was NFD-normalized, else `undefined`
+	 */
+	private static failsWordEdgeTest;
+	/**
+	 * Returns a sticky copy of a zero-width test, so it runs at exactly the offset it is given.
+	 *
+	 * @param edgeTest The test as the caller supplied it, or `undefined`
+	 */
+	private static toStickyEdgeTest;
+	/**
 	 * True when `source` declares at least one whitespace capture group that
 	 * {@link hasWhitespaceGapAwayFromBoundary} would act on.
 	 *
@@ -6951,8 +6982,9 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 *   absent from the set is left out.
 	 * @param shouldRecordBoundaries When `true`, also records the offsets in the concatenated text
 	 *   where adjacent text nodes belong to different blocks.
-	 * @returns The text chunks, a map from each chunk's offset to its document location, and the set
-	 *   of block-boundary offsets (empty when `shouldRecordBoundaries` is `false`).
+	 * @returns The text chunks, a map from each chunk's offset to its document location, the set of
+	 *   block-boundary offsets at which a whitespace gap is tolerable, and the set of every offset
+	 *   where the block changes (both empty when `shouldRecordBoundaries` is `false`).
 	 */
 	private collectSearchText;
 	/**

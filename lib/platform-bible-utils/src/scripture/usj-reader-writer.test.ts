@@ -1295,6 +1295,75 @@ describe('Find USJ details for text searches', () => {
     return regex;
   };
 
+  describe('search with wordEdges', () => {
+    // MAT 1:1 ends one paragraph with "Abraham." and 1:2 begins the next with "Abraham became".
+    const notFollowedByLetter = /(?!\p{L})/u;
+    const notPrecededByLetter = /(?<!\p{L})/u;
+
+    test('passes an end on a block change whatever its test says', () => {
+      const usjDoc = new UsjReaderWriter(matthew1And2Usj);
+
+      // Joined, the next character is the letter "A", so the plain lookahead finds nothing here.
+      const joined = usjDoc.search(/of Abraham\.(?!\p{L})/gu);
+      expect(joined.map((match) => match.text)).not.toContain('of Abraham.');
+
+      const results = usjDoc.search(/of Abraham\./g, { wordEdges: { end: notFollowedByLetter } });
+      expect(results.map((match) => match.text)).toContain('of Abraham.');
+    });
+
+    test('passes a start on a block change whatever its test says', () => {
+      const usjDoc = new UsjReaderWriter(matthew1And2Usj);
+
+      // Joined, the previous character is the period, so make a test that a period fails.
+      const notPrecededByPeriod = /(?<!\.)/u;
+      const atBlockStart = /Abraham became/g;
+      expect(usjDoc.search(/(?<!\.)Abraham became/gu)).toEqual([]);
+
+      const results = usjDoc.search(atBlockStart, { wordEdges: { start: notPrecededByPeriod } });
+      expect(results.map((match) => match.text)).toEqual(['Abraham became']);
+    });
+
+    test('discards a match failing its test away from a block change', () => {
+      const usjDoc = new UsjReaderWriter(matthew1And2Usj);
+
+      const insideAWord = /nealog/g;
+      expect(usjDoc.search(insideAWord).length).toBeGreaterThan(0);
+      expect(usjDoc.search(insideAWord, { wordEdges: { start: notPrecededByLetter } })).toEqual([]);
+      expect(usjDoc.search(insideAWord, { wordEdges: { end: notFollowedByLetter } })).toEqual([]);
+    });
+
+    test('finds a later match overlapping a discarded one', () => {
+      const usjDoc = new UsjReaderWriter(matthew1And2Usj);
+
+      // In "Abraham" the first alternative matches "Ab", which the test rejects with an "r" next.
+      // Only resuming inside that rejected match can reach "braham".
+      const results = usjDoc.search(/Ab|braham/g, { wordEdges: { end: notFollowedByLetter } });
+
+      expect(results.map((match) => match.text)).toContain('braham');
+    });
+
+    test('leaves the caller’s test objects untouched', () => {
+      const usjDoc = new UsjReaderWriter(matthew1And2Usj);
+      const end = /(?!\p{L})/gu;
+      end.lastIndex = 5;
+
+      usjDoc.search(/Abraham/g, { wordEdges: { end } });
+
+      expect(end.lastIndex).toBe(5);
+    });
+
+    test('is not confused by an NFD search, whose offsets differ from the original', () => {
+      const usjDoc = new UsjReaderWriter(matthew1And2Usj);
+
+      const results = usjDoc.search(/of Abraham\./g, {
+        normalizationForm: 'NFD',
+        wordEdges: { end: notFollowedByLetter },
+      });
+
+      expect(results.map((match) => match.text)).toContain('of Abraham.');
+    });
+  });
+
   test('search bridges a whitespace gap only at a block boundary 3.0', () => {
     const usjDoc = new UsjReaderWriter(matthew1And2Usj);
 

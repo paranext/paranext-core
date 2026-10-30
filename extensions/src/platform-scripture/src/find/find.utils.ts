@@ -5,6 +5,7 @@ import {
   isPlatformError,
   isSelectableInvisibleCharOrWhiteSpace,
   LanguageStrings,
+  LocalizeKey,
   normalizeProjectId,
   PlatformError,
   ScrollGroupId,
@@ -15,10 +16,12 @@ import {
   FindJobStatus,
   FindJobStatusReport,
   FindOptions,
+  FindResult,
   ReplaceOutcome,
 } from 'platform-scripture';
 import type { OpenProjectTabWithWebView } from '../hooks/use-open-project-tabs';
 import { isExtraMaterialBookId } from './extra-material.utils';
+import type { MarkerReplaceAction } from './structure-protection.util';
 
 /** Maps invisible/whitespace code points to visible stand-in symbols */
 const INVISIBLE_CHAR_SYMBOLS: Record<string, string> = {
@@ -171,6 +174,33 @@ export function buildReplacedAllMessage(
         localizedStrings['%webView_find_replacedNOccurrencesSkippedNResults%'],
         { replacedCount: replacedCount.toString(), skippedCount: skippedCount.toString() },
       );
+}
+
+/** The reference of a result as Find writes it for the user: `GEN 1:3`. */
+export function formatResultReference(result: Pick<FindResult, 'start'>): string {
+  const { book, chapterNum, verse, verseNum } = result.start.verseRef;
+  return `${book} ${chapterNum}:${verse || verseNum}`;
+}
+
+const SKIPPED_MATCH_MESSAGE_KEYS: Record<
+  Exclude<MarkerReplaceAction, 'replace' | 'confirm'>,
+  LocalizeKey
+> = {
+  chapterMarker: '%webView_find_replace_skippedChapterMarker%',
+  oneEndedMarker: '%webView_find_replace_skippedOneEndedMarker%',
+  structureProtected: '%webView_find_replace_skippedStructureProtected%',
+};
+
+/** Builds the message telling the user that a match Replace may not touch is being skipped. */
+export function buildSkippedMatchMessage(
+  action: keyof typeof SKIPPED_MATCH_MESSAGE_KEYS,
+  result: Pick<FindResult, 'start' | 'text'>,
+  localizedStrings: LanguageStrings,
+): string {
+  return formatReplacementString(localizedStrings[SKIPPED_MATCH_MESSAGE_KEYS[action]], {
+    reference: formatResultReference(result),
+    text: result.text,
+  });
 }
 
 /**
@@ -815,6 +845,94 @@ function isSingleCharacterWord(codePoint: number): boolean {
   );
 }
 
+/** Zero-width regex source asserting that a match starts or ends on a word boundary. */
+type WordBoundaryAssertions = { start: string; end: string };
+
+/**
+ * Builds the assertions that keep a search to whole words, or `undefined` when `searchString` has a
+ * single-character-word character (CJK ideograph, Hiragana, Katakana, etc.): those scripts do not
+ * delimit words with spaces, so the standard non-word-char lookaround logic does not apply. Similar
+ * to Paratext 9's `IsSingleCharacterWord` check in `CreateSearchRegex`.
+ */
+function buildWordBoundaryAssertions(
+  searchString: string,
+  characterCategorizer: CharacterCategorizer,
+): WordBoundaryAssertions | undefined {
+  const containsSingleCharacterWord = [...searchString].some((char) => {
+    const cp = char.codePointAt(0);
+    return cp !== undefined && isSingleCharacterWord(cp);
+  });
+  if (containsSingleCharacterWord) return undefined;
+
+  const {
+    baseCharacterClassRegex: baseClass,
+    diacriticCharacterClassRegex: diacriticClass,
+    wordMedialCharacterRegex: wordMedial,
+    wordBreakRegex,
+  } = characterCategorizer;
+
+  // Detect if the search string contains supplementary-plane characters (code points > U+FFFF). In
+  // UTF-16 these are encoded as surrogate pairs, so a high surrogate in the string is the
+  // reliable indicator. Mirrors P9's `isSurrogatePairSearch = searchFor.Any(char.IsHighSurrogate)`
+  // in `ScrLanguage.CreateSearchRegex`. When true, word boundaries use the positive-lookaround
+  // surrogate path rather than the negative-lookaround non-surrogate path: surrogate code units
+  // are not word characters, so the standard negative-lookahead/lookbehind boundary logic would
+  // misfire on them; the positive path avoids this by anchoring to whitespace/punctuation instead.
+  if (/[\uD800-\uDBFF]/.test(searchString)) {
+    // Punctuation/symbol class mirroring P9's `punctRegex` in `ScrLanguage.CreateSearchRegex`.
+    // Uses the same explicit category list: all Punctuation (Pc Pd Ps Pe Pi Pf Po) and Symbol
+    // (Sm Sc Sk So) general categories, with + to match runs — identical to P9's regex literal.
+    const punctuationRegex = `[\\p{Pc}\\p{Pd}\\p{Ps}\\p{Pe}\\p{Pi}\\p{Pf}\\p{Po}\\p{Sm}\\p{Sc}\\p{Sk}\\p{So}]+`;
+    // Surrogate-path word boundaries mirror P9's regex.AppendFormat calls inside isSurrogatePairSearch:
+    //   start: (?<=^|WordBreakRegex|punctuationRegex)
+    //   end:   (?=$|WordBreakRegex|punctuationRegex)
+    return {
+      start: `(?<=^|${wordBreakRegex}|${punctuationRegex})`,
+      end: `(?=$|${wordBreakRegex}|${punctuationRegex})`,
+    };
+  }
+
+  // Non-surrogate-path word boundaries: negative lookbehind/lookahead asserting the adjacent
+  // character is not a word-forming character (or word-medial if applicable).
+  const wordFormingClass = `[${baseClass}${diacriticClass}]`;
+  return wordMedial
+    ? {
+        start: `(?<!${wordFormingClass}|${wordMedial})`,
+        end: `(?!${wordFormingClass}|${wordMedial})`,
+      }
+    : { start: `(?<!${wordFormingClass})`, end: `(?!${wordFormingClass})` };
+}
+
+/** Whether a word restriction limits where a match may start. */
+function restrictsWordStart(wordRestriction: FindOptions['wordRestriction']): boolean {
+  return wordRestriction === 'wholeWord' || wordRestriction === 'startOfWord';
+}
+
+/** Whether a word restriction limits where a match may end. */
+function restrictsWordEnd(wordRestriction: FindOptions['wordRestriction']): boolean {
+  return wordRestriction === 'wholeWord' || wordRestriction === 'endOfWord';
+}
+
+/**
+ * Builds the word restriction of `options` as the tests `UsjReaderWriter.search` applies to each
+ * match's ends, for use with a regex built with `shouldAssertWordBoundaries` set to `false`.
+ *
+ * The regex's own lookarounds can only see the joined text, where `Isaac` at a paragraph's end runs
+ * into the next paragraph's `And`. `search` knows where the blocks change.
+ */
+export function buildWordEdgeTests(
+  options: Pick<FindOptions, 'searchString' | 'wordRestriction'>,
+  characterCategorizer: CharacterCategorizer,
+): { start?: RegExp; end?: RegExp } {
+  const { searchString, wordRestriction } = options;
+  const assertions = buildWordBoundaryAssertions(searchString, characterCategorizer);
+  if (!assertions) return {};
+  return {
+    ...(restrictsWordStart(wordRestriction) ? { start: new RegExp(assertions.start, 'u') } : {}),
+    ...(restrictsWordEnd(wordRestriction) ? { end: new RegExp(assertions.end, 'u') } : {}),
+  };
+}
+
 /**
  * Builds a JavaScript RegExp that mirrors Paratext 9's find/replace search logic in
  * `ScrLanguage.CreateSearchRegex`
@@ -849,12 +967,15 @@ function isSingleCharacterWord(codePoint: number): boolean {
  * @param options The find options controlling search behavior
  * @param characterCategorizer The character categorizer settings for the project, used to build
  *   character classes in the regex
+ * @param shouldAssertWordBoundaries Whether the regex itself enforces `options.wordRestriction`.
+ *   Pass `false` when {@link buildWordEdgeTests} will enforce it through `UsjReaderWriter.search`.
  * @returns A compiled RegExp for use in `UsjReaderWriter.search`, paired with
  *   `flexibleWhitespaceAtBlockBoundaries` when the query is not a regex
  */
 export function buildSearchRegex(
   options: FindOptions,
   characterCategorizer: CharacterCategorizer,
+  shouldAssertWordBoundaries = true,
 ): RegExp {
   const {
     searchString,
@@ -865,67 +986,20 @@ export function buildSearchRegex(
     ignoreWhitespaceDifferences: ignoreWhitespace,
   } = options;
 
-  const {
-    baseCharacterClassRegex: baseClass,
-    diacriticCharacterClassRegex: diacriticClass,
-    wordMedialCharacterRegex: wordMedial,
-    wordBreakRegex,
-    allowInvisibleCharacters,
-  } = characterCategorizer;
+  const { diacriticCharacterClassRegex: diacriticClass, allowInvisibleCharacters } =
+    characterCategorizer;
 
-  // Detect if the search string contains supplementary-plane characters (code points > U+FFFF). In
-  // UTF-16 these are encoded as surrogate pairs, so a high surrogate in the string is the
-  // reliable indicator. Mirrors P9's `isSurrogatePairSearch = searchFor.Any(char.IsHighSurrogate)`
-  // in `ScrLanguage.CreateSearchRegex`. When true, word boundaries use the positive-lookaround
-  // surrogate path rather than the negative-lookaround non-surrogate path: surrogate code units
-  // are not word characters, so the standard negative-lookahead/lookbehind boundary logic would
-  // misfire on them; the positive path avoids this by anchoring to whitespace/punctuation instead.
-  const isSurrogatePairSearch = /[\uD800-\uDBFF]/.test(searchString);
-
-  // Build the word-forming character class used in non-surrogate-path boundaries.
-  const wordFormingClass = `[${baseClass}${diacriticClass}]`;
-
-  // Punctuation/symbol class mirroring P9's `punctRegex` in `ScrLanguage.CreateSearchRegex`.
-  // Uses the same explicit category list: all Punctuation (Pc Pd Ps Pe Pi Pf Po) and Symbol
-  // (Sm Sc Sk So) general categories, with + to match runs — identical to P9's regex literal.
-  const punctuationRegex = `[\\p{Pc}\\p{Pd}\\p{Ps}\\p{Pe}\\p{Pi}\\p{Pf}\\p{Po}\\p{Sm}\\p{Sc}\\p{Sk}\\p{So}]+`;
-
-  // Surrogate-path word boundaries mirror P9's regex.AppendFormat calls inside isSurrogatePairSearch:
-  //   start: (?<=^|WordBreakRegex|punctuationRegex)
-  //   end:   (?=$|WordBreakRegex|punctuationRegex)
-  const surrogateWordLookbehind = `(?<=^|${wordBreakRegex}|${punctuationRegex})`;
-  const surrogateWordLookahead = `(?=$|${wordBreakRegex}|${punctuationRegex})`;
-
-  // Non-surrogate-path word boundaries: negative lookbehind/lookahead asserting the adjacent
-  // character is not a word-forming character (or word-medial if applicable).
-  const wordBoundaryNegLookbehind = wordMedial
-    ? `(?<!${wordFormingClass}|${wordMedial})`
-    : `(?<!${wordFormingClass})`;
-  const wordBoundaryNegLookahead = wordMedial
-    ? `(?!${wordFormingClass}|${wordMedial})`
-    : `(?!${wordFormingClass})`;
+  const wordBoundaries = buildWordBoundaryAssertions(searchString, characterCategorizer);
 
   // Build a RegExp to test individual code points for diacritics (used in ignoreDiacritics loop).
   const isDiacritic = new RegExp(`^[${diacriticClass}]$`, 'u');
-
-  // If any code point in the search string is a single-character-word character (CJK ideograph,
-  // Hiragana, Katakana, etc.), word-boundary assertions are skipped. These scripts do not delimit
-  // words with spaces, so the standard non-word-char lookaround logic does not apply.
-  // Similar to Paratext 9's `IsSingleCharacterWord` check in `CreateSearchRegex`.
-  const containsSingleCharacterWord = [...searchString].some((char) => {
-    const cp = char.codePointAt(0);
-    return cp !== undefined && isSingleCharacterWord(cp);
-  });
 
   let regexStr = '';
 
   // MatchAtBeginningOfWord: use positive lookaround (surrogate path) or negative lookbehind
   // (non-surrogate path) to assert we are at a word boundary.
-  if (
-    !containsSingleCharacterWord &&
-    (wordRestriction === 'wholeWord' || wordRestriction === 'startOfWord')
-  ) {
-    regexStr += isSurrogatePairSearch ? surrogateWordLookbehind : wordBoundaryNegLookbehind;
+  if (shouldAssertWordBoundaries && wordBoundaries && restrictsWordStart(wordRestriction)) {
+    regexStr += wordBoundaries.start;
   }
 
   regexStr += '(';
@@ -1044,11 +1118,8 @@ export function buildSearchRegex(
 
   // MatchAtEndOfWord: use positive lookahead (surrogate path) or negative lookahead (non-surrogate
   // path) to assert the match does not continue into a word.
-  if (
-    !containsSingleCharacterWord &&
-    (wordRestriction === 'wholeWord' || wordRestriction === 'endOfWord')
-  ) {
-    regexStr += isSurrogatePairSearch ? surrogateWordLookahead : wordBoundaryNegLookahead;
+  if (shouldAssertWordBoundaries && wordBoundaries && restrictsWordEnd(wordRestriction)) {
+    regexStr += wordBoundaries.end;
   }
 
   // The `u` flag enables \p{} Unicode property escapes, which are used in word-boundary patterns
@@ -1062,7 +1133,7 @@ export function buildSearchRegex(
   // `u` those escapes degrade to literals and the restriction stops working. Regex mode plus a word
   // restriction therefore does compile the user's pattern under `u`, by necessity.
   const needsUnicodeFlag =
-    (!containsSingleCharacterWord && !!(wordRestriction && wordRestriction !== 'none')) ||
+    (!!wordBoundaries && !!(wordRestriction && wordRestriction !== 'none')) ||
     (!!ignoreDiacritics && !useRegex);
   // `d` exposes capture group offsets, which UsjReaderWriter.search needs to tell a whitespace
   // group that matched real whitespace from one that matched nothing. Emitted only when there is

@@ -10,6 +10,8 @@ import {
   armBoundedWait,
   buildReplacedAllMessage,
   buildSearchRegex,
+  buildSkippedMatchMessage,
+  buildWordEdgeTests,
   callControllerSafely,
   classifyPollAttempt,
   gateStartSearch,
@@ -335,6 +337,88 @@ describe('buildSearchRegex – word restrictions', () => {
     );
     // 'pre' is at the start of 'preview', not the end
     expect(matchAll(regex, 'preview')).toEqual([]);
+  });
+});
+
+describe('buildSkippedMatchMessage', () => {
+  const STRINGS = {
+    '%webView_find_replace_skippedOneEndedMarker%': 'one-ended {reference} ("{text}")',
+    '%webView_find_replace_skippedChapterMarker%': 'chapter {reference} ("{text}")',
+    '%webView_find_replace_skippedStructureProtected%': 'structure {reference} ("{text}")',
+  };
+  const verseRef = { book: 'GEN', chapterNum: 1, verseNum: 3 };
+  const result = { text: 'Lord God', start: { verseRef } };
+
+  it.each([
+    ['oneEndedMarker', 'one-ended GEN 1:3 ("Lord God")'],
+    ['chapterMarker', 'chapter GEN 1:3 ("Lord God")'],
+    ['structureProtected', 'structure GEN 1:3 ("Lord God")'],
+  ] as const)('says where and what for %s', (action, expected) => {
+    expect(buildSkippedMatchMessage(action, result, STRINGS)).toBe(expected);
+  });
+
+  it('uses the verse as written when the reference has one', () => {
+    const start = { verseRef: { ...verseRef, verse: '3-4' } };
+    expect(buildSkippedMatchMessage('chapterMarker', { ...result, start }, STRINGS)).toBe(
+      'chapter GEN 1:3-4 ("Lord God")',
+    );
+  });
+});
+
+describe('buildWordEdgeTests', () => {
+  const options = (searchString: string, wordRestriction: FindOptions['wordRestriction']) => ({
+    searchString,
+    wordRestriction,
+  });
+
+  it('tests both ends of a whole word', () => {
+    const { start, end } = buildWordEdgeTests(options('Isaac', 'wholeWord'), DEFAULT_CATEGORIZER);
+    expect(start).toBeDefined();
+    expect(end).toBeDefined();
+  });
+
+  it('tests only the start for startOfWord, and only the end for endOfWord', () => {
+    expect(
+      buildWordEdgeTests(options('a', 'startOfWord'), DEFAULT_CATEGORIZER).end,
+    ).toBeUndefined();
+    expect(
+      buildWordEdgeTests(options('a', 'endOfWord'), DEFAULT_CATEGORIZER).start,
+    ).toBeUndefined();
+  });
+
+  it('tests nothing with no word restriction', () => {
+    expect(buildWordEdgeTests(options('a', 'none'), DEFAULT_CATEGORIZER)).toEqual({});
+    expect(buildWordEdgeTests(options('a', undefined), DEFAULT_CATEGORIZER)).toEqual({});
+  });
+
+  it('tests nothing for a script that does not delimit words with spaces', () => {
+    expect(buildWordEdgeTests(options('神', 'wholeWord'), DEFAULT_CATEGORIZER)).toEqual({});
+  });
+
+  it('builds tests that agree with the lookarounds the regex would carry', () => {
+    const { end } = buildWordEdgeTests(options('Isaac', 'wholeWord'), DEFAULT_CATEGORIZER);
+    if (!end) throw new Error('Expected an end test');
+    const inWord = new RegExp(end.source, 'uy');
+    inWord.lastIndex = 5;
+    expect(inWord.test('IsaacAnd')).toBe(false);
+    const atWordEnd = new RegExp(end.source, 'uy');
+    atWordEnd.lastIndex = 5;
+    expect(atWordEnd.test('Isaac And')).toBe(true);
+  });
+
+  it('leaves the assertions out of a regex told not to carry them, and keeps its flags', () => {
+    const findOptions: FindOptions = {
+      searchString: 'Isaac',
+      scope: [{ bookId: 'GEN' }],
+      caseInsensitive: false,
+      wordRestriction: 'wholeWord',
+    };
+    const asserted = buildSearchRegex(findOptions, DEFAULT_CATEGORIZER);
+    const unasserted = buildSearchRegex(findOptions, DEFAULT_CATEGORIZER, false);
+
+    expect('xIsaacx'.match(asserted)).toBeNull();
+    expect('xIsaacx'.match(unasserted)).not.toBeNull();
+    expect(unasserted.flags).toBe(asserted.flags);
   });
 });
 

@@ -3315,6 +3315,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
 - **Date:** 2026-09-09
 - **Status:** Accepted
+- **Amended by:** [adr-find-replace-confirms-marker-deletion](#adr-find-replace-confirms-marker-deletion-a-confirmed-replace-may-delete-markers-but-never-one-end-of-a-pair-or-a-chapter) (2026-10-30). The marker-deletion guard below is no longer unconditional: Replace asks instead of being disabled, and a confirmed Replace may delete whole markers. `isNoteMarker` is gone, because every marker now counts. Whole-word Find at a block boundary, left out of scope below, is fixed there too.
 - **Context:** `UsjReaderWriter.search` builds the text it searches by concatenating every USJ text
   node with no separator, and paragraph-final whitespace is stripped during the USFM→USX conversion,
   so a phrase copied out of the editor across a paragraph, table, or sidebar break (e.g. `of Abraham.
@@ -3632,6 +3633,81 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   saved books, such as a New Testament resource, would otherwise empty the saved scope for good.
   One deliberate exception: a picker edit made while books are hidden this way commits the visible
   set and drops the hidden books, so that Select all and Clear all act on the whole scope.
+
+## adr-find-replace-confirms-marker-deletion: A confirmed Replace may delete markers, but never one end of a pair or a chapter
+
+- **Date:** 2026-10-30
+- **Status:** Accepted, with the structure-protection answer provisional until UX confirms it (see Consequences)
+- **Context:** Find searches text with the markup removed, so a match can start in one verse,
+  paragraph, footnote or character style and end in the next, and Replace removes all the USFM
+  between its ends. `adr-find-block-boundary-whitespace` refused deletion of structural markers and
+  notes outright and disabled Replace on those results, but it did not count character markers, so
+  `Lord God` in `\nd Lord\nd* God` deleted `\nd*` and left a style that never closes. UX decided that
+  a match may keep crossing markers, that a result shows the markers it includes, that a single
+  Replace asks before deleting them, with **Cancel** and **Replace (including markers)**, and that a
+  match holding only one end of a pair is skipped, with a message and one button, **OK**.
+- **Decision:**
+  - Every marker in a match counts, not only structural ones and notes. `FindResult.removedMarkers`
+    lists them all.
+  - `replace()` deletes markers only when the caller passes `allowMarkerDeletion`, which requires
+    `expectedUsfm` so that the agreement holds only for the text the user saw. It is per call and
+    explicit; a web view that has not asked cannot reach it by accident.
+  - Three refusals stand even so, in every interface mode: **one end of a pair**, which leaves a
+    style that never ends or a note with no start; **a chapter marker**, which merges two chapters;
+    and structure protection. These are decided on the markers the replacement loses, not the markers
+    in the span, because a span can hold a balanced pair and a replacement can keep one end of it.
+  - The Find web view classifies a Replace with `getMarkerReplaceAction`, in the same order
+    `replace()` applies its guards, before the pre-replace version-history commit, so backing out
+    leaves nothing behind. A refused match is skipped: one `ReplaceMarkersPrompt` either asks or says
+    so with only OK, and the selection stays on the result. A replacement that puts every marker
+    back deletes nothing and asks nothing.
+  - Results show the markers only where Replace exists. Simple mode has no Replace, and nothing else
+    there exposes USFM markers.
+  - Which markers pair comes from the markers map (`isCloseable`, `independentClosingMarkers`),
+    except milestones, which the map does not link and which pair by their `-s`/`-e` suffix. A
+    marker whose closer is optional still counts: if a match holds `\fq` and not where it ends, the
+    text after the match is in that style, and deleting `\fq` restyles it. A closer ends whatever
+    opened inside it, so a whole note is whole even though its `\ft` has no closer of its own. The
+    cost is that a match ending exactly where such a marker's content ends is skipped too.
+  - An optional line break (`//`) counts as a marker, though it has no backslash.
+  - A word restriction is enforced by `UsjReaderWriter.search` through `wordEdges` rather than by
+    lookarounds in the regex, because only `search` knows where blocks change. Both ends of a match
+    pass on a block change; no separator enters the searched text, so matches still cross blocks.
+- **Alternatives considered:**
+  - **Keep the markers in place.** Rejected by UX: Replace cannot know where in the replacement a
+    marker should go. Replacing `and he eat \w bread\w*` with `and he drank wine` is the example.
+  - **Separators between text nodes**, so that a match cannot cross by accident. Rejected: a match
+    may cross markers on purpose. A separator would also have to survive every project's word-forming
+    character classes, which can include unassigned code points.
+  - **Match within one text run, as Paratext 9's Replace does.** Rejected for the same reason, and
+    because it fails silently: Paratext 9's Find matches where its Replace reports nothing.
+  - **A second search pass over each block for whole-word search.** Rejected: it cannot see a phrase
+    spanning blocks, where one end fails a lookaround and no single block holds the phrase.
+  - **Whole-word lookarounds with a post-filter in regex mode too.** Rejected: a lazy user pattern
+    relies on the engine backtracking to satisfy the lookaround, so regex mode keeps its lookarounds.
+- **Consequences:** `the Lord` over `\nd Lord\nd*` holds only the opening marker, so it can be found
+  but not replaced; a user searches `Lord` or `the Lord said` instead. Extending a match to take in
+  the start marker just before it would ease that, and is possible later work. A structure marker
+  under structure protection is skipped the same way, but that answer is still open with UX; it is
+  one line in `getMarkerReplaceAction`, and is unreachable from the UI today because Replace is
+  Power-only and protection is Simple-only. Skipping chapter markers is stricter than the ticket
+  asked, confirmed with the developer; it should relax only with a decision on what merging two
+  chapters does to their notes and references.
+
+  Replace All is unchanged: it stays disabled, never passes `allowMarkerDeletion`, and skips every
+  result that would delete a marker, which now includes character markers. Its messages still list
+  only the structural and note markers. Regex-mode whole-word search keeps the block-edge gap, and a
+  note boundary is still not a word boundary: `Isaac\f + \ft And\f*` reads `IsaacAnd`, because a note
+  is not a block. Revisit all of this when Find can search for markers (PT-3199); an option to match
+  markers or not may make sense then.
+- **Key symbols:** `getMarkerReplaceAction`, `extractGuardedMarkers`, `findOneEndedMarkers`
+  (`extensions/src/platform-scripture/src/find/structure-protection.util.ts`);
+  `splitUsfmForMarkerDisplay` (`extensions/src/platform-scripture/src/find/usfm-tokens.util.ts`);
+  `ReplaceMarkersPrompt` (`extensions/src/platform-scripture/src/find/replace-markers-prompt.component.tsx`);
+  `buildSkippedMatchMessage` (`extensions/src/platform-scripture/src/find/find.utils.ts`);
+  `ReplaceOptions` (`extensions/src/platform-scripture/src/types/platform-scripture.d.ts`);
+  `UsjSearchOptions.wordEdges` (`lib/platform-bible-utils/src/scripture/usj-reader-writer.model.ts`).
+- **Source:** PT-4969 (parent PT-4910). PT-3199 for searching with markers.
 
 ## adr-find-searchable-tabs: Find searches what a tab declares it displays, and targets editors and reference panels differently
 

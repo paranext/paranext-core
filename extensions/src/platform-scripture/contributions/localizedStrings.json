@@ -90,6 +90,33 @@
     "%webView_find_replacedNOfMResultsTextChangedOrMarker%": {
       "notes": "Toast after Replace All in the Find tab, when some results were replaced and the rest were skipped, either because their text changed after the search or because replacing them would delete a marker. {replacedCount} can be 1, while {totalCount} is always at least 2."
     },
+    "%webView_find_replace_markerDeletionTooltip%": {
+      "deprecationInfo": {
+        "date": "2026-10-30",
+        "message": "Replace is no longer disabled on a result that holds markers; it asks first. See %webView_find_replace_markersPrompt_message%."
+      }
+    },
+    "%webView_find_replace_markersPrompt_confirm%": {
+      "notes": "Button in the Find tab's prompt that replaces the match and deletes the USFM markers it includes. The other button is Cancel."
+    },
+    "%webView_find_replace_markersPrompt_message%": {
+      "notes": "Message in the Find tab's prompt when the match being replaced includes USFM markers, such as a verse number, a paragraph break, a footnote, or a character style. The match is shown below this text with its markers visible."
+    },
+    "%webView_find_replace_markersPrompt_title%": {
+      "notes": "Title of the Find tab's prompt asking whether to replace a match that includes USFM markers."
+    },
+    "%webView_find_replace_skippedChapterMarker%": {
+      "notes": "Message in the Find tab when Replace skips a match because it includes a chapter marker. {reference} is where the match is, such as GEN 1:3, and {text} is the matched text. Shown with one button, OK."
+    },
+    "%webView_find_replace_skippedOneEndedMarker%": {
+      "notes": "Message in the Find tab when Replace skips a match because it includes one end of a USFM marker pair but not the other. In a character style, for example, the opening marker starts the style and the closing marker ends it. {reference} is where the match is, such as GEN 1:3, and {text} is the matched text. Shown with one button, OK."
+    },
+    "%webView_find_replace_skippedStructureProtected%": {
+      "notes": "Message in the Find tab when Replace skips a match because it includes a verse number, paragraph break, or chapter marker while structure protection is on. {reference} is where the match is, such as GEN 1:3, and {text} is the matched text. Shown with one button, OK."
+    },
+    "%webView_find_replace_skipped_title%": {
+      "notes": "Title of the message in the Find tab saying that Replace is skipping a match because of the USFM markers it includes."
+    },
     "%webView_find_replace_textChangedAllResults%": {
       "notes": "Toast after Replace All in the Find tab, when nothing was replaced because the text of every result changed after the search."
     },
@@ -739,6 +766,13 @@
       "%webView_find_replace_failedMessage%": "Couldn't replace all results. Nothing in the project was changed.",
       "%webView_find_replace_markerDeletionError%": "Couldn't replace: the replacement would delete a paragraph, verse, chapter, table, sidebar, footnote, endnote, or cross-reference marker that it doesn't put back. Edit this text in the Scripture editor instead.",
       "%webView_find_replace_markerDeletionTooltip%": "This result spans a paragraph, verse, chapter, table, sidebar, footnote, endnote, or cross-reference marker, so replacing it would delete that marker. Edit this text in the Scripture editor instead.",
+      "%webView_find_replace_markersPrompt_confirm%": "Replace (including markers)",
+      "%webView_find_replace_markersPrompt_message%": "This match includes the markers shown here. Replacing it deletes them.",
+      "%webView_find_replace_markersPrompt_title%": "Replace text and markers?",
+      "%webView_find_replace_skippedChapterMarker%": "The text in {reference} to be replaced (\"{text}\") includes a chapter marker, so it will be skipped.",
+      "%webView_find_replace_skippedOneEndedMarker%": "The text in {reference} to be replaced (\"{text}\") includes only part of a marker, so it will be skipped.",
+      "%webView_find_replace_skippedStructureProtected%": "The text in {reference} to be replaced (\"{text}\") includes a verse number, paragraph break, or chapter marker, and structure protection is on, so it will be skipped.",
+      "%webView_find_replace_skipped_title%": "Match skipped",
       "%webView_find_replace_readOnlyNote%": "This project is read-only. Replacements will be rejected.",
       "%webView_find_replace_readOnlyTooltip%": "This project is read-only, so replacements can't be made.",
       "%webView_find_replace_rollbackFailedMessage%": "Replace all failed partway through, and the books it had already changed couldn't be restored. Review them in the Scripture editor.",

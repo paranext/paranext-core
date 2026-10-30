@@ -161,6 +161,26 @@ const TEXT_CHANGED_TOAST_KEYS = [
   '%webView_find_replace_textChangedOrMarkerAllResults%',
 ];
 
+describe('skipped match messages', () => {
+  it('says where the match is, what it is, and that it is skipped', () => {
+    [
+      '%webView_find_replace_skippedOneEndedMarker%',
+      '%webView_find_replace_skippedChapterMarker%',
+      '%webView_find_replace_skippedStructureProtected%',
+    ].forEach((key) => {
+      expect(localizedStrings.en[key]).toContain('{reference}');
+      expect(localizedStrings.en[key]).toContain('{text}');
+      expect(localizedStrings.en[key]).toContain('skipped');
+    });
+  });
+
+  it('reads as UX drafted it for a match with only part of a marker', () => {
+    expect(localizedStrings.en['%webView_find_replace_skippedOneEndedMarker%']).toBe(
+      'The text in {reference} to be replaced ("{text}") includes only part of a marker, so it will be skipped.',
+    );
+  });
+});
+
 describe.each(TEXT_CHANGED_TOAST_KEYS)('text-changed toast %s', (key) => {
   it('has an English string and translator notes', () => {
     expect(localizedStrings.en[key]).toBeTruthy();

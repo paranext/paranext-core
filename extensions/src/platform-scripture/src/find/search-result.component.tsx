@@ -8,9 +8,15 @@ import {
 } from 'platform-bible-react';
 import { LocalizedStringValue, LocalizeKey, UsjReaderWriter } from 'platform-bible-utils';
 import { FindResult } from 'platform-scripture';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { LocalizedBookData } from './find-types';
-import { applyPreserveCase, preserveTrailingSpaces, renderWithInvisibleChars } from './find.utils';
+import {
+  applyPreserveCase,
+  formatResultReference,
+  preserveTrailingSpaces,
+  renderWithInvisibleChars,
+} from './find.utils';
+import { MatchedUsfmText } from './matched-usfm-text.component';
 import {
   getFindHighlightClasses,
   getGoldFindHighlightClasses,
@@ -108,6 +114,8 @@ interface SearchResultProps {
    * through to {@link renderWithInvisibleChars} when `previewOptions.showInvisible` is true.
    */
   allowInvisibleCharacters?: boolean;
+  /** Whether to show the markers the match includes. Off where they would mean nothing. */
+  shouldShowMarkers?: boolean;
   localizedStrings: {
     [localizedInventoryKey in (typeof SEARCH_RESULT_LOCALIZED_STRING_KEYS)[number]]?: LocalizedStringValue;
   };
@@ -162,6 +170,7 @@ export default function SearchResult({
   replaceConfig,
   previewOptions = DEFAULT_FIND_PREVIEW_OPTIONS,
   allowInvisibleCharacters = false,
+  shouldShowMarkers = false,
   logger,
 }: SearchResultProps) {
   // useRef requires null as the initial value for DOM refs
@@ -262,6 +271,14 @@ export default function SearchResult({
   const displayText = (text: string) =>
     previewOptions.showInvisible ? renderWithInvisibleChars(text, allowInvisibleCharacters) : text;
 
+  // The match with its markers showing, when it includes any, so the user can see what Replace
+  // would delete. Stands in only where the match is displayed: `textParts` stays marker-free, since
+  // the clipboard copies are built from it.
+  const matchWithMarkers =
+    shouldShowMarkers && searchResult.removedMarkers?.length ? (
+      <MatchedUsfmText matchedUsfm={searchResult.matchedUsfm} renderText={displayText} />
+    ) : undefined;
+
   const fontClass = previewOptions.monospace ? 'tw:font-mono' : 'scripture-font';
 
   const { highlightShape, color } = previewOptions;
@@ -291,14 +308,12 @@ export default function SearchResult({
         {displayText(beforeText)}
         {/* <mark> exposes the match as highlighted text to assistive tech; findHighlightClass sets
             its own bg + text color, overriding the UA default mark styling. */}
-        <mark className={findHighlightClass}>{displayText(preserveTrailingSpaces(text))}</mark>
+        <mark className={findHighlightClass}>
+          {matchWithMarkers ?? displayText(preserveTrailingSpaces(text))}
+        </mark>
         {displayText(afterText)}
       </ContentZoomRoot>
     );
-  };
-
-  const getReference = () => {
-    return `${searchResult.start.verseRef.book} ${searchResult.start.verseRef.chapterNum}:${searchResult.start.verseRef.verse || searchResult.start.verseRef.verseNum}`;
   };
 
   const getVerseText = () => {
@@ -307,7 +322,7 @@ export default function SearchResult({
   };
 
   const handleCopyReference = () => {
-    navigator.clipboard.writeText(getReference());
+    navigator.clipboard.writeText(formatResultReference(searchResult));
   };
 
   const handleCopyVerseText = () => {
@@ -315,7 +330,7 @@ export default function SearchResult({
   };
 
   const handleCopyReferenceAndVerseText = () => {
-    navigator.clipboard.writeText(`${getReference()} - ${getVerseText()}`);
+    navigator.clipboard.writeText(`${formatResultReference(searchResult)} - ${getVerseText()}`);
   };
 
   const handleDismiss = () => {
@@ -389,9 +404,12 @@ export default function SearchResult({
     // When showInvisible is on, let renderWithInvisibleChars turn trailing spaces into · directly
     // (same as replace text). preserveTrailingSpaces is only needed when showInvisible is off so
     // that trailing spaces aren't collapsed inside the CSS-highlighted span.
-    const findText = previewOptions.showInvisible
-      ? displayText(rawFindText)
-      : preserveTrailingSpaces(rawFindText);
+    let findText: ReactNode = matchWithMarkers;
+    if (!findText) {
+      findText = previewOptions.showInvisible
+        ? displayText(rawFindText)
+        : preserveTrailingSpaces(rawFindText);
+    }
     const replaceText = displayText(previewReplacement);
 
     // When replacing with nothing, show a thin vertical bar using the replace color so the user
@@ -430,9 +448,10 @@ export default function SearchResult({
         <ContentZoomRoot as="div" className={`tw:text-muted-foreground ${fontClass} ${breakClass}`}>
           {displayText(textParts.beforeText)}
           <span className={findClassInline}>
-            {previewOptions.showInvisible
-              ? displayText(textParts.text)
-              : preserveTrailingSpaces(textParts.text)}
+            {matchWithMarkers ??
+              (previewOptions.showInvisible
+                ? displayText(textParts.text)
+                : preserveTrailingSpaces(textParts.text))}
           </span>
           {isEmptyReplace ? deletionBar : <span className={replaceClassInline}>{replaceText}</span>}
           {displayText(textParts.afterText)}
@@ -511,7 +530,7 @@ export default function SearchResult({
           as="span"
           className="scripture-font tw:min-w-0 tw:truncate tw:font-normal tw:text-muted-foreground"
         >
-          {searchResult.text ?? ''}
+          {matchWithMarkers ?? searchResult.text ?? ''}
         </ContentZoomRoot>
       )}
       {searchResult.isReplaced && (

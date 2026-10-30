@@ -1626,12 +1626,11 @@ describe('Find — recent searches menu', () => {
 });
 
 describe('Find — Replace on a result whose span holds markers', () => {
-  // A boundary-spanning match's USFM span always contains the block marker that made it a
-  // boundary, so a plain-text replacement would delete it and `replace()` refuses the write. The
-  // button has to say so up front rather than raising a toast after the click.
+  // Replace asks before deleting a marker, which the web view owns. This component's part is to
+  // leave Replace clickable so that the question can be asked.
   const BOUNDARY_RESULT: HidableFindResult = {
     ...RESULT,
-    removedMarkers: ['p', 'v'],
+    removedMarkers: ['p', 'v:2'],
   };
 
   // The toolbar's Replace button and the card's carry the same localized key, so a render that
@@ -1657,47 +1656,47 @@ describe('Find — Replace on a result whose span holds markers', () => {
     });
   }
 
-  it('disables the card’s Replace on a result a plain-text replacement would strip markers from', () => {
-    render(<Find {...buildReplaceProps()} />);
+  it('reports a click on the card’s Replace, for the web view to ask about', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onReplace = vi.fn();
+    render(<Find {...buildReplaceProps({ onReplace })} />);
+
+    await user.click(screen.getByRole('button', { name: CARD_REPLACE_LABEL }));
+
+    expect(onReplace).toHaveBeenCalledWith(0);
+  });
+
+  it('reports a click on the toolbar’s Replace, which acts on the focused result', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onReplace = vi.fn();
+    render(<Find {...buildReplaceProps({ onReplace })} />);
+
+    await user.click(screen.getByRole('button', { name: 'Replace' }));
+
+    expect(onReplace).toHaveBeenCalledWith();
+  });
+
+  it('shows the result’s markers where Replace exists, and not in Simple mode', () => {
+    // A span that holds a marker; `matchedUsfm` is what the chips are built from.
+    const withMarker = { ...BOUNDARY_RESULT, matchedUsfm: 'b\n\\p And' };
+    const props = {
+      results: [withMarker],
+      resultsByBook: new Map<string, BookResultEntry[]>([
+        ['GEN', [{ result: withMarker, originalIndex: 0 }]],
+      ]),
+    };
+    const { unmount } = render(<Find {...buildReplaceProps(props)} />);
+    expect(screen.getAllByText('\\p').length).toBeGreaterThan(0);
+    unmount();
+
+    render(<Find {...buildReplaceProps({ ...props, activeMode: 'find', hideModeToggle: true })} />);
+    expect(screen.queryByText('\\p')).toBeNull();
+  });
+
+  it('still disables Replace on a result when the project is read-only', () => {
+    render(<Find {...buildReplaceProps({ isEditable: false })} />);
 
     expect(screen.getByRole('button', { name: CARD_REPLACE_LABEL })).toBeDisabled();
-  });
-
-  it('leaves the card’s Replace enabled once the replacement puts the same markers back', () => {
-    // Power mode's replacement field takes raw USFM, so a user can satisfy the guard. The gate is
-    // driven by the replacement term, not by the result being boundary-spanning per se.
-    render(<Find {...buildReplaceProps({ replaceTerm: 'replacement\\p \\v 2 more' })} />);
-
-    expect(screen.getByRole('button', { name: CARD_REPLACE_LABEL })).toBeEnabled();
-  });
-
-  it('leaves the card’s Replace enabled on an ordinary result that spans no markers', () => {
-    render(
-      <Find
-        {...buildReplaceProps({
-          results: [RESULT],
-          resultsByBook: RESULTS_BY_BOOK,
-        })}
-      />,
-    );
-
-    expect(screen.getByRole('button', { name: CARD_REPLACE_LABEL })).toBeEnabled();
-  });
-
-  it('disables the toolbar’s Replace too, since it acts on the focused result', () => {
-    render(<Find {...buildReplaceProps()} />);
-
     expect(screen.getByRole('button', { name: 'Replace' })).toBeDisabled();
-  });
-
-  it('leaves Replace All enabled and unexplained by the focused result’s reason', () => {
-    // Replace All is not blocked by one result — it skips the ones it cannot replace. Sharing the
-    // per-result tooltip wrapper with it would announce "This result spans a paragraph…" on a
-    // button that is still usable, with nothing on the toolbar to say which result is meant.
-    render(<Find {...buildReplaceProps()} />);
-
-    const replaceAll = screen.getByRole('button', { name: 'Replace all' });
-    expect(replaceAll).toBeEnabled();
-    expect(replaceAll.closest('[role="group"]')).toBeNull();
   });
 });

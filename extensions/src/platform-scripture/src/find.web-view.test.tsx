@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useCallback, useState, type ComponentType } from 'react';
 import type { WebViewProps } from '@papi/core';
 import papi from '@papi/frontend';
-import { useProjectDataProvider } from '@papi/frontend/react';
+import { useProjectData, useProjectDataProvider } from '@papi/frontend/react';
 import { sonner } from 'platform-bible-react';
 import { booksPresentFor } from './find/find-book-lists.test-utils';
+import { extractGuardedMarkers } from './find/structure-protection.util';
 
 // jsdom implements none of ResizeObserver, IntersectionObserver or matchMedia, and the Find render
 // path touches all three (Radix popovers, `useViewVisibility`, shared components' media queries).
@@ -186,6 +187,13 @@ function makeProps(
 
 const SAVED_BOOKS_KEY = 'findSelectedBookIds';
 
+const ONE_ENDED_MESSAGE = '%webView_find_replace_skippedOneEndedMarker%';
+const CHAPTER_MESSAGE = '%webView_find_replace_skippedChapterMarker%';
+const STRUCTURE_PROTECTED_MESSAGE = '%webView_find_replace_skippedStructureProtected%';
+
+/** What the unmocked `useProjectData` fake answers, for restoring after a test overrides it. */
+const ORIGINAL_PROJECT_DATA = vi.mocked(useProjectData)('platformScripture.replaceWithUsfm', '');
+
 describe('Find web view — the saved book scope on a project that lacks some of its books', () => {
   const writeWebViewState = vi.fn();
 
@@ -333,5 +341,286 @@ describe('Find web view — Replace on a match whose text changed after the sear
     await waitFor(() => expect(findPdp.beginFindJob).toHaveBeenCalledTimes(2));
     // Nothing was written, so no "replaced" confirmation.
     expect(sonner).not.toHaveBeenCalledWith('%webView_find_replacedOneOccurrence%');
+  });
+});
+
+describe('Find web view — Replace on a match that includes markers', () => {
+  const REPLACE = '%webView_find_replace%';
+  const CANCEL = '%general_cancel%';
+  const CONFIRM = '%webView_find_replace_markersPrompt_confirm%';
+  const OK = '%general_ok%';
+  const verseRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
+
+  /** A result the way the finder reports it, with `removedMarkers` derived as it derives them. */
+  function resultFor(text: string, matchedUsfm: string) {
+    const removedMarkers = extractGuardedMarkers(matchedUsfm);
+    return {
+      text,
+      start: { verseRef, offset: 0 },
+      end: { verseRef, offset: matchedUsfm.length },
+      matchedUsfm,
+      ...(removedMarkers.length > 0 ? { removedMarkers } : {}),
+    };
+  }
+
+  const WHOLE_MARKER_RESULT = resultFor('ZzFirstSecond', 'ZzFirst\n\\p ZzSecond');
+  const END_ONLY_RESULT = resultFor('ZzLord God', 'ZzLord\\nd* God');
+  const START_ONLY_RESULT = resultFor('ZzWord1:3', 'ZzWord\\f + \\fr 1:3');
+  const CHAPTER_RESULT = resultFor('ZzFirstSecond', 'ZzFirst\n\\c 2\n\\p\n\\v 1 ZzSecond');
+  const PLAIN_RESULT = resultFor('ZzPlain', 'ZzPlain');
+
+  let resultToFind: ReturnType<typeof resultFor>;
+  /** Tells the web view its monitored book's USFM changed, which re-runs the search. */
+  let notifyBookChanged: () => void;
+
+  const findPdp = {
+    beginFindJob: vi.fn(async () => 'job-1'),
+    abandonFindJob: vi.fn(async () => true),
+    stopFindJob: vi.fn(async () => true),
+    retrieveFindJobUpdate: vi.fn(async () => ({
+      jobId: 'job-1',
+      status: 'completed',
+      percentComplete: 100,
+      totalResultsCount: 1,
+      nextResults: [resultToFind],
+      totalExecutionTimeMs: 1,
+    })),
+  };
+  const replacePdp = { replace: vi.fn(async () => ({ changedIndexes: [] })) };
+  const usfmBookPdp = {
+    getBookUSFM: vi.fn(async () => 'snapshot'),
+    subscribeBookUSFM: vi.fn(async (_verseRef: unknown, callback: (usfm: string) => void) => {
+      notifyBookChanged = () => callback('changed');
+      callback('initial');
+      return async () => true;
+    }),
+  };
+
+  const commitCalls = () =>
+    vi
+      .mocked(papi.commands.sendCommand)
+      .mock.calls.filter(([command]) => command === 'paratextBibleSendReceive.commitChanges');
+
+  beforeEach(() => {
+    mockBooksPresent.value = booksPresentFor(['GEN']);
+    mockSettingValues['platform.interfaceMode'] = 'power';
+    vi.mocked(papi.commands.sendCommand).mockClear();
+    // The real hook is generic over every project interface; the fake covers only these reads.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    vi.mocked(useProjectDataProvider).mockImplementation(((projectInterface: string) => {
+      if (projectInterface === 'platformScripture.findInScripture') return findPdp;
+      if (projectInterface === 'platformScripture.replaceWithUsfm') return replacePdp;
+      if (projectInterface === 'platformScripture.USFM_Book') return usfmBookPdp;
+      return undefined;
+    }) as unknown as typeof useProjectDataProvider);
+    // `commitChanges` resolves true; the command map has no single return type to satisfy.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    vi.mocked(papi.commands.sendCommand).mockImplementation((async () => true) as never);
+  });
+
+  afterEach(() => {
+    delete mockSettingValues['platform.interfaceMode'];
+    vi.mocked(useProjectDataProvider).mockImplementation(() => undefined);
+    vi.mocked(papi.commands.sendCommand).mockReset();
+    vi.mocked(papi.commands.sendCommand).mockImplementation(async () => undefined);
+    vi.mocked(useProjectData).mockReset();
+    vi.mocked(useProjectData).mockImplementation(() => ORIGINAL_PROJECT_DATA);
+    findPdp.beginFindJob.mockClear();
+    replacePdp.replace.mockClear();
+  });
+
+  /** Renders Find in Replace mode on `result`, and waits for its Replace buttons. */
+  async function renderReplacing(
+    result: ReturnType<typeof resultFor>,
+    webViewState: Record<string, unknown> = {},
+  ) {
+    resultToFind = result;
+    const FindWebView = getFindWebView();
+    render(
+      <FindWebView
+        {...makeProps(
+          {
+            findActiveMode: 'replace',
+            findSearchTerm: 'Zz',
+            findReplaceTerm: 'X',
+            ...webViewState,
+          },
+          vi.fn(),
+        )}
+      />,
+    );
+    await waitFor(() => expect(findPdp.beginFindJob).toHaveBeenCalledTimes(1));
+    return screen.findAllByRole('button', { name: REPLACE });
+  }
+
+  async function clickCardReplace(result: ReturnType<typeof resultFor>) {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const replaceButtons = await renderReplacing(result);
+    await user.click(replaceButtons[replaceButtons.length - 1]);
+    return user;
+  }
+
+  it('shows the marker in the prompt before anything is committed or written', async () => {
+    await clickCardReplace(WHOLE_MARKER_RESULT);
+
+    const prompt = await screen.findByRole('alertdialog');
+    expect(within(prompt).getByText('\\p')).toBeInTheDocument();
+    expect(commitCalls()).toEqual([]);
+    expect(replacePdp.replace).not.toHaveBeenCalled();
+  });
+
+  it('writes nothing on Cancel', async () => {
+    const user = await clickCardReplace(WHOLE_MARKER_RESULT);
+
+    const prompt = await screen.findByRole('alertdialog');
+    await user.click(within(prompt).getByRole('button', { name: CANCEL }));
+
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(commitCalls()).toEqual([]);
+    expect(replacePdp.replace).not.toHaveBeenCalled();
+  });
+
+  it('replaces the whole range on Replace (including markers)', async () => {
+    const user = await clickCardReplace(WHOLE_MARKER_RESULT);
+
+    const prompt = await screen.findByRole('alertdialog');
+    await user.click(within(prompt).getByRole('button', { name: CONFIRM }));
+
+    await waitFor(() => expect(replacePdp.replace).toHaveBeenCalledTimes(1));
+    expect(replacePdp.replace).toHaveBeenCalledWith(
+      [{ start: WHOLE_MARKER_RESULT.start, end: WHOLE_MARKER_RESULT.end }],
+      'X',
+      [WHOLE_MARKER_RESULT.matchedUsfm],
+      { allowMarkerDeletion: true },
+    );
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+  });
+
+  /** Everything a skip must leave behind, once its message has been shown and dismissed. */
+  const SKIPPED = { buttons: [OK], commits: 0, writes: 0 };
+
+  /** Reads the skip message `message`, clicks OK, and reports what the skip left behind. */
+  async function dismissSkipMessage(
+    user: ReturnType<typeof userEvent.setup>,
+    message: string,
+  ): Promise<typeof SKIPPED> {
+    const prompt = await screen.findByRole('alertdialog');
+    within(prompt).getByText(message);
+    const buttons = within(prompt)
+      .getAllByRole('button')
+      .map((button) => button.textContent ?? '');
+
+    await user.click(within(prompt).getByRole('button', { name: OK }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+
+    return {
+      buttons,
+      commits: commitCalls().length,
+      writes: replacePdp.replace.mock.calls.length,
+    };
+  }
+
+  it.each([
+    ['an end marker without its start', END_ONLY_RESULT, ONE_ENDED_MESSAGE],
+    ['a start marker without its end, into a footnote', START_ONLY_RESULT, ONE_ENDED_MESSAGE],
+    ['a chapter marker', CHAPTER_RESULT, CHAPTER_MESSAGE],
+  ])('skips a match with %s, with only OK', async (_description, result, message) => {
+    const user = await clickCardReplace(result);
+
+    expect(await dismissSkipMessage(user, message)).toEqual(SKIPPED);
+  });
+
+  it('skips a structure marker while structure is protected, with only OK', async () => {
+    const protectedData = new Proxy({}, { get: () => () => [true, vi.fn(), false] });
+    // The fake covers only the one read this path makes.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    vi.mocked(useProjectData).mockImplementation(() => protectedData as never);
+
+    const user = await clickCardReplace(WHOLE_MARKER_RESULT);
+
+    expect(await dismissSkipMessage(user, STRUCTURE_PROTECTED_MESSAGE)).toEqual(SKIPPED);
+  });
+
+  it('offers Cancel and Replace (including markers) when every pair is whole', async () => {
+    await clickCardReplace(resultFor('the Lord God', 'the \\nd Lord\\nd* God'));
+
+    const prompt = await screen.findByRole('alertdialog');
+    expect(
+      within(prompt)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual([CANCEL, CONFIRM]);
+  });
+
+  it('asks nothing of a match with no marker', async () => {
+    await clickCardReplace(PLAIN_RESULT);
+
+    await waitFor(() => expect(replacePdp.replace).toHaveBeenCalledTimes(1));
+    expect(replacePdp.replace).toHaveBeenCalledWith(
+      [{ start: PLAIN_RESULT.start, end: PLAIN_RESULT.end }],
+      'X',
+      [PLAIN_RESULT.matchedUsfm],
+      undefined,
+    );
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  it('asks nothing when the replacement puts every marker back', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const replaceButtons = await renderReplacing(WHOLE_MARKER_RESULT, {
+      findReplaceTerm: 'X\n\\p Y',
+    });
+    await user.click(replaceButtons[replaceButtons.length - 1]);
+
+    await waitFor(() => expect(replacePdp.replace).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  it('decides from the text preserve-case will write, not the term as typed', async () => {
+    // Typed as it is, this puts `\nd*` back. Upper-cased to follow the match it does not.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const replaceButtons = await renderReplacing(resultFor('LORD GOD', 'LORD\\nd* GOD'), {
+      findReplaceTerm: 'x\\nd* y',
+      findPreserveCase: true,
+    });
+    await user.click(replaceButtons[replaceButtons.length - 1]);
+
+    expect(await dismissSkipMessage(user, ONE_ENDED_MESSAGE)).toEqual(SKIPPED);
+  });
+
+  it('closes the prompt without writing when the results change under it', async () => {
+    const user = await clickCardReplace(WHOLE_MARKER_RESULT);
+    const prompt = await screen.findByRole('alertdialog');
+    const confirm = within(prompt).getByRole('button', { name: CONFIRM });
+
+    // An edit made elsewhere re-runs the search, which empties the list before filling it again.
+    await act(async () => notifyBookChanged());
+
+    await waitFor(() => expect(findPdp.beginFindJob).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    await user.click(confirm);
+    expect(replacePdp.replace).not.toHaveBeenCalled();
+  });
+
+  it('reaches the prompt from the toolbar Replace, which acts on the focused result', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const replaceButtons = await renderReplacing(WHOLE_MARKER_RESULT);
+
+    await waitFor(() => expect(replaceButtons[0]).toBeEnabled());
+    await user.click(replaceButtons[0]);
+
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+    expect(replacePdp.replace).not.toHaveBeenCalled();
+  });
+
+  it('reaches the prompt from Enter on the selected card', async () => {
+    const replaceButtons = await renderReplacing(WHOLE_MARKER_RESULT);
+    // The toolbar Replace enables once the card is selected, which is what arms the card's keys.
+    await waitFor(() => expect(replaceButtons[0]).toBeEnabled());
+
+    fireEvent.keyDown(screen.getAllByText('ZzSecond', { exact: false })[0], { key: 'Enter' });
+
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+    expect(replacePdp.replace).not.toHaveBeenCalled();
   });
 });
