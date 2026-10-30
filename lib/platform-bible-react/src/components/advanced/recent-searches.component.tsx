@@ -136,6 +136,10 @@ export default function RecentSearches<T>({
       size="icon"
       className={buttonClassName}
       aria-label={resolvedAriaLabel}
+      // Radix names the list by its own id, and in the trigger's `aria-controls` only while the list
+      // is open. The list id and the trigger's `aria-controls` must agree, so a given id is mirrored
+      // here on the same terms and applied to the list only when one is given.
+      {...(id !== undefined ? { 'aria-controls': isOpen ? id : undefined } : {})}
       // Disarm on hover. The flag is armed on every close but consumed only if a tooltip-open
       // request actually arrives, so a close that does NOT put focus back on this button would
       // otherwise leave it armed and silently swallow the user's next genuine hover. `pointerenter`
@@ -172,7 +176,7 @@ export default function RecentSearches<T>({
           nothing references, so without this the list announces as an unnamed menu of N items and
           a screen-reader user is never told these are recent searches. */}
       <DropdownMenuContent
-        id={id}
+        {...(id !== undefined ? { id } : {})}
         aria-labelledby={headingId}
         className="tw:w-[300px]"
         align="start"

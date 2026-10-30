@@ -147,6 +147,56 @@ describe('DropdownMenuContent focus after dismissal', () => {
     expect(document.activeElement).not.toBe(screen.getByText('open'));
   });
 
+  async function closeByAltTab() {
+    const trigger = screen.getByText('open');
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    await user.click(trigger);
+    expect(await screen.findByRole('menu')).toBeInTheDocument();
+    expect(document.activeElement).not.toBe(trigger);
+
+    // The OS window was deactivated: the main document no longer has focus
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    blurWindow();
+
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+    // Let FocusScope's own zero-delay close-auto-focus timer run before asserting
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  }
+
+  it('returns focus to the trigger of a non-modal menu after an alt-tab close in the main document', async () => {
+    render(
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger>open</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem>item</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>,
+    );
+
+    await closeByAltTab();
+
+    expect(screen.getByText('open')).toHaveFocus();
+  });
+
+  // Regression guard: Radix restores a modal menu's trigger itself, so this passes without the
+  // hook's own restore too
+  it('returns focus to the trigger of a modal menu after an alt-tab close in the main document', async () => {
+    render(
+      <DropdownMenu>
+        <DropdownMenuTrigger>open</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem>item</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>,
+    );
+
+    await closeByAltTab();
+
+    expect(screen.getByText('open')).toHaveFocus();
+  });
+
   it('returns focus to the trigger after Escape', async () => {
     // jsdom reports no document focus by default; a browser tab the user is working in has it
     vi.spyOn(document, 'hasFocus').mockReturnValue(true);

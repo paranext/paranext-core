@@ -51,30 +51,81 @@ export type DismissOnWindowBlurProps<T extends HTMLElement> = {
 };
 
 /**
+ * Finds the trigger that opens a Radix Content, from the attributes Radix links them with.
+ *
+ * - Popover: the trigger always carries `aria-controls` naming the content's id.
+ * - Menubar and DropdownMenu: the trigger carries `aria-controls` only while the menu is open, so the
+ *   lookup also runs when the content mounts; their content's `aria-labelledby` names the trigger.
+ * - ContextMenu: there is no trigger element to find, so nothing is restored, just as Radix restores
+ *   nothing there after an outside interaction.
+ *
+ * @param content The Radix Content element
+ * @returns The first element outside `content` whose `aria-controls` is exactly the content's id,
+ *   else the element outside `content` that the content's `aria-labelledby` names, else
+ *   `undefined`
+ */
+function findTriggerFor(content: HTMLElement): HTMLElement | undefined {
+  const doc = content.ownerDocument;
+  if (content.id) {
+    const controller = Array.from(doc.querySelectorAll<HTMLElement>('[aria-controls]')).find(
+      (element) =>
+        element.getAttribute('aria-controls') === content.id && !content.contains(element),
+    );
+    if (controller) return controller;
+  }
+  const labelledBy = content.getAttribute('aria-labelledby');
+  const labeller = labelledBy ? doc.getElementById(labelledBy) : undefined;
+  if (labeller && !content.contains(labeller)) return labeller;
+  return undefined;
+}
+
+/**
  * Builds the close-auto-focus handler for a Radix Content: runs the caller's handler first, then
  * keeps focus where the user put it when {@link shouldSuppressFocusReturn} says returning it to the
- * trigger would pull focus across frames. The handler reads state at close time and its identity is
- * stable; the caller's handler is held in a ref, so it need not be stable.
+ * trigger would pull focus across frames.
+ *
+ * In the main document, a close while the document has no focus (the OS window was deactivated)
+ * returns focus to the trigger itself: the blur's synthetic press counts as an outside interaction,
+ * after which non-modal Radix surfaces skip their own restore. It does so only while nothing else
+ * holds focus, so it never takes focus from an element the user focused.
+ *
+ * The handler reads state at close time and its identity is stable; the caller's handler and the
+ * trigger getter are held in refs, so neither need be stable.
  *
  * Internal to this library; not exported from the package.
  *
  * @param callerOnCloseAutoFocus The caller's own close-auto-focus handler, if any; it can itself
  *   prevent the default
+ * @param getTriggerToRestore Returns the trigger to focus after a close in an unfocused main
+ *   document, if there is one and it is still in the document; without it, nothing is restored
  * @returns A stable handler to pass to the Radix Content
  */
 export function useGatedCloseAutoFocus(
   callerOnCloseAutoFocus?: (event: Event) => void,
+  getTriggerToRestore?: () => HTMLElement | undefined,
 ): (event: Event) => void {
   const [isInWebView] = useState(isRunningInWebView);
   const callerOnCloseAutoFocusRef = useRef(callerOnCloseAutoFocus);
   callerOnCloseAutoFocusRef.current = callerOnCloseAutoFocus;
+  const getTriggerToRestoreRef = useRef(getTriggerToRestore);
+  getTriggerToRestoreRef.current = getTriggerToRestore;
 
   return useCallback(
     (event: Event) => {
       callerOnCloseAutoFocusRef.current?.(event);
       if (event.defaultPrevented) return;
       // Decided from state at close time rather than remembered from the blur
-      if (shouldSuppressFocusReturn(document, isInWebView)) event.preventDefault();
+      if (shouldSuppressFocusReturn(document, isInWebView)) {
+        event.preventDefault();
+        return;
+      }
+      if (isInWebView || document.hasFocus()) return;
+      const { activeElement } = document;
+      if (activeElement && activeElement !== document.body) return;
+      const trigger = getTriggerToRestoreRef.current?.();
+      if (!trigger) return;
+      trigger.focus({ preventScroll: true });
+      event.preventDefault();
     },
     [isInWebView],
   );
@@ -145,6 +196,9 @@ export function useDismissOnWindowBlur<T extends HTMLElement>({
   onCloseAutoFocus: (event: Event) => void;
 } {
   const elementRef = useRef<T | undefined>(undefined);
+  // Kept after the content detaches: Radix runs close-auto-focus from a timer after the unmount
+  const lastContentRef = useRef<T | undefined>(undefined);
+  const capturedTriggerRef = useRef<HTMLElement | undefined>(undefined);
 
   useEffect(() => {
     const handleWindowBlur = () => {
@@ -170,6 +224,10 @@ export function useDismissOnWindowBlur<T extends HTMLElement>({
   const ref = useCallback(
     (element: T | null) => {
       elementRef.current = element ?? undefined;
+      if (element) {
+        lastContentRef.current = element;
+        capturedTriggerRef.current = findTriggerFor(element);
+      }
       if (typeof forwardedRef === 'function') {
         const forwardedCleanup = forwardedRef(element);
         // React 19 calls a cleanup returned from a callback ref instead of calling the ref with
@@ -186,7 +244,14 @@ export function useDismissOnWindowBlur<T extends HTMLElement>({
     [forwardedRef],
   );
 
-  const onCloseAutoFocus = useGatedCloseAutoFocus(forwardedOnCloseAutoFocus);
+  const getTriggerToRestore = useCallback(() => {
+    const content = lastContentRef.current;
+    // Looked up again at close, as the trigger may have been replaced; the trigger found on attach
+    // covers menus, whose trigger drops `aria-controls` once the menu closes
+    const trigger = (content && findTriggerFor(content)) ?? capturedTriggerRef.current;
+    return trigger?.isConnected ? trigger : undefined;
+  }, []);
+  const onCloseAutoFocus = useGatedCloseAutoFocus(forwardedOnCloseAutoFocus, getTriggerToRestore);
 
   return { ref, onCloseAutoFocus };
 }

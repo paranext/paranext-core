@@ -2,7 +2,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createRef, useState } from 'react';
-import { beforeAll, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest';
 import '@testing-library/jest-dom';
 import {
   DropdownMenu,
@@ -55,6 +55,10 @@ beforeAll(() => {
 const getTrigger = () => screen.getByRole('combobox', { name: 'book-chapter-trigger' });
 
 describe('BookChapterControl imperative handle', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   test('open() opens the dropdown and focuses the search input', async () => {
     const handleRef = createRef<BookChapterControlHandle>();
     render(
@@ -201,6 +205,69 @@ describe('BookChapterControl imperative handle', () => {
     await user.click(getTrigger());
 
     await waitFor(() => expect(document.querySelector('[cmdk-input]')).toBeVisible());
+  });
+
+  test('returns focus to the trigger after an alt-tab close in the main document', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+      />,
+    );
+
+    await user.click(getTrigger());
+    await waitFor(() => expect(document.querySelector('[cmdk-input]')).not.toBeNull());
+    expect(getTrigger()).not.toHaveFocus();
+
+    // The OS window was deactivated: the main document no longer has focus
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    act(() => {
+      window.dispatchEvent(new Event('blur'));
+    });
+    await waitFor(() => expect(getTrigger()).toHaveAttribute('aria-expanded', 'false'));
+    // Let FocusScope's own zero-delay close-auto-focus timer run before asserting
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(getTrigger()).toHaveFocus();
+  });
+
+  test('names the content by the id it is given, on the content and in the trigger aria-controls', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        id="bcv-under-test"
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+      />,
+    );
+
+    await user.click(getTrigger());
+    await waitFor(() => expect(document.querySelector('[cmdk-input]')).not.toBeNull());
+
+    expect(getTrigger()).toHaveAttribute('aria-controls', 'bcv-under-test');
+    expect(document.getElementById('bcv-under-test')).toBe(
+      document.querySelector('[data-slot="popover-content"]'),
+    );
+  });
+
+  test("the trigger's aria-controls names the open content when no id is given", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+      />,
+    );
+
+    await user.click(getTrigger());
+    await waitFor(() => expect(document.querySelector('[cmdk-input]')).not.toBeNull());
+
+    const content = document.querySelector('[data-slot="popover-content"]');
+    expect(content).not.toBeNull();
+    expect(document.getElementById(getTrigger().getAttribute('aria-controls') ?? '')).toBe(content);
   });
 
   test('does not render a chevron by default', () => {
