@@ -1411,14 +1411,16 @@ export function BookChapterControl({
         // Everything Radix would treat as an outside interaction — a press elsewhere in the
         // document, focus leaving, a window blur's synthetic press — is prevented here. Only the
         // dismissal is prevented: the press itself still reaches whatever the user clicked.
+        // A modal picker makes everything outside inert, its trigger included, so "stays open"
+        // would leave no way out: compact mode applies only when the picker is non-modal.
         onInteractOutside={(event) => {
-          if (isCommandOpen && isCommandListHidden) event.preventDefault();
+          if (!modal && isCommandOpen && isCommandListHidden) event.preventDefault();
         }}
         // Radix listens for Escape on the whole document, so compact mode keeps it from closing the
         // picker unless focus is in the picker or on the trigger. Escape pressed while focus is in
         // another frame never reaches this document.
         onEscapeKeyDown={(event) => {
-          if (!isCommandOpen || !isCommandListHidden) return;
+          if (modal || !isCommandOpen || !isCommandListHidden) return;
           const { target } = event;
           const isFocusInPicker =
             target instanceof Node &&
