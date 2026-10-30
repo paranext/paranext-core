@@ -127,7 +127,8 @@ Dismissal is a keyboard and screen-reader concern, not just a pointer one:
   stays where the user put it. The renderer's overlay service also leaves focus where the user moved
   it, with a wider check than the shared wrappers' iframe test: focus on any pane frame, on a
   focusable shell control outside the overlay, or when the window service already reports focus on a
-  different web view or tab than the one that opened the overlay. `Select` follows the same rule
+  different web view or tab than the one that opened the overlay. It decides one task after the
+  overlay closes, so the focus move of the press that dismissed it has already happened. `Select` follows the same rule
   through `SelectContent`. A hand-rolled dismissal (a `window` listener that sets your own state)
   runs *outside* Radix's lifecycle: it must not focus the trigger on a blur dismissal in a web view,
   or when the active element is an iframe (`shouldSuppressFocusReturn`); in the main document after
