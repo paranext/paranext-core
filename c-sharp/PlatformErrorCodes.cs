@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 
 namespace Paranext.DataProvider;
 
@@ -93,5 +94,35 @@ public static class PlatformErrorCodes
         }
         code = null;
         return false;
+    }
+
+    /// <summary>
+    /// Like <see cref="TryGetCode"/>, but also looks through the wrappers that reflection and
+    /// tasks put around a handler's exception: a <see cref="TargetInvocationException"/>, and an
+    /// <see cref="AggregateException"/> holding exactly one exception. An exception that wraps a
+    /// coded exception as its <see cref="Exception.InnerException"/> does not take on the inner
+    /// code: it reports its own failure. Neither does an aggregate of several exceptions, whose
+    /// codes may disagree.
+    /// </summary>
+    public static bool TryFindCode(Exception ex, [NotNullWhen(true)] out string? code)
+    {
+        var current = ex;
+        while (true)
+        {
+            if (TryGetCode(current, out code))
+                return true;
+            switch (current)
+            {
+                case TargetInvocationException { InnerException: { } inner }:
+                    current = inner;
+                    break;
+                case AggregateException { InnerExceptions: [var single] }:
+                    current = single;
+                    break;
+                default:
+                    code = null;
+                    return false;
+            }
+        }
     }
 }

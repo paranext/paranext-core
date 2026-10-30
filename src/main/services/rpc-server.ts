@@ -449,10 +449,13 @@ export class RpcServer implements IRpcHandler {
             request.method as SerializedRequestType,
             request.params,
           );
+          // The error goes on whole: its `data` carries what the handler attached, such as the
+          // platform error code the .NET data provider sends in `error.data.data.platformErrorCode`
+          // for the requester's network service to read.
           const payload =
             'result' in response
               ? createSuccessResponse(response.result, request.id)
-              : createErrorResponse(response.error.message, response.error.code, request.id);
+              : { ...response, id: request.id };
           sendPayloadToWebSocket(this.ws, payload);
         } catch (error) {
           this.handleError(`Error handling request: ${getErrorMessage(error)}`, request);

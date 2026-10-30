@@ -36,7 +36,7 @@ internal class PapiClient : IDisposable
         _cancellationToken = _cancellationTokenSource.Token;
 
         var formatter = SerializationOptions.CreateJsonRpcMessageFormatter();
-        _jsonRpc = new JsonRpc(new WebSocketMessageHandler(_webSocket, formatter))
+        _jsonRpc = new PapiJsonRpc(new WebSocketMessageHandler(_webSocket, formatter))
         {
             AllowModificationWhileListening = true,
             ExceptionOptions = ExceptionSettings.TrustedData,
