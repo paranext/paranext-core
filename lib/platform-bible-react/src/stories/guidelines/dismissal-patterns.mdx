@@ -124,12 +124,18 @@ Dismissal is a keyboard and screen-reader concern, not just a pointer one:
   themselves for keyboard users coming back from another application. After an outside interaction a
   non-modal `Popover` and a `Menubar` would skip that restore, while a modal `DropdownMenu` would
   restore anyway; the wrappers make the outcome the same for all three. Inside a web view focus
-  stays where the user put it. The renderer's overlay service also leaves focus where the user moved
-  it, with a wider check than the shared wrappers' iframe test: focus on any pane frame, on a
-  focusable shell control outside the overlay, or when the window service already reports focus on a
-  different web view or tab than the one that opened the overlay. It decides one task after the
-  overlay closes, so the focus move of the press that dismissed it has already happened. `Select` follows the same rule
-  through `SelectContent`. A hand-rolled dismissal (a `window` listener that sets your own state)
+  stays where the user put it. The renderer's overlay service (command palette, including a passive
+  one, context menu with its submenus, and popover) decides by how the overlay closed, not by where
+  focus is. Picking an item returns focus to the opener. Escape, the opener's own dismiss and the
+  app losing focus (the window blurs while `document.hasFocus()` is false) return focus to the
+  opener only if focus is inside that overlay's own content at that moment. A click elsewhere (in
+  the main document or a pane frame), a pane or tab switch, a click into a pane that blurs the
+  window while the app keeps focus, a replacement, a timeout and a scroll never return focus.
+  Modal dialogs return focus on every answer (OK, Cancel, Escape, the close button, the backdrop,
+  an error the dialog reports) but not when they are replaced or the window shuts down. The opener
+  is the requesting web view when it is a real web view whose frame exists; otherwise the tab the
+  user was last in (modal dialogs) or the focus the window service reported when the overlay
+  opened. `Select` follows the same rule through `SelectContent`. A hand-rolled dismissal (a `window` listener that sets your own state)
   runs *outside* Radix's lifecycle: it must not focus the trigger on a blur dismissal in a web view,
   or when the active element is an iframe (`shouldSuppressFocusReturn`); in the main document after
   an OS-level deactivation it should return focus to the trigger, as the shared wrappers do. It must
