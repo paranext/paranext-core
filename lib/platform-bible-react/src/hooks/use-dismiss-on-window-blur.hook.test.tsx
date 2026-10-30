@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom';
 import {
   isRunningInWebView,
+  isWindowBlurPress,
   shouldSuppressFocusReturn,
   useDismissOnWindowBlur,
 } from './use-dismiss-on-window-blur.hook';
@@ -102,6 +103,8 @@ describe('useDismissOnWindowBlur', () => {
     expect(seen[0].type).toBe('pointerdown');
     expect(seen[0].target).toBe(getByTestId('parent'));
     expect(seen[0].isTrusted).toBe(false);
+    expect(isWindowBlurPress(seen[0])).toBe(true);
+    expect(isWindowBlurPress(new Event('pointerdown'))).toBe(false);
     // jsdom has no PointerEvent, so the hook falls back to MouseEvent there, which has no pointerType
     const expectedPointerType = typeof PointerEvent === 'undefined' ? undefined : 'mouse';
     expect(Reflect.get(seen[0], 'pointerType')).toBe(expectedPointerType);

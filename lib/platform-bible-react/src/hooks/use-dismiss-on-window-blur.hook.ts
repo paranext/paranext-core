@@ -131,6 +131,22 @@ export function useGatedCloseAutoFocus(
   );
 }
 
+const WINDOW_BLUR_PRESS_MARKER = Symbol.for('platform-bible-react.window-blur-press');
+
+/**
+ * Whether this event is the outside press {@link useDismissOnWindowBlur} dispatches for a window
+ * blur. Internal to this library; not exported from the package. The renderer reads the same
+ * `Symbol.for` key through its own copy
+ * (`src/renderer/services/overlays/window-blur-press.util.ts`), pinned by a contract test there —
+ * change the key in both places.
+ *
+ * @param event The event to check
+ * @returns `true` when the hook dispatched the event
+ */
+export function isWindowBlurPress(event: Event): boolean {
+  return Reflect.get(event, WINDOW_BLUR_PRESS_MARKER) === true;
+}
+
 /**
  * Treats the window losing focus as a press outside the calling surface, so an open menu or popover
  * dismisses itself.
@@ -214,6 +230,7 @@ export function useDismissOnWindowBlur<T extends HTMLElement>({
         typeof PointerEvent === 'undefined'
           ? new MouseEvent('pointerdown', eventInit)
           : new PointerEvent('pointerdown', eventInit);
+      Object.defineProperty(syntheticPress, WINDOW_BLUR_PRESS_MARKER, { value: true });
       parent.dispatchEvent(syntheticPress);
     };
 

@@ -1,3 +1,5 @@
+import { isWindowBlurPress } from '@/hooks/use-dismiss-on-window-blur.hook';
+
 /** Defines HTML elements that can be focusable by keyboard as a CSS selector string */
 const FOCUSABLE_SELECTOR = `
   a[href],
@@ -95,7 +97,9 @@ export function trackInteractionModality() {
   // Capture phase, so the modality is already correct by the time any focus handler runs.
   document.addEventListener(
     'pointerdown',
-    () => {
+    (event) => {
+      // A window blur is not the user choosing the pointer
+      if (isWindowBlurPress(event)) return;
       lastInteractionModality = 'pointer';
     },
     true,
