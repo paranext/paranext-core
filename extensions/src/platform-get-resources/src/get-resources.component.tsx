@@ -68,7 +68,6 @@ import { getInternetBlockedMessageKey } from './internet-block-notification.util
 export const GET_RESOURCES_STRING_KEYS = Object.freeze([
   '%data_loading_error_internetAccess_disabled_3%',
   '%general_error_title%',
-  '%getResources_waitingForSync_label%',
   '%resources_action%',
   '%resources_actionDidNotTakeEffect%',
   '%resources_any_language%',
@@ -102,6 +101,7 @@ export const GET_RESOURCES_STRING_KEYS = Object.freeze([
   '%resources_type_Commentary%',
   '%resources_type_unknown%',
   '%resources_update%',
+  '%resources_waitingForSync_label%',
 ] as const);
 
 type GetResourcesLocalizedStringKey = (typeof GET_RESOURCES_STRING_KEYS)[number];
@@ -397,7 +397,7 @@ export function GetResources({
   const fullNameText: string = getLocalizedString('%resources_fullName%');
   const getText: string = getLocalizedString('%resources_get%');
   const installedText: string = getLocalizedString('%resources_installed%');
-  const waitingForSyncText: string = getLocalizedString('%getResources_waitingForSync_label%');
+  const waitingForSyncText: string = getLocalizedString('%resources_waitingForSync_label%');
   const languageText: string = getLocalizedString('%resources_language%');
   const languagesText: string = getLocalizedString('%resources_languages%');
   const languagesSearchPlaceholder: string = getLocalizedString(

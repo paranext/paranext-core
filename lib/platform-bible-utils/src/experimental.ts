@@ -49,6 +49,7 @@ export {
 export {
   IDLE_SYNC_QUEUE,
   isSyncQueueSnapshot,
+  SYNC_REQUEST_REMOVED_MARKER,
   toSyncQueue,
   type SyncQueue,
   type SyncQueueValue,

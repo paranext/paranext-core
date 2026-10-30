@@ -111,6 +111,9 @@ const CANCEL_SYNC_PROMPT_COMMAND = 'paratextBibleSendReceive.cancelSyncPrompt';
  * @returns `false` when nothing was cancelled (the user chose to keep syncing)
  */
 async function sendCancelRequest(): Promise<boolean> {
+  // Keep in step with `requestCancelSync` in
+  // `extensions/src/platform-scripture-editor/src/sync-blocked-banner.component.tsx`; they live in
+  // different processes so they can't share code.
   try {
     return await sendCommand(CANCEL_SYNC_PROMPT_COMMAND);
   } catch (e) {

@@ -6,6 +6,12 @@ import { isCommandNotRegisteredError } from './platform-scripture-editor.utils';
 
 const CANCEL_SYNC_PROMPT_COMMAND = 'paratextBibleSendReceive.cancelSyncPrompt';
 
+const BANNER_TEXT_KEY: LocalizeKey = '%webView_platformScriptureEditor_syncEditBlocked_banner_2%';
+const CANCEL_KEY: LocalizeKey = '%general_cancel%';
+
+/** Banner text plus the reused general Cancel label. */
+export const SYNC_BLOCKED_BANNER_STRING_KEYS: LocalizeKey[] = [BANNER_TEXT_KEY, CANCEL_KEY];
+
 /**
  * Asks to cancel the running sync, through the prompt that also asks about the projects waiting in
  * the sync queue. The running sync is reported by the backend, so it can be running while the
@@ -15,6 +21,8 @@ const CANCEL_SYNC_PROMPT_COMMAND = 'paratextBibleSendReceive.cancelSyncPrompt';
  * @returns `false` when nothing was cancelled (the user chose to keep syncing)
  */
 async function requestCancelSync(): Promise<boolean> {
+  // Keep in step with `sendCancelRequest` in `src/renderer/components/sync-status-button.component.tsx`;
+  // they live in different processes so they can't share code.
   try {
     return await papi.commands.sendCommand(CANCEL_SYNC_PROMPT_COMMAND);
   } catch (e) {
@@ -26,12 +34,6 @@ async function requestCancelSync(): Promise<boolean> {
     return true;
   }
 }
-
-const BANNER_TEXT_KEY: LocalizeKey = '%webView_platformScriptureEditor_syncEditBlocked_banner_2%';
-const CANCEL_KEY: LocalizeKey = '%general_cancel%';
-
-/** Banner text plus the reused general Cancel label. */
-export const SYNC_BLOCKED_BANNER_STRING_KEYS: LocalizeKey[] = [BANNER_TEXT_KEY, CANCEL_KEY];
 
 /**
  * Payload of the Send/Receive extension's sync progress event (the same public seam the old
