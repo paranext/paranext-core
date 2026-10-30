@@ -11009,8 +11009,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - The patch's guard applies in the main document too: if a trapped dialog's focused child is
     removed while the OS window is deactivated, focus stays on `body` when the user comes back
     instead of moving to the dialog. Accepted as rare.
-- **Amended 2026-10-30 (UX ruling, Sebastian and Ian for UX):** the `BookChapterControl` in
-  compact mode is an explicit-dismissal surface. Compact mode starts when a quick-nav arrow
+- **Amended 2026-10-30 (UX ruling, Sebastian and Ian for UX):** the non-modal `BookChapterControl`
+  in compact mode is an explicit-dismissal surface. Compact mode starts when a quick-nav arrow
   (previous or next chapter or verse) hides the book list and ends when the list returns (the search
   input takes focus, or the user types); a fresh open always starts with the full picker. While
   compact it survives a window blur, a real press elsewhere in the document, focus leaving and other
@@ -11020,8 +11020,17 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   elsewhere in the document, because Radix listens for it on the whole document). Closing with its
   container, becoming disabled, unmounting and submitting a reference are unchanged. The reason: the
   user steps through chapters with the arrows while working in another pane. With the list showing,
-  the picker follows the rule above (it closes). The rule lives in the component, so every instance
-  gets it.
+  the picker follows the rule above (it closes). A modal picker makes everything outside inert, its
+  trigger included, so it never enters compact stay-open and closes on an outside press and on Escape
+  as before. A compact picker whose tab becomes hidden stays open on purpose (a UX decision); it
+  closes through its trigger once the tab is visible again, or on Escape with focus in it. The rule
+  lives in the component, so every non-modal instance gets it.
+- **Overlay focus restore:** the renderer's overlay service returns focus to the pane that opened an
+  overlay only while the user has not moved it. It skips the restore when the main document's active
+  element is a web view iframe or any focusable element outside the overlay content, or when the
+  window service already reports focus on a different web view or tab. Escape, picking an item and a
+  dismissal with focus on `body` still restore. The check is wider than the shared wrappers'
+  iframe-only test above.
 - **Source:** PT-2989 (PR #2963); related PT-2205, PT-4627; prototype PR #2887.
 
 ## adr-unresolvable-spdx-operators-drop-the-dependency: A declaration carrying an SPDX operator this pipeline cannot resolve drops the dependency
