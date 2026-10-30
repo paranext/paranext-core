@@ -109,8 +109,10 @@ Dismissal is a keyboard and screen-reader concern, not just a pointer one:
   focus is **not** returned when it is already in a web view (`activeElement` is an iframe) or,
   inside a web view, when the window is not focused. Returning focus across frames blurs the window
   the user just moved to and closes the menu they opened there. In the main document an unfocused
-  window can only mean the OS window was deactivated, so focus still returns to the trigger for
-  keyboard users coming back from another application. A hand-rolled dismissal (a `window` listener
+  window can only mean the OS window was deactivated, so the shared wrappers return focus to the
+  trigger themselves for keyboard users coming back from another application (Radix's non-modal
+  surfaces skip that restore after an outside press); inside a web view focus stays where the user
+  put it. `Select` follows the same rule through `SelectContent`. A hand-rolled dismissal (a `window` listener
   that sets your own state) runs *outside* Radix's lifecycle: it must NOT focus the trigger on a
   blur dismissal, and must call `trigger.focus()` on other dismissals (Escape, a choice) —
   otherwise keyboard users are stranded on a closed surface's dead anchor. A consumer
@@ -163,17 +165,23 @@ the example). Because it is the ordinary outside-press path, the opt-outs in
 [How to wire each pattern](#how-to-wire-each-pattern) keep working, and a popover portaled into a
 dialog through `PopoverPortalContainerProvider` closes while the dialog stays open.
 
-This **reverses the earlier rule** that a plain window switch dismisses nothing: the window losing
-focus now dismisses a Light or Click-away surface whether focus went to another frame, another
-application (alt-tab) or DevTools, as native menus do.
+A plain window switch (alt-tab, DevTools) also dismisses a Light or Click-away surface, as native
+menus do.
 
 Consequences to know about:
 
 - The click that dismisses the surface is not swallowed. The pane it lands on receives it first, so
   it acts there (places a caret, focuses the pane) and the surface closes.
-- Not wired: `Select` (modal — it already swallows a click into an iframe), `Tooltip` and `Dialog`
-  (not on this axis), and sub-menu contents (dismissing the root closes them).
+- Not wired: `Select` (it closes on window blur by itself; `SelectContent` applies the same
+  focus-return rule), `Tooltip` and `Dialog` (not on this axis), sub-menu contents (dismissing the
+  root closes them), and the Scripture editor's right-click menu (not Radix; its window-blur close is
+  fixed separately in the editor package).
 - Escape is not forwarded across frames. After a click into another frame, Escape goes to that frame.
+- A modal menu opened inside a picker closes alone on a window blur; the picker stays open until the
+  next blur or outside press, as it would after a real click outside both.
+- Inside a web view, a dialog does not pull focus back from another frame when a picker nested in it
+  closes on blur. Platform.Bible patches Radix's focus trap for this; web views built in other
+  repositories carry their own copy of Radix and need the same patch until Radix fixes it upstream.
 
 **Don't hand-roll containment against the trigger.** Radix portals content to `document.body`
 (`lib/platform-bible-react/src/components/shadcn-ui/popover.tsx`), so the floating content is **not**

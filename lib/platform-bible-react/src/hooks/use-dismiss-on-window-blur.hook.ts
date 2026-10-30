@@ -29,6 +29,9 @@ export function isRunningInWebView(): boolean {
  * another application. Inside a web view it is ambiguous (switching applications versus clicking
  * into another frame) and stays suppressed.
  *
+ * It decides only whether to suppress; {@link useDismissOnWindowBlur} restores the trigger itself in
+ * the main-document case.
+ *
  * @param doc The document the surface renders in
  * @param isInWebView Whether that document's window is a web view; see {@link isRunningInWebView}
  * @returns `true` when focus must not be returned to the trigger
@@ -171,23 +174,29 @@ export function isWindowBlurPress(event: Event): boolean {
  * Radix anyway: a layer below the top-most layer that disables outside pointer events does not
  * dismiss.
  *
- * Focus rule: a dismissal caused by window blur does not return focus to the trigger. The user has
- * already put focus somewhere else, and Radix's default close-auto-focus would pull it back. That
- * matters most across frames: a menu closing in one frame by returning focus to its trigger blurs
- * the main window, which would close the menu the user just opened in another frame. The returned
+ * Focus rule: a dismissal caused by a click into another frame does not return focus to the
+ * trigger. The user has already put focus somewhere else, and Radix's default close-auto-focus
+ * would pull it back: a menu closing in one frame by returning focus to its trigger blurs the main
+ * window, which would close the menu the user just opened in another frame. The returned
  * `onCloseAutoFocus` calls `preventDefault()` per {@link shouldSuppressFocusReturn}: when the active
  * element is an `<iframe>` (the user clicked into a web view from this document), or when this
- * window is a web view whose document no longer has focus (the user clicked into another frame, or
+ * window is a web view whose document has lost focus (the user clicked into another frame, or
  * switched applications). In the main document a lost `document.hasFocus()` can only mean the OS
- * window was deactivated, so focus returns to the trigger there. Any other close, such as Escape or
- * a click elsewhere in this document, restores focus as usual. The rule reads state at close time
- * rather than remembering that a blur dismissal happened: Radix runs close-auto-focus from its own
- * timer after an asynchronous unmount, so a flag cleared by a timeout loses that race under load.
+ * window was deactivated, so the hook returns focus to the trigger itself: Radix's non-modal
+ * popover and menus skip their own restore after any outside press, which the synthetic press is.
+ * The trigger is the element whose `aria-controls` names the content's `id` (read when the content
+ * mounts and again at close), or the element the content's `aria-labelledby` names; a surface
+ * without either (a context menu) restores nothing. Focus is never taken from an element the user
+ * focused elsewhere. Any other close, such as Escape or a click elsewhere in this document,
+ * restores focus as usual. The rule reads state at close time rather than remembering that a blur
+ * dismissal happened: Radix runs close-auto-focus from its own timer after an asynchronous unmount,
+ * so a flag cleared by a timeout loses that race under load.
  *
- * The synthetic press is untrusted (`isTrusted === false`). Other document-level `pointerdown`
- * listeners see it too (the focus modality tracker, window service gesture tracking, overlay
- * correlation, content-zoom bootstrap, the editor's selection snapshot) and were judged benign; a
- * listener that must ignore it can filter on `isTrusted`.
+ * The synthetic press is untrusted and carries a window-blur marker (checked by the internal
+ * `isWindowBlurPress`). The focus modality tracker and the overlay service's press recorder skip
+ * it, and the overlay service's own surfaces ignore it. Window service gesture tracking, the
+ * content-zoom bootstrap and the editor's selection snapshot see it and were judged benign. Another
+ * document-level `pointerdown` listener that must ignore it can check the marker the same way.
  *
  * Hidden-view case (the repo's rule on hidden views): a keyboard tab switch can hide a pane that
  * holds an open menu. The blur listener then dismisses it on the next window blur, which is

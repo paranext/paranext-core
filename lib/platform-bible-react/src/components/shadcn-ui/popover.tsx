@@ -95,9 +95,9 @@ function PopoverContent({
   // into another iframe never reaches this document, so the window's blur stands in for the outside
   // press; see the hook's TSDoc. The press targets the content's parent, so a dialog hosting this
   // popover (via PopoverPortalContainerProvider) sees an inside press and stays open. The returned
-  // ref callback also forwards the caller's ref, and the returned onCloseAutoFocus also
-  // decides, from document focus state, whether Radix may return focus to the trigger on close,
-  // while still calling the caller's handler.
+  // ref callback also forwards the caller's ref, and the returned onCloseAutoFocus also keeps focus
+  // out of another frame on close and, after the OS window was deactivated, returns focus to the
+  // trigger itself, while still calling the caller's handler.
   const blurDismissProps = useDismissOnWindowBlur({ ref, onCloseAutoFocus });
   return (
     // CUSTOM: When a PopoverPortalContainerProvider is in scope, portal into its container
@@ -106,7 +106,8 @@ function PopoverContent({
       <PopoverPrimitive.Content
         data-slot="popover-content"
         // CUSTOM: ref and onCloseAutoFocus from useDismissOnWindowBlur (it finds the content's
-        // parent and decides, from document focus state, whether focus returns to the trigger on close)
+        // parent, keeps focus out of another frame on close and restores the trigger after the OS
+        // window was deactivated)
         {...blurDismissProps}
         align={align}
         sideOffset={sideOffset}
