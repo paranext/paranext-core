@@ -2947,9 +2947,16 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - A copy that goes through another editor loses the attribute and pastes as html (catalog row
     CB-14).
   - The read raises no `paste` event, so during a chapter load `usePauseEditing` holds off the paste
-    chords by key, and the Edit flyout's Paste is refused by the web view's read-only check. The
-    right-click menu's Paste is not held off. A read already in flight when the load starts can
-    still land in the chapter being left, where it shows and is not saved.
+    chords by key (and the cut chord, which raises no `cut` event), and the Edit flyout's Paste is
+    refused by the web view's read-only check. The right-click menu's Paste and Cut are not held
+    off; what they do is not saved, and cut text returns when the new chapter loads.
+  - The hold-off starts after the chapter's last save. The chapter-switch flush runs in the commit
+    that changes the chapter selector, the loading flag is set in an effect after it, and
+    `usePauseEditing` attaches its listeners a commit later. A paste or keystroke in that gap, or a
+    clipboard read landing after the flush, is not held off and is not saved
+    (`isEditorContentForChapter` refuses it): it shows in the chapter being left until the new one
+    replaces it. A read started in that gap can also outlast a short load, and then lands in the new
+    chapter and is saved there (seen in `in-editor-paste.spec.ts`).
   - Checked on Electron 39 on Linux and on Windows (probes), and end to end on Linux by
     `in-editor-paste.spec.ts`. macOS was researched, not run.
 - **Source:** PT-4921; paranext-core#2976, paranext/scripture-editors#43.

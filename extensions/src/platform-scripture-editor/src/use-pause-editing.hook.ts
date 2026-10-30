@@ -22,13 +22,21 @@ const CARET_KEYS = new Set([
  * because the editor still shows the chapter being left: moving it there reports that chapter's
  * verse as the current reference, which pulls the reference back to the chapter the user just left.
  * The paste chords count because the editor takes them itself and reads the clipboard, which raises
- * no `paste` event to hold off, and whose result could land in the new chapter. A read already in
- * flight when the pause starts still lands. Every other chord is let through so the application's
- * shortcuts keep working. A paste the browser runs itself is held off as the `paste` event it
- * raises, and the Edit flyout's Paste is refused by the web view's read-only check while a chapter
- * loads. Nothing holds off the right-click menu's Paste, which reads the clipboard as the chords
- * do. The cut chord counts because the editor takes it itself and dispatches its cut command, with
- * no `cut` event; as in the editor, Shift or Alt with it makes it some other chord.
+ * no `paste` event to hold off, and whose result could land in the new chapter. The cut chord
+ * counts because the editor takes it itself and dispatches its cut command, with no `cut` event; as
+ * in the editor, Shift or Alt with it makes it some other chord. Every other chord is let through
+ * so the application's shortcuts keep working. A paste the browser runs itself is held off as the
+ * `paste` event it raises, and the Edit flyout's Paste is refused by the web view's read-only check
+ * while a chapter loads. Nothing holds off the right-click menu's Paste or Cut; what they do is not
+ * saved, and cut text returns when the new chapter loads.
+ *
+ * The hold-off starts after the chapter's last save. The chapter-switch flush runs in the commit
+ * that changes the chapter selector, the loading flag is set in an effect after it, and
+ * {@link usePauseEditing} attaches its listeners a commit later. So a paste or keystroke in that
+ * gap, or a clipboard read that lands after the flush, is not held off and is not saved
+ * (`isEditorContentForChapter` refuses it): it shows in the chapter being left until the new one
+ * replaces it. A clipboard read started in that gap can also outlast a short load, and then lands
+ * in the new chapter and is saved there.
  */
 function isHeldOffKey(event: KeyboardEvent): boolean {
   if (event.isComposing || CARET_KEYS.has(event.key)) return true;

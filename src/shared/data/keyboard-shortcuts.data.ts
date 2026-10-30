@@ -375,12 +375,13 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     ],
   },
   // The paste and cut themselves are the scripture-editors repo's ClipboardPlugin (Ctrl+V reads the
-  // clipboard, Ctrl+X dispatches a cut command); `usePauseEditing` holds the chords off while the editor still shows the chapter being left, as
-  // it does typing, undo and caret moves.
+  // clipboard, Ctrl+X dispatches a cut command); `usePauseEditing` holds the chords off while the
+  // editor still shows the chapter being left, as it does typing, undo and caret moves. The
+  // right-click menu's Cut and Paste are not held off.
   {
     id: 'scripture-cut-paste-held-off-chapter-loading',
     purpose:
-      'While the next chapter is loading, the Cut, Paste and Paste as plain text keys do nothing. A paste pressed just before the load started reads the clipboard in the background, so it can still land',
+      'While the next chapter is loading, the Cut, Paste and Paste as plain text keys do nothing. This starts a moment after the chapter changes: a paste or cut in that moment, or a paste whose clipboard read finishes then, still shows in the chapter being left but is not saved, or can land in the new chapter if the load is short',
     category: 'Editing',
     context: 'Scripture editor, while it moves to another chapter',
     keys: {
