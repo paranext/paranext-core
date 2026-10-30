@@ -10924,7 +10924,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   hand-rolled copy (removed by this decision, which covers it through the shared wrappers); the
   recipe cannot work inside a web view: a click from a web view onto the main toolbar fires
   `window.blur` with `document.hasFocus() === false`, which the recipe reads as a plain window switch,
-  and web views cannot ask the host where focus went.
+  and web views cannot ask the host where focus went. The product owner agreed the behaviour on
+  2026-10-29.
 - **Decision:** A transient surface treats "my window lost focus" as an outside click, whichever
   frame the focus went to, including another application. `useDismissOnWindowBlur`
   (`lib/platform-bible-react/src/hooks/use-dismiss-on-window-blur.hook.ts`) listens for `blur` on
