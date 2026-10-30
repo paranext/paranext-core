@@ -166,6 +166,38 @@ export async function ensureFootnotesVisible(
   }
   await footnotesRoot.waitFor({ state: 'attached', timeout: 20_000 });
 }
+
+const BUNDLED_SAMPLE_WEB_DIR = path.resolve(__dirname, '../../c-sharp/assets/WEB');
+
+/**
+ * Builds a `prepareProjectRoot` callback that puts a copy of the bundled sample WEB project into
+ * the isolated project root with `DefaultFont` and `DefaultFontSize` rewritten in its
+ * `Settings.xml`. The copy keeps the sample's project id, so every sample-project helper works
+ * unchanged, and the backend skips its sample install because the root is no longer empty. The font
+ * has to be on disk before the app starts: nothing writes it through PAPI, and the project's style
+ * info is read from the loaded project. The font need not be installed; computed styles report the
+ * declared family.
+ */
+export function installSampleProjectWithFont(options: {
+  fontName: string;
+  fontSize: number;
+}): (projectRoot: string) => void {
+  return (projectRoot) => {
+    const target = path.join(projectRoot, 'WEB');
+    fs.cpSync(BUNDLED_SAMPLE_WEB_DIR, target, { recursive: true });
+    const settingsPath = path.join(target, 'Settings.xml');
+    let settings = fs.readFileSync(settingsPath, 'utf-8');
+    const fontTag = /<DefaultFont>[^<]*<\/DefaultFont>/;
+    const sizeTag = /<DefaultFontSize>[^<]*<\/DefaultFontSize>/;
+    if (!fontTag.test(settings) || !sizeTag.test(settings))
+      throw new Error('The sample project Settings.xml has no DefaultFont or DefaultFontSize tag.');
+    settings = settings
+      .replace(fontTag, () => `<DefaultFont>${options.fontName}</DefaultFont>`)
+      .replace(sizeTag, () => `<DefaultFontSize>${options.fontSize}</DefaultFontSize>`);
+    fs.writeFileSync(settingsPath, settings);
+  };
+}
+
 /**
  * Poll until the ProjectLookupService advertises the bundled sample WEB project. The generic
  * `waitForAtLeastOneProjectMetadata` is NOT sufficient here: other PDP factories (e.g. the lexical

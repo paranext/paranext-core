@@ -239,6 +239,67 @@ export const SendReceiveError: Story = {
 };
 
 /**
+ * A sync is running for the undownloaded shared project `HPUX-S/R`: its row shows a spinner, and
+ * every other row's Get and Sync is disabled with the reason "Wait for the current sync to
+ * finish".
+ */
+function SyncInProgressDecorator(Story: (update?: { args: HomeProps }) => ReactElement) {
+  return (
+    <Story
+      args={{
+        localizedStringsWithLoadingState: [localizedStrings, false],
+        localProjectsInfo: staticLocalProjectsAndResources,
+        sharedProjectsInfo: staticProjectsAndResources,
+        isSendReceiveInProgress: true,
+        activeSendReceiveProjects: ['17'],
+        headerContent: (
+          <>
+            <HomeIcon size="36" />
+            <CardTitle>Home</CardTitle>
+          </>
+        ),
+      }}
+    />
+  );
+}
+
+/**
+ * A sync is running. Also what Home shows for a sync started elsewhere: the Sync dialog, auto-sync,
+ * startup or a project switch.
+ */
+export const SyncInProgress: Story = {
+  decorators: [SyncInProgressDecorator],
+};
+
+/**
+ * Home opens while a sync that started elsewhere holds the server list: the spinner shows with a
+ * line saying a sync is running and the projects load when it finishes.
+ */
+function LoadingDuringSyncDecorator(Story: (update?: { args: HomeProps }) => ReactElement) {
+  return (
+    <Story
+      args={{
+        localizedStringsWithLoadingState: [localizedStrings, false],
+        localProjectsInfo: staticLocalProjectsAndResources,
+        remoteProjectsState: 'loading',
+        isServerListExpectedAfterSync: true,
+        isSendReceiveInProgress: true,
+        headerContent: (
+          <>
+            <HomeIcon size="36" />
+            <CardTitle>Home</CardTitle>
+          </>
+        ),
+      }}
+    />
+  );
+}
+
+export const LoadingDuringSync: Story = {
+  decorators: [LoadingDuringSyncDecorator],
+};
+
+/**
  * The send/receive server could not be reached, so the list holds only what is already on this
  * computer.
  */

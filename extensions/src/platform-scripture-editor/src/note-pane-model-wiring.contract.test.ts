@@ -107,9 +107,9 @@ describe('note pane model wiring', () => {
         // The one place the note model itself is decided
         "usesPaneNoteModel: if (viewType === 'standard') return true;",
       ],
-      'platform-scripture-editor.web-view.tsx': [
+      'use-project-stylesheet.hook.ts': [
         // Which stylesheet mode the text renders in; not a note check
-        'useProjectStylesheet',
+        "projectStylesheetMode: return viewType === 'standard' ? 'full' : 'fonts';",
       ],
     });
   });

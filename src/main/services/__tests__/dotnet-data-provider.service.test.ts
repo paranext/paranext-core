@@ -177,3 +177,65 @@ describe('dotnetDataProvider.start', () => {
     );
   });
 });
+
+describe('dotnetDataProvider.waitForClose', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    globalThis.isPackaged = false;
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /**
+   * The service keeps its close promise at module level and it never resets once the child exits,
+   * so each test starts a fresh copy of the service rather than the one imported above.
+   */
+  async function startFreshDataProvider() {
+    const child = fakeChildProcess();
+    mocks.spawn.mockReturnValue(child);
+    vi.resetModules();
+    const service = (await import('@main/services/dotnet-data-provider.service'))
+      .dotnetDataProvider;
+    service.start();
+    /** What the child does when it exits by itself */
+    const exit = () => {
+      const onExit = child.once.mock.calls.find(([event]) => event === 'exit')?.[1];
+      if (!onExit) throw new Error('The service did not listen for the child exiting');
+      onExit(0, undefined);
+    };
+    return { service, child, exit };
+  }
+
+  test('kills the data provider when it does not exit within the time given', async () => {
+    const { service, child } = await startFreshDataProvider();
+
+    const waiting = service.waitForClose(2000);
+    await vi.advanceTimersByTimeAsync(2000);
+    await waiting;
+
+    expect(child.kill).toHaveBeenCalledTimes(1);
+  });
+
+  test('stops waiting as soon as the data provider exits by itself, without killing it', async () => {
+    const { service, child, exit } = await startFreshDataProvider();
+
+    let waitEnded = false;
+    const waiting = (async () => {
+      await service.waitForClose(2000);
+      waitEnded = true;
+    })();
+    // As the provider does once main closes its PAPI connection
+    exit();
+    // Lets pending promise callbacks run but moves the clock nowhere near the 2000 ms limit, so
+    // the wait can only have ended because of the exit. (Once the provider has exited, the kill
+    // step has nothing left to kill, so `child.kill` alone cannot tell the two causes apart.)
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(waitEnded).toBe(true);
+    expect(child.kill).not.toHaveBeenCalled();
+    await waiting;
+  });
+});

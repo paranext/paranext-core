@@ -1299,7 +1299,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Date:** 2026-08-27
 - **Status:** Accepted, amended 2026-09-18 — the Text Collection's follow gate is now decided by
   project kind (`platform.isPublished`), not editability, and the editor's gate on Find's re-point
-  is removed, so Find follows every editor-column switch.
+  is removed, so Find follows every editor-column switch. Amended 2026-10-21 — the writes a
+  followed `Editable=F` project's grid makes are checked and accepted. Amended 2026-10-27 — the
+  routes that keep a published resource out of the Simple editor column are recorded.
 - **Context:** Simple mode's Column 3 holds a fixed set of panels, pinned by
   `shipped-simple-layout-order.test.ts`. A
   project switch re-pointed three of them explicitly (`openOrUpdateRelatedPanels` sends two
@@ -1390,7 +1392,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `openOrUpdateRelatedPanels` (or, if it needs the new editor's id, beside `updateRelatedFindPanel`)
   rather than giving it a signal to infer from. Five limits of this decision are recorded
   deliberately rather than left to be re-derived *(amended 2026-09-18: two of the five are
-  superseded and two bullets are added, each marked below)*:
+  superseded and two bullets are added; amended 2026-10-21 and 2026-10-27: one more bullet each;
+  each marked below)*:
   - **Read-only resources are not followed.** `openOrUpdateRelatedPanels` takes
     `isProjectEditable` and skips the Text Collection re-point when it is false, so a published
     resource opened in the editor column does not re-point the grid at itself — a project with no
@@ -1436,7 +1439,25 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     PT-4724, which should first settle where to run that check: `default-layout-supplement.json` lists
     the Scripture Text Grid behind `platformScriptureEditor.enableScriptureTextGrid` (contributed
     default `true`), while `default-layout-supplement.model.ts` and `filterEnabledSupplementEntries`
-    describe the supplement as empty in vanilla builds.
+    describe the supplement as empty in vanilla builds. *(Answered 2026-10-21: see the next bullet.
+    Those two descriptions were wrong and are corrected.)*
+  - **Added 2026-10-21 — a followed `Editable=F` project's grid writes into it, and that is
+    accepted.** The grid runs in core: `default-layout-supplement.json` lists it behind
+    `platformScriptureEditor.enableScriptureTextGrid` (contributed default `true`), and a
+    Simple-mode run showed the tab. With the WEB sample (`Editable=F`) open, the grid bound it,
+    offered its add, remove and reorder controls, and wrote `Extensions/UserSettings-<user>.xml`
+    into WEB's folder on mount (`initializeTextCollectionOverlay`) and again when a text was added.
+    The file holds one user's view of the panel, and `Editable=F` no more stops that than it stops
+    new comments.
+  - **Added 2026-10-27 — a published resource does not normally reach the Simple editor column,
+    so `updateRelatedTextCollectionPanel`'s `isPublished` skip is a backstop.** The title-bar picker and its "More projects…" dialog leave
+    resources out (`isPickableProject` in `use-project-picker-data.hook.ts`, merged 2026-10-23 via
+    #2920), Home sends a resource to its reference tab in Simple mode (`openResource` in
+    `open-home-item.ts`), the Power→Simple switch walks past them as above, and the default project
+    picker skips them in the recently-opened list it walks (`tryOpenFromRecentlyOpened`), which
+    builds from before #2920 can still hold. Nothing on the front end stops a grid that is already
+    bound to a resource from writing into it; whether the grid, Bible Texts, Commentaries and Model
+    Text write per-user settings into a resource they are bound to is tracked on PT-4895.
   - **The re-point targets one window.** `getAllOpenWebViewDefinitions()` flattens across every
     window, so `.find()` returns whichever Text Collection comes first, not the one in the window
     that switched. If that panel already shows the target project the skip guard returns early and a
@@ -1482,7 +1503,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4423, which fixes PT-4238. *(Corrected 2026-09-18: PT-4423 hardens the Simple-mode
   re-point; PT-4238 (PR #2736) replaced the unbound grid's scroll-group fallback — see
   `adr-active-editor-project-is-a-window-data-type`.)* Amended by PT-4716: the `isPublished` follow
-  rule.
+  rule. Amended by PT-4724: the `Editable=F` check, and the default project picker's resource skip.
 
 ## adr-comment-drafts-follow-filters: An uncommitted comment draft is filtered like any other thread, unlike Paratext 9
 
@@ -4129,6 +4150,49 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   in PT9, while the row editor still protects them. Arrow keys step through an unclosed note in the
   text like any other text.
 - **Source:** PT-4189.
+
+## adr-formatted-view-project-fonts-only: The formatted view gets the project's fonts only, not its layout
+
+- **Date:** 2026-10-29
+- **Status:** Accepted
+- **Context:** The scripture editor applied the project stylesheet CSS only in Standard view. Outside
+  Power mode the editor always shows the formatted view, so Simple mode never showed the project
+  font, and neither did Power's Preview. The formatted view has its own marker layout rules in
+  `_usj-nodes.scss`, tuned and tested without project layout layered over them. Paratext 10 does not
+  install project fonts, so a project font that is missing on the machine must degrade to the
+  Scripture font stack (Gentium Plus, Charis SIL, ...), not to the browser default.
+- **Decision:** In the formatted view, inject a fonts-only stylesheet built from the same
+  `StyleInfo` (`generateProjectFontCss`): the project's default font family followed by the
+  `--usj-font-fallback` stack, the default font size in points, and one `font-family` rule per
+  marker that names a font: the marker's font, then the project's default font, then the
+  `--usj-font-fallback` stack. Nothing else from a marker entry (weight, style, colour, size, margins,
+  indent, line height, alignment) is emitted. Standard view keeps the whole generated sheet.
+  `useProjectStylesheet` takes a `'full' | 'fonts'` mode.
+- **Alternatives:**
+  - **The full sheet in the formatted view.** Rejected: it would layer project layout over the
+    view's own marker rules, an interaction nothing tests.
+  - **Font family only, without the size.** Rejected: the project's default size is part of how
+    its text is meant to look, and the Standard view already applies it.
+  - **The base font only, without per-marker fonts.** Rejected: a project that sets a different
+    font on a marker (for example a transliteration marker) would lose it in exactly the views
+    this fixes.
+  - **Leave the formatted view as it is.** Rejected: Simple mode and Preview then never show the
+    project's font.
+- **Consequences:** The formatted view shows project fonts with the platform fallback; its layout
+  stays the platform's. `generateProjectFontCss` repeats private helpers of the editor package's
+  `generateUsjCss`; tests pin its output to the package's until PT-4974 moves the fonts-only sheet
+  into the package.
+  - Simple's fixed text sizes (verse numbers, headings, the empty-verse ellipsis box) are multiples
+    of a registered length, `--psc-base-font-size`, computed once on the editor root, so they scale
+    with the project font size. Plain `em` is not used: it compounds with an ancestor's size
+    (the visible-marker verse number) and resolves separately in the ellipsis box and the caret
+    host's margin, so the two disagree. The chapter numeral is deliberately a fixed `5rem`: it is
+    decorative and its parent is `font-size: 0`.
+  - The footnotes pane's read-only rows get the project fonts in every view through a second,
+    pane-scoped fonts-only sheet (`FOOTNOTE_ROWS_SELECTOR`), so a row keeps its font and size when it
+    is opened for editing. Rows take fonts only (family, size, per-marker family). Standard view's row
+    editor still applies per-marker size and style that read-only rows do not; this is accepted.
+- **Source:** PT-4966.
 
 ## adr-generic-name-routing-proxies: Generic-name service routers in main forward to the focused/owning window's scoped service
 

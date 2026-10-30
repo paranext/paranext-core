@@ -45,10 +45,10 @@ export type PickerResource = {
 };
 
 /**
- * Enumerate every locally-installed read-only reference resource and resolve its display metadata.
- * Filters to `isEditable === false` to exclude the user's own editable translation projects while
- * including both DBL-published resources and locally-installed read-only resources (e.g. VULGP83,
- * TNN, TND, HBK) that have `isPublished === false` but `isEditable === false`.
+ * Enumerate every locally-installed project that is not editable and resolve its display metadata:
+ * every resource, DBL-published or locally installed (e.g. VULGP83, TNN, TND, HBK), and any plain
+ * project marked `Editable=F`, such as the WEB sample. Filters to `isEditable === false`, which
+ * excludes the user's own editable translation projects.
  *
  * Note: the renderer uses a similar enumerate-and-resolve pattern in
  * `src/renderer/hooks/use-project-picker-data.hook.ts`. A shared utility isn't possible here
@@ -58,9 +58,10 @@ export async function fetchDownloadedResources(): Promise<DownloadedResource[]> 
   try {
     // Filter to `platform.base` rather than `platformScripture.USJ_Chapter` so that
     // commentary/notes resources that do not implement USJ are included.
-    // Then filter to `isEditable === false`: DBL resources always have this flag; locally-installed
-    // read-only resources (VULGP83, TNN, TND, HBK) have `Editable=F` in their Settings.xml and
-    // therefore also get `isEditable: false`, even though `isPublished` is `false` for them.
+    // Then filter to `isEditable === false`: every resource project reports it, DBL-published or a
+    // locally installed `.p8z` (VULGP83, TNN, TND, HBK), whatever its Settings.xml says, and
+    // reports `isPublished: true` too. A plain project marked `Editable=F`, such as the WEB
+    // sample, also passes this filter.
     // The user's own editable translation projects have `isEditable: true` and are excluded.
     // Per the project-metadata model: absence means editable, so the test MUST be `=== false`.
     const allMetadata = await papi.projectLookup.getMetadataForAllProjects({

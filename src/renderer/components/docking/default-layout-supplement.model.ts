@@ -42,7 +42,7 @@ export interface DefaultLayoutSupplementEntry {
   flagSetting?: string;
 }
 
-/** Product-specific additions to the default layout. Empty in vanilla builds. */
+/** Product-specific additions to the default layout, each optionally gated by a flag setting. */
 export interface DefaultLayoutSupplement {
   tabs: DefaultLayoutSupplementEntry[];
 }

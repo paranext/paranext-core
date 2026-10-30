@@ -183,11 +183,12 @@ export class RpcServer implements IRpcHandler {
   }
 
   // TODO(PT-4495): Nothing calls this. `RpcWebSocketListener.disconnect()` closes the WebSocket
-  // server without iterating its `RpcServer`s, so live client sockets are never closed and
-  // `IRpcHandler.disconnect`'s documented "on servers: disconnects from all clients" is unmet —
-  // which is also why `INTENTIONAL_CLOSE_CODE` never leaves main. Fixing it means changing what
-  // shutdown does to live sockets, so it belongs with the reconnect/teardown work rather than in a
-  // diagnosis-only change.
+  // server without iterating its `RpcServer`s, so `networkService.shutdown()` leaves live client
+  // sockets open and `IRpcHandler.disconnect`'s documented "on servers: disconnects from all
+  // clients" is unmet. The quit sequence closes the websocket clients itself beforehand, through
+  // `RpcWebSocketListener.closeWebSocketClients`, so the data provider can shut down; the network
+  // teardown still does not. Fixing it means changing what shutdown does to live sockets, so it
+  // belongs with the reconnect/teardown work rather than in a diagnosis-only change.
   async disconnect(): Promise<void> {
     if (this.connectionStatus === ConnectionStatus.Disconnected) return;
     if (!this.ws) {
@@ -345,8 +346,9 @@ export class RpcServer implements IRpcHandler {
     // A close with no completed handshake is the fingerprint this ticket exists to make greppable —
     // but on the way down it is also the ordinary case, not a fault. Main's server is still
     // listening while the extension host calls `process.exit()` and each renderer process is torn
-    // down, so every peer's socket dies with 1006 on a normal quit. Reporting those at `warn` would
-    // fire on every shutdown and bury the signal under the routine.
+    // down, so every peer's socket dies with 1006 on a normal quit — except the data provider's,
+    // which main closes with the intentional code first. Reporting those at `warn` would fire on
+    // every shutdown and bury the signal under the routine.
     const diedDuringShutdown = !isClean && isAppShuttingDown();
     const shutdownNote = diedDuringShutdown ? ', expected during app shutdown' : '';
     // No method count here on purpose: the number that belongs on a close line is what this socket

@@ -107,7 +107,7 @@ export const SIMPLE_PARAGRAPH_STRUCTURE_VIEW: EditableViewCase = {
 
 /**
  * The `test.use()` options a spec for a view in `view.interfaceMode` needs; `seedProjectRoot` fills
- * the isolated project root before the app starts (`seedIsolatedProjectRoot`).
+ * the isolated project root before the app starts (`prepareProjectRoot`).
  */
 export function noUnaskedEditsTestOptions(
   view: Pick<EditableViewCase, 'interfaceMode'>,
@@ -121,7 +121,7 @@ export function noUnaskedEditsTestOptions(
     electronLaunchOptions: {
       isolatedProjectRoot: true,
       envOverrides: { DEV_NOISY: 'false' },
-      ...(seedProjectRoot ? { seedIsolatedProjectRoot: seedProjectRoot } : {}),
+      ...(seedProjectRoot ? { prepareProjectRoot: seedProjectRoot } : {}),
     },
   };
 }
@@ -1280,7 +1280,7 @@ async function expectInstalledBytes(
  * modification time.
  *
  * `seededFiles`, by file name, are the files a spec wrote over the bundled ones before the app
- * started (`seedIsolatedProjectRoot`): those bytes are expected in their place.
+ * started (`prepareProjectRoot`): those bytes are expected in their place.
  */
 async function makeSampleProjectEditableExpectingOnlyThat(
   seededFiles: ReadonlyMap<string, Buffer> = new Map(),
@@ -2145,7 +2145,7 @@ export function invisibleCharactersTestOptions(
 ) {
   return noUnaskedEditsTestOptions(view, (projectRoot) => {
     const projectDir = path.join(projectRoot, INSTALLED_WEB_FOLDER);
-    fs.mkdirSync(projectDir);
+    fs.mkdirSync(projectDir, { recursive: true });
     const seeded = invisibleCharactersSeededFiles(setting);
     readBundledProject().forEach((bytes, file) =>
       fs.writeFileSync(path.join(projectDir, file), seeded.get(file) ?? bytes),

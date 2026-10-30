@@ -618,6 +618,12 @@ interface PickerMocks {
    * candidate ids only passes if the picker normalizes them.
    */
   setUnsupportedIds: (ids: string[]) => void;
+  /**
+   * Marks the given project ids as published resources: their `platform.base` PDP reads
+   * `platform.isPublished` as `true`. The batched metadata lookup does not report them, as when the
+   * resources' factory has not registered yet.
+   */
+  setPublishedIds: (ids: string[]) => void;
   /** Synthesize an `object:onDidCreateNetworkObject` event for an object of this type. */
   fireNetworkObjectCreated: (objectType: string) => void;
   /** `true` once the driver has unsubscribed from `object:onDidCreateNetworkObject`. */
@@ -700,8 +706,13 @@ function createPickerMocks(): PickerMocks {
   const setCanUserEditScripture = (projectId: string, canEdit: boolean) => {
     canUserEditScriptureByProjectId.set(projectId, canEdit);
   };
+  // Published resources answer `platform.isPublished` through the project's own PDP, and are absent
+  // from the batched metadata lookup below.
+  const publishedProjectIds = new Set<string>();
   const mockProjectDataProvidersGet = vi.fn(async (_interface: string, projectId: string) => ({
     canUserEditScripture: async () => canUserEditScriptureByProjectId.get(projectId) ?? true,
+    getSetting: async (key: string) =>
+      key === 'platform.isPublished' ? publishedProjectIds.has(projectId.toUpperCase()) : undefined,
   }));
 
   // Backs the picker's unsupported-project lookup. Answers for each id it is asked about, with the
@@ -769,6 +780,9 @@ function createPickerMocks(): PickerMocks {
     },
     setUnsupportedIds: (ids: string[]) => {
       ids.forEach((id) => unsupportedProjectIds.add(id.toUpperCase()));
+    },
+    setPublishedIds: (ids: string[]) => {
+      ids.forEach((id) => publishedProjectIds.add(id.toUpperCase()));
     },
     fireNetworkObjectCreated: (objectType: string) => {
       const listener = networkEventListeners.get('object:onDidCreateNetworkObject');
@@ -2111,6 +2125,151 @@ describe('openDefaultActiveProjectIfApplicable', () => {
       'platformScriptureEditor.openScriptureEditor',
       'p1',
     );
+    expect(
+      mockSendCommand.mock.calls
+        .filter(([cmd]) => cmd === 'platformScriptureEditor.openScriptureEditor')
+        .map(([, id]) => id),
+    ).toEqual(['p1']);
+  });
+
+  it('skips a published resource in the recent projects and opens the next one', async () => {
+    // Builds whose title-bar picker offered resources recorded them as recently opened, and the
+    // picker fills the Simple editor column, which shows projects.
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      setRecentProjects,
+      setPublishedIds,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    setRecentProjects(['res', 'p1']);
+    setPublishedIds(['res']);
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'platformScriptureEditor.openScriptureEditor') return undefined;
+      throw new Error(`Unexpected command in test: ${commandName}`);
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(
+      mockSendCommand.mock.calls
+        .filter(([cmd]) => cmd === 'platformScriptureEditor.openScriptureEditor')
+        .map(([, id]) => id),
+    ).toEqual(['p1']);
+  });
+
+  it('opens a recent project whose published setting cannot be read', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      mockProjectDataProvidersGet,
+      mockWarn,
+      setRecentProjects,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    setRecentProjects(['p1']);
+    mockProjectDataProvidersGet.mockRejectedValue(new Error('pdp unavailable'));
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'platformScriptureEditor.openScriptureEditor') return undefined;
+      throw new Error(`Unexpected command in test: ${commandName}`);
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(
+      mockSendCommand.mock.calls
+        .filter(([cmd]) => cmd === 'platformScriptureEditor.openScriptureEditor')
+        .map(([, id]) => id),
+    ).toEqual(['p1']);
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('pdp unavailable'));
+  });
+
+  it('checks each recent project on its own when one can be neither read nor opened', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      mockProjectDataProvidersGet,
+      setRecentProjects,
+      setPublishedIds,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    setRecentProjects(['bad', 'res', 'p1']);
+    setPublishedIds(['res']);
+    const defaultProjectDataProvidersGet = mockProjectDataProvidersGet.getMockImplementation();
+    mockProjectDataProvidersGet.mockImplementation(async (interfaceName, projectId) => {
+      if (projectId === 'bad' || !defaultProjectDataProvidersGet)
+        throw new Error('pdp unavailable');
+      return defaultProjectDataProvidersGet(interfaceName, projectId);
+    });
+    // An unreadable project counts as a project, so it must also fail to open for the walk to move on.
+    mockSendCommand.mockImplementation(async (commandName: string, projectId: string) => {
+      if (commandName !== 'platformScriptureEditor.openScriptureEditor')
+        throw new Error(`Unexpected command in test: ${commandName}`);
+      if (projectId === 'bad') throw new Error('cannot open');
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(
+      mockSendCommand.mock.calls
+        .filter(([cmd]) => cmd === 'platformScriptureEditor.openScriptureEditor')
+        .map(([, id]) => id),
+    ).toEqual(['bad', 'p1']);
+  });
+
+  it('falls through to the shared projects when every recent project is a published resource', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      setRecentProjects,
+      setPublishedIds,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    setRecentProjects(['res1', 'res2']);
+    setPublishedIds(['res1', 'res2']);
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          p1: {
+            id: 'p1',
+            name: 'P1',
+            fullName: 'P1',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-01-01T00:00:00Z',
+          },
+        };
+      }
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
     expect(
       mockSendCommand.mock.calls
         .filter(([cmd]) => cmd === 'platformScriptureEditor.openScriptureEditor')

@@ -1610,8 +1610,16 @@ export type DefaultProjectPickerOutcome =
  * Try to open the most-recently-used project from the `platformScripture.recentlyOpenedProjects`
  * data provider. Returns `'filled'` if a recent project was successfully opened, or `undefined` if
  * the service is unavailable, the recents list is empty, every recent project is unsupported (see
- * {@link createUnsupportedProjectIdsCache}), or every recent project fails to open (in which case
- * the caller should fall through to the S/R-based picker).
+ * {@link createUnsupportedProjectIdsCache}) or a published resource, or every recent project fails
+ * to open (in which case the caller should fall through to the S/R-based picker).
+ *
+ * A published resource is skipped because the picker fills the Simple editor column, which shows
+ * projects; the recently-opened list can still hold one recorded by a build whose title-bar picker
+ * offered resources. Each candidate is asked on its own, as it is reached, rather than in one batch
+ * with the others: a lookup for one named project waits for the factory that provides it, while a
+ * batch answered by the projects' factory alone would leave a resource whose factory has not
+ * registered yet looking like a project. A failed read counts as a project, so the picker still
+ * fills the editor.
  */
 async function tryOpenFromRecentlyOpened(
   papi: typeof PapiBackend,
@@ -1635,6 +1643,12 @@ async function tryOpenFromRecentlyOpened(
         if (unsupported.has(normalizeProjectId(projectId))) {
           papi.logger.debug(
             `Default active project picker: recent project ${projectId} is unsupported, trying next`,
+          );
+          return undefined;
+        }
+        if (await isProjectPublished(papi, projectId)) {
+          papi.logger.debug(
+            `Default active project picker: recent project ${projectId} is a published resource, trying next`,
           );
           return undefined;
         }

@@ -205,13 +205,12 @@ export interface LaunchElectronAppOptions {
    */
   isolatedProjectRoot?: boolean;
   /**
-   * Fills the isolated project root before the app starts, for a spec that needs project data the
-   * bundled sample does not hold (a project setting, characters a book does not contain). Called
-   * with the root folder, which exists and is empty. The backend installs the sample only into a
-   * root that holds no project, so a seed that writes a `WEB` folder must write the whole project.
-   * Requires {@link LaunchElectronAppOptions.isolatedProjectRoot}.
+   * Runs once the isolated project root's path is known and before Electron launches, so a test can
+   * put a project on disk that the backend then loads instead of installing the bundled sample (the
+   * sample is installed only into an empty root). The folder may not exist yet; create it. Requires
+   * {@link LaunchElectronAppOptions.isolatedProjectRoot}.
    */
-  seedIsolatedProjectRoot?: (projectRoot: string) => void;
+  prepareProjectRoot?: (projectRoot: string) => void;
   /**
    * Absolute path of an existing user-data directory to launch into, instead of creating a fresh
    * temp one. For relaunch tests: pass the `userDataDir` a previous {@link launchElectronApp}
@@ -794,6 +793,11 @@ export async function launchElectronApp(
   isolatedProjectRootDir = opts.isolatedProjectRoot
     ? path.join(userDataDir, 'projects')
     : undefined;
+  if (opts.prepareProjectRoot) {
+    if (!isolatedProjectRootDir)
+      throw new Error('`prepareProjectRoot` requires `isolatedProjectRoot: true`.');
+    opts.prepareProjectRoot(isolatedProjectRootDir);
+  }
   const env = {
     ...restEnv,
     NODE_ENV: 'development',
@@ -817,12 +821,6 @@ export async function launchElectronApp(
 
   let electronApp: ElectronApplication;
   try {
-    if (opts.seedIsolatedProjectRoot) {
-      if (!isolatedProjectRootDir)
-        throw new Error('seedIsolatedProjectRoot needs isolatedProjectRoot: true');
-      fs.mkdirSync(isolatedProjectRootDir, { recursive: true });
-      opts.seedIsolatedProjectRoot(isolatedProjectRootDir);
-    }
     electronApp = await electron.launch({
       args: [`--user-data-dir=${userDataDir}`, rootDir],
       cwd: rootDir,
