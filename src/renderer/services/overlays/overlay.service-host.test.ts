@@ -2207,6 +2207,23 @@ describe('overlay.service-host', () => {
         return { dismissed: promise };
       }
 
+      /**
+       * Appends the DOM the real context menu renders: Radix portals the content into a popper
+       * wrapper on the body. Returns the focusable menu item.
+       */
+      function addRealContextMenuItem(): HTMLButtonElement {
+        const wrapper = addToBody(document.createElement('div'));
+        wrapper.setAttribute('data-radix-popper-content-wrapper', '');
+        const content = document.createElement('div');
+        content.className = 'overlay-context-menu-content';
+        content.setAttribute('role', 'menu');
+        const item = document.createElement('button');
+        item.setAttribute('role', 'menuitem');
+        content.appendChild(item);
+        wrapper.appendChild(content);
+        return item;
+      }
+
       /** Runs the restore decision, which waits one task after the overlay resolves */
       function flushRestoreDecision(): void {
         vi.advanceTimersByTime(1);
@@ -2353,10 +2370,7 @@ describe('overlay.service-host', () => {
       it('does not restore when a press focused a dock tab header after the overlay resolved', async () => {
         const { dismissed } = await openContextMenuPastGrace();
 
-        const menu = addToBody(document.createElement('div'));
-        menu.setAttribute('data-overlay-context-menu', '');
-        const inner = document.createElement('button');
-        menu.appendChild(inner);
+        const inner = addRealContextMenuItem();
         inner.focus();
 
         // Radix dismisses from its pointerdown listener, before the click's default focus move
@@ -2376,10 +2390,7 @@ describe('overlay.service-host', () => {
       it('does not restore when a shell menu opened on the press holds focus', async () => {
         const { dismissed } = await openContextMenuPastGrace();
 
-        const menu = addToBody(document.createElement('div'));
-        menu.setAttribute('data-overlay-context-menu', '');
-        const inner = document.createElement('button');
-        menu.appendChild(inner);
+        const inner = addRealContextMenuItem();
         inner.focus();
 
         const [overlay] = getOverlays();
