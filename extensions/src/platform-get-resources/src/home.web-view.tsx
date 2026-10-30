@@ -218,18 +218,35 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
   const syncActivity = useSyncActivity();
   const syncQueue = useSyncQueue();
 
-  // Two flags because a sync started elsewhere pauses only the server-list fetch, which queues
-  // behind it; the local list keeps loading, and only Home's own sync pauses that.
+  // Two flags because any sync pauses the server-list fetch, which queues behind it, while only a
+  // run that includes one of Home's own requests pauses the local list: a request that only waits
+  // in the queue behind another surface's run leaves the local list loading.
   const isAnySendReceiveInProgress = isOwnSendReceiveInProgress || syncActivity.isSyncing;
+  // While the backend reports a run, it alone says which projects are running: Home's own request
+  // may only be waiting behind that run, and must not show a spinner. With no run reported, Home's
+  // own ids cover the moment between its click and the backend's first activity event.
   const activeSendReceiveProjects = useMemo(
     () =>
       Array.from(
         new Set(
-          [...ownActiveSendReceiveProjects, ...syncActivity.projectIds].map(normalizeProjectId),
+          [
+            ...(syncActivity.isSyncing ? [] : ownActiveSendReceiveProjects),
+            ...syncActivity.projectIds,
+          ].map(normalizeProjectId),
         ),
       ),
-    [ownActiveSendReceiveProjects, syncActivity.projectIds],
+    [ownActiveSendReceiveProjects, syncActivity.isSyncing, syncActivity.projectIds],
   );
+  const isOwnRequestRunning = useMemo(() => {
+    if (!syncActivity.isSyncing) return isOwnSendReceiveInProgress;
+    const runningIds = new Set(syncActivity.projectIds.map(normalizeProjectId));
+    return ownActiveSendReceiveProjects.some((id) => runningIds.has(normalizeProjectId(id)));
+  }, [
+    syncActivity.isSyncing,
+    syncActivity.projectIds,
+    ownActiveSendReceiveProjects,
+    isOwnSendReceiveInProgress,
+  ]);
   const [syncsCompletedCount, setSyncsCompletedCount] = useState<number>(0);
 
   useEvent(
@@ -311,16 +328,27 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
     }
   };
 
-  const removeFromSyncQueue = useCallback(async (projectId: string) => {
-    try {
-      await papi.commands.sendCommand('paratextBibleSendReceive.removeFromSyncQueue', [projectId]);
-    } catch (e) {
-      // The row keeps showing what the queue reports, so a failed removal leaves it waiting.
-      logger.warn(
-        `Home web view could not take project ${projectId} out of the sync queue: ${getErrorMessage(e)}`,
-      );
-    }
-  }, []);
+  const removeFromSyncQueue = useCallback(
+    async (projectId: string) => {
+      try {
+        await papi.commands.sendCommand('paratextBibleSendReceive.removeFromSyncQueue', [
+          projectId,
+        ]);
+      } catch (e) {
+        // The row keeps showing what the queue reports, so a failed removal leaves it waiting; the
+        // notification says the click did not take.
+        logger.warn(
+          `Home web view could not take project ${projectId} out of the sync queue: ${getErrorMessage(e)}`,
+        );
+        papi.notifications.send({
+          severity: 'warning',
+          message: '%resources_syncUnavailable%',
+          notificationId: sharedProjectErrorNotificationId,
+        });
+      }
+    },
+    [sharedProjectErrorNotificationId],
+  );
 
   const [sharedProjectsInfo, setSharedProjectsInfo] = useState<SharedProjectsInfo>();
   /**
@@ -424,8 +452,8 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
 
   const { localProjectsInfo, isLoadingLocalProjects } = useLocalProjects({
     logLabel: 'Home',
-    // Pause fetching while a Send/Receive runs and resume when it finishes.
-    enabled: !isOwnSendReceiveInProgress,
+    // Pause fetching while a run that includes Home's own request runs, and resume when it ends.
+    enabled: !isOwnRequestRunning,
     // Re-fetch when the cached resource list changes or a sync completes.
     refetchTriggers: [resourcesList, syncsCompletedCount],
   });

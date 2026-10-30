@@ -101,6 +101,7 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_syncFailed_title%',
   '%resources_syncWaiting_clickToRemove%',
   '%resources_syncWaiting_label%',
+  '%resources_syncWaiting_remove_format%',
   '%resources_sync%',
   '%resources_syncRunning_listLoads%',
 ] as const);
@@ -499,6 +500,9 @@ export function Home({
   const syncWaitingLabelText: string = getLocalizedString('%resources_syncWaiting_label%');
   const syncWaitingClickToRemoveText: string = getLocalizedString(
     '%resources_syncWaiting_clickToRemove%',
+  );
+  const syncWaitingRemoveFormat: string = getLocalizedString(
+    '%resources_syncWaiting_remove_format%',
   );
   const syncRunningListLoadsText: string = getLocalizedString('%resources_syncRunning_listLoads%');
   const serverUnreachableDescriptionText: string = getLocalizedString(
@@ -1042,9 +1046,15 @@ export function Home({
    * the project out of the queue, which its tooltip (or, in a menu, its second line) says.
    */
   const waitingButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
+    // Every waiting row reads "Waiting…", so the name says which project a click takes out of the
+    // queue, starting with the visible text.
+    const removeName = formatReplacementString(syncWaitingRemoveFormat, { name: project.name });
     if (isMenuItem)
       return (
-        <DropdownMenuItem onSelect={() => handleRemoveFromQueue(project.projectId)}>
+        <DropdownMenuItem
+          aria-label={removeName}
+          onSelect={() => handleRemoveFromQueue(project.projectId)}
+        >
           {/* `min-w-0` lets the explanation wrap instead of widening the menu. */}
           <div className="tw:flex tw:min-w-0 tw:flex-col tw:text-muted-foreground">
             <span>{syncWaitingLabelText}</span>
@@ -1061,6 +1071,7 @@ export function Home({
           <Button
             variant="secondary"
             className="tw:text-muted-foreground"
+            aria-label={removeName}
             onClick={() => handleRemoveFromQueue(project.projectId)}
           >
             {syncWaitingLabelText}
