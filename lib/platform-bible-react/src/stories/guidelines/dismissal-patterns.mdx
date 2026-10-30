@@ -97,6 +97,13 @@ Radix (shadcn) primitives expose the triggers as props on the content element:
   click: call `event.preventDefault()` in `onPointerDownOutside` / `onInteractOutside`, or control
   `open` without an `onOpenChange` handler. There is no opt-out prop. A picker with a search box is
   not such a surface — losing a half-typed filter is not losing work.
+- **An explicit-dismissal picker: the compact `BookChapterControl`.** After the user clicks one of
+  its quick-nav arrows (previous or next chapter or verse) the book list is hidden and the popover
+  becomes a small stepper. In that state it stays open through outside clicks, window blur and focus
+  leaving, because the user steps through chapters while working elsewhere. Only a click on its
+  trigger, or Escape while focus is in the popover or on the trigger, closes it. Clicks elsewhere
+  still act where the user clicked; only the dismissal is prevented. Once the book list returns
+  (the search input takes focus, or the user types), the normal picker rules apply again.
 
 ---
 
