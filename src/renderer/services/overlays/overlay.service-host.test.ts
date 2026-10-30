@@ -2180,5 +2180,122 @@ describe('overlay.service-host', () => {
       // setFocus should have been called to restore
       expect(windowService.setFocus).toHaveBeenCalled();
     });
+
+    describe('after the overlay is dismissed', () => {
+      const PAST_GRACE_MS = 400;
+      const PAST_INPUT_DEFER_MS = 50;
+      const addedElements: HTMLElement[] = [];
+
+      /** Appends an element to the body and remembers it for cleanup */
+      function addToBody<T extends HTMLElement>(element: T): T {
+        document.body.appendChild(element);
+        addedElements.push(element);
+        return element;
+      }
+
+      /** Opens a context menu from 'test-webview', lets its focus save settle, and leaves the grace */
+      async function openContextMenuPastGrace(): Promise<{ dismissed: Promise<unknown> }> {
+        vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue(DEFAULT_WEB_VIEW_MENU);
+        const promise = overlayService.showContextMenu('ext.testWebView', 'test-webview');
+        await vi.advanceTimersByTimeAsync(0);
+        expect(getOverlays().filter((o) => o.type === 'contextMenu')).toHaveLength(1);
+        vi.advanceTimersByTime(PAST_GRACE_MS);
+        return { dismissed: promise };
+      }
+
+      function emitInput(kind: AppWindowInputEvent['kind']): void {
+        appWindowInputSubscribers.forEach((subscriber) => subscriber({ kind }));
+        vi.advanceTimersByTime(PAST_INPUT_DEFER_MS);
+      }
+
+      beforeEach(async () => {
+        vi.useFakeTimers();
+        appWindowInputSubscribers.length = 0;
+        resetAppWindowInputState();
+        vi.mocked(windowService.setFocus).mockClear();
+        vi.mocked(windowService.subscribeFocus).mockClear();
+        await startOverlayService();
+      });
+
+      afterEach(() => {
+        addedElements.splice(0).forEach((element) => element.remove());
+        // Move focus back to the body so one test's focused element cannot leak into the next
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        (document.activeElement as HTMLElement | null)?.blur();
+      });
+
+      it('does not restore focus after a click-away when a web view frame now holds focus', async () => {
+        const { dismissed } = await openContextMenuPastGrace();
+
+        const frame = addToBody(document.createElement('iframe'));
+        frame.focus();
+        expect(document.activeElement).toBe(frame);
+
+        emitInput('mouseDown');
+
+        await expect(dismissed).resolves.toBeUndefined();
+        expect(windowService.setFocus).not.toHaveBeenCalled();
+      });
+
+      it('does not restore focus when the tracked focus moved to another tab', async () => {
+        const onFocusChange = vi.mocked(windowService.subscribeFocus).mock.calls.at(-1)?.[1];
+        expect(onFocusChange).toBeDefined();
+        // Establish the tracked focus before the overlay opens, as the focus service does on load
+        onFocusChange?.({ focusType: 'webView', id: 'test-webview' });
+
+        const { dismissed } = await openContextMenuPastGrace();
+        expect(document.activeElement).toBe(document.body);
+
+        onFocusChange?.({ focusType: 'tab', id: 'other-tab', tabType: 'x' });
+
+        await expect(dismissed).resolves.toBeUndefined();
+        expect(windowService.setFocus).not.toHaveBeenCalled();
+      });
+
+      it('does not restore focus when a shell control outside the overlay took focus', async () => {
+        const { dismissed } = await openContextMenuPastGrace();
+
+        const button = addToBody(document.createElement('button'));
+        button.focus();
+        expect(document.activeElement).toBe(button);
+
+        emitInput('mouseDown');
+
+        await expect(dismissed).resolves.toBeUndefined();
+        expect(windowService.setFocus).not.toHaveBeenCalled();
+      });
+
+      it('restores focus on Escape while overlay content holds focus', async () => {
+        const { dismissed } = await openContextMenuPastGrace();
+
+        const host = addToBody(document.createElement('div'));
+        host.setAttribute('data-overlay-host', '');
+        const inner = document.createElement('button');
+        host.appendChild(inner);
+        inner.focus();
+        expect(document.activeElement).toBe(inner);
+
+        emitInput('escape');
+
+        await expect(dismissed).resolves.toBeUndefined();
+        expect(windowService.setFocus).toHaveBeenCalledWith({
+          focusType: 'webView',
+          id: 'test-webview',
+        });
+      });
+
+      it('restores focus after a dismissal while the page body holds focus', async () => {
+        const { dismissed } = await openContextMenuPastGrace();
+        expect(document.activeElement).toBe(document.body);
+
+        emitInput('escape');
+
+        await expect(dismissed).resolves.toBeUndefined();
+        expect(windowService.setFocus).toHaveBeenCalledWith({
+          focusType: 'webView',
+          id: 'test-webview',
+        });
+      });
+    });
   });
 });

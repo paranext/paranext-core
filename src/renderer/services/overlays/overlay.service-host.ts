@@ -174,14 +174,41 @@ async function saveFocus(overlayId: string): Promise<void> {
 }
 
 /**
+ * Id of the tab or webView the window service last reported as focused (undefined when none or
+ * `other`). Written by the focus-change subscription in {@link registerAutoDismissListeners}.
+ */
+let lastTrackedFocusId: string | undefined;
+
+/**
+ * Whether focus already moved away from `saved` to somewhere other than this overlay: the page's
+ * active element is a frame or shell control outside overlay content, or the tracked focus id
+ * differs from the saved subject's.
+ */
+function hasFocusMovedElsewhere(saved: FocusSubject): boolean {
+  const active = document.activeElement;
+  if (active && active !== document.body && !active.closest(OVERLAY_CONTENT_SELECTOR)) return true;
+  return (
+    saved.focusType !== 'other' &&
+    lastTrackedFocusId !== undefined &&
+    lastTrackedFocusId !== saved.id
+  );
+}
+
+/**
  * Restores focus to the subject that was active when the overlay was created. Uses the window
  * service's setFocus API to return focus to the original webView or tab.
+ *
+ * Skipped when the user already moved focus elsewhere (clicked into another pane or onto a tab
+ * header): returning focus across frames blurs the window they moved to and closes whatever they
+ * opened there. Escape or picking an item still restores, because focus is then inside overlay
+ * content or nowhere.
  */
 function restoreFocus(overlayId: string): void {
   const focusSubject = savedFocusState.get(overlayId);
   savedFocusState.delete(overlayId);
 
   if (!focusSubject || focusSubject.focusType === 'other') return;
+  if (hasFocusMovedElsewhere(focusSubject)) return;
 
   // setFocus accepts SetFocusSubject (webView or tab with id) — pass only the fields it needs
   const setFocusTarget =
@@ -1272,7 +1299,7 @@ function registerAutoDismissListeners(): void {
   getNetworkEvent(EVENT_NAME_ON_DID_APP_WINDOW_INPUT)(handleAppWindowInput);
 
   // Dismiss overlays when the focused tab changes
-  let lastFocusId: string | undefined;
+  lastTrackedFocusId = undefined;
   windowService
     .subscribeFocus(undefined, (focusSubject) => {
       if (isPlatformError(focusSubject)) return;
@@ -1281,8 +1308,8 @@ function registerAutoDismissListeners(): void {
       const newFocusId = focusSubject.focusType === 'other' ? undefined : focusSubject.id;
 
       // Only dismiss if focus actually moved to a different tab/webView
-      if (newFocusId === lastFocusId) return;
-      lastFocusId = newFocusId;
+      if (newFocusId === lastTrackedFocusId) return;
+      lastTrackedFocusId = newFocusId;
 
       // Skip if an overlay was just created — right-clicking a different panel causes focus
       // changes that would otherwise immediately dismiss the just-created context menu
