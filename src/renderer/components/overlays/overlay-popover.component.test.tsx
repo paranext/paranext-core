@@ -3,6 +3,11 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { OverlayEntry } from '@renderer/services/overlays/overlay.service-model';
 import { takeOverlayFocusReturnMark } from '@renderer/services/overlays/overlay-focus-return.util';
+import {
+  addOverlay,
+  clearAllOverlays,
+  getOverlayById,
+} from '@renderer/services/overlays/overlay-store';
 import { OverlayPopover, OverlayPopoverPresentational } from './overlay-popover.component';
 
 // The store-connected component resolves LocalizeKeys via useLocalizedStrings; an empty map makes
@@ -382,8 +387,19 @@ describe('OverlayPopover (store-connected)', () => {
     expect(anchorStyle.height).toBe('20px');
   });
 
-  it('marks the overlay for a focus return on Escape, and not on an outside press', () => {
-    const entry = createPopoverEntry();
+  afterEach(() => {
+    clearAllOverlays();
+  });
+
+  it('marks the overlay for a focus return on Escape', () => {
+    // Settling the overlay consumes its mark, as the overlay service does
+    let wasMarkedWhenSettled: boolean | undefined;
+    const entry = createPopoverEntry({
+      resolve: vi.fn(() => {
+        wasMarkedWhenSettled = takeOverlayFocusReturnMark('popover-1');
+      }),
+    });
+    addOverlay(entry);
     render(<OverlayPopover overlay={entry} />);
 
     const popover = document.querySelector('[data-overlay-popover]');
@@ -392,6 +408,37 @@ describe('OverlayPopover (store-connected)', () => {
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     fireEvent.keyDown(popover as Element, { key: 'Escape' });
 
-    expect(takeOverlayFocusReturnMark(entry.id)).toBe(true);
+    expect(wasMarkedWhenSettled).toBe(true);
+    // The key handler reports Escape again after the dismissal settled the overlay; that report
+    // must not leave a mark behind
+    expect(takeOverlayFocusReturnMark(entry.id)).toBe(false);
+  });
+
+  it('does not mark the overlay for a focus return on an outside press', async () => {
+    const entry = createPopoverEntry();
+    addOverlay(entry);
+    render(<OverlayPopover overlay={entry} />);
+    // Radix attaches its outside-press listener on the next tick
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 20);
+      });
+    });
+
+    fireEvent.pointerDown(document.body);
+
+    // Positive control: the outside press did dismiss the overlay
+    expect(getOverlayById(entry.id)).toBeUndefined();
+    expect(takeOverlayFocusReturnMark(entry.id)).toBe(false);
+  });
+
+  it('writes its id to its content so focus inside it can be told from another overlay', () => {
+    const entry = createPopoverEntry();
+    render(<OverlayPopover overlay={entry} />);
+
+    expect(document.querySelector('[data-overlay-popover]')).toHaveAttribute(
+      'data-overlay-id',
+      entry.id,
+    );
   });
 });

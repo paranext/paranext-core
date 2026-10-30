@@ -12616,6 +12616,13 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
      * @experimental This property is unstable and may change or disappear without notice
      */
     onEscape?: () => void;
+    /**
+     * Id of the overlay this renders, written to the content as `data-overlay-id` so the overlay
+     * service can tell whether focus is inside this overlay's own content rather than another's.
+     *
+     * @experimental This property is unstable and may change or disappear without notice
+     */
+    overlayId?: string;
   };
   /**
    * Pure presentational context menu component. Renders a context menu at a fixed position using
@@ -12631,6 +12638,7 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
     onSelect,
     onDismiss,
     onEscape,
+    overlayId,
   }: OverlayContextMenuPresentationalProps): import('react/jsx-runtime').JSX.Element;
   type OverlayContextMenuProps = {
     overlay: Extract<
@@ -15540,8 +15548,11 @@ declare module 'renderer/services/overlays/overlay.service-host' {
   /** The overlay service instance exposed on papi */
   export const overlayService: IOverlayService;
   /**
-   * Resets the parent-document pointerdown record. Exported for use in tests only, so one test's
-   * recorded click cannot correlate with the next test's input signal. @internal
+   * Resets the parent-document pointerdown record and the focus-return state (open overlays' focus
+   * records and the last focused tab). Exported for use in tests only, so one test's recorded click
+   * cannot correlate with the next test's input signal and no test inherits another's focus state.
+   *
+   * @internal
    */
   export function resetAppWindowInputState(): void;
   /** Initialize the overlay service. Called during renderer startup. */

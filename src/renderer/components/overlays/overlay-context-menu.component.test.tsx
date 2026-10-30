@@ -278,6 +278,31 @@ describe('OverlayContextMenuPresentational', () => {
       expect(calls).toEqual(['escape', 'dismiss']);
     });
 
+    it('writes the overlay id to the menu content and to its submenu content', () => {
+      render(
+        <OverlayContextMenuPresentational
+          items={[
+            {
+              type: 'submenu',
+              label: 'More',
+              items: [{ type: 'item', id: 'inner', label: 'Inner' }],
+            },
+          ]}
+          position={position}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+          overlayId="menu-x"
+        />,
+      );
+
+      expect(screen.getByRole('menu')).toHaveAttribute('data-overlay-id', 'menu-x');
+      const trigger = screen.getByRole('menuitem', { name: 'More' });
+      trigger.focus();
+      fireEvent.keyDown(trigger, { key: 'ArrowRight' });
+      const inner = screen.getByRole('menuitem', { name: 'Inner' });
+      expect(inner.closest('[data-overlay-id="menu-x"]')).not.toBeNull();
+    });
+
     it('does not report an outside press as Escape', async () => {
       const onEscape = vi.fn();
       const onDismiss = vi.fn();

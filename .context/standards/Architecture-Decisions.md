@@ -11032,13 +11032,16 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   carrying a result) returns focus; Escape (reported by the component, or the app-window Escape
   signal), the opener's own dismiss (`dismissPopover`, `dismissCommandPalette`) and app
   deactivation (parent window blur while `document.hasFocus()` is false) return focus only if the
-  focused element is inside that overlay's own content at that moment; a click elsewhere, a pane
+  focused element is inside that overlay's own content (its content roots carry
+  `data-overlay-id`, so another overlay of the same type does not count) at that moment; a click elsewhere, a pane
   or tab switch, a parent blur while the app keeps focus (a click into a pane), a replacement, a
   timeout and a scroll never do. Modal dialogs return focus on every answer: any resolve, and any
   reject other than the ABORTED one used for replacement and shutdown. The opener is the
-  requesting web view when its iframe exists; otherwise the last focused tab (modal dialogs, read
-  synchronously from the window service shard) or the focus subject saved at open, and a target
-  that no longer exists is skipped. Closes that qualify are marked through
+  requesting web view when its iframe exists; otherwise the last focused tab (modal dialogs; a
+  host-local tracker fed by the focus subscription and seeded from the focus read at open, because
+  importing the window service shard would pull it into the `papi.d.ts` build) or the focus subject
+  saved at open. A target that no longer exists is skipped; with multi-window routing the tracked
+  tab can belong to another window, in which case the lookup fails harmlessly. Closes that qualify are marked through
   `markOverlayFocusReturnIfFocusInside` (`overlay-focus-return.util.ts`) before the overlay is
   resolved. Rejected alternative: deferring the decision one task and guessing from the active
   element, which could not tell a click elsewhere from Escape.

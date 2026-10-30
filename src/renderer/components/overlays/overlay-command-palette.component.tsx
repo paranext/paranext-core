@@ -116,6 +116,13 @@ export type OverlayCommandPalettePresentationalProps = {
    */
   onEscape?: () => void;
   /**
+   * Id of the overlay this renders, written to the content as `data-overlay-id` so the overlay
+   * service can tell whether focus is inside this overlay's own content rather than another's.
+   *
+   * @experimental This property is unstable and may change or disappear without notice
+   */
+  overlayId?: string;
+  /**
    * Reports filter text the user types into the ACTIVE palette's input, so the store-connected
    * owner can mirror it into the overlay store — keeping a forwarded
    * `commitCommandPaletteSelection` (which resolves from the STORE's filterText/selectedIndex) in
@@ -371,6 +378,7 @@ export function OverlayCommandPalettePresentational({
   onSelect,
   onDismiss,
   onEscape,
+  overlayId,
   onFilterTextChange,
   onSelectedIndexChange,
   keyForwarding,
@@ -626,6 +634,7 @@ export function OverlayCommandPalettePresentational({
   const paletteContent = isHostDriven ? (
     <Command
       data-overlay-command-palette
+      data-overlay-id={overlayId}
       className="tw:rounded-lg tw:border"
       onKeyDown={handleKeyDown}
       // Filtering happens OUTSIDE cmdk in BOTH modes (filteredItems above). Passive mode must say
@@ -688,6 +697,7 @@ export function OverlayCommandPalettePresentational({
   ) : (
     <Command
       data-overlay-command-palette
+      data-overlay-id={overlayId}
       className="tw:rounded-lg tw:border"
       onKeyDown={handleKeyDown}
       // With cmdk fuzzy matching enabled, cmdk owns filtering (its scorer over each item's
@@ -758,6 +768,7 @@ export function OverlayCommandPalettePresentational({
       </PopoverAnchor>
       <PopoverContent
         data-overlay-command-palette
+        data-overlay-id={overlayId}
         // The `Command` inside already paints the whole panel — opaque `bg-popover`, a 1px border,
         // and `rounded-xl!`. PopoverContent's own base paints a second one at the same rect
         // (`bg-popover`, `ring-1 ring-foreground/10`, `rounded-lg`), and because the radii differ
@@ -930,6 +941,9 @@ export function OverlayCommandPalette({ overlay }: OverlayCommandPaletteProps) {
   }, [overlay]);
 
   const handleEscape = useCallback(() => {
+    // Radix reports Escape first and the dismissal settles the overlay; a later report from the
+    // key handler must not leave a mark behind
+    if (hasResolved.current) return;
     markOverlayFocusReturnIfFocusInside(overlay.id);
   }, [overlay]);
 
@@ -999,6 +1013,7 @@ export function OverlayCommandPalette({ overlay }: OverlayCommandPaletteProps) {
       onSelect={handleSelect}
       onDismiss={handleDismiss}
       onEscape={handleEscape}
+      overlayId={overlay.id}
       onFilterTextChange={handleFilterTextChange}
       onSelectedIndexChange={handleSelectedIndexChange}
       keyForwarding={overlay.request.keyForwarding}

@@ -204,21 +204,17 @@ function saveFocus(overlayId: string, requesterId: string, isModal: boolean = fa
 }
 
 /**
- * Selectors for each overlay type's own content in the parent document. Focus inside one of these
- * is focus the overlay holds, as opposed to focus in a web view frame or any other part of the app.
- * The context menu's items (and its submenus') are portalled into `.overlay-context-menu-content`;
- * `[data-overlay-context-menu]` only marks its hidden trigger.
+ * Whether the document's focused element sits inside the given overlay's own content: every overlay
+ * component writes its id to its content roots as `data-overlay-id`. Focus in another overlay of
+ * the same type, a web view frame or the rest of the app is not focus this overlay holds.
  */
-const OVERLAY_OWN_CONTENT_SELECTOR: Record<OverlayEntry['type'], string> = {
-  contextMenu: '.overlay-context-menu-content',
-  popover: '[data-overlay-popover]',
-  commandPalette: '[data-overlay-command-palette]',
-  modalDialog: '[data-overlay-modal-dialog]',
-};
-
-/** Whether the document's focused element sits inside the given overlay type's own content */
-function isFocusInsideOverlayContent(type: OverlayEntry['type']): boolean {
-  return !!document.activeElement?.closest(OVERLAY_OWN_CONTENT_SELECTOR[type]);
+function isFocusInsideOverlayContent(overlayId: string): boolean {
+  let element = document.activeElement;
+  while (element) {
+    if (element.getAttribute('data-overlay-id') === overlayId) return true;
+    element = element.parentElement;
+  }
+  return false;
 }
 
 /**
@@ -246,8 +242,9 @@ function resolveFocusTarget(
 
 /**
  * Settles an overlay's focus record when it closes, returning focus to the opener when asked to.
- * Called synchronously from the one place each overlay type settles; nothing here reads where focus
- * currently is, so a click elsewhere can never pull focus back.
+ * Called synchronously from the one place each overlay type settles. This function itself never
+ * reads where focus currently is; the only focus read is the containment check in
+ * {@link settleTransientOverlayFocus}, so a click elsewhere can never pull focus back.
  *
  * @param overlayId The overlay that is closing
  * @param shouldReturnFocus Whether this close hands focus back to the opener
@@ -270,13 +267,9 @@ function settleFocus(overlayId: string, shouldReturnFocus: boolean): void {
  * focus was inside the overlay's own content at that moment. A click elsewhere, a pane or tab
  * switch, a replacement, a timeout and a scroll never return focus.
  */
-function settleTransientOverlayFocus(
-  overlayId: string,
-  type: OverlayEntry['type'],
-  wasPicked: boolean,
-): void {
+function settleTransientOverlayFocus(overlayId: string, wasPicked: boolean): void {
   const isMarked = takeOverlayFocusReturnMark(overlayId);
-  settleFocus(overlayId, wasPicked || (isMarked && isFocusInsideOverlayContent(type)));
+  settleFocus(overlayId, wasPicked || (isMarked && isFocusInsideOverlayContent(overlayId)));
 }
 
 /** Whether a rejection is the replacement or shutdown of an overlay rather than an answer to it */
@@ -595,11 +588,11 @@ async function showContextMenu(
       items,
       position: clampedPosition,
       resolve: (result) => {
-        settleTransientOverlayFocus(overlayId, 'contextMenu', result !== undefined);
+        settleTransientOverlayFocus(overlayId, result !== undefined);
         resolve(result);
       },
       reject: (reason?: unknown) => {
-        settleTransientOverlayFocus(overlayId, 'contextMenu', false);
+        settleTransientOverlayFocus(overlayId, false);
         reject(reason);
       },
     });
@@ -779,7 +772,7 @@ async function showPopover(request: PopoverRequest, webViewId: string): Promise<
     position: clampedPosition,
     resolve: (actionId: string | undefined) => {
       clearPopoverTimer(overlayId);
-      settleTransientOverlayFocus(overlayId, 'popover', actionId !== undefined);
+      settleTransientOverlayFocus(overlayId, actionId !== undefined);
       const pending = popoverPromises.get(overlayId);
       if (pending) {
         pending.resolve(actionId);
@@ -788,7 +781,7 @@ async function showPopover(request: PopoverRequest, webViewId: string): Promise<
     },
     reject: (error: PlatformError) => {
       clearPopoverTimer(overlayId);
-      settleTransientOverlayFocus(overlayId, 'popover', false);
+      settleTransientOverlayFocus(overlayId, false);
       const pending = popoverPromises.get(overlayId);
       if (pending) {
         pending.reject(error);
@@ -1020,11 +1013,11 @@ async function showCommandPalette(
       selectedIndex: 0,
       position,
       resolve: (selectedId) => {
-        settleTransientOverlayFocus(overlayId, 'commandPalette', selectedId !== undefined);
+        settleTransientOverlayFocus(overlayId, selectedId !== undefined);
         resolve(selectedId);
       },
       reject: (reason?: unknown) => {
-        settleTransientOverlayFocus(overlayId, 'commandPalette', false);
+        settleTransientOverlayFocus(overlayId, false);
         reject(reason);
       },
     });
@@ -1238,11 +1231,16 @@ const PARENT_POINTER_DOWN_CORRELATION_MS = 150;
 let lastParentPointerDown: { time: number; insideOverlay: boolean } | undefined;
 
 /**
- * Resets the parent-document pointerdown record. Exported for use in tests only, so one test's
- * recorded click cannot correlate with the next test's input signal. @internal
+ * Resets the parent-document pointerdown record and the focus-return state (open overlays' focus
+ * records and the last focused tab). Exported for use in tests only, so one test's recorded click
+ * cannot correlate with the next test's input signal and no test inherits another's focus state.
+ *
+ * @internal
  */
 export function resetAppWindowInputState(): void {
   lastParentPointerDown = undefined;
+  lastFocusedTabId = undefined;
+  focusRecords.clear();
 }
 
 /**
