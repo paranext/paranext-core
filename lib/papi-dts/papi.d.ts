@@ -12381,10 +12381,34 @@ declare module 'renderer/services/overlays/window-blur-press.util' {
    * Property key under which the library's `useDismissOnWindowBlur` marks the `pointerdown` it
    * dispatches for a window blur. It must equal the library's key; `window-blur-press.util.test.tsx`
    * fails if the two differ.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
    */
   export const WINDOW_BLUR_PRESS_MARKER: unique symbol;
-  /** Whether this event is the press `useDismissOnWindowBlur` dispatches for a window blur. */
+  /**
+   * Whether this event is the press `useDismissOnWindowBlur` dispatches for a window blur.
+   *
+   * @experimental This function is unstable and may change or disappear without notice
+   */
   export function isWindowBlurPress(event: Event): boolean;
+}
+declare module 'renderer/services/overlays/overlay-focus-return.util' {
+  /**
+   * Marks an overlay's coming close as one that returns focus to the opener, provided focus is inside
+   * the overlay's own content when the overlay settles. Call it right before resolving the overlay.
+   *
+   * @param overlayId Id of the overlay about to close
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function markOverlayFocusReturnIfFocusInside(overlayId: string): void;
+  /**
+   * Reads and clears an overlay's mark set by {@link markOverlayFocusReturnIfFocusInside}.
+   *
+   * @param overlayId Id of the overlay that is settling
+   * @returns Whether the overlay was marked
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function takeOverlayFocusReturnMark(overlayId: string): boolean;
 }
 declare module 'renderer/services/overlays/overlay-store' {
   /**
@@ -12585,6 +12609,13 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
     onSelect: (result: OverlayContextMenuResult) => void;
     /** Called when the menu is dismissed without a selection */
     onDismiss: () => void;
+    /**
+     * Called when the user presses Escape in the menu or one of its submenus, just before
+     * {@link onDismiss}. Lets the owner tell an Escape close apart from a click away.
+     *
+     * @experimental This property is unstable and may change or disappear without notice
+     */
+    onEscape?: () => void;
   };
   /**
    * Pure presentational context menu component. Renders a context menu at a fixed position using
@@ -12599,6 +12630,7 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
     position,
     onSelect,
     onDismiss,
+    onEscape,
   }: OverlayContextMenuPresentationalProps): import('react/jsx-runtime').JSX.Element;
   type OverlayContextMenuProps = {
     overlay: Extract<

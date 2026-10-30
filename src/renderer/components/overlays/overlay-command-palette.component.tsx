@@ -10,6 +10,7 @@
 
 import { Popover as PopoverPrimitive } from 'radix-ui';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { markOverlayFocusReturnIfFocusInside } from '@renderer/services/overlays/overlay-focus-return.util';
 import {
   resolveAndRemoveOverlay,
   updateCommandPaletteState,
@@ -107,6 +108,13 @@ export type OverlayCommandPalettePresentationalProps = {
   onSelect: (itemId: string) => void;
   /** Called when the palette is dismissed (Escape, click outside) */
   onDismiss: () => void;
+  /**
+   * Called when the user presses Escape in the palette, just before {@link onDismiss}. Lets the
+   * owner tell an Escape close apart from a click away.
+   *
+   * @experimental This property is unstable and may change or disappear without notice
+   */
+  onEscape?: () => void;
   /**
    * Reports filter text the user types into the ACTIVE palette's input, so the store-connected
    * owner can mirror it into the overlay store — keeping a forwarded
@@ -362,6 +370,7 @@ export function OverlayCommandPalettePresentational({
   selectedIndex = 0,
   onSelect,
   onDismiss,
+  onEscape,
   onFilterTextChange,
   onSelectedIndexChange,
   keyForwarding,
@@ -520,10 +529,11 @@ export function OverlayCommandPalettePresentational({
       }
       if (e.key === 'Escape') {
         e.preventDefault();
+        onEscape?.();
         onDismiss();
       }
     },
-    [keyForwarding, onDismiss, isListFocused],
+    [keyForwarding, onDismiss, onEscape, isListFocused],
   );
 
   // Containment modes bypass cmdk's own filtering: the filtered list is computed with the same
@@ -775,6 +785,7 @@ export function OverlayCommandPalettePresentational({
         onPointerDownOutside={(event) => {
           if (isWindowBlurPress(event.detail.originalEvent)) event.preventDefault();
         }}
+        onEscapeKeyDown={() => onEscape?.()}
         onOpenAutoFocus={(e) => e.preventDefault()}
         onCloseAutoFocus={(e) => e.preventDefault()}
       >
@@ -918,6 +929,10 @@ export function OverlayCommandPalette({ overlay }: OverlayCommandPaletteProps) {
     resolveAndRemoveOverlay(overlay.id, overlay.type, undefined);
   }, [overlay]);
 
+  const handleEscape = useCallback(() => {
+    markOverlayFocusReturnIfFocusInside(overlay.id);
+  }, [overlay]);
+
   // Mirror the ACTIVE palette's local input/highlight into the overlay store, so a forwarded
   // commitCommandPaletteSelection (which resolves from the STORE's filterText/selectedIndex)
   // always picks exactly what the palette displays — the store is the single source of truth
@@ -983,6 +998,7 @@ export function OverlayCommandPalette({ overlay }: OverlayCommandPaletteProps) {
       selectedIndex={overlay.selectedIndex}
       onSelect={handleSelect}
       onDismiss={handleDismiss}
+      onEscape={handleEscape}
       onFilterTextChange={handleFilterTextChange}
       onSelectedIndexChange={handleSelectedIndexChange}
       keyForwarding={overlay.request.keyForwarding}

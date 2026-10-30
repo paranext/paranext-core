@@ -64,7 +64,16 @@ import {
   updateOverlayContent,
   updateCommandPaletteState,
 } from './overlay-store';
-import { translateCoordinates, clampToViewport, isWebViewVisible } from './overlay-coordinates';
+import {
+  translateCoordinates,
+  clampToViewport,
+  isWebViewVisible,
+  getWebViewIframe,
+} from './overlay-coordinates';
+import {
+  markOverlayFocusReturnIfFocusInside,
+  takeOverlayFocusReturnMark,
+} from './overlay-focus-return.util';
 import { isWindowBlurPress } from './window-blur-press.util';
 
 // ── Debounce ──
@@ -153,101 +162,126 @@ const latestCommandPaletteRequestSeqByWebView = new Map<string, number>();
 
 // ── Focus Save/Restore ──
 
-/** What was focused when an overlay opened, and which web view asked for the overlay. */
-interface SavedFocus {
-  subject: FocusSubject;
+/** What the overlay service remembers about an overlay in order to return focus when it closes. */
+interface FocusRecord {
   /** Id of the web view (or service) that requested the overlay */
   requesterId: string;
+  /** Whether the overlay is a modal dialog, which returns focus whenever it is answered */
+  isModal: boolean;
+  /** The window service's focus subject when the overlay opened; set once `getFocus` answers */
+  subject?: FocusSubject;
 }
 
-/** Saved focus per overlay ID, captured via windowService.getFocus() */
-const savedFocusState = new Map<string, SavedFocus>();
+/** Focus records per overlay ID, created synchronously when the overlay opens */
+const focusRecords = new Map<string, FocusRecord>();
 
 /**
- * Captures the current window focus subject and stores it for later restoration. Uses the window
- * service's getFocus API instead of postMessage to iframes.
+ * Id of the tab or web view the window service most recently reported as focused. Kept when focus
+ * moves outside every tab (into a modal dialog, say), so a modal dialog that the dialog service
+ * opened can return to the tab the user was in. A web view's tab id equals its web view id.
  */
-async function saveFocus(overlayId: string, requesterId: string): Promise<void> {
-  try {
-    const focusSubject = await windowService.getFocus();
-    // Guard against writing stale entries after the overlay has been dismissed.
-    // saveFocus is called without await, so restoreFocus may delete the entry before we get here.
-    if (focusSubject && getOverlayById(overlayId)) {
-      savedFocusState.set(overlayId, { subject: focusSubject, requesterId });
-    }
-  } catch {
-    // Best-effort focus save
-  }
-}
+let lastFocusedTabId: string | undefined;
 
 /**
- * Id of the tab or webView the window service last reported as focused (undefined when none or
- * `other`). Written by the focus-change subscription in {@link registerAutoDismissListeners}.
+ * Starts the focus record for an overlay and fills in the window service's focus subject once it
+ * answers. The record exists from the start so a close that beats the answer still knows its
+ * requester.
  */
-let lastTrackedFocusId: string | undefined;
-
-/**
- * Surfaces the overlay service itself renders, as opposed to the generic popper wrapper that shell
- * menus (Menubar, DropdownMenu) share. Focus inside one of these still belongs to the overlay that
- * is closing, so a restore may proceed. The context menu's items are portalled into
- * `.overlay-context-menu-content`; `[data-overlay-context-menu]` only marks its hidden trigger.
- */
-const OVERLAY_FOCUS_SURFACE_SELECTOR =
-  '[data-overlay-host], [data-overlay-modal-dialog], [data-overlay-popover], [data-overlay-command-palette], [data-overlay-context-menu], .overlay-context-menu-content';
-
-/**
- * Whether focus already moved away from the saved subject to somewhere other than the closing
- * overlay: the page's active element is a frame or shell control outside the overlay's own
- * surfaces, or the tracked focus id differs from both the saved subject's and the requester's. The
- * requester counts as not moved, since the tracked focus can lag behind a right-click that changed
- * which pane is focused.
- */
-function hasFocusMovedElsewhere(saved: SavedFocus): boolean {
-  const active = document.activeElement;
-  if (active && active !== document.body && !active.closest(OVERLAY_FOCUS_SURFACE_SELECTOR)) {
-    return true;
-  }
-  if (saved.subject.focusType === 'other') return false;
-  if (lastTrackedFocusId === undefined) return false;
-  return lastTrackedFocusId !== saved.subject.id && lastTrackedFocusId !== saved.requesterId;
-}
-
-/**
- * Restores focus to the subject that was active when the overlay was created. Uses the window
- * service's setFocus API to return focus to the original webView or tab.
- *
- * Skipped when the user already moved focus elsewhere (clicked into another pane, onto a tab
- * header, or onto a shell control): returning focus across frames blurs the window they moved to
- * and closes whatever they opened there. Escape or picking an item still restores, because focus is
- * then inside overlay content or nowhere.
- *
- * The saved entry is taken synchronously, but the decision waits one task. A press in the parent
- * document dismisses a Radix-based overlay from its `pointerdown` listener, before the browser's
- * default action for that press has moved focus; deciding immediately would see the overlay's own
- * content still focused and then pull focus off what the user just clicked.
- */
-function restoreFocus(overlayId: string): void {
-  const saved = savedFocusState.get(overlayId);
-  savedFocusState.delete(overlayId);
-
-  if (!saved || saved.subject.focusType === 'other') return;
-
-  setTimeout(() => {
-    if (hasFocusMovedElsewhere(saved)) return;
-
-    // When the requester's pane is the tracked focus but the saved subject is stale, restore to the
-    // requester instead.
-    const subject: FocusSubject =
-      lastTrackedFocusId === saved.requesterId && lastTrackedFocusId !== saved.subject.id
-        ? { focusType: 'webView', id: saved.requesterId }
-        : saved.subject;
-    // setFocus accepts SetFocusSubject (webView or tab with id) — pass only the fields it needs
-    const setFocusTarget =
-      subject.focusType === 'webView' ? subject : { focusType: subject.focusType, id: subject.id };
-    windowService.setFocus(setFocusTarget).catch(() => {
-      // Best-effort focus restore
+function saveFocus(overlayId: string, requesterId: string, isModal: boolean = false): void {
+  const record: FocusRecord = { requesterId, isModal };
+  focusRecords.set(overlayId, record);
+  windowService
+    .getFocus()
+    .then((focusSubject) => {
+      if (focusSubject) record.subject = focusSubject;
+      if (focusSubject && focusSubject.focusType !== 'other' && !lastFocusedTabId)
+        lastFocusedTabId = focusSubject.id;
+      return undefined;
+    })
+    .catch(() => {
+      // Best-effort focus save
     });
-  }, 0);
+}
+
+/**
+ * Selectors for each overlay type's own content in the parent document. Focus inside one of these
+ * is focus the overlay holds, as opposed to focus in a web view frame or any other part of the app.
+ * The context menu's items (and its submenus') are portalled into `.overlay-context-menu-content`;
+ * `[data-overlay-context-menu]` only marks its hidden trigger.
+ */
+const OVERLAY_OWN_CONTENT_SELECTOR: Record<OverlayEntry['type'], string> = {
+  contextMenu: '.overlay-context-menu-content',
+  popover: '[data-overlay-popover]',
+  commandPalette: '[data-overlay-command-palette]',
+  modalDialog: '[data-overlay-modal-dialog]',
+};
+
+/** Whether the document's focused element sits inside the given overlay type's own content */
+function isFocusInsideOverlayContent(type: OverlayEntry['type']): boolean {
+  return !!document.activeElement?.closest(OVERLAY_OWN_CONTENT_SELECTOR[type]);
+}
+
+/**
+ * Where focus goes back to: the requesting web view when it is a real web view whose frame exists,
+ * so a menu opened in a pane the window service has not yet noticed still returns to that pane.
+ * Otherwise (a modal dialog, whose requester is the dialog service) the tab the user was last in,
+ * or else the subject the window service reported when the overlay opened. A target that no longer
+ * exists is never returned to. Undefined when there is nowhere to go.
+ */
+function resolveFocusTarget(
+  record: FocusRecord,
+): { focusType: 'webView' | 'tab'; id: string } | undefined {
+  if (getWebViewIframe(record.requesterId)) return { focusType: 'webView', id: record.requesterId };
+
+  if (record.isModal) {
+    if (lastFocusedTabId) return { focusType: 'tab', id: lastFocusedTabId };
+  }
+
+  const { subject } = record;
+  if (!subject || subject.focusType === 'other') return undefined;
+  // `setFocus` looks a tab up and does nothing for a missing one, but records a web view blindly
+  if (subject.focusType === 'webView' && !getWebViewIframe(subject.id)) return undefined;
+  return { focusType: subject.focusType, id: subject.id };
+}
+
+/**
+ * Settles an overlay's focus record when it closes, returning focus to the opener when asked to.
+ * Called synchronously from the one place each overlay type settles; nothing here reads where focus
+ * currently is, so a click elsewhere can never pull focus back.
+ *
+ * @param overlayId The overlay that is closing
+ * @param shouldReturnFocus Whether this close hands focus back to the opener
+ */
+function settleFocus(overlayId: string, shouldReturnFocus: boolean): void {
+  const record = focusRecords.get(overlayId);
+  focusRecords.delete(overlayId);
+  if (!shouldReturnFocus || !record) return;
+
+  const target = resolveFocusTarget(record);
+  if (!target) return;
+  windowService.setFocus(target).catch(() => {
+    // Best-effort focus restore
+  });
+}
+
+/**
+ * Settles a context menu, popover or command palette that closed. These return focus to the opener
+ * when an item was picked (a result came back), or when the close was marked as returning focus and
+ * focus was inside the overlay's own content at that moment. A click elsewhere, a pane or tab
+ * switch, a replacement, a timeout and a scroll never return focus.
+ */
+function settleTransientOverlayFocus(
+  overlayId: string,
+  type: OverlayEntry['type'],
+  wasPicked: boolean,
+): void {
+  const isMarked = takeOverlayFocusReturnMark(overlayId);
+  settleFocus(overlayId, wasPicked || (isMarked && isFocusInsideOverlayContent(type)));
+}
+
+/** Whether a rejection is the replacement or shutdown of an overlay rather than an answer to it */
+function isAbortedRejection(reason: unknown): boolean {
+  return isPlatformError(reason) && reason.code === ABORTED;
 }
 
 // ── Aria-Live Announcements ──
@@ -461,26 +495,35 @@ function dismissAll(...types: OverlayEntry['type'][]): void {
  * Escape, matching the popover component's own Escape handler, which dismisses regardless of that
  * option (the option governs click-outside, not the key).
  *
- * @param trigger What is dismissing the overlays
+ * @param trigger What is dismissing the overlays. `windowBlur` is the parent window losing focus
+ *   and otherwise dismisses exactly as `clickAway` does
  * @param onlyIds When provided, only overlays with these IDs are dismissed. The app-window input
  *   listener uses it to act on exactly the overlays that were open when the input happened — every
  *   one of them for a click away, only the topmost for Escape.
  */
 function dismissTransientOverlays(
-  trigger: 'clickAway' | 'escape',
+  trigger: 'clickAway' | 'escape' | 'windowBlur',
   onlyIds?: ReadonlySet<string>,
 ): void {
+  // Escape, and the app losing OS focus (as opposed to a click into a pane, which also blurs the
+  // parent window), return focus to the opener when focus is inside the overlay's own content
+  const returnsFocusIfInside =
+    trigger === 'escape' || (trigger === 'windowBlur' && !document.hasFocus());
+  const dismiss = (overlay: OverlayEntry): void => {
+    if (returnsFocusIfInside) markOverlayFocusReturnIfFocusInside(overlay.id);
+    resolveAndRemoveOverlay(overlay.id, overlay.type, undefined);
+  };
   getOverlays().forEach((overlay) => {
     if (onlyIds && !onlyIds.has(overlay.id)) return;
     if (overlay.type === 'contextMenu' || overlay.type === 'commandPalette') {
-      resolveAndRemoveOverlay(overlay.id, overlay.type, undefined);
+      dismiss(overlay);
       return;
     }
     if (
       overlay.type === 'popover' &&
       (trigger === 'escape' || overlay.request.dismissOnClickOutside !== false)
     ) {
-      resolveAndRemoveOverlay(overlay.id, overlay.type, undefined);
+      dismiss(overlay);
     }
   });
 }
@@ -532,7 +575,6 @@ async function showContextMenu(
       existing.id,
       newPlatformError('Overlay was replaced by a new request', ABORTED),
     );
-    restoreFocus(existing.id);
   });
 
   const overlayId = newGuid();
@@ -553,11 +595,11 @@ async function showContextMenu(
       items,
       position: clampedPosition,
       resolve: (result) => {
-        restoreFocus(overlayId);
+        settleTransientOverlayFocus(overlayId, 'contextMenu', result !== undefined);
         resolve(result);
       },
       reject: (reason?: unknown) => {
-        restoreFocus(overlayId);
+        settleTransientOverlayFocus(overlayId, 'contextMenu', false);
         reject(reason);
       },
     });
@@ -606,13 +648,12 @@ export async function showModalDialogOverlay<TReturn>(
       existing.id,
       newPlatformError('Overlay was replaced by a new request', ABORTED),
     );
-    restoreFocus(existing.id);
   });
 
   const overlayId = newGuid();
 
   // Save current focus state for later restoration
-  saveFocus(overlayId, webViewId);
+  saveFocus(overlayId, webViewId, true);
 
   const title = typeof props.title === 'string' ? props.title : 'Dialog';
   announceLocalizedToScreenReader('%overlay_aria_dialogOpened%', { title });
@@ -630,13 +671,16 @@ export async function showModalDialogOverlay<TReturn>(
       // Generic T resolve can't be assigned to unknown resolve without widening
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       resolve: ((result: unknown) => {
-        restoreFocus(overlayId);
+        // Every answer to a modal dialog (OK, Cancel, Escape, the close button, the backdrop)
+        // returns focus: nothing else is left to hold it once the dialog unmounts.
+        settleFocus(overlayId, true);
         // Cast unknown result back to the generic dialog response type
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         resolve(result as TReturn | undefined);
       }) as (result: unknown) => void,
       reject: (reason?: unknown) => {
-        restoreFocus(overlayId);
+        // A dialog that reports an error was answered; a replaced or shut-down one was not
+        settleFocus(overlayId, !isAbortedRejection(reason));
         reject(reason);
       },
     });
@@ -698,7 +742,6 @@ async function showPopover(request: PopoverRequest, webViewId: string): Promise<
       existing.id,
       newPlatformError('Overlay was replaced by a new request', ABORTED),
     );
-    restoreFocus(existing.id);
   });
 
   const overlayId = newGuid();
@@ -736,7 +779,7 @@ async function showPopover(request: PopoverRequest, webViewId: string): Promise<
     position: clampedPosition,
     resolve: (actionId: string | undefined) => {
       clearPopoverTimer(overlayId);
-      restoreFocus(overlayId);
+      settleTransientOverlayFocus(overlayId, 'popover', actionId !== undefined);
       const pending = popoverPromises.get(overlayId);
       if (pending) {
         pending.resolve(actionId);
@@ -745,7 +788,7 @@ async function showPopover(request: PopoverRequest, webViewId: string): Promise<
     },
     reject: (error: PlatformError) => {
       clearPopoverTimer(overlayId);
-      restoreFocus(overlayId);
+      settleTransientOverlayFocus(overlayId, 'popover', false);
       const pending = popoverPromises.get(overlayId);
       if (pending) {
         pending.reject(error);
@@ -792,6 +835,7 @@ async function updatePopover(overlayId: string, content: PopoverContent): Promis
 async function dismissPopover(overlayId: string): Promise<void> {
   const overlay = getOverlayById(overlayId);
   if (!overlay || overlay.type !== 'popover') return;
+  markOverlayFocusReturnIfFocusInside(overlayId);
   resolveAndRemoveOverlay(overlayId, 'popover', undefined);
 }
 
@@ -854,9 +898,9 @@ async function localizePaletteItems(
 }
 
 /**
- * Rejects (ABORTED) and removes every command palette this WebView already has open, restoring the
- * focus each saved — a new request replaces its predecessors rather than stacking on them, which is
- * what keeps the one-palette-per-WebView invariant true in the store.
+ * Rejects (ABORTED) and removes every command palette this WebView already has open — a new request
+ * replaces its predecessors rather than stacking on them, which is what keeps the
+ * one-palette-per-WebView invariant true in the store. A replaced palette does not return focus.
  */
 function replaceExistingCommandPalettes(webViewId: string): void {
   getOverlaysByWebView(webViewId)
@@ -866,7 +910,6 @@ function replaceExistingCommandPalettes(webViewId: string): void {
         existing.id,
         newPlatformError('Overlay was replaced by a new request', ABORTED),
       );
-      restoreFocus(existing.id);
     });
 }
 
@@ -977,11 +1020,11 @@ async function showCommandPalette(
       selectedIndex: 0,
       position,
       resolve: (selectedId) => {
-        restoreFocus(overlayId);
+        settleTransientOverlayFocus(overlayId, 'commandPalette', selectedId !== undefined);
         resolve(selectedId);
       },
       reject: (reason?: unknown) => {
-        restoreFocus(overlayId);
+        settleTransientOverlayFocus(overlayId, 'commandPalette', false);
         reject(reason);
       },
     });
@@ -1151,6 +1194,7 @@ async function commitCommandPaletteSelection(webViewId: string): Promise<void> {
 async function dismissCommandPalette(webViewId: string): Promise<void> {
   const entry = getActiveCommandPalette(webViewId);
   if (!entry) return;
+  markOverlayFocusReturnIfFocusInside(entry.id);
   resolveAndRemoveOverlay(entry.id, 'commandPalette', undefined);
 }
 
@@ -1304,7 +1348,7 @@ function registerAutoDismissListeners(): void {
     // Skip if an overlay was just created — focus shifts from panel activation can trigger blur
     if (isWithinOverlayCreationGrace()) return;
 
-    dismissTransientOverlays('clickAway');
+    dismissTransientOverlays('windowBlur');
   });
 
   // Record every parent-document pointerdown, and whether it landed on overlay content, so an
@@ -1329,13 +1373,14 @@ function registerAutoDismissListeners(): void {
   getNetworkEvent(EVENT_NAME_ON_DID_APP_WINDOW_INPUT)(handleAppWindowInput);
 
   // Dismiss overlays when the focused tab changes
-  lastTrackedFocusId = undefined;
+  let lastTrackedFocusId: string | undefined;
   windowService
     .subscribeFocus(undefined, (focusSubject) => {
       if (isPlatformError(focusSubject)) return;
 
       // Determine the id of the newly focused subject (undefined for 'other')
       const newFocusId = focusSubject.focusType === 'other' ? undefined : focusSubject.id;
+      if (newFocusId) lastFocusedTabId = newFocusId;
 
       // Only dismiss if focus actually moved to a different tab/webView
       if (newFocusId === lastTrackedFocusId) return;
