@@ -10172,15 +10172,16 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - **Two snapshots.** C# serves the activity snapshot (`getSyncActivity` / `onSyncActivityChanged`,
     including the resource ids the running run will update); the extension serves the queue snapshot
     (`getSyncQueue` / `onSyncQueueChanged`, the waiting project ids). Home reads both.
-  - **Cancel asks.** Every Cancel (toast, toolbar, Sync dialog) goes through `cancelSyncPrompt`:
-    "Stop this sync?" and, if something is waiting, "Drop them too?". A run counter keeps a late
+  - **Cancel asks.** Every Cancel (toast, toolbar, Sync dialog and the editor's sync-blocked banner) goes
+    through `cancelSyncPrompt`, which asks whether to stop the running sync and then, if projects are
+    waiting, whether to drop them too. A run counter keeps a late
     answer from cancelling or clearing for a run that started while the question was open.
   - **Startup and shutdown boundary syncs stay direct** — core's startup/shutdown tasks and the
     extension's session-boundary syncs call the C# commands without the queue. The queue waits for
     them through the activity signal and also re-reads `getSyncActivity` every 30 s while anything is
     waiting, so a missed idle edge delays the next run by at most 30 s and cannot hang it. A shutdown
     run starting means the app is quitting, so the queue is dropped.
-  - **A public C# `SyncRunResourceGuard`** makes a DBL resource install/uninstall and a sync run's
+  - **A C# `SyncRunResourceGuard` in core** makes a DBL resource install/uninstall and a sync run's
     connected-resource window wait for each other, bounded by a timeout that restarts for each run
     that holds the resource. The sync side's wait is cancellable (Cancel); the install side's is not.
     An install waits only for the running run, never a waiting one.
@@ -10199,8 +10200,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     started, syncing projects nobody chose. Rejected.
   - *Keep disabling controls.* Prevents the failures but drops the user's click. Rejected.
 - **Consequences:**
-  - Home is the only surface with waiting UI (waiting rows, per-row results). The Sync dialog and
-    the editor menu are thin callers, which keeps the way open to merge sync into Home later.
+  - Home is the main surface with waiting UI (waiting rows, per-row results); Get Resources also
+    shows a waiting row for a resource the running sync will update, only for a row the user
+    clicked. The Sync dialog and the editor menu are thin callers, which keeps the way open to merge sync into Home later.
   - Every new automatic trigger must request through the queue AND still ask the first-run consent
     gate (`.claude/rules/first-run-sync-consent.md`); the queue is not a consent chokepoint.
   - When both kinds are waiting at once, two progress toasts appear back to back.

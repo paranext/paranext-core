@@ -378,8 +378,8 @@ declare module 'paratext-bible-send-receive' {
    * Unlike {@link SyncState}, this is derived from the C# sync run marker rather than the
    * Send/Receive extension's claim map, so it covers EVERY sync path — including callers that reach
    * the dotnet `syncProjects`/`sendReceiveProjects` commands directly and raise no claim
-   * (`main/startup-tasks.ts`, the extension's queue executor). That is what makes a Simple-mode
-   * startup sync visible.
+   * (`main/startup-tasks.ts`, `main/shutdown-tasks.ts`, the extension's queue executor). That is
+   * what makes a Simple-mode startup sync visible.
    *
    * Every build registers both surfaces (`getSyncActivity` and `onSyncActivityChanged`), but only a
    * Paratext 10 build carries the run bracket that reports real activity. A plain Platform.Bible
