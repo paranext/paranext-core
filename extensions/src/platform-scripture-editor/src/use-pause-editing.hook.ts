@@ -22,10 +22,12 @@ const CARET_KEYS = new Set([
  * because the editor still shows the chapter being left: moving it there reports that chapter's
  * verse as the current reference, which pulls the reference back to the chapter the user just left.
  * The paste chords count because the editor takes them itself and reads the clipboard, which raises
- * no `paste` event to hold off, and whose result could land in the new chapter. Every other chord
- * is let through so the application's shortcuts keep working. A paste the browser runs itself is
- * held off as the `paste` event it raises; the Paste items of the editor's own menus read the
- * clipboard as the chords do, so nothing here holds them off.
+ * no `paste` event to hold off, and whose result could land in the new chapter. A read already in
+ * flight when the pause starts still lands. Every other chord is let through so the application's
+ * shortcuts keep working. A paste the browser runs itself is held off as the `paste` event it
+ * raises, and the Edit flyout's Paste is refused by the web view's read-only check while a chapter
+ * loads. Nothing holds off the right-click menu's Paste, which reads the clipboard as the chords
+ * do, or Ctrl+X, which dispatches the editor's cut command with no `cut` event.
  */
 function isHeldOffKey(event: KeyboardEvent): boolean {
   if (event.isComposing || CARET_KEYS.has(event.key)) return true;
