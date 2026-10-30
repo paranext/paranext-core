@@ -239,9 +239,10 @@ export const SendReceiveError: Story = {
 };
 
 /**
- * A sync is running for the undownloaded shared project `HPUX-S/R`: its row shows a spinner, and
- * every other row's Get and Sync is disabled with the reason "Wait for the current sync to
- * finish".
+ * A sync is running for the undownloaded shared project `HPUX-S/R`: its row shows a spinner. The
+ * edited project `Pr4--S/R` waits in the sync queue for the next run, so its row shows "Waiting…",
+ * which takes it out of the queue when clicked. Every other row's Get and Sync stays enabled: a
+ * click is queued.
  */
 function SyncInProgressDecorator(Story: (update?: { args: HomeProps }) => ReactElement) {
   return (
@@ -252,6 +253,7 @@ function SyncInProgressDecorator(Story: (update?: { args: HomeProps }) => ReactE
         sharedProjectsInfo: staticProjectsAndResources,
         isSendReceiveInProgress: true,
         activeSendReceiveProjects: ['17'],
+        waitingProjectIds: ['13'],
         headerContent: (
           <>
             <HomeIcon size="36" />
