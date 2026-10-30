@@ -21,9 +21,9 @@
  *    goes in as text without its marker tokens, with no notice — no note and no marker of the row
  *    editor's comes with it.
  * 5. **Ctrl+V pressed while the next chapter is loading lands nowhere.** The keys are recorded inside
- *    the web view: every paste the chapter being left showed is what it saved, and at least one
- *    press while it was showing was held off. The new chapter holds no more pastes than were
- *    pressed once it had arrived.
+ *    the web view: every paste the chapter being left showed before the pause is saved, nothing it
+ *    never showed is, and at least one press while it was showing was held off. The new chapter
+ *    holds no more pastes than were pressed once it had arrived.
  *
  * Saved text is compared whitespace-normalized, because the chapter's first save rewrites line
  * endings and trailing spaces (catalog rows S-2 and E-1 in
@@ -138,6 +138,8 @@ interface MoveProbe {
   tokensShownAtStart: number;
   /** The most pasted tokens it ever showed. */
   mostTokensShown: number;
+  /** Pasted tokens it showed at the last press that was not held off, so before the pause began. */
+  tokensShownAtLastPassedPress: number;
 }
 
 /** The book file's text with every whitespace run as one space. */
@@ -493,12 +495,15 @@ test.describe('the editor’s own paste in Simple mode’s paragraph-structure v
             let pressesWhileOld = 0;
             let pressesAfter = 0;
             let mostTokensShown = 0;
+            let tokensShownAtLastPassedPress = 0;
             const tokensShown = () => (editorRoot?.textContent ?? '').split(token).length - 1;
             dataset.probeTokensShownAtStart = String(tokensShown());
+            tokensShownAtLastPassedPress = tokensShown();
             const record = () => {
               dataset.probePressesWhileOld = String(pressesWhileOld);
               dataset.probePressesAfter = String(pressesAfter);
               dataset.probeMostTokensShown = String(mostTokensShown);
+              dataset.probeTokensShownAtLastPassedPress = String(tokensShownAtLastPassedPress);
             };
             const recordShown = () => {
               if (!showsOldChapter()) return;
@@ -515,6 +520,14 @@ test.describe('the editor’s own paste in Simple mode’s paragraph-structure v
               record();
             };
             window.addEventListener('keydown', onKeyDown, true);
+            // Bubble phase on the window: a press held off stops on its way down and never gets here.
+            const onKeyPassed = (event: KeyboardEvent) => {
+              if (event.key.toLowerCase() !== 'v' || !(event.ctrlKey || event.metaKey)) return;
+              if (!showsOldChapter()) return;
+              tokensShownAtLastPassedPress = tokensShown();
+              record();
+            };
+            window.addEventListener('keydown', onKeyPassed);
             const observer = new MutationObserver(recordShown);
             if (editorRoot)
               observer.observe(editorRoot, { subtree: true, childList: true, characterData: true });
@@ -522,6 +535,7 @@ test.describe('the editor’s own paste in Simple mode’s paragraph-structure v
               'paste-probe-stop',
               () => {
                 window.removeEventListener('keydown', onKeyDown, true);
+                window.removeEventListener('keydown', onKeyPassed);
                 observer.disconnect();
               },
               { once: true },
@@ -538,6 +552,7 @@ test.describe('the editor’s own paste in Simple mode’s paragraph-structure v
             pressesAfter: Number(dataset.probePressesAfter),
             tokensShownAtStart: Number(dataset.probeTokensShownAtStart),
             mostTokensShown: Number(dataset.probeMostTokensShown),
+            tokensShownAtLastPassedPress: Number(dataset.probeTokensShownAtLastPassedPress),
           };
         });
 
@@ -581,12 +596,20 @@ test.describe('the editor’s own paste in Simple mode’s paragraph-structure v
             const probe = await stopProbe();
             test.info().annotations.push({ type: 'probe', description: JSON.stringify(probe) });
 
-            // Every paste the chapter being left showed is what it saved, and nothing more.
+            // Every paste the chapter being left showed before the pause began is saved. A clipboard
+            // read in flight when the pause began can still show there, and nothing edited during
+            // the pause is saved, so that paste is gone with the chapter it showed in. Nothing is
+            // saved that was never shown.
             await expect
               .poll(async () => (await tokensSaved(fromChapter)) - tokensBefore.old, {
                 timeout: 30_000,
               })
-              .toBe(probe.mostTokensShown - probe.tokensShownAtStart);
+              .toBeGreaterThanOrEqual(
+                probe.tokensShownAtLastPassedPress - probe.tokensShownAtStart,
+              );
+            expect((await tokensSaved(fromChapter)) - tokensBefore.old).toBeLessThanOrEqual(
+              probe.mostTokensShown - probe.tokensShownAtStart,
+            );
             // The new chapter holds no paste pressed before it arrived.
             const landedInNext = (await tokensSaved(fromChapter + 1)) - tokensBefore.next;
             expect(landedInNext).toBeLessThanOrEqual(probe.pressesAfter);
