@@ -10179,13 +10179,20 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - **Startup and shutdown boundary syncs stay direct** — core's startup/shutdown tasks and the
     extension's session-boundary syncs call the C# commands without the queue. The queue waits for
     them through the activity signal and also re-reads `getSyncActivity` every 30 s while anything is
-    waiting, so a missed idle edge delays the next run by at most 30 s and cannot hang it. A shutdown
-    run starting means the app is quitting, so the queue is dropped.
+    waiting, so a missed idle edge delays the next run by at most 30 s and cannot hang it. The C#
+    semaphore is also held briefly with the activity already idle (the shared-project list fetch, a
+    run's closing project-list refresh), so a run refused because the semaphore was held — by a sync
+    or by such an operation — goes back to waiting and is retried after 1, 2 and 4 s before the queue
+    falls back to the activity signal; a refusal is never reported as a failure or stamped.
   - **A C# `SyncRunResourceGuard` in core** makes a DBL resource install/uninstall and a sync run's
     connected-resource window wait for each other, bounded by a timeout that restarts for each run
     that holds the resource. The sync side's wait is cancellable (Cancel); the install side's is not.
     An install waits only for the running run, never a waiting one.
   - **The queue is in memory** and is dropped silently at quit; rows are plain again on restart.
+    The extension host is killed after core's shutdown tasks without deactivating, so core's
+    shutdown tasks drop the queue first (`paratextBibleSendReceive.dropSyncQueue`, bounded), before
+    cancelling the running sync — a queued run must not start and make the shutdown sync fail as
+    busy.
 - **Alternatives:**
   - *Queue in C#.* Would make it authoritative for every path, but puts UI-shaped policy (source
     kinds, per-project result routing, the Cancel question) in the backend and needs a Studio build
