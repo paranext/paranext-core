@@ -157,6 +157,33 @@ test.describe('menus dismiss when the click lands in another frame', () => {
     await expect(mainPage.locator(BCV_SEARCH_INPUT)).toBeHidden();
   });
 
+  test('top toolbar BCV stays open after a quick-nav arrow until its trigger is clicked', async ({
+    mainPage,
+  }) => {
+    const editorFrame = await openEditor(mainPage);
+
+    await mainPage.locator(BCV_TRIGGER).first().click();
+    await expect(mainPage.locator(BCV_SEARCH_INPUT)).toBeVisible();
+    // The arrow hides the book list; the search input stays, so it marks the picker as open
+    await mainPage
+      .locator('[data-radix-popper-content-wrapper]')
+      .getByRole('button', { name: 'Next chapter' })
+      .click();
+    const editorPoint = await getEditorClickPoint(mainPage, editorFrame);
+
+    await mainPage.mouse.click(editorPoint.x, editorPoint.y);
+    await mainPage.waitForTimeout(SETTLE_MS);
+    await expect(mainPage.locator(BCV_SEARCH_INPUT)).toBeVisible();
+
+    // Focus is in the editor frame, so this Escape never reaches the picker's document
+    await mainPage.keyboard.press('Escape');
+    await mainPage.waitForTimeout(SETTLE_MS);
+    await expect(mainPage.locator(BCV_SEARCH_INPUT)).toBeVisible();
+
+    await mainPage.locator(BCV_TRIGGER).first().click();
+    await expect(mainPage.locator(BCV_SEARCH_INPUT)).toBeHidden();
+  });
+
   test('Platform menu closes on a click inside the editor', async ({ mainPage }) => {
     const editorFrame = await openEditor(mainPage);
 

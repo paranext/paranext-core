@@ -1892,3 +1892,230 @@ describe('BookChapterControl hands the arrows to the preview grid once entered',
     expect(input.selectionStart).toBe(caretBeforeArrow - 1);
   });
 });
+
+/**
+ * Compact mode: after a quick-nav arrow hides the book list, the popover is a small stepper the
+ * user keeps beside their work, so only its trigger or Escape with focus in it may close it.
+ * Everything else (window blur, a press elsewhere in the document, focus leaving) leaves it open
+ * without swallowing the press.
+ */
+describe('BookChapterControl compact mode stays open', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const scrRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
+
+  function renderWithOutsideButton() {
+    const onOutsidePointerDown = vi.fn();
+    const onOutsideClick = vi.fn();
+    const ui = (disabled?: boolean) => (
+      <div>
+        <BookChapterControl scrRef={scrRef} handleSubmit={vi.fn()} disabled={disabled} />
+        <button type="button" onPointerDown={onOutsidePointerDown} onClick={onOutsideClick}>
+          outside
+        </button>
+      </div>
+    );
+    const result = render(ui());
+    return {
+      ...result,
+      rerenderDisabled: () => result.rerender(ui(true)),
+      onOutsidePointerDown,
+      onOutsideClick,
+    };
+  }
+
+  const getOutside = () => screen.getByRole('button', { name: 'outside' });
+  const isOpen = () => getTrigger().getAttribute('aria-expanded') === 'true';
+  const settle = () =>
+    act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 50);
+      });
+    });
+  const getSearchInputElement = () => {
+    const input = document.querySelector('[cmdk-input]');
+    if (!(input instanceof HTMLElement)) throw new Error('expected the search input');
+    return input;
+  };
+
+  async function openCompact() {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const utils = renderWithOutsideButton();
+    await user.click(getTrigger());
+    await waitFor(() => expect(document.querySelector('[cmdk-input]')).not.toBeNull());
+    await user.click(screen.getByRole('button', { name: 'Next chapter' }));
+    // The list is gone: that is compact mode
+    await waitFor(() => expect(screen.queryByRole('option')).toBeNull());
+    expect(isOpen()).toBe(true);
+    return { user, ...utils };
+  }
+
+  async function openFull() {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const utils = renderWithOutsideButton();
+    await user.click(getTrigger());
+    await waitFor(() => expect(screen.queryAllByRole('option').length).toBeGreaterThan(0));
+    return { user, ...utils };
+  }
+
+  test('a quick-nav arrow click does not itself close the popover', async () => {
+    await openCompact();
+    await settle();
+    expect(isOpen()).toBe(true);
+  });
+
+  test('a window blur leaves it open', async () => {
+    await openCompact();
+    act(() => {
+      window.dispatchEvent(new Event('blur'));
+    });
+    await settle();
+    expect(isOpen()).toBe(true);
+  });
+
+  test('a press elsewhere in the document leaves it open and still reaches its target', async () => {
+    const { user, onOutsidePointerDown, onOutsideClick } = await openCompact();
+    await user.click(getOutside());
+    await settle();
+    expect(isOpen()).toBe(true);
+    expect(onOutsidePointerDown).toHaveBeenCalledTimes(1);
+    expect(onOutsideClick).toHaveBeenCalledTimes(1);
+  });
+
+  test('focus moving outside leaves it open', async () => {
+    await openCompact();
+    act(() => {
+      getOutside().focus();
+    });
+    await settle();
+    expect(isOpen()).toBe(true);
+  });
+
+  test('Escape with focus elsewhere in the document leaves it open', async () => {
+    const { user } = await openCompact();
+    act(() => {
+      getOutside().focus();
+    });
+    await user.keyboard('{Escape}');
+    await settle();
+    expect(isOpen()).toBe(true);
+  });
+
+  test('Escape with focus on the page body leaves it open', async () => {
+    const { user } = await openCompact();
+    act(() => {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    });
+    expect(document.activeElement).toBe(document.body);
+    await user.keyboard('{Escape}');
+    await settle();
+    expect(isOpen()).toBe(true);
+  });
+
+  test('Escape with focus inside the popover closes it', async () => {
+    const { user } = await openCompact();
+    const content = document.querySelector('[data-slot="popover-content"]');
+    expect(content?.contains(document.activeElement)).toBe(true);
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(isOpen()).toBe(false));
+  });
+
+  test('Escape with focus on the trigger closes it', async () => {
+    const { user } = await openCompact();
+    act(() => {
+      getTrigger().focus();
+    });
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(isOpen()).toBe(false));
+  });
+
+  test('a click on the trigger closes it and does not reopen it', async () => {
+    const { user } = await openCompact();
+    await user.click(getTrigger());
+    await waitFor(() => expect(isOpen()).toBe(false));
+    await settle();
+    expect(isOpen()).toBe(false);
+  });
+
+  test('becoming disabled closes it', async () => {
+    const { rerenderDisabled } = await openCompact();
+    rerenderDisabled();
+    await waitFor(() => expect(isOpen()).toBe(false));
+  });
+
+  test('leaving compact mode through the search input restores the normal outside-press rules', async () => {
+    const { user } = await openCompact();
+    await user.click(getSearchInputElement());
+    await waitFor(() => expect(screen.queryAllByRole('option').length).toBeGreaterThan(0));
+    await user.click(getOutside());
+    await waitFor(() => expect(isOpen()).toBe(false));
+  });
+
+  test('a fresh open after a compact close shows the full picker, which closes on a window blur', async () => {
+    const { user } = await openCompact();
+    await user.click(getTrigger());
+    await waitFor(() => expect(isOpen()).toBe(false));
+    await user.click(getTrigger());
+    await waitFor(() => expect(screen.queryAllByRole('option').length).toBeGreaterThan(0));
+    act(() => {
+      window.dispatchEvent(new Event('blur'));
+    });
+    await waitFor(() => expect(isOpen()).toBe(false));
+  });
+
+  test('controls: with the list showing, a window blur closes it', async () => {
+    await openFull();
+    act(() => {
+      window.dispatchEvent(new Event('blur'));
+    });
+    await waitFor(() => expect(isOpen()).toBe(false));
+  });
+
+  test('controls: with the list showing, a press elsewhere closes it', async () => {
+    const { user } = await openFull();
+    await user.click(getOutside());
+    await waitFor(() => expect(isOpen()).toBe(false));
+  });
+
+  test('controls: with the list showing, Escape with focus on the page body closes it', async () => {
+    const { user } = await openFull();
+    act(() => {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    });
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(isOpen()).toBe(false));
+  });
+});
+
+describe('BookChapterControl fresh open after a compact close', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  test('shows the full picker even when the search input does not take focus', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+      />,
+    );
+    await user.click(getTrigger());
+    await waitFor(() => expect(screen.queryAllByRole('option').length).toBeGreaterThan(0));
+    await user.click(screen.getByRole('button', { name: 'Next chapter' }));
+    await waitFor(() => expect(screen.queryByRole('option')).toBeNull());
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(getTrigger()).toHaveAttribute('aria-expanded', 'false'));
+
+    // An unfocused window gives the search input no focus event to leave compact mode with
+    vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(() => {});
+    act(() => {
+      getTrigger().click();
+    });
+
+    await waitFor(() => expect(getTrigger()).toHaveAttribute('aria-expanded', 'true'));
+    await waitFor(() => expect(screen.queryAllByRole('option').length).toBeGreaterThan(0));
+  });
+});
