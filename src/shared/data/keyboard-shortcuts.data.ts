@@ -374,6 +374,25 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'extensions/src/platform-scripture-editor/src/model-text-panel.web-view.tsx',
     ],
   },
+  // The paste itself is the scripture-editors repo's ClipboardPlugin (Ctrl+V asks the host's
+  // `platform.pasteIntoFocusedWindow`); `usePauseEditing` holds the chords off while the editor
+  // still shows the chapter being left, as it does typing, undo and caret moves.
+  {
+    id: 'scripture-paste-held-off-chapter-loading',
+    purpose:
+      'While the next chapter is loading, Paste and Paste as plain text do nothing, so nothing is pasted into the chapter being left or lands in the new one',
+    category: 'Editing',
+    context: 'Scripture editor, while it moves to another chapter',
+    keys: {
+      macOS: '⌘V / ⇧⌘V',
+      windows: 'Ctrl+V / Ctrl+Shift+V',
+      linux: 'Ctrl+V / Ctrl+Shift+V',
+    },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/use-pause-editing.hook.ts',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+    ],
+  },
   {
     id: 'reveal-server-picker',
     purpose:
