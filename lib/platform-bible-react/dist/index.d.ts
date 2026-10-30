@@ -198,7 +198,9 @@ export type BookChapterControlProps = {
 	 * or DropdownMenu) — the transient focus blip that happens when the picker transitions between
 	 * book/chapter/verse views would otherwise collide with the outer scope's focus trap and dismiss
 	 * the popover. Modal mode gives the popover its own FocusScope that pauses the outer scope while
-	 * it's open, avoiding the collision.
+	 * it's open, avoiding the collision. A modal picker makes everything outside inert, its trigger
+	 * included, so it does not use the compact stay-open behavior after a quick-nav step: it closes
+	 * on an outside press and on Escape like any other modal popover.
 	 */
 	modal?: boolean;
 	/**
@@ -4674,7 +4676,10 @@ type DismissOnWindowBlurProps<T extends HTMLElement> = {
  *
  * Hidden-view case (the repo's rule on hidden views): a keyboard tab switch can hide a pane that
  * holds an open menu. The blur listener then dismisses it on the next window blur, which is
- * harmless, so there is deliberately no catch-up logic.
+ * harmless, so there is deliberately no catch-up logic. The one deliberate exception is a compact
+ * `BookChapterControl`: its `onInteractOutside` prevents this hook's synthetic press from
+ * dismissing it, so it stays open while its tab is hidden and closes through its trigger once the
+ * tab is visible again, or on Escape with focus in it.
  *
  * @param props The caller's `ref` and `onCloseAutoFocus` for the Radix Content. Both still work:
  *   the ref receives the element too, and the caller's handler runs first and can itself prevent
