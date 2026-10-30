@@ -1,21 +1,28 @@
 import type { Frame, Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/comment.fixture';
-import { waitForAppReady } from '../../../fixtures/helpers';
+import {
+  waitForAppReady,
+  waitForOpenWebViewIdByType,
+  waitForOverlayGone,
+} from '../../../fixtures/helpers';
 import {
   findScriptureEditorFrame,
   openEditableScriptureEditorForProject,
 } from '../../../fixtures/scripture-editor-helpers';
 import {
+  clickCommentsTab,
   cleanupCommentTestProject,
   createCommentTestProject,
+  openCommentListPanel,
   type CommentTestProject,
 } from '../../../fixtures/comment-test-helpers';
 
 // Launch fixture (not the cdp connect fixture): the running app scans the projects folder exactly
 // once at startup, so the test project MUST exist on disk before the app launches. comment.fixture
 // launches Electron lazily (after beforeAll), so the project is present for the startup scan. Same
-// worker-scoped launch fixture the verse-navigation spec uses; "comment" is only its historical
-// name.
+// worker-scoped launch fixture the verse-navigation spec uses; it also starts the app in Simple
+// mode, whose Column 3 Comments tab supplies the web-view Select the Select variant opens (the
+// "All comments" preset filter).
 
 // The top toolbar's BookChapterControl trigger is the first one in the DOM
 const BCV_TRIGGER = '[aria-label="book-chapter-trigger"]';
@@ -25,6 +32,11 @@ const OPEN_MENU = '[role=menu][data-state=open]';
 const TOOLBAR_LOGO = 'img[alt="Application Logo"]';
 // Long enough for a late close or focus return to land before a "stays open" assertion repeats
 const SETTLE_MS = 300;
+// Fixed web view type of the Simple layout's Column 3 Comments tab (its id is minted per launch)
+const COMMENT_LIST_PANEL_WEBVIEW_TYPE = 'legacyCommentManager.commentListPanel';
+// The Comments tab's "All comments" preset filter: a Select trigger inside the Comments web view
+const COMMENT_PRESET_FILTER = '[data-testid="comment-preset-filter"]';
+const SELECT_CONTENT = '[data-slot="select-content"]';
 
 test.use({ commentAppOwner: 'menu-dismissal' });
 
@@ -198,6 +210,54 @@ test.describe('menus dismiss when the click lands in another frame', () => {
     // Settle, then assert again so a late close or refocus would be caught
     await mainPage.waitForTimeout(SETTLE_MS);
     await expect(mainPage.locator(OPEN_MENU)).toHaveCount(1);
+  });
+
+  test('opening a toolbar menu closes an open web-view Select and stays open', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
+    const commentsPanelId = await waitForOpenWebViewIdByType(
+      mainPage,
+      COMMENT_LIST_PANEL_WEBVIEW_TYPE,
+    );
+    await openCommentListPanel(project.projectId);
+    const commentsFrame = mainPage.frameLocator(`iframe[data-web-view-id="${commentsPanelId}"]`);
+    const presetFilter = commentsFrame.locator(COMMENT_PRESET_FILTER);
+    // A dock rebuild (the workspace-updating overlay) can still reset the active tab, so wait it
+    // out and retry the tab click until the filter shows
+    await expect(async () => {
+      await waitForOverlayGone(mainPage, 60_000);
+      await clickCommentsTab(mainPage, commentsPanelId, 5_000);
+      await expect(presetFilter).toBeVisible({ timeout: 10_000 });
+    }).toPass({ timeout: 180_000 });
+    await waitForOverlayGone(mainPage, 30_000);
+
+    await presetFilter.click();
+    const selectContent = commentsFrame.locator(SELECT_CONTENT);
+    await expect(selectContent).toBeVisible({ timeout: 10_000 });
+    await expect(commentsFrame.getByRole('listbox')).toHaveCount(1);
+    await expect(presetFilter).toHaveAttribute('aria-expanded', 'true');
+
+    const platformTrigger = mainPage.getByRole('menuitem', { name: 'Platform' }).first();
+    await platformTrigger.click();
+    await expect(selectContent).toHaveCount(0);
+    await expect(commentsFrame.getByRole('listbox')).toHaveCount(0);
+
+    // A Select close that refocused its trigger would pull focus back into the web view and close
+    // the menu just opened, which nothing reopens; check at two settle points so a late refocus is
+    // caught too
+    const assertPlatformMenuStillOpen = async () => {
+      await expect(mainPage.locator(OPEN_MENU)).toHaveCount(1);
+      await expect(platformTrigger).toHaveAttribute('aria-expanded', 'true');
+      const triggerIsFocused = await presetFilter.evaluate(
+        (trigger) => trigger.ownerDocument.activeElement === trigger,
+      );
+      expect(triggerIsFocused).toBe(false);
+    };
+    await mainPage.waitForTimeout(SETTLE_MS);
+    await assertPlatformMenuStillOpen();
+    await mainPage.waitForTimeout(500);
+    await assertPlatformMenuStillOpen();
   });
 
   test.describe('controls', () => {
