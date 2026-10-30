@@ -62,7 +62,11 @@ export type ResourceSelectionResolution = {
    * committed, and when the selection the user picked is rewritten to another form of its id.
    */
   nextUserPickedResourceId: string | undefined;
-  /** Whether the in-flight pick has arrived in the list and can stop suppressing auto-correct. */
+  /**
+   * Whether the in-flight pick has been stored and can stop suppressing auto-correct. Not as soon
+   * as its row arrives: the stored selection changes only once the write is reported back, so a
+   * pick let go any sooner would show the old selection again in between.
+   */
   shouldClearPending: boolean;
   /** The row to display, or `undefined` when there is nothing to show. */
   selectedRow: PickerResource | undefined;
@@ -133,7 +137,8 @@ export function findSelectedRow(
  *    chose, while the write propagates through the settings chain into the list. It is compared as
  *    a row id, so it must be derived from the reference that was actually stored — a bare DBL entry
  *    UID never matches, and for a locally-installed non-DBL resource the stored reference is a
- *    project reference whose id is the project id, not the UID.
+ *    project reference whose id is the project id, not the UID. The pick stays pending, and on
+ *    screen, until the stored selection names it.
  * 2. Hold still while a pick is in flight. Auto-correct must not overwrite the selection before the
  *    new resource shows up.
  * 3. Auto-correct otherwise — rewrite a legacy bare id to its namespaced form (and a selection found
@@ -217,14 +222,17 @@ export function resolveResourceSelection(
     const pendingRow = rows.find(
       (row) => getResourceReferenceRowId(row.reference) === pendingResourceId,
     );
-    if (pendingRow)
+    if (pendingRow) {
+      const isStored =
+        selectedResourceId === pendingResourceId && userPickedResourceId === pendingResourceId;
       return {
-        nextSelectedResourceId: pendingResourceId,
-        nextUserPickedResourceId: pendingResourceId,
-        shouldClearPending: true,
+        nextSelectedResourceId: isStored ? undefined : pendingResourceId,
+        nextUserPickedResourceId: isStored ? undefined : pendingResourceId,
+        shouldClearPending: isStored,
         selectedRow: pendingRow,
         shownFallbackRowId: undefined,
       };
+    }
     const heldRow = selectedRow ?? configuredFallback ?? pickUnsavedFallback();
     return {
       nextSelectedResourceId: undefined,

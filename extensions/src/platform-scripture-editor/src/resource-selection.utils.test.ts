@@ -101,8 +101,30 @@ describe('resolveResourceSelection', () => {
     const result = resolve(rows, { selectedResourceId: 'dbl:old', pendingResourceId: 'dbl:new' });
     expect(result.nextSelectedResourceId).toBe('dbl:new');
     expect(result.nextUserPickedResourceId).toBe('dbl:new');
-    expect(result.shouldClearPending).toBe(true);
+    expect(result.shouldClearPending).toBe(false);
     expect(result.selectedRow?.projectId).toBe('proj-new');
+  });
+
+  it('keeps showing a committed pick until it is stored, then lets it go', () => {
+    // Let go as soon as it is written, the pick would give way to the old stored selection until
+    // the write is reported back.
+    const rows = [dblRow('old'), dblRow('new')];
+    const written = resolve(rows, { selectedResourceId: 'dbl:old', pendingResourceId: 'dbl:new' });
+    expect(written.shouldClearPending).toBe(false);
+    expect(written.selectedRow?.projectId).toBe('proj-new');
+
+    const stored = resolve(rows, {
+      selectedResourceId: 'dbl:new',
+      userPickedResourceId: 'dbl:new',
+      pendingResourceId: 'dbl:new',
+    });
+    expect(stored).toEqual({
+      nextSelectedResourceId: undefined,
+      nextUserPickedResourceId: undefined,
+      shouldClearPending: true,
+      selectedRow: rows[1],
+      shownFallbackRowId: undefined,
+    });
   });
 
   it('commits a pick of a locally-installed non-DBL resource, which stores a project reference', () => {
@@ -114,7 +136,7 @@ describe('resolveResourceSelection', () => {
       pendingResourceId: 'project:VULGP83',
     });
     expect(result.nextSelectedResourceId).toBe('project:VULGP83');
-    expect(result.shouldClearPending).toBe(true);
+    expect(result.selectedRow?.projectId).toBe('VULGP83');
   });
 
   it('holds the selection still while a pick has not arrived yet', () => {
@@ -436,7 +458,7 @@ describe('resolveResourceSelection', () => {
         ...UNSETTLED,
       });
       expect(result.nextSelectedResourceId).toBe('dbl:new');
-      expect(result.shouldClearPending).toBe(true);
+      expect(result.selectedRow?.projectId).toBe('proj-new');
     });
 
     it('keeps the pick once the catalog completes and its row appears', () => {

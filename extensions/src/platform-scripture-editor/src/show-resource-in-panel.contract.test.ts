@@ -89,6 +89,8 @@ async function selectedProjectId(
     pendingResourceId: undefined,
     heldFallbackRowId: undefined,
     isListComplete: true,
+    areSourcesSettled: true,
+    mayPersistCorrection: true,
   }).selectedRow?.projectId;
 }
 
@@ -129,6 +131,8 @@ describe('the selection queued for a resource is a row its panel lists', () => {
         pendingResourceId: undefined,
         heldFallbackRowId: undefined,
         isListComplete: true,
+        areSourcesSettled: true,
+        mayPersistCorrection: true,
       }).selectedRow?.projectId,
     ).toBe('byz-project');
   });

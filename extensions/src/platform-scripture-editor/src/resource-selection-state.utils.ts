@@ -2,7 +2,7 @@
  * Where the Bible texts and Commentaries panels keep their selection: one entry per project, in a
  * hidden user setting, so each project shows its own selection after a project switch and after a
  * restart. A Simple-mode project switch reloads a panel in place, and Simple mode builds the panels
- * afresh at every launch, so neither the panel's web view state nor flat keys could hold it.
+ * afresh at every launch, so the panel's web view state could not hold it.
  *
  * Shared by the panel, which reads its own project's entry, and by the extension host, which writes
  * every entry (see `resource-selection-store.ts`).

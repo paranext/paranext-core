@@ -6489,13 +6489,19 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   for per-project memory, and `adr-per-web-view-state-lives-in-the-definition` records why.
   - **Reads.** The panel reads its own project's entry with `useSetting`, through
     `useProjectResourceSelection`, and shows the loading view until the setting has arrived, so a
-    stored pick is never mistaken for an absent one and replaced with a fallback.
+    stored pick is never mistaken for an absent one and replaced with a fallback. A setting that
+    cannot be read also reads as no selection, so while it cannot be read the panel shows its
+    fallback without storing it (`mayPersistCorrection: false`); a pick the user makes still goes
+    through.
   - **Writes.** Every write goes through the `platformScriptureEditor.updateResourceSelection`
     command, which merges one project's entry into the setting in the extension host and runs
     writes one at a time (`resource-selection-store.ts`). The setting is replaced whole on every
     write, so two writers each reading it first would undo each other; one serialized
     read-modify-write in one process rules that out for both panels and the provider alike. Both ids
-    are written in one update, so no render sees the selection without the pick.
+    are written in one update, so no render sees the selection without the pick. A pick from the
+    resource picker stays pending, and on screen, until the setting reports it back, so the panel
+    does not show the old selection again for the round trip. A write that fails tells the user with
+    an error notification and lets go of a pending pick; the panel stays on the stored resource.
   - **Stale renders.** The hook writes only for the project the panel mounted with. During a switch
     the outgoing document can render once more with the incoming project's id while it still holds
     the outgoing project's resources; a fallback resolved from those would otherwise be stored as
