@@ -3068,6 +3068,17 @@ declare module 'main/services/rpc-server' {
    * @param signal Returns whether the app is currently coming down
    */
   export function setAppShutdownSignal(signal: () => boolean): void;
+  /**
+   * How a client reached main, as far as the request types it may send depend on it. See the
+   * TODO(PT-2893) in {@link RpcServer.processMessage}.
+   *
+   * - `websocket-without-origin`: a WebSocket whose handshake carried no `Origin` header, as the
+   *   extension host and the .NET data provider connect.
+   * - `renderer`: a window's renderer, over its Electron MessagePort. Extension web views can drive it.
+   * - `websocket-with-origin`: a WebSocket whose handshake carried `Origin`, as every browser page's
+   *   does, or one whose handshake nobody vouched for.
+   */
+  export type RpcClientKind = 'websocket-without-origin' | 'renderer' | 'websocket-with-origin';
   type PropagateEventMethod = <T>(source: RpcServer, eventType: string, event: T) => void;
   /** Called by an RpcServer with the method names its client's departure removed from the registry */
   type AnnounceClientDisconnectMethod = (removedMethodNames: string[]) => void;
@@ -3111,13 +3122,13 @@ declare module 'main/services/rpc-server' {
     private readonly propagateEventMethod;
     /** Called by an RpcServer once its client's methods have been removed from the registry */
     private readonly announceClientDisconnectMethod;
-    /** See the constructor's `isWebSocketWithoutOrigin` */
-    private readonly isWebSocketWithoutOrigin;
+    /** See the constructor's `clientKind` */
+    private readonly clientKind;
     /**
-     * @param isWebSocketWithoutOrigin Whether the client connected over a WebSocket whose handshake
-     *   carried no `Origin` header. Only such a client may send the request types main refuses to
-     *   browsers and renderers. Defaults to false, so a connection nobody vouched for is refused
-     *   them.
+     * @param clientKind How the client reached main. Only a WebSocket whose handshake carried no
+     *   `Origin` header may send the request types main refuses to browsers and renderers, and a
+     *   renderer may also send those refused only to browsers. Defaults to `websocket-with-origin`,
+     *   so a connection nobody vouched for is refused both.
      */
     constructor(
       name: string,
@@ -3126,7 +3137,7 @@ declare module 'main/services/rpc-server' {
       rpcMethodDetailsByMethodName: Map<string, RegisteredRpcMethodDetails>,
       rpcEventDetailsByEventName: IRpcEventRegistry,
       announceClientDisconnectMethod: AnnounceClientDisconnectMethod,
-      isWebSocketWithoutOrigin?: boolean,
+      clientKind?: RpcClientKind,
     );
     connect(): Promise<boolean>;
     disconnect(): Promise<void>;

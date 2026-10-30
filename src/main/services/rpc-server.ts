@@ -17,6 +17,7 @@ import {
 } from '@shared/models/rpc.interface';
 import {
   ANNOUNCE_PEER,
+  CATEGORY_COMMAND,
   ConnectionStatus,
   createErrorResponse,
   createRequest,
@@ -36,7 +37,7 @@ import {
   UNREGISTER_EVENT,
   UNREGISTER_METHOD,
 } from '@shared/data/rpc.model';
-import { bindClassMethods, SerializedRequestType } from '@shared/utils/util';
+import { bindClassMethods, SerializedRequestType, serializeRequestType } from '@shared/utils/util';
 import {
   SingleMethodDocumentation,
   SingleNotificationDocumentation,
@@ -67,6 +68,18 @@ export function setAppShutdownSignal(signal: () => boolean): void {
 }
 
 /**
+ * How a client reached main, as far as the request types it may send depend on it. See the
+ * TODO(PT-2893) in {@link RpcServer.processMessage}.
+ *
+ * - `websocket-without-origin`: a WebSocket whose handshake carried no `Origin` header, as the
+ *   extension host and the .NET data provider connect.
+ * - `renderer`: a window's renderer, over its Electron MessagePort. Extension web views can drive it.
+ * - `websocket-with-origin`: a WebSocket whose handshake carried `Origin`, as every browser page's
+ *   does, or one whose handshake nobody vouched for.
+ */
+export type RpcClientKind = 'websocket-without-origin' | 'renderer' | 'websocket-with-origin';
+
+/**
  * Request types main refuses from connections that could be a browser page, an extension web view
  * or a renderer. See the TODO(PT-2893) in {@link RpcServer.processMessage}.
  */
@@ -75,6 +88,17 @@ const REQUEST_TYPES_REFUSED_TO_BROWSERS_AND_RENDERERS: ReadonlySet<string> = new
   // spelled out because importing it would publish that module in `papi.d.ts`. The real-socket
   // tests send the constant itself, so they fail if the two drift apart.
   'requestRegistryTokens:getAccessToken',
+]);
+
+/**
+ * Request types main refuses from connections that could be a browser page, but serves to a
+ * renderer, whose web views need them. See the TODO(PT-2893) in {@link RpcServer.processMessage}.
+ */
+const REQUEST_TYPES_REFUSED_TO_BROWSERS: ReadonlySet<string> = new Set([
+  // Pastes the user's clipboard into whatever has focus in the app. A web page in the user's
+  // browser could otherwise poll it until the Scripture editor has focus, then read the pasted
+  // clipboard back from the saved text. See the Security Guide.
+  serializeRequestType(CATEGORY_COMMAND, 'platform.pasteIntoFocusedWindow'),
 ]);
 
 type PropagateEventMethod = <T>(source: RpcServer, eventType: string, event: T) => void;
@@ -122,14 +146,14 @@ export class RpcServer implements IRpcHandler {
   private readonly propagateEventMethod: PropagateEventMethod;
   /** Called by an RpcServer once its client's methods have been removed from the registry */
   private readonly announceClientDisconnectMethod: AnnounceClientDisconnectMethod;
-  /** See the constructor's `isWebSocketWithoutOrigin` */
-  private readonly isWebSocketWithoutOrigin: boolean;
+  /** See the constructor's `clientKind` */
+  private readonly clientKind: RpcClientKind;
 
   /**
-   * @param isWebSocketWithoutOrigin Whether the client connected over a WebSocket whose handshake
-   *   carried no `Origin` header. Only such a client may send the request types main refuses to
-   *   browsers and renderers. Defaults to false, so a connection nobody vouched for is refused
-   *   them.
+   * @param clientKind How the client reached main. Only a WebSocket whose handshake carried no
+   *   `Origin` header may send the request types main refuses to browsers and renderers, and a
+   *   renderer may also send those refused only to browsers. Defaults to `websocket-with-origin`,
+   *   so a connection nobody vouched for is refused both.
    */
   constructor(
     name: string,
@@ -138,14 +162,14 @@ export class RpcServer implements IRpcHandler {
     rpcMethodDetailsByMethodName: Map<string, RegisteredRpcMethodDetails>,
     rpcEventDetailsByEventName: IRpcEventRegistry,
     announceClientDisconnectMethod: AnnounceClientDisconnectMethod,
-    isWebSocketWithoutOrigin = false,
+    clientKind: RpcClientKind = 'websocket-with-origin',
   ) {
     bindClassMethods.call(this);
     this.name = name;
     this.ws = webSocket;
     this.propagateEventMethod = propagateEventMethod;
     this.announceClientDisconnectMethod = announceClientDisconnectMethod;
-    this.isWebSocketWithoutOrigin = isWebSocketWithoutOrigin;
+    this.clientKind = clientKind;
 
     // Uncomment the following to log every message sent
     /*
@@ -419,10 +443,13 @@ export class RpcServer implements IRpcHandler {
           // so this keeps browser pages and extension web views from minting Registry tokens. It
           // trusts a header instead of identifying the caller, so any local process that leaves
           // `Origin` out still gets through. Checked before the event branch too, so the request
-          // type can't be sent on as an event either.
+          // type can't be sent on as an event either. The request types refused only to browsers
+          // are ones a renderer's web views need and may have.
           if (
-            !this.isWebSocketWithoutOrigin &&
-            REQUEST_TYPES_REFUSED_TO_BROWSERS_AND_RENDERERS.has(request.method)
+            (this.clientKind !== 'websocket-without-origin' &&
+              REQUEST_TYPES_REFUSED_TO_BROWSERS_AND_RENDERERS.has(request.method)) ||
+            (this.clientKind === 'websocket-with-origin' &&
+              REQUEST_TYPES_REFUSED_TO_BROWSERS.has(request.method))
           ) {
             logger.warn(`Refused '${request.method}' from ${this.describePeer()}`);
             if (request.id)

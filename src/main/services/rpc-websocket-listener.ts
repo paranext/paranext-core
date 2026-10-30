@@ -39,7 +39,7 @@ import { WebSocketServer } from 'ws';
 import { logger } from '@shared/services/logger.service';
 import { JSONRPCErrorCode, JSONRPCResponse } from 'json-rpc-2.0';
 import { bindClassMethods, SerializedRequestType } from '@shared/utils/util';
-import { RpcServer } from './rpc-server';
+import { RpcClientKind, RpcServer } from './rpc-server';
 // RpcEventRegistry was extracted to its own file to satisfy max-classes-per-file
 import { RpcEventRegistry } from './rpc-event-registry';
 
@@ -366,7 +366,7 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar, IRpcLocalClien
         `The PAPI network is not accepting clients (status ${this.connectionStatus})`,
       );
     // Only renderers connect this way, and a web view can drive its renderer's connection
-    this.serveClient(socket, name, false);
+    this.serveClient(socket, name, 'renderer');
     logger.info(`PAPI client ${name} connected over a local port`);
   }
 
@@ -638,18 +638,16 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar, IRpcLocalClien
     this.serveClient(
       webSocket,
       socketId,
-      !!upgradeRequest && upgradeRequest.headers.origin === undefined,
+      upgradeRequest && upgradeRequest.headers.origin === undefined
+        ? 'websocket-without-origin'
+        : 'websocket-with-origin',
     );
     // Note: `webSocket.url` is always undefined for server-side sockets, so log the socket id
     logger.info(`Websocket client ${socketId} connected`);
   }
 
   /** Attach an `RpcServer` to a socket and track it until the socket closes */
-  private serveClient(
-    socket: ServerSocketLike,
-    name: string,
-    isWebSocketWithoutOrigin: boolean,
-  ): void {
+  private serveClient(socket: ServerSocketLike, name: string, clientKind: RpcClientKind): void {
     const rpcServer = new RpcServer(
       name,
       socket,
@@ -657,7 +655,7 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar, IRpcLocalClien
       this.rpcMethodDetailsByMethodName,
       this.rpcEventDetailsByEventName,
       this.announceClientDisconnect,
-      isWebSocketWithoutOrigin,
+      clientKind,
     );
     rpcServer.connect();
     this.rpcServerBySocket.set(socket, rpcServer);
