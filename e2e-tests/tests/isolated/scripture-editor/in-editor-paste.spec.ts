@@ -1,19 +1,25 @@
 /**
  * Pasting in Simple mode's editable view — the paragraph-structure preset, markers hidden,
- * structure locked — through the host's native paste (`platform.pasteIntoFocusedWindow`), whose
- * `paste` event carries the editor's own copy format. Judged by the book file on disk:
+ * structure locked — through the editor's own paste, which reads the clipboard with
+ * `navigator.clipboard.read()`. That read returns no custom clipboard format, so a copy's node copy
+ * travels in an attribute of its html (`scripture-editors`' `docs/clipboard-semantics.md`, S5). The
+ * tests of the editor's own repo model the read; this spec goes through the real one. Judged by the
+ * book file on disk:
  *
  * 1. **Ctrl+V.** Matthew 3:13's text across its footnote, copied and pasted into 3:14, saves exactly
  *    the copied USFM: the footnote comes back as it was, with no closers added.
  * 2. **The Edit flyout's Paste, and the right-click menu's Paste.** The same copy, pasted from each
- *    menu, saves the same bytes, and the editor has the focus afterwards. A menu that took focus
- *    back after the paste was asked for would leave the paste on the menu and nothing saved.
- * 3. **A copy from the footnotes pane's row editor**, which shows markers as Standard view does,
+ *    menu, saves the same bytes, in the editor.
+ * 3. **A note's attributes through the real read.** A copy across a note with a category shows the
+ *    read returning the html's attribute and no custom format, and pastes the note back with its
+ *    `\cat`. The same copy with the attribute taken out of the clipboard's html loses the `\cat`,
+ *    which shows the attribute is what carried it.
+ * 4. **A copy from the footnotes pane's row editor**, which shows markers as Standard view does,
  *    pasted into the text. The editor's own format of a Standard-view copy is not taken in a view
- *    that hides markers, so the paste reads the copy's text, which is its USFM: it goes in as text
- *    without its `\` (the view cannot store one), with the notice that says so — no note and no
- *    marker of the row editor's comes with it.
- * 4. **Ctrl+V pressed while the next chapter is loading lands nowhere.** The keys are recorded inside
+ *    that hides markers, so the paste reads the copy's text, which is its USFM marked as such: it
+ *    goes in as text without its marker tokens, with no notice — no note and no marker of the row
+ *    editor's comes with it.
+ * 5. **Ctrl+V pressed while the next chapter is loading lands nowhere.** The keys are recorded inside
  *    the web view: every paste the chapter being left showed is what it saved, and at least one
  *    press while it was showing was held off. The new chapter holds no more pastes than were
  *    pressed once it had arrived.
@@ -27,7 +33,7 @@
  * one Electron instance, in order.
  *
  * Runs against an isolated project root: `npm run test:e2e:isolated
- * tests/isolated/scripture-editor/native-paste.spec.ts`.
+ * tests/isolated/scripture-editor/in-editor-paste.spec.ts`.
  */
 import fs from 'fs';
 import type { Locator } from '@playwright/test';
@@ -49,6 +55,7 @@ import {
   makeSampleProjectEditable,
   navigateToolbarBcv,
   openEditableScriptureEditorForProject,
+  rewriteSampleProjectChapterUsfm,
   SAMPLE_WEB_PROJECT_ID,
   sendCommandWithId,
 } from '../../../fixtures/scripture-editor-helpers';
@@ -67,7 +74,7 @@ const WEBSOCKET_PORT = 8876;
 const MATTHEW_3_RENDERED_TEXT = 'with whom I am well pleased';
 
 /** Written to the OS clipboard before a copy, so the poll measures the copy's own text. */
-const CLIPBOARD_SENTINEL = 'NATIVEPASTESENTINELNOTCOPIED';
+const CLIPBOARD_SENTINEL = 'INEDITORPASTESENTINELNOTCOPIED';
 
 /** The structure-lock toggle's accessible name; `aria-pressed` is whether structure is locked. */
 const STRUCTURE_LOCK_BUTTON_NAME = 'Toggle structure protection';
@@ -85,16 +92,31 @@ const CTRL_V_POINT = 'saying, |“I need';
 const EDIT_MENU_POINT = 'baptized by |you, and you come';
 const CONTEXT_MENU_POINT = 'and you come |to me?';
 
-// Step 3. The 3:11 footnote's row, copied from inside its `\fr` text across the `\ft` marker into
+// Step 3. A note with a category, written into 3:6 for this spec, since the sample text has none.
+const CATEGORY_NOTE_FOLLOWS = 'They were baptized by him';
+const CATEGORY_MARKUP = '\\cat TN\\cat*';
+const CATEGORY_NOTE = `\\f + ${CATEGORY_MARKUP}\\fr 3:6 \\ft a categorized note\\f*`;
+/** Text of the copied range ahead of its note, to count pastes whatever became of the note. */
+const CATEGORY_COPIED_TEXT = 'were baptized by him';
+const CATEGORY_COPY_FROM = 'They |were baptized';
+const CATEGORY_COPY_TO = 'in the |Jordan, confessing';
+/** The copied range's USFM, whitespace-normalized. */
+const CATEGORY_COPIED_USFM = `were baptized by him${CATEGORY_NOTE} in the `;
+const CATEGORY_PASTE_POINT = 'Therefore |produce fruit';
+const CATEGORY_LOST_PASTE_POINT = 'and cast |into the fire';
+/** The html attribute that carries the editor's node copy. */
+const NODE_COPY_HTML_ATTRIBUTE = 'data-platform-editor-node-copy';
+
+// Step 4. The 3:11 footnote's row, copied from inside its `\fr` text across the `\ft` marker into
 // its `\ft` text, and pasted into 3:16.
 const PANE_NOTE_TEXT = 'and with fire';
 const PANE_COPY_FROM = '3:1|1';
 const PANE_COPY_TO = 'TR and |NU add';
 const PANE_PASTE_POINT = 'Spirit of God |descending';
-/** What the paste saves at that point: the copied USFM (`1 \ft TR and `) without its `\`. */
-const PANE_PASTED_TEXT = '1 ft TR and ';
+/** What the paste saves at that point: the copied USFM (`1 \ft TR and `) without its marker. */
+const PANE_PASTED_TEXT = '1 TR and ';
 
-// Step 4. Pasted while Matthew moves on a chapter.
+// Step 5. Pasted while Matthew moves on a chapter.
 const LOAD_PASTE_POINT = 'with whom I am |well pleased';
 /** Pasted while the chapter changes. Matthew's own text has no `qzq` in it. */
 const LOAD_PASTE_TOKEN = 'qzq';
@@ -142,8 +164,8 @@ function isEditorFocused(editorInput: Locator): Promise<boolean> {
   );
 }
 
-test.describe('native paste in Simple mode’s paragraph-structure view', () => {
-  test('a copied footnote pastes back exactly from Ctrl+V and both menus, a pane copy pastes as text, and a paste during a chapter load lands nowhere', async ({
+test.describe('the editor’s own paste in Simple mode’s paragraph-structure view', () => {
+  test('a copied footnote pastes back exactly from Ctrl+V and both menus, a note’s category survives the real clipboard read, a pane copy pastes as text, and a paste during a chapter load lands nowhere', async ({
     mainPage,
     electronApp,
   }) => {
@@ -153,6 +175,10 @@ test.describe('native paste in Simple mode’s paragraph-structure view', () => 
     // Simple mode's layout has no Home tab; this also suppresses the onboarding tour.
     await waitForAppReady(mainPage);
     await makeSampleProjectEditable();
+    await rewriteSampleProjectChapterUsfm({ book: 'MAT', chapterNum: 3, verseNum: 1 }, (usfm) => {
+      expect(countOf(usfm, CATEGORY_NOTE_FOLLOWS)).toBe(1);
+      return usfm.replace(CATEGORY_NOTE_FOLLOWS, `${CATEGORY_NOTE_FOLLOWS}${CATEGORY_NOTE}`);
+    });
 
     const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
     const editorFrame = mainPage.frameLocator(`iframe[data-web-view-id="${editorId}"]`);
@@ -182,9 +208,13 @@ test.describe('native paste in Simple mode’s paragraph-structure view', () => 
 
     /**
      * Runs `paste` with the copy on the clipboard and the caret at `point`, waits for the save, and
-     * checks that the book gained exactly the copied USFM there.
+     * checks that the book gained exactly `copiedUsfm` there.
      */
-    const expectCopyPastedAt = async (point: string, paste: () => Promise<void>) => {
+    const expectPastedAt = async (
+      point: string,
+      copiedUsfm: string,
+      paste: () => Promise<void>,
+    ) => {
       const before = fs.readFileSync(bookPath);
       const normalizedBefore = readNormalizedBook();
       expect(countOf(normalizedBefore, pointWith(point))).toBe(1);
@@ -196,12 +226,12 @@ test.describe('native paste in Simple mode’s paragraph-structure view', () => 
       expect(afterPaste, 'the paste never saved to disk').toBeDefined();
 
       const normalizedAfter = readNormalizedBook();
-      const expected = normalizedBefore.replace(pointWith(point), pointWith(point, COPIED_USFM));
+      const expected = normalizedBefore.replace(pointWith(point), pointWith(point, copiedUsfm));
       if (normalizedAfter !== expected) {
-        const at = normalizedAfter.indexOf('\\v 14 ');
+        const at = normalizedAfter.indexOf(pointWith(point).split(' ')[0]);
         test.info().annotations.push({
-          type: 'saved 3:14',
-          description: JSON.stringify(normalizedAfter.slice(at, at + 600)),
+          type: `saved near ${point}`,
+          description: JSON.stringify(normalizedAfter.slice(Math.max(0, at - 300), at + 300)),
         });
       }
       expect(normalizedAfter, 'the book should gain exactly the copied USFM').toBe(expected);
@@ -231,12 +261,12 @@ test.describe('native paste in Simple mode’s paragraph-structure view', () => 
         })
         .not.toBe(CLIPBOARD_SENTINEL);
 
-      await expectCopyPastedAt(CTRL_V_POINT, () => editorInput.press(PASTE_KEY));
+      await expectPastedAt(CTRL_V_POINT, COPIED_USFM, () => editorInput.press(PASTE_KEY));
     });
 
     await test.step('the Edit flyout’s Paste lands in the editor, which keeps the focus', async () => {
       const hamburger = editorFrame.locator(EDITOR_HAMBURGER_SELECTOR);
-      await expectCopyPastedAt(EDIT_MENU_POINT, async () => {
+      await expectPastedAt(EDIT_MENU_POINT, COPIED_USFM, async () => {
         await expect(hamburger).toBeVisible({ timeout: 15_000 });
         await hamburger.click();
         await editorFrame.getByRole('menuitem', { name: /^Edit/ }).click();
@@ -253,7 +283,7 @@ test.describe('native paste in Simple mode’s paragraph-structure view', () => 
 
     await test.step('the right-click menu’s Paste lands in the editor, which keeps the focus', async () => {
       const contextMenu = editorFrame.locator('.typeahead-popover.auto-embed-menu');
-      await expectCopyPastedAt(CONTEXT_MENU_POINT, async () => {
+      await expectPastedAt(CONTEXT_MENU_POINT, COPIED_USFM, async () => {
         // Right-clicked at the caret, on the left edge of the character after it, so the click
         // leaves the caret where the paste belongs.
         const at = await editorInput.evaluate((root) => {
@@ -280,6 +310,76 @@ test.describe('native paste in Simple mode’s paragraph-structure view', () => 
           message: 'the editor should have the focus after the right-click menu’s Paste',
         })
         .toBe(true);
+    });
+
+    await test.step('a note’s category survives Ctrl+V through the real clipboard read', async () => {
+      expect(
+        countOf(readNormalizedBook(), `They ${CATEGORY_COPIED_USFM}Jordan, confessing`),
+        'the copied range should read as CATEGORY_COPIED_USFM in the book',
+      ).toBe(1);
+      const categoriesBefore = countOf(readNormalizedBook(), CATEGORY_MARKUP);
+      const copiesBefore = countOf(readNormalizedBook(), CATEGORY_COPIED_TEXT);
+
+      await electronApp.evaluate(
+        ({ clipboard }, sentinel) => clipboard.writeText(sentinel),
+        CLIPBOARD_SENTINEL,
+      );
+      await selectInEditor(editorInput, CATEGORY_COPY_FROM, CATEGORY_COPY_TO);
+      await editorInput.press(COPY_KEY);
+      await expect
+        .poll(() => electronApp.evaluate(({ clipboard }) => clipboard.readText()), {
+          message: 'the copy never reached the OS clipboard',
+          timeout: 15_000,
+        })
+        .not.toBe(CLIPBOARD_SENTINEL);
+
+      // What the editor's paste will get: the same read it makes, in its own frame.
+      const read = await editorInput.evaluate(async (root, attribute) => {
+        const items = await root.ownerDocument.defaultView?.navigator.clipboard.read();
+        const item = items?.[0];
+        if (!item) throw new Error('The clipboard read returned nothing');
+        const html = await (await item.getType('text/html')).text();
+        const parsed = new DOMParser().parseFromString(html, 'text/html');
+        return {
+          types: [...item.types],
+          nodeCopy: parsed.querySelector(`[${attribute}]`)?.getAttribute(attribute) ?? undefined,
+        };
+      }, NODE_COPY_HTML_ATTRIBUTE);
+      test.info().annotations.push({ type: 'read types', description: read.types.join(', ') });
+      expect(read.types, 'the read returns no custom format').not.toContain(
+        'application/x-lexical-editor',
+      );
+      expect(read.nodeCopy, 'the read keeps the html’s attribute').toBeDefined();
+      expect(read.nodeCopy, 'the attribute holds the note’s category').toContain('"TN"');
+
+      await expectPastedAt(CATEGORY_PASTE_POINT, CATEGORY_COPIED_USFM, () =>
+        editorInput.press(PASTE_KEY),
+      );
+      expect(countOf(readNormalizedBook(), CATEGORY_MARKUP)).toBe(categoriesBefore + 1);
+
+      // The control: the same copy with only the attribute taken out, as another program's html.
+      await electronApp.evaluate(
+        ({ clipboard }, attribute) =>
+          clipboard.write({
+            text: clipboard.readText(),
+            html: clipboard.readHTML().replace(new RegExp(`\\s${attribute}="[^"]*"`), ''),
+          }),
+        NODE_COPY_HTML_ATTRIBUTE,
+      );
+      const before = fs.readFileSync(bookPath);
+      await selectInEditor(editorInput, CATEGORY_LOST_PASTE_POINT);
+      await editorInput.press(PASTE_KEY);
+      const afterControl = await waitForSaveToSettle(mainPage, bookPath, before);
+      expect(afterControl, 'the control paste never saved to disk').toBeDefined();
+      const normalizedAfter = readNormalizedBook();
+      expect(
+        countOf(normalizedAfter, CATEGORY_COPIED_TEXT),
+        'the control paste should have gone in',
+      ).toBe(copiesBefore + 2);
+      expect(
+        countOf(normalizedAfter, CATEGORY_MARKUP),
+        'without the attribute the html cannot carry the category',
+      ).toBe(categoriesBefore + 1);
     });
 
     await test.step('a copy from the footnotes pane’s row editor pastes into the text as the view shows it', async () => {
@@ -342,15 +442,13 @@ test.describe('native paste in Simple mode’s paragraph-structure view', () => 
       expect(pasted, '3:16 should hold the paste at the paste point').not.toBeNull();
       if (!pasted) return;
       const inserted = pasted[1];
-      expect(inserted, "the copy's USFM should go in as text, without its `\\`").toBe(
+      expect(inserted, "the copy's USFM should go in as text, without its marker").toBe(
         PANE_PASTED_TEXT,
       );
-      await expect
-        .poll(() => recordedToasts(mainPage), {
-          message: 'the paste should tell the user that \\ was removed',
-          timeout: 20_000,
-        })
-        .toEqual(expect.arrayContaining([expect.stringContaining(REMOVED_FROM_PASTE_NOTICE)]));
+      expect(
+        await recordedToasts(mainPage),
+        'removing a marker is not news: the view never asked the user to type one',
+      ).not.toEqual(expect.arrayContaining([expect.stringContaining(REMOVED_FROM_PASTE_NOTICE)]));
       // Nothing else changed: taking the paste back out leaves the book as it was.
       expect(normalizedAfter.replace(pasted[0], site)).toBe(normalizedBefore);
     });
