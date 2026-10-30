@@ -873,7 +873,10 @@ describe('BookChapterControl additional books', () => {
 
     // Quick navigation spans the project's books only, so the current book offers no next chapter.
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Next chapter' })).toBeDisabled(),
+      expect(screen.getByRole('button', { name: 'Next chapter' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      ),
     );
 
     // Searching spans the same books. A fragment several books match keeps the list rendered.
@@ -945,7 +948,10 @@ describe('BookChapterControl additional books', () => {
     // MAT 28 is the last chapter of the project's last book, so stepping forward from here would
     // have to leave the project — which the collapsed list does not offer.
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Next chapter' })).toBeDisabled(),
+      expect(screen.getByRole('button', { name: 'Next chapter' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      ),
     );
   });
 
@@ -2127,6 +2133,105 @@ describe('BookChapterControl compact mode stays open', () => {
       await user.keyboard('{Escape}');
       await waitFor(() => expect(isModalOpen()).toBe(false));
     });
+  });
+});
+
+describe('BookChapterControl quick-nav arrows at the edge of the canon', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  type Ref = { book: string; chapterNum: number; verseNum: number };
+
+  const isOpen = () => getTrigger().getAttribute('aria-expanded') === 'true';
+  const getArrow = (name: string) => screen.getByRole('button', { name });
+
+  // The last book of the offered list is the edge a forward step runs into.
+  const LAST_BOOK_LIST = ['MAT'];
+  const getLastBookList = () => LAST_BOOK_LIST;
+
+  function ControlledControl({
+    initial,
+    onSubmit,
+    limitBooks,
+  }: {
+    initial: Ref;
+    onSubmit: () => void;
+    limitBooks?: boolean;
+  }) {
+    const [scrRef, setScrRef] = useState(initial);
+    return (
+      <BookChapterControl
+        scrRef={scrRef}
+        getActiveBookIds={limitBooks ? getLastBookList : undefined}
+        handleSubmit={(newRef) => {
+          onSubmit();
+          setScrRef(newRef);
+        }}
+      />
+    );
+  }
+
+  async function openAt(initial: Ref, limitBooks = false) {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onSubmit = vi.fn();
+    render(<ControlledControl initial={initial} onSubmit={onSubmit} limitBooks={limitBooks} />);
+    await user.click(getTrigger());
+    await waitFor(() => expect(document.querySelector('[cmdk-input]')).not.toBeNull());
+    return { user, onSubmit };
+  }
+
+  async function stepOntoEdge(initial: Ref, name: string, limitBooks = false) {
+    const { user, onSubmit } = await openAt(initial, limitBooks);
+    act(() => {
+      getArrow(name).focus();
+    });
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(getArrow(name)).toHaveAttribute('aria-disabled', 'true'));
+    return { user, onSubmit };
+  }
+
+  test('stepping back to the first chapter keeps focus on the Previous chapter arrow', async () => {
+    await stepOntoEdge({ book: 'GEN', chapterNum: 2, verseNum: 1 }, 'Previous chapter');
+    expect(document.activeElement).toBe(getArrow('Previous chapter'));
+  });
+
+  test('Escape then closes the compact picker', async () => {
+    const { user } = await stepOntoEdge(
+      { book: 'GEN', chapterNum: 2, verseNum: 1 },
+      'Previous chapter',
+    );
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(isOpen()).toBe(false));
+  });
+
+  test('stepping forward to the last chapter of the last book keeps focus on the Next chapter arrow', async () => {
+    const { user } = await stepOntoEdge(
+      { book: 'MAT', chapterNum: 27, verseNum: 1 },
+      'Next chapter',
+      true,
+    );
+    expect(document.activeElement).toBe(getArrow('Next chapter'));
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(isOpen()).toBe(false));
+  });
+
+  test('a click on an aria-disabled arrow does nothing', async () => {
+    const { user, onSubmit } = await openAt({ book: 'GEN', chapterNum: 1, verseNum: 1 });
+    expect(getArrow('Previous chapter')).toHaveAttribute('aria-disabled', 'true');
+    await user.click(getArrow('Previous chapter'));
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.queryAllByRole('option').length).toBeGreaterThan(0);
+  });
+
+  test('Enter on an aria-disabled arrow does nothing', async () => {
+    const { user, onSubmit } = await openAt({ book: 'GEN', chapterNum: 1, verseNum: 1 });
+    act(() => {
+      getArrow('Previous chapter').focus();
+    });
+    await user.keyboard('{Enter}');
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.queryAllByRole('option').length).toBeGreaterThan(0);
   });
 });
 
