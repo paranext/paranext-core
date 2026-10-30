@@ -22,7 +22,7 @@ import {
   type SessionSyncBoundary,
 } from '@main/scheduled-session-sync.util';
 import type { SettingTypes } from 'papi-shared-types';
-import { AsyncVariable, getErrorMessage } from 'platform-bible-utils';
+import { AsyncVariable, getErrorMessage, wait } from 'platform-bible-utils';
 
 /**
  * Behaviour-driving outcome of a bounded shutdown sync. The extension reports its own result, so
@@ -79,8 +79,9 @@ type BoundedSyncSettlement<T> =
  *
  * In Simple mode: cancels any in-progress sync, then — if the first-run sync consent gate allows it
  * (see {@link getAutomaticSyncConsent}) — S/Rs the projects of all open writable Scripture Editors
- * across every window. All errors are swallowed — extension may not be installed, or may fail —
- * shutdown must never be permanently blocked.
+ * across every window, once the cancelled sync has stopped (bounded by
+ * {@link CANCELLED_SYNC_STOP_WAIT_MS}). All errors are swallowed — extension may not be installed,
+ * or may fail — shutdown must never be permanently blocked.
  *
  * In Power mode: S/Rs the projects scheduled "On startup/shutdown" via the S/R extension's
  * `runScheduledSessionSync` command. Same error-swallowing contract — if the command isn't
@@ -444,8 +445,82 @@ async function drainInFlightWindowCloseSyncs(): Promise<void> {
   }
 }
 
+/**
+ * How long a quit waits for a sync it cancelled to stop before sending its own. Cancelling only
+ * signals the running sync: until it has unwound it still holds the Send/Receive lock, and a quit
+ * sync sent meanwhile is refused as already in progress. Also bounds the read that tells whether a
+ * sync was running at all. A few seconds next to the {@link AUTO_SYNC_MAX_DURATION_MS} the quit sync
+ * itself may take, so it adds at most this much (twice in the pathological case of a read that
+ * hangs and then a sync that never stops) to the longest quit there already is.
+ */
+export const CANCELLED_SYNC_STOP_WAIT_MS = 5_000;
+
+/** How often a quit asks whether the sync it cancelled has stopped yet */
+export const CANCELLED_SYNC_POLL_INTERVAL_MS = 250;
+
+/**
+ * Whether the Send/Receive extension reports a sync in progress. Never throws and never takes
+ * longer than `timeoutMs`: an activity that cannot be read in time — the extension is missing, or
+ * Paratext 10 is not running — counts as no sync, because there is then nothing a quit could wait
+ * for.
+ */
+async function isSyncInProgress(timeoutMs: number): Promise<boolean> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<false>((resolve) => {
+    timeout = setTimeout(() => resolve(false), timeoutMs);
+  });
+  try {
+    return await Promise.race([
+      networkService
+        .requestNoRetry<
+          [],
+          { isSyncing: boolean } | undefined
+        >(serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.getSyncActivity'))
+        .then((activity) => activity?.isSyncing === true),
+      timedOut,
+    ]);
+  } catch (e) {
+    logger.debug(`Could not read the sync activity at quit: ${getErrorMessage(e)}`);
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * Waits until the sync just cancelled has stopped, or {@link CANCELLED_SYNC_STOP_WAIT_MS} has passed
+ * — then the quit sync goes ahead anyway, as it would without this wait, and may be refused.
+ *
+ * Nothing can start a new run during this wait: the sync queue was dropped before the cancel (see
+ * {@link dropSyncQueue}), so once the cancelled run stops, the lock is free for the quit sync.
+ */
+async function waitForCancelledSyncToStop(): Promise<void> {
+  let isWaitOver = false;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const budgetSpent = new Promise<'budgetSpent'>((resolve) => {
+    timeout = setTimeout(() => resolve('budgetSpent'), CANCELLED_SYNC_STOP_WAIT_MS);
+  });
+  const pollUntilStopped = async (): Promise<'stopped' | 'budgetSpent'> => {
+    if (isWaitOver) return 'budgetSpent';
+    if (!(await isSyncInProgress(CANCELLED_SYNC_STOP_WAIT_MS))) return 'stopped';
+    await wait(CANCELLED_SYNC_POLL_INTERVAL_MS);
+    return pollUntilStopped();
+  };
+  try {
+    if ((await Promise.race([pollUntilStopped(), budgetSpent])) === 'budgetSpent')
+      logger.warn(
+        `The cancelled sync did not stop within ${CANCELLED_SYNC_STOP_WAIT_MS} ms; sending the shutdown sync anyway, which may be refused as already in progress`,
+      );
+  } finally {
+    isWaitOver = true;
+    clearTimeout(timeout);
+  }
+}
+
 async function performSimpleModeShutdownSync(): Promise<void> {
   // Cancel any in-progress sync first (e.g. a first-sync on startup), then S/R the active project.
+  // Read before the cancel, so the quit only waits when there was something to cancel.
+  const wasSyncing = await isSyncInProgress(CANCELLED_SYNC_STOP_WAIT_MS);
   try {
     await networkService.requestNoRetry(
       serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.cancelSync'),
@@ -521,6 +596,9 @@ async function performSimpleModeShutdownSync(): Promise<void> {
     logShutdownSyncOutcome(windowIdsMissingFromSync.length > 0 ? 'partial' : 'skipped');
     return;
   }
+
+  // Only now, with a sync about to be sent: a quit that sends nothing has no reason to wait.
+  if (wasSyncing) await waitForCancelledSyncToStop();
 
   logger.info(`Syncing projects on shutdown: ${projectIds.join(', ')}`);
   // `sendReceiveProjects` takes the whole list in one call, so every open editor's project goes out
