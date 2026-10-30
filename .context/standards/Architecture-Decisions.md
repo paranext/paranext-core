@@ -11025,16 +11025,23 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   as before. A compact picker whose tab becomes hidden stays open on purpose (a UX decision); it
   closes through its trigger once the tab is visible again, or on Escape with focus in it. The rule
   lives in the component, so every non-modal instance gets it.
-- **Overlay focus restore:** the renderer's overlay service returns focus to the pane that opened an
-  overlay only while the user has not moved it. It skips the restore when the main document's active
-  element is a web view iframe or any focusable element outside the overlay service's own surfaces
-  (the overlay host, modal dialog, popover, command palette and context menu content; not the
-  generic popper wrapper that shell menus share), or when the window service reports focus on a
-  web view or tab other than both the saved one and the requesting web view. The decision runs one
-  task after the overlay resolves, because a press in the parent document dismisses a Radix overlay
-  before the browser moves focus to what was clicked. Escape, picking an item and a dismissal with
-  focus on `body` still restore. The check is wider than the shared wrappers' iframe-only test
-  above.
+- **Overlay focus restore:** the renderer's overlay service decides whether focus returns to the
+  opener from how the overlay closed, synchronously when it settles, without reading where focus
+  currently is (apart from the one containment check below). For the command palette (passive
+  included), the context menu (submenus included) and the popover: picking an item (a resolve
+  carrying a result) returns focus; Escape (reported by the component, or the app-window Escape
+  signal), the opener's own dismiss (`dismissPopover`, `dismissCommandPalette`) and app
+  deactivation (parent window blur while `document.hasFocus()` is false) return focus only if the
+  focused element is inside that overlay's own content at that moment; a click elsewhere, a pane
+  or tab switch, a parent blur while the app keeps focus (a click into a pane), a replacement, a
+  timeout and a scroll never do. Modal dialogs return focus on every answer: any resolve, and any
+  reject other than the ABORTED one used for replacement and shutdown. The opener is the
+  requesting web view when its iframe exists; otherwise the last focused tab (modal dialogs, read
+  synchronously from the window service shard) or the focus subject saved at open, and a target
+  that no longer exists is skipped. Closes that qualify are marked through
+  `markOverlayFocusReturnIfFocusInside` (`overlay-focus-return.util.ts`) before the overlay is
+  resolved. Rejected alternative: deferring the decision one task and guessing from the active
+  element, which could not tell a click elsewhere from Escape.
 - **Source:** PT-2989 (PR #2963); related PT-2205, PT-4627; prototype PR #2887.
 
 ## adr-unresolvable-spdx-operators-drop-the-dependency: A declaration carrying an SPDX operator this pipeline cannot resolve drops the dependency
