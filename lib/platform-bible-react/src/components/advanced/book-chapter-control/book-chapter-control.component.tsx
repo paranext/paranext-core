@@ -171,6 +171,9 @@ export function BookChapterControl({
   // own `onOpenToggle` handler runs — `composeEventHandlers` skips `onOpenToggle` when
   // `defaultPrevented` is true, so the popover stays closed instead of toggling back open.
   const justClosedByTriggerRef = useRef(false);
+  // Reference to the popover content, so Escape handling can tell whether focus is inside it
+  // eslint-disable-next-line no-null/no-null
+  const contentRef = useRef<HTMLDivElement | null>(null);
   // Reference to the Command component
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const commandRef = useRef<HTMLDivElement>(undefined!);
@@ -461,6 +464,9 @@ export function BookChapterControl({
         setInputValue('');
         setHasPreviewGridKeyboardControl(false);
         setIsHeaderControlFocused(false);
+        // A fresh open shows the full picker. Compact mode normally ends when the search input takes
+        // focus, but a window without focus gives that input no focus event to end it with.
+        setIsCommandListHidden(false);
         // Seed, don't force: the list opens expanded when the current book is outside the project so
         // that book is visible, and the toggle still collapses from there.
         setIsShowingMoreBooks(isCurrentBookOutsideProject);
@@ -1351,6 +1357,7 @@ export function BookChapterControl({
         // window-blur focus return both follow the link), so a given id is applied to both, and
         // only when one is given.
         {...(id !== undefined ? { id } : {})}
+        ref={contentRef}
         forceMount
         className="tw:w-[280px] tw:p-0"
         align={align}
@@ -1397,6 +1404,26 @@ export function BookChapterControl({
             justClosedByTriggerRef.current = true;
             handleOpenChange(false);
           }
+        }}
+        // Compact mode (a quick-nav arrow hid the book list) is a stepper the user keeps open while
+        // working elsewhere, so only a deliberate close dismisses it: a click on the trigger
+        // (closed above, before this runs) or Escape with focus in the picker or on the trigger.
+        // Everything Radix would treat as an outside interaction — a press elsewhere in the
+        // document, focus leaving, a window blur's synthetic press — is prevented here. Only the
+        // dismissal is prevented: the press itself still reaches whatever the user clicked.
+        onInteractOutside={(event) => {
+          if (isCommandOpen && isCommandListHidden) event.preventDefault();
+        }}
+        // Radix listens for Escape on the whole document, so compact mode keeps it from closing the
+        // picker unless focus is in the picker or on the trigger. Escape pressed while focus is in
+        // another frame never reaches this document.
+        onEscapeKeyDown={(event) => {
+          if (!isCommandOpen || !isCommandListHidden) return;
+          const { target } = event;
+          const isFocusInPicker =
+            target instanceof Node &&
+            (!!contentRef.current?.contains(target) || !!triggerRef.current?.contains(target));
+          if (!isFocusInPicker) event.preventDefault();
         }}
         onCloseAutoFocus={onCloseAutoFocus}
       >
