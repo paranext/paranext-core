@@ -66,6 +66,7 @@ import { getInternetBlockedMessageKey } from './internet-block-notification.util
  * component.
  */
 export const GET_RESOURCES_STRING_KEYS = Object.freeze([
+  '%getResources_waitingForSync_label%',
   '%data_loading_error_internetAccess_disabled_3%',
   '%general_error_title%',
   '%resources_action%',
@@ -177,12 +178,17 @@ const getActionButtonContent = (
 const getActionContent = (
   resource: DblResourceData,
   idsBeingHandled: string[],
+  idsWaitingForSync: string[],
+  waitingForSyncText: string,
   getText: string,
   updateText: string,
   installedText: string,
   onInstallOrRemoveResource: (dblEntryUid: string, action: ResourceAction) => void,
 ) => {
   const isBeingHandled = idsBeingHandled.includes(resource.dblEntryUid);
+  if (isBeingHandled && idsWaitingForSync.includes(resource.dblEntryUid)) {
+    return <Label className="tw:my-2 tw:flex tw:h-6 tw:items-center">{waitingForSyncText}</Label>;
+  }
   if (isBeingHandled) {
     return (
       <Button className="tw:bg-muted" variant="ghost">
@@ -325,6 +331,11 @@ export type GetResourcesProps = {
   areDownloadsUnavailable?: boolean;
   /** DBL entry UIDs that are currently installing/removing (shown with a spinner). */
   idsBeingHandled?: string[];
+  /**
+   * DBL entry UIDs from `idsBeingHandled` that the running sync is updating: the action is waiting
+   * for the sync to release them, so these rows say so instead of showing a spinner.
+   */
+  idsWaitingForSync?: string[];
   /** Currently selected resource type filter values. */
   selectedTypes?: string[];
   /** Currently selected language filter values. */
@@ -364,6 +375,7 @@ export function GetResources({
   onRetryResources,
   areDownloadsUnavailable = false,
   idsBeingHandled = [],
+  idsWaitingForSync = emptySelection,
   selectedTypes = emptySelection,
   selectedLanguages = emptySelection,
   onSelectedTypesChange = () => {},
@@ -385,6 +397,7 @@ export function GetResources({
   const fullNameText: string = getLocalizedString('%resources_fullName%');
   const getText: string = getLocalizedString('%resources_get%');
   const installedText: string = getLocalizedString('%resources_installed%');
+  const waitingForSyncText: string = getLocalizedString('%getResources_waitingForSync_label%');
   const languageText: string = getLocalizedString('%resources_language%');
   const languagesText: string = getLocalizedString('%resources_languages%');
   const languagesSearchPlaceholder: string = getLocalizedString(
@@ -732,6 +745,8 @@ export function GetResources({
                         {getActionContent(
                           resource,
                           idsBeingHandled,
+                          idsWaitingForSync,
+                          waitingForSyncText,
                           getText,
                           updateText,
                           installedText,
