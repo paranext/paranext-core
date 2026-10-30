@@ -233,6 +233,103 @@ describe('PopoverContent window blur', () => {
     await waitFor(() => expect(screen.queryByText('body')).not.toBeInTheDocument());
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
+
+  /** A modal popover (like the book and chapter pickers) portalled into a dialog's content. */
+  function ModalPopoverInDialog() {
+    // React's ref callback API hands over null when the element unmounts
+    // eslint-disable-next-line no-null/no-null
+    const [dialogElement, setDialogElement] = useState<HTMLDivElement | null>(null);
+    const [isDialogOpen, setIsDialogOpen] = useState(true);
+    return (
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent ref={setDialogElement}>
+          <DialogTitle>dialog title</DialogTitle>
+          <PopoverPortalContainerProvider container={dialogElement}>
+            <Popover modal>
+              <PopoverTrigger>open</PopoverTrigger>
+              <PopoverContent>
+                <input aria-label="search" />
+              </PopoverContent>
+            </Popover>
+          </PopoverPortalContainerProvider>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  function getDialogContent() {
+    const dialogContent = document.querySelector<HTMLElement>('[data-slot="dialog-content"]');
+    if (!dialogContent) throw new Error('dialog content is not mounted');
+    return dialogContent;
+  }
+
+  /** Lets FocusScope's MutationObserver callback and its zero-delay unmount timer run. */
+  async function flushFocusScope() {
+    await act(async () => {});
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  }
+
+  it('leaves the dialog unfocused when a nested popover closes while its web view is unfocused', async () => {
+    // A web view's `top` is its host window, not itself; the hook reads it once, on mount
+    vi.stubGlobal('top', {});
+    render(<ModalPopoverInDialog />);
+    const dialogElement = getDialogContent();
+    fireEvent.click(await screen.findByText('open'));
+    // Awaited so Radix's outside-press listener, registered a tick after mount, is in place
+    const search = await screen.findByLabelText('search');
+    act(() => search.focus());
+    const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus');
+
+    // The user clicked into another frame: this document no longer has focus
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    blurWindow();
+
+    await waitFor(() => expect(screen.queryByLabelText('search')).not.toBeInTheDocument());
+    await flushFocusScope();
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    // A focus() inside an unfocused iframe would pull the frame's focus back from the other frame
+    expect(
+      focusSpy.mock.contexts.filter(
+        (element) => element instanceof Node && dialogElement.contains(element),
+      ),
+    ).toEqual([]);
+    expect(document.activeElement).not.toBe(dialogElement);
+  });
+
+  it("keeps the trap's container focus when the document has focus", async () => {
+    render(<ModalPopoverInDialog />);
+    const dialogElement = getDialogContent();
+    fireEvent.click(await screen.findByText('open'));
+    const search = await screen.findByLabelText('search');
+    act(() => search.focus());
+    const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus');
+
+    fireEvent.keyDown(search, { key: 'Escape' });
+
+    await waitFor(() => expect(screen.queryByLabelText('search')).not.toBeInTheDocument());
+    await flushFocusScope();
+    // Radix's trap focuses its container when the focused node is removed; harmless while the
+    // document keeps frame focus, so it stays in place there
+    expect(focusSpy.mock.contexts).toContain(dialogElement);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('a trap that mounts while the document is unfocused still focuses its content', async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    render(
+      <Dialog open>
+        <DialogContent>
+          <DialogTitle>t</DialogTitle>
+          <input aria-label="first" />
+        </DialogContent>
+      </Dialog>,
+    );
+
+    await waitFor(() => expect(document.activeElement).not.toBe(document.body));
+    expect(getDialogContent().contains(document.activeElement)).toBe(true);
+  });
 });
 
 describe('PopoverContent focus after dismissal', () => {
