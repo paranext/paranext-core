@@ -910,8 +910,80 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
 
             Assert.That(
                 output.ToString(),
-                Does.Contain(WhitelistedUid).And.Contain("installing anyway")
+                Does.Contain("Warning").And.Contain(WhitelistedUid).And.Contain("anyway")
             );
+        }
+
+        [Test]
+        public async Task UninstallDblResource_WaitsForARunningSyncThatUpdatesTheResource()
+        {
+            // Not installed, so the removal fails at once when it does run — without touching the
+            // disk. What this pins is that it does not run while the sync holds the resource.
+            var provider = new DblResourcesDataProvider(
+                Client,
+                ParatextProjects,
+                () => [new InstalledResource(null!) { DBLEntryUid = HexId.FromStr(WhitelistedUid) }]
+            );
+            var run = SyncRunResourceGuard.BeginRun([WhitelistedUid]);
+
+            var uninstall = provider.UninstallDblResource(WhitelistedUid);
+
+            Assert.That(
+                await FinishesWithin(uninstall, s_stillBlockedWindow),
+                Is.False,
+                "the removal must wait while the sync run holds the resource"
+            );
+
+            run.Dispose();
+
+            Assert.That(
+                await FinishesWithin(uninstall, s_shouldFinishBound),
+                Is.True,
+                "the removal must proceed once the run ends"
+            );
+            var exception = Assert.ThrowsAsync<Exception>(() => uninstall);
+            Assert.That(exception!.Message, Does.Contain("not currently installed"));
+        }
+
+        [Test]
+        public async Task InstallDblResource_ASyncRunWaitsForAnInstallOfOneOfItsResourcesToFinish()
+        {
+            // The catalog fetch runs inside the install's write, so blocking it holds the install
+            // mid-write for as long as the test needs.
+            using DummyScrText existing = new();
+            using var fetchEntered = new ManualResetEventSlim(false);
+            using var releaseFetch = new ManualResetEventSlim(false);
+            var provider = new DblResourcesDataProvider(
+                Client,
+                ParatextProjects,
+                () =>
+                {
+                    fetchEntered.Set();
+                    releaseFetch.Wait(s_shouldFinishBound);
+                    return [UpToDateResource(WhitelistedUid, existing)];
+                }
+            );
+            var install = provider.InstallDblResource(WhitelistedUid);
+            Assert.That(fetchEntered.Wait(s_shouldFinishBound), Is.True, "install never started");
+
+            var begin = Task.Run(() => SyncRunResourceGuard.BeginRun([WhitelistedUid]));
+
+            Assert.That(
+                await FinishesWithin(begin, s_stillBlockedWindow),
+                Is.False,
+                "the sync run must wait while the install is writing its resource"
+            );
+
+            releaseFetch.Set();
+
+            Assert.That(await FinishesWithin(install, s_shouldFinishBound), Is.True);
+            await install;
+            Assert.That(
+                await FinishesWithin(begin, s_shouldFinishBound),
+                Is.True,
+                "the sync run must start once the install has finished"
+            );
+            (await begin).Dispose();
         }
 
         #endregion
