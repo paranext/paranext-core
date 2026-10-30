@@ -604,4 +604,60 @@ describe('GetResources language filter', () => {
 
     expect(onSelectedLanguagesChange).toHaveBeenCalledWith(['Coptic', 'Amharic']);
   });
+
+  describe('waiting for the running sync', () => {
+    const heldResource: DblResourceData = {
+      dblEntryUid: 'uid-1',
+      displayName: 'WEB',
+      fullName: 'World English Bible',
+      bestLanguageName: 'English',
+      type: 'ScriptureResource',
+      size: 1,
+      installed: false,
+      updateAvailable: false,
+      projectId: '',
+    };
+    const waitingStrings = {
+      ...STRINGS,
+      '%getResources_waitingForSync_label%': 'Waiting for sync…',
+    };
+
+    it('shows the waiting label, not the install spinner, for a resource the sync holds', () => {
+      render(
+        <GetResources
+          localizedStringsWithLoadingState={[waitingStrings, false]}
+          resources={[heldResource]}
+          idsBeingHandled={['uid-1']}
+          idsWaitingForSync={['uid-1']}
+        />,
+      );
+
+      expect(screen.getByText('Waiting for sync…')).toBeInTheDocument();
+    });
+
+    it('shows no waiting label while the action is merely in progress', () => {
+      render(
+        <GetResources
+          localizedStringsWithLoadingState={[waitingStrings, false]}
+          resources={[heldResource]}
+          idsBeingHandled={['uid-1']}
+          idsWaitingForSync={[]}
+        />,
+      );
+
+      expect(screen.queryByText('Waiting for sync…')).not.toBeInTheDocument();
+    });
+
+    it('shows no waiting label for a resource the user did not click', () => {
+      render(
+        <GetResources
+          localizedStringsWithLoadingState={[waitingStrings, false]}
+          resources={[heldResource]}
+        />,
+      );
+
+      expect(screen.queryByText('Waiting for sync…')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Get' })).toBeEnabled();
+    });
+  });
 });
