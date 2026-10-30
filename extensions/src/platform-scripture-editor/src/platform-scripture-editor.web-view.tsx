@@ -455,6 +455,14 @@ const NO_UPDATE_TITLE = '__do_not_update_title_not_for_use__';
 const defaultTextDirection = 'ltr';
 
 /**
+ * The editor's `requestNativePaste`: the host's own paste, whose `paste` event carries the editor's
+ * own copy format, which `navigator.clipboard.read()` cannot see. It pastes into whatever has focus
+ * in the focused window, so the editor puts focus back on its text before asking. Declared once
+ * here so the options keep one identity.
+ */
+const requestNativePaste = () => papi.commands.sendCommand('platform.pasteIntoFocusedWindow');
+
+/**
  * Logs a marker-palette open failure, EXCEPT the routine one: a newer palette request replacing an
  * older one rejects the older show promise with `ABORTED`, which the `\` reopen flow does on every
  * keystroke that commits and reopens.
@@ -2095,6 +2103,7 @@ function PlatformScriptureEditor({
       // A read-only editor makes no edits, so there is nothing to ask about.
       onHiddenContentDelete: isReadOnlyEffective ? undefined : handleHiddenContentDelete,
       onUnstorableTextRemoved: isReadOnlyEffective ? undefined : handleUnstorableTextRemoved,
+      requestNativePaste: isReadOnlyEffective ? undefined : requestNativePaste,
       hasSpellCheck: false,
       nodes: nodeOptions,
       textDirection: textDirectionEffective,
