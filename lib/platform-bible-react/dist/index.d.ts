@@ -3897,7 +3897,7 @@ export type SelectTriggerProps = React$1.ComponentProps<typeof SelectPrimitive.T
 /** @inheritdoc Select */
 export declare function SelectTrigger({ className, size, children, ...props }: SelectTriggerProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Select */
-export declare function SelectContent({ className, children, position, align, style, ...props }: React$1.ComponentProps<typeof SelectPrimitive.Content>): import("react/jsx-runtime").JSX.Element;
+export declare function SelectContent({ className, children, position, align, style, onCloseAutoFocus, ...props }: React$1.ComponentProps<typeof SelectPrimitive.Content>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Select */
 export declare function SelectLabel({ className, ...props }: React$1.ComponentProps<typeof SelectPrimitive.Label>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Select */
@@ -4586,12 +4586,13 @@ export declare const useViewVisibility: () => boolean;
  */
 export declare function useRunWhenVisible(isViewVisible: boolean, run: () => void): () => void;
 /**
- * Whether this window is a web view, meaning it is not the top window. In Paratext web views
- * `window.top` is deleted (`undefined`), which also counts as a web view; the main document is its
- * own top window.
+ * Whether this window is a web view, meaning it is not the top window. In a web view `window.top`
+ * is the host window: the web view's setup script deletes it, but `top` cannot be deleted, so the
+ * deletion does nothing (`web-view.service-shard.ts`, the `imports` string). The main document is
+ * its own top window. A missing or unreadable `top` also counts as a web view.
  *
- * @returns `true` inside a web view (or when `window.top` cannot be read), `false` in the main
- *   document
+ * @returns `true` inside a web view (or when `window.top` is missing or unreadable), `false` in the
+ *   main document
  * @experimental This export is unstable and may change shape or disappear without notice
  */
 export declare function isRunningInWebView(): boolean;
