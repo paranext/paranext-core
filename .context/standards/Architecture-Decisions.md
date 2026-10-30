@@ -4057,6 +4057,49 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   text like any other text.
 - **Source:** PT-4189.
 
+## adr-formatted-view-project-fonts-only: The formatted view gets the project's fonts only, not its layout
+
+- **Date:** 2026-10-29
+- **Status:** Accepted
+- **Context:** The scripture editor applied the project stylesheet CSS only in Standard view. Outside
+  Power mode the editor always shows the formatted view, so Simple mode never showed the project
+  font, and neither did Power's Preview. The formatted view has its own marker layout rules in
+  `_usj-nodes.scss`, tuned and tested without project layout layered over them. Paratext 10 does not
+  install project fonts, so a project font that is missing on the machine must degrade to the
+  Scripture font stack (Gentium Plus, Charis SIL, ...), not to the browser default.
+- **Decision:** In the formatted view, inject a fonts-only stylesheet built from the same
+  `StyleInfo` (`generateProjectFontCss`): the project's default font family followed by the
+  `--usj-font-fallback` stack, the default font size in points, and one `font-family` rule per
+  marker that names a font: the marker's font, then the project's default font, then the
+  `--usj-font-fallback` stack. Nothing else from a marker entry (weight, style, colour, size, margins,
+  indent, line height, alignment) is emitted. Standard view keeps the whole generated sheet.
+  `useProjectStylesheet` takes a `'full' | 'fonts'` mode.
+- **Alternatives:**
+  - **The full sheet in the formatted view.** Rejected: it would layer project layout over the
+    view's own marker rules, an interaction nothing tests.
+  - **Font family only, without the size.** Rejected: the project's default size is part of how
+    its text is meant to look, and the Standard view already applies it.
+  - **The base font only, without per-marker fonts.** Rejected: a project that sets a different
+    font on a marker (for example a transliteration marker) would lose it in exactly the views
+    this fixes.
+  - **Leave the formatted view as it is.** Rejected: Simple mode and Preview then never show the
+    project's font.
+- **Consequences:** The formatted view shows project fonts with the platform fallback; its layout
+  stays the platform's. `generateProjectFontCss` repeats private helpers of the editor package's
+  `generateUsjCss`; tests pin its output to the package's until PT-4974 moves the fonts-only sheet
+  into the package.
+  - Simple's fixed text sizes (verse numbers, headings, the empty-verse ellipsis box) are multiples
+    of a registered length, `--psc-base-font-size`, computed once on the editor root, so they scale
+    with the project font size. Plain `em` is not used: it compounds with an ancestor's size
+    (the visible-marker verse number) and resolves separately in the ellipsis box and the caret
+    host's margin, so the two disagree. The chapter numeral is deliberately a fixed `5rem`: it is
+    decorative and its parent is `font-size: 0`.
+  - The footnotes pane's read-only rows get the project fonts in every view through a second,
+    pane-scoped fonts-only sheet (`FOOTNOTE_ROWS_SELECTOR`), so a row keeps its font and size when it
+    is opened for editing. Rows take fonts only (family, size, per-marker family). Standard view's row
+    editor still applies per-marker size and style that read-only rows do not; this is accepted.
+- **Source:** PT-4966.
+
 ## adr-generic-name-routing-proxies: Generic-name service routers in main forward to the focused/owning window's scoped service
 
 - **Formerly:** ADR-0008
