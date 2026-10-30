@@ -485,6 +485,34 @@ describe('useDismissOnWindowBlur', () => {
       expect(event.defaultPrevented).toBe(true);
     });
 
+    it('falls back to aria-labelledby when the captured trigger is gone', () => {
+      const markup = (triggerKey: string, controls?: string) => (
+        <>
+          <button key={triggerKey} type="button" aria-controls={controls}>
+            trigger
+          </button>
+          <span id="label" tabIndex={-1}>
+            label
+          </span>
+        </>
+      );
+      const { onCloseAutoFocus, rerenderTrigger } = renderTriggeredProbe(markup('first', 'c'), {
+        id: 'c',
+        labelledBy: 'label',
+      });
+      const firstButton = screen.getByRole('button', { name: 'trigger' });
+      // The replacement no longer names the content, and the captured trigger leaves the document
+      rerenderTrigger(markup('second'));
+      expect(firstButton.isConnected).toBe(false);
+      vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+
+      const event = cancelable();
+      onCloseAutoFocus(event);
+
+      expect(screen.getByText('label')).toHaveFocus();
+      expect(event.defaultPrevented).toBe(true);
+    });
+
     it('leaves the default to Radix when the trigger cannot take focus', () => {
       const { onCloseAutoFocus } = renderTriggeredProbe(
         <button type="button" aria-controls="c" disabled>
