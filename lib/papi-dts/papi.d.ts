@@ -5449,7 +5449,9 @@ declare module 'shared/services/window.service-model' {
    *
    * Shared so every consumer that projects a focus subject to a web view id (e.g. the window
    * service's last-selected tracking and `platform.openBookChapterControl`) stays in lockstep when
-   * focus subject shapes change.
+   * focus subject shapes change. Extensions cannot import this at runtime, so the Scripture editor
+   * keeps its own copy (`getEditorFocusLocation` in `platform-scripture-editor.web-view.utils.ts`):
+   * update it too.
    */
   export function getWebViewIdFromFocusSubject(focusSubject: FocusSubject): string | undefined;
   /**
@@ -11323,7 +11325,7 @@ declare module 'shared/data/platform.data' {
    * waits on its final sync. It also conceptually matches the C# write gate's stall watchdog, which
    * bounds the same "one automatic Send/Receive" window. The renderer does not time blocking locally
    * — it reads the backend write gate's snapshot (`auto-sync-blocking-store.ts`), so blocking clears
-   * when the backend says so rather than on a renderer-side timer.
+   * only once the backend says so rather than on a renderer-side timeout.
    *
    * @experimental
    */

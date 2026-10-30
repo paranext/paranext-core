@@ -11,7 +11,12 @@ import {
   SEARCH_WHITESPACE_GROUP_PREFIX,
   SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS,
 } from 'platform-bible-utils';
-import { FindJobStatus, FindJobStatusReport, FindOptions } from 'platform-scripture';
+import {
+  FindJobStatus,
+  FindJobStatusReport,
+  FindOptions,
+  ReplaceOutcome,
+} from 'platform-scripture';
 import type { OpenProjectTabWithWebView } from '../hooks/use-open-project-tabs';
 import { isExtraMaterialBookId } from './extra-material.utils';
 
@@ -115,12 +120,33 @@ export function applyPreserveCase(matchedText: string, replacementText: string):
  * skipped-clause joined with a space. A translation has to be free to punctuate between the two
  * clauses, reorder them, or merge them, and each count needs its own singular form — one skipped
  * result is the ordinary case, and "Skipped 1 results" is what a shared plural template produces.
+ *
+ * `changedCount` is how many results were not written because their text changed after the search.
+ * When it is nonzero the message reports "N of M" with M covering all three counts; M is at least 2
+ * there, so "of 1 results" cannot occur.
  */
 export function buildReplacedAllMessage(
   localizedStrings: LanguageStrings,
   replacedCount: number,
   skippedCount: number,
+  changedCount = 0,
 ): string {
+  if (changedCount > 0) {
+    if (replacedCount === 0) {
+      return skippedCount === 0
+        ? localizedStrings['%webView_find_replace_textChangedAllResults%']
+        : localizedStrings['%webView_find_replace_textChangedOrMarkerAllResults%'];
+    }
+    return formatReplacementString(
+      skippedCount === 0
+        ? localizedStrings['%webView_find_replacedNOfMResultsTextChanged%']
+        : localizedStrings['%webView_find_replacedNOfMResultsTextChangedOrMarker%'],
+      {
+        replacedCount: replacedCount.toString(),
+        totalCount: (replacedCount + skippedCount + changedCount).toString(),
+      },
+    );
+  }
   if (skippedCount === 0) {
     return replacedCount === 1
       ? localizedStrings['%webView_find_replacedOneOccurrence%']
@@ -148,6 +174,25 @@ export function buildReplacedAllMessage(
 }
 
 /**
+ * Collects the results `replace()` declined to write because their text changed after the search.
+ * `outcomes[i]` belongs to `groups[i]`, and each changed index addresses that group's `results`,
+ * which are in the same order as the ranges sent.
+ */
+export function getChangedResults<T>(
+  groups: Array<{ results: T[] }>,
+  outcomes: ReplaceOutcome[],
+): Set<T> {
+  const changed = new Set<T>();
+  outcomes.forEach((outcome, groupIndex) => {
+    outcome.changedIndexes.forEach((changedIndex) => {
+      const skipped = groups[groupIndex]?.results[changedIndex];
+      if (skipped !== undefined) changed.add(skipped);
+    });
+  });
+  return changed;
+}
+
+/**
  * Narrows the snapshots Replace All took before writing to only the books whose `replace()` call
  * actually committed, given the outcomes in the order the calls were issued.
  *
@@ -160,21 +205,49 @@ export function buildReplacedAllMessage(
  * The written books come from the outcomes, not from the snapshots, so a book that wrote but whose
  * snapshot could not be read is reported in `writtenBookIdsWithoutSnapshot` rather than dropped:
  * nothing can roll it back, and the caller has to tell the user it still holds its replacements.
+ *
+ * @param rangeCountsInReplaceOrder How many ranges each call sent, in the order the calls were
+ *   issued. When given, a fulfilled book whose every range came back in
+ *   {@link ReplaceOutcome.changedIndexes} counts as unwritten too: it was skipped whole, so it still
+ *   holds whatever someone else put there. When omitted, every fulfilled book counts as written.
  */
 export function selectWrittenBookSnapshots(
   bookSnapshots: Map<string, string>,
   bookIdsInReplaceOrder: string[],
-  replaceOutcomes: PromiseSettledResult<unknown>[],
+  replaceOutcomes: PromiseSettledResult<ReplaceOutcome | undefined>[],
+  rangeCountsInReplaceOrder?: number[],
 ): { writtenBookSnapshots: Map<string, string>; writtenBookIdsWithoutSnapshot: string[] } {
   const writtenBookSnapshots = new Map<string, string>();
   const writtenBookIdsWithoutSnapshot: string[] = [];
   bookIdsInReplaceOrder.forEach((bookId, outcomeIndex) => {
-    if (replaceOutcomes[outcomeIndex]?.status !== 'fulfilled') return;
+    const outcome = replaceOutcomes[outcomeIndex];
+    if (outcome?.status !== 'fulfilled') return;
+    const rangeCount = rangeCountsInReplaceOrder?.[outcomeIndex];
+    if (rangeCount !== undefined && (outcome.value?.changedIndexes.length ?? 0) >= rangeCount)
+      return;
     const snapshot = bookSnapshots.get(bookId);
     if (snapshot === undefined) writtenBookIdsWithoutSnapshot.push(bookId);
     else writtenBookSnapshots.set(bookId, snapshot);
   });
   return { writtenBookSnapshots, writtenBookIdsWithoutSnapshot };
+}
+
+/**
+ * Whether Replace All has to search again once its cancel window closes. A revert puts back every
+ * book Replace All wrote, so after a successful one the list is still valid — unless some results
+ * were skipped because their text changed after the search: those already point at text that has
+ * moved, which no revert undoes, so the list is stale either way.
+ */
+export function shouldSearchAgainAfterReplaceAll({
+  isCancelled,
+  isRevertSuccessful,
+  changedCount,
+}: {
+  isCancelled: boolean;
+  isRevertSuccessful: boolean;
+  changedCount: number;
+}): boolean {
+  return !(isCancelled && isRevertSuccessful) || changedCount > 0;
 }
 
 /**

@@ -5,16 +5,19 @@
  * Backend-authoritative snapshot model: the backend write gate is the single source of truth. It
  * emits a full snapshot of the blocked project ids on every arm/disarm, and the producer applies it
  * wholesale via {@link setBlockedProjects} — an empty set means nothing is blocked. There is
- * deliberately no local ref-counting and no timer-driven opinion about blocking (a second,
+ * deliberately no local ref-counting and no timer that decides blocking on its own (a second,
  * timer-driven opinion is exactly the kind of drift that lets the UI disagree with the backend):
  * resilience against a lost event is re-query of the backend authority (the service's init
- * consult), not a local safety leash.
+ * consult), not a local safety leash. Only the backend starts or ends a block; the two graces below
+ * only shift when consumers see that, by a bounded amount.
  *
  * Visibility keeps a 200 ms show-grace matching PT9's automatic-sync surface: on the first project
  * becoming blocked (empty → non-empty) a grace timer is armed, and consumers only ever see a
  * non-empty visible set if blocking is still in flight when it fires. A sync that finishes within
- * the grace never shows anything. Set changes while already visible (e.g. a project joins or leaves
- * an in-flight batch) are reflected immediately, with no fresh grace.
+ * the grace never shows anything. A project joining a visible set shows immediately, with no fresh
+ * grace.
+ *
+ * A visible project stays visible for {@link HIDE_GRACE_MS} after the backend stops blocking it.
  */
 
 import { deepEqual } from 'platform-bible-utils';
@@ -24,6 +27,19 @@ import { deepEqual } from 'platform-bible-utils';
  * shows nothing (PT9 parity).
  */
 const SHOW_GRACE_MS = 200;
+
+/**
+ * How long a project stays visibly blocked after the backend stops blocking it. A Send/Receive
+ * sends its project update before it clears the write gate, but the merged chapter's delivery and
+ * the clear then race to the web views. An editor that became editable first could take a keystroke
+ * and push its pre-merge text over the merge, so editing stays off long enough for the delivery to
+ * land.
+ *
+ * This narrows that race and does not close it: a delivery later than this can still lose to a
+ * keystroke. Not measured against real deliveries, because the gate only arms in Paratext 10
+ * builds. Editing staying off a moment longer costs little at the end of a sync that took seconds.
+ */
+const HIDE_GRACE_MS = 1000;
 
 const EMPTY_SET: ReadonlySet<string> = new Set();
 
@@ -35,6 +51,7 @@ let rawBlockedProjectIds: ReadonlySet<string> = EMPTY_SET;
  */
 let visibleBlockedProjectIds: ReadonlySet<string> = EMPTY_SET;
 let graceTimer: ReturnType<typeof setTimeout> | undefined;
+let hideGraceTimer: ReturnType<typeof setTimeout> | undefined;
 
 const listeners = new Set<() => void>();
 
@@ -61,29 +78,37 @@ export function setBlockedProjects(projectIds: ReadonlyArray<string>): void {
   // case-sensitive. Upper-casing at the single ingestion point keeps the whole store canonical.
   const next: ReadonlySet<string> = new Set(projectIds.map((id) => id.toUpperCase()));
 
-  if (next.size === 0) {
-    // Fully cleared: cancel a pending grace (cleared inside the window → nothing ever showed) and
-    // drop the visible set immediately.
-    clearTimeout(graceTimer);
-    graceTimer = undefined;
-    setVisible(EMPTY_SET);
+  if (visibleBlockedProjectIds.size > 0) {
+    // Already past the show-grace and visible. A joining project shows at once. A leaving project
+    // stays visible through the hide-grace. Any later snapshot restarts it, so every leaver gets at
+    // least the full hide-grace, and a snapshot that leaves nothing out cancels it.
+    rawBlockedProjectIds = next;
+    clearTimeout(hideGraceTimer);
+    hideGraceTimer = undefined;
+    const isProjectLeaving = [...visibleBlockedProjectIds].some((id) => !next.has(id));
+    if (!isProjectLeaving) {
+      setVisible(next);
+      return;
+    }
+    setVisible(new Set([...visibleBlockedProjectIds, ...next]));
+    hideGraceTimer = setTimeout(() => {
+      hideGraceTimer = undefined;
+      setVisible(rawBlockedProjectIds);
+    }, HIDE_GRACE_MS);
     return;
   }
 
-  if (visibleBlockedProjectIds.size > 0) {
-    // Already past the grace and visible: reflect set changes immediately (a project joined or left
-    // an in-flight batch) with no fresh grace.
-    setVisible(next);
+  if (next.size === 0) {
+    // Cleared inside the show-grace: cancel it, so nothing ever showed.
+    clearTimeout(graceTimer);
+    graceTimer = undefined;
     return;
   }
 
   // Empty → non-empty. Record the latest raw snapshot for the grace-timer callback to read, then arm
   // the show-grace if one is not already pending; visibility only turns on if blocking survives the
-  // grace. This assignment belongs here (below the cleared and already-visible branches) rather than
-  // at the top of the function: only the grace callback reads rawBlockedProjectIds, so at the top it
-  // would be a dead store on those earlier branches. Keeping it above the pending-grace check means a
-  // second empty → non-empty snapshot arriving while a grace is still pending still refreshes what
-  // that pending timer will read.
+  // grace. Keeping this above the pending-grace check means a second empty → non-empty snapshot
+  // arriving while a grace is still pending still refreshes what that pending timer will read.
   rawBlockedProjectIds = next;
   if (graceTimer === undefined) {
     graceTimer = setTimeout(() => {
@@ -132,5 +157,7 @@ export function resetAutoSyncBlocking(): void {
   visibleBlockedProjectIds = EMPTY_SET;
   clearTimeout(graceTimer);
   graceTimer = undefined;
+  clearTimeout(hideGraceTimer);
+  hideGraceTimer = undefined;
   listeners.clear();
 }

@@ -24,6 +24,10 @@ design for BOTH visibility states, not just the live case.
   (`lib/platform-bible-react/src/hooks/use-run-when-visible.hook.ts`; reference consumer:
   `find.web-view.tsx` in `extensions/src/platform-scripture/`) is the reusable defer-and-collapse
   form of the catch-up shape below — requests made while hidden collapse into one run on activation.
+- Inside a web view, `isFocused()`, `containsFocus()` and `document.activeElement` are **not
+  evidence the user is still there**: each iframe keeps its own focused element after the user
+  clicks into another web view. Ask the window focus subject instead (`papi.window`'s `Focus` data
+  type). Reference consumer: `useEditorFocusLocation` in `extensions/src/platform-scripture-editor/`.
 
 ## The rule
 

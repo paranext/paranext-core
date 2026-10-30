@@ -60,6 +60,7 @@ import {
   classifyPollAttempt,
   GIVE_UP_AFTER_MS,
   gateStartSearch,
+  getChangedResults,
   isDifferentProjectSelection,
   isFindQueryValid,
   isSimpleInterfaceMode,
@@ -70,6 +71,7 @@ import {
   resolveTargetReferencePanelWebViewId,
   selectWrittenBookSnapshots,
   shouldClearResultsForInvalidQuery,
+  shouldSearchAgainAfterReplaceAll,
 } from './find/find.utils';
 import { deriveFindBookLists, UNKNOWN_FIND_BOOK_LISTS } from './find/find-book-lists.utils';
 import { isExtraMaterialBookId } from './find/extra-material.utils';
@@ -111,7 +113,12 @@ const WEB_VIEW_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_replacedOneOccurrenceSkippedNResults%',
   '%webView_find_replacedNOccurrencesSkippedOneResult%',
   '%webView_find_replacedNOccurrencesSkippedNResults%',
+  '%webView_find_replacedNOfMResultsTextChanged%',
+  '%webView_find_replacedNOfMResultsTextChangedOrMarker%',
   '%webView_find_replacementReverted%',
+  '%webView_find_replace_textChangedAllResults%',
+  '%webView_find_replace_textChangedError%',
+  '%webView_find_replace_textChangedOrMarkerAllResults%',
   '%webView_find_searchInterruptedError%',
 ];
 
@@ -1622,6 +1629,17 @@ global.webViewComponent = function FindWebView({
   const handleStartSearchRef = useRef(handleStartSearch);
   handleStartSearchRef.current = handleStartSearch;
 
+  /**
+   * Searches again after a Replace or Replace All so the list matches the project as it now stands.
+   * `advanceToIndex` is the result to move focus past once the new results arrive.
+   */
+  const reSearchAfterReplace = useCallback(async (advanceToIndex?: number) => {
+    if (!isMountedRef.current) return;
+    if (advanceToIndex !== undefined) pendingAdvanceIndexRef.current = advanceToIndex;
+    isPostReplaceSearchRef.current = true;
+    await handleStartSearchRef.current();
+  }, []);
+
   // The debounced auto-search, plus the one way to call it off. See the hook's docs for why
   // deduplication has to cancel the queued search rather than flag the next one to stand down.
   const { requestAutoSearch, cancelPendingAutoSearch } = useAutoSearchDebounce(
@@ -2009,7 +2027,20 @@ global.webViewComponent = function FindWebView({
           return;
         }
 
-        await replacePdp.replace([{ start: result.start, end: result.end }], usfmToInsert);
+        const replaceOutcome = await replacePdp.replace(
+          [{ start: result.start, end: result.end }],
+          usfmToInsert,
+          [result.matchedUsfm],
+        );
+
+        // The text changed after the search, so nothing was written: there is nothing to commit,
+        // mark, or revert. Keep focus near the user's place and re-search so the list matches the
+        // project as it now stands.
+        if (replaceOutcome.changedIndexes.length > 0) {
+          sonner(localizedStrings['%webView_find_replace_textChangedError%']);
+          await reSearchAfterReplace(indexToReplace);
+          return;
+        }
 
         // Commits resulting changes from the replace to the version history
         try {
@@ -2074,13 +2105,9 @@ global.webViewComponent = function FindWebView({
           // rather than jumping back to the first after the re-search completes.
           pendingAdvanceIndexRef.current = indexToReplace;
         }
-        if (!isMountedRef.current) return;
         // Skip re-search when the revert succeeded — the book is restored to its pre-replace
         // state so the existing results are still valid, and re-searching would cause a flicker.
-        if (!(isCancelled && revertSucceeded)) {
-          isPostReplaceSearchRef.current = true;
-          await handleStartSearchRef.current();
-        }
+        if (!(isCancelled && revertSucceeded)) await reSearchAfterReplace();
       } catch (error) {
         const message = getErrorMessage(error);
         if (message.includes(STRUCTURE_PROTECTED_ERROR)) {
@@ -2100,6 +2127,7 @@ global.webViewComponent = function FindWebView({
       isReplacing,
       localizedStrings,
       preserveCase,
+      reSearchAfterReplace,
       replacePdp,
       replaceTerm,
       results,
@@ -2220,19 +2248,16 @@ global.webViewComponent = function FindWebView({
       // Group results by book and call replace() once per book (API requires all ranges in same book).
       const bookGroupMap = new Map<
         string,
-        {
-          ranges: { start: HidableFindResult['start']; end: HidableFindResult['end'] }[];
-          insertions: string[];
-        }
+        { results: HidableFindResult[]; insertions: string[] }
       >();
       visibleResultsList.forEach((r, i) => {
         const bookId = r.start.verseRef.book;
-        if (!bookGroupMap.has(bookId)) bookGroupMap.set(bookId, { ranges: [], insertions: [] });
+        if (!bookGroupMap.has(bookId)) bookGroupMap.set(bookId, { results: [], insertions: [] });
         // TypeScript doesn't know that bookId is guaranteed to be in bookGroupMap here, but the
         // preceding `if` ensures it was just inserted if missing, so the `!` assertion is safe.
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         const group = bookGroupMap.get(bookId)!;
-        group.ranges.push({ start: r.start, end: r.end });
+        group.results.push(r);
         group.insertions.push(Array.isArray(usfmToInsert) ? usfmToInsert[i] : usfmToInsert);
       });
       // `replace()` is all-or-nothing per book, but Replace All issues one call per book. If one
@@ -2240,9 +2265,16 @@ global.webViewComponent = function FindWebView({
       // and roll the written books back from the snapshots before surfacing the failure. Using
       // `Promise.all` here would jump straight to the catch, skipping the revert window below and
       // leaving a partial cross-book write with no way to undo it.
+      const rangeCountsInReplaceOrder = [...bookGroupMap.values()].map(
+        ({ results: groupResults }) => groupResults.length,
+      );
       const replaceOutcomes = await Promise.allSettled(
-        [...bookGroupMap.values()].map(({ ranges, insertions }) =>
-          replacePdp.replace(ranges, preserveCase ? insertions : insertions[0]),
+        [...bookGroupMap.values()].map(({ results: groupResults, insertions }) =>
+          replacePdp.replace(
+            groupResults.map((r) => ({ start: r.start, end: r.end })),
+            preserveCase ? insertions : insertions[0],
+            groupResults.map((r) => r.matchedUsfm),
+          ),
         ),
       );
       const firstReplaceRejection = replaceOutcomes.find(
@@ -2254,10 +2286,12 @@ global.webViewComponent = function FindWebView({
         // back would overwrite whatever someone else changed in it since the snapshot was taken,
         // and the likeliest non-sentinel rejection is the PDP exhausting its cache-invalidation
         // retries, which is precisely the case where someone else was editing.
+        // A fulfilled book whose every range was skipped as changed wrote nothing either.
         const { writtenBookSnapshots, writtenBookIdsWithoutSnapshot } = selectWrittenBookSnapshots(
           bookSnapshots,
           [...bookGroupMap.keys()],
           replaceOutcomes,
+          rangeCountsInReplaceOrder,
         );
         if (writtenBookIdsWithoutSnapshot.length > 0) {
           didLeaveBooksModified = true;
@@ -2274,13 +2308,28 @@ global.webViewComponent = function FindWebView({
         }
         throw firstReplaceRejection.reason;
       }
-      const count = visibleResultsList.length;
+      // Every call fulfilled here, so each outcome says which of its book's results were skipped
+      // because their text changed after the search. Those were never written.
+      const changedResults = getChangedResults(
+        [...bookGroupMap.values()],
+        replaceOutcomes.map((outcome) =>
+          outcome.status === 'fulfilled' ? outcome.value : { changedIndexes: [] },
+        ),
+      );
+      const replacedCount = visibleResultsList.length - changedResults.size;
       // One template per outcome rather than two sentences joined in code: only the translation
       // can decide whether its language needs a period, a separator, or a different word order
       // between the two clauses, and only it can inflect each count for its own plural rules.
       const replacedAllToastId = sonner(
-        buildReplacedAllMessage(localizedStrings, count, skippedCount),
+        buildReplacedAllMessage(localizedStrings, replacedCount, skippedCount, changedResults.size),
       );
+
+      // Nothing was written, so there is nothing to commit, mark, or revert: go straight to a
+      // re-search so the list matches the project as it now stands.
+      if (replacedCount === 0) {
+        await reSearchAfterReplace();
+        return;
+      }
 
       // Commits resulting changes from the replace to the version history
       try {
@@ -2311,7 +2360,7 @@ global.webViewComponent = function FindWebView({
       // Functional form, like every other write on the replace path: `allResults` is a snapshot from
       // before the batches were loaded, so writing it directly would resurrect whatever the results
       // have become since — including results that were deliberately emptied.
-      const replacedResultKeys = new Set(visibleResultsList);
+      const replacedResultKeys = new Set(visibleResultsList.filter((r) => !changedResults.has(r)));
       setResults((prev) =>
         prev.map((r) => {
           if (r.isHidden || !replacedResultKeys.has(r)) return r;
@@ -2326,8 +2375,16 @@ global.webViewComponent = function FindWebView({
       let revertSucceeded = false;
       if (isCancelled) {
         if (!isMountedRef.current) return; // Unmount — keep the replacement, don't revert
-        if (bookSnapshots.size > 0 && usfmBookPdp) {
-          revertSucceeded = await revertBookSnapshots(bookSnapshots, usfmBookPdp);
+        // Only the books that wrote at least one range: a book whose every range was skipped as
+        // changed still holds what someone else put there, which its snapshot would overwrite.
+        const { writtenBookSnapshots } = selectWrittenBookSnapshots(
+          bookSnapshots,
+          [...bookGroupMap.keys()],
+          replaceOutcomes,
+          rangeCountsInReplaceOrder,
+        );
+        if (writtenBookSnapshots.size > 0 && usfmBookPdp) {
+          revertSucceeded = await revertBookSnapshots(writtenBookSnapshots, usfmBookPdp);
         } else {
           logger.error('Error reverting replace all: book snapshots unavailable');
         }
@@ -2338,13 +2395,14 @@ global.webViewComponent = function FindWebView({
             setResults((prev) => prev.map((r) => ({ ...r, isReplaced: false })));
         }
       }
-      if (!isMountedRef.current) return;
-      // Skip re-search when the revert succeeded — the book is restored to its pre-replace
-      // state so the existing results are still valid, and re-searching would cause a flicker.
-      if (!(isCancelled && revertSucceeded)) {
-        isPostReplaceSearchRef.current = true;
-        await handleStartSearchRef.current();
-      }
+      if (
+        shouldSearchAgainAfterReplaceAll({
+          isCancelled,
+          isRevertSuccessful: revertSucceeded,
+          changedCount: changedResults.size,
+        })
+      )
+        await reSearchAfterReplace();
     } catch (error) {
       const message = getErrorMessage(error);
       if (message.includes(STRUCTURE_PROTECTED_ERROR)) {
@@ -2369,8 +2427,7 @@ global.webViewComponent = function FindWebView({
         });
         // Those books still hold their replacements, so every offset in the result list points at
         // text that has moved. Re-search so the list describes the project as it now stands.
-        isPostReplaceSearchRef.current = true;
-        await handleStartSearchRef.current();
+        await reSearchAfterReplace();
       }
     } finally {
       setIsReplacing(false);
@@ -2380,6 +2437,7 @@ global.webViewComponent = function FindWebView({
     isReplacing,
     localizedStrings,
     preserveCase,
+    reSearchAfterReplace,
     replacePdp,
     replaceTerm,
     retrieveFindJobUpdate,

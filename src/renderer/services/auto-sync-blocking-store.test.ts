@@ -9,6 +9,8 @@ import {
 
 /** Must match SHOW_GRACE_MS in auto-sync-blocking-store.ts */
 const SHOW_GRACE_MS = 200;
+/** Must match HIDE_GRACE_MS in auto-sync-blocking-store.ts */
+const HIDE_GRACE_MS = 1000;
 
 describe('auto-sync-blocking-store', () => {
   // The store's show-grace timer means nearly every test needs timer control.
@@ -85,6 +87,94 @@ describe('auto-sync-blocking-store', () => {
     });
   });
 
+  describe('hide grace', () => {
+    /** Blocks the given projects and lets the show grace pass, so they are visible. */
+    function blockVisibly(...projectIds: string[]): void {
+      setBlockedProjects(projectIds);
+      vi.advanceTimersByTime(SHOW_GRACE_MS);
+    }
+
+    it('keeps a project blocked until the hide grace passes after the backend clears it', () => {
+      blockVisibly('P1');
+      setBlockedProjects([]);
+
+      vi.advanceTimersByTime(HIDE_GRACE_MS - 1);
+      expect(isProjectBlocked('P1')).toBe(true);
+
+      vi.advanceTimersByTime(1);
+      expect(isProjectBlocked('P1')).toBe(false);
+      expect(getBlockedProjectIds().size).toBe(0);
+    });
+
+    it('notifies listeners only when the hide grace ends', () => {
+      blockVisibly('P1');
+      const listener = vi.fn();
+      subscribeToAutoSyncBlocking(listener);
+
+      setBlockedProjects([]);
+      expect(listener).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(HIDE_GRACE_MS);
+      expect(listener).toHaveBeenCalledOnce();
+    });
+
+    it('holds a project that leaves an in-flight batch without holding up the others', () => {
+      blockVisibly('P1', 'P2');
+      setBlockedProjects(['P2']);
+
+      vi.advanceTimersByTime(HIDE_GRACE_MS - 1);
+      expect(isProjectBlocked('P1')).toBe(true);
+
+      vi.advanceTimersByTime(1);
+      expect(isProjectBlocked('P1')).toBe(false);
+      expect(isProjectBlocked('P2')).toBe(true);
+    });
+
+    it('gives a project leaving later its own full hide grace', () => {
+      blockVisibly('P1', 'P2');
+      setBlockedProjects(['P2']);
+      vi.advanceTimersByTime(HIDE_GRACE_MS - 1);
+
+      setBlockedProjects([]);
+      vi.advanceTimersByTime(HIDE_GRACE_MS - 1);
+      expect(isProjectBlocked('P2')).toBe(true);
+
+      vi.advanceTimersByTime(1);
+      expect(getBlockedProjectIds().size).toBe(0);
+    });
+
+    it('stays blocked when a new sync starts during the hide grace', () => {
+      blockVisibly('P1');
+      setBlockedProjects([]);
+      vi.advanceTimersByTime(HIDE_GRACE_MS - 1);
+
+      setBlockedProjects(['P1']);
+      vi.advanceTimersByTime(HIDE_GRACE_MS);
+
+      expect(isProjectBlocked('P1')).toBe(true);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('shows a project joining during the hide grace at once and keeps it after the grace', () => {
+      blockVisibly('P1');
+      setBlockedProjects([]);
+      setBlockedProjects(['P2']);
+      expect(isProjectBlocked('P1')).toBe(true);
+      expect(isProjectBlocked('P2')).toBe(true);
+
+      vi.advanceTimersByTime(HIDE_GRACE_MS);
+      expect(isProjectBlocked('P1')).toBe(false);
+      expect(isProjectBlocked('P2')).toBe(true);
+    });
+
+    it('never applies to a sync that finished inside the show grace', () => {
+      setBlockedProjects(['P1']);
+      setBlockedProjects([]);
+      expect(vi.getTimerCount()).toBe(0);
+      expect(isProjectBlocked('P1')).toBe(false);
+    });
+  });
+
   describe('case canonicalization (ingestion)', () => {
     it('canonicalizes ingested project ids to upper case', () => {
       // The backend gate matches ids OrdinalIgnoreCase and the canonical project id is upper; the
@@ -114,6 +204,7 @@ describe('auto-sync-blocking-store', () => {
       expect([...getBlockedProjectIds()].sort()).toEqual(['P1', 'P2']);
 
       setBlockedProjects(['P2', 'P3']); // wholesale replace, not a merge
+      vi.advanceTimersByTime(HIDE_GRACE_MS);
       expect(isProjectBlocked('P1')).toBe(false);
       expect(isProjectBlocked('P2')).toBe(true);
       expect(isProjectBlocked('P3')).toBe(true);
@@ -124,6 +215,7 @@ describe('auto-sync-blocking-store', () => {
       vi.advanceTimersByTime(SHOW_GRACE_MS);
       expect(isProjectBlocked('P1')).toBe(true);
       setBlockedProjects([]);
+      vi.advanceTimersByTime(HIDE_GRACE_MS);
       expect(getBlockedProjectIds().size).toBe(0);
     });
 
@@ -178,6 +270,7 @@ describe('auto-sync-blocking-store', () => {
       const listener = vi.fn();
       subscribeToAutoSyncBlocking(listener);
       setBlockedProjects([]);
+      vi.advanceTimersByTime(HIDE_GRACE_MS);
       expect(listener).toHaveBeenCalledTimes(1);
     });
 
@@ -212,6 +305,15 @@ describe('auto-sync-blocking-store', () => {
       expect(getBlockedProjectIds().size).toBe(0);
       expect(vi.getTimerCount()).toBe(0);
       expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('clears the pending hide grace timer', () => {
+      setBlockedProjects(['P1']);
+      vi.advanceTimersByTime(SHOW_GRACE_MS);
+      setBlockedProjects([]);
+      resetAutoSyncBlocking();
+      expect(vi.getTimerCount()).toBe(0);
+      expect(getBlockedProjectIds().size).toBe(0);
     });
   });
 });

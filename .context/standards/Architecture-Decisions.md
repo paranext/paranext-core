@@ -3115,6 +3115,57 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   documents is `insertCommentAtCurrentSelection` in
   `extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx`.
 
+## adr-editor-yields-to-window-focus-subject: The Scripture editor's typing hold yields to the window focus subject
+
+- **Date:** 2026-10-29
+- **Status:** Accepted
+- **Context:** A focused editor that was edited recently keeps its own copy of the chapter over a
+  differing incoming one. Each web view's iframe keeps its own focused element, so after the user
+  clicked into Find the editor still reported focus, and its copy overwrote Find's replacement.
+- **Decision:**
+  - The window focus subject decides where the user is (`useEditorFocusLocation`). In another web
+    view, the incoming chapter is applied.
+  - `document.hasFocus()` only means "not settled yet". While the subject still names the editor's
+    own iframe and the document lacks focus, the delivery is held, neither applied nor pushed back,
+    until the subject moves (it lags a click by the window service's 250 ms debounce).
+  - If the subject has not moved within `FOCUS_SETTLE_GRACE_MS` (1000 ms), the user has left the
+    window, and the incoming chapter is applied.
+  - When the subject names another web view, the claim ends for good: the last edit is forgotten,
+    so the incoming chapter is applied even if the user has clicked back by the time it arrives.
+    The next edit claims the chapter again.
+  - A Send/Receive (`isSyncBlocked`) ends the claim, and no pending save is flushed over its merge.
+  - The block outlasts the write gate by `HIDE_GRACE_MS` (1000 ms, in
+    `auto-sync-blocking-store.ts`), because the merged chapter's delivery and the gate's clear race
+    to the web view, and a keystroke between them would claim the chapter again.
+  - The footnotes pane claims on the same terms (`isFootnotesPaneOwner`): another web view ends its
+    claim, a Send/Receive ends it, and a delivery is held while focus settles.
+- **Alternatives:** `document.hasFocus()` as the release test: rejected, because menus and overlays
+  outside the iframe also clear it, so the editor would give up its copy while the user is still
+  working in it. Asking where focus is only when a delivery arrives: rejected, because a replacement
+  that lands after the user clicks back would then find the editor focused and be overwritten.
+  Keeping the editor read-only until the merged chapter arrives, rather than for a
+  fixed time: not done, because a sync that changes nothing in the chapter may deliver nothing, so
+  it still needs a time limit, and every sync whose delivery beat the clear would wait out that
+  limit anyway.
+- **Consequences:** A pending save (typed in the last ~700 ms) and an open marker palette or
+  footnote popover can still overwrite a replacement: out of scope, tracked by PT-4970. So can
+  typing after clicking back but before the replacement arrives, a visit shorter than the subject's
+  250 ms debounce, and a visit to Find in another window, since neither of the last two names
+  another web view. PT-4970 covers these by ending the hold once the editor's own save has
+  finished. After visiting another tab and returning without typing, the editor has no claim until
+  the next keystroke, so an update arriving then moves the caret.
+  A manual Send/Receive arms the same write gate (as of the 2026-10-22 Studio build,
+  `ParatextProjectSendReceiveService.cs`), so it should set `isSyncBlocked` and yield the same way,
+  but that has not been tested in the app.
+  A merged chapter delivered more than `HIDE_GRACE_MS` after the gate clears can still lose to a
+  keystroke, and that grace is unmeasured because the gate only arms in Paratext 10 builds. An open
+  footnote popover survives a Send/Receive, so its session still pushes the pre-merge text over the
+  merge once writes are accepted again.
+  Alt-tabbing away mid-edit in the footnotes pane applies a delivery once the grace period ends,
+  after flushing pending saves, as the text editor does.
+  Revisit the grace period if the window service's focus debounce changes.
+- **Source:** PT-4968
+
 ## adr-empty-is-zero-state-primitive: shadcn `Empty` is the zero-state-with-action primitive; `EmptyState` stays message-only
 
 - **Formerly:** ADR-0016
@@ -3687,6 +3738,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   will match where no such character exists — the very capability this entry's own
   Consequences section singles out. That is knowingly given up: the position licensing makes the false positives rare enough
   not to warrant a third toggle.
+
+- **Amended by:** [adr-nfd-search-drops-partial-character-matches](#adr-nfd-search-drops-partial-character-matches-ignore-diacritics-search-drops-matches-that-start-or-end-inside-a-character) (2026-10-29). With
+  `ignoreDiacritics` on, a match that starts or ends inside a character is dropped rather than
+  reported. The query still reaches the engine byte-identical.
 
 ## adr-first-run-existing-registration-is-prefill: An existing registration prefills the first-run wizard; it never skips it
 
@@ -5751,6 +5806,22 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   **Revisit** if a reader ever needs more than project ids from a declaring view, which would call
   for a typed surface rather than a state key.
 - **Source:** PT-4346, global BCV control showing books from open resources.
+
+## adr-nfd-search-drops-partial-character-matches: Ignore-diacritics search drops matches that start or end inside a character
+
+- **Date:** 2026-10-29
+- **Status:** Accepted
+- **Context:** With "ignore diacritics" on, the search runs over NFD text. A Hangul syllable
+  decomposes into jamo, so a search for one syllable matched the first jamo of another.
+- **Decision:** `UsjReaderWriter.search` drops a match that starts or ends inside a character. A
+  syllable stored decomposed counts as one character: a position just before a Hangul vowel or
+  final consonant jamo (U+1160-11FF, U+D7B0-D7FF) is inside it.
+- **Alternatives:** Widening a partial match to the whole character: rejected, because the leftover
+  jamo are letters, so the result is not what the user searched for.
+- **Consequences:** Paratext 9 (ParatextData 9.5.0.24) finds no Hangul at all with the option on.
+  Paratext 10 deliberately keeps finding whole syllables (approved 2026-10-29, recorded on
+  PT-4968).
+- **Source:** PT-4968
 
 ## adr-no-agpl-notice-in-the-application-ui: the application UI names the Terms of Service and no license
 
@@ -8438,6 +8509,31 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Consequences (the shutdown signal is injected, not imported):** `RpcServer` reads whether the app is coming down through `setAppShutdownSignal`, wired from `src/main/main.ts`, rather than importing `shutdown-latch.service` directly. Every module `rpc-server` imports is reachable from `papi.d.ts`'s entry points, so the direct import published the shutdown latch and the window-state service it depends on — `resetForTesting()` included — as extension-facing API on the generated surface and the TypeDoc site. Any future main-process-only state a shared or client-reachable module needs should come in through the same kind of seam.
 - **Amended 2026-09-24 (PT-1641):** Root cause identified: Chromium's `TCPClientSocket::OnSuspend` closes the renderer's socket on the OS suspend signal; see `adr-renderer-papi-transport-is-messageport`, which supersedes the reconnect direction for the renderer (the renderer no longer uses a WebSocket). Shape 3, the 17-minute `forEach` stall, is consistent with shape 1 observed on Windows with the log straddling the sleep: the close arrives, main logs one removal line, Windows freezes the process within its ~2 s allotment, and on resume the loop finishes in 60 ms while the extension host's overdue hourly timer fires in the same second. The January 2025 log predates the power-monitor logging, so the suspend is inferred, not recorded. The heartbeat deferral stands, on stronger ground. The four reconnect blockers remain true statements about `RpcClient` and now apply to the extension host only.
 - **Source:** PT-4434; diagnosed on macOS 2026-08-26. Reviewed in PR #2731, which is where the severity, unreachable-4000 and third-peer consequences above were established.
+
+## adr-replace-verifies-expected-usfm: Replace writes only text that is unchanged since the search
+
+- **Date:** 2026-10-29
+- **Status:** Accepted
+- **Context:** Find & Replace wrote at the offsets Find reported, so text that changed after the
+  search could be overwritten.
+- **Decision:** `replace(ranges, usfm, expectedUsfm?)` on the Scripture Finder data provider
+  compares, byte for byte, the USFM span each range covers now with `FindResult.matchedUsfm` (the
+  span Find recorded). A mismatch is skipped, never written, and reported in
+  `ReplaceOutcome.changedIndexes`; the Find tab tells the user and searches again. The comparison
+  is on USFM because that is what a replace removes.
+- **Alternatives:** Comparing plain text: rejected, because the removed span includes character
+  markers (`the \nd Lord\nd*` vs `the Lord`), `\w` attributes and `~`, which plain text cannot
+  see.
+- **Consequences:**
+  - The check reads the finder's cached chapter, which a change notification invalidates, and the
+    write replaces the whole chapter. An edit whose notification has not arrived yet can still be
+    overwritten: there is no compare-and-swap.
+  - An identical token shifted onto the old offsets passes the check (deleting the first `a ` of
+    `a a a`).
+  - If PR #2922 lands (open as of 2026-10-29), toggling `allowInvisibleCharacters` between Find and
+    Replace re-spells no-break spaces, so every match containing one reads as changed. That fails
+    safe: nothing is written.
+- **Source:** PT-4968
 
 ## adr-resource-missing-book-message: A missing book in a *published resource* is mode-agnostic and action-free; a *project* splits Simple/Power
 
