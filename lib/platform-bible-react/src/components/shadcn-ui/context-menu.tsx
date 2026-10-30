@@ -74,15 +74,15 @@ function ContextMenuContent({
   // into another iframe never reaches this document, so the window's blur stands in for the outside
   // press; see the hook's TSDoc. ContextMenuSubContent is not wired: a sub-menu closes with its
   // root menu. The returned ref callback also forwards the caller's ref, and the returned
-  // onCloseAutoFocus also decides, from document focus state, whether Radix may return focus to
-  // the trigger on close, while still calling the caller's handler.
+  // onCloseAutoFocus also keeps focus out of another frame on close (a context menu has no trigger
+  // to restore), while still calling the caller's handler.
   const blurDismissProps = useDismissOnWindowBlur({ ref, onCloseAutoFocus });
   return (
     <ContextMenuPrimitive.Portal>
       <ContextMenuPrimitive.Content
         data-slot="context-menu-content"
         // CUSTOM: ref and onCloseAutoFocus from useDismissOnWindowBlur (it finds the content's
-        // parent and decides, from document focus state, whether focus returns to the trigger on close)
+        // parent and keeps focus out of another frame on close)
         {...blurDismissProps}
         className={cn(
           // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
