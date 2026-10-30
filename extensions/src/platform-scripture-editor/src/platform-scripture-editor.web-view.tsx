@@ -202,7 +202,11 @@ import { usePauseEditing } from './use-pause-editing.hook';
 import { EditorDocumentSelector, useEditorPdpSync } from './use-editor-pdp-sync.hook';
 import { toBookChapterKey, useScrollToRange } from './use-scroll-to-range.hook';
 import { applyEditorScrRefReport } from './editor-scr-ref-report.util';
-import { useProjectStylesheet } from './use-project-stylesheet.hook';
+import {
+  projectStylesheetMode,
+  useFootnotePaneFontStylesheet,
+  useProjectStylesheet,
+} from './use-project-stylesheet.hook';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import {
   availableScrollGroupIds,
@@ -1007,8 +1011,9 @@ function PlatformScriptureEditor({
   // not offer verse selection (the picker falls back to chapter-level submission).
   const currentBookNum = useMemo(() => Canon.bookIdToNumber(scrRef.book), [scrRef.book]);
 
-  // Project stylesheet-derived style info for the current book; feeds
-  // `generateUsjCss` via `useProjectStylesheet` below and `EditorOptions.styleInfo`.
+  // Project stylesheet-derived style info for the current book; feeds `useProjectStylesheet` below
+  // (`generateUsjCss` in the Standard view, `generateProjectFontCss` in the formatted view) and
+  // `EditorOptions.styleInfo`.
   // Disabled (undefined source, the hook's no-subscription state) while `currentBookNum` is not a
   // real book: an unrecognized book id resolves to 0, which the backend rejects, so an enabled
   // subscription delivered nothing but PlatformErrors — same guard as the versification fetch
@@ -3057,8 +3062,16 @@ function PlatformScriptureEditor({
   // Apply annotation styles from extensions
   useAnnotationStyleSheet();
 
-  // Apply the project stylesheet-derived CSS (standard view only)
-  useProjectStylesheet(styleInfo, textDirectionEffective === 'rtl', viewType === 'standard');
+  // Apply the project stylesheet: whole sheet in Standard view, fonts only elsewhere
+  useProjectStylesheet(
+    styleInfo,
+    textDirectionEffective === 'rtl',
+    projectStylesheetMode(viewType),
+  );
+
+  // The footnotes pane's read-only rows need the project fonts in every view. This is pure CSS, so a
+  // hidden tab needs no catch-up when it becomes visible.
+  useFootnotePaneFontStylesheet(styleInfo);
 
   // Load PT9-derived marker styles when the open project is a supported commentary
   useCommentaryMarkerStyles(projectId);

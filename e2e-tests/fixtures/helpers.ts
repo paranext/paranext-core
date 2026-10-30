@@ -205,6 +205,13 @@ export interface LaunchElectronAppOptions {
    */
   isolatedProjectRoot?: boolean;
   /**
+   * Runs once the isolated project root's path is known and before Electron launches, so a test can
+   * put a project on disk that the backend then loads instead of installing the bundled sample (the
+   * sample is installed only into an empty root). The folder may not exist yet; create it. Requires
+   * {@link LaunchElectronAppOptions.isolatedProjectRoot}.
+   */
+  prepareProjectRoot?: (projectRoot: string) => void;
+  /**
    * Absolute path of an existing user-data directory to launch into, instead of creating a fresh
    * temp one. For relaunch tests: pass the `userDataDir` a previous {@link launchElectronApp}
    * returned (launched with {@link LaunchElectronAppOptions.preserveUserDataDir}) so the new
@@ -786,6 +793,11 @@ export async function launchElectronApp(
   isolatedProjectRootDir = opts.isolatedProjectRoot
     ? path.join(userDataDir, 'projects')
     : undefined;
+  if (opts.prepareProjectRoot) {
+    if (!isolatedProjectRootDir)
+      throw new Error('`prepareProjectRoot` requires `isolatedProjectRoot: true`.');
+    opts.prepareProjectRoot(isolatedProjectRootDir);
+  }
   const env = {
     ...restEnv,
     NODE_ENV: 'development',
