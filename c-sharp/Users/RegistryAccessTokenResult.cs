@@ -11,7 +11,7 @@ namespace Paranext.DataProvider.Users;
 /// <remarks>
 /// Failures are returned rather than thrown, a contract set while a code thrown from C# could not
 /// reach the TypeScript caller. A thrown code now reaches it (see <see cref="PapiJsonRpc"/>).
-/// TODO(PT-4750): throw <see cref="PlatformErrorCodes"/> exceptions instead, and drop the failure
+/// TODO(PT-4884): throw <see cref="PlatformErrorCodes"/> exceptions instead, and drop the failure
 /// members.
 /// </remarks>
 public sealed record RegistryAccessTokenResult(

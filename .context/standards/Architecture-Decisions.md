@@ -8205,8 +8205,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `InternetServicesGate`'s saved-setting check, which also refuses "Disable access to some Bible
   translation services", is for Send/Receive and the DBL, so it doesn't apply here. Failures come
   back from C# as a result object and become
-  `PlatformError` codes in the extension host, because C# codes don't cross the RPC boundary yet
-  (PT-4750).
+  `PlatformError` codes in the extension host, a contract set while C# codes didn't cross the RPC
+  boundary; moving to thrown codes is PT-4884.
 - **Alternatives:** An open `paratextRegistration.*` command: every extension could impersonate the
   user to every registered service. A one-time user-consent prompt: the extra step we want to avoid,
   though it can be layered on later. The OAuth browser flow: users don't know their Registry login.
@@ -8233,8 +8233,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   refuses them only this request type. Authenticating the clients the main process launches, so
   sensitive request types can be limited to the extension host, is open work in PT-2893, deferred
   as of 2026-10-20 until after the November release; a renderer connection can't be trusted with
-  them because a web view can drive it. Revisit when PT-4750 lands (throw codes instead of
-  returning them), when the WebSocket authenticates its clients (and remove the `Origin` stopgap
+  them because a web view can drive it. Revisit with PT-4884 (throw codes instead of
+  returning them; codes now cross — see `adr-platform-error-code-crosses-json-rpc`), when the WebSocket authenticates its clients (and remove the `Origin` stopgap
   then), or if a consent prompt becomes necessary.
 - **Amended 2026-10-22 (PT-4893):** "Disable access to some Bible translation services" now saves
   `Disabled`, so tokens are refused for it in every location. A saved `VpnRequired`, the
