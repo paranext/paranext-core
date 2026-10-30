@@ -2948,8 +2948,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     CB-14).
   - The read raises no `paste` event, so during a chapter load `usePauseEditing` holds off the paste
     chords by key, and the Edit flyout's Paste is refused by the web view's read-only check. The
-    right-click menu's Paste is not held off, and neither is Ctrl+X, which dispatches the editor's
-    cut command directly. A read already in flight when the load starts can still land.
+    right-click menu's Paste is not held off. A read already in flight when the load starts can
+    still land in the chapter being left, where it shows and is not saved.
   - Checked on Electron 39 on Linux and on Windows (probes), and end to end on Linux by
     `in-editor-paste.spec.ts`. macOS was researched, not run.
 - **Source:** PT-4921; paranext-core#2976, paranext/scripture-editors#43.
