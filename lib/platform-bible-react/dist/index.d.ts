@@ -4657,13 +4657,14 @@ type DismissOnWindowBlurProps<T extends HTMLElement> = {
  * window was deactivated, so the hook focuses the trigger itself and prevents Radix's default.
  * After an outside interaction, which the synthetic press is, the non-modal Popover and the Menubar
  * would skip their own restore, while a modal DropdownMenu would restore anyway; the outcome is the
- * same for all three. The trigger is the element whose `aria-controls` names the content's `id`
- * (read when the content mounts and again at close), or the element the content's `aria-labelledby`
- * names; a surface without either (a context menu) restores nothing. Focus is never taken from an
- * element the user focused elsewhere. Any other close, such as Escape or a click elsewhere in this
- * document, restores focus as usual. The rule reads state at close time rather than remembering
- * that a blur dismissal happened: Radix runs close-auto-focus from its own timer after an
- * asynchronous unmount, so a flag cleared by a timeout loses that race under load.
+ * same for all three. The trigger is the element whose `aria-controls` names the content's `id`,
+ * looked up at close and, failing that, as found when the content mounted; else the element the
+ * content's `aria-labelledby` names. A surface without either (a context menu) restores nothing.
+ * Focus is never taken from an element the user focused elsewhere. Any other close, such as Escape
+ * or a click elsewhere in this document, restores focus as usual. The rule reads state at close
+ * time rather than remembering that a blur dismissal happened: Radix runs close-auto-focus from its
+ * own timer after an asynchronous unmount, so a flag cleared by a timeout loses that race under
+ * load.
  *
  * The synthetic press is untrusted and carries a window-blur marker (checked by the internal
  * `isWindowBlurPress`). The focus modality tracker and the overlay service's press recorder skip
