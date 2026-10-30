@@ -1717,11 +1717,10 @@ declare module 'shared/data/rpc.model' {
    *
    * The code has to be read back out of the message because `doRequest` flattens every RPC-level
    * error — method-not-found and a handler throwing alike — into a thrown value whose `message` is
-   * `JSON-RPC Request error (${code}): ${message}`, with no other machine-readable marker: a "no
-   * handler yet" response has no `error.data` at all, and the `platformErrorCode` field is no help
-   * either, because it is never populated from C#. `JsonRpc.ExceptionStrategy` is left at its
-   * `CommonErrorData` default, which serializes no `Exception.Data`, so `error.data.data` is always
-   * absent whatever `PlatformErrorCodes.WithCode` set. Deriving the format from
+   * `JSON-RPC Request error (${code}): ${message}`, with no other machine-readable marker for this
+   * case: a "no handler yet" response has no `error.data` at all, so the thrown error has no platform
+   * error `code` either. (That `code` is set only when a handler that did run threw one, as the .NET
+   * data provider's `PlatformErrorCodes.WithCode` does.) Deriving the format from
    * {@link getJsonRpcRequestErrorMessagePrefix}, the same producer `doRequest` builds the message
    * with, keeps this matcher in lockstep with any reformat there.
    *
