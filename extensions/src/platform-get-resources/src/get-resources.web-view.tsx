@@ -16,6 +16,8 @@ import {
 } from './get-resources.component';
 import { getInternetBlockedNotification } from './internet-block-notification.utils';
 import { openResourceFrom } from './open-home-item';
+import { getIdsWaitingForSync } from './resources-waiting-for-sync.utils';
+import { useSyncActivity } from './use-sync-activity.hook';
 
 type InstallInfo = {
   dblEntryUid: string;
@@ -272,6 +274,14 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
 
   const idsBeingHandled = useMemo(() => installInfo.map((info) => info.dblEntryUid), [installInfo]);
 
+  // The data provider holds a resource's action until the running sync releases that resource; the
+  // row says so while it waits, then returns to its ordinary progress state.
+  const syncActivity = useSyncActivity();
+  const idsWaitingForSync = useMemo(
+    () => getIdsWaitingForSync(idsBeingHandled, syncActivity.resourceIds),
+    [idsBeingHandled, syncActivity.resourceIds],
+  );
+
   return (
     <GetResources
       localizedStringsWithLoadingState={localizedStringsWithLoadingState}
@@ -281,6 +291,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
       onRetryResources={refetchResources}
       areDownloadsUnavailable={areDownloadsUnavailable}
       idsBeingHandled={idsBeingHandled}
+      idsWaitingForSync={idsWaitingForSync}
       selectedTypes={selectedTypes}
       selectedLanguages={selectedLanguages}
       onSelectedTypesChange={setSelectedTypes}
