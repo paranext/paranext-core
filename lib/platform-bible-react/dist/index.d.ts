@@ -2463,6 +2463,14 @@ type TabDropdownMenuProps = {
 	buttonVariant?: "default" | "ghost" | "outline" | "secondary";
 	/** Optional unique identifier */
 	id?: string;
+	/**
+	 * Whether the menu hands focus back to its trigger as it closes after `item` was selected.
+	 * Defaults to always, which the tab order depends on. Return `false` for an item whose handler
+	 * puts focus where it belongs itself, such as an editor action that returns focus to the text it
+	 * acts on: the menu's own return comes after the handler's and would take focus from there.
+	 * Closing without a selection (Escape, a click outside) always returns focus to the trigger.
+	 */
+	shouldReturnFocusOnSelect?: (item: MenuItemContainingCommand) => boolean;
 };
 /**
  * Dropdown menu for Platform.Bible menu data. Each column that has items is a section, divided from
@@ -2474,7 +2482,7 @@ type TabDropdownMenuProps = {
  *
  * A child component can be passed in to show as an icon on the menu trigger button.
  */
-export function TabDropdownMenu({ onSelectMenuItem, menuData, tabLabel, icon, className, showSectionHeadings, variant, buttonVariant, id, }: TabDropdownMenuProps): import("react/jsx-runtime").JSX.Element;
+export function TabDropdownMenu({ onSelectMenuItem, menuData, tabLabel, icon, className, showSectionHeadings, variant, buttonVariant, id, shouldReturnFocusOnSelect, }: TabDropdownMenuProps): import("react/jsx-runtime").JSX.Element;
 type TabToolbarCommonProps = {
 	/**
 	 * The handler to use for toolbar item commands related to the project menu. Here is a basic
@@ -2505,6 +2513,12 @@ type TabToolbarCommonProps = {
 	 * useMemo to get the WebViewMenu.
 	 */
 	projectMenuData?: Localized<MultiColumnMenu>;
+	/**
+	 * Whether the project menu hands focus back to its trigger as it closes after `item` was
+	 * selected. Defaults to always. Return `false` for an item whose handler puts focus where it
+	 * belongs itself; see `TabDropdownMenu`'s `shouldReturnFocusOnSelect`.
+	 */
+	shouldProjectMenuReturnFocusOnSelect?: (item: MenuItemContainingCommand) => boolean;
 	/** Optional unique identifier */
 	id?: string;
 	/** Additional css classes to help with unique styling of the extensible toolbar */
@@ -2556,13 +2570,13 @@ export type TabToolbarProps = TabToolbarCommonProps & {
  * for toolbar icons followed by an optional view info menu icon. See the Tab Floating Menu Button
  * component for a menu component that takes up less screen real estate yet is always visible.
  */
-export declare function TabToolbar({ onSelectProjectMenuItem, onSelectViewInfoMenuItem, projectMenuData, tabViewMenuData, id, className, startAreaChildren, centerAreaChildren, endAreaChildren, menuButtonIcon, }: TabToolbarProps): import("react/jsx-runtime").JSX.Element;
+export declare function TabToolbar({ onSelectProjectMenuItem, onSelectViewInfoMenuItem, projectMenuData, shouldProjectMenuReturnFocusOnSelect, tabViewMenuData, id, className, startAreaChildren, centerAreaChildren, endAreaChildren, menuButtonIcon, }: TabToolbarProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Renders a TabDropdownMenu with a trigger button that looks like the menuButtonIcon or like the
  * default of three stacked horizontal lines (aka the hamburger). The menu "floats" over the content
  * so it is always visible. When clicked, it displays a dropdown menu with the projectMenuData.
  */
-export declare function TabFloatingMenu({ onSelectProjectMenuItem, projectMenuData, id, className, menuButtonIcon, }: TabToolbarCommonProps): import("react/jsx-runtime").JSX.Element;
+export declare function TabFloatingMenu({ onSelectProjectMenuItem, projectMenuData, shouldProjectMenuReturnFocusOnSelect, id, className, menuButtonIcon, }: TabToolbarCommonProps): import("react/jsx-runtime").JSX.Element;
 export type TabKeyValueContent = {
 	key: string;
 	value: string;

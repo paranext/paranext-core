@@ -135,6 +135,8 @@ export function handleEditMenuCommand<TEditor extends EditMenuTarget>(
   } catch (e) {
     effects.onActionError(e);
   }
-  // The menu hands focus back to its trigger as it closes; return it to the text
+  // Return focus to the text from wherever the menu left it: its trigger, or nowhere after Cut, Copy
+  // or Paste. A Paste waits for focus to come back before asking the host to paste, since the host
+  // pastes into whatever has focus.
   effects.focusEditor();
 }
