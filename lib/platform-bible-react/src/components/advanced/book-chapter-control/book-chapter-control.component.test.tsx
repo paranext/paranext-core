@@ -2087,6 +2087,47 @@ describe('BookChapterControl compact mode stays open', () => {
     await user.keyboard('{Escape}');
     await waitFor(() => expect(isOpen()).toBe(false));
   });
+
+  describe('when modal', () => {
+    // A modal picker makes everything outside inert, its trigger included, so compact mode must
+    // still let an outside press or Escape dismiss it. Radix hides everything outside a modal
+    // popover from the accessibility tree, so these queries opt in to hidden elements.
+    const isModalOpen = () =>
+      screen
+        .getByRole('combobox', { name: 'book-chapter-trigger', hidden: true })
+        .getAttribute('aria-expanded') === 'true';
+    async function openModalCompact() {
+      const user = userEvent.setup({ pointerEventsCheck: 0 });
+      render(
+        <div>
+          <BookChapterControl modal scrRef={scrRef} handleSubmit={vi.fn()} />
+          <button type="button">outside</button>
+        </div>,
+      );
+      await user.click(getTrigger());
+      await waitFor(() => expect(document.querySelector('[cmdk-input]')).not.toBeNull());
+      await user.click(screen.getByRole('button', { name: 'Next chapter' }));
+      await waitFor(() => expect(screen.queryByRole('option')).toBeNull());
+      expect(isModalOpen()).toBe(true);
+      return { user };
+    }
+
+    test('an outside press closes a modal picker after a quick-nav step', async () => {
+      const { user } = await openModalCompact();
+      await user.click(screen.getByRole('button', { name: 'outside', hidden: true }));
+      await waitFor(() => expect(isModalOpen()).toBe(false));
+    });
+
+    test('Escape with focus on the page body closes a modal picker after a quick-nav step', async () => {
+      const { user } = await openModalCompact();
+      act(() => {
+        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+      });
+      expect(document.activeElement).toBe(document.body);
+      await user.keyboard('{Escape}');
+      await waitFor(() => expect(isModalOpen()).toBe(false));
+    });
+  });
 });
 
 describe('BookChapterControl fresh open after a compact close', () => {
