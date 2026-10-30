@@ -2054,16 +2054,16 @@ const JSON_RPC_METHOD_NOT_FOUND_CODE = -32601;
 const REQUEST_SYNC_COMMAND = 'paratextBibleSendReceive.requestSync';
 
 /**
- * Whether a rejection of `requestSync` says no handler is registered for it, i.e. the Send/Receive
- * extension is not running. Extensions cannot import the shared RPC helpers, so this matches the
- * message the network service throws for an error response: `JSON-RPC Request error (-32601): ...`,
- * which names the request type.
+ * Whether a rejection of `command` says no handler is registered for it, e.g. because the
+ * Send/Receive extension is not running. Extensions cannot import the shared RPC helpers, so this
+ * matches the message the network service throws for an error response: `JSON-RPC Request error
+ * (-32601): ...`, which names the request type.
  */
-function isRequestSyncNotRegisteredError(error: unknown): boolean {
+export function isCommandNotRegisteredError(error: unknown, command: string): boolean {
   const message = getErrorMessage(error);
   return (
     message.includes(`JSON-RPC Request error (${JSON_RPC_METHOD_NOT_FOUND_CODE})`) &&
-    message.includes(REQUEST_SYNC_COMMAND)
+    message.includes(command)
   );
 }
 
@@ -2089,7 +2089,7 @@ async function requestAutoSync(
       );
       return;
     }
-    if (!isRequestSyncNotRegisteredError(e)) throw e;
+    if (!isCommandNotRegisteredError(e, REQUEST_SYNC_COMMAND)) throw e;
     papi.logger.info(
       `The sync queue is not available (${getErrorMessage(e)}); syncing ${projectIds.join(', ')} directly`,
     );

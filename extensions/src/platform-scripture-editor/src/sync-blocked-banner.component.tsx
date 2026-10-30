@@ -2,6 +2,30 @@ import papi, { logger } from '@papi/frontend';
 import { Button, Progress, useEvent } from 'platform-bible-react';
 import { getErrorMessage, LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useState } from 'react';
+import { isCommandNotRegisteredError } from './platform-scripture-editor.utils';
+
+const CANCEL_SYNC_PROMPT_COMMAND = 'paratextBibleSendReceive.cancelSyncPrompt';
+
+/**
+ * Asks to cancel the running sync, through the prompt that also asks about the projects waiting in
+ * the sync queue. The running sync is reported by the backend, so it can be running while the
+ * Send/Receive extension that serves the prompt is not; then this cancels it directly, as there is
+ * no queue to ask about.
+ *
+ * @returns `false` when nothing was cancelled (the user chose to keep syncing)
+ */
+async function requestCancelSync(): Promise<boolean> {
+  try {
+    return await papi.commands.sendCommand(CANCEL_SYNC_PROMPT_COMMAND);
+  } catch (e) {
+    if (!isCommandNotRegisteredError(e, CANCEL_SYNC_PROMPT_COMMAND)) throw e;
+    logger.info(
+      `Sync-blocked banner is cancelling the sync directly: ${CANCEL_SYNC_PROMPT_COMMAND} is not available`,
+    );
+    await papi.commands.sendCommand('paratextBibleSendReceive.cancelSync');
+    return true;
+  }
+}
 
 const BANNER_TEXT_KEY: LocalizeKey = '%webView_platformScriptureEditor_syncEditBlocked_banner_2%';
 const CANCEL_KEY: LocalizeKey = '%general_cancel%';
@@ -64,8 +88,7 @@ export function SyncBlockedBanner({ localizedStrings }: Props) {
     // `.context/standards/Architecture-Decisions.md` for why, and for the follow-up that gives them
     // one shared cancel-requested state.
     setIsCancelEnabled(false);
-    papi.commands
-      .sendCommand('paratextBibleSendReceive.cancelSyncPrompt')
+    requestCancelSync()
       .then((isCancelSent) => {
         if (isCancelSent === false) setIsCancelEnabled(true);
         return undefined;

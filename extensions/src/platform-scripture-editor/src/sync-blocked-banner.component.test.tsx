@@ -14,7 +14,7 @@ vi.mock('@papi/frontend', () => ({
     commands: { sendCommand },
     network: { getNetworkEvent: () => () => () => true },
   },
-  logger: { warn: vi.fn() },
+  logger: { info: vi.fn(), warn: vi.fn() },
 }));
 
 const STRINGS = {
@@ -80,5 +80,27 @@ describe('SyncBlockedBanner — Cancel', () => {
     fireEvent.click(cancel);
 
     await waitFor(() => expect(cancel).toBeEnabled());
+    expect(sendCommand).not.toHaveBeenCalledWith('paratextBibleSendReceive.cancelSync');
+  });
+
+  // The backend reports the running sync, so the banner can show while the Send/Receive extension
+  // that serves the prompt is not running
+  it('cancels the sync directly when the cancel prompt is not registered', async () => {
+    sendCommand.mockImplementation(async (command: string) => {
+      if (command === 'paratextBibleSendReceive.cancelSyncPrompt')
+        throw new Error(
+          "JSON-RPC Request error (-32601): 'command:paratextBibleSendReceive.cancelSyncPrompt' not found",
+        );
+      return undefined;
+    });
+    const cancel = renderBanner();
+
+    fireEvent.click(cancel);
+
+    await waitFor(() =>
+      expect(sendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.cancelSync'),
+    );
+    await Promise.resolve();
+    expect(cancel).toBeDisabled();
   });
 });
