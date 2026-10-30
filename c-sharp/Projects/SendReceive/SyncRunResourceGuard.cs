@@ -304,6 +304,18 @@ internal static class SyncRunResourceGuard
         public ImmutableHashSet<string> ResourceIds { get; }
 
         /// <summary>
+        /// This run's uids that a user's install or removal is still writing right now: the writes
+        /// <see cref="WaitForResourceWrites"/> waits for. A run can name the rest as waiting for it
+        /// while these are still being written by someone else.
+        /// </summary>
+        /// <returns>A snapshot of the uids, each once; empty when no such write is open.</returns>
+        public IReadOnlyCollection<string> ResourceIdsWithOpenWrites()
+        {
+            lock (s_lock)
+                return ResourceIds.Where(s_writeCounts.ContainsKey).ToArray();
+        }
+
+        /// <summary>
         /// Waits until no write scope is open on any of this run's uids — writes that started
         /// before <see cref="RegisterRun"/>, since later ones wait for the run instead. Returns at
         /// once when there are none, or when this run has already ended. Bounded by

@@ -152,11 +152,13 @@ namespace TestParanextDataProvider.Projects.SendReceive
         public async Task EnterResourceWrite_RestartsItsTimeoutForEachRunThatHoldsItsResource()
         {
             // Timeline, from when the write starts waiting on run A:
-            //   1.2 s  A ends and B begins on the same uid, with no moment between them
-            //   2.0 s  a single budget spanning both runs would expire here
-            //   2.6 s  checked: the write must still be waiting, now on B
-            //   3.2 s  B's own budget would expire; B ends at 2.6 s, before that
-            var budget = TimeSpan.FromSeconds(2);
+            //   2 s  A ends and B begins on the same uid, with no moment between them
+            //   4 s  a single budget spanning both runs would expire here
+            //   5 s  checked: the write must still be waiting, now on B
+            //   6 s  B's own budget would expire; B ends at 5 s, before that
+            // Every step has a full second of slack, so a slow machine (a late swap, a late check, a
+            // write that starts waiting late) cannot make it fail.
+            var budget = TimeSpan.FromSeconds(4);
             SyncRunResourceGuard.WaitTimeout = budget;
             var runA = SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([HeldUid]);
             IDisposable? runB = null;
@@ -171,7 +173,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
                     () => SyncRunResourceGuard.EnterResourceWrite(HeldUid).Dispose()
                 );
 
-                await Task.Delay(TimeSpan.FromMilliseconds(1200));
+                await Task.Delay(budget / 2);
                 // Under the guard's lock, so the write cannot slip in between the two runs.
                 SyncRunResourceGuard.InsideGuardLockForTests(() =>
                 {
@@ -179,7 +181,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
                     runB = SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([HeldUid]);
                 });
 
-                var untilCheck = budget + TimeSpan.FromMilliseconds(600) - started.Elapsed;
+                var untilCheck = budget + TimeSpan.FromSeconds(1) - started.Elapsed;
                 if (untilCheck > TimeSpan.Zero)
                     await Task.Delay(untilCheck);
                 Assert.That(
@@ -375,6 +377,24 @@ namespace TestParanextDataProvider.Projects.SendReceive
             (await register).Dispose();
             inFlight.Dispose();
             Assert.That(await FinishesWithin(arriving, s_shouldReturnBound), Is.True);
+        }
+
+        [Test]
+        public void ResourceIdsWithOpenWrites_NamesOnlyTheRunsUidsAUserIsStillWriting()
+        {
+            var inFlight = SyncRunResourceGuard.EnterResourceWrite(HeldUid.ToUpperInvariant());
+            using var unrelated = SyncRunResourceGuard.EnterResourceWrite("not-in-the-run");
+            using var run = SyncRunResourceGuard.RegisterRun([HeldUid, OtherUid]);
+
+            Assert.That(
+                run.ResourceIdsWithOpenWrites(),
+                Is.EquivalentTo(new[] { HeldUid }),
+                "the uid being written, in either case, and none the run does not hold"
+            );
+
+            inFlight.Dispose();
+
+            Assert.That(run.ResourceIdsWithOpenWrites(), Is.Empty);
         }
 
         [Test]
