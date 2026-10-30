@@ -1515,10 +1515,15 @@ export function BookChapterControl({
                           variant="ghost"
                           size="sm"
                           onClick={() => {
+                            // `aria-disabled` does not stop activation, so the guard lives here;
+                            // it also covers Enter, which the browser turns into a click.
+                            if (isQuickNavDisabled) return;
                             setIsCommandListHidden(true);
                             onClick();
                           }}
-                          disabled={isQuickNavDisabled}
+                          // `aria-disabled` rather than `disabled`: see the tooltip wrapper below.
+                          // The `aria-disabled:` classes match Button's `disabled:` look.
+                          aria-disabled={isQuickNavDisabled}
                           // `rounded-lg!` re-asserts all four corners against `ButtonGroup`'s
                           // horizontal variant, which squares off the inner edges so that flush
                           // buttons read as one bar. These four are not flush — `gap-1` on the
@@ -1527,7 +1532,7 @@ export function BookChapterControl({
                           // the row produced a ring that changed shape from button to button. The
                           // radius matches what `size="sm"` already applies inside a button group,
                           // so only the corners the group removed come back.
-                          className="tw:h-8.5 tw:w-6 tw:rounded-lg! tw:p-0"
+                          className="tw:h-8.5 tw:w-6 tw:rounded-lg! tw:p-0 tw:aria-disabled:cursor-default tw:aria-disabled:opacity-50"
                           aria-label={title}
                           onKeyDown={handleQuickNavButtonKeyDown}
                         >
@@ -1546,23 +1551,17 @@ export function BookChapterControl({
                           {index > 0 && group !== quickNavButtons[index - 1].group && (
                             <ButtonGroupSeparator />
                           )}
-                          {isQuickNavDisabled ? (
-                            // A disabled Button carries `pointer-events: none` from its own base
-                            // variants, so it is not hit-tested: neither a Radix tooltip nor a
-                            // `title` ON THE BUTTON can ever fire. These arrows come back disabled
-                            // at the edges of the canon — Genesis 1:1 is the default state of a
-                            // freshly opened project — which is exactly where a user asks what the
-                            // button was for. The wrapper is still hit-tested, so the native
-                            // tooltip it carries is the one hover explanation available here.
-                            <span title={title} className="tw:inline-flex">
-                              {quickNavButton}
-                            </span>
-                          ) : (
-                            <Tooltip>
-                              <TooltipTrigger asChild>{quickNavButton}</TooltipTrigger>
-                              <TooltipContent>{title}</TooltipContent>
-                            </Tooltip>
-                          )}
+                          {/* The arrows at the edges of the canon (Genesis 1:1 is the default
+                              state of a freshly opened project) use `aria-disabled`, not
+                              `disabled`, for two reasons. They stay focusable, so stepping onto
+                              an edge never drops focus out of the picker, which would stop
+                              Escape from closing a compact picker. And they stay hit-tested (a
+                              disabled Button carries `pointer-events: none`), so the hover
+                              tooltip still explains what the button is for. */}
+                          <Tooltip>
+                            <TooltipTrigger asChild>{quickNavButton}</TooltipTrigger>
+                            <TooltipContent>{title}</TooltipContent>
+                          </Tooltip>
                         </Fragment>
                       );
                     },
