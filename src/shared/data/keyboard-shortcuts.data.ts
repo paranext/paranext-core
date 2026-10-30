@@ -380,7 +380,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
     id: 'scripture-paste-held-off-chapter-loading',
     purpose:
-      'While the next chapter is loading, Paste and Paste as plain text do nothing, so nothing is pasted into the chapter being left or lands in the new one',
+      'While the next chapter is loading, the Paste and Paste as plain text keys do nothing. A paste pressed just before the load started reads the clipboard in the background, so it can still land',
     category: 'Editing',
     context: 'Scripture editor, while it moves to another chapter',
     keys: {
