@@ -137,7 +137,9 @@ describe('FootnotesLayout rows the project font reaches', () => {
       .getAllByRole('option')
       .filter((row) => !row.closest('[data-state="editing"]'));
     expect(staticRows).toHaveLength(1);
-    expect([...rows]).toEqual(staticRows);
+    // Identity, not `toEqual`: DOM nodes compare structurally, so a look-alike row would pass.
+    expect(rows).toHaveLength(staticRows.length);
+    staticRows.forEach((row) => expect([...rows].includes(row)).toBe(true));
     const editingRow = container.querySelector('li[data-state="editing"]');
     expect(editingRow).not.toBeNull();
     expect(editingRow).toContainElement(screen.getByTestId('row-editor'));
@@ -146,8 +148,11 @@ describe('FootnotesLayout rows the project font reaches', () => {
     outside.className = 'formatted-font';
     outside.innerHTML = '<li>outside the pane</li>';
     document.body.appendChild(outside);
-    expect(document.querySelectorAll(FOOTNOTE_ROWS_SELECTOR)).toHaveLength(rows.length);
-    outside.remove();
+    try {
+      expect(document.querySelectorAll(FOOTNOTE_ROWS_SELECTOR)).toHaveLength(rows.length);
+    } finally {
+      outside.remove();
+    }
   });
 });
 

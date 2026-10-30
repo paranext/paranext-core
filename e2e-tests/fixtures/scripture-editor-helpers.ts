@@ -178,14 +178,7 @@ export function installSampleProjectWithFont(options: {
 }): (projectRoot: string) => void {
   return (projectRoot) => {
     const target = path.join(projectRoot, 'WEB');
-    fs.mkdirSync(target, { recursive: true });
-    fs.readdirSync(BUNDLED_SAMPLE_WEB_DIR, { withFileTypes: true }).forEach((entry) => {
-      if (entry.isFile())
-        fs.copyFileSync(
-          path.join(BUNDLED_SAMPLE_WEB_DIR, entry.name),
-          path.join(target, entry.name),
-        );
-    });
+    fs.cpSync(BUNDLED_SAMPLE_WEB_DIR, target, { recursive: true });
     const settingsPath = path.join(target, 'Settings.xml');
     let settings = fs.readFileSync(settingsPath, 'utf-8');
     const fontTag = /<DefaultFont>[^<]*<\/DefaultFont>/;
