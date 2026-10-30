@@ -2907,6 +2907,50 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4370 round 9; paranext-core PR #2823, scripture-editors PR
   paranext/scripture-editors#11.
 
+## adr-editor-clipboard-format-in-html-attribute: A hidden-marker view's clipboard format travels in an attribute of the copy's html
+
+- **Date:** 2026-10-30
+- **Status:** Accepted (short term). Long-term direction: USFM on the clipboard, read back with
+  Standard view's tokenizer, so one format serves every view and other programs; no ticket yet.
+- **Context:** A view that hides its markers cannot paste what it copied from the copy's text or
+  its html: Lexical's html export carries no char or note attributes, milestones or figures, so a
+  pasted footnote gained closers (catalog row CB-3). The editor's own node copy does hold all of it,
+  but the editor's Ctrl+V and menu Paste start from `navigator.clipboard.read()`, which returns only
+  sanctioned types and drops `application/x-lexical-editor`. The `data-*` attributes of the html do
+  come through that read.
+- **Decision:** The editor writes the node copy into an attribute of the copy's html
+  (`data-platform-editor-node-copy`, on one inline `<span>` around the export) as well as into
+  `application/x-lexical-editor`, and reads it back through today's async read. The mechanics are in
+  `scripture-editors`' `docs/clipboard-semantics.md`, S5. The host has no part in it: paranext-core
+  has no clipboard command.
+- **Alternatives considered:**
+  - _A host command running a native paste (`webContents.paste()`), whose `paste` event carries the
+    flavor._ PAPI commands are reachable over the unauthenticated WebSocket on 8876, so a web page
+    in the user's browser could paste the clipboard (a password just copied) into a focused editor,
+    where it is saved and can be read back. Refusing connections with an `Origin` is a header
+    stopgap, and does not stop such a page sending a notification whose click command the renderer
+    then runs for it. The paste also lands wherever focus is, which needs a focus workaround in the
+    menu component.
+  - _A web custom format (`web application/x-lexical-editor`, through
+    `navigator.clipboard.write`)._ It survives the read, but cannot be written in the copy event, so
+    it needs an async second write: rejected when the document is not focused, broken by concurrent
+    writes on Linux, and unseen by a native paste such as the macOS app menu's.
+  - _Carrying everything in the html's own elements._ Rewrites Lexical's export and import for every
+    node type, and other programs' html still would not have it.
+- **Consequences:**
+  - No main-process surface, and no focus requirement beyond the document having focus, which the
+    read needs anyway.
+  - The attribute holds what the view hides (a figure's caption, a collapsed note's text) and about
+    doubles the html, so any program reading attributes can see those; TJ accepted this
+    (2026-10-30). Any program can also write the attribute, which goes through the same guarded parse
+    as the flavor; TJ does not mind forged data (2026-10-30).
+  - A copy that goes through another editor loses the attribute and pastes as html (catalog row
+    CB-14).
+  - The read raises no `paste` event, so `usePauseEditing` holds off the paste chords by key, and
+    the Paste items of the editor's own menus are not held off during a chapter load.
+  - Checked on Electron 39 on Linux and on Windows (probes), and end to end on Linux by
+    `in-editor-paste.spec.ts`. macOS was researched, not run.
+
 ## adr-editor-collapsed-note-hides-its-annotations: An annotation inside a collapsed note is not shown, as in Paratext 9
 
 - **Date:** 2026-10-01
