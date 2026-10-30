@@ -12376,6 +12376,16 @@ declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useWebViewController } from 'renderer/hooks/papi-hooks/use-web-view-controller.hook';
   export { default as useRecentScriptureRefs } from 'renderer/hooks/papi-hooks/use-recent-scripture-refs.hook';
 }
+declare module 'renderer/services/overlays/window-blur-press.util' {
+  /**
+   * Property key under which the library's `useDismissOnWindowBlur` marks the `pointerdown` it
+   * dispatches for a window blur. It must equal the library's key; `window-blur-press.util.test.tsx`
+   * fails if the two differ.
+   */
+  export const WINDOW_BLUR_PRESS_MARKER: unique symbol;
+  /** Whether this event is the press `useDismissOnWindowBlur` dispatches for a window blur. */
+  export function isWindowBlurPress(event: Event): boolean;
+}
 declare module 'renderer/services/overlays/overlay-store' {
   /**
    * Simple overlay store using a Map and listeners pattern. Manages active overlay entries (context
