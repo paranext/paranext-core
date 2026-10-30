@@ -20,10 +20,13 @@
  *    that hides markers, so the paste reads the copy's text, which is its USFM marked as such: it
  *    goes in as text without its marker tokens, with no notice — no note and no marker of the row
  *    editor's comes with it.
- * 5. **Ctrl+V pressed while the next chapter is loading lands nowhere.** The keys are recorded inside
- *    the web view: every paste the chapter being left showed before the pause is saved, nothing it
- *    never showed is, and at least one press while it was showing was held off. The new chapter
- *    holds no more pastes than were pressed once it had arrived.
+ * 5. **A Ctrl+V held off during a chapter move lands nowhere.** The keys are recorded inside the web
+ *    view. Every paste the chapter being left showed before the move was asked for is saved,
+ *    nothing it never showed is, and at least one press while it was showing was held off. Only
+ *    presses that were let through paste anything. One let through just before the new chapter
+ *    arrives can land there: its clipboard read outlasts the load. The chapter being left can show
+ *    more than it saves: a paste that lands after the chapter-switch flush is not saved
+ *    (`isEditorContentForChapter`), and the hold-off starts only after that flush.
  *
  * Saved text is compared whitespace-normalized, because the chapter's first save rewrites line
  * endings and trailing spaces (catalog rows S-2 and E-1 in
@@ -37,7 +40,7 @@
  * tests/isolated/scripture-editor/in-editor-paste.spec.ts`.
  */
 import fs from 'fs';
-import type { Locator } from '@playwright/test';
+import type { ConsoleMessage, Locator } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import { sendPapiRequestOnce, waitForAppReady } from '../../../fixtures/helpers';
 import {
@@ -123,9 +126,16 @@ const PANE_PASTED_TEXT = '1 TR and ';
 const LOAD_PASTE_POINT = 'with whom I am |well pleased';
 /** Pasted while the chapter changes. Matthew's own text has no `qzq` in it. */
 const LOAD_PASTE_TOKEN = 'qzq';
-const PASTES_PER_MOVE = 30;
+/** Part of the web view's debug line for a save refused because the chapter has moved on. */
+const NOT_SAVED_LOG_TEXT = "Not saving the editor's content";
+const PASTE_MODIFIER = PASTE_KEY.split('+')[0] === 'Meta' ? 'Meta' : 'Control';
+const PASTE_LETTER = 'v';
 const PASTE_INTERVAL_MS = 15;
-/** The most chapter moves tried before concluding no press landed during one. */
+/** The stream of presses for one move ends after this many, if the move has not arrived by then. */
+const MOST_PRESSES_PER_MOVE = 40;
+/** Presses sent once the new chapter has arrived. */
+const PRESSES_AFTER_ARRIVAL = 5;
+/** A load can be shorter than the time between presses, so one move may see no press held off. */
 const MOST_MOVES = 3;
 
 /** What the web view recorded around one chapter move. */
@@ -138,8 +148,8 @@ interface MoveProbe {
   tokensShownAtStart: number;
   /** The most pasted tokens it ever showed. */
   mostTokensShown: number;
-  /** Pasted tokens it showed at the last press that was not held off, so before the pause began. */
-  tokensShownAtLastPassedPress: number;
+  /** Of {@link pressesWhileOld}, those no listener on the way to the editor stopped. */
+  pressesPassedWhileOld: number;
 }
 
 /** The book file's text with every whitespace run as one space. */
@@ -170,7 +180,7 @@ function isEditorFocused(editorInput: Locator): Promise<boolean> {
 }
 
 test.describe('the editor’s own paste in Simple mode’s paragraph-structure view', () => {
-  test('a copied footnote pastes back exactly from Ctrl+V and both menus, a note’s category survives the real clipboard read, a pane copy pastes as text, and a paste during a chapter load lands nowhere', async ({
+  test('a copied footnote pastes back exactly from Ctrl+V and both menus, a note’s category survives the real clipboard read, a pane copy pastes as text, and a paste held off during a chapter move lands nowhere', async ({
     mainPage,
     electronApp,
   }) => {
@@ -463,7 +473,7 @@ test.describe('the editor’s own paste in Simple mode’s paragraph-structure v
       expect(normalizedAfter.replace(pasted[0], site)).toBe(normalizedBefore);
     });
 
-    await test.step('Ctrl+V pressed while the next chapter loads lands nowhere', async () => {
+    await test.step('a Ctrl+V held off during a chapter move lands nowhere', async () => {
       const editorEvalFrame = await findScriptureEditorFrame(mainPage);
       const chapterMarker = editorInput.locator('[data-marker="c"][data-number]');
       const book = { book: 'MAT', verseNum: 1 };
@@ -495,15 +505,14 @@ test.describe('the editor’s own paste in Simple mode’s paragraph-structure v
             let pressesWhileOld = 0;
             let pressesAfter = 0;
             let mostTokensShown = 0;
-            let tokensShownAtLastPassedPress = 0;
+            let pressesPassedWhileOld = 0;
             const tokensShown = () => (editorRoot?.textContent ?? '').split(token).length - 1;
             dataset.probeTokensShownAtStart = String(tokensShown());
-            tokensShownAtLastPassedPress = tokensShown();
             const record = () => {
               dataset.probePressesWhileOld = String(pressesWhileOld);
               dataset.probePressesAfter = String(pressesAfter);
               dataset.probeMostTokensShown = String(mostTokensShown);
-              dataset.probeTokensShownAtLastPassedPress = String(tokensShownAtLastPassedPress);
+              dataset.probePressesPassedWhileOld = String(pressesPassedWhileOld);
             };
             const recordShown = () => {
               if (!showsOldChapter()) return;
@@ -524,7 +533,7 @@ test.describe('the editor’s own paste in Simple mode’s paragraph-structure v
             const onKeyPassed = (event: KeyboardEvent) => {
               if (event.key.toLowerCase() !== 'v' || !(event.ctrlKey || event.metaKey)) return;
               if (!showsOldChapter()) return;
-              tokensShownAtLastPassedPress = tokensShown();
+              pressesPassedWhileOld += 1;
               record();
             };
             window.addEventListener('keydown', onKeyPassed);
@@ -552,16 +561,23 @@ test.describe('the editor’s own paste in Simple mode’s paragraph-structure v
             pressesAfter: Number(dataset.probePressesAfter),
             tokensShownAtStart: Number(dataset.probeTokensShownAtStart),
             mostTokensShown: Number(dataset.probeMostTokensShown),
-            tokensShownAtLastPassedPress: Number(dataset.probeTokensShownAtLastPassedPress),
+            pressesPassedWhileOld: Number(dataset.probePressesPassedWhileOld),
           };
         });
 
-      let heldOffAPaste = false;
-      for (let move = 0; move < MOST_MOVES && !heldOffAPaste; move += 1) {
+      /** The pasted tokens the editor shows now. */
+      const tokensShownNow = () =>
+        editorInput.evaluate(
+          (root, token) => (root.textContent ?? '').split(token).length - 1,
+          LOAD_PASTE_TOKEN,
+        );
+
+      let wasMoveMeaningful = false;
+      for (let move = 0; move < MOST_MOVES && !wasMoveMeaningful; move += 1) {
         const fromChapter = 3 + move;
         // Sequential on purpose: each move starts from the chapter the one before arrived at.
         // eslint-disable-next-line no-await-in-loop
-        heldOffAPaste =
+        wasMoveMeaningful =
           await test.step(`pasting while moving from Matthew ${fromChapter}`, async () => {
             await expect(chapterMarker).toHaveAttribute('data-number', String(fromChapter), {
               timeout: 30_000,
@@ -570,58 +586,112 @@ test.describe('the editor’s own paste in Simple mode’s paragraph-structure v
               old: await tokensSaved(fromChapter),
               next: await tokensSaved(fromChapter + 1),
             };
+            let notSavedLogLines = 0;
+            const countNotSaved = (message: ConsoleMessage) => {
+              if (message.text().includes(NOT_SAVED_LOG_TEXT)) notSavedLogLines += 1;
+            };
+            mainPage.on('console', countNotSaved);
             await startProbe(fromChapter);
-            // One stream of presses spanning the move: `keyboard` reaches the editor because its
-            // frame holds the focus.
+            const tokensAtStart = await tokensShownNow();
+            // The paste that makes the lower bound below mean something: it has shown before the move
+            // is asked for, so it landed ahead of the chapter-switch flush.
+            await mainPage.keyboard.press(PASTE_KEY);
+            await expect
+              .poll(tokensShownNow, {
+                message: 'no paste showed in the chapter before the move',
+                timeout: 15_000,
+              })
+              .toBeGreaterThan(tokensAtStart);
+            const tokensShownBeforeMove = await tokensShownNow();
+
+            const stream = { hasArrived: false };
             await Promise.all([
               (async () => {
-                // Paced presses, each one after the one before.
+                // One stream of presses spanning the move; `keyboard` reaches the editor because its
+                // frame holds the focus. Not waiting for each press to come back: with the editor
+                // busy pasting that takes longer than most loads do, so no press would fall during
+                // one. The modifier stays down so that overlapping presses cannot lose it.
+                const presses: Promise<void>[] = [];
+                await mainPage.keyboard.down(PASTE_MODIFIER);
+                let pressesAfterArrival = 0;
+                // Paced by the timeout, so one at a time on purpose.
                 /* eslint-disable no-await-in-loop */
-                for (let i = 0; i < PASTES_PER_MOVE; i += 1) {
-                  await mainPage.keyboard.press(PASTE_KEY);
+                for (
+                  let i = 0;
+                  i < MOST_PRESSES_PER_MOVE && pressesAfterArrival < PRESSES_AFTER_ARRIVAL;
+                  i += 1
+                ) {
+                  presses.push(mainPage.keyboard.press(PASTE_LETTER));
                   await mainPage.waitForTimeout(PASTE_INTERVAL_MS);
+                  if (stream.hasArrived) pressesAfterArrival += 1;
                 }
                 /* eslint-enable no-await-in-loop */
+                await Promise.all(presses);
+                await mainPage.keyboard.up(PASTE_MODIFIER);
               })(),
               (async () => {
-                await mainPage.waitForTimeout(PASTE_INTERVAL_MS * 3);
                 await sendPapiRequestOnce('command:platform.goToNextChapter', [], WEBSOCKET_PORT);
+                await expect(chapterMarker).toHaveAttribute(
+                  'data-number',
+                  String(fromChapter + 1),
+                  { timeout: 30_000 },
+                );
+                stream.hasArrived = true;
               })(),
             ]);
-            await expect(chapterMarker).toHaveAttribute('data-number', String(fromChapter + 1), {
-              timeout: 30_000,
-            });
             // Let pastes asked for during the move finish, wherever they are going to land.
             await mainPage.waitForTimeout(3_000);
             const probe = await stopProbe();
-            test.info().annotations.push({ type: 'probe', description: JSON.stringify(probe) });
+            mainPage.off('console', countNotSaved);
+            const heldOffPresses = probe.pressesWhileOld - probe.pressesPassedWhileOld;
+            const savedOld = () => tokensSaved(fromChapter).then((n) => n - tokensBefore.old);
+            const report = JSON.stringify({
+              ...probe,
+              tokensShownBeforeMove,
+              heldOffPresses,
+              notSavedLogLines,
+            });
+            test.info().annotations.push({ type: 'probe', description: report });
+            // Worker output, so a passing run's values can be read from the run's own log.
+            // eslint-disable-next-line no-console
+            console.log(`[in-editor-paste probe] move from ${fromChapter}: ${report}`);
 
-            // Every paste the chapter being left showed before the pause began is saved. A clipboard
-            // read in flight when the pause began can still show there, and nothing edited during
-            // the pause is saved, so that paste is gone with the chapter it showed in. Nothing is
-            // saved that was never shown.
+            // Every paste shown before the move was asked for is saved. The chapter being left can
+            // show more than that: a paste landing after the flush shows there and is not saved.
+            // Nothing is saved that was never shown.
             await expect
-              .poll(async () => (await tokensSaved(fromChapter)) - tokensBefore.old, {
+              .poll(savedOld, {
+                message: `every paste shown before the move should be saved: ${report}`,
                 timeout: 30_000,
               })
-              .toBeGreaterThanOrEqual(
-                probe.tokensShownAtLastPassedPress - probe.tokensShownAtStart,
-              );
-            expect((await tokensSaved(fromChapter)) - tokensBefore.old).toBeLessThanOrEqual(
-              probe.mostTokensShown - probe.tokensShownAtStart,
-            );
-            // The new chapter holds no paste pressed before it arrived.
+              .toBeGreaterThanOrEqual(tokensShownBeforeMove - probe.tokensShownAtStart);
+            expect(
+              await savedOld(),
+              `nothing should be saved that never showed: ${report}`,
+            ).toBeLessThanOrEqual(probe.mostTokensShown - probe.tokensShownAtStart);
+            // Only a press let through pastes: one that had not shown in the chapter being left can
+            // land in the new one, once its read outlasts the load; one held off lands nowhere.
             const landedInNext = (await tokensSaved(fromChapter + 1)) - tokensBefore.next;
-            expect(landedInNext).toBeLessThanOrEqual(probe.pressesAfter);
+            const shownInOld = probe.mostTokensShown - probe.tokensShownAtStart;
+            // Worker output, as above.
+            // eslint-disable-next-line no-console
+            console.log(
+              `[in-editor-paste probe] saved from the chapter left: ${await savedOld()}; in the new chapter: ${landedInNext}`,
+            );
+            expect(
+              landedInNext,
+              `the new chapter should hold only pastes of presses let through: ${report}`,
+            ).toBeLessThanOrEqual(probe.pressesAfter + probe.pressesPassedWhileOld - shownInOld);
 
-            return probe.pressesWhileOld > probe.mostTokensShown - probe.tokensShownAtStart;
+            return tokensShownBeforeMove > probe.tokensShownAtStart && heldOffPresses > 0;
           });
       }
-      // Without a press while the chapter changed there was nothing to hold off, and the checks
-      // above proved nothing.
-      expect(heldOffAPaste, 'no Ctrl+V was pressed while the editor was changing chapter').toBe(
-        true,
-      );
+      // Without a paste shown ahead of the move and a press held off during it, the checks above
+      // proved nothing.
+      expect(
+        wasMoveMeaningful,
+        'no move had a paste shown ahead of it and a Ctrl+V held off during it',
+      ).toBe(true);
     });
   });
 });
