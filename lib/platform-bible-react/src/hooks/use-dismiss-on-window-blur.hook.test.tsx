@@ -261,7 +261,7 @@ describe('useDismissOnWindowBlur', () => {
           </>
         );
       }
-      let currentTrigger = trigger;
+      let currentTrigger: ReactNode = trigger;
       const { rerender } = render(<Probe triggerMarkup={trigger} />);
       return {
         onCloseAutoFocus: (event: Event) => handler?.(event),
