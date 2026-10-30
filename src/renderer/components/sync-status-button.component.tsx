@@ -210,11 +210,11 @@ export function SyncStatusButton() {
    *
    * Written during RENDER, deliberately, and unlike the effect-written refs below. React schedules
    * the passive-effect flush as its own task after commit, i.e. after pending microtasks — so a
-   * `cancelSync` rejection delivered between the commit that moved `status` to `failed` and that
-   * flush would read an effect-written ref as still `syncing`, and toast "Couldn't cancel the sync"
-   * beside a popover saying the sync finished. That is precisely what the guard exists to suppress.
-   * A render-phase write cannot lag the commit it belongs to, and for a SUPPRESSION guard being
-   * marginally ahead is the safe direction: it errs toward staying quiet.
+   * `cancelSyncPrompt` rejection delivered between the commit that moved `status` to `failed` and
+   * that flush would read an effect-written ref as still `syncing`, and toast "Couldn't cancel the
+   * sync" beside a popover saying the sync finished. That is precisely what the guard exists to
+   * suppress. A render-phase write cannot lag the commit it belongs to, and for a SUPPRESSION guard
+   * being marginally ahead is the safe direction: it errs toward staying quiet.
    */
   const statusRef = useRef(status);
   statusRef.current = status;
@@ -224,12 +224,12 @@ export function SyncStatusButton() {
    * again whenever the status leaves `syncing` (see the settle effect below) — so an episode
    * boundary invalidates any request still in flight across it.
    *
-   * `cancelSync` can reject long after it was sent (an unregistered handler rejects only after the
-   * RPC layer's ~10s retry budget), by which time the sync it targeted may have ended and another
-   * begun. Without this, sync A's rejection re-enables Cancel and toasts "Couldn't cancel the sync"
-   * against sync B — and if the user had already cancelled B, it reverts B's "Cancelling…" while
-   * B's own request is still in flight, defeating the single-shot guard the whole handler is built
-   * around.
+   * `cancelSyncPrompt` can reject long after it was sent (an unregistered handler rejects only
+   * after the RPC layer's ~10s retry budget), by which time the sync it targeted may have ended and
+   * another begun. Without this, sync A's rejection re-enables Cancel and toasts "Couldn't cancel
+   * the sync" against sync B — and if the user had already cancelled B, it reverts B's
+   * "Cancelling…" while B's own request is still in flight, defeating the single-shot guard the
+   * whole handler is built around.
    */
   const cancelGenerationRef = useRef(0);
 
@@ -256,7 +256,17 @@ export function SyncStatusButton() {
       // ask for. If an implementation ever REQUIRES the id to act, this cancel would silently do
       // nothing while the button said "Cancelling…", so the contract commits to treating an absent
       // id as an unconditional cancel.
-      await sendCommand('paratextBibleSendReceive.cancelSync');
+      //
+      // The prompt variant, so a user with projects waiting behind this sync is asked whether to
+      // drop them too. It is served by the Send/Receive extension, which is also what reports the
+      // running sync this button offers to cancel.
+      const isCancelSent = await sendCommand('paratextBibleSendReceive.cancelSyncPrompt');
+      // The user answered that the sync should go on: nothing is pending, so Cancel is offered
+      // again and the sync's outcome is not reported as one they asked for.
+      if (isCancelSent === false && generation === cancelGenerationRef.current) {
+        setIsCancelEnabled(true);
+        setIsCancelling(false);
+      }
     } catch (e) {
       logger.warn(`Toolbar could not cancel the running sync: ${getErrorMessage(e)}`);
       // The sync this request was for is over, and everything below would land on a later one's
