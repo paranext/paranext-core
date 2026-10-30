@@ -258,6 +258,11 @@ export function SyncStatusButton() {
    * whole handler is built around.
    */
   const cancelGenerationRef = useRef(0);
+  /**
+   * Whether the cancel prompt of the current sync is still open. Cancel stays disarmed while it is,
+   * including across a popover close and reopen, so one sync is never asked twice.
+   */
+  const isCancelPromptOpenRef = useRef(false);
 
   const handleCancel = useCallback(async () => {
     // The editor's sync-blocked banner (`extensions/src/platform-scripture-editor/`) offers the
@@ -268,10 +273,7 @@ export function SyncStatusButton() {
     // can't queue another request, and re-enabled only if this one is rejected while a sync is
     // still running, so the user can retry.
     setIsCancelEnabled(false);
-    // A cancel takes effect whenever send/receive reaches a stopping point, so the sync keeps
-    // reporting `syncing` for a while yet. Saying "Cancelling…" is what distinguishes a request that
-    // was accepted from a button that has merely gone dim.
-    setIsCancelling(true);
+    isCancelPromptOpenRef.current = true;
     cancelGenerationRef.current += 1;
     const generation = cancelGenerationRef.current;
     try {
@@ -288,11 +290,19 @@ export function SyncStatusButton() {
       // button offers to cancel is reported by the backend, so a sync can be running without the
       // prompt: then the sync is cancelled directly, as there is no queue to ask about.
       const isCancelSent = await sendCancelRequest();
-      // Nothing was cancelled (the user chose to keep syncing): nothing is pending, so Cancel is
-      // offered again and the sync's outcome is not reported as one they asked for.
-      if (isCancelSent === false && generation === cancelGenerationRef.current) {
+      // The prompt of a sync that is over says nothing about the sync that shows now.
+      if (generation !== cancelGenerationRef.current) return;
+      isCancelPromptOpenRef.current = false;
+      if (isCancelSent === false) {
+        // Nothing was cancelled (the user chose to keep syncing): nothing is pending, so Cancel is
+        // offered again and the sync's outcome is not reported as one they asked for.
         setIsCancelEnabled(true);
-        setIsCancelling(false);
+      } else {
+        // A cancel takes effect whenever send/receive reaches a stopping point, so the sync keeps
+        // reporting `syncing` for a while yet. Saying "Cancelling…" once the cancel is confirmed is
+        // what distinguishes a request that was accepted from a button that has merely gone dim; it
+        // is not said while the prompt is still open, since the user may yet keep syncing.
+        setIsCancelling(true);
       }
     } catch (e) {
       logger.warn(`Toolbar could not cancel the running sync: ${getErrorMessage(e)}`);
@@ -300,6 +310,7 @@ export function SyncStatusButton() {
       // state. Nothing to re-enable and nothing to report: whatever is showing now describes the
       // episode that is actually running.
       if (generation !== cancelGenerationRef.current) return;
+      isCancelPromptOpenRef.current = false;
       setIsCancelEnabled(true);
       setIsCancelling(false);
       // A rejected cancel does NOT prove the sync is still running — the declaration guarantees
@@ -402,6 +413,7 @@ export function SyncStatusButton() {
     setIsCancelEnabled(true);
     // This episode is over, so a cancel request still in flight from it must not reach the next one.
     cancelGenerationRef.current += 1;
+    isCancelPromptOpenRef.current = false;
   }, [status]);
 
   /**
@@ -448,12 +460,12 @@ export function SyncStatusButton() {
   }, [isOpen]);
 
   // Re-arm Cancel each time the popover is reopened, so a rejected-then-abandoned attempt doesn't
-  // leave the button dead for the rest of the session. Not while a cancel is still pending, though:
-  // that would produce an enabled button reading "Cancelling…" which fires a second request.
+  // leave the button dead for the rest of the session. Not while a cancel is still pending or its
+  // prompt is still open, though: that would let a second click send a second request.
   const handleOpenChange = useCallback(
     (nextIsOpen: boolean) => {
       setIsOpen(nextIsOpen);
-      if (nextIsOpen && !isCancelling) setIsCancelEnabled(true);
+      if (nextIsOpen && !isCancelling && !isCancelPromptOpenRef.current) setIsCancelEnabled(true);
     },
     [isCancelling],
   );

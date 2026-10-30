@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { getRowSyncState, isSyncRequestRemovedError } from './home-sync-queue.util';
+import {
+  getRowSyncState,
+  isCommandNotRegisteredError,
+  isSyncRequestRemovedError,
+} from './home-sync-queue.util';
 
 describe('getRowSyncState', () => {
   const RUNNING = new Set(['RUN', 'BOTH']);
@@ -32,5 +36,34 @@ describe('isSyncRequestRemovedError', () => {
     expect(isSyncRequestRemovedError(new Error('Project is locked by another user'))).toBe(false);
     expect(isSyncRequestRemovedError(new Error('write refused (SR_EDIT_BLOCKED)'))).toBe(false);
     expect(isSyncRequestRemovedError(undefined)).toBe(false);
+  });
+});
+
+describe('isCommandNotRegisteredError', () => {
+  const COMMAND = 'paratextBibleSendReceive.requestSync';
+
+  it('recognizes a method-not-found rejection that names the command', () => {
+    expect(
+      isCommandNotRegisteredError(
+        new Error(`JSON-RPC Request error (-32601): Method not found: ${COMMAND}`),
+        COMMAND,
+      ),
+    ).toBe(true);
+  });
+
+  it('does not take a different command, a different code, or a plain failure for it', () => {
+    expect(
+      isCommandNotRegisteredError(
+        new Error('JSON-RPC Request error (-32601): Method not found: other.command'),
+        COMMAND,
+      ),
+    ).toBe(false);
+    expect(
+      isCommandNotRegisteredError(
+        new Error(`JSON-RPC Request error (-32000): ${COMMAND}`),
+        COMMAND,
+      ),
+    ).toBe(false);
+    expect(isCommandNotRegisteredError(new Error('Project is locked'), COMMAND)).toBe(false);
   });
 });

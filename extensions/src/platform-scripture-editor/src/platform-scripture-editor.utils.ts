@@ -2074,6 +2074,9 @@ export function isCommandNotRegisteredError(error: unknown, command: string): bo
  * request that was taken out of the queue before it ran (`SYNC_REQUEST_REMOVED_MARKER`: the user
  * removed it, or it was dropped at quit) is not a failure and only logs at info. Any other
  * rejection is rethrown for the caller to report.
+ *
+ * The queue skips an automatic request for a project whose sync is already running or waiting, so
+ * edits made during that run go out with the project's next sync.
  */
 async function requestAutoSync(
   papi: typeof PapiBackend,
@@ -2173,6 +2176,8 @@ export async function syncOnProjectSwitch(
 
   if (outgoingProjectId && !(await isProjectPublished(papi, outgoingProjectId))) {
     try {
+      // Skipped when the outgoing project's sync is already running or waiting; edits made during
+      // that run go out with the project's next sync.
       await requestAutoSync(papi, [outgoingProjectId], { includeConnected: false }, () =>
         papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [
           outgoingProjectId,

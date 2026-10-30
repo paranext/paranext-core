@@ -15,7 +15,7 @@ import {
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Home, HOME_STRING_KEYS, type RemoteProjectsState } from './home.component';
-import { isSyncRequestRemovedError } from './home-sync-queue.util';
+import { isCommandNotRegisteredError, isSyncRequestRemovedError } from './home-sync-queue.util';
 import { parseUnsyncedProjectIds } from './home-unsynced.util';
 import { getInternetBlockedNotification } from './internet-block-notification.utils';
 import { isProjectResourceFilterValue } from './project-resource-filter.component';
@@ -260,6 +260,7 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
   // report through this id, so a repeat failure replaces the previous toast instead of stacking.
   // Internet blocks carry their own id, shared with everywhere else that notices the same block.
   const sharedProjectErrorNotificationId = useMemo(() => newGuid(), []);
+  const syncQueueRemoveErrorNotificationId = useMemo(() => newGuid(), []);
 
   /** Ends one of Home's own open requests for the project, leaving any other still listed. */
   const endOwnRequest = (projectId: string) => {
@@ -270,8 +271,22 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
     });
   };
 
+  /**
+   * Normalized ids of the projects Home has asked the queue to sync that the queue has not yet
+   * reported as running or waiting. Kept in a ref so a second click in the same tick sees the
+   * first.
+   */
+  const unreportedRequestsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    [...syncActivity.projectIds, ...syncQueue.waitingProjectIds].forEach((id) =>
+      unreportedRequestsRef.current.delete(normalizeProjectId(id)),
+    );
+  }, [syncActivity.projectIds, syncQueue.waitingProjectIds]);
+
   // Every click is handed to the sync queue, which starts it right away or keeps it waiting for the
-  // next run, so nothing here refuses a click because a sync is already running.
+  // next run. A sync that is already running does not refuse a click: it queues the project's next
+  // run. Only a repeat click on a project whose own request the queue has not yet reported as
+  // running or waiting is ignored, so a double-click asks once.
   const sendReceiveProject = async (projectId: string) => {
     if (!isSendReceiveAvailable) {
       // Say so rather than doing nothing. Availability can still be unknown when a row's Sync
@@ -285,12 +300,32 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
       return;
     }
 
+    const normalizedProjectId = normalizeProjectId(projectId);
+    if (unreportedRequestsRef.current.has(normalizedProjectId)) {
+      logger.info(`Home web view ignored a repeat sync click for project ${projectId}`);
+      return;
+    }
+    unreportedRequestsRef.current.add(normalizedProjectId);
+
     setOwnActiveSendReceiveProjects((prev) => [...prev, projectId]);
     try {
       // Get of a project not on this computer yet downloads it through the same request.
-      await papi.commands.sendCommand('paratextBibleSendReceive.requestSync', [projectId], 'home', {
-        includeConnected: false,
-      });
+      try {
+        await papi.commands.sendCommand(
+          'paratextBibleSendReceive.requestSync',
+          [projectId],
+          'home',
+          { includeConnected: false },
+        );
+      } catch (e) {
+        if (!isCommandNotRegisteredError(e, 'paratextBibleSendReceive.requestSync')) throw e;
+        logger.info(
+          `The sync queue is not available (${getErrorMessage(e)}); syncing project ${projectId} directly`,
+        );
+        await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [
+          projectId,
+        ]);
+      }
     } catch (e) {
       const errorMessage = getErrorMessage(e);
       // Taken out of the queue before it ran, by the user or at quit: nothing failed.
@@ -324,6 +359,7 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
       // callback's rejection and renders the message, but only ever saw a resolved promise.
       throw e;
     } finally {
+      unreportedRequestsRef.current.delete(normalizedProjectId);
       endOwnRequest(projectId);
     }
   };
@@ -342,12 +378,12 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
         );
         papi.notifications.send({
           severity: 'warning',
-          message: '%resources_syncUnavailable%',
-          notificationId: sharedProjectErrorNotificationId,
+          message: '%resources_syncQueueRemoveFailed%',
+          notificationId: syncQueueRemoveErrorNotificationId,
         });
       }
     },
-    [sharedProjectErrorNotificationId],
+    [syncQueueRemoveErrorNotificationId],
   );
 
   const [sharedProjectsInfo, setSharedProjectsInfo] = useState<SharedProjectsInfo>();
