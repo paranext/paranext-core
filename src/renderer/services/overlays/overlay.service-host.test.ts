@@ -2177,6 +2177,10 @@ describe('overlay.service-host', () => {
       modalOverlay.resolve(true);
 
       await promise;
+      // The restore decision waits one task so a press's default focus move happens first
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 0);
+      });
       // setFocus should have been called to restore
       expect(windowService.setFocus).toHaveBeenCalled();
     });
@@ -2201,6 +2205,11 @@ describe('overlay.service-host', () => {
         expect(getOverlays().filter((o) => o.type === 'contextMenu')).toHaveLength(1);
         vi.advanceTimersByTime(PAST_GRACE_MS);
         return { dismissed: promise };
+      }
+
+      /** Runs the restore decision, which waits one task after the overlay resolves */
+      function flushRestoreDecision(): void {
+        vi.advanceTimersByTime(1);
       }
 
       function emitInput(kind: AppWindowInputEvent['kind']): void {
@@ -2234,6 +2243,7 @@ describe('overlay.service-host', () => {
         emitInput('mouseDown');
 
         await expect(dismissed).resolves.toBeUndefined();
+        flushRestoreDecision();
         expect(windowService.setFocus).not.toHaveBeenCalled();
       });
 
@@ -2249,6 +2259,7 @@ describe('overlay.service-host', () => {
         onFocusChange?.({ focusType: 'tab', id: 'other-tab', tabType: 'x' });
 
         await expect(dismissed).resolves.toBeUndefined();
+        flushRestoreDecision();
         expect(windowService.setFocus).not.toHaveBeenCalled();
       });
 
@@ -2262,22 +2273,143 @@ describe('overlay.service-host', () => {
         emitInput('mouseDown');
 
         await expect(dismissed).resolves.toBeUndefined();
+        flushRestoreDecision();
         expect(windowService.setFocus).not.toHaveBeenCalled();
       });
 
       it('restores focus on Escape while overlay content holds focus', async () => {
         const { dismissed } = await openContextMenuPastGrace();
 
-        const host = addToBody(document.createElement('div'));
-        host.setAttribute('data-overlay-host', '');
+        const menu = addToBody(document.createElement('div'));
+        menu.setAttribute('data-overlay-context-menu', '');
         const inner = document.createElement('button');
-        host.appendChild(inner);
+        menu.appendChild(inner);
         inner.focus();
         expect(document.activeElement).toBe(inner);
 
         emitInput('escape');
 
         await expect(dismissed).resolves.toBeUndefined();
+        flushRestoreDecision();
+        expect(windowService.setFocus).toHaveBeenCalledWith({
+          focusType: 'webView',
+          id: 'test-webview',
+        });
+      });
+
+      it('restores focus when the rendered context menu content held focus and then unmounted', async () => {
+        const { dismissed } = await openContextMenuPastGrace();
+
+        const content = addToBody(document.createElement('div'));
+        content.className = 'overlay-context-menu-content';
+        const item = document.createElement('button');
+        content.appendChild(item);
+        item.focus();
+
+        const [overlay] = getOverlays();
+        overlay.resolve(undefined);
+        content.remove();
+        await expect(dismissed).resolves.toBeUndefined();
+        flushRestoreDecision();
+
+        expect(windowService.setFocus).toHaveBeenCalledWith({
+          focusType: 'webView',
+          id: 'test-webview',
+        });
+      });
+
+      it('restores focus when a modal dialog button held focus at close', async () => {
+        const MockComponent = vi.fn(
+          // vi.fn mock must satisfy React component return type; `any` cast is the standard test pattern
+          // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+          () => undefined as any,
+        );
+        const promise = showModalDialogOverlay(
+          MockComponent,
+          { prompt: 'x', isDialog: true },
+          undefined,
+          'test-webview',
+        );
+        await vi.advanceTimersByTimeAsync(0);
+
+        const dialog = addToBody(document.createElement('div'));
+        dialog.setAttribute('data-overlay-modal-dialog', '');
+        const ok = document.createElement('button');
+        dialog.appendChild(ok);
+        ok.focus();
+        expect(document.activeElement).toBe(ok);
+
+        const [overlay] = getOverlays();
+        overlay.resolve(true);
+        await promise;
+        flushRestoreDecision();
+
+        expect(windowService.setFocus).toHaveBeenCalledWith({
+          focusType: 'webView',
+          id: 'test-webview',
+        });
+      });
+
+      it('does not restore when a press focused a dock tab header after the overlay resolved', async () => {
+        const { dismissed } = await openContextMenuPastGrace();
+
+        const menu = addToBody(document.createElement('div'));
+        menu.setAttribute('data-overlay-context-menu', '');
+        const inner = document.createElement('button');
+        menu.appendChild(inner);
+        inner.focus();
+
+        // Radix dismisses from its pointerdown listener, before the click's default focus move
+        const [overlay] = getOverlays();
+        overlay.resolve(undefined);
+        await expect(dismissed).resolves.toBeUndefined();
+        const tabHeader = addToBody(document.createElement('div'));
+        tabHeader.className = 'dock-tab-btn';
+        tabHeader.tabIndex = -1;
+        tabHeader.focus();
+        expect(document.activeElement).toBe(tabHeader);
+
+        flushRestoreDecision();
+        expect(windowService.setFocus).not.toHaveBeenCalled();
+      });
+
+      it('does not restore when a shell menu opened on the press holds focus', async () => {
+        const { dismissed } = await openContextMenuPastGrace();
+
+        const menu = addToBody(document.createElement('div'));
+        menu.setAttribute('data-overlay-context-menu', '');
+        const inner = document.createElement('button');
+        menu.appendChild(inner);
+        inner.focus();
+
+        const [overlay] = getOverlays();
+        overlay.resolve(undefined);
+        await expect(dismissed).resolves.toBeUndefined();
+        const shellMenu = addToBody(document.createElement('div'));
+        shellMenu.setAttribute('data-radix-popper-content-wrapper', '');
+        const shellItem = document.createElement('button');
+        shellMenu.appendChild(shellItem);
+        shellItem.focus();
+
+        flushRestoreDecision();
+        expect(windowService.setFocus).not.toHaveBeenCalled();
+      });
+
+      it('restores to the requester when the saved subject is stale and the requester is tracked', async () => {
+        vi.mocked(windowService.getFocus).mockResolvedValueOnce({
+          focusType: 'webView',
+          id: 'pane-a',
+        });
+        const onFocusChange = vi.mocked(windowService.subscribeFocus).mock.calls.at(-1)?.[1];
+        onFocusChange?.({ focusType: 'webView', id: 'pane-a' });
+
+        const { dismissed } = await openContextMenuPastGrace();
+        // Right-click in the requester's pane: tracked focus moves to it
+        onFocusChange?.({ focusType: 'webView', id: 'test-webview' });
+        emitInput('escape');
+
+        await expect(dismissed).resolves.toBeUndefined();
+        flushRestoreDecision();
         expect(windowService.setFocus).toHaveBeenCalledWith({
           focusType: 'webView',
           id: 'test-webview',
@@ -2291,6 +2423,7 @@ describe('overlay.service-host', () => {
         emitInput('escape');
 
         await expect(dismissed).resolves.toBeUndefined();
+        flushRestoreDecision();
         expect(windowService.setFocus).toHaveBeenCalledWith({
           focusType: 'webView',
           id: 'test-webview',
