@@ -20,6 +20,26 @@ function Host({
   return <section data-testid="parent">{open && <div data-testid="content" ref={ref} />}</section>;
 }
 
+describe('isRunningInWebView', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('is false in the main document, which is its own top window', () => {
+    expect(isRunningInWebView()).toBe(false);
+  });
+
+  it('is true when top is another window', () => {
+    vi.stubGlobal('top', {});
+    expect(isRunningInWebView()).toBe(true);
+  });
+
+  it('is true when top cannot be read as a window', () => {
+    vi.stubGlobal('top', undefined);
+    expect(isRunningInWebView()).toBe(true);
+  });
+});
+
 describe('shouldSuppressFocusReturn', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -64,6 +84,7 @@ describe('useDismissOnWindowBlur', () => {
 
   afterEach(() => {
     document.removeEventListener('pointerdown', recordEvent);
+    vi.restoreAllMocks();
   });
 
   it('does nothing while the surface is closed (no content element)', () => {
@@ -99,11 +120,14 @@ describe('useDismissOnWindowBlur', () => {
     expect(seen).toHaveLength(0);
   });
 
-  it('stops listening after unmount', () => {
+  it('removes its window blur listener on unmount', () => {
+    const add = vi.spyOn(window, 'addEventListener');
+    const remove = vi.spyOn(window, 'removeEventListener');
     const { unmount } = render(<Host />);
+    const handler = add.mock.calls.find(([type]) => type === 'blur')?.[1];
+    expect(handler).toBeDefined();
     unmount();
-    window.dispatchEvent(new Event('blur'));
-    expect(seen).toHaveLength(0);
+    expect(remove).toHaveBeenCalledWith('blur', handler);
   });
 
   it('forwards the element to a function ref, and null on unmount', () => {
@@ -187,8 +211,8 @@ describe('useDismissOnWindowBlur', () => {
 
     it('prevents close-auto-focus in a web view whose document is not focused', () => {
       vi.spyOn(document, 'hasFocus').mockReturnValue(false);
-      // Paratext web views have no `window.top`
-      vi.stubGlobal('top', undefined);
+      // A web view's `top` is its host window, not itself
+      vi.stubGlobal('top', {});
       const onCloseAutoFocus = renderProbe();
       const event = cancelable();
       onCloseAutoFocus(event);

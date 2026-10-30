@@ -1,12 +1,13 @@
 import { Ref, RefCallback, useCallback, useEffect, useRef, useState } from 'react';
 
 /**
- * Whether this window is a web view, meaning it is not the top window. In Paratext web views
- * `window.top` is deleted (`undefined`), which also counts as a web view; the main document is its
- * own top window.
+ * Whether this window is a web view, meaning it is not the top window. In a web view `window.top`
+ * is the host window: the web view's setup script deletes it, but `top` cannot be deleted, so the
+ * deletion does nothing (`web-view.service-shard.ts`, the `imports` string). The main document is
+ * its own top window. A missing or unreadable `top` also counts as a web view.
  *
- * @returns `true` inside a web view (or when `window.top` cannot be read), `false` in the main
- *   document
+ * @returns `true` inside a web view (or when `window.top` is missing or unreadable), `false` in the
+ *   main document
  * @experimental This export is unstable and may change shape or disappear without notice
  */
 export function isRunningInWebView(): boolean {
@@ -48,6 +49,36 @@ export type DismissOnWindowBlurProps<T extends HTMLElement> = {
   /** The caller's own close-auto-focus handler, if any */
   onCloseAutoFocus?: (event: Event) => void;
 };
+
+/**
+ * Builds the close-auto-focus handler for a Radix Content: runs the caller's handler first, then
+ * keeps focus where the user put it when {@link shouldSuppressFocusReturn} says returning it to the
+ * trigger would pull focus across frames. The handler reads state at close time and its identity is
+ * stable; the caller's handler is held in a ref, so it need not be stable.
+ *
+ * Internal to this library; not exported from the package.
+ *
+ * @param callerOnCloseAutoFocus The caller's own close-auto-focus handler, if any; it can itself
+ *   prevent the default
+ * @returns A stable handler to pass to the Radix Content
+ */
+export function useGatedCloseAutoFocus(
+  callerOnCloseAutoFocus?: (event: Event) => void,
+): (event: Event) => void {
+  const [isInWebView] = useState(isRunningInWebView);
+  const callerOnCloseAutoFocusRef = useRef(callerOnCloseAutoFocus);
+  callerOnCloseAutoFocusRef.current = callerOnCloseAutoFocus;
+
+  return useCallback(
+    (event: Event) => {
+      callerOnCloseAutoFocusRef.current?.(event);
+      if (event.defaultPrevented) return;
+      // Decided from state at close time rather than remembered from the blur
+      if (shouldSuppressFocusReturn(document, isInWebView)) event.preventDefault();
+    },
+    [isInWebView],
+  );
+}
 
 /**
  * Treats the window losing focus as a press outside the calling surface, so an open menu or popover
@@ -113,10 +144,7 @@ export function useDismissOnWindowBlur<T extends HTMLElement>({
   /** Close-auto-focus handler for the Radix Content; also calls the caller's handler */
   onCloseAutoFocus: (event: Event) => void;
 } {
-  const [isInWebView] = useState(isRunningInWebView);
   const elementRef = useRef<T | undefined>(undefined);
-  const onCloseAutoFocusRef = useRef(forwardedOnCloseAutoFocus);
-  onCloseAutoFocusRef.current = forwardedOnCloseAutoFocus;
 
   useEffect(() => {
     const handleWindowBlur = () => {
@@ -158,15 +186,7 @@ export function useDismissOnWindowBlur<T extends HTMLElement>({
     [forwardedRef],
   );
 
-  const onCloseAutoFocus = useCallback(
-    (event: Event) => {
-      onCloseAutoFocusRef.current?.(event);
-      if (event.defaultPrevented) return;
-      // Decided from state at close time rather than remembered from the blur
-      if (shouldSuppressFocusReturn(document, isInWebView)) event.preventDefault();
-    },
-    [isInWebView],
-  );
+  const onCloseAutoFocus = useGatedCloseAutoFocus(forwardedOnCloseAutoFocus);
 
   return { ref, onCloseAutoFocus };
 }
