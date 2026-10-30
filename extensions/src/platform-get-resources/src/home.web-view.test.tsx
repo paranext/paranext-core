@@ -538,9 +538,54 @@ describe('HomeWebView requests through the sync queue', () => {
 
     await waitFor(() => {
       expect(mockSendNotification).toHaveBeenCalledWith(
-        expect.objectContaining({ severity: 'warning', message: '%resources_syncUnavailable%' }),
+        expect.objectContaining({
+          severity: 'warning',
+          message: '%resources_syncQueueRemoveFailed%',
+        }),
       );
     });
+    const removeFailure = mockSendNotification.mock.calls
+      .map(([notification]) => notification)
+      .find((n) => n.message === '%resources_syncQueueRemoveFailed%');
+    expect(removeFailure.notificationId).toEqual(expect.any(String));
+  });
+
+  it('a double-click requests once, and a click after the queue reports the run requests again', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    await renderSubscribed();
+    const button = screen.getByRole('button', { name: 'send/receive' });
+
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+    await act(async () => {});
+    expect(requestSyncCalls()).toHaveLength(1);
+
+    await emit(syncActivityEvents, { isSyncing: true, projectIds: ['RH2'] });
+    fireEvent.click(button);
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(2));
+  });
+
+  it('falls back to a direct sync when the sync queue command is not registered', async () => {
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === IS_AVAILABLE) return true;
+      if (commandName === GET_SHARED_PROJECTS) return {};
+      if (commandName === GET_SYNC_ACTIVITY) return { isSyncing: false, projectIds: [] };
+      if (commandName === GET_SYNC_QUEUE) return { waitingProjectIds: [] };
+      if (commandName === REQUEST_SYNC)
+        throw new Error(`JSON-RPC Request error (-32601): Method not found: ${REQUEST_SYNC}`);
+      return undefined;
+    });
+    const home = await renderSubscribed();
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+
+    await waitFor(() => {
+      expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
+        'RH2',
+      ]);
+    });
+    expect(home).toHaveAttribute('data-send-receive-error', '');
   });
 
   it('a failed request shows the Home-wide error as before', async () => {

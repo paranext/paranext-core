@@ -119,6 +119,11 @@ vi.mock('@shared/services/project-lookup.service', () => ({
  * `sendCommand`'s per-command generic signature can't be satisfied by a single mock body, so the
  * cast lives here once rather than at every call site.
  */
+const cancelPromptCallCount = () =>
+  vi
+    .mocked(sendCommand)
+    .mock.calls.filter(([name]) => name === 'paratextBibleSendReceive.cancelSyncPrompt').length;
+
 const mockCommands = (handlers: Record<string, (() => unknown) | undefined>) => {
   vi.mocked(sendCommand).mockImplementation(
     // `sendCommand` resolves a different return type per command name, which no single mock body can
@@ -1828,7 +1833,7 @@ describe('SyncStatusButton — popover and cancel', () => {
     // The cancel is really requested — the guard under test only runs on the rejection path.
     fireEvent.click(await screen.findByTestId('toolbar-sync-cancel-button'));
     await waitFor(() => {
-      expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent('Test Cancelling');
+      expect(cancelPromptCallCount()).toBe(1);
     });
 
     // The sync finishes on its own, and only then does the cancel request come back rejected.
@@ -1874,7 +1879,7 @@ describe('SyncStatusButton — popover and cancel', () => {
     fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
     fireEvent.click(await screen.findByTestId('toolbar-sync-cancel-button'));
     await waitFor(() => {
-      expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent('Test Cancelling');
+      expect(cancelPromptCallCount()).toBe(1);
     });
     if (!rejectCancel) throw new Error('cancelSyncPrompt was never called');
     const rejectSyncACancel = rejectCancel;
@@ -1920,6 +1925,65 @@ describe('SyncStatusButton — popover and cancel', () => {
     await waitFor(() => {
       expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent('Test Cancelling');
     });
+  });
+
+  it('keeps saying Cancel and stays disarmed while the cancel prompt is open', async () => {
+    let resolvePrompt: ((value: boolean) => void) | undefined;
+    mockCommands({
+      'paratextBibleSendReceive.getSyncState': () => ({
+        isSyncing: true,
+        lastRequestedProjectIds: [],
+        syncingProjectIds: ['a'],
+      }),
+      'paratextBibleSendReceive.cancelSyncPrompt': () =>
+        new Promise<boolean>((resolve) => {
+          resolvePrompt = resolve;
+        }),
+    });
+    mockProjectNames({ a: 'AAA' });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
+    fireEvent.click(await screen.findByTestId('toolbar-sync-cancel-button'));
+    await waitFor(() => expect(cancelPromptCallCount()).toBe(1));
+
+    const cancel = screen.getByTestId('toolbar-sync-cancel-button');
+    expect(cancel).toHaveTextContent('Test Cancel sync');
+    expect(cancel).toHaveAttribute('aria-disabled', 'true');
+
+    if (!resolvePrompt) throw new Error('cancelSyncPrompt was never called');
+    await act(async () => {
+      resolvePrompt?.(true);
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent('Test Cancelling');
+    });
+  });
+
+  it('sends no second prompt when the popover is reopened while the first is open', async () => {
+    mockCommands({
+      'paratextBibleSendReceive.getSyncState': () => ({
+        isSyncing: true,
+        lastRequestedProjectIds: [],
+        syncingProjectIds: ['a'],
+      }),
+      'paratextBibleSendReceive.cancelSyncPrompt': () => new Promise<boolean>(() => {}),
+    });
+    mockProjectNames({ a: 'AAA' });
+    render(<SyncStatusButton />);
+    const trigger = await screen.findByTestId('toolbar-sync-button');
+
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByTestId('toolbar-sync-cancel-button'));
+    await waitFor(() => expect(cancelPromptCallCount()).toBe(1));
+
+    fireEvent.click(trigger);
+    fireEvent.click(trigger);
+    const cancel = await screen.findByTestId('toolbar-sync-cancel-button');
+    expect(cancel).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(cancel);
+
+    expect(cancelPromptCallCount()).toBe(1);
   });
 
   // Send/receive asks before cancelling when other projects are waiting, and the user can answer
