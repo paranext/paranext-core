@@ -4088,6 +4088,16 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   stays the platform's. `generateProjectFontCss` repeats private helpers of the editor package's
   `generateUsjCss`; tests pin its output to the package's until PT-4974 moves the fonts-only sheet
   into the package.
+  - Simple's fixed text sizes (verse numbers, headings, the empty-verse ellipsis box) are multiples
+    of a registered length, `--psc-base-font-size`, computed once on the editor root, so they scale
+    with the project font size. Plain `em` is not used: it compounds with an ancestor's size
+    (the visible-marker verse number) and resolves separately in the ellipsis box and the caret
+    host's margin, so the two disagree. The chapter numeral is deliberately a fixed `5rem`: it is
+    decorative and its parent is `font-size: 0`.
+  - The footnotes pane's read-only rows get the project fonts in every view through a second,
+    pane-scoped fonts-only sheet (`FOOTNOTE_ROWS_SELECTOR`), so a row matches the editor in the row
+    being edited. Rows take fonts only (family, size, per-marker family). Standard view's row editor
+    still applies per-marker size and style that read-only rows do not; this is accepted.
 - **Source:** PT-4966.
 
 ## adr-generic-name-routing-proxies: Generic-name service routers in main forward to the focused/owning window's scoped service
