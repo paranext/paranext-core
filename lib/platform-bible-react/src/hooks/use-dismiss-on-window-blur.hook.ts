@@ -88,9 +88,11 @@ function findTriggerFor(content: HTMLElement): HTMLElement | undefined {
  * trigger would pull focus across frames.
  *
  * In the main document, a close while the document has no focus (the OS window was deactivated)
- * returns focus to the trigger itself: the blur's synthetic press counts as an outside interaction,
- * after which non-modal Radix surfaces skip their own restore. It does so only while nothing else
- * holds focus, so it never takes focus from an element the user focused.
+ * focuses the trigger itself and prevents Radix's default: the blur's synthetic press counts as an
+ * outside interaction, after which the non-modal Popover and the Menubar would skip their own
+ * restore while a modal DropdownMenu would restore anyway, so the outcome is the same for all
+ * three. It does so only while nothing else holds focus, so it never takes focus from an element
+ * the user focused.
  *
  * The handler reads state at close time and its identity is stable; the caller's handler and the
  * trigger getter are held in refs, so neither need be stable.
@@ -182,15 +184,16 @@ export function isWindowBlurPress(event: Event): boolean {
  * element is an `<iframe>` (the user clicked into a web view from this document), or when this
  * window is a web view whose document has lost focus (the user clicked into another frame, or
  * switched applications). In the main document a lost `document.hasFocus()` can only mean the OS
- * window was deactivated, so the hook returns focus to the trigger itself: Radix's non-modal
- * popover and menus skip their own restore after any outside press, which the synthetic press is.
- * The trigger is the element whose `aria-controls` names the content's `id` (read when the content
- * mounts and again at close), or the element the content's `aria-labelledby` names; a surface
- * without either (a context menu) restores nothing. Focus is never taken from an element the user
- * focused elsewhere. Any other close, such as Escape or a click elsewhere in this document,
- * restores focus as usual. The rule reads state at close time rather than remembering that a blur
- * dismissal happened: Radix runs close-auto-focus from its own timer after an asynchronous unmount,
- * so a flag cleared by a timeout loses that race under load.
+ * window was deactivated, so the hook focuses the trigger itself and prevents Radix's default.
+ * After an outside interaction, which the synthetic press is, the non-modal Popover and the Menubar
+ * would skip their own restore, while a modal DropdownMenu would restore anyway; the outcome is the
+ * same for all three. The trigger is the element whose `aria-controls` names the content's `id`
+ * (read when the content mounts and again at close), or the element the content's `aria-labelledby`
+ * names; a surface without either (a context menu) restores nothing. Focus is never taken from an
+ * element the user focused elsewhere. Any other close, such as Escape or a click elsewhere in this
+ * document, restores focus as usual. The rule reads state at close time rather than remembering
+ * that a blur dismissal happened: Radix runs close-auto-focus from its own timer after an
+ * asynchronous unmount, so a flag cleared by a timeout loses that race under load.
  *
  * The synthetic press is untrusted and carries a window-blur marker (checked by the internal
  * `isWindowBlurPress`). The focus modality tracker and the overlay service's press recorder skip
