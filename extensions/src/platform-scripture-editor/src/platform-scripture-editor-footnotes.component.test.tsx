@@ -1408,7 +1408,8 @@ describe('FootnotesLayout copy limit', () => {
 });
 
 describe('FootnotesLayout copy of a no-break space the row editor holds as its stand-in', () => {
-  // Standard view with "Allow invisible characters" on holds a stored no-break space as U+001A.
+  // Standard view holds a stored no-break space as U+001A with "Allow invisible characters" on, and
+  // one in an attribute value under either setting.
   const STAND_IN = '\u001A';
   const NBSP = '\u00A0';
   const allowing = getEditorViewOptions('standard', false, true);
@@ -1475,7 +1476,7 @@ describe('FootnotesLayout copy of a no-break space the row editor holds as its s
     { label: 'the setting is off', rowEditorViewOptions: notAllowing },
     { label: 'the pane has no row editor view options', rowEditorViewOptions: undefined },
   ])(
-    'leaves the copy to the browser when $label and there is no copy limit',
+    'copies it as a no-break space when $label, as an attribute value holds one under either setting',
     ({ rowEditorViewOptions }) => {
       const { container } = renderPaneWithStandInRow({
         copyLimit: undefined,
@@ -1485,8 +1486,8 @@ describe('FootnotesLayout copy of a no-break space the row editor holds as its s
       const { setData, isCancelled, selectedText } = copyWholePane(container);
 
       expect(selectedText).toContain(STAND_IN);
-      expect(isCancelled).toBe(false);
-      expect(setData).not.toHaveBeenCalled();
+      expect(isCancelled).toBe(true);
+      expect(setData).toHaveBeenCalledWith('text/plain', selectedText.replaceAll(STAND_IN, NBSP));
     },
   );
 });

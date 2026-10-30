@@ -95,10 +95,11 @@ describe('useOpenFindShortcut', () => {
   });
 
   // Standard view holds a stored no-break space as an internal stand-in (U+001A, drawn as a blank)
-  // where `~` is an ordinary character, and the search must look for the project's own text.
+  // where `~` is an ordinary character, as in an attribute value under either setting, and the
+  // search must look for the project's own text.
   it.each([
     { allowInvisibleCharacters: true, searched: 'a~b\u00A0c' },
-    { allowInvisibleCharacters: false, searched: 'a~b\u001Ac' },
+    { allowInvisibleCharacters: false, searched: 'a~b\u00A0c' },
   ])(
     'searches for a no-break space the editor holds as its stand-in as the project spells it (allowInvisibleCharacters $allowInvisibleCharacters)',
     ({ allowInvisibleCharacters, searched }) => {
