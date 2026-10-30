@@ -11027,10 +11027,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   lives in the component, so every non-modal instance gets it.
 - **Overlay focus restore:** the renderer's overlay service returns focus to the pane that opened an
   overlay only while the user has not moved it. It skips the restore when the main document's active
-  element is a web view iframe or any focusable element outside the overlay content, or when the
-  window service already reports focus on a different web view or tab. Escape, picking an item and a
-  dismissal with focus on `body` still restore. The check is wider than the shared wrappers'
-  iframe-only test above.
+  element is a web view iframe or any focusable element outside the overlay service's own surfaces
+  (the overlay host, modal dialog, popover, command palette and context menu content; not the
+  generic popper wrapper that shell menus share), or when the window service reports focus on a
+  web view or tab other than both the saved one and the requesting web view. The decision runs one
+  task after the overlay resolves, because a press in the parent document dismisses a Radix overlay
+  before the browser moves focus to what was clicked. Escape, picking an item and a dismissal with
+  focus on `body` still restore. The check is wider than the shared wrappers' iframe-only test
+  above.
 - **Source:** PT-2989 (PR #2963); related PT-2205, PT-4627; prototype PR #2887.
 
 ## adr-unresolvable-spdx-operators-drop-the-dependency: A declaration carrying an SPDX operator this pipeline cannot resolve drops the dependency

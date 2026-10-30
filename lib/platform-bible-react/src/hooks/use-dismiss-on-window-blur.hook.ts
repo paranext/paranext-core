@@ -226,8 +226,8 @@ export function isWindowBlurPress(event: Event): boolean {
  *
  * Hidden-view case (the repo's rule on hidden views): a keyboard tab switch can hide a pane that
  * holds an open menu. The blur listener then dismisses it on the next window blur, which is
- * harmless, so there is deliberately no catch-up logic. The one deliberate exception is a compact
- * `BookChapterControl`: its `onInteractOutside` prevents this hook's synthetic press from
+ * harmless, so there is deliberately no catch-up logic. The one deliberate exception is a non-modal
+ * compact `BookChapterControl`: its `onInteractOutside` prevents this hook's synthetic press from
  * dismissing it, so it stays open while its tab is hidden and closes through its trigger once the
  * tab is visible again, or on Escape with focus in it.
  *
