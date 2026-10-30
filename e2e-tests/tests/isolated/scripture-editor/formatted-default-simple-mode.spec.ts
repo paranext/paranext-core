@@ -10,7 +10,8 @@
  *
  * It also checks that Ctrl+E, Power's Standard view and Preview toggle, changes nothing in Simple,
  * and that a project with a non-default font and size reaches the editor text, the verse numbers,
- * the headings and the footnotes pane's rows.
+ * the headings, the empty-verse placeholder and the footnotes pane's rows, read-only and while
+ * edited.
  *
  * ONE test() per spec file on purpose — see standard-default-power-mode.spec.ts.
  */
@@ -66,12 +67,15 @@ test.describe('scripture editor default view', () => {
     // (simple-layout.data.ts). The open helper below carries its own app-readiness gates (first
     // iframe attached = initial loadLayout() done; PAPI command registration; retry loop).
     await makeSampleProjectEditable();
-    // The sample has no heading; put one at the top of the chapter, tolerating any line ending.
+    // The sample has no heading and no empty verse; put a heading at the top of the chapter and
+    // empty verse 3 (which has no note), tolerating any line ending.
     await rewriteSampleProjectChapterUsfm({ book: 'OBA', chapterNum: 1, verseNum: 1 }, (usfm) =>
-      usfm.replace(
-        /(\\c 1[ \t]*)(\r?\n)/,
-        (_match, chapter, newline) => `${chapter}${newline}\\s1 Heading${newline}`,
-      ),
+      usfm
+        .replace(
+          /(\\c 1[ \t]*)(\r?\n)/,
+          (_match, chapter, newline) => `${chapter}${newline}\\s1 Heading${newline}`,
+        )
+        .replace(/(\\v 3 )[^\r\n]*/, '$1'),
     );
     const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
     const editorFrame = mainPage.frameLocator(`iframe[data-web-view-id="${editorId}"]`);
@@ -135,6 +139,19 @@ test.describe('scripture editor default view', () => {
       await expect
         .poll(async () => (await computedStyle('.usfm_s1')).fontSize, { timeout: 30_000 })
         .toBeCloseTo(PROJECT_FONT_SIZE_PX * 0.8, 1);
+      // An empty verse's `…` placeholder is a box as wide as the verse number is tall.
+      const emptyVerse = editorFrame
+        .locator(
+          '.psc-gutter-markers .verse.psc-empty-text, .psc-gutter-markers .verse.psc-empty-text-active',
+        )
+        .first();
+      await expect(emptyVerse).toBeAttached({ timeout: 30_000 });
+      const ellipsis = await emptyVerse.evaluate((element) => {
+        const { width, fontSize } = getComputedStyle(element, '::after');
+        return { width: parseFloat(width), fontSize: parseFloat(fontSize) };
+      });
+      expect(ellipsis.width).toBeCloseTo((PROJECT_FONT_SIZE_PX * 13) / 16, 1);
+      expect(ellipsis.fontSize).toBeCloseTo((PROJECT_FONT_SIZE_PX * 13) / 16, 1);
 
       // The footnotes pane's static rows use the project font too.
       await ensureFootnotesVisible(mainPage, await getEditorFrame(mainPage, editorId), editorId);
@@ -155,6 +172,25 @@ test.describe('scripture editor default view', () => {
       // The project font need not be installed, so what follows it must be the Scripture stack the
       // editor text falls back to, not bare `serif`.
       expect(noteFamily).toContain('Charis SIL');
+
+      // Opening the row for editing, and closing it again, changes neither its font nor its size.
+      const readOnlyStyle = await noteStyle();
+      await rows.first().click();
+      const editingRow = editorFrame.locator('[data-footnotes-pane] li[data-state="editing"]');
+      await expect(editingRow).toHaveCount(1, { timeout: 20_000 });
+      const editingNoteText = editingRow.locator('.editor-input .usfm_ft').first();
+      await expect(editingNoteText).toBeAttached({ timeout: 20_000 });
+      const editingStyle = await editingNoteText.evaluate((element) => {
+        const { fontFamily, fontSize } = getComputedStyle(element);
+        return { fontFamily, fontSize: parseFloat(fontSize) };
+      });
+      expect(editingStyle.fontFamily).toBe(readOnlyStyle.fontFamily);
+      expect(editingStyle.fontSize).toBeCloseTo(PROJECT_FONT_SIZE_PX, 1);
+      // The row editor handles Escape only from inside it.
+      await editingNoteText.click();
+      await mainPage.keyboard.press('Escape');
+      await expect(editingRow).toHaveCount(0, { timeout: 20_000 });
+      expect(await noteStyle()).toEqual(readOnlyStyle);
     });
 
     await test.step('Ctrl+E changes nothing in Simple', async () => {

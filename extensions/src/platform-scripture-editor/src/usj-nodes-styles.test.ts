@@ -268,7 +268,6 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
     });
     describe('Simple-mode text sizes follow the project font size', () => {
       const code = scss.replace(/\/\*[\s\S]*?\*\//g, '');
-      const gutterSection = code.slice(code.indexOf('@property --psc-base-font-size'));
       const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const ruleBody = (selectors: string[]) => {
         const match = new RegExp(
@@ -283,26 +282,7 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
         );
         expect(ruleBody(['.psc-gutter-markers'])).toContain('--psc-base-font-size: 1em;');
       });
-
-      it('sizes Simple verse numbers and headings from the base size', () => {
-        const verseSize = 'font-size: calc(var(--psc-base-font-size) * 13 / 16)';
-        expect(
-          ruleBody(['.psc-gutter-markers .usfm_v', '.psc-gutter-markers span.verse']),
-        ).toContain(verseSize);
-        expect(ruleBody(['.psc-gutter-markers .verse.marker::after'])).toContain(verseSize);
-        expect(
-          ruleBody([
-            '.psc-gutter-markers .usfm_s',
-            '.psc-gutter-markers .usfm_s1',
-            '.psc-gutter-markers .usfm_s2',
-            '.psc-gutter-markers .usfm_s3',
-          ]),
-        ).toContain('font-size: calc(var(--psc-base-font-size) * 0.8)');
-        // The chapter numeral is decorative and deliberately stays a fixed size.
-        expect(ruleBody(['.psc-gutter-markers .usfm_c::after'])).toContain('font-size: 5rem');
-        expect(gutterSection).not.toContain('font-size: 13px');
-        expect(gutterSection).not.toContain('font-size: 0.8rem');
-      });
+      // The sizes derived from it are measured in formatted-default-simple-mode.spec.ts.
     });
 
     describe('empty-verse caret', () => {
@@ -319,9 +299,6 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
       const host = `${activeVerse} + [data-caret-host]`;
 
       it('sizes the ellipsis box from one variable', () => {
-        expect(rules).toContain(
-          '--psc-empty-verse-ellipsis-width: calc(var(--psc-base-font-size) * 13 / 16);',
-        );
         const box = [
           '.psc-gutter-markers .verse:not(.marker).psc-empty-text::after',
           `${activeVerse}::after`,
