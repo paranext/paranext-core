@@ -1831,6 +1831,9 @@ describe('Home while a sync runs', () => {
 
   const WAITING_LABEL = enString('%resources_syncWaiting_label%');
   const CLICK_TO_REMOVE = enString('%resources_syncWaiting_clickToRemove%');
+  /** The accessible name of a waiting row's action, which says which project it takes out. */
+  const waitingName = (name: string) =>
+    formatReplacementString(enString('%resources_syncWaiting_remove_format%'), { name });
 
   /**
    * Renders two shared projects that are not downloaded, so each row's action is a "Get" button.
@@ -1933,7 +1936,7 @@ describe('Home while a sync runs', () => {
       // Spelled as the queue spells it, which need not match the project list.
       waitingProjectIds: ['WAITINGPROJECT'],
     });
-    const waitingButton = within(rowOf('WAI')).getByRole('button', { name: WAITING_LABEL });
+    const waitingButton = within(rowOf('WAI')).getByRole('button', { name: waitingName('WAI') });
     expect(waitingButton).toBeEnabled();
     expect(waitingButton).not.toHaveAttribute('aria-busy', 'true');
     expect(waitingButton).toHaveTextContent(WAITING_LABEL);
@@ -1949,7 +1952,7 @@ describe('Home while a sync runs', () => {
       activeSendReceiveProjects: ['syncingProject'],
       waitingProjectIds: ['syncingProject'],
     });
-    const button = within(rowOf('SYN')).getByRole('button', { name: WAITING_LABEL });
+    const button = within(rowOf('SYN')).getByRole('button', { name: waitingName('SYN') });
     expect(button).not.toHaveAttribute('aria-busy', 'true');
   });
 
@@ -1962,7 +1965,7 @@ describe('Home while a sync runs', () => {
       onRemoveFromQueue,
       onSendReceiveProject,
     });
-    fireEvent.click(within(rowOf('WAI')).getByRole('button', { name: WAITING_LABEL }));
+    fireEvent.click(within(rowOf('WAI')).getByRole('button', { name: waitingName('WAI') }));
     await waitFor(() => expect(onRemoveFromQueue).toHaveBeenCalledWith('waitingProject'));
     expect(onSendReceiveProject).not.toHaveBeenCalled();
   });
@@ -1972,8 +1975,24 @@ describe('Home while a sync runs', () => {
       activeSendReceiveProjects: ['syncingProject'],
       waitingProjectIds: ['waitingProject'],
     });
-    within(rowOf('WAI')).getByRole('button', { name: WAITING_LABEL }).focus();
+    within(rowOf('WAI'))
+      .getByRole('button', { name: waitingName('WAI') })
+      .focus();
     expect(await screen.findAllByText(CLICK_TO_REMOVE)).not.toHaveLength(0);
+  });
+
+  it('names each waiting button after its project, starting with its visible text', () => {
+    renderHomeDuringSync({
+      activeSendReceiveProjects: [],
+      waitingProjectIds: ['syncingProject', 'waitingProject'],
+    });
+    const synButton = within(rowOf('SYN')).getByRole('button', { name: waitingName('SYN') });
+    const waiButton = within(rowOf('WAI')).getByRole('button', { name: waitingName('WAI') });
+    expect(synButton).toHaveAccessibleName('Waiting… — take SYN out of the queue');
+    expect(waiButton).toHaveAccessibleName('Waiting… — take WAI out of the queue');
+    // The visible text stays the short label, and the name starts with it.
+    expect(waiButton).toHaveTextContent(WAITING_LABEL);
+    expect(waiButton.getAttribute('aria-label')?.startsWith(WAITING_LABEL)).toBe(true);
   });
 
   it('requests a Get from another row while one project syncs', async () => {
@@ -2052,6 +2071,7 @@ describe('Home while a sync runs', () => {
     const item = await openLocalRowMenuItem();
     expect(item).toHaveTextContent(WAITING_LABEL);
     expect(item).toHaveTextContent(CLICK_TO_REMOVE);
+    expect(item).toHaveAccessibleName(waitingName('LOC'));
     await userEvent.click(item);
     expect(onRemoveFromQueue).toHaveBeenCalledWith('localProject');
   });

@@ -371,7 +371,10 @@ describe('HomeWebView requests through the sync queue', () => {
   /** Answers availability `true` and hands each `requestSync` call to the given behavior. */
   function mockAvailableQueue(
     requestSync: () => Promise<unknown>,
-    { waitingProjectIds = [] }: { waitingProjectIds?: string[] } = {},
+    {
+      waitingProjectIds = [],
+      removeFromSyncQueue = async () => undefined,
+    }: { waitingProjectIds?: string[]; removeFromSyncQueue?: () => Promise<unknown> } = {},
   ) {
     mockSendCommand.mockImplementation(async (commandName: string) => {
       if (commandName === IS_AVAILABLE) return true;
@@ -379,6 +382,7 @@ describe('HomeWebView requests through the sync queue', () => {
       if (commandName === GET_SYNC_ACTIVITY) return { isSyncing: false, projectIds: [] };
       if (commandName === GET_SYNC_QUEUE) return { waitingProjectIds };
       if (commandName === REQUEST_SYNC) return requestSync();
+      if (commandName === REMOVE_FROM_SYNC_QUEUE) return removeFromSyncQueue();
       return undefined;
     });
   }
@@ -470,6 +474,72 @@ describe('HomeWebView requests through the sync queue', () => {
 
     await waitFor(() => {
       expect(mockSendCommand).toHaveBeenCalledWith(REMOVE_FROM_SYNC_QUEUE, ['RH2']);
+    });
+  });
+
+  it('shows no spinner for a request that only waits behind an outside run', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    const home = await renderSubscribed();
+    await emit(syncActivityEvents, { isSyncing: true, projectIds: ['RH3'] });
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+    await act(async () => {});
+
+    // Only the run the backend reports is running; Home's request waits behind it.
+    expect(home).toHaveAttribute('data-active-projects', '["RH3"]');
+    expect(home).toHaveAttribute('data-send-receive-in-progress', 'true');
+
+    // Positive control: once the backend's run names the project, it is running.
+    await emit(syncActivityEvents, { isSyncing: true, projectIds: ['rh2'] });
+    expect(home).toHaveAttribute('data-active-projects', '["RH2"]');
+  });
+
+  it("keeps the local list loading while Home's request waits behind an outside run", async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    await renderSubscribed();
+    await emit(syncActivityEvents, { isSyncing: true, projectIds: ['RH3'] });
+    const lastLocalProjectsOptions = () => vi.mocked(useLocalProjects).mock.calls.at(-1)?.[0];
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+    await act(async () => {});
+
+    expect(lastLocalProjectsOptions()).toEqual(expect.objectContaining({ enabled: true }));
+
+    // Positive control: the run that includes Home's own request pauses it.
+    await emit(syncActivityEvents, { isSyncing: true, projectIds: ['RH2'] });
+    expect(lastLocalProjectsOptions()).toEqual(expect.objectContaining({ enabled: false }));
+  });
+
+  it('pauses the local list for its own request before the backend reports the run', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    await renderSubscribed();
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+    await act(async () => {});
+
+    expect(vi.mocked(useLocalProjects).mock.calls.at(-1)?.[0]).toEqual(
+      expect.objectContaining({ enabled: false }),
+    );
+  });
+
+  it('says so when taking a project out of the queue fails', async () => {
+    mockAvailableQueue(async () => ({}), {
+      waitingProjectIds: ['RH2'],
+      removeFromSyncQueue: async () => {
+        throw new Error('not registered');
+      },
+    });
+    await renderSubscribed();
+
+    fireEvent.click(screen.getByRole('button', { name: 'remove from queue' }));
+
+    await waitFor(() => {
+      expect(mockSendNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ severity: 'warning', message: '%resources_syncUnavailable%' }),
+      );
     });
   });
 
