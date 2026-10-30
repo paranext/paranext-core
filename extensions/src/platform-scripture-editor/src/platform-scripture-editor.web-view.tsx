@@ -201,7 +201,6 @@ import { useSelectionSnapshot } from './use-selection-snapshot.hook';
 import { usePauseEditing } from './use-pause-editing.hook';
 import { EditorDocumentSelector, useEditorPdpSync } from './use-editor-pdp-sync.hook';
 import { useEditorFocusLocation } from './use-editor-focus-location.hook';
-import { useForgetEditsOnSyncBlock } from './use-forget-edits-on-sync-block.hook';
 import { toBookChapterKey, useScrollToRange } from './use-scroll-to-range.hook';
 import { applyEditorScrRefReport } from './editor-scr-ref-report.util';
 import { useProjectStylesheet } from './use-project-stylesheet.hook';
@@ -4844,7 +4843,8 @@ function PlatformScriptureEditor({
   // "jumping to the top" mid-insert). A footnotes-pane session claims less. Its row editor saves as it goes, like the Scripture
   // editor, so it holds updates back only on the Scripture editor's terms: focus in the pane and an
   // edit there within the ownership window, with the same settle hold while focus may be moving
-  // (`isFootnotesPaneOwner`). Past that, a differing update replaces the document and ends the
+  // (`isFootnotesPaneOwner`), and a Send/Receive or a visit to another web view ends that claim
+  // (`lastPaneEditTimestamp`). Past that, a differing update replaces the document and ends the
   // session (`setEditorUsj`) rather than being overwritten by this view's older copy.
   // A note session past its staleness bound is the exception — that key is orphaned bookkeeping
   // from a popover that died without cleanup, and until the time bound existed it wedged sync
@@ -4890,10 +4890,6 @@ function PlatformScriptureEditor({
     }
     return activity.isActive;
   }, [closeFootnoteEditor, getPaneEditingSession]);
-  // A Send/Receive replaces the chapter with its merge, so the footnotes pane gives up its claim
-  // to the text as soon as one starts, as `useEditorPdpSync` does for the Scripture editor. Called
-  // before `useEditorPdpSync` so its effect runs first when a block and a delivery share a render.
-  useForgetEditsOnSyncBlock(isSyncBlocked, lastPaneNoteEditAt);
   useEditorPdpSync({
     usjFromPdp,
     documentSelector: chapterUsjSelector,
@@ -4904,6 +4900,7 @@ function PlatformScriptureEditor({
     flushPendingDebouncedSave,
     isEditingSessionActive,
     isFootnotesPaneOwner,
+    lastPaneEditTimestamp: lastPaneNoteEditAt,
     lastLocalEditTimestamp,
     editorDocumentSelector,
     getFocusLocation,

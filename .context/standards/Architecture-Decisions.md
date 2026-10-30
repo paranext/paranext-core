@@ -3130,22 +3130,33 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     until the subject moves (it lags a click by the window service's 250 ms debounce).
   - If the subject has not moved within `FOCUS_SETTLE_GRACE_MS` (1000 ms), the user has left the
     window, and the incoming chapter is applied.
-  - An automatic Send/Receive (`isSyncBlocked`) ends the claim, and no pending save is flushed over
-    its merge.
+  - When the subject names another web view, the claim ends for good: the last edit is forgotten,
+    so the incoming chapter is applied even if the user has clicked back by the time it arrives.
+    The next edit claims the chapter again.
+  - A Send/Receive (`isSyncBlocked`) ends the claim, and no pending save is flushed over its merge.
   - The block outlasts the write gate by `HIDE_GRACE_MS` (1000 ms, in
     `auto-sync-blocking-store.ts`), because the merged chapter's delivery and the gate's clear race
     to the web view, and a keystroke between them would claim the chapter again.
   - The footnotes pane claims on the same terms (`isFootnotesPaneOwner`): another web view ends its
-    claim, and a delivery is held while focus settles.
+    claim, a Send/Receive ends it, and a delivery is held while focus settles.
 - **Alternatives:** `document.hasFocus()` as the release test: rejected, because menus and overlays
   outside the iframe also clear it, so the editor would give up its copy while the user is still
-  working in it. Keeping the editor read-only until the merged chapter arrives, rather than for a
+  working in it. Asking where focus is only when a delivery arrives: rejected, because a replacement
+  that lands after the user clicks back would then find the editor focused and be overwritten.
+  Keeping the editor read-only until the merged chapter arrives, rather than for a
   fixed time: not done, because a sync that changes nothing in the chapter may deliver nothing, so
   it still needs a time limit, and every sync whose delivery beat the clear would wait out that
   limit anyway.
 - **Consequences:** A pending save (typed in the last ~700 ms) and an open marker palette or
-  footnote popover can still overwrite a replacement: out of scope, tracked by PT-4970. A manual
-  Send/Receive started outside the editor does not set `isSyncBlocked`, so it is not covered.
+  footnote popover can still overwrite a replacement: out of scope, tracked by PT-4970. So can
+  typing after clicking back but before the replacement arrives, a visit shorter than the subject's
+  250 ms debounce, and a visit to Find in another window, since neither of the last two names
+  another web view. PT-4970 covers these by ending the hold once the editor's own save has
+  finished. After visiting another tab and returning without typing, the editor has no claim until
+  the next keystroke, so an update arriving then moves the caret.
+  A manual Send/Receive arms the same write gate (as of the 2026-10-22 Studio build,
+  `ParatextProjectSendReceiveService.cs`), so it should set `isSyncBlocked` and yield the same way,
+  but that has not been tested in the app.
   A merged chapter delivered more than `HIDE_GRACE_MS` after the gate clears can still lose to a
   keystroke, and that grace is unmeasured because the gate only arms in Paratext 10 builds. An open
   footnote popover survives a Send/Receive, so its session still pushes the pre-merge text over the
@@ -5759,7 +5770,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Status:** Accepted
 - **Context:** With "ignore diacritics" on, the search runs over NFD text. A Hangul syllable
   decomposes into jamo, so a search for one syllable matched the first jamo of another.
-- **Decision:** `UsjReaderWriter.search` drops a match that starts or ends inside a character.
+- **Decision:** `UsjReaderWriter.search` drops a match that starts or ends inside a character. A
+  syllable stored decomposed counts as one character: a position just before a Hangul vowel or
+  final consonant jamo (U+1160-11FF, U+D7B0-D7FF) is inside it.
 - **Alternatives:** Widening a partial match to the whole character: rejected, because the leftover
   jamo are letters, so the result is not what the user searched for.
 - **Consequences:** Paratext 9 (ParatextData 9.5.0.24) finds no Hangul at all with the option on.

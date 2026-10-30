@@ -1867,6 +1867,57 @@ describe('Find USJ details for text searches', () => {
       expect(searchNfd('하', 'ᅡ')).toEqual([]);
     });
 
+    describe('Hangul stored decomposed', () => {
+      const decomposedHanNa = '한나'.normalize('NFD');
+      const decomposedHa = '하'.normalize('NFD');
+
+      test('drops a match that ends before a final consonant 3.0', () => {
+        expect(searchNfd(decomposedHanNa, '하')).toEqual([]);
+      });
+
+      test('drops a match that ends before a vowel 3.0', () => {
+        expect(searchNfd(decomposedHa, 'ᄒ')).toEqual([]);
+      });
+
+      test('drops a match that starts at a vowel or a final consonant 3.0', () => {
+        expect(searchNfd(decomposedHa, 'ᅡ')).toEqual([]);
+        expect(searchNfd(decomposedHanNa, 'ᆫ')).toEqual([]);
+      });
+
+      test('keeps a vowel at the very start of the text, which has no syllable to continue 3.0', () => {
+        expect(searchNfd('ᅡ', 'ᅡ')).toHaveLength(1);
+      });
+
+      test('drops a match that ends before a Jamo Extended-B vowel or final consonant 3.0', () => {
+        expect(searchNfd('하ퟋ', '하')).toEqual([]);
+        expect(searchNfd('ᄒힰ', 'ᄒ')).toEqual([]);
+      });
+
+      test('finds whole syllables and maps them to exactly those syllables 3.0', () => {
+        const first = searchNfd(decomposedHanNa, '한');
+        expect(first.map((result) => result.text)).toEqual(['한'.normalize('NFD')]);
+        expect(offsetsOf(first[0])).toEqual([0, 3]);
+
+        const second = searchNfd(decomposedHanNa, '나');
+        expect(second.map((result) => result.text)).toEqual(['나'.normalize('NFD')]);
+        expect(offsetsOf(second[0])).toEqual([3, 5]);
+      });
+
+      test('a dropped partial match does not hide a later real match 3.0', () => {
+        const results = searchNfd('한하'.normalize('NFD'), '하');
+        expect(results.map((result) => result.text)).toEqual([decomposedHa]);
+        expect(offsetsOf(results[0])).toEqual([3, 5]);
+      });
+    });
+
+    test('drops an NFD match that starts on the mark of a precomposed letter 3.0', () => {
+      expect(searchNfd('é', '́')).toEqual([]);
+    });
+
+    test('drops a precomposed syllable followed by a final consonant 3.0', () => {
+      expect(searchNfd('한', '하')).toEqual([]);
+    });
+
     test('finds a whole Hangul syllable and maps it to exactly that syllable 3.0', () => {
       const first = searchNfd('한나', '한');
       expect(first.map((result) => result.text)).toEqual(['한']);

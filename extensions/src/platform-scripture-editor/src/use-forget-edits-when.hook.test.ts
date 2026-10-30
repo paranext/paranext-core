@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import type { MutableRefObject } from 'react';
-import { useForgetEditsOnSyncBlock } from './use-forget-edits-on-sync-block.hook';
+import { useForgetEditsWhen } from './use-forget-edits-when.hook';
 
 const EDIT_AT = 1_000;
 
@@ -12,51 +12,51 @@ function editedRef(): MutableRefObject<number | undefined> {
 }
 
 function renderForget(
-  initialIsSyncBlocked: boolean | undefined,
+  initialShouldForget: boolean | undefined,
   ...refs: MutableRefObject<number | undefined>[]
 ) {
   return renderHook(
-    ({ isSyncBlocked }: { isSyncBlocked: boolean | undefined }) =>
-      useForgetEditsOnSyncBlock(isSyncBlocked, ...refs),
-    { initialProps: { isSyncBlocked: initialIsSyncBlocked } },
+    ({ shouldForget }: { shouldForget: boolean | undefined }) =>
+      useForgetEditsWhen(shouldForget, ...refs),
+    { initialProps: { shouldForget: initialShouldForget } },
   );
 }
 
-describe('useForgetEditsOnSyncBlock', () => {
-  it('forgets the edit when a block starts', () => {
+describe('useForgetEditsWhen', () => {
+  it('forgets the edit when the condition turns true', () => {
     const lastEditAt = editedRef();
     const { rerender } = renderForget(false, lastEditAt);
     expect(lastEditAt.current).toBe(EDIT_AT);
 
-    rerender({ isSyncBlocked: true });
+    rerender({ shouldForget: true });
 
     expect(lastEditAt.current).toBeUndefined();
   });
 
-  it('does not forget an edit stamped while the block continues', () => {
+  it('does not forget an edit stamped while the condition stays true', () => {
     const lastEditAt = editedRef();
     const { rerender } = renderForget(false, lastEditAt);
-    rerender({ isSyncBlocked: true });
+    rerender({ shouldForget: true });
     expect(lastEditAt.current).toBeUndefined();
 
     lastEditAt.current = EDIT_AT;
-    rerender({ isSyncBlocked: true });
-    rerender({ isSyncBlocked: true });
+    rerender({ shouldForget: true });
+    rerender({ shouldForget: true });
 
     expect(lastEditAt.current).toBe(EDIT_AT);
   });
 
-  it('forgets nothing when a block ends', () => {
+  it('forgets nothing when the condition turns false', () => {
     const lastEditAt = editedRef();
     const { rerender } = renderForget(true, lastEditAt);
     lastEditAt.current = EDIT_AT;
 
-    rerender({ isSyncBlocked: false });
+    rerender({ shouldForget: false });
 
     expect(lastEditAt.current).toBe(EDIT_AT);
   });
 
-  it('forgets the edit when mounted already blocked', () => {
+  it('forgets the edit when mounted with the condition true', () => {
     const lastEditAt = editedRef();
 
     renderForget(true, lastEditAt);
@@ -69,7 +69,7 @@ describe('useForgetEditsOnSyncBlock', () => {
     const lastPaneEditAt = editedRef();
     const { rerender } = renderForget(false, lastEditAt, lastPaneEditAt);
 
-    rerender({ isSyncBlocked: true });
+    rerender({ shouldForget: true });
 
     expect(lastEditAt.current).toBeUndefined();
     expect(lastPaneEditAt.current).toBeUndefined();

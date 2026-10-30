@@ -360,7 +360,8 @@ export type UsjSearchOptions = {
    * `ignoreDiacritics` behaviour on NFC source text: a pre-composed character such as `é` (U+00E9)
    * will not match `e[combining]*` unless the text is first decomposed. Returned `text` values are
    * always slices of the original (non-NFD) string. A match that starts or ends inside an original
-   * character (for example part of a Hangul syllable) is not returned.
+   * character (for example part of a Hangul syllable, stored precomposed or decomposed) is not
+   * returned.
    */
   normalizationForm?: 'NFD';
   /**
