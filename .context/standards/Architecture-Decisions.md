@@ -7206,7 +7206,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4551 (Ian NN-3.3 (a) and (d)), with the overflow mechanism measured in the running
   app rather than inferred.
 
-## adr-platform-error-code-crosses-json-rpc: A C# exception's platform error code travels in `error.data.data.platformErrorCode`, and main relays error responses whole
+## adr-platform-error-code-crosses-json-rpc: A C# exception's platform error code travels in `error.data.data.platformErrorCode`, and main relays that code and no other error data
 
 - **Date:** 2026-10-30
 - **Status:** Accepted
@@ -7223,7 +7223,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   also looks through a `TargetInvocationException` and a single-exception `AggregateException`),
   the `CommonErrorData` is replaced by `PlatformCodedErrorData` — the same fields plus
   `data: { platformErrorCode }`. An exception without a code keeps the default shape. Main relays
-  an error response object whole, so `error.data` reaches whichever process asked.
+  an error response's `code`, `message` and `error.data.data.platformErrorCode` and nothing else
+  from `error.data`: the exception type names, stack and inner exceptions can hold absolute paths
+  with the user's name, and browser pages connect to the same WebSocket.
 - **Alternatives:**
   - *`ExceptionStrategy = ISerializable`.* Serializes the whole exception, `Data` included, but
     changes the JSON-RPC error code and the shape of every error for every caller, and couples the
@@ -7992,7 +7994,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   tears down the whole C# connection (an unaddressed platform-level issue), so the response is
   bounded by an aggregate size cap and fails with a documented error whose machine-readable
   contract is the RESOURCE_EXHAUSTED platform error code (exception types do not cross the RPC
-  boundary, but Exception.Data does); the documented message prefix remains the fallback for
+  boundary, but the platform error code in Exception.Data does); the documented message prefix remains the fallback for
   consumers that see only the message. Schema evolution now moves at platform speed: a field the
   payload drops costs a core release to recover, which is why the setup records deliberately
   carry the model text's identity even though nothing consumes it yet. A future PT9-legacy import
@@ -11082,9 +11084,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     `EnterWrite`. It is not in `LocalParatextProjects.GetParatextProject`, which S/R, settings and
     metadata share. `OpenBlockedCoverageTests` scans the guarded services for text reads and
     writes and fails on any that neither refuses first nor carries an `// open-block: exempt`
-    marker naming its guarded caller. The exception's `FAILED_PRECONDITION` code is for C# callers
-    only: `CommonErrorData` drops `Exception.Data` at the JSON-RPC boundary, so TypeScript relies on
-    the sentinel.
+    marker naming its guarded caller. The exception's `FAILED_PRECONDITION` code crosses JSON-RPC
+    (`adr-platform-error-code-crosses-json-rpc`), but TypeScript still relies on the sentinel,
+    because that code alone does not identify this refusal.
   - **TypeScript shows the reason.** Tools that surface the refusal detect the sentinel and show the
     localized reason (`%project_unsupported_generic%` if the key can't be read). The inventory,
     checks, Checklist and Manage Books `open*` commands also refuse such a project; `openFind`

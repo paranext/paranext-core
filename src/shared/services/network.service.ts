@@ -465,8 +465,8 @@ async function doRequest<TParam extends Array<unknown>, TReturn>(
   //   - The INNER `.data` is the `{ platformErrorCode }` object `PapiJsonRpc`
   //     (c-sharp/PapiJsonRpc.cs) adds to that `CommonErrorData` when the
   //     exception carries a code.
-  // Main relays the error object whole between clients (`RpcServer.processMessage`),
-  // so the code arrives the same in every process. Do NOT flatten this access
+  // Main relays only the error's code, message and this platform error code between
+  // clients (`RpcServer.processMessage`), so the code arrives the same in every process. Do NOT flatten this access
   // without changing `PlatformCodedErrorData` to match — both levels are intentional.
   let platformErrorCode: PlatformErrorCode | undefined;
   if (isJsonRpcResponse(response)) {
