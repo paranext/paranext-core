@@ -14,6 +14,7 @@ import { windowService } from '@shared/services/window.service';
 import { CommandPaletteRequest, PopoverContent, PopoverRequest } from './overlay.service-model';
 import { getOverlays, getOverlayById, clearAllOverlays, subscribe } from './overlay-store';
 import { isWebViewVisible } from './overlay-coordinates';
+import { WINDOW_BLUR_PRESS_MARKER } from './window-blur-press.util';
 
 /** Must match DEBOUNCE_COOLDOWN_MS in overlay.service-host.ts */
 const DEBOUNCE_COOLDOWN_MS = 50;
@@ -1851,11 +1852,17 @@ describe('overlay.service-host', () => {
      * Dispatch a pointerdown in the PARENT document (what a click outside every WebView iframe
      * produces), either on overlay content or on an unrelated element.
      */
-    function dispatchParentDocumentPointerDown(location: 'insideOverlay' | 'outsideOverlay'): void {
+    function dispatchParentDocumentPointerDown(
+      location: 'insideOverlay' | 'outsideOverlay',
+      options?: { isWindowBlurPress?: boolean },
+    ): void {
       const target = document.createElement('div');
       if (location === 'insideOverlay') target.setAttribute('data-overlay-command-palette', '');
       document.body.appendChild(target);
-      target.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      const event = new Event('pointerdown', { bubbles: true });
+      if (options?.isWindowBlurPress)
+        Object.defineProperty(event, WINDOW_BLUR_PRESS_MARKER, { value: true });
+      target.dispatchEvent(event);
       target.remove();
     }
 
@@ -1894,6 +1901,20 @@ describe('overlay.service-host', () => {
 
       // Clean up
       getOverlays().forEach((overlay) => overlay.resolve(undefined));
+      await expect(palettePromise).resolves.toBeUndefined();
+    });
+
+    it('should dismiss overlays when the only parent-document pointerdown was a window-blur press on overlay content', async () => {
+      vi.useFakeTimers();
+
+      const palettePromise = overlayService.showCommandPalette(paletteRequest, 'blur-press');
+
+      vi.advanceTimersByTime(PAST_GRACE_MS);
+      dispatchParentDocumentPointerDown('insideOverlay', { isWindowBlurPress: true });
+      emitAppWindowInput('mouseDown');
+      vi.advanceTimersByTime(PAST_INPUT_DEFER_MS);
+
+      expect(getOverlays()).toHaveLength(0);
       await expect(palettePromise).resolves.toBeUndefined();
     });
 
