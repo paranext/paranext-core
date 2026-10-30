@@ -874,7 +874,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
         {
             using DummyScrText existing = new();
             var provider = ProviderWithInstalledResource(existing);
-            using var run = SyncRunResourceGuard.BeginRun([WhitelistedUid]);
+            var run = SyncRunResourceGuard.BeginRun([WhitelistedUid]);
             var install = provider.InstallDblResource(WhitelistedUid);
             Assert.That(await FinishesWithin(install, s_stillBlockedWindow), Is.False);
 
@@ -884,6 +884,11 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
 
             Assert.That(await FinishesWithin(list, s_shouldFinishBound), Is.True);
             Assert.That(install.IsCompleted, Is.False, "the install is still waiting for the run");
+
+            // Finish the install inside the test, while the objects it uses are still alive.
+            run.Dispose();
+            Assert.That(await FinishesWithin(install, s_shouldFinishBound), Is.True);
+            await install;
         }
 
         [Test]
