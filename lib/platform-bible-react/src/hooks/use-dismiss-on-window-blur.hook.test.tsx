@@ -5,6 +5,7 @@ import { createRef, ReactNode, Ref } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom';
 import {
+  focusUnlessSuppressed,
   isRunningInWebView,
   isWindowBlurPress,
   shouldSuppressFocusReturn,
@@ -72,6 +73,28 @@ describe('shouldSuppressFocusReturn', () => {
     vi.spyOn(document, 'hasFocus').mockReturnValue(false);
     expect(shouldSuppressFocusReturn(document, true)).toBe(true);
     expect(shouldSuppressFocusReturn(document, false)).toBe(false);
+  });
+});
+
+describe('focusUnlessSuppressed', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('runs the focus move when focus return is not suppressed', () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    const focus = vi.fn();
+    focusUnlessSuppressed(focus);
+    expect(focus).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips the focus move in an unfocused web view', () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    vi.stubGlobal('top', {});
+    const focus = vi.fn();
+    focusUnlessSuppressed(focus);
+    expect(focus).not.toHaveBeenCalled();
   });
 });
 
@@ -216,25 +239,38 @@ describe('useDismissOnWindowBlur', () => {
       content: { id?: string; labelledBy?: string; children?: ReactNode } = { id: 'c' },
     ) {
       let handler: ((event: Event) => void) | undefined;
-      function Probe({ triggerMarkup }: { triggerMarkup: ReactNode }) {
+      function Probe({
+        triggerMarkup,
+        showContent = true,
+      }: {
+        triggerMarkup: ReactNode;
+        showContent?: boolean;
+      }) {
         const blurDismissal = useDismissOnWindowBlur<HTMLDivElement>({});
         handler = blurDismissal.onCloseAutoFocus;
         return (
           <>
             {triggerMarkup}
             <section>
-              <div id={content.id} aria-labelledby={content.labelledBy} ref={blurDismissal.ref}>
-                {content.children}
-              </div>
+              {showContent && (
+                <div id={content.id} aria-labelledby={content.labelledBy} ref={blurDismissal.ref}>
+                  {content.children}
+                </div>
+              )}
             </section>
           </>
         );
       }
+      let currentTrigger = trigger;
       const { rerender } = render(<Probe triggerMarkup={trigger} />);
       return {
         onCloseAutoFocus: (event: Event) => handler?.(event),
-        rerenderTrigger: (nextTrigger: ReactNode) =>
-          rerender(<Probe triggerMarkup={nextTrigger} />),
+        rerenderTrigger: (nextTrigger: ReactNode) => {
+          currentTrigger = nextTrigger;
+          rerender(<Probe triggerMarkup={nextTrigger} />);
+        },
+        /** Unmounts the content, as Radix does on close before it runs close-auto-focus */
+        detachContent: () => rerender(<Probe triggerMarkup={currentTrigger} showContent={false} />),
       };
     }
 
@@ -420,6 +456,97 @@ describe('useDismissOnWindowBlur', () => {
 
       expect(document.activeElement).toBe(document.body);
       expect(event.defaultPrevented).toBe(false);
+    });
+
+    it("prefers the trigger found on attach to an outside element the content's aria-labelledby names", () => {
+      const triggerMarkup = (isOpen: boolean) => (
+        <>
+          <button type="button" aria-controls={isOpen ? 'c' : undefined}>
+            trigger
+          </button>
+          <span id="label" tabIndex={-1}>
+            label
+          </span>
+        </>
+      );
+      const { onCloseAutoFocus, rerenderTrigger } = renderTriggeredProbe(triggerMarkup(true), {
+        id: 'c',
+        labelledBy: 'label',
+      });
+      // A menu trigger drops `aria-controls` once the menu closes
+      rerenderTrigger(triggerMarkup(false));
+      const button = screen.getByRole('button', { name: 'trigger' });
+      vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+
+      const event = cancelable();
+      onCloseAutoFocus(event);
+
+      expect(button).toHaveFocus();
+      expect(event.defaultPrevented).toBe(true);
+    });
+
+    it('leaves the default to Radix when the trigger cannot take focus', () => {
+      const { onCloseAutoFocus } = renderTriggeredProbe(
+        <button type="button" aria-controls="c" disabled>
+          trigger
+        </button>,
+      );
+      vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+
+      const event = cancelable();
+      onCloseAutoFocus(event);
+
+      expect(document.activeElement).toBe(document.body);
+      expect(event.defaultPrevented).toBe(false);
+    });
+
+    it('does not rescan the document when the same content element re-attaches', () => {
+      function InlineRefProbe({ tick }: { tick: number }) {
+        // An inline ref gives the hook's ref callback a new identity on every render, so React
+        // detaches and re-attaches the same element each time
+        const blurDismissal = useDismissOnWindowBlur<HTMLDivElement>({ ref: () => {} });
+        return (
+          <>
+            <button type="button" aria-controls="c">
+              {tick}
+            </button>
+            <section>
+              <div id="c" ref={blurDismissal.ref} />
+            </section>
+          </>
+        );
+      }
+      const querySelectorAll = vi.spyOn(document, 'querySelectorAll');
+      const { rerender } = render(<InlineRefProbe tick={0} />);
+      const scansOf = () =>
+        querySelectorAll.mock.calls.filter(([selector]) => selector === '[aria-controls]').length;
+      // Control: the first attach scans
+      expect(scansOf()).toBe(1);
+
+      rerender(<InlineRefProbe tick={1} />);
+      rerender(<InlineRefProbe tick={2} />);
+
+      expect(scansOf()).toBe(1);
+    });
+
+    it('releases the content and trigger it kept once close-auto-focus has run for a detached content', () => {
+      const { onCloseAutoFocus, detachContent } = renderTriggeredProbe();
+      const button = screen.getByRole('button', { name: 'trigger' });
+      detachContent();
+      vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+
+      const first = cancelable();
+      onCloseAutoFocus(first);
+      // Control: the close that the kept content belongs to restores the trigger
+      expect(button).toHaveFocus();
+      expect(first.defaultPrevented).toBe(true);
+
+      button.blur();
+      const second = cancelable();
+      onCloseAutoFocus(second);
+
+      expect(document.activeElement).toBe(document.body);
+      expect(second.defaultPrevented).toBe(false);
     });
   });
 });
