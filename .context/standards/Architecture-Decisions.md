@@ -11009,6 +11009,19 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - The patch's guard applies in the main document too: if a trapped dialog's focused child is
     removed while the OS window is deactivated, focus stays on `body` when the user comes back
     instead of moving to the dialog. Accepted as rare.
+- **Amended 2026-10-30 (UX ruling, Sebastian and Ian for UX):** the `BookChapterControl` in
+  compact mode is an explicit-dismissal surface. Compact mode starts when a quick-nav arrow
+  (previous or next chapter or verse) hides the book list and ends when the list returns (the search
+  input takes focus, or the user types); a fresh open always starts with the full picker. While
+  compact it survives a window blur, a real press elsewhere in the document, focus leaving and other
+  menus opening, by calling `preventDefault()` in `onInteractOutside`; the press is not swallowed,
+  only the dismissal is prevented. Only a click on its trigger, or Escape with focus inside the
+  popover or on the trigger, closes it (`onEscapeKeyDown` declines Escape pressed with focus
+  elsewhere in the document, because Radix listens for it on the whole document). Closing with its
+  container, becoming disabled, unmounting and submitting a reference are unchanged. The reason: the
+  user steps through chapters with the arrows while working in another pane. With the list showing,
+  the picker follows the rule above (it closes). The rule lives in the component, so every instance
+  gets it.
 - **Source:** PT-2989 (PR #2963); related PT-2205, PT-4627; prototype PR #2887.
 
 ## adr-unresolvable-spdx-operators-drop-the-dependency: A declaration carrying an SPDX operator this pipeline cannot resolve drops the dependency
