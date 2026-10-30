@@ -6421,8 +6421,14 @@ declare module 'papi-shared-types' {
      * A web view calls this for a paste it started itself (a menu item, or a keystroke it handles),
      * so put focus where the paste belongs first: it lands wherever focus is when it runs.
      *
-     * @returns `true` once the paste has been issued; `false`, without pasting, when no window has
-     *   focus
+     * Refused to WebSocket connections whose handshake carried `Origin` (a web page in the user's
+     * browser): the pasted clipboard is saved where it lands and could be read back.
+     *
+     * @returns `true` once `webContents.paste()` has been called on the focused window. That call
+     *   is fire-and-forget: it asks the window to paste and returns before the `paste` event runs,
+     *   so `true` means the paste was issued, not that it has landed. The Scripture editor treats
+     *   `true` as pasted and does not fall back to reading the clipboard itself. `false`, without
+     *   pasting, when no window has focus
      * @experimental This command is unstable and may change or disappear without notice
      */
     'platform.pasteIntoFocusedWindow': () => Promise<boolean>;

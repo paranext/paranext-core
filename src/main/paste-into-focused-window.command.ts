@@ -8,10 +8,14 @@ import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
  * including formats a page wrote for itself (such as a rich-text editor's own copy format).
  *
  * It hands the caller nothing from the clipboard: whatever is pasted goes only to the frame that
- * already has focus, which can read the clipboard itself.
+ * already has focus, which can read the clipboard itself. Main refuses it to browser pages
+ * (`REQUEST_TYPES_REFUSED_TO_BROWSERS` in `rpc-server.ts`; see the Security Guide).
  *
- * @returns `true` once the paste has been issued to the focused window; `false`, without pasting,
- *   when no window of this application has focus or the focused one is closing.
+ * @returns `true` once `webContents.paste()` has been called on the focused window — a
+ *   fire-and-forget request, so the paste has been issued but its `paste` event may not have run
+ *   yet. A caller that gets `true` must not paste again itself (the Scripture editor treats it as
+ *   pasted). `false`, without pasting, when no window of this application has focus or the focused
+ *   one is closing.
  */
 export async function pasteIntoFocusedWindow(): Promise<boolean> {
   const window = BrowserWindow.getFocusedWindow();
@@ -32,7 +36,9 @@ export const PASTE_INTO_FOCUSED_WINDOW_DOCS: SingleMethodDocumentation = {
     params: [],
     result: {
       name: 'return value',
-      summary: 'Whether the paste was issued',
+      summary:
+        'Whether the paste was issued (webContents.paste() was called; its paste event may not ' +
+        'have run yet). Treat true as pasted',
       schema: { type: 'boolean' },
     },
   },
