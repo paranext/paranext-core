@@ -1,21 +1,30 @@
 // @vitest-environment jsdom
 
-import { generateUsjCss, type StyleInfo } from '@eten-tech-foundation/platform-editor';
+import {
+  generateUsjCss,
+  generateUsjFontCss,
+  type StyleInfo,
+} from '@eten-tech-foundation/platform-editor';
 import { renderHook } from '@testing-library/react';
 import { useStylesheet } from 'platform-bible-react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { FOOTNOTE_ROWS_SELECTOR, generateProjectFontCss } from './project-font-css.util';
 import {
+  FOOTNOTE_ROWS_SELECTOR,
   projectStylesheetMode,
   useFootnotePaneFontStylesheet,
   useProjectStylesheet,
 } from './use-project-stylesheet.hook';
 
 vi.mock('platform-bible-react', () => ({ useStylesheet: vi.fn() }));
-// The full-sheet generator is the editor package's; only the hook's choice of generator is under test.
+// Both generators are the editor package's; only the hook's choice of generator and options is
+// under test.
 vi.mock('@eten-tech-foundation/platform-editor', () => ({
   generateUsjCss: vi.fn(
     (_info: unknown, options: { rtl: boolean }) => `full-sheet rtl=${options.rtl}`,
+  ),
+  generateUsjFontCss: vi.fn(
+    (_info: unknown, options?: { containerSelector?: string }) =>
+      `font-sheet scope=${options?.containerSelector ?? 'default'}`,
   ),
 }));
 
@@ -31,15 +40,14 @@ const styleInfo: StyleInfo = {
 
 describe('useProjectStylesheet', () => {
   beforeEach(() => {
-    mockUseStylesheet.mockClear();
+    vi.clearAllMocks();
   });
 
-  it("passes the fonts-only CSS in 'fonts' mode", () => {
-    renderHook(() => useProjectStylesheet(styleInfo, false, 'fonts'));
-    const css = mockUseStylesheet.mock.lastCall?.[0];
-    expect(css).toBe(generateProjectFontCss(styleInfo));
-    expect(css).toContain('Ezra SIL');
-    expect(css).not.toContain('bold');
+  it("passes the fonts-only CSS in the editor's default scope in 'fonts' mode", () => {
+    renderHook(() => useProjectStylesheet(styleInfo, true, 'fonts'));
+    expect(mockUseStylesheet.mock.lastCall?.[0]).toBe('font-sheet scope=default');
+    expect(generateUsjFontCss).toHaveBeenCalledWith(styleInfo);
+    expect(generateUsjCss).not.toHaveBeenCalled();
   });
 
   it("passes the whole generated stylesheet in 'full' mode", () => {
@@ -56,18 +64,16 @@ describe('useProjectStylesheet', () => {
 
 describe('useFootnotePaneFontStylesheet', () => {
   beforeEach(() => {
-    mockUseStylesheet.mockClear();
+    vi.clearAllMocks();
   });
 
   it("passes the fonts-only CSS scoped to the pane's read-only rows", () => {
     renderHook(() => useFootnotePaneFontStylesheet(styleInfo));
     expect(mockUseStylesheet).toHaveBeenCalledTimes(1);
-    const css = mockUseStylesheet.mock.lastCall?.[0];
-    expect(css).toBe(
-      generateProjectFontCss(styleInfo, { containerSelector: FOOTNOTE_ROWS_SELECTOR }),
-    );
-    expect(css).toContain(FOOTNOTE_ROWS_SELECTOR);
-    expect(css).not.toContain('bold');
+    expect(mockUseStylesheet.mock.lastCall?.[0]).toBe(`font-sheet scope=${FOOTNOTE_ROWS_SELECTOR}`);
+    expect(generateUsjFontCss).toHaveBeenCalledWith(styleInfo, {
+      containerSelector: FOOTNOTE_ROWS_SELECTOR,
+    });
   });
 
   it("passes '' without style info", () => {
