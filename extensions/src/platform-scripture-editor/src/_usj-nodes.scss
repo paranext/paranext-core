@@ -40,8 +40,8 @@
    the declaration in src/renderer/styles/fonts.css — which drops bold and italic Scripture text
    onto a system font. */
 /* Fallback chain for the editor's generated project stylesheet, which emits
-   `font-family: "<project font>", var(--usj-font-fallback, serif)`. On `.usfm` so the unformatted
-   view gets it too, and on the footnotes pane, whose read-only rows get project font rules but sit
+   `font-family: "PlatformEditorNbspStandIn", "<project font>", var(--usj-font-fallback, serif)`.
+   On `.usfm` so the unformatted view gets it too, and on the footnotes pane, whose read-only rows get project font rules but sit
    outside `.usfm`. Diverges from the editor library's copy, which hard-codes the chain: this
    points at Platform.Bible's own stack in src/renderer/styles/fonts.css, inlined into every web
    view. The literal chain is the library's, and applies where fonts.css is not loaded. */
@@ -2568,9 +2568,7 @@
    `verse-delete-armed` root class so a verse merely inside an ordinary range selection shows the
    tint but does not blink. For a verse, `verse-selected` is on the inner VerseDecorator span (the
    element that paints the red), NOT the outer `.verse`/`.usfm_v` element — so padding lives here,
-   with an equal negative margin so neighbors don't shift when it arms. An armed chapter number
-   carries it on the chapter element itself, which is a block, so it is shrunk to its number below
-   rather than tinting the whole line. */
+   with an equal negative margin so neighbors don't shift when it arms. */
 $armed-marker-padding: 3px;
 .verse-selected {
   background-color: color-mix(in srgb, var(--destructive) 15%, transparent);
@@ -2582,10 +2580,6 @@ $armed-marker-padding: 3px;
 
 .dark .verse-selected {
   background-color: color-mix(in oklab, var(--destructive) 20%, transparent);
-}
-
-.usfm_c.verse-selected {
-  width: fit-content;
 }
 
 /* Caret-like glow-underline blink, only while armed (StructureKeyboardPlugin sets the root class). */
@@ -2814,12 +2808,6 @@ span.read img {
   font-size: 0;
   line-height: 0;
   padding: 0.5rem 0 0.25rem;
-}
-
-/* An armed chapter number keeps its place: the block's padding above replaces the pill's inline
-   padding, which the pill's negative inline margin is there to offset, so it is put back. */
-.psc-gutter-markers .usfm_c.verse-selected {
-  padding-inline: $armed-marker-padding;
 }
 
 .psc-gutter-markers .usfm_c::after {

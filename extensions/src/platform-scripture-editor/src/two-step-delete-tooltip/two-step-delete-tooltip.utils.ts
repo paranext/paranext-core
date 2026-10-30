@@ -14,7 +14,6 @@ export type ArmedHint = {
 
 const ARMED_HINT_KINDS = [
   'verse',
-  'chapter',
   'selection',
   'joinPreviousPara',
   'joinNextPara',
@@ -31,7 +30,6 @@ function isArmedHintKind(kind: string | null | undefined): kind is ArmedHintKind
 /** The hint's message for each armed kind; `{key}` is replaced with the confirming key's name. */
 const MESSAGE_KEYS: Record<ArmedHintKind, LocalizeKey> = {
   verse: '%webView_platformScriptureEditor_twoStepDelete_removeVerseNumber%',
-  chapter: '%webView_platformScriptureEditor_twoStepDelete_removeChapterNumber%',
   selection: '%webView_platformScriptureEditor_twoStepDelete_deleteSelection%',
   joinPreviousPara: '%webView_platformScriptureEditor_twoStepDelete_joinPreviousParagraph%',
   joinNextPara: '%webView_platformScriptureEditor_twoStepDelete_joinNextParagraph%',
@@ -80,7 +78,6 @@ const PARA_MERGE_ARMED_CLASS = 'para-merge-armed';
 /** Class of the element the editor marks for each armed kind; the hint anchors to that element. */
 const ARMED_ELEMENT_CLASSES: Record<ArmedHintKind, string> = {
   verse: 'verse-selected',
-  chapter: 'verse-selected',
   selection: 'verse-selected',
   joinPreviousPara: PARA_MERGE_ARMED_CLASS,
   joinNextPara: PARA_MERGE_ARMED_CLASS,
@@ -151,7 +148,6 @@ export function narrowToArmedMarkerText(rect: AnchorRect, marker: HTMLElement): 
  * editor has marked no element for it:
  *
  * - A verse or selection arm: the armed verse marker.
- * - A chapter arm: the armed chapter number.
  * - A paragraph arm on a gutter marker (the armed element is the marker glyph, which the editor tags
  *   `data-text-type="marker"`): the marker's text, see {@link narrowToArmedMarkerText}.
  * - A paragraph arm with no marker shown (the armed element is the paragraph): the caret, which the

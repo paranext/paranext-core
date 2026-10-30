@@ -102,14 +102,6 @@ describe('readArmedHint', () => {
     expect(readArmedHint(el)).toEqual({ intent: 'deleteForward', kind: 'selection' });
   });
 
-  it('reads a backward chapter arm', () => {
-    const el = makeAttrEl({
-      'data-verse-delete-intent': 'deleteBackward',
-      'data-verse-delete-kind': 'chapter',
-    });
-    expect(readArmedHint(el)).toEqual({ intent: 'deleteBackward', kind: 'chapter' });
-  });
-
   it('returns undefined when attributes are missing', () => {
     expect(readArmedHint(makeAttrEl({}))).toBeUndefined();
   });
@@ -149,7 +141,6 @@ describe('readArmedHint', () => {
 describe('hintMessageKey', () => {
   it.each([
     ['verse', '%webView_platformScriptureEditor_twoStepDelete_removeVerseNumber%'],
-    ['chapter', '%webView_platformScriptureEditor_twoStepDelete_removeChapterNumber%'],
     ['selection', '%webView_platformScriptureEditor_twoStepDelete_deleteSelection%'],
     ['joinPreviousPara', '%webView_platformScriptureEditor_twoStepDelete_joinPreviousParagraph%'],
     ['joinNextPara', '%webView_platformScriptureEditor_twoStepDelete_joinNextParagraph%'],

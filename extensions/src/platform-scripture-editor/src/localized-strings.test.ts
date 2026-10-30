@@ -658,8 +658,7 @@ describe.each([...HIDDEN_CONTENT_DELETE_STRING_KEYS])('hidden content delete lab
   });
 });
 
-// The guarded two-press delete's "press again" hint: one message per armed kind (verse, chapter,
-// selection).
+// The guarded two-press delete's "press again" hint: one message per armed kind.
 describe.each([...TWO_STEP_DELETE_MESSAGE_STRING_KEYS])('two-step delete hint %s', (key) => {
   it('has an English label', () => {
     expect(localizedStrings.en[key]).toBeTruthy();

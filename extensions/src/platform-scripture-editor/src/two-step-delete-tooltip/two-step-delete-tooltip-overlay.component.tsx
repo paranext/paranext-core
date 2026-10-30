@@ -27,18 +27,18 @@ type ArmedData = AnchorRect & ArmedHint;
 type Props = { children: React.ReactNode };
 
 /**
- * Renders the destructive "press again to delete" hint while a verse marker, a chapter marker, a
- * selection containing verse markers, or a paragraph merge is armed for the two-step delete. This
- * lives in core — not the editor repo — so the user-facing copy is localized. Rendering itself is
- * delegated to `platform-bible-react`'s `DestructiveKeyConfirmation`; this component owns only
- * detecting the armed state and where to anchor it.
+ * Renders the destructive "press again to delete" hint while a verse marker, a selection containing
+ * verse markers, or a paragraph merge is armed for the two-step delete. This lives in core — not
+ * the editor repo — so the user-facing copy is localized. Rendering itself is delegated to
+ * `platform-bible-react`'s `DestructiveKeyConfirmation`; this component owns only detecting the
+ * armed state and where to anchor it.
  *
  * The DOM contract with the editor (shared-react's StructureKeyboardPlugin), which this overlay
  * observes:
  *
  * - The editor root carries `data-verse-delete-intent` and `data-verse-delete-kind` while a delete is
  *   armed.
- * - An armed verse marker or chapter number carries `verse-selected`.
+ * - An armed verse marker carries `verse-selected`.
  * - An armed paragraph's gutter marker carries `para-merge-armed` — or, when the paragraph shows no
  *   marker, the paragraph itself does. The gutter marker is told apart by its
  *   `data-text-type="marker"` attribute, and carries `--para-merge-armed-text-left` and
