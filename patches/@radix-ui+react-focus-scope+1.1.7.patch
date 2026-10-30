@@ -13,8 +13,8 @@ index c91ae91..58931d4 100644
 +         * `body`, even while a nested scope has paused it. In a document without focus (a web view
 +         * after the user clicked into another frame, or a window the user switched away from), a
 +         * `focus()` inside an iframe takes the frame's focus back from where the user put it. So
-+         * the observer does nothing while the document is unfocused; containment resumes at the next
-+         * focus move (Tab or click) once focus returns.
++         * the observer does nothing while the document is unfocused; containment resumes when focus next
++         * lands on an element inside the trap (a click), not from a Tab out of body.
 +         */
 +        if (!document.hasFocus()) return;
          if (focusedElement !== document.body) return;
@@ -35,8 +35,8 @@ index e39d5c9..48e4efa 100644
 +         * `body`, even while a nested scope has paused it. In a document without focus (a web view
 +         * after the user clicked into another frame, or a window the user switched away from), a
 +         * `focus()` inside an iframe takes the frame's focus back from where the user put it. So
-+         * the observer does nothing while the document is unfocused; containment resumes at the next
-+         * focus move (Tab or click) once focus returns.
++         * the observer does nothing while the document is unfocused; containment resumes when focus next
++         * lands on an element inside the trap (a click), not from a Tab out of body.
 +         */
 +        if (!document.hasFocus()) return;
          if (focusedElement !== document.body) return;
