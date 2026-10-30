@@ -1,4 +1,4 @@
-import { Localized, MultiColumnMenu } from 'platform-bible-utils';
+import { Localized, MenuItemContainingCommand, MultiColumnMenu } from 'platform-bible-utils';
 import React, { PropsWithChildren, ReactNode, useCallback, useRef, useState } from 'react';
 import {
   SHRINK_STEP,
@@ -40,6 +40,13 @@ export type TabToolbarCommonProps = {
    * useMemo to get the WebViewMenu.
    */
   projectMenuData?: Localized<MultiColumnMenu>;
+
+  /**
+   * Whether the project menu hands focus back to its trigger as it closes after `item` was
+   * selected. Defaults to always. Return `false` for an item whose handler puts focus where it
+   * belongs itself; see `TabDropdownMenu`'s `shouldReturnFocusOnSelect`.
+   */
+  shouldProjectMenuReturnFocusOnSelect?: (item: MenuItemContainingCommand) => boolean;
 
   /** Optional unique identifier */
   id?: string;

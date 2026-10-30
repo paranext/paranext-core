@@ -186,6 +186,15 @@ export type TabDropdownMenuProps = {
 
   /** Optional unique identifier */
   id?: string;
+
+  /**
+   * Whether the menu hands focus back to its trigger as it closes after `item` was selected.
+   * Defaults to always, which the tab order depends on. Return `false` for an item whose handler
+   * puts focus where it belongs itself, such as an editor action that returns focus to the text it
+   * acts on: the menu's own return comes after the handler's and would take focus from there.
+   * Closing without a selection (Escape, a click outside) always returns focus to the trigger.
+   */
+  shouldReturnFocusOnSelect?: (item: MenuItemContainingCommand) => boolean;
 };
 
 /**
@@ -208,6 +217,7 @@ export default function TabDropdownMenu({
   variant,
   buttonVariant = 'ghost',
   id,
+  shouldReturnFocusOnSelect,
 }: TabDropdownMenuProps) {
   const headingIdPrefix = useId();
   const menuTree = useMemo(() => buildMenuTree(menuData), [menuData]);
@@ -237,6 +247,14 @@ export default function TabDropdownMenu({
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const restoreFocusRing = () => showFocusRing(triggerRef.current ?? undefined);
 
+  // Whether the item selected since the menu last closed keeps focus away from the trigger. Read and
+  // cleared as the menu closes, so a close without a selection always returns focus.
+  const isFocusKeptAfterSelectRef = useRef(false);
+  const selectMenuItem: SelectMenuItemHandler = (item) => {
+    isFocusKeptAfterSelectRef.current = shouldReturnFocusOnSelect?.(item) === false;
+    onSelectMenuItem(item);
+  };
+
   return (
     <DropdownMenu variant={variant}>
       <DropdownMenuTrigger aria-label={tabLabel} className={className} asChild id={id}>
@@ -254,9 +272,18 @@ export default function TabDropdownMenu({
       <DropdownMenuContent
         align="start"
         style={{ zIndex: Z_INDEX_ABOVE_DOCK }}
-        onCloseAutoFocus={() => {
+        onCloseAutoFocus={(event) => {
+          const isFocusKeptAfterSelect = isFocusKeptAfterSelectRef.current;
+          isFocusKeptAfterSelectRef.current = false;
+          if (isFocusKeptAfterSelect) {
+            // Skips Radix's own restore, and with it the reset of its "interacted outside"
+            // bookkeeping. That is only ever set by a click outside, which closes the menu without
+            // a selection, so it is already clear here.
+            event.preventDefault();
+            return;
+          }
           // Radix composes this ahead of its own restore, so the mark is in place before it
-          // focuses. Deliberately does not preventDefault: Radix's handler also resets the
+          // focuses. Otherwise does not preventDefault: Radix's handler also resets the
           // bookkeeping that decides when the trigger must not be refocused at all.
           if (getLastInteractionModality() === 'pointer')
             hideFocusRing(triggerRef.current ?? undefined);
@@ -277,11 +304,9 @@ export default function TabDropdownMenu({
                   </DropdownMenuLabel>
                 )}
                 <TooltipProvider>
-                  {getGroupContent(
-                    groupsOfSection(columnKey),
-                    onSelectMenuItem,
-                    leadingSlot,
-                  ).flatMap((group) => group.items)}
+                  {getGroupContent(groupsOfSection(columnKey), selectMenuItem, leadingSlot).flatMap(
+                    (group) => group.items,
+                  )}
                 </TooltipProvider>
               </DropdownMenuGroup>
 

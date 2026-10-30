@@ -97,6 +97,7 @@ import {
   isLocalizeKey,
   isPlatformError,
   LocalizeKey,
+  MenuItemContainingCommand,
   serialize,
 } from 'platform-bible-utils';
 import {
@@ -477,6 +478,15 @@ const defaultTextDirection = 'ltr';
  * here so the options keep one identity.
  */
 const requestNativePaste = () => papi.commands.sendCommand('platform.pasteIntoFocusedWindow');
+
+/**
+ * Whether the Project menu returns focus to its trigger after `item` was selected: not after Cut,
+ * Copy and Paste, which return focus to the editor's text themselves. A menu return arriving after
+ * that would take focus from the text, and a native paste the editor has already asked for would
+ * land on the trigger instead.
+ */
+const shouldProjectMenuReturnFocusOnSelect = (item: MenuItemContainingCommand) =>
+  !isEditMenuCommand(item.command);
 
 /**
  * Logs a marker-palette open failure, EXCEPT the routine one: a newer palette request replacing an
@@ -5615,6 +5625,7 @@ function PlatformScriptureEditor({
     >
       <TabToolbar
         onSelectProjectMenuItem={menuCommandHandler}
+        shouldProjectMenuReturnFocusOnSelect={shouldProjectMenuReturnFocusOnSelect}
         onSelectViewInfoMenuItem={menuCommandHandler}
         projectMenuData={projectMenuData}
         className={[

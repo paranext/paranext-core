@@ -704,6 +704,90 @@ describe('TabDropdownMenu focus after the menu closes', () => {
   });
 });
 
+describe('TabDropdownMenu focus after selecting an item that places focus itself', () => {
+  /**
+   * Renders the menu beside a text field. Selecting the item focuses the field from a task queued
+   * by the select handler, the way an editor action returns focus to its text once the menu has
+   * closed; `shouldReturnFocusOnSelect` decides whether the menu then takes focus back.
+   */
+  function renderWithFocusTarget(shouldReturnFocusOnSelect?: () => boolean) {
+    const onSelectMenuItem = vi.fn(() => {
+      setTimeout(() => screen.getByRole('textbox', { name: 'Text' }).focus(), 0);
+    });
+    render(
+      <>
+        <input aria-label="Text" />
+        <TabDropdownMenu
+          onSelectMenuItem={onSelectMenuItem}
+          menuData={MENU_DATA}
+          tabLabel="Project"
+          shouldReturnFocusOnSelect={shouldReturnFocusOnSelect}
+        />
+      </>,
+    );
+    return {
+      trigger: screen.getByRole('button', { name: 'Project' }),
+      text: screen.getByRole('textbox', { name: 'Text' }),
+      onSelectMenuItem,
+    };
+  }
+
+  /** Lets the menu's own focus return, a task after it closes, run if it is going to. */
+  const settle = () =>
+    new Promise<void>((resolve) => {
+      setTimeout(resolve, 20);
+    });
+
+  it.each(['pointer selection', 'keyboard selection'] as const)(
+    'leaves focus where the handler put it after a %s the predicate declines',
+    async (close) => {
+      const user = userEvent.setup({ pointerEventsCheck: 0 });
+      const shouldReturnFocusOnSelect = vi.fn(() => false);
+      const { text, trigger, onSelectMenuItem } = renderWithFocusTarget(shouldReturnFocusOnSelect);
+
+      await openWith.pointer(user, trigger);
+      await screen.findByRole('menu');
+      await closeWith[close](user);
+      await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+      await settle();
+
+      expect(onSelectMenuItem).toHaveBeenCalledTimes(1);
+      expect(text).toHaveFocus();
+      expect(shouldReturnFocusOnSelect).toHaveBeenCalledWith(
+        expect.objectContaining({ command: 'test.showFootnotes' }),
+      );
+    },
+  );
+
+  it('returns focus to the trigger after a selection the predicate accepts', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const { trigger } = renderWithFocusTarget(() => true);
+
+    await openWith.pointer(user, trigger);
+    await screen.findByRole('menu');
+    await closeWith['pointer selection'](user);
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+    await settle();
+
+    expect(trigger).toHaveFocus();
+  });
+
+  it('returns focus to the trigger when the menu closes without a selection', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const shouldReturnFocusOnSelect = vi.fn(() => false);
+    const { trigger } = renderWithFocusTarget(shouldReturnFocusOnSelect);
+
+    await openWith.keyboard(user, trigger);
+    await screen.findByRole('menu');
+    await closeWith.Escape(user);
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+    await settle();
+
+    expect(trigger).toHaveFocus();
+    expect(shouldReturnFocusOnSelect).not.toHaveBeenCalled();
+  });
+});
+
 describe('TabDropdownMenu label alignment and shortcut spacing', () => {
   const MIXED: Localized<MultiColumnMenu> = {
     columns: { 'test.project': { label: 'Project', order: 1 } },

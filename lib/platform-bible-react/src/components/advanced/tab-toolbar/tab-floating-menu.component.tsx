@@ -9,6 +9,7 @@ import { TabToolbarCommonProps, TabToolbarContainer } from './tab-toolbar-contai
 export function TabFloatingMenu({
   onSelectProjectMenuItem,
   projectMenuData,
+  shouldProjectMenuReturnFocusOnSelect,
   id,
   className,
   menuButtonIcon,
@@ -18,6 +19,7 @@ export function TabFloatingMenu({
       {projectMenuData && (
         <TabDropdownMenu
           onSelectMenuItem={onSelectProjectMenuItem}
+          shouldReturnFocusOnSelect={shouldProjectMenuReturnFocusOnSelect}
           menuData={projectMenuData}
           tabLabel="Project"
           icon={menuButtonIcon}
