@@ -126,8 +126,9 @@ Dismissal is a keyboard and screen-reader concern, not just a pointer one:
   pointer, the ring would sit on a control the pointer has left. Suppress the ring for that case
   rather than withholding the focus — see `TabDropdownMenu`, which marks its trigger with
   `data-quiet-focus` and clears the mark on the next keydown. The ring stays under forced colors
-  (Windows High Contrast), where it is the only focus indicator left. For why the browser's own "focus without the indicator" option is not usable here,
-  see the `adr-menu-close-focus-restores-without-the-ring` entry in
+  (Windows High Contrast), where it is the only focus indicator left. For why the browser's own
+  "focus without the indicator" option is not usable here, see the
+  `adr-menu-close-focus-restores-without-the-ring` entry in
   `.context/standards/Architecture-Decisions.md`. The helpers behind this (`QUIET_FOCUS_*`,
   `useInteractionModality`) are internal to this library for now and not exported, so an extension
   cannot reuse them yet.
@@ -179,7 +180,8 @@ Consequences to know about:
   focus-return rule), `Tooltip` and `Dialog` (not on this axis), sub-menu contents (dismissing the
   root closes them), and the Scripture editor's right-click menu (not Radix; its window-blur close
   is fixed separately in the editor package).
-- Escape is not forwarded across frames. After a click into another frame, Escape goes to that frame.
+- Escape is not forwarded across frames. After a click into another frame, Escape goes to that
+  frame.
 - A modal menu opened inside a picker closes alone on a window blur; the picker stays open until the
   next blur or outside press, as it would after a real click outside both.
 - Inside a web view, a dialog does not pull focus back from another frame when a picker nested in it
@@ -187,9 +189,9 @@ Consequences to know about:
   repositories carry their own copy of Radix and need the same patch until Radix fixes it upstream.
 
 **Don't hand-roll containment against the trigger.** Radix portals content to `document.body`
-(`lib/platform-bible-react/src/components/shadcn-ui/popover.tsx`), so the floating content is **not**
-a DOM descendant of its trigger. A naive `trigger.contains(activeElement)` check reads the surface's
-own content as "outside" and **dismisses itself**. Radix's built-in
+(`lib/platform-bible-react/src/components/shadcn-ui/popover.tsx`), so the floating content is
+**not** a DOM descendant of its trigger. A naive `trigger.contains(activeElement)` check reads the
+surface's own content as "outside" and **dismisses itself**. Radix's built-in
 `onInteractOutside`/`onPointerDownOutside` are already portal-aware — use them.
 
 ### Scroll inside a WebView is unobservable
@@ -211,14 +213,17 @@ The window-blur dismissal lives in `useDismissOnWindowBlur`
 shared wrappers. There is no WebView scroll-forwarding capability yet, so in-WebView scroll won't
 dismiss a Light surface.
 
-See also: [Interactions](./application-interactions.mdx) for the menus and surfaces these patterns apply to, and [Component Choices](./component-choices.mdx) for picking the surface in the first place.
+See also: [Interactions](./application-interactions.mdx) for the menus and surfaces these patterns
+apply to, and [Component Choices](./component-choices.mdx) for picking the surface in the first
+place.
 
 ---
 
 ## Glossary
 
 - **Outside-interaction dismissal** — umbrella term for closing a surface in response to interaction
-  elsewhere (pointer, Escape, scroll, or the window losing focus). Mirrors Radix's `onInteractOutside`.
+  elsewhere (pointer, Escape, scroll, or the window losing focus). Mirrors Radix's
+  `onInteractOutside`.
 - **Light dismissal** — closes on *any* outside interaction, including scroll. (In UX writing,
   "light dismissal" is sometimes used generically; here it names this specific pattern.)
 - **Click-away dismissal** — closes on outside press + Escape + the window losing focus,
