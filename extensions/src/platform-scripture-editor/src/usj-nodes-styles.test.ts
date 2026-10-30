@@ -258,6 +258,14 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
         /\.psc-active-focus \.psc-active-text::before/,
       );
     });
+    it('defines the project-font fallback chain for the footnotes pane too', () => {
+      // The pane's read-only rows get project font rules but sit outside `.usfm`, so without this
+      // a missing project font would fall to bare `serif` there.
+      const code = scss.replace(/\/\*[\s\S]*?\*\//g, '');
+      expect(code).toMatch(
+        /(?:^|\})\s*\.usfm,\s*\[data-footnotes-pane\]\s*\{\s*--usj-font-fallback:/,
+      );
+    });
     describe('Simple-mode text sizes follow the project font size', () => {
       const code = scss.replace(/\/\*[\s\S]*?\*\//g, '');
       const gutterSection = code.slice(code.indexOf('@property --psc-base-font-size'));

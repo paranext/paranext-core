@@ -40,10 +40,12 @@
    onto a system font. */
 /* Fallback chain for the editor's generated project stylesheet, which emits
    `font-family: "<project font>", var(--usj-font-fallback, serif)`. On `.usfm` so the unformatted
-   view gets it too. Diverges from the editor library's copy, which hard-codes the chain: this
+   view gets it too, and on the footnotes pane, whose read-only rows get project font rules but sit
+   outside `.usfm`. Diverges from the editor library's copy, which hard-codes the chain: this
    points at Platform.Bible's own stack in src/renderer/styles/fonts.css, inlined into every web
    view. The literal chain is the library's, and applies where fonts.css is not loaded. */
-.usfm {
+.usfm,
+[data-footnotes-pane] {
   --usj-font-fallback: var(
     --scripture-font-stack,
     'Charis SIL',

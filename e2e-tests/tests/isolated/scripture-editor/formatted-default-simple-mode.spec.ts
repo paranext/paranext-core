@@ -150,7 +150,11 @@ test.describe('scripture editor default view', () => {
       await expect
         .poll(async () => (await noteStyle()).fontSize, { timeout: 30_000 })
         .toBeCloseTo(PROJECT_FONT_SIZE_PX, 1);
-      expect(startsWithProjectFont((await noteStyle()).fontFamily)).toBe(true);
+      const noteFamily = (await noteStyle()).fontFamily;
+      expect(startsWithProjectFont(noteFamily)).toBe(true);
+      // The project font need not be installed, so what follows it must be the Scripture stack the
+      // editor text falls back to, not bare `serif`.
+      expect(noteFamily).toContain('Charis SIL');
     });
 
     await test.step('Ctrl+E changes nothing in Simple', async () => {
