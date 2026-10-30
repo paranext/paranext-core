@@ -2911,7 +2911,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
 - **Date:** 2026-10-30
 - **Status:** Accepted (short term). Long-term direction: USFM on the clipboard, read back with
-  Standard view's tokenizer, so one format serves every view and other programs; no ticket yet.
+  Standard view's tokenizer, so one format serves every view and other programs (PT-4984).
 - **Context:** A view that hides its markers cannot paste what it copied from the copy's text or
   its html: Lexical's html export carries no char or note attributes, milestones or figures, so a
   pasted footnote gained closers (catalog row CB-3). The editor's own node copy does hold all of it,
@@ -2946,10 +2946,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     as the flavor; TJ does not mind forged data (2026-10-30).
   - A copy that goes through another editor loses the attribute and pastes as html (catalog row
     CB-14).
-  - The read raises no `paste` event, so `usePauseEditing` holds off the paste chords by key, and
-    the Paste items of the editor's own menus are not held off during a chapter load.
+  - The read raises no `paste` event, so during a chapter load `usePauseEditing` holds off the paste
+    chords by key, and the Edit flyout's Paste is refused by the web view's read-only check. The
+    right-click menu's Paste is not held off, and neither is Ctrl+X, which dispatches the editor's
+    cut command directly. A read already in flight when the load starts can still land.
   - Checked on Electron 39 on Linux and on Windows (probes), and end to end on Linux by
     `in-editor-paste.spec.ts`. macOS was researched, not run.
+- **Source:** PT-4921; paranext-core#2976, paranext/scripture-editors#43.
 
 ## adr-editor-collapsed-note-hides-its-annotations: An annotation inside a collapsed note is not shown, as in Paratext 9
 
