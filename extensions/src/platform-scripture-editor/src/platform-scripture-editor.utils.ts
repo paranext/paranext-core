@@ -52,7 +52,7 @@ import {
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import type { ScriptureEditorViewType, ScriptureRange } from 'platform-scripture-editor';
 import type { SharedProjectsInfo } from 'platform-scripture';
-import type { UnsyncedChangesSnapshot } from 'paratext-bible-send-receive';
+import type { SyncRequestOptions, UnsyncedChangesSnapshot } from 'paratext-bible-send-receive';
 import type { InternetUse } from 'paratext-registration';
 import type { SettingTypes } from 'papi-shared-types';
 import type { MutableRefObject } from 'react';
@@ -2048,6 +2048,55 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
 
 // #region Project-Switch Sync
 
+/** The JSON-RPC error code for "no handler is registered for this method". */
+const JSON_RPC_METHOD_NOT_FOUND_CODE = -32601;
+
+const REQUEST_SYNC_COMMAND = 'paratextBibleSendReceive.requestSync';
+
+/**
+ * Whether a rejection of `requestSync` says no handler is registered for it, i.e. the Send/Receive
+ * extension is not running. Extensions cannot import the shared RPC helpers, so this matches the
+ * message the network service throws for an error response: `JSON-RPC Request error (-32601): ...`,
+ * which names the request type.
+ */
+function isRequestSyncNotRegisteredError(error: unknown): boolean {
+  const message = getErrorMessage(error);
+  return (
+    message.includes(`JSON-RPC Request error (${JSON_RPC_METHOD_NOT_FOUND_CODE})`) &&
+    message.includes(REQUEST_SYNC_COMMAND)
+  );
+}
+
+/**
+ * Asks the Send/Receive extension's sync queue to sync `projectIds` as an automatic sync. Falls
+ * back to `directSync` once when the queue's command is not registered (the extension is absent). A
+ * request that was taken out of the queue before it ran (`(SR_REMOVED)`: the user removed it, or it
+ * was dropped at quit) is not a failure and only logs at info. Any other rejection is rethrown for
+ * the caller to report.
+ */
+async function requestAutoSync(
+  papi: typeof PapiBackend,
+  projectIds: string[],
+  options: SyncRequestOptions,
+  directSync: () => Promise<unknown>,
+): Promise<void> {
+  try {
+    await papi.commands.sendCommand(REQUEST_SYNC_COMMAND, projectIds, 'autoSync', options);
+  } catch (e) {
+    if (getErrorMessage(e).includes('(SR_REMOVED)')) {
+      papi.logger.info(
+        `Automatic sync of ${projectIds.join(', ')} was removed from the sync queue`,
+      );
+      return;
+    }
+    if (!isRequestSyncNotRegisteredError(e)) throw e;
+    papi.logger.info(
+      `The sync queue is not available (${getErrorMessage(e)}); syncing ${projectIds.join(', ')} directly`,
+    );
+    await directSync();
+  }
+}
+
 /**
  * Fire-and-forget helper that flushes the outgoing project, then syncs the incoming one. Each sync
  * is independently error-isolated so a failure in one doesn't block the other. Called after a
@@ -2121,9 +2170,11 @@ export async function syncOnProjectSwitch(
 
   if (outgoingProjectId && !(await isProjectPublished(papi, outgoingProjectId))) {
     try {
-      await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [
-        outgoingProjectId,
-      ]);
+      await requestAutoSync(papi, [outgoingProjectId], { includeConnected: false }, () =>
+        papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [
+          outgoingProjectId,
+        ]),
+      );
     } catch (e) {
       papi.logger.warn(
         `Project-switch sync: outgoing sync for ${outgoingProjectId} failed: ${getErrorMessage(e)}`,
@@ -2137,10 +2188,19 @@ export async function syncOnProjectSwitch(
     // runs leaves it with no progress surface until it ends. Accepted in
     // `adr-sync-surface-per-interface-mode`.
     const flag: [true] | [] = interfaceMode === 'simple' ? [true] : [];
-    await papi.commands.sendCommand(
-      'paratextBibleSendReceive.syncProjects',
+    await requestAutoSync(
+      papi,
       [incomingProjectId],
-      ...flag,
+      {
+        includeConnected: true,
+        ...(interfaceMode === 'simple' ? { suppressNotification: true } : {}),
+      },
+      () =>
+        papi.commands.sendCommand(
+          'paratextBibleSendReceive.syncProjects',
+          [incomingProjectId],
+          ...flag,
+        ),
     );
   } catch (e) {
     papi.logger.warn(
@@ -2345,7 +2405,9 @@ export async function syncOnSwitchToPower(
   if (!shouldSync) return;
 
   try {
-    await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [projectId]);
+    await requestAutoSync(papi, [projectId], { includeConnected: false }, () =>
+      papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [projectId]),
+    );
   } catch (e) {
     papi.logger.warn(`Switch-to-Power sync of ${projectId} failed: ${getErrorMessage(e)}`);
   }
