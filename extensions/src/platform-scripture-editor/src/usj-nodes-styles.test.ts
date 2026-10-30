@@ -258,6 +258,33 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
         /\.psc-active-focus \.psc-active-text::before/,
       );
     });
+    it('defines the project-font fallback chain for the footnotes pane too', () => {
+      // The pane's read-only rows get project font rules but sit outside `.usfm`, so without this
+      // a missing project font would fall to bare `serif` there.
+      const code = scss.replace(/\/\*[\s\S]*?\*\//g, '');
+      expect(code).toMatch(
+        /(?:^|\})\s*\.usfm,\s*\[data-footnotes-pane\]\s*\{\s*--usj-font-fallback:/,
+      );
+    });
+    describe('Simple-mode text sizes follow the project font size', () => {
+      const code = scss.replace(/\/\*[\s\S]*?\*\//g, '');
+      const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const ruleBody = (selectors: string[]) => {
+        const match = new RegExp(
+          `(?:^|\\}|;)\\s*${selectors.map(escapeRegExp).join(',\\s*')}\\s*\\{([^}]*)\\}`,
+        ).exec(code);
+        return match?.[1] ?? '';
+      };
+
+      it('registers --psc-base-font-size as an inherited length defaulting to 16px', () => {
+        expect(code).toMatch(
+          /@property --psc-base-font-size\s*\{[^}]*syntax:\s*'<length>'[^}]*inherits:\s*true[^}]*initial-value:\s*16px/,
+        );
+        expect(ruleBody(['.psc-gutter-markers'])).toContain('--psc-base-font-size: 1em;');
+      });
+      // The sizes derived from it are measured in formatted-default-simple-mode.spec.ts.
+    });
+
     describe('empty-verse caret', () => {
       // The caret rules only show in layout, so what is pinned is that each load-bearing
       // declaration stays on exactly the selector list the editor renders for. A rule is matched
@@ -272,7 +299,6 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
       const host = `${activeVerse} + [data-caret-host]`;
 
       it('sizes the ellipsis box from one variable', () => {
-        expect(rules).toContain('--psc-empty-verse-ellipsis-width: 13px;');
         const box = [
           '.psc-gutter-markers .verse:not(.marker).psc-empty-text::after',
           `${activeVerse}::after`,
