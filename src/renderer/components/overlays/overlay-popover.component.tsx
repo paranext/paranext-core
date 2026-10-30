@@ -9,12 +9,12 @@
 
 import { Popover as PopoverPrimitive } from 'radix-ui';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { isWindowBlurPress } from '@renderer/services/overlays/window-blur-press.util';
 import { resolveAndRemoveOverlay } from '@renderer/services/overlays/overlay-store';
 import {
   OverlayEntry,
   PopoverContent as PopoverContentModel,
 } from '@renderer/services/overlays/overlay.service-model';
+import { isWindowBlurPress } from '@renderer/services/overlays/window-blur-press.util';
 import {
   Button,
   MarkdownRenderer,

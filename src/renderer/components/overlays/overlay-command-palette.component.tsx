@@ -10,7 +10,6 @@
 
 import { Popover as PopoverPrimitive } from 'radix-ui';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { isWindowBlurPress } from '@renderer/services/overlays/window-blur-press.util';
 import {
   resolveAndRemoveOverlay,
   updateCommandPaletteState,
@@ -25,6 +24,7 @@ import {
   filterPaletteItems,
   getPaletteFilterMode,
 } from '@renderer/services/overlays/overlay-palette-filter.util';
+import { isWindowBlurPress } from '@renderer/services/overlays/window-blur-press.util';
 import {
   cn,
   Command,

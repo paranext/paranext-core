@@ -58,7 +58,8 @@ describe('SelectContent close focus', () => {
 
     await waitFor(() => expect(screen.queryByRole('listbox')).not.toBeInTheDocument());
     await waitForCloseAutoFocus();
-    expect(document.activeElement).not.toBe(trigger);
+    expect(trigger).not.toHaveFocus();
+    expect(document.activeElement).toBe(document.body);
   });
 
   it('returns focus to its trigger after Escape in a focused document', async () => {

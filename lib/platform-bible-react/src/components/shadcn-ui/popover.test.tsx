@@ -190,7 +190,7 @@ describe('PopoverContent window blur', () => {
           <PopoverContent>body</PopoverContent>
         </Popover>
         <Dialog open onOpenChange={handleOpenChange}>
-          <DialogContent>
+          <DialogContent aria-describedby={undefined}>
             <DialogTitle>dialog title</DialogTitle>
           </DialogContent>
         </Dialog>
@@ -212,7 +212,7 @@ describe('PopoverContent window blur', () => {
       const [isDialogOpen, setIsDialogOpen] = useState(true);
       return (
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent ref={setDialogElement}>
+          <DialogContent ref={setDialogElement} aria-describedby={undefined}>
             <DialogTitle>dialog title</DialogTitle>
             <PopoverPortalContainerProvider container={dialogElement}>
               <Popover>
@@ -242,7 +242,7 @@ describe('PopoverContent window blur', () => {
     const [isDialogOpen, setIsDialogOpen] = useState(true);
     return (
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent ref={setDialogElement}>
+        <DialogContent ref={setDialogElement} aria-describedby={undefined}>
           <DialogTitle>dialog title</DialogTitle>
           <PopoverPortalContainerProvider container={dialogElement}>
             <Popover modal>
@@ -299,6 +299,7 @@ describe('PopoverContent window blur', () => {
   });
 
   it("keeps the trap's container focus when the document has focus", async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
     render(<ModalPopoverInDialog />);
     const dialogElement = getDialogContent();
     fireEvent.click(await screen.findByText('open'));
@@ -320,7 +321,7 @@ describe('PopoverContent window blur', () => {
     vi.spyOn(document, 'hasFocus').mockReturnValue(false);
     render(
       <Dialog open>
-        <DialogContent>
+        <DialogContent aria-describedby={undefined}>
           <DialogTitle>t</DialogTitle>
           <input aria-label="first" />
         </DialogContent>
