@@ -17,18 +17,27 @@ const CARET_KEYS = new Set([
 
 /**
  * Whether a key press is held off while editing is paused: one that edits the document (a key that
- * types a character, Enter, Backspace, Delete, Tab, and the undo, redo and word-delete chords) or
- * moves the caret (the arrow and page keys, Home, End, and select-all). The caret counts because
- * the editor still shows the chapter being left: moving it there reports that chapter's verse as
- * the current reference, which pulls the reference back to the chapter the user just left. Every
- * other chord is let through so the application's shortcuts keep working, and paste and cut are
- * held off as the events they raise rather than by their keys.
+ * types a character, Enter, Backspace, Delete, Tab, and the undo, redo, word-delete and paste
+ * chords) or moves the caret (the arrow and page keys, Home, End, and select-all). The caret counts
+ * because the editor still shows the chapter being left: moving it there reports that chapter's
+ * verse as the current reference, which pulls the reference back to the chapter the user just left.
+ * The paste chords count because the editor takes them itself and asks the host for the paste,
+ * whose `paste` event can arrive after the pause has ended and land in the new chapter. Every other
+ * chord is let through so the application's shortcuts keep working; a paste started from a menu is
+ * held off as the `paste` event it raises.
  */
 function isHeldOffKey(event: KeyboardEvent): boolean {
   if (event.isComposing || CARET_KEYS.has(event.key)) return true;
   if (event.ctrlKey || event.metaKey) {
     const key = event.key.toLowerCase();
-    return key === 'z' || key === 'y' || key === 'a' || key === 'backspace' || key === 'delete';
+    return (
+      key === 'z' ||
+      key === 'y' ||
+      key === 'a' ||
+      key === 'v' ||
+      key === 'backspace' ||
+      key === 'delete'
+    );
   }
   if (event.altKey) return false;
   return (
