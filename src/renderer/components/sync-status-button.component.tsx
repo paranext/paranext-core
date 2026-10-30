@@ -1,5 +1,6 @@
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { SyncStatus, SyncingProject, useSyncStatus } from '@renderer/hooks/use-sync-status.hook';
+import { isJsonRpcMethodNotFoundError } from '@shared/data/rpc.model';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { notificationService } from '@shared/services/notification.service';
@@ -99,6 +100,28 @@ export const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   SYNC_CANCEL_UNAVAILABLE_MESSAGE_KEY,
   SYNC_VIEW_DETAILS_UNAVAILABLE_MESSAGE_KEY,
 ];
+
+const CANCEL_SYNC_PROMPT_COMMAND = 'paratextBibleSendReceive.cancelSyncPrompt';
+
+/**
+ * Asks to cancel the running sync through the prompt that also asks about projects waiting in the
+ * sync queue, or cancels it directly when the Send/Receive extension that serves the prompt is not
+ * running (the running sync is reported by the backend, so it can run without the extension).
+ *
+ * @returns `false` when nothing was cancelled (the user chose to keep syncing)
+ */
+async function sendCancelRequest(): Promise<boolean> {
+  try {
+    return await sendCommand(CANCEL_SYNC_PROMPT_COMMAND);
+  } catch (e) {
+    if (!isJsonRpcMethodNotFoundError(e, CANCEL_SYNC_PROMPT_COMMAND)) throw e;
+    logger.info(
+      `Toolbar is cancelling the sync directly: ${CANCEL_SYNC_PROMPT_COMMAND} is not available`,
+    );
+    await sendCommand('paratextBibleSendReceive.cancelSync');
+    return true;
+  }
+}
 
 /**
  * The popover's list of project names, shared by the syncing and unsynced states so both render the
@@ -258,9 +281,10 @@ export function SyncStatusButton() {
       // id as an unconditional cancel.
       //
       // The prompt variant, so a user with projects waiting behind this sync is asked whether to
-      // drop them too. It is served by the Send/Receive extension, which is also what reports the
-      // running sync this button offers to cancel.
-      const isCancelSent = await sendCommand('paratextBibleSendReceive.cancelSyncPrompt');
+      // drop them too. It is served by the Send/Receive extension, while the running sync this
+      // button offers to cancel is reported by the backend, so a sync can be running without the
+      // prompt: then the sync is cancelled directly, as there is no queue to ask about.
+      const isCancelSent = await sendCancelRequest();
       // Nothing was cancelled (the user chose to keep syncing): nothing is pending, so Cancel is
       // offered again and the sync's outcome is not reported as one they asked for.
       if (isCancelSent === false && generation === cancelGenerationRef.current) {
