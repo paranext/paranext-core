@@ -11,9 +11,10 @@
  * 2. **The Edit flyout's Paste, and the right-click menu's Paste.** The same copy, pasted from each
  *    menu, saves the same bytes, in the editor.
  * 3. **A note's attributes through the real read.** A copy across a note with a category shows the
- *    read returning the html's attribute and no custom format, and pastes the note back with its
- *    `\cat`. The same copy with the attribute taken out of the clipboard's html loses the `\cat`,
- *    which shows the attribute is what carried it.
+ *    read returning the html's attribute and no custom format. Rewritten to hold only its text and
+ *    html, so that nothing else could carry the note, the copy pastes the note back with its
+ *    `\cat`. The same clipboard with the attribute taken out of the html loses the `\cat`, which
+ *    shows the attribute is what carried it.
  * 4. **A copy from the footnotes pane's row editor**, which shows markers as Standard view does,
  *    pasted into the text. The editor's own format of a Standard-view copy is not taken in a view
  *    that hides markers, so the paste reads the copy's text, which is its USFM marked as such: it
@@ -112,6 +113,8 @@ const NODE_COPY_HTML_ATTRIBUTE = 'data-platform-editor-node-copy';
 const PANE_NOTE_TEXT = 'and with fire';
 const PANE_COPY_FROM = '3:1|1';
 const PANE_COPY_TO = 'TR and |NU add';
+/** Part of the row editor's copy of that range, so only a copy of the range counts as one. */
+const PANE_COPIED_MARKER_TEXT = '\\ft TR and';
 const PANE_PASTE_POINT = 'Spirit of God |descending';
 /** What the paste saves at that point: the copied USFM (`1 \ft TR and `) without its marker. */
 const PANE_PASTED_TEXT = '1 TR and ';
@@ -352,12 +355,16 @@ test.describe('the editor’s own paste in Simple mode’s paragraph-structure v
       expect(read.nodeCopy, 'the read keeps the html’s attribute').toBeDefined();
       expect(read.nodeCopy, 'the attribute holds the note’s category').toContain('"TN"');
 
+      // Only the text and the html from here on, so the attribute is all that differs below.
+      await electronApp.evaluate(({ clipboard }) =>
+        clipboard.write({ text: clipboard.readText(), html: clipboard.readHTML() }),
+      );
       await expectPastedAt(CATEGORY_PASTE_POINT, CATEGORY_COPIED_USFM, () =>
         editorInput.press(PASTE_KEY),
       );
       expect(countOf(readNormalizedBook(), CATEGORY_MARKUP)).toBe(categoriesBefore + 1);
 
-      // The control: the same copy with only the attribute taken out, as another program's html.
+      // The control: the same clipboard with only the attribute taken out, as another program's html.
       await electronApp.evaluate(
         ({ clipboard }, attribute) =>
           clipboard.write({
@@ -392,21 +399,22 @@ test.describe('the editor’s own paste in Simple mode’s paragraph-structure v
       await expect(rowEditor).toContainText(PANE_NOTE_TEXT, { timeout: 20_000 });
       // The row editor shows markers as Standard view does.
       await expect(rowEditor).toHaveClass(/\bmarker-editable\b/);
-      // The row editor places its caret over a timeout and an animation frame after it loads.
-      await mainPage.waitForTimeout(600);
-
-      await electronApp.evaluate(
-        ({ clipboard }, sentinel) => clipboard.writeText(sentinel),
-        CLIPBOARD_SENTINEL,
-      );
-      await selectInEditor(rowEditor, PANE_COPY_FROM, PANE_COPY_TO);
-      await rowEditor.press(COPY_KEY);
-      await expect
-        .poll(() => electronApp.evaluate(({ clipboard }) => clipboard.readText()), {
-          message: 'the row editor’s copy never reached the OS clipboard',
-          timeout: 15_000,
-        })
-        .not.toBe(CLIPBOARD_SENTINEL);
+      // The row editor places its caret over a timeout and an animation frame after it loads, which
+      // can replace a selection made before then, so the copy is retried until it holds the range.
+      await expect(async () => {
+        await electronApp.evaluate(
+          ({ clipboard }, sentinel) => clipboard.writeText(sentinel),
+          CLIPBOARD_SENTINEL,
+        );
+        await selectInEditor(rowEditor, PANE_COPY_FROM, PANE_COPY_TO);
+        await rowEditor.press(COPY_KEY);
+        await expect
+          .poll(() => electronApp.evaluate(({ clipboard }) => clipboard.readText()), {
+            message: 'the row editor’s copy never reached the OS clipboard',
+            timeout: 2_000,
+          })
+          .toContain(PANE_COPIED_MARKER_TEXT);
+      }).toPass({ timeout: 20_000 });
       const copiedText = await electronApp.evaluate(({ clipboard }) => clipboard.readText());
       test
         .info()
