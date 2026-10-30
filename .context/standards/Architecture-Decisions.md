@@ -7249,6 +7249,42 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4551 (Ian NN-3.3 (a) and (d)), with the overflow mechanism measured in the running
   app rather than inferred.
 
+## adr-platform-error-code-crosses-json-rpc: A C# exception's platform error code travels in `error.data.data.platformErrorCode`, and main relays that code and no other error data
+
+- **Date:** 2026-10-30
+- **Status:** Accepted
+- **Context:** C# services throw `PlatformErrorCodes.WithCode(code, message)`, which stores the
+  code in `Exception.Data`, and `doRequest` in `network.service.ts` was written to read it from
+  `error.data.data.platformErrorCode`. It never arrived: StreamJsonRpc's default
+  `ExceptionStrategy` (`CommonErrorData`) serializes the exception's type, message, stack, HResult
+  and inner exception but not `Exception.Data`, and `RpcServer.processMessage` in main rebuilt
+  every relayed error response from its message and JSON-RPC code. So TypeScript callers matched
+  localized message text instead, which works only in the languages the matcher lists (the
+  Send/Receive queue's "backend busy, retry" check was the case that surfaced it).
+- **Decision:** `PapiJsonRpc` (`c-sharp/PapiJsonRpc.cs`), the `JsonRpc` subclass `PapiClient`
+  uses, overrides `CreateErrorDetails`: when the exception carries a code (`TryFindCode`, which
+  also looks through a `TargetInvocationException` and a single-exception `AggregateException`),
+  the `CommonErrorData` is replaced by `PlatformCodedErrorData` — the same fields plus
+  `data: { platformErrorCode }`. An exception without a code keeps the default shape. Main relays
+  an error response's `code`, `message` and `error.data.data.platformErrorCode` and nothing else
+  from `error.data`: the exception type names, stack and inner exceptions can hold absolute paths
+  with the user's name, and browser pages connect to the same WebSocket.
+- **Alternatives:**
+  - *`ExceptionStrategy = ISerializable`.* Serializes the whole exception, `Data` included, but
+    changes the JSON-RPC error code and the shape of every error for every caller, and couples the
+    wire to .NET's exception serialization. Rejected.
+  - *Throw `LocalRpcException` with `ErrorData` at each site.* Works without a subclass, but every
+    `WithCode` call site (Manage Books, Enhanced Resources, Send/Receive) would change, and the
+    common error fields would be lost unless each site rebuilt them. Rejected.
+  - *Encode the code in the message.* That is the message matching this replaces. Rejected.
+- **Consequences:** Every `WithCode` throw now reaches TypeScript as a `PlatformError` with
+  `.code`, so a TypeScript branch on a code from C# fires for real; the TypeScript code that read
+  these codes was checked when this landed. A code thrown by a TypeScript handler still does not
+  cross a process boundary: the layers that answer a throwing TypeScript handler (the `json-rpc-2.0`
+  server inside `RpcClient`, `RpcWebSocketListener.request` in main) send its message, not its
+  `code`. Message matching stays as a fallback where a caller may run
+  against a core build without this change.
+
 ## adr-platform-minted-window-ids: Window ids are minted by main, never reused, and numeric on every surface
 
 - **Date:** 2026-08-26
@@ -8001,7 +8037,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   tears down the whole C# connection (an unaddressed platform-level issue), so the response is
   bounded by an aggregate size cap and fails with a documented error whose machine-readable
   contract is the RESOURCE_EXHAUSTED platform error code (exception types do not cross the RPC
-  boundary, but Exception.Data does); the documented message prefix remains the fallback for
+  boundary, but the platform error code in Exception.Data does); the documented message prefix remains the fallback for
   consumers that see only the message. Schema evolution now moves at platform speed: a field the
   payload drops costs a core release to recover, which is why the setup records deliberately
   carry the model text's identity even though nothing consumes it yet. A future PT9-legacy import
@@ -8212,8 +8248,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `InternetServicesGate`'s saved-setting check, which also refuses "Disable access to some Bible
   translation services", is for Send/Receive and the DBL, so it doesn't apply here. Failures come
   back from C# as a result object and become
-  `PlatformError` codes in the extension host, because C# codes don't cross the RPC boundary yet
-  (PT-4750).
+  `PlatformError` codes in the extension host, a contract set while C# codes didn't cross the RPC
+  boundary; moving to thrown codes is PT-4884.
 - **Alternatives:** An open `paratextRegistration.*` command: every extension could impersonate the
   user to every registered service. A one-time user-consent prompt: the extra step we want to avoid,
   though it can be layered on later. The OAuth browser flow: users don't know their Registry login.
@@ -8240,8 +8276,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   refuses them only this request type. Authenticating the clients the main process launches, so
   sensitive request types can be limited to the extension host, is open work in PT-2893, deferred
   as of 2026-10-20 until after the November release; a renderer connection can't be trusted with
-  them because a web view can drive it. Revisit when PT-4750 lands (throw codes instead of
-  returning them), when the WebSocket authenticates its clients (and remove the `Origin` stopgap
+  them because a web view can drive it. Revisit with PT-4884 (throw codes instead of
+  returning them; codes now cross — see `adr-platform-error-code-crosses-json-rpc`), when the WebSocket authenticates its clients (and remove the `Origin` stopgap
   then), or if a consent prompt becomes necessary.
 - **Amended 2026-10-22 (PT-4893):** "Disable access to some Bible translation services" now saves
   `Disabled`, so tokens are refused for it in every location. A saved `VpnRequired`, the
@@ -10184,6 +10220,82 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   4. *"Has this user ever synced"* (PT-4327) — the outcome lasts one backend process, so answering
      that across restarts still needs persistence.
 
+## adr-sync-queue-one-run-at-a-time: Sync requests from the Send/Receive extension queue and run one run at a time; nothing is disabled because another sync is running
+
+- **Date:** 2026-10-30
+- **Status:** Accepted
+- **Context:** One Send/Receive run may hold the backend at a time. Before this decision the surfaces
+  prevented a second request by refusal: Home, the Sync dialog and the sync-status view disabled
+  their controls while any sync ran. That guarded against two real failures — a second sync
+  clobbering the first's progress state, and a server repository lock left behind when two runs
+  overlapped on a project. The cost was that a click during a sync (often the automatic one the user
+  never started) did nothing, and a user could not line up several projects and walk away. A DBL
+  resource install or uninstall could also overlap a sync's connected-resource update of the same
+  resource, with no ordering between them.
+- **Decision:**
+  - **The queue lives in the Send/Receive extension** and is the one path for extension-side
+    requests (`paratextBibleSendReceive.requestSync`, `removeFromSyncQueue`). Home, the Sync dialog,
+    the editor's menu and project-switch syncs, the sync-status view, lock-prompt retries and the
+    auto-sync interval all request through it; every click is accepted. A project clicked while it
+    is running is queued for the next run; clicking a waiting row removes it.
+  - **A run never mixes the two sync kinds** — plain (`sendReceiveProjects`: only the projects
+    asked for) and with-connected (`syncProjects`: also each project's connected projects and
+    resources). A run takes the kind of the oldest waiting request and only the projects requested
+    with that kind; the other kind runs next. A project requested both ways runs once, in the oldest
+    request's kind.
+  - **Results are per project.** `requestSync` resolves with the results for the ids it asked about
+    when the run containing them ends, and rejects if the user removed them or they were dropped at
+    quit.
+  - **The automatic sync never re-queues a project that is running or already waiting**, so it
+    cannot become a continuous re-sync loop; it raises no same-user lock prompt.
+  - **Two snapshots.** C# serves the activity snapshot (`getSyncActivity` / `onSyncActivityChanged`,
+    including the resource ids the running run will update); the extension serves the queue snapshot
+    (`getSyncQueue` / `onSyncQueueChanged`, the waiting project ids). Home reads both.
+  - **Cancel asks.** Every Cancel (toast, toolbar, Sync dialog and the editor's sync-blocked banner) goes
+    through `cancelSyncPrompt`, which asks whether to stop the running sync and then, if projects are
+    waiting, whether to drop them too. A run counter keeps a late
+    answer from cancelling or clearing for a run that started while the question was open.
+  - **Startup and shutdown boundary syncs stay direct** — core's startup/shutdown tasks and the
+    extension's session-boundary syncs call the C# commands without the queue. The queue waits for
+    them through the activity signal and also re-reads `getSyncActivity` every 30 s while anything is
+    waiting, so a missed idle edge delays the next run by at most 30 s and cannot hang it. The C#
+    semaphore is also held briefly with the activity already idle (the shared-project list fetch, a
+    run's closing project-list refresh), so a run refused because the semaphore was held — by a sync
+    or by such an operation — goes back to waiting and is retried after 1, 2 and 4 s before the queue
+    falls back to the activity signal; a refusal is never reported as a failure or stamped.
+  - **A C# `SyncRunResourceGuard` in core** makes a DBL resource install/uninstall and a sync run's
+    connected-resource window wait for each other, bounded by a timeout that restarts for each run
+    that holds the resource. The sync side's wait is cancellable (Cancel); the install side's is not.
+    An install waits only for the running run, never a waiting one.
+  - **The queue is in memory** and is dropped silently at quit; rows are plain again on restart.
+    The extension host is killed after core's shutdown tasks without deactivating, so core's
+    shutdown tasks drop the queue first (`paratextBibleSendReceive.dropSyncQueue`, bounded), before
+    cancelling the running sync — a queued run must not start and make the shutdown sync fail as
+    busy.
+- **Alternatives:**
+  - *Queue in C#.* Would make it authoritative for every path, but puts UI-shaped policy (source
+    kinds, per-project result routing, the Cancel question) in the backend and needs a Studio build
+    for every change. Rejected; the activity snapshot already gives C# authority over "a run is
+    active".
+  - *Queue in Home.* Only Home would queue; the dialog, the editor and the auto-sync would still
+    collide. Rejected.
+  - *Per-surface queues.* Each surface would order only its own clicks, so cross-surface overlap —
+    the case that caused the failures — would remain. Rejected.
+  - *Mixing the kinds in one run* (any with-connected request upgrades the whole run). One toast
+    instead of two, but an unrelated auto-sync would pull connected projects into a run the user
+    started, syncing projects nobody chose. Rejected.
+  - *Keep disabling controls.* Prevents the failures but drops the user's click. Rejected.
+- **Consequences:**
+  - Home is the main surface with waiting UI (waiting rows, per-row results); Get Resources also
+    shows a waiting row for a resource the running sync will update, only for a row the user
+    clicked. The Sync dialog and the editor menu are thin callers, which keeps the way open to merge sync into Home later.
+  - Every new automatic trigger must request through the queue AND still ask the first-run consent
+    gate (`.claude/rules/first-run-sync-consent.md`); the queue is not a consent chokepoint.
+  - When both kinds are waiting at once, two progress toasts appear back to back.
+  - A waiting queue is lost at quit; a missed run is picked up at the next opportunity.
+  - Revisit if a core-authoritative "a sync is running" signal (PT-4214) lands — the 30 s recheck
+    could then be dropped.
+
 ## adr-sync-surface-per-interface-mode: Each sync gets one persistent progress surface per interface mode, chosen by its caller
 
 - **Date:** 2026-10-13
@@ -11015,9 +11127,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     `EnterWrite`. It is not in `LocalParatextProjects.GetParatextProject`, which S/R, settings and
     metadata share. `OpenBlockedCoverageTests` scans the guarded services for text reads and
     writes and fails on any that neither refuses first nor carries an `// open-block: exempt`
-    marker naming its guarded caller. The exception's `FAILED_PRECONDITION` code is for C# callers
-    only: `CommonErrorData` drops `Exception.Data` at the JSON-RPC boundary, so TypeScript relies on
-    the sentinel.
+    marker naming its guarded caller. The exception's `FAILED_PRECONDITION` code crosses JSON-RPC
+    (`adr-platform-error-code-crosses-json-rpc`), but TypeScript still relies on the sentinel,
+    because that code alone does not identify this refusal.
   - **TypeScript shows the reason.** Tools that surface the refusal detect the sentinel and show the
     localized reason (`%project_unsupported_generic%` if the key can't be read). The inventory,
     checks, Checklist and Manage Books `open*` commands also refuse such a project; `openFind`
@@ -11113,6 +11225,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     - Deferred to a follow-up: each editor build adds a `getMetadataForProject` fan-out, and
       auto-open its own metadata lookup, rather than reusing lookups they already make.
 - **Source:** PT-4685.
+- **Amended 2026-10-30:** the C# refusal's `FAILED_PRECONDITION` code now reaches TypeScript too
+  (`adr-platform-error-code-crosses-json-rpc`), so "for C# callers only" above no longer holds. The
+  TypeScript callers still detect the sentinel, which also identifies this refusal among other
+  `FAILED_PRECONDITION` failures.
 
 ## adr-unsynced-changes-signal-is-backend-read: "Unsynced changes" is read from the project's local Mercurial state in the backend and pushed as a snapshot
 

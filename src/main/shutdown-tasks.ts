@@ -22,7 +22,7 @@ import {
   type SessionSyncBoundary,
 } from '@main/scheduled-session-sync.util';
 import type { SettingTypes } from 'papi-shared-types';
-import { AsyncVariable, getErrorMessage } from 'platform-bible-utils';
+import { AsyncVariable, getErrorMessage, wait } from 'platform-bible-utils';
 
 /**
  * Behaviour-driving outcome of a bounded shutdown sync. The extension reports its own result, so
@@ -74,10 +74,14 @@ type BoundedSyncSettlement<T> =
 /**
  * Runs cleanup tasks (e.g., syncing projects) when the user closes the main window.
  *
+ * First, in every mode: drops the projects waiting in the Send/Receive extension's sync queue, so
+ * none of them starts a run while the app quits.
+ *
  * In Simple mode: cancels any in-progress sync, then — if the first-run sync consent gate allows it
  * (see {@link getAutomaticSyncConsent}) — S/Rs the projects of all open writable Scripture Editors
- * across every window. All errors are swallowed — extension may not be installed, or may fail —
- * shutdown must never be permanently blocked.
+ * across every window, once the cancelled sync has stopped (bounded by
+ * {@link CANCELLED_SYNC_STOP_WAIT_MS}). All errors are swallowed — extension may not be installed,
+ * or may fail — shutdown must never be permanently blocked.
  *
  * In Power mode: S/Rs the projects scheduled "On startup/shutdown" via the S/R extension's
  * `runScheduledSessionSync` command. Same error-swallowing contract — if the command isn't
@@ -101,6 +105,11 @@ export async function performShutdownTasks(): Promise<void> {
 }
 
 async function performShutdownTasksInternal(): Promise<void> {
+  // First, so nothing waiting in the queue starts a run while the app quits: the extension host is
+  // killed after these tasks without deactivating, and a run started now would make the shutdown
+  // sync below fail as busy.
+  await dropSyncQueue();
+
   // Drained before the mode is even read, not just before either branch: a closing window's sync
   // belongs to no mode, since it was started under whichever mode was in force when that window
   // closed and the mode can have changed since. An unreadable mode must not skip this wait either —
@@ -131,6 +140,44 @@ async function performShutdownTasksInternal(): Promise<void> {
   // is the only value left here — Simple mode is the fall-through, not a checked branch. A future
   // third mode would be a compile error here, not a silent no-S/R.
   await performSimpleModeShutdownSync();
+}
+
+/**
+ * How long a quit waits for the Send/Receive extension to drop its sync queue. The drop is an
+ * in-memory change in the extension, so this only bounds an extension host that stopped answering.
+ */
+export const DROP_SYNC_QUEUE_TIMEOUT_MS = 5_000;
+
+/**
+ * Drops everything waiting in the Send/Receive extension's sync queue, so no queued run starts
+ * while the app quits (the queue is in memory only and is not carried to the next session). A run
+ * already in progress is left to the shutdown sync's own cancel. Never throws and never waits
+ * longer than {@link DROP_SYNC_QUEUE_TIMEOUT_MS}: without the extension the command is missing,
+ * which only means there is no queue to drop.
+ */
+async function dropSyncQueue(): Promise<void> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<'timedOut'>((resolve) => {
+    timeout = setTimeout(() => resolve('timedOut'), DROP_SYNC_QUEUE_TIMEOUT_MS);
+  });
+  try {
+    const outcome = await Promise.race([
+      networkService
+        .requestNoRetry(
+          serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.dropSyncQueue'),
+        )
+        .then(() => 'dropped' as const),
+      timedOut,
+    ]);
+    if (outcome === 'timedOut')
+      logger.warn(
+        `Dropping the sync queue did not answer within ${DROP_SYNC_QUEUE_TIMEOUT_MS} ms; continuing shutdown`,
+      );
+  } catch (e) {
+    logger.debug(`Could not drop the sync queue at quit: ${getErrorMessage(e)}`);
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 /**
@@ -398,8 +445,82 @@ async function drainInFlightWindowCloseSyncs(): Promise<void> {
   }
 }
 
+/**
+ * How long a quit waits for a sync it cancelled to stop before sending its own. Cancelling only
+ * signals the running sync: until it has unwound it still holds the Send/Receive lock, and a quit
+ * sync sent meanwhile is refused as already in progress. Also bounds the read that tells whether a
+ * sync was running at all. A few seconds next to the {@link AUTO_SYNC_MAX_DURATION_MS} the quit sync
+ * itself may take, so it adds at most this much (twice in the pathological case of a read that
+ * hangs and then a sync that never stops) to the longest quit there already is.
+ */
+export const CANCELLED_SYNC_STOP_WAIT_MS = 5_000;
+
+/** How often a quit asks whether the sync it cancelled has stopped yet */
+export const CANCELLED_SYNC_POLL_INTERVAL_MS = 250;
+
+/**
+ * Whether the Send/Receive extension reports a sync in progress. Never throws and never takes
+ * longer than `timeoutMs`: an activity that cannot be read in time — the extension is missing, or
+ * Paratext 10 is not running — counts as no sync, because there is then nothing a quit could wait
+ * for.
+ */
+async function isSyncInProgress(timeoutMs: number): Promise<boolean> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<false>((resolve) => {
+    timeout = setTimeout(() => resolve(false), timeoutMs);
+  });
+  try {
+    return await Promise.race([
+      networkService
+        .requestNoRetry<
+          [],
+          { isSyncing: boolean } | undefined
+        >(serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.getSyncActivity'))
+        .then((activity) => activity?.isSyncing === true),
+      timedOut,
+    ]);
+  } catch (e) {
+    logger.debug(`Could not read the sync activity at quit: ${getErrorMessage(e)}`);
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * Waits until the sync just cancelled has stopped, or {@link CANCELLED_SYNC_STOP_WAIT_MS} has passed
+ * — then the quit sync goes ahead anyway, as it would without this wait, and may be refused.
+ *
+ * Nothing can start a new run during this wait: the sync queue was dropped before the cancel (see
+ * {@link dropSyncQueue}), so once the cancelled run stops, the lock is free for the quit sync.
+ */
+async function waitForCancelledSyncToStop(): Promise<void> {
+  let isWaitOver = false;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const budgetSpent = new Promise<'budgetSpent'>((resolve) => {
+    timeout = setTimeout(() => resolve('budgetSpent'), CANCELLED_SYNC_STOP_WAIT_MS);
+  });
+  const pollUntilStopped = async (): Promise<'stopped' | 'budgetSpent'> => {
+    if (isWaitOver) return 'budgetSpent';
+    if (!(await isSyncInProgress(CANCELLED_SYNC_STOP_WAIT_MS))) return 'stopped';
+    await wait(CANCELLED_SYNC_POLL_INTERVAL_MS);
+    return pollUntilStopped();
+  };
+  try {
+    if ((await Promise.race([pollUntilStopped(), budgetSpent])) === 'budgetSpent')
+      logger.warn(
+        `The cancelled sync did not stop within ${CANCELLED_SYNC_STOP_WAIT_MS} ms; sending the shutdown sync anyway, which may be refused as already in progress`,
+      );
+  } finally {
+    isWaitOver = true;
+    clearTimeout(timeout);
+  }
+}
+
 async function performSimpleModeShutdownSync(): Promise<void> {
   // Cancel any in-progress sync first (e.g. a first-sync on startup), then S/R the active project.
+  // Read before the cancel, so the quit only waits when there was something to cancel.
+  const wasSyncing = await isSyncInProgress(CANCELLED_SYNC_STOP_WAIT_MS);
   try {
     await networkService.requestNoRetry(
       serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.cancelSync'),
@@ -475,6 +596,9 @@ async function performSimpleModeShutdownSync(): Promise<void> {
     logShutdownSyncOutcome(windowIdsMissingFromSync.length > 0 ? 'partial' : 'skipped');
     return;
   }
+
+  // Only now, with a sync about to be sent: a quit that sends nothing has no reason to wait.
+  if (wasSyncing) await waitForCancelledSyncToStop();
 
   logger.info(`Syncing projects on shutdown: ${projectIds.join(', ')}`);
   // `sendReceiveProjects` takes the whole list in one call, so every open editor's project goes out

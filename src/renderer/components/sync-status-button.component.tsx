@@ -1,5 +1,6 @@
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { SyncStatus, SyncingProject, useSyncStatus } from '@renderer/hooks/use-sync-status.hook';
+import { isJsonRpcMethodNotFoundError } from '@shared/data/rpc.model';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { notificationService } from '@shared/services/notification.service';
@@ -99,6 +100,31 @@ export const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   SYNC_CANCEL_UNAVAILABLE_MESSAGE_KEY,
   SYNC_VIEW_DETAILS_UNAVAILABLE_MESSAGE_KEY,
 ];
+
+const CANCEL_SYNC_PROMPT_COMMAND = 'paratextBibleSendReceive.cancelSyncPrompt';
+
+/**
+ * Asks to cancel the running sync through the prompt that also asks about projects waiting in the
+ * sync queue, or cancels it directly when the Send/Receive extension that serves the prompt is not
+ * running (the running sync is reported by the backend, so it can run without the extension).
+ *
+ * @returns `false` when nothing was cancelled (the user chose to keep syncing)
+ */
+async function sendCancelRequest(): Promise<boolean> {
+  // Keep in step with `requestCancelSync` in
+  // `extensions/src/platform-scripture-editor/src/sync-blocked-banner.component.tsx`; they live in
+  // different processes so they can't share code.
+  try {
+    return await sendCommand(CANCEL_SYNC_PROMPT_COMMAND);
+  } catch (e) {
+    if (!isJsonRpcMethodNotFoundError(e, CANCEL_SYNC_PROMPT_COMMAND)) throw e;
+    logger.info(
+      `Toolbar is cancelling the sync directly: ${CANCEL_SYNC_PROMPT_COMMAND} is not available`,
+    );
+    await sendCommand('paratextBibleSendReceive.cancelSync');
+    return true;
+  }
+}
 
 /**
  * The popover's list of project names, shared by the syncing and unsynced states so both render the
@@ -210,11 +236,11 @@ export function SyncStatusButton() {
    *
    * Written during RENDER, deliberately, and unlike the effect-written refs below. React schedules
    * the passive-effect flush as its own task after commit, i.e. after pending microtasks — so a
-   * `cancelSync` rejection delivered between the commit that moved `status` to `failed` and that
-   * flush would read an effect-written ref as still `syncing`, and toast "Couldn't cancel the sync"
-   * beside a popover saying the sync finished. That is precisely what the guard exists to suppress.
-   * A render-phase write cannot lag the commit it belongs to, and for a SUPPRESSION guard being
-   * marginally ahead is the safe direction: it errs toward staying quiet.
+   * `cancelSyncPrompt` rejection delivered between the commit that moved `status` to `failed` and
+   * that flush would read an effect-written ref as still `syncing`, and toast "Couldn't cancel the
+   * sync" beside a popover saying the sync finished. That is precisely what the guard exists to
+   * suppress. A render-phase write cannot lag the commit it belongs to, and for a SUPPRESSION guard
+   * being marginally ahead is the safe direction: it errs toward staying quiet.
    */
   const statusRef = useRef(status);
   statusRef.current = status;
@@ -224,14 +250,19 @@ export function SyncStatusButton() {
    * again whenever the status leaves `syncing` (see the settle effect below) — so an episode
    * boundary invalidates any request still in flight across it.
    *
-   * `cancelSync` can reject long after it was sent (an unregistered handler rejects only after the
-   * RPC layer's ~10s retry budget), by which time the sync it targeted may have ended and another
-   * begun. Without this, sync A's rejection re-enables Cancel and toasts "Couldn't cancel the sync"
-   * against sync B — and if the user had already cancelled B, it reverts B's "Cancelling…" while
-   * B's own request is still in flight, defeating the single-shot guard the whole handler is built
-   * around.
+   * `cancelSyncPrompt` can reject long after it was sent (an unregistered handler rejects only
+   * after the RPC layer's ~10s retry budget), by which time the sync it targeted may have ended and
+   * another begun. Without this, sync A's rejection re-enables Cancel and toasts "Couldn't cancel
+   * the sync" against sync B — and if the user had already cancelled B, it reverts B's
+   * "Cancelling…" while B's own request is still in flight, defeating the single-shot guard the
+   * whole handler is built around.
    */
   const cancelGenerationRef = useRef(0);
+  /**
+   * Whether the cancel prompt of the current sync is still open. Cancel stays disarmed while it is,
+   * including across a popover close and reopen, so one sync is never asked twice.
+   */
+  const isCancelPromptOpenRef = useRef(false);
 
   const handleCancel = useCallback(async () => {
     // The editor's sync-blocked banner (`extensions/src/platform-scripture-editor/`) offers the
@@ -242,10 +273,7 @@ export function SyncStatusButton() {
     // can't queue another request, and re-enabled only if this one is rejected while a sync is
     // still running, so the user can retry.
     setIsCancelEnabled(false);
-    // A cancel takes effect whenever send/receive reaches a stopping point, so the sync keeps
-    // reporting `syncing` for a while yet. Saying "Cancelling…" is what distinguishes a request that
-    // was accepted from a button that has merely gone dim.
-    setIsCancelling(true);
+    isCancelPromptOpenRef.current = true;
     cancelGenerationRef.current += 1;
     const generation = cancelGenerationRef.current;
     try {
@@ -256,13 +284,33 @@ export function SyncStatusButton() {
       // ask for. If an implementation ever REQUIRES the id to act, this cancel would silently do
       // nothing while the button said "Cancelling…", so the contract commits to treating an absent
       // id as an unconditional cancel.
-      await sendCommand('paratextBibleSendReceive.cancelSync');
+      //
+      // The prompt variant, so a user with projects waiting behind this sync is asked whether to
+      // drop them too. It is served by the Send/Receive extension, while the running sync this
+      // button offers to cancel is reported by the backend, so a sync can be running without the
+      // prompt: then the sync is cancelled directly, as there is no queue to ask about.
+      const isCancelSent = await sendCancelRequest();
+      // The prompt of a sync that is over says nothing about the sync that shows now.
+      if (generation !== cancelGenerationRef.current) return;
+      isCancelPromptOpenRef.current = false;
+      if (isCancelSent === false) {
+        // Nothing was cancelled (the user chose to keep syncing): nothing is pending, so Cancel is
+        // offered again and the sync's outcome is not reported as one they asked for.
+        setIsCancelEnabled(true);
+      } else {
+        // A cancel takes effect whenever send/receive reaches a stopping point, so the sync keeps
+        // reporting `syncing` for a while yet. Saying "Cancelling…" once the cancel is confirmed is
+        // what distinguishes a request that was accepted from a button that has merely gone dim; it
+        // is not said while the prompt is still open, since the user may yet keep syncing.
+        setIsCancelling(true);
+      }
     } catch (e) {
       logger.warn(`Toolbar could not cancel the running sync: ${getErrorMessage(e)}`);
       // The sync this request was for is over, and everything below would land on a later one's
       // state. Nothing to re-enable and nothing to report: whatever is showing now describes the
       // episode that is actually running.
       if (generation !== cancelGenerationRef.current) return;
+      isCancelPromptOpenRef.current = false;
       setIsCancelEnabled(true);
       setIsCancelling(false);
       // A rejected cancel does NOT prove the sync is still running — the declaration guarantees
@@ -365,6 +413,7 @@ export function SyncStatusButton() {
     setIsCancelEnabled(true);
     // This episode is over, so a cancel request still in flight from it must not reach the next one.
     cancelGenerationRef.current += 1;
+    isCancelPromptOpenRef.current = false;
   }, [status]);
 
   /**
@@ -411,12 +460,12 @@ export function SyncStatusButton() {
   }, [isOpen]);
 
   // Re-arm Cancel each time the popover is reopened, so a rejected-then-abandoned attempt doesn't
-  // leave the button dead for the rest of the session. Not while a cancel is still pending, though:
-  // that would produce an enabled button reading "Cancelling…" which fires a second request.
+  // leave the button dead for the rest of the session. Not while a cancel is still pending or its
+  // prompt is still open, though: that would let a second click send a second request.
   const handleOpenChange = useCallback(
     (nextIsOpen: boolean) => {
       setIsOpen(nextIsOpen);
-      if (nextIsOpen && !isCancelling) setIsCancelEnabled(true);
+      if (nextIsOpen && !isCancelling && !isCancelPromptOpenRef.current) setIsCancelEnabled(true);
     },
     [isCancelling],
   );

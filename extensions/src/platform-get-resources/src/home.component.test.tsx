@@ -1829,6 +1829,12 @@ describe('Home while a sync runs', () => {
     lastSendReceiveDate: '2026-08-16T00:00:00.000Z',
   });
 
+  const WAITING_LABEL = enString('%resources_syncWaiting_label%');
+  const CLICK_TO_REMOVE = enString('%resources_syncWaiting_clickToRemove%');
+  /** The accessible name of a waiting row's action, which says which project it takes out. */
+  const waitingName = (name: string) =>
+    formatReplacementString(enString('%resources_syncWaiting_remove_format%'), { name });
+
   /**
    * Renders two shared projects that are not downloaded, so each row's action is a "Get" button.
    * With `withLocalProject`, a downloaded, unedited shared project is listed too; its Sync action
@@ -1837,11 +1843,17 @@ describe('Home while a sync runs', () => {
   function renderHomeDuringSync({
     isSendReceiveInProgress = true,
     activeSendReceiveProjects,
+    waitingProjectIds,
     withLocalProject = false,
+    onSendReceiveProject = () => {},
+    onRemoveFromQueue = () => {},
   }: {
     isSendReceiveInProgress?: boolean;
     activeSendReceiveProjects: string[];
+    waitingProjectIds?: string[];
     withLocalProject?: boolean;
+    onSendReceiveProject?: (projectId: string) => void | Promise<void>;
+    onRemoveFromQueue?: (projectId: string) => void | Promise<void>;
   }) {
     const sharedProjectsInfo: SharedProjectsInfo = {
       syncingProject: sharedProject('syncingProject', 'SYN'),
@@ -1867,71 +1879,157 @@ describe('Home while a sync runs', () => {
         remoteProjectsState="loaded"
         isSendReceiveInProgress={isSendReceiveInProgress}
         activeSendReceiveProjects={activeSendReceiveProjects}
-        onSendReceiveProject={() => {}}
+        waitingProjectIds={waitingProjectIds}
+        onSendReceiveProject={onSendReceiveProject}
+        onRemoveFromQueue={onRemoveFromQueue}
         localizedStringsWithLoadingState={[EN_STRINGS, false]}
       />,
     );
   }
 
-  it("disables the other rows' Get buttons while one project syncs", () => {
+  /** The row that lists the project with the given short name. */
+  function rowOf(name: string): HTMLElement {
+    const row = screen.getByText(name).closest('tr');
+    if (!row) throw new Error(`Home rendered no row for ${name}`);
+    return row;
+  }
+
+  async function openLocalRowMenuItem() {
+    const ellipsisTrigger = within(rowOf('LOC')).getAllByRole('button').at(-1);
+    if (!ellipsisTrigger) throw new Error('The local project row has no buttons');
+    await userEvent.click(ellipsisTrigger);
+    return screen.findByRole('menuitem');
+  }
+
+  it("keeps the other rows' Get buttons enabled while one project syncs", () => {
     renderHomeDuringSync({ activeSendReceiveProjects: ['syncingProject'] });
     // The syncing row shows a spinner in place of "Get" but keeps "Get" as its accessible name.
     const getButtons = screen.getAllByRole('button', { name: 'Get' });
     expect(getButtons).toHaveLength(2);
-    getButtons.forEach((button) => expect(button).toBeDisabled());
+    getButtons.forEach((button) => expect(button).toBeEnabled());
     expect(getButtons.filter((button) => button.getAttribute('aria-busy') === 'true')).toHaveLength(
       1,
     );
-    // Only the waiting row explains why it is disabled; the syncing row needs no reason.
-    expect(screen.getAllByRole('group', { name: /: waiting$/ })).toHaveLength(1);
-    expect(screen.getByRole('group', { name: 'Get WAI: waiting' })).toBeInTheDocument();
+    expect(within(rowOf('SYN')).getByRole('button', { name: 'Get' })).toHaveAttribute(
+      'aria-busy',
+      'true',
+    );
   });
 
   it('matches the syncing project whatever the casing of its id', () => {
     // Paratext ids reach Home upper-cased from the backend's sync activity and as the project list
-    // spells them; a mismatch in case must not turn the syncing row into a waiting one.
+    // spells them; a mismatch in case must not leave the syncing row without its spinner.
     renderHomeDuringSync({ activeSendReceiveProjects: ['SYNCINGPROJECT'] });
-    const getButtons = screen.getAllByRole('button', { name: 'Get' });
-    expect(getButtons.filter((button) => button.getAttribute('aria-busy') === 'true')).toHaveLength(
-      1,
+    expect(within(rowOf('SYN')).getByRole('button', { name: 'Get' })).toHaveAttribute(
+      'aria-busy',
+      'true',
     );
-    expect(screen.getAllByRole('group', { name: /: waiting$/ })).toHaveLength(1);
-    expect(screen.getByRole('group', { name: 'Get WAI: waiting' })).toBeInTheDocument();
+    expect(within(rowOf('WAI')).getByRole('button', { name: 'Get' })).not.toHaveAttribute(
+      'aria-busy',
+      'true',
+    );
   });
 
-  it('names a waiting Sync stop after the action and project, and keeps the reason as its tooltip', async () => {
-    // A downloaded project with local edits has Sync as a button of its own
-    render(
-      <Home
-        headerContent={undefined}
-        localProjectsInfo={[
-          {
-            projectId: 'localProject',
-            isPublished: false,
-            fullName: 'LOC full name',
-            name: 'LOC',
-            language: 'en',
-          },
-        ]}
-        sharedProjectsInfo={{
-          syncingProject: sharedProject('syncingProject', 'SYN'),
-          waitingProject: sharedProject('waitingProject', 'WAI'),
-          localProject: { ...sharedProject('localProject', 'LOC'), editedStatus: 'edited' },
-        }}
-        remoteProjectsState="loaded"
-        isSendReceiveInProgress
-        activeSendReceiveProjects={['syncingProject']}
-        onSendReceiveProject={() => {}}
-        localizedStringsWithLoadingState={[EN_STRINGS, false]}
-      />,
+  it('a project in waitingProjectIds shows the waiting button, not a spinner', () => {
+    renderHomeDuringSync({
+      activeSendReceiveProjects: ['syncingProject'],
+      // Spelled as the queue spells it, which need not match the project list.
+      waitingProjectIds: ['WAITINGPROJECT'],
+    });
+    const waitingButton = within(rowOf('WAI')).getByRole('button', { name: waitingName('WAI') });
+    expect(waitingButton).toBeEnabled();
+    expect(waitingButton).not.toHaveAttribute('aria-busy', 'true');
+    expect(waitingButton).toHaveTextContent(WAITING_LABEL);
+    // Positive control: the running row in the same render does show the spinner.
+    expect(within(rowOf('SYN')).getByRole('button', { name: 'Get' })).toHaveAttribute(
+      'aria-busy',
+      'true',
     );
-    const stop = screen.getByRole('group', { name: 'Sync LOC: waiting' });
-    // Every waiting stop has a name of its own, so a screen reader can tell them apart
-    const names = screen.getAllByRole('group').map((group) => group.getAttribute('aria-label'));
-    expect(names).toEqual(expect.arrayContaining(['Sync LOC: waiting', 'Get WAI: waiting']));
-    expect(new Set(names).size).toBe(names.length);
-    stop.focus();
-    expect(await screen.findAllByText('Wait for the current sync to finish')).not.toHaveLength(0);
+  });
+
+  it('shows a running project that was asked for again as waiting for the next run', () => {
+    renderHomeDuringSync({
+      activeSendReceiveProjects: ['syncingProject'],
+      waitingProjectIds: ['syncingProject'],
+    });
+    const button = within(rowOf('SYN')).getByRole('button', { name: waitingName('SYN') });
+    expect(button).not.toHaveAttribute('aria-busy', 'true');
+  });
+
+  it('clicking the waiting button asks to take the project out of the queue', async () => {
+    const onRemoveFromQueue = vi.fn();
+    const onSendReceiveProject = vi.fn();
+    renderHomeDuringSync({
+      activeSendReceiveProjects: ['syncingProject'],
+      waitingProjectIds: ['waitingProject'],
+      onRemoveFromQueue,
+      onSendReceiveProject,
+    });
+    fireEvent.click(within(rowOf('WAI')).getByRole('button', { name: waitingName('WAI') }));
+    await waitFor(() => expect(onRemoveFromQueue).toHaveBeenCalledWith('waitingProject'));
+    expect(onSendReceiveProject).not.toHaveBeenCalled();
+  });
+
+  it('says in a tooltip that clicking the waiting button removes it from the queue', async () => {
+    renderHomeDuringSync({
+      activeSendReceiveProjects: ['syncingProject'],
+      waitingProjectIds: ['waitingProject'],
+    });
+    within(rowOf('WAI'))
+      .getByRole('button', { name: waitingName('WAI') })
+      .focus();
+    expect(await screen.findAllByText(CLICK_TO_REMOVE)).not.toHaveLength(0);
+  });
+
+  it('names each waiting button after its project, starting with its visible text', () => {
+    renderHomeDuringSync({
+      activeSendReceiveProjects: [],
+      waitingProjectIds: ['syncingProject', 'waitingProject'],
+    });
+    const synButton = within(rowOf('SYN')).getByRole('button', { name: waitingName('SYN') });
+    const waiButton = within(rowOf('WAI')).getByRole('button', { name: waitingName('WAI') });
+    expect(synButton).toHaveAccessibleName('Waiting… — remove SYN from the queue');
+    expect(waiButton).toHaveAccessibleName('Waiting… — remove WAI from the queue');
+    // The visible text stays the short label, and the name starts with it.
+    expect(waiButton).toHaveTextContent(WAITING_LABEL);
+    expect(waiButton.getAttribute('aria-label')?.startsWith(WAITING_LABEL)).toBe(true);
+  });
+
+  it('requests a Get from another row while one project syncs', async () => {
+    const onSendReceiveProject = vi.fn();
+    renderHomeDuringSync({ activeSendReceiveProjects: ['syncingProject'], onSendReceiveProject });
+    fireEvent.click(within(rowOf('WAI')).getByRole('button', { name: 'Get' }));
+    await waitFor(() => expect(onSendReceiveProject).toHaveBeenCalledWith('waitingProject'));
+  });
+
+  it('lets the running row be clicked again to ask for the next run', async () => {
+    const onSendReceiveProject = vi.fn();
+    renderHomeDuringSync({ activeSendReceiveProjects: ['syncingProject'], onSendReceiveProject });
+    fireEvent.click(within(rowOf('SYN')).getByRole('button', { name: 'Get' }));
+    await waitFor(() => expect(onSendReceiveProject).toHaveBeenCalledWith('syncingProject'));
+  });
+
+  it('gets an idle row on double-click while another project syncs', async () => {
+    const onSendReceiveProject = vi.fn();
+    renderHomeDuringSync({ activeSendReceiveProjects: ['syncingProject'], onSendReceiveProject });
+    fireEvent.doubleClick(rowOf('WAI'));
+    await waitFor(() => expect(onSendReceiveProject).toHaveBeenCalledWith('waitingProject'));
+  });
+
+  it('does not ask again on double-click for a row that is running or waiting', async () => {
+    const onSendReceiveProject = vi.fn();
+    const onRemoveFromQueue = vi.fn();
+    renderHomeDuringSync({
+      activeSendReceiveProjects: ['syncingProject'],
+      waitingProjectIds: ['waitingProject'],
+      onSendReceiveProject,
+      onRemoveFromQueue,
+    });
+    fireEvent.doubleClick(rowOf('SYN'));
+    fireEvent.doubleClick(rowOf('WAI'));
+    await act(async () => {});
+    expect(onSendReceiveProject).not.toHaveBeenCalled();
+    expect(onRemoveFromQueue).not.toHaveBeenCalled();
   });
 
   it('enables every Get button when no sync runs', () => {
@@ -1939,18 +2037,46 @@ describe('Home while a sync runs', () => {
     screen.getAllByRole('button', { name: 'Get' }).forEach((b) => expect(b).toBeEnabled());
   });
 
-  it('disables the Sync menu item of a project that is already syncing', async () => {
-    renderHomeDuringSync({ activeSendReceiveProjects: ['localProject'], withLocalProject: true });
-    const row = screen.getByText('LOC').closest('tr');
-    if (!row) throw new Error('Home rendered no row for the local project');
-    const ellipsisTrigger = within(row).getAllByRole('button').at(-1);
-    if (!ellipsisTrigger) throw new Error('The local project row has no buttons');
-    await userEvent.click(ellipsisTrigger);
-    const syncItem = await screen.findByRole('menuitem');
-    expect(syncItem).toHaveAttribute('aria-disabled', 'true');
+  it('keeps the Sync menu item of a syncing project usable and named', async () => {
+    const onSendReceiveProject = vi.fn();
+    renderHomeDuringSync({
+      activeSendReceiveProjects: ['localProject'],
+      withLocalProject: true,
+      onSendReceiveProject,
+    });
+    const syncItem = await openLocalRowMenuItem();
+    expect(syncItem).not.toHaveAttribute('aria-disabled', 'true');
+    expect(syncItem).toHaveAttribute('aria-busy', 'true');
+    // The spinner has no text, so the item keeps its name while it shows.
+    expect(syncItem).toHaveAccessibleName('Sync');
+    await userEvent.click(syncItem);
+    expect(onSendReceiveProject).toHaveBeenCalledWith('localProject');
   });
 
-  it('shows an unsupported project its own reason, not the wait reason, while another syncs', () => {
+  it("keeps a row's Sync menu item usable while another project syncs", async () => {
+    renderHomeDuringSync({ activeSendReceiveProjects: ['syncingProject'], withLocalProject: true });
+    const syncItem = await openLocalRowMenuItem();
+    expect(syncItem).not.toHaveAttribute('aria-disabled', 'true');
+    expect(syncItem).toHaveAccessibleName('Sync');
+  });
+
+  it('offers to take a waiting project out of the queue from its menu item', async () => {
+    const onRemoveFromQueue = vi.fn();
+    renderHomeDuringSync({
+      activeSendReceiveProjects: ['syncingProject'],
+      waitingProjectIds: ['localProject'],
+      withLocalProject: true,
+      onRemoveFromQueue,
+    });
+    const item = await openLocalRowMenuItem();
+    expect(item).toHaveTextContent(WAITING_LABEL);
+    expect(item).toHaveTextContent(CLICK_TO_REMOVE);
+    expect(item).toHaveAccessibleName(waitingName('LOC'));
+    await userEvent.click(item);
+    expect(onRemoveFromQueue).toHaveBeenCalledWith('localProject');
+  });
+
+  it('shows an unsupported project its own reason while another syncs', () => {
     const unsupportedReasonKey = '%project_unsupported_studyBibleAdditions%';
     const unsupportedReasonText = "Study Bible Additions projects aren't supported yet.";
     render(
@@ -1973,41 +2099,8 @@ describe('Home while a sync runs', () => {
       />,
     );
     expect(screen.getByRole('group', { name: unsupportedReasonText })).toBeInTheDocument();
-    expect(screen.queryByRole('group', { name: /: waiting$/ })).toBeNull();
-  });
-
-  it("gives a waiting row's Sync menu item the reason while another project syncs", async () => {
-    renderHomeDuringSync({ activeSendReceiveProjects: ['syncingProject'], withLocalProject: true });
-    const row = screen.getByText('LOC').closest('tr');
-    if (!row) throw new Error('Home rendered no row for the local project');
-    const ellipsisTrigger = within(row).getAllByRole('button').at(-1);
-    if (!ellipsisTrigger) throw new Error('The local project row has no buttons');
-    await userEvent.click(ellipsisTrigger);
-    const syncItem = await screen.findByRole('menuitem');
-    expect(syncItem).toHaveAttribute('aria-disabled', 'true');
-    expect(syncItem).toHaveTextContent('Wait for the current sync to finish');
-  });
-
-  async function openLocalRowMenuItem() {
-    const row = screen.getByText('LOC').closest('tr');
-    if (!row) throw new Error('Home rendered no row for the local project');
-    const ellipsisTrigger = within(row).getAllByRole('button').at(-1);
-    if (!ellipsisTrigger) throw new Error('The local project row has no buttons');
-    await userEvent.click(ellipsisTrigger);
-    return screen.findByRole('menuitem');
-  }
-
-  it("names the syncing row's Sync menu item, which shows only a spinner", async () => {
-    renderHomeDuringSync({ activeSendReceiveProjects: ['localProject'], withLocalProject: true });
-    const syncItem = await openLocalRowMenuItem();
-    expect(syncItem).toHaveAttribute('aria-disabled', 'true');
-    expect(syncItem).toHaveAccessibleName('Sync');
-  });
-
-  it("keeps the wait reason in a waiting row's menu item name", async () => {
-    renderHomeDuringSync({ activeSendReceiveProjects: ['syncingProject'], withLocalProject: true });
-    const syncItem = await openLocalRowMenuItem();
-    expect(syncItem).toHaveAccessibleName(/Sync.*Wait for the current sync to finish/s);
+    expect(within(rowOf('BLK')).getByRole('button', { name: 'Get' })).toBeDisabled();
+    expect(within(rowOf('SYN')).getByRole('button', { name: 'Get' })).toBeEnabled();
   });
 });
 
@@ -2146,12 +2239,13 @@ describe('Home while a sync holds the project list', () => {
     expect(screen.queryByText(LINE)).toBeNull();
   });
 
-  it('shows no line once loaded, and keeps the Get buttons disabled during the sync', () => {
+  it('shows no line once loaded, and keeps the Get buttons enabled during the sync', () => {
     render(homeElement({ isSendReceiveInProgress: true, remoteProjectsState: 'loaded' }));
     expect(screen.queryByText(LINE)).toBeNull();
     const getButtons = screen.getAllByRole('button', { name: 'Get' });
     expect(getButtons).toHaveLength(2);
-    getButtons.forEach((button) => expect(button).toBeDisabled());
+    // A click while another sync runs is queued, so nothing is disabled for it.
+    getButtons.forEach((button) => expect(button).toBeEnabled());
   });
 
   it('shows no line while loading when no sync runs', () => {
@@ -2159,14 +2253,14 @@ describe('Home while a sync holds the project list', () => {
     expect(screen.queryByText(LINE)).toBeNull();
   });
 
-  it('drops the line when the list arrives and re-enables rows when the sync ends', () => {
+  it('drops the line when the list arrives and keeps the rows enabled through the sync', () => {
     const { rerender } = render(
       homeElement({ isSendReceiveInProgress: true, remoteProjectsState: 'loading' }),
     );
     expect(screen.getByText(LINE)).toBeInTheDocument();
     rerender(homeElement({ isSendReceiveInProgress: true, remoteProjectsState: 'loaded' }));
     expect(screen.queryByText(LINE)).toBeNull();
-    screen.getAllByRole('button', { name: 'Get' }).forEach((b) => expect(b).toBeDisabled());
+    screen.getAllByRole('button', { name: 'Get' }).forEach((b) => expect(b).toBeEnabled());
     rerender(homeElement({ isSendReceiveInProgress: false, remoteProjectsState: 'loaded' }));
     screen.getAllByRole('button', { name: 'Get' }).forEach((b) => expect(b).toBeEnabled());
   });

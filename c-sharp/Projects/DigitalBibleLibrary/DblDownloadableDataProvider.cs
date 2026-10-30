@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Paranext.DataProvider.NetworkObjects.Documentation;
 using Paranext.DataProvider.ParatextUtils;
+using Paranext.DataProvider.Projects.SendReceive;
 using Paranext.DataProvider.Services;
 using Paranext.DataProvider.Users;
 using Paratext.Data;
@@ -715,14 +716,20 @@ internal class DblResourcesDataProvider(
     }
 
     /// <summary>
-    /// Try to install DBL resource with specified DBL id
+    /// Try to install DBL resource with specified DBL id. Waits first while a running sync is
+    /// updating the same resource, and makes a sync that starts meanwhile wait for this install
+    /// (see <see cref="SyncRunResourceGuard"/>).
     /// </summary>
     [NetworkTimeout(DBL_NETWORK_TIMEOUT)]
-    private Task InstallDblResource(string DBLEntryUid) =>
+    internal Task InstallDblResource(string DBLEntryUid) =>
         // Run the blocking Install()/RefreshScrTexts() on a background thread so the reading loop
         // stays responsive; the lock keeps it from overlapping a fetch or an uninstall.
         Task.Run(() =>
         {
+            // Entered before taking _providerGate, never inside it: a wait that can last a whole
+            // sync run must not hold up the fetches, uninstalls and other installs that need the
+            // gate.
+            using var resourceWrite = SyncRunResourceGuard.EnterResourceWrite(DBLEntryUid);
             lock (_providerGate)
             {
                 EnsureResourcesLoadedCore();
@@ -819,15 +826,20 @@ internal class DblResourcesDataProvider(
     }
 
     /// <summary>
-    /// Try to uninstall DBL resource with specified DBL id
+    /// Try to uninstall DBL resource with specified DBL id. Waits first while a running sync is
+    /// updating the same resource, and makes a sync that starts meanwhile wait for this removal
+    /// (see <see cref="SyncRunResourceGuard"/>).
     /// </summary>
-    // Catalog may load on-demand here, so allow the caller to wait without timing out.
+    // Catalog may load on-demand here, and a sync updating the resource may hold it up, so allow the
+    // caller to wait without timing out.
     [NetworkTimeout(DBL_NETWORK_TIMEOUT)]
-    private Task UninstallDblResource(string DBLEntryUid) =>
+    internal Task UninstallDblResource(string DBLEntryUid) =>
         // Run the blocking Delete()/RefreshScrTexts() on a background thread so the reading loop
         // stays responsive; the lock keeps it from overlapping a fetch or an install.
         Task.Run(() =>
         {
+            // Before _providerGate, for the same reason as in InstallDblResource.
+            using var resourceWrite = SyncRunResourceGuard.EnterResourceWrite(DBLEntryUid);
             lock (_providerGate)
             {
                 EnsureResourcesLoadedCore();

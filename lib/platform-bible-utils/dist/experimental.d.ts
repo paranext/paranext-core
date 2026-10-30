@@ -341,6 +341,12 @@ export type SyncActivityValue = {
 	 * @experimental This field is unstable and may change or disappear without notice
 	 */
 	projectIds?: readonly string[] | null;
+	/**
+	 * Entry uids of the resources the running sync will update, when the backend names them
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	resourceIds?: readonly string[] | null;
 };
 /**
  * What a consumer knows about the backend sync activity.
@@ -361,12 +367,19 @@ export type SyncActivity = {
 	 * @experimental This field is unstable and may change or disappear without notice
 	 */
 	projectIds: readonly string[];
+	/**
+	 * Entry uids of the resources the running sync will update. Empty when no sync runs or the
+	 * backend does not name them.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	resourceIds: readonly string[];
 };
 /**
  * Whether a value read from the wire is a usable sync-activity snapshot. Checked rather than
  * trusted: the payload comes from another process, and a build may send another shape. `isSyncing`
- * must be a boolean; `projectIds` may be absent, `undefined`, `null` or a list of strings, and
- * anything else makes the whole snapshot unusable.
+ * must be a boolean; `projectIds` and `resourceIds` may each be absent, `undefined`, `null` or a
+ * list of strings, and anything else makes the whole snapshot unusable.
  *
  * @param value The raw payload of the command or event
  * @returns `true` if the value is a {@link SyncActivityValue}
@@ -407,5 +420,75 @@ export declare const SYNC_ACTIVITY_RECHECK_INTERVAL_MS = 30000;
  * @experimental This export is unstable and may change shape or disappear without notice
  */
 export declare function shouldRecheckSyncActivity(value: SyncActivityValue | undefined): boolean;
+/**
+ * What a consumer knows about the backend's sync queue, and the pieces every reader of the
+ * `paratextBibleSendReceive.getSyncQueue` command and `onSyncQueueChanged` event shares: the check
+ * of the payload and the mapping to what a consumer reads. Free of React and PAPI, so the renderer,
+ * the extension host and web views can all use it.
+ */
+/**
+ * Ends the message of a `paratextBibleSendReceive.requestSync` rejection for a request that never
+ * ran because it was removed from the sync queue, or dropped when the queue was disposed at quit.
+ * An error that crosses papi arrives as a plain error carrying only its message, so this stable
+ * token is how a caller recognizes that outcome.
+ *
+ * @experimental This is unstable and may change or disappear without notice
+ */
+export declare const SYNC_REQUEST_REMOVED_MARKER = " (SR_REMOVED)";
+/**
+ * The part of a sync-queue snapshot a consumer relies on, as it arrives on the wire.
+ * `waitingProjectIds` may be absent or `null`; both mean "no project is waiting".
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type SyncQueueValue = {
+	/**
+	 * IDs of the projects waiting for a later sync run, in the order they will run
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	waitingProjectIds?: readonly string[] | null;
+};
+/**
+ * What a consumer knows about the backend sync queue.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type SyncQueue = {
+	/**
+	 * IDs of the projects waiting for a later sync run. Empty when nothing waits or the answer is not
+	 * known: unknown never disables anything.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	waitingProjectIds: readonly string[];
+};
+/**
+ * Whether a value read from the wire is a usable sync-queue snapshot. Checked rather than trusted:
+ * the payload comes from another process, and a build may send another shape. `waitingProjectIds`
+ * may be absent, `undefined`, `null` or a list of strings, and anything else makes the whole
+ * snapshot unusable.
+ *
+ * @param value The raw payload of the command or event
+ * @returns `true` if the value is a {@link SyncQueueValue}
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function isSyncQueueSnapshot(value: unknown): value is SyncQueueValue;
+/**
+ * The queue a consumer reads while nothing is known: nothing waits. A constant, so a consumer that
+ * memoizes on it does not re-render.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const IDLE_SYNC_QUEUE: SyncQueue;
+/**
+ * Maps the latest snapshot to what a consumer reads. Falls back to {@link IDLE_SYNC_QUEUE} while no
+ * snapshot is known, so a missing, rejected or malformed answer never disables anything.
+ *
+ * @param value The latest valid snapshot, or `undefined` while none is known
+ * @returns The queue to show
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function toSyncQueue(value: SyncQueueValue | undefined): SyncQueue;
 
 export {};

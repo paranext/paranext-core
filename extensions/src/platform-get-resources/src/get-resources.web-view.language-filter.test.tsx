@@ -9,6 +9,12 @@ import {
 
 const { mockSendCommand } = vi.hoisted(() => ({ mockSendCommand: vi.fn() }));
 
+// These tests are not about the sync, so the dialog sees an idle one.
+vi.mock('./use-sync-activity.hook', () => {
+  const idle = { isSyncing: false, resourceIds: [] };
+  return { default: () => idle, useSyncActivity: () => idle };
+});
+
 vi.mock('@papi/frontend', () => ({
   default: {
     commands: { sendCommand: (...args: unknown[]) => mockSendCommand(...args) },

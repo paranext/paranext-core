@@ -25,6 +25,12 @@ export type SyncActivityValue = {
    * @experimental This field is unstable and may change or disappear without notice
    */
   projectIds?: readonly string[] | null;
+  /**
+   * Entry uids of the resources the running sync will update, when the backend names them
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
+  resourceIds?: readonly string[] | null;
 };
 
 /**
@@ -46,13 +52,20 @@ export type SyncActivity = {
    * @experimental This field is unstable and may change or disappear without notice
    */
   projectIds: readonly string[];
+  /**
+   * Entry uids of the resources the running sync will update. Empty when no sync runs or the
+   * backend does not name them.
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
+  resourceIds: readonly string[];
 };
 
 /**
  * Whether a value read from the wire is a usable sync-activity snapshot. Checked rather than
  * trusted: the payload comes from another process, and a build may send another shape. `isSyncing`
- * must be a boolean; `projectIds` may be absent, `undefined`, `null` or a list of strings, and
- * anything else makes the whole snapshot unusable.
+ * must be a boolean; `projectIds` and `resourceIds` may each be absent, `undefined`, `null` or a
+ * list of strings, and anything else makes the whole snapshot unusable.
  *
  * @param value The raw payload of the command or event
  * @returns `true` if the value is a {@link SyncActivityValue}
@@ -61,11 +74,18 @@ export type SyncActivity = {
 export function isSyncActivitySnapshot(value: unknown): value is SyncActivityValue {
   if (typeof value !== 'object' || !value) return false;
   if (!('isSyncing' in value) || typeof value.isSyncing !== 'boolean') return false;
+  return (
+    isOptionalStringList('projectIds' in value ? value.projectIds : undefined) &&
+    isOptionalStringList('resourceIds' in value ? value.resourceIds : undefined)
+  );
+}
+
+/** Whether a wire value is absent, `undefined`, `null` or a list of strings */
+function isOptionalStringList(list: unknown): boolean {
   // The wire may send null for an absent list, so null has to be compared against
   // eslint-disable-next-line no-null/no-null
-  if (!('projectIds' in value) || value.projectIds === undefined || value.projectIds === null)
-    return true;
-  return Array.isArray(value.projectIds) && value.projectIds.every((id) => typeof id === 'string');
+  if (list === undefined || list === null) return true;
+  return Array.isArray(list) && list.every((id) => typeof id === 'string');
 }
 
 /**
@@ -77,6 +97,7 @@ export function isSyncActivitySnapshot(value: unknown): value is SyncActivityVal
 export const IDLE_SYNC_ACTIVITY: SyncActivity = Object.freeze({
   isSyncing: false,
   projectIds: Object.freeze([]),
+  resourceIds: Object.freeze([]),
 });
 
 /**
@@ -93,6 +114,7 @@ export function toSyncActivity(value: SyncActivityValue | undefined): SyncActivi
   return {
     isSyncing: value.isSyncing,
     projectIds: value.isSyncing ? (value.projectIds ?? []) : [],
+    resourceIds: value.isSyncing ? (value.resourceIds ?? []) : [],
   };
 }
 
