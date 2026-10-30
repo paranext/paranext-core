@@ -134,6 +134,20 @@ declare module 'papi-shared-types' {
     /** If the browser window is in full screen */
     'platform.isFullScreen': () => Promise<boolean>;
     /**
+     * Paste the clipboard into whatever has focus in the focused window, as the keyboard shortcut
+     * would: Chromium's own paste, whose `paste` event carries every format on the clipboard,
+     * including ones a page wrote for itself, which `navigator.clipboard.read()` does not return.
+     * Nothing from the clipboard comes back to the caller.
+     *
+     * A web view calls this for a paste it started itself (a menu item, or a keystroke it handles),
+     * so put focus where the paste belongs first: it lands wherever focus is when it runs.
+     *
+     * @returns `true` once the paste has been issued; `false`, without pasting, when no window has
+     *   focus
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.pasteIntoFocusedWindow': () => Promise<boolean>;
+    /**
      * Whether the first-run sync consent gate allows an automatic Simple-mode Send/Receive to start
      * now: `granted`; `unconfirmed` when the first-run wizard has not been answered; `unreadable`
      * when its completion flag could not be read; or `deferred` when the user chose "Don't sync

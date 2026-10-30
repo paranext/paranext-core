@@ -31,6 +31,10 @@ import {
   startLifecycleEvents,
 } from '@main/lifecycle-events.util';
 import { registerExtensionHostStoppedStateCommand } from '@main/extension-host-stopped-state.command';
+import {
+  PASTE_INTO_FOCUSED_WINDOW_DOCS,
+  pasteIntoFocusedWindow,
+} from '@main/paste-into-focused-window.command';
 import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util';
 import { getVerseNavigationCommand } from '@main/verse-navigation-shortcuts.util';
 import { getPhysicalHistoryNavigationDirection } from '@main/reference-history-keyboard.util';
@@ -2814,6 +2818,12 @@ async function main() {
         },
       },
     },
+  );
+
+  commandService.registerCommand(
+    'platform.pasteIntoFocusedWindow',
+    pasteIntoFocusedWindow,
+    PASTE_INTO_FOCUSED_WINDOW_DOCS,
   );
 
   commandService.registerCommand(
