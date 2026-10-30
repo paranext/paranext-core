@@ -176,32 +176,6 @@ internal static class SyncRunResourceGuard
     }
 
     /// <summary>
-    /// <see cref="RegisterRun"/> followed by an uncancellable
-    /// <see cref="Run.WaitForResourceWrites"/>: opens the run once every write scope already open on
-    /// one of its resources has closed, or <see cref="WaitTimeout"/> has elapsed. For callers with no
-    /// cancellation to honor; a sync uses the two steps, so it can announce its resources before
-    /// waiting and stop waiting when cancelled.
-    /// </summary>
-    /// <param name="dblEntryUids">The DBL entry uids of the resources the run will update.</param>
-    /// <returns>A handle whose <c>Dispose</c> ends the run and releases every waiting write.</returns>
-    /// <exception cref="InvalidOperationException">A run is already open.</exception>
-    public static IDisposable BeginRun(IEnumerable<string> dblEntryUids)
-    {
-        var run = RegisterRun(dblEntryUids);
-        try
-        {
-            run.WaitForResourceWrites(CancellationToken.None);
-        }
-        catch
-        {
-            // The caller never receives the handle, so nothing else could ever end this run.
-            run.Dispose();
-            throw;
-        }
-        return run;
-    }
-
-    /// <summary>
     /// Waits while the open run holds <paramref name="dblEntryUid"/>, then marks it as being written
     /// until the returned scope is disposed, so a run that starts meanwhile waits for this write.
     /// Returns at once when no run holds the uid. If one run ends and the next one also holds it,
