@@ -10980,20 +10980,21 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - Escape still does not work across frames, and scroll inside a web view still cannot dismiss a
     Light surface.
   - Alt-tab and keyboard users: in the main document an unfocused document can only mean the OS
-    window was deactivated, so the shared wrappers return focus to the trigger themselves (Radix's
-    non-modal popover and menu skip their own restore after any outside press, which the synthetic
-    press is), and a keyboard user returning from another application keeps their place. The
-    trigger is the element whose `aria-controls` names the content's `id`, or the element the
-    content's `aria-labelledby` names; a context menu has neither and restores nothing. The restore
-    happens only while nothing else holds focus. Inside a web view the same signal is ambiguous
-    (alt-tab versus a click into another frame), so web views do not restore focus there.
+    window was deactivated, so the shared wrappers focus the trigger themselves and prevent Radix's
+    default. After an outside interaction (which the synthetic press is) the non-modal `Popover` and
+    the `Menubar` would skip their own restore, while a modal `DropdownMenu` would restore anyway, so
+    the outcome is the same for all three: a keyboard user returning from another application keeps
+    their place. The trigger is the element whose `aria-controls` names the content's `id`, or the
+    element the content's `aria-labelledby` names; a context menu has neither and restores nothing.
+    The restore happens only while nothing else holds focus. Inside a web view the same signal is
+    ambiguous (alt-tab versus a click into another frame), so web views do not restore focus there.
   - The synthetic press is untrusted and carries a window-blur marker. The focus modality tracker
     and the overlay service's press recorder skip it, and the overlay service's own surfaces ignore
     it and keep their own blur rule and creation grace period. Window service gesture tracking, the
     content-zoom bootstrap and the editor's selection snapshot see it and were judged benign. A
     listener in the library that must ignore it uses the internal `isWindowBlurPress`; the renderer
-    reads the same `Symbol.for` key through `src/renderer/services/overlays/window-blur-press.util.ts`,
-    pinned by a contract test.
+    reads the same `Symbol.for` key through
+    `src/renderer/services/overlays/window-blur-press.util.ts`, pinned by a contract test.
   - A modal menu opened inside a wired surface takes a blur alone: the outer surface stays open until
     the next outside press or blur, as for a real click outside both.
   - Inside a web view, a focus trap (a dialog or a modal menu) does not take focus back from another

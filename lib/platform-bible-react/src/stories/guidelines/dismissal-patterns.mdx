@@ -109,13 +109,15 @@ Dismissal is a keyboard and screen-reader concern, not just a pointer one:
   focus is **not** returned when it is already in a web view (`activeElement` is an iframe) or,
   inside a web view, when the window is not focused. Returning focus across frames blurs the window
   the user just moved to and closes the menu they opened there. In the main document an unfocused
-  window can only mean the OS window was deactivated, so the shared wrappers return focus to the
-  trigger themselves for keyboard users coming back from another application (Radix's non-modal
-  surfaces skip that restore after an outside press); inside a web view focus stays where the user
-  put it. `Select` follows the same rule through `SelectContent`. A hand-rolled dismissal (a `window` listener
-  that sets your own state) runs *outside* Radix's lifecycle: it must NOT focus the trigger on a
-  blur dismissal, and must call `trigger.focus()` on other dismissals (Escape, a choice) —
-  otherwise keyboard users are stranded on a closed surface's dead anchor. A consumer
+  window can only mean the OS window was deactivated, so the shared wrappers focus the trigger
+  themselves for keyboard users coming back from another application. After an outside interaction
+  a non-modal `Popover` and a `Menubar` would skip that restore, while a modal `DropdownMenu` would
+  restore anyway; the wrappers make the outcome the same for all three. Inside a web view focus
+  stays where the user put it. `Select` follows the same rule through `SelectContent`. A
+  hand-rolled dismissal (a `window` listener that sets your own state) runs *outside* Radix's
+  lifecycle: it must NOT focus the trigger on a blur dismissal, and must call `trigger.focus()` on
+  other dismissals (Escape, a choice) — otherwise keyboard users are stranded on a closed surface's
+  dead anchor. A consumer
   `onCloseAutoFocus` that calls `preventDefault()` and then focuses something explicitly bypasses
   the rule, so it must gate that focus call with `shouldSuppressFocusReturn` (exported by this
   library, together with `isRunningInWebView`). Restoring focus is not the same as showing a
@@ -174,8 +176,8 @@ Consequences to know about:
   it acts there (places a caret, focuses the pane) and the surface closes.
 - Not wired: `Select` (it closes on window blur by itself; `SelectContent` applies the same
   focus-return rule), `Tooltip` and `Dialog` (not on this axis), sub-menu contents (dismissing the
-  root closes them), and the Scripture editor's right-click menu (not Radix; its window-blur close is
-  fixed separately in the editor package).
+  root closes them), and the Scripture editor's right-click menu (not Radix; its window-blur close
+  is fixed separately in the editor package).
 - Escape is not forwarded across frames. After a click into another frame, Escape goes to that frame.
 - A modal menu opened inside a picker closes alone on a window blur; the picker stays open until the
   next blur or outside press, as it would after a real click outside both.
