@@ -374,9 +374,9 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'extensions/src/platform-scripture-editor/src/model-text-panel.web-view.tsx',
     ],
   },
-  // The paste itself is the scripture-editors repo's ClipboardPlugin (Ctrl+V asks the host's
-  // `platform.pasteIntoFocusedWindow`); `usePauseEditing` holds the chords off while the editor
-  // still shows the chapter being left, as it does typing, undo and caret moves.
+  // The paste itself is the scripture-editors repo's ClipboardPlugin (Ctrl+V reads the clipboard);
+  // `usePauseEditing` holds the chords off while the editor still shows the chapter being left, as
+  // it does typing, undo and caret moves.
   {
     id: 'scripture-paste-held-off-chapter-loading',
     purpose:

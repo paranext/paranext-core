@@ -21,10 +21,11 @@ const CARET_KEYS = new Set([
  * chords) or moves the caret (the arrow and page keys, Home, End, and select-all). The caret counts
  * because the editor still shows the chapter being left: moving it there reports that chapter's
  * verse as the current reference, which pulls the reference back to the chapter the user just left.
- * The paste chords count because the editor takes them itself and asks the host for the paste,
- * whose `paste` event can arrive after the pause has ended and land in the new chapter. Every other
- * chord is let through so the application's shortcuts keep working; a paste started from a menu is
- * held off as the `paste` event it raises.
+ * The paste chords count because the editor takes them itself and reads the clipboard, which raises
+ * no `paste` event to hold off, and whose result could land in the new chapter. Every other chord
+ * is let through so the application's shortcuts keep working. A paste the browser runs itself is
+ * held off as the `paste` event it raises; the Paste items of the editor's own menus read the
+ * clipboard as the chords do, so nothing here holds them off.
  */
 function isHeldOffKey(event: KeyboardEvent): boolean {
   if (event.isComposing || CARET_KEYS.has(event.key)) return true;
