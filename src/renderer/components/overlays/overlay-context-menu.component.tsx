@@ -8,6 +8,7 @@
  */
 
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { isWindowBlurPress } from '@renderer/services/overlays/window-blur-press.util';
 import { resolveAndRemoveOverlay } from '@renderer/services/overlays/overlay-store';
 import { OverlayEntry } from '@renderer/services/overlays/overlay.service-model';
 import {
@@ -294,11 +295,11 @@ export function OverlayContextMenuPresentational({
         align="start"
         side="bottom"
         sideOffset={0}
-        // The shared wrappers turn a window blur into an untrusted outside press. The overlay
+        // The shared wrappers turn a window blur into an outside press. The overlay
         // service owns blur dismissal for this surface (creation grace period,
-        // `dismissOnClickOutside`), so the untrusted press is ignored here.
+        // `dismissOnClickOutside`), so that press is ignored here.
         onPointerDownOutside={(event) => {
-          if (!event.detail.originalEvent.isTrusted) event.preventDefault();
+          if (isWindowBlurPress(event.detail.originalEvent)) event.preventDefault();
         }}
       >
         {renderMenuItems(items, onSelect)}

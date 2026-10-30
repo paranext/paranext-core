@@ -65,6 +65,7 @@ import {
   updateCommandPaletteState,
 } from './overlay-store';
 import { translateCoordinates, clampToViewport, isWebViewVisible } from './overlay-coordinates';
+import { isWindowBlurPress } from './window-blur-press.util';
 
 // ── Debounce ──
 
@@ -1255,6 +1256,9 @@ function registerAutoDismissListeners(): void {
   document.addEventListener(
     'pointerdown',
     (e) => {
+      // The press a window blur produces in this document is not a click, and recording it would
+      // make the app-window mouse-down that follows look like a click on overlay content.
+      if (isWindowBlurPress(e)) return;
       lastParentPointerDown = {
         time: Date.now(),
         insideOverlay: e.target instanceof Element && !!e.target.closest(OVERLAY_CONTENT_SELECTOR),

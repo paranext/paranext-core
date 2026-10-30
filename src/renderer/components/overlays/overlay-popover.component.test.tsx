@@ -82,7 +82,7 @@ describe('OverlayPopoverPresentational', () => {
   });
 
   describe('outside presses', () => {
-    it('should ignore the untrusted outside press a window blur produces', async () => {
+    it('should ignore the outside press a window blur produces', async () => {
       const onDismiss = vi.fn();
 
       render(
@@ -100,17 +100,12 @@ describe('OverlayPopoverPresentational', () => {
         });
       });
 
-      // The shared wrapper answers a window blur with an untrusted outside press
+      // The shared wrapper answers a window blur with a marked outside press
       fireEvent.blur(window);
       expect(onDismiss).not.toHaveBeenCalled();
 
-      // Positive control: the popover is live and still dismisses (jsdom cannot produce a trusted
-      // press)
-      const popover = document.querySelector('[data-overlay-popover]');
-      expect(popover).toBeInTheDocument();
-      // querySelector returns Element | null; the expect above guards null, but TS can't narrow it
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      fireEvent.keyDown(popover as Element, { key: 'Escape' });
+      // Positive control: an ordinary outside press still dismisses
+      fireEvent.pointerDown(document.body);
       expect(onDismiss).toHaveBeenCalled();
     });
   });

@@ -186,7 +186,7 @@ describe('OverlayCommandPalettePresentational', () => {
       expect(onDismiss).not.toHaveBeenCalled();
     });
 
-    it('should ignore the untrusted outside press a window blur produces', async () => {
+    it('should ignore the outside press a window blur produces', async () => {
       const onDismiss = vi.fn();
 
       render(
@@ -205,13 +205,12 @@ describe('OverlayCommandPalettePresentational', () => {
         });
       });
 
-      // The shared wrapper answers a window blur with an untrusted outside press
+      // The shared wrapper answers a window blur with a marked outside press
       fireEvent.blur(window);
       expect(onDismiss).not.toHaveBeenCalled();
 
-      // Positive control: the palette is live and still dismisses (jsdom cannot produce a trusted
-      // press)
-      fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
+      // Positive control: an ordinary outside press still dismisses
+      fireEvent.pointerDown(document.body);
       expect(onDismiss).toHaveBeenCalled();
     });
   });
