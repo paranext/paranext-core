@@ -168,31 +168,6 @@ connection.
 
 Rationale: `adr-registry-tokens-via-elevated-privilege` in `Architecture-Decisions.md`.
 
-### Pasting into the focused window
-
-`platform.pasteIntoFocusedWindow` (main, `src/main/paste-into-focused-window.command.ts`) runs
-Chromium's own paste into whatever has focus in the focused window, so a hidden-marker Scripture
-editor gets the clipboard's every format. It returns only whether the paste was issued and hands the
-caller nothing from the clipboard, but the paste lands in the user's text and is saved: a caller that
-can also read the project back can read the clipboard — often a password just copied from a password
-manager — and the `true` result tells it when.
-
-Who may call it:
-
-- **Renderers** (and so extension web views, which can drive their renderer's PAPI connection):
-  served. The Scripture editor's web view needs it, and a web view can already read the clipboard
-  in its own frame.
-- **WebSocket clients without `Origin`** (the extension host, the .NET data provider, any local
-  process): served. They run as the user and could read the clipboard directly.
-- **WebSocket clients with `Origin`** (a web page open in the user's browser, which can connect to
-  `ws://localhost:8876`): refused, by the same header stopgap as the Registry token request type,
-  through a second set in `rpc-server.ts` (`REQUEST_TYPES_REFUSED_TO_BROWSERS`) that a renderer
-  connection is not refused. The same limits apply: it trusts a header and does not identify the
-  caller, and PT-2893 must replace it.
-
-As of 2026-10, no other PAPI request reads or writes the clipboard; a web view reads it only inside
-its own frame, which a WebSocket client cannot reach.
-
 ---
 
 ## Security Best Practices
