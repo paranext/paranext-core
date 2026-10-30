@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   isPlatformError,
+  newPlatformError,
   ABORTED,
   RESOURCE_EXHAUSTED,
   FAILED_PRECONDITION,
@@ -11,9 +12,15 @@ import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
 import { menuDataService } from '@shared/services/menu-data.service';
 import { windowService } from '@shared/services/window.service';
-import { CommandPaletteRequest, PopoverContent, PopoverRequest } from './overlay.service-model';
+import {
+  CommandPaletteRequest,
+  OverlayEntry,
+  PopoverContent,
+  PopoverRequest,
+} from './overlay.service-model';
 import { getOverlays, getOverlayById, clearAllOverlays, subscribe } from './overlay-store';
-import { isWebViewVisible } from './overlay-coordinates';
+import { getWebViewIframe, isWebViewVisible } from './overlay-coordinates';
+import { markOverlayFocusReturnIfFocusInside } from './overlay-focus-return.util';
 import { WINDOW_BLUR_PRESS_MARKER } from './window-blur-press.util';
 
 /** Must match DEBOUNCE_COOLDOWN_MS in overlay.service-host.ts */
@@ -101,6 +108,7 @@ vi.mock('@shared/services/network.service', () => ({
 // eslint-disable-next-line import/first
 import {
   overlayService,
+  rejectModalDialogOverlaysOnShutdown,
   resetAppWindowInputState,
   resetDebounceState,
   showModalDialogOverlay,
@@ -2154,180 +2162,160 @@ describe('overlay.service-host', () => {
     });
   });
 
-  describe('focus save/restore', () => {
-    it('should save and restore focus when showing and resolving a modal dialog', async () => {
-      // windowService.getFocus and setFocus are mocked at the top
-      const MockFocusComponent = vi.fn(
+  describe('focus return', () => {
+    // getWebViewIframe reports a web view with no frame as null
+    // eslint-disable-next-line no-null/no-null
+    const NO_FRAME = null;
+    const PAST_GRACE_MS = 400;
+    const PAST_INPUT_DEFER_MS = 50;
+    const addedElements: HTMLElement[] = [];
+    /** Web view ids whose iframe exists in the mocked document */
+    let framedWebViewIds: Set<string>;
+
+    const popoverRequest: PopoverRequest = {
+      anchor: { x: 10, y: 10 },
+      content: { type: 'text', body: 'Hello' },
+    };
+    const paletteRequest: CommandPaletteRequest = {
+      items: [
+        { id: 'ft', label: 'Footnote' },
+        { id: 'xt', label: 'Cross Reference' },
+      ],
+      anchor: { x: 10, y: 10 },
+    };
+
+    /** Appends an element to the body and remembers it for cleanup */
+    function addToBody<T extends HTMLElement>(element: T): T {
+      document.body.appendChild(element);
+      addedElements.push(element);
+      return element;
+    }
+
+    /** Focuses a button inside the DOM the given overlay type renders for its own content */
+    function focusInsideOverlayContent(type: 'contextMenu' | 'popover' | 'commandPalette'): void {
+      const content = addToBody(document.createElement('div'));
+      if (type === 'contextMenu') content.className = 'overlay-context-menu-content';
+      else if (type === 'popover') content.setAttribute('data-overlay-popover', '');
+      else content.setAttribute('data-overlay-command-palette', '');
+      const button = document.createElement('button');
+      content.appendChild(button);
+      button.focus();
+      expect(document.activeElement).toBe(button);
+    }
+
+    /** Focuses a web view frame, which is outside every overlay's content */
+    function focusFrame(): void {
+      const frame = addToBody(document.createElement('iframe'));
+      frame.focus();
+      expect(document.activeElement).toBe(frame);
+    }
+
+    /** Opens a context menu from 'test-webview', lets its focus save settle, and leaves the grace */
+    async function openContextMenuPastGrace(): Promise<{ dismissed: Promise<string | undefined> }> {
+      vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue(DEFAULT_WEB_VIEW_MENU);
+      const promise = overlayService.showContextMenu('ext.testWebView', 'test-webview');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(getOverlays().filter((o) => o.type === 'contextMenu')).toHaveLength(1);
+      vi.advanceTimersByTime(PAST_GRACE_MS);
+      return { dismissed: promise };
+    }
+
+    /** Opens a popover from 'test-webview', lets its focus save settle, and leaves the grace */
+    async function openPopoverPastGrace(request: PopoverRequest = popoverRequest): Promise<string> {
+      const id = await overlayService.showPopover(request, 'test-webview');
+      expectPopoverId(id);
+      await vi.advanceTimersByTimeAsync(0);
+      vi.advanceTimersByTime(PAST_GRACE_MS);
+      return id;
+    }
+
+    /** Opens a command palette from 'test-webview', lets its focus save settle, leaves the grace */
+    async function openPaletteBeyondGrace(
+      request: CommandPaletteRequest = paletteRequest,
+    ): Promise<{ dismissed: Promise<string | undefined> }> {
+      const promise = overlayService.showCommandPalette(request, 'test-webview');
+      await vi.advanceTimersByTimeAsync(0);
+      vi.advanceTimersByTime(PAST_GRACE_MS);
+      return { dismissed: promise };
+    }
+
+    /** Opens a modal dialog from the given requester and lets its focus save settle */
+    async function openModal(webViewId?: string): Promise<{
+      promise: Promise<unknown>;
+      overlay: Extract<OverlayEntry, { type: 'modalDialog' }>;
+    }> {
+      const MockComponent = vi.fn(
         // vi.fn mock must satisfy React component return type; `any` cast is the standard test pattern
         // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
         () => undefined as any,
       );
-      const props = { prompt: 'Focus test', isDialog: true };
-      const promise = showModalDialogOverlay(MockFocusComponent, props, undefined, 'focus-webview');
-
-      // saveFocus should have been called (getFocus is async, allow it to resolve)
-      await Promise.resolve();
-      expect(windowService.getFocus).toHaveBeenCalled();
-
-      // Resolve the dialog to trigger restoreFocus
-      const overlays = getOverlays();
-      // TypeScript cannot narrow a discriminated union after getOverlays(); cast needed to access typed fields
+      const promise = showModalDialogOverlay(
+        MockComponent,
+        { prompt: 'x', isDialog: true },
+        undefined,
+        webViewId,
+      );
+      // Settle the rejection if a test never awaits it
+      promise.catch(() => {});
+      await vi.advanceTimersByTimeAsync(0);
+      // TypeScript cannot narrow a discriminated union after getOverlays(); the only overlay is the modal
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const modalOverlay = overlays[0] as Extract<(typeof overlays)[0], { type: 'modalDialog' }>;
-      modalOverlay.resolve(true);
+      const overlay = getOverlays()[0] as Extract<OverlayEntry, { type: 'modalDialog' }>;
+      return { promise, overlay };
+    }
 
-      await promise;
-      // The restore decision waits one task so a press's default focus move happens first
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 0);
-      });
-      // setFocus should have been called to restore
-      expect(windowService.setFocus).toHaveBeenCalled();
+    function emitInput(kind: AppWindowInputEvent['kind']): void {
+      appWindowInputSubscribers.forEach((subscriber) => subscriber({ kind }));
+      vi.advanceTimersByTime(PAST_INPUT_DEFER_MS);
+    }
+
+    function setAppFocused(hasFocus: boolean): void {
+      vi.spyOn(document, 'hasFocus').mockReturnValue(hasFocus);
+    }
+
+    beforeEach(async () => {
+      vi.useFakeTimers();
+      appWindowInputSubscribers.length = 0;
+      resetAppWindowInputState();
+      vi.mocked(windowService.setFocus).mockClear();
+      vi.mocked(windowService.subscribeFocus).mockClear();
+      framedWebViewIds = new Set(['test-webview']);
+      vi.mocked(getWebViewIframe).mockImplementation((id) =>
+        framedWebViewIds.has(id) ? document.createElement('iframe') : NO_FRAME,
+      );
+      await startOverlayService();
     });
 
-    describe('after the overlay is dismissed', () => {
-      const PAST_GRACE_MS = 400;
-      const PAST_INPUT_DEFER_MS = 50;
-      const addedElements: HTMLElement[] = [];
+    afterEach(() => {
+      vi.restoreAllMocks();
+      addedElements.splice(0).forEach((element) => element.remove());
+      // Move focus back to the body so one test's focused element cannot leak into the next
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      (document.activeElement as HTMLElement | null)?.blur();
+      vi.mocked(getWebViewIframe).mockImplementation(() => NO_FRAME);
+    });
 
-      /** Appends an element to the body and remembers it for cleanup */
-      function addToBody<T extends HTMLElement>(element: T): T {
-        document.body.appendChild(element);
-        addedElements.push(element);
-        return element;
-      }
-
-      /** Opens a context menu from 'test-webview', lets its focus save settle, and leaves the grace */
-      async function openContextMenuPastGrace(): Promise<{ dismissed: Promise<unknown> }> {
-        vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue(DEFAULT_WEB_VIEW_MENU);
-        const promise = overlayService.showContextMenu('ext.testWebView', 'test-webview');
-        await vi.advanceTimersByTimeAsync(0);
-        expect(getOverlays().filter((o) => o.type === 'contextMenu')).toHaveLength(1);
-        vi.advanceTimersByTime(PAST_GRACE_MS);
-        return { dismissed: promise };
-      }
-
-      /**
-       * Appends the DOM the real context menu renders: Radix portals the content into a popper
-       * wrapper on the body. Returns the focusable menu item.
-       */
-      function addRealContextMenuItem(): HTMLButtonElement {
-        const wrapper = addToBody(document.createElement('div'));
-        wrapper.setAttribute('data-radix-popper-content-wrapper', '');
-        const content = document.createElement('div');
-        content.className = 'overlay-context-menu-content';
-        content.setAttribute('role', 'menu');
-        const item = document.createElement('button');
-        item.setAttribute('role', 'menuitem');
-        content.appendChild(item);
-        wrapper.appendChild(content);
-        return item;
-      }
-
-      /** Runs the restore decision, which waits one task after the overlay resolves */
-      function flushRestoreDecision(): void {
-        vi.advanceTimersByTime(1);
-      }
-
-      function emitInput(kind: AppWindowInputEvent['kind']): void {
-        appWindowInputSubscribers.forEach((subscriber) => subscriber({ kind }));
-        vi.advanceTimersByTime(PAST_INPUT_DEFER_MS);
-      }
-
-      beforeEach(async () => {
-        vi.useFakeTimers();
-        appWindowInputSubscribers.length = 0;
-        resetAppWindowInputState();
-        vi.mocked(windowService.setFocus).mockClear();
-        vi.mocked(windowService.subscribeFocus).mockClear();
-        await startOverlayService();
-      });
-
-      afterEach(() => {
-        addedElements.splice(0).forEach((element) => element.remove());
-        // Move focus back to the body so one test's focused element cannot leak into the next
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        (document.activeElement as HTMLElement | null)?.blur();
-      });
-
-      it('does not restore focus after a click-away when a web view frame now holds focus', async () => {
+    describe('when an item is picked', () => {
+      it('returns focus to the requester after a context menu pick', async () => {
         const { dismissed } = await openContextMenuPastGrace();
+        focusFrame();
 
-        const frame = addToBody(document.createElement('iframe'));
-        frame.focus();
-        expect(document.activeElement).toBe(frame);
+        getOverlays()[0].resolve('ext.cut');
 
-        emitInput('mouseDown');
-
-        await expect(dismissed).resolves.toBeUndefined();
-        flushRestoreDecision();
-        expect(windowService.setFocus).not.toHaveBeenCalled();
-      });
-
-      it('does not restore focus when the tracked focus moved to another tab', async () => {
-        const onFocusChange = vi.mocked(windowService.subscribeFocus).mock.calls.at(-1)?.[1];
-        expect(onFocusChange).toBeDefined();
-        // Establish the tracked focus before the overlay opens, as the focus service does on load
-        onFocusChange?.({ focusType: 'webView', id: 'test-webview' });
-
-        const { dismissed } = await openContextMenuPastGrace();
-        expect(document.activeElement).toBe(document.body);
-
-        onFocusChange?.({ focusType: 'tab', id: 'other-tab', tabType: 'x' });
-
-        await expect(dismissed).resolves.toBeUndefined();
-        flushRestoreDecision();
-        expect(windowService.setFocus).not.toHaveBeenCalled();
-      });
-
-      it('does not restore focus when a shell control outside the overlay took focus', async () => {
-        const { dismissed } = await openContextMenuPastGrace();
-
-        const button = addToBody(document.createElement('button'));
-        button.focus();
-        expect(document.activeElement).toBe(button);
-
-        emitInput('mouseDown');
-
-        await expect(dismissed).resolves.toBeUndefined();
-        flushRestoreDecision();
-        expect(windowService.setFocus).not.toHaveBeenCalled();
-      });
-
-      it('restores focus on Escape while overlay content holds focus', async () => {
-        const { dismissed } = await openContextMenuPastGrace();
-
-        const menu = addToBody(document.createElement('div'));
-        menu.setAttribute('data-overlay-context-menu', '');
-        const inner = document.createElement('button');
-        menu.appendChild(inner);
-        inner.focus();
-        expect(document.activeElement).toBe(inner);
-
-        emitInput('escape');
-
-        await expect(dismissed).resolves.toBeUndefined();
-        flushRestoreDecision();
+        await dismissed;
         expect(windowService.setFocus).toHaveBeenCalledWith({
           focusType: 'webView',
           id: 'test-webview',
         });
       });
 
-      it('restores focus when the rendered context menu content held focus and then unmounted', async () => {
-        const { dismissed } = await openContextMenuPastGrace();
+      it('returns focus to the requester after a popover action', async () => {
+        const id = await openPopoverPastGrace();
+        focusFrame();
 
-        const content = addToBody(document.createElement('div'));
-        content.className = 'overlay-context-menu-content';
-        const item = document.createElement('button');
-        content.appendChild(item);
-        item.focus();
-
-        const [overlay] = getOverlays();
-        overlay.resolve(undefined);
-        content.remove();
-        await expect(dismissed).resolves.toBeUndefined();
-        flushRestoreDecision();
+        getOverlays()
+          .find((o) => o.id === id)
+          ?.resolve('action');
 
         expect(windowService.setFocus).toHaveBeenCalledWith({
           focusType: 'webView',
@@ -2335,110 +2323,440 @@ describe('overlay.service-host', () => {
         });
       });
 
-      it('restores focus when a modal dialog button held focus at close', async () => {
-        const MockComponent = vi.fn(
-          // vi.fn mock must satisfy React component return type; `any` cast is the standard test pattern
-          // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-          () => undefined as any,
-        );
-        const promise = showModalDialogOverlay(
-          MockComponent,
-          { prompt: 'x', isDialog: true },
-          undefined,
-          'test-webview',
-        );
-        await vi.advanceTimersByTimeAsync(0);
+      it('returns focus to the requester after a command palette pick, passive or not', async () => {
+        const { dismissed: passivePicked } = await openPaletteBeyondGrace({
+          ...paletteRequest,
+          passive: true,
+        });
+        getOverlays()[0].resolve('ft');
+        await passivePicked;
+        expect(windowService.setFocus).toHaveBeenCalledTimes(1);
 
-        const dialog = addToBody(document.createElement('div'));
-        dialog.setAttribute('data-overlay-modal-dialog', '');
-        const ok = document.createElement('button');
-        dialog.appendChild(ok);
-        ok.focus();
-        expect(document.activeElement).toBe(ok);
+        const { dismissed: activePicked } = await openPaletteBeyondGrace();
+        getOverlays()[0].resolve('xt');
+        await activePicked;
+        expect(windowService.setFocus).toHaveBeenCalledTimes(2);
+      });
 
-        const [overlay] = getOverlays();
-        overlay.resolve(true);
-        await promise;
-        flushRestoreDecision();
+      it('returns focus when the requester commits the highlighted palette item', async () => {
+        const { dismissed: picked } = await openPaletteBeyondGrace({
+          ...paletteRequest,
+          passive: true,
+        });
+        focusFrame();
 
+        await overlayService.commitCommandPaletteSelection('test-webview');
+
+        await expect(picked).resolves.toBe('ft');
         expect(windowService.setFocus).toHaveBeenCalledWith({
           focusType: 'webView',
           id: 'test-webview',
         });
       });
 
-      it('does not restore when a press focused a dock tab header after the overlay resolved', async () => {
-        const { dismissed } = await openContextMenuPastGrace();
-
-        const inner = addRealContextMenuItem();
-        inner.focus();
-
-        // Radix dismisses from its pointerdown listener, before the click's default focus move
-        const [overlay] = getOverlays();
-        overlay.resolve(undefined);
-        await expect(dismissed).resolves.toBeUndefined();
-        const tabHeader = addToBody(document.createElement('div'));
-        tabHeader.className = 'dock-tab-btn';
-        tabHeader.tabIndex = -1;
-        tabHeader.focus();
-        expect(document.activeElement).toBe(tabHeader);
-
-        flushRestoreDecision();
-        expect(windowService.setFocus).not.toHaveBeenCalled();
-      });
-
-      it('does not restore when a shell menu opened on the press holds focus', async () => {
-        const { dismissed } = await openContextMenuPastGrace();
-
-        const inner = addRealContextMenuItem();
-        inner.focus();
-
-        const [overlay] = getOverlays();
-        overlay.resolve(undefined);
-        await expect(dismissed).resolves.toBeUndefined();
-        const shellMenu = addToBody(document.createElement('div'));
-        shellMenu.setAttribute('data-radix-popper-content-wrapper', '');
-        const shellItem = document.createElement('button');
-        shellMenu.appendChild(shellItem);
-        shellItem.focus();
-
-        flushRestoreDecision();
-        expect(windowService.setFocus).not.toHaveBeenCalled();
-      });
-
-      it('restores to the requester when the saved subject is stale and the requester is tracked', async () => {
+      it('returns focus to the requester even when the saved subject names another pane', async () => {
         vi.mocked(windowService.getFocus).mockResolvedValueOnce({
           focusType: 'webView',
           id: 'pane-a',
         });
-        const onFocusChange = vi.mocked(windowService.subscribeFocus).mock.calls.at(-1)?.[1];
-        onFocusChange?.({ focusType: 'webView', id: 'pane-a' });
-
+        framedWebViewIds.add('pane-a');
         const { dismissed } = await openContextMenuPastGrace();
-        // Right-click in the requester's pane: tracked focus moves to it
-        onFocusChange?.({ focusType: 'webView', id: 'test-webview' });
-        emitInput('escape');
 
-        await expect(dismissed).resolves.toBeUndefined();
-        flushRestoreDecision();
+        getOverlays()[0].resolve('ext.cut');
+
+        await dismissed;
+        expect(windowService.setFocus).toHaveBeenCalledTimes(1);
         expect(windowService.setFocus).toHaveBeenCalledWith({
           focusType: 'webView',
           id: 'test-webview',
         });
       });
 
-      it('restores focus after a dismissal while the page body holds focus', async () => {
+      it('returns focus to the requester when the overlay closes before the focus save answers', async () => {
+        const picked = overlayService.showCommandPalette(paletteRequest, 'test-webview');
+
+        getOverlays()[0].resolve('ft');
+
+        await picked;
+        expect(windowService.setFocus).toHaveBeenCalledWith({
+          focusType: 'webView',
+          id: 'test-webview',
+        });
+      });
+    });
+
+    describe('on Escape', () => {
+      it('returns focus when the app-window Escape arrives with focus inside the menu', async () => {
+        const { dismissed } = await openContextMenuPastGrace();
+        focusInsideOverlayContent('contextMenu');
+
+        emitInput('escape');
+
+        await expect(dismissed).resolves.toBeUndefined();
+        expect(windowService.setFocus).toHaveBeenCalledWith({
+          focusType: 'webView',
+          id: 'test-webview',
+        });
+      });
+
+      it('does not return focus when Escape arrives with focus in a web view frame', async () => {
+        const { dismissed } = await openContextMenuPastGrace();
+        focusFrame();
+
+        emitInput('escape');
+
+        await expect(dismissed).resolves.toBeUndefined();
+        expect(windowService.setFocus).not.toHaveBeenCalled();
+      });
+
+      it('does not return focus when Escape arrives with focus on the page body', async () => {
         const { dismissed } = await openContextMenuPastGrace();
         expect(document.activeElement).toBe(document.body);
 
         emitInput('escape');
 
         await expect(dismissed).resolves.toBeUndefined();
-        flushRestoreDecision();
+        expect(windowService.setFocus).not.toHaveBeenCalled();
+      });
+
+      it('returns focus when the menu reports its own Escape (including a submenu) with focus inside', async () => {
+        const { dismissed } = await openContextMenuPastGrace();
+        focusInsideOverlayContent('contextMenu');
+        const [menu] = getOverlays();
+
+        markOverlayFocusReturnIfFocusInside(menu.id);
+        menu.resolve(undefined);
+
+        await expect(dismissed).resolves.toBeUndefined();
         expect(windowService.setFocus).toHaveBeenCalledWith({
           focusType: 'webView',
           id: 'test-webview',
         });
+      });
+
+      it('does not return focus when the menu reports its own Escape with focus outside it', async () => {
+        const { dismissed } = await openContextMenuPastGrace();
+        focusFrame();
+        const [menu] = getOverlays();
+
+        markOverlayFocusReturnIfFocusInside(menu.id);
+        menu.resolve(undefined);
+
+        await expect(dismissed).resolves.toBeUndefined();
+        expect(windowService.setFocus).not.toHaveBeenCalled();
+      });
+
+      it('does not return focus for a close that carries no reason, even with focus inside', async () => {
+        const { dismissed } = await openContextMenuPastGrace();
+        focusInsideOverlayContent('contextMenu');
+
+        getOverlays()[0].resolve(undefined);
+
+        await expect(dismissed).resolves.toBeUndefined();
+        expect(windowService.setFocus).not.toHaveBeenCalled();
+      });
+
+      it('does not return focus after a popover Escape typed elsewhere', async () => {
+        await openPopoverPastGrace();
+        focusFrame();
+
+        emitInput('escape');
+
+        expect(getOverlays()).toHaveLength(0);
+        expect(windowService.setFocus).not.toHaveBeenCalled();
+      });
+
+      it('returns focus after a popover Escape with focus inside the popover', async () => {
+        await openPopoverPastGrace();
+        focusInsideOverlayContent('popover');
+
+        emitInput('escape');
+
+        expect(getOverlays()).toHaveLength(0);
+        expect(windowService.setFocus).toHaveBeenCalledWith({
+          focusType: 'webView',
+          id: 'test-webview',
+        });
+      });
+
+      it('does not return focus after a passive palette Escape', async () => {
+        const { dismissed } = await openPaletteBeyondGrace({ ...paletteRequest, passive: true });
+        focusFrame();
+
+        emitInput('escape');
+
+        await expect(dismissed).resolves.toBeUndefined();
+        expect(windowService.setFocus).not.toHaveBeenCalled();
+      });
+    });
+
+    describe("when the opener's own dismiss closes the overlay", () => {
+      it('returns focus after dismissPopover with focus inside the popover', async () => {
+        const id = await openPopoverPastGrace();
+        focusInsideOverlayContent('popover');
+
+        await overlayService.dismissPopover(id);
+
+        expect(windowService.setFocus).toHaveBeenCalledWith({
+          focusType: 'webView',
+          id: 'test-webview',
+        });
+      });
+
+      it('does not return focus after dismissPopover with focus outside the popover', async () => {
+        const id = await openPopoverPastGrace();
+        focusFrame();
+
+        await overlayService.dismissPopover(id);
+
+        expect(windowService.setFocus).not.toHaveBeenCalled();
+      });
+
+      it('returns focus after dismissCommandPalette with focus inside the palette', async () => {
+        const { dismissed } = await openPaletteBeyondGrace();
+        focusInsideOverlayContent('commandPalette');
+
+        await overlayService.dismissCommandPalette('test-webview');
+
+        await expect(dismissed).resolves.toBeUndefined();
+        expect(windowService.setFocus).toHaveBeenCalledWith({
+          focusType: 'webView',
+          id: 'test-webview',
+        });
+      });
+
+      it('does not return focus after dismissCommandPalette with focus outside the palette', async () => {
+        const { dismissed } = await openPaletteBeyondGrace({ ...paletteRequest, passive: true });
+        focusFrame();
+
+        await overlayService.dismissCommandPalette('test-webview');
+
+        await expect(dismissed).resolves.toBeUndefined();
+        expect(windowService.setFocus).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('when the app loses focus', () => {
+      it('returns focus on a parent window blur with the app deactivated and focus inside', async () => {
+        const { dismissed } = await openContextMenuPastGrace();
+        focusInsideOverlayContent('contextMenu');
+        setAppFocused(false);
+
+        window.dispatchEvent(new Event('blur'));
+
+        await expect(dismissed).resolves.toBeUndefined();
+        expect(windowService.setFocus).toHaveBeenCalledWith({
+          focusType: 'webView',
+          id: 'test-webview',
+        });
+      });
+
+      it('does not return focus on a blur with the app deactivated and focus outside', async () => {
+        const { dismissed } = await openContextMenuPastGrace();
+        focusFrame();
+        setAppFocused(false);
+
+        window.dispatchEvent(new Event('blur'));
+
+        await expect(dismissed).resolves.toBeUndefined();
+        expect(windowService.setFocus).not.toHaveBeenCalled();
+      });
+
+      it('does not return focus on a blur caused by a click into a pane', async () => {
+        const { dismissed } = await openContextMenuPastGrace();
+        focusInsideOverlayContent('contextMenu');
+        setAppFocused(true);
+
+        window.dispatchEvent(new Event('blur'));
+
+        await expect(dismissed).resolves.toBeUndefined();
+        expect(windowService.setFocus).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('when the overlay closes any other way', () => {
+      it('does not return focus after a click-away, even with focus inside the overlay', async () => {
+        const { dismissed } = await openContextMenuPastGrace();
+        focusInsideOverlayContent('contextMenu');
+
+        emitInput('mouseDown');
+
+        await expect(dismissed).resolves.toBeUndefined();
+        expect(windowService.setFocus).not.toHaveBeenCalled();
+      });
+
+      it('does not return focus when the focused tab changes', async () => {
+        const onFocusChange = vi.mocked(windowService.subscribeFocus).mock.calls.at(-1)?.[1];
+        expect(onFocusChange).toBeDefined();
+        onFocusChange?.({ focusType: 'webView', id: 'test-webview' });
+        const { dismissed } = await openContextMenuPastGrace();
+
+        onFocusChange?.({ focusType: 'tab', id: 'other-tab', tabType: 'x' });
+
+        await expect(dismissed).resolves.toBeUndefined();
+        expect(windowService.setFocus).not.toHaveBeenCalled();
+      });
+
+      it('does not return focus when the parent document scrolls', async () => {
+        const { dismissed } = await openContextMenuPastGrace();
+        focusInsideOverlayContent('contextMenu');
+
+        window.dispatchEvent(new Event('scroll'));
+
+        await expect(dismissed).resolves.toBeUndefined();
+        expect(windowService.setFocus).not.toHaveBeenCalled();
+      });
+
+      it('does not return focus when a popover times out', async () => {
+        await openPopoverPastGrace({ ...popoverRequest, dismissAfterMs: 5000 });
+        focusInsideOverlayContent('popover');
+
+        vi.advanceTimersByTime(5000);
+
+        expect(getOverlays()).toHaveLength(0);
+        expect(windowService.setFocus).not.toHaveBeenCalled();
+      });
+
+      it.each([
+        [
+          'context menu',
+          async () => {
+            const { dismissed: first } = await openContextMenuPastGrace();
+            first.catch(() => {});
+            resetDebounceState();
+            const second = overlayService.showContextMenu('ext.testWebView', 'test-webview');
+            second.catch(() => {});
+            await vi.advanceTimersByTimeAsync(0);
+            return { replaced: first };
+          },
+        ],
+        [
+          'popover',
+          async () => {
+            const id = await openPopoverPastGrace();
+            const dismissed = overlayService.onPopoverDismissed(id);
+            dismissed.catch(() => {});
+            resetDebounceState();
+            await overlayService.showPopover(popoverRequest, 'test-webview');
+            return { replaced: dismissed };
+          },
+        ],
+        [
+          'command palette',
+          async () => {
+            const { dismissed: first } = await openPaletteBeyondGrace();
+            first.catch(() => {});
+            resetDebounceState();
+            overlayService.showCommandPalette(paletteRequest, 'test-webview').catch(() => {});
+            return { replaced: first };
+          },
+        ],
+        [
+          'modal dialog',
+          async () => {
+            const { promise } = await openModal('test-webview');
+            resetDebounceState();
+            openModal('test-webview');
+            return { replaced: promise };
+          },
+        ],
+      ])('does not return focus when a %s is replaced', async (_name, replace) => {
+        const { replaced } = await replace();
+
+        await expect(replaced).rejects.toMatchObject({ code: ABORTED });
+        expect(windowService.setFocus).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('modal dialogs', () => {
+      it.each([
+        ['an OK answer', true],
+        ['a Cancel, Escape, close-button or backdrop dismissal', undefined],
+      ])('return focus to the requesting web view after %s', async (_name, answer) => {
+        const { promise, overlay } = await openModal('test-webview');
+
+        overlay.resolve(answer);
+
+        await promise;
+        expect(windowService.setFocus).toHaveBeenCalledWith({
+          focusType: 'webView',
+          id: 'test-webview',
+        });
+      });
+
+      it('return focus to the last focused tab when the dialog service asked', async () => {
+        const onFocusChange = vi.mocked(windowService.subscribeFocus).mock.calls.at(-1)?.[1];
+        onFocusChange?.({ focusType: 'tab', id: 'tab-1', tabType: 'x' });
+        vi.mocked(windowService.getFocus).mockResolvedValueOnce({ focusType: 'other' });
+        const { promise, overlay } = await openModal();
+
+        overlay.resolve(true);
+
+        await promise;
+        expect(windowService.setFocus).toHaveBeenCalledWith({ focusType: 'tab', id: 'tab-1' });
+      });
+
+      it('return focus after the dialog reports an error', async () => {
+        const { promise, overlay } = await openModal('test-webview');
+
+        overlay.reject(newPlatformError('boom'));
+
+        await expect(promise).rejects.toMatchObject({ message: 'boom' });
+        expect(windowService.setFocus).toHaveBeenCalledWith({
+          focusType: 'webView',
+          id: 'test-webview',
+        });
+      });
+
+      it('do not return focus when the window shuts down', async () => {
+        const { promise } = await openModal('test-webview');
+
+        rejectModalDialogOverlaysOnShutdown('closing');
+
+        await expect(promise).rejects.toMatchObject({ code: ABORTED });
+        expect(windowService.setFocus).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('when the requester is gone', () => {
+      it('returns focus to the saved tab', async () => {
+        vi.mocked(windowService.getFocus).mockResolvedValueOnce({
+          focusType: 'tab',
+          id: 'tab-9',
+          tabType: 'x',
+        });
+        framedWebViewIds.clear();
+        const { dismissed } = await openContextMenuPastGrace();
+
+        getOverlays()[0].resolve('ext.cut');
+
+        await dismissed;
+        expect(windowService.setFocus).toHaveBeenCalledWith({ focusType: 'tab', id: 'tab-9' });
+      });
+
+      it('does not return focus when the saved subject is not a tab or web view', async () => {
+        vi.mocked(windowService.getFocus).mockResolvedValueOnce({ focusType: 'other' });
+        framedWebViewIds.clear();
+        const { dismissed } = await openContextMenuPastGrace();
+
+        getOverlays()[0].resolve('ext.cut');
+
+        await dismissed;
+        expect(windowService.setFocus).not.toHaveBeenCalled();
+      });
+
+      it('does not return focus to a saved web view whose frame is gone', async () => {
+        vi.mocked(windowService.getFocus).mockResolvedValueOnce({
+          focusType: 'webView',
+          id: 'pane-a',
+        });
+        framedWebViewIds.clear();
+        const { dismissed } = await openContextMenuPastGrace();
+
+        getOverlays()[0].resolve('ext.cut');
+
+        await dismissed;
+        expect(windowService.setFocus).not.toHaveBeenCalled();
       });
     });
   });

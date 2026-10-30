@@ -9,6 +9,7 @@
 
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { isWindowBlurPress } from '@renderer/services/overlays/window-blur-press.util';
+import { markOverlayFocusReturnIfFocusInside } from '@renderer/services/overlays/overlay-focus-return.util';
 import { resolveAndRemoveOverlay } from '@renderer/services/overlays/overlay-store';
 import { OverlayEntry } from '@renderer/services/overlays/overlay.service-model';
 import {
@@ -92,6 +93,13 @@ export type OverlayContextMenuPresentationalProps = {
   onSelect: (result: OverlayContextMenuResult) => void;
   /** Called when the menu is dismissed without a selection */
   onDismiss: () => void;
+  /**
+   * Called when the user presses Escape in the menu or one of its submenus, just before
+   * {@link onDismiss}. Lets the owner tell an Escape close apart from a click away.
+   *
+   * @experimental This property is unstable and may change or disappear without notice
+   */
+  onEscape?: () => void;
 };
 
 // ── Constants ──
@@ -124,10 +132,12 @@ function HoverableSubmenu({
   label,
   items,
   onSelect,
+  onEscape,
 }: {
   label: string;
   items: OverlayContextMenuItem[];
   onSelect: (result: OverlayContextMenuResult) => void;
+  onEscape?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const openTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -170,10 +180,12 @@ function HoverableSubmenu({
           style={{ zIndex: Z_INDEX_OVERLAY }}
           onPointerEnter={cancelClose}
           onPointerLeave={scheduleClose}
+          // Escape in a submenu closes the whole menu through the root's open state
+          onEscapeKeyDown={() => onEscape?.()}
         >
           {/* renderMenuItems and HoverableSubmenu call each other; forward reference is unavoidable */}
           {/* eslint-disable-next-line no-use-before-define */}
-          {renderMenuItems(items, onSelect)}
+          {renderMenuItems(items, onSelect, onEscape)}
         </DropdownMenuSubContent>
       </DropdownMenuPortal>
     </DropdownMenuSub>
@@ -187,6 +199,7 @@ function HoverableSubmenu({
 function renderMenuItems(
   items: OverlayContextMenuItem[],
   onSelect: (result: OverlayContextMenuResult) => void,
+  onEscape?: () => void,
 ): ReactNode[] {
   const result: ReactNode[] = [];
   let i = 0;
@@ -229,6 +242,7 @@ function renderMenuItems(
           label={typeof item.label === 'string' ? item.label : String(item.label)}
           items={item.items}
           onSelect={onSelect}
+          onEscape={onEscape}
         />,
       );
       i += 1;
@@ -255,6 +269,7 @@ export function OverlayContextMenuPresentational({
   position,
   onSelect,
   onDismiss,
+  onEscape,
 }: OverlayContextMenuPresentationalProps) {
   // React refs passed to DOM elements must be initialized with null, not undefined
   // eslint-disable-next-line no-null/no-null
@@ -295,6 +310,7 @@ export function OverlayContextMenuPresentational({
         align="start"
         side="bottom"
         sideOffset={0}
+        onEscapeKeyDown={() => onEscape?.()}
         // The shared wrappers turn a window blur into an outside press. The overlay
         // service owns blur dismissal for this surface (creation grace period,
         // `dismissOnClickOutside`), so that press is ignored here.
@@ -302,7 +318,7 @@ export function OverlayContextMenuPresentational({
           if (isWindowBlurPress(event.detail.originalEvent)) event.preventDefault();
         }}
       >
-        {renderMenuItems(items, onSelect)}
+        {renderMenuItems(items, onSelect, onEscape)}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -349,12 +365,17 @@ export function OverlayContextMenu({ overlay }: OverlayContextMenuProps) {
     resolveAndRemoveOverlay(overlay.id, overlay.type, undefined);
   }, [overlay]);
 
+  const handleEscape = useCallback(() => {
+    markOverlayFocusReturnIfFocusInside(overlay.id);
+  }, [overlay]);
+
   return (
     <OverlayContextMenuPresentational
       items={localizedItems}
       position={overlay.position}
       onSelect={handleSelect}
       onDismiss={handleDismiss}
+      onEscape={handleEscape}
     />
   );
 }

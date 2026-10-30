@@ -231,6 +231,79 @@ describe('OverlayContextMenuPresentational', () => {
     });
   });
 
+  describe('reporting Escape', () => {
+    it('reports Escape in the menu before it dismisses', () => {
+      const calls: string[] = [];
+
+      render(
+        <OverlayContextMenuPresentational
+          items={[{ type: 'item', id: 'copy', label: 'Copy' }]}
+          position={position}
+          onSelect={vi.fn()}
+          onDismiss={() => calls.push('dismiss')}
+          onEscape={() => calls.push('escape')}
+        />,
+      );
+
+      fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+
+      expect(calls).toEqual(['escape', 'dismiss']);
+    });
+
+    it('reports Escape pressed inside a submenu, which closes the whole menu', () => {
+      const calls: string[] = [];
+
+      render(
+        <OverlayContextMenuPresentational
+          items={[
+            {
+              type: 'submenu',
+              label: 'More',
+              items: [{ type: 'item', id: 'inner', label: 'Inner' }],
+            },
+          ]}
+          position={position}
+          onSelect={vi.fn()}
+          onDismiss={() => calls.push('dismiss')}
+          onEscape={() => calls.push('escape')}
+        />,
+      );
+
+      const trigger = screen.getByRole('menuitem', { name: 'More' });
+      trigger.focus();
+      fireEvent.keyDown(trigger, { key: 'ArrowRight' });
+      const inner = screen.getByRole('menuitem', { name: 'Inner' });
+      fireEvent.keyDown(inner, { key: 'Escape' });
+
+      expect(calls).toEqual(['escape', 'dismiss']);
+    });
+
+    it('does not report an outside press as Escape', async () => {
+      const onEscape = vi.fn();
+      const onDismiss = vi.fn();
+
+      render(
+        <OverlayContextMenuPresentational
+          items={[{ type: 'item', id: 'copy', label: 'Copy' }]}
+          position={position}
+          onSelect={vi.fn()}
+          onDismiss={onDismiss}
+          onEscape={onEscape}
+        />,
+      );
+      await act(async () => {
+        await new Promise((resolve) => {
+          setTimeout(resolve, 20);
+        });
+      });
+
+      fireEvent.pointerDown(document.body);
+
+      expect(onDismiss).toHaveBeenCalled();
+      expect(onEscape).not.toHaveBeenCalled();
+    });
+  });
+
   describe('scale', () => {
     const items: OverlayContextMenuItem[] = [{ type: 'item', id: 'copy', label: 'Copy' }];
 

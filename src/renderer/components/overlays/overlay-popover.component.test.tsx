@@ -2,6 +2,7 @@ import { vi } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { OverlayEntry } from '@renderer/services/overlays/overlay.service-model';
+import { takeOverlayFocusReturnMark } from '@renderer/services/overlays/overlay-focus-return.util';
 import { OverlayPopover, OverlayPopoverPresentational } from './overlay-popover.component';
 
 // The store-connected component resolves LocalizeKeys via useLocalizedStrings; an empty map makes
@@ -220,6 +221,29 @@ describe('OverlayPopoverPresentational', () => {
 
       expect(onDismiss).toHaveBeenCalled();
     });
+
+    it('reports Escape before it dismisses', () => {
+      const calls: string[] = [];
+
+      render(
+        <OverlayPopoverPresentational
+          content={{ type: 'text', body: 'Hello' }}
+          position={position}
+          onDismiss={() => calls.push('dismiss')}
+          onEscape={() => calls.push('escape')}
+        />,
+      );
+
+      const popover = document.querySelector('[data-overlay-popover]');
+      expect(popover).toBeInTheDocument();
+      // querySelector returns Element | null; the expect above guards null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      fireEvent.keyDown(popover as Element, { key: 'Escape' });
+
+      // Radix's document-level Escape listener and the popover's own key handler both report;
+      // reporting is idempotent, so only the order of the first pair matters
+      expect(calls.slice(0, 2)).toEqual(['escape', 'dismiss']);
+    });
   });
 
   describe('sizing and anchoring', () => {
@@ -356,5 +380,18 @@ describe('OverlayPopover (store-connected)', () => {
     // request.anchor is 40x20, drawn at that size.
     expect(anchorStyle.width).toBe('40px');
     expect(anchorStyle.height).toBe('20px');
+  });
+
+  it('marks the overlay for a focus return on Escape, and not on an outside press', () => {
+    const entry = createPopoverEntry();
+    render(<OverlayPopover overlay={entry} />);
+
+    const popover = document.querySelector('[data-overlay-popover]');
+    expect(popover).toBeInTheDocument();
+    // querySelector returns Element | null; the expect above guards null, but TS can't narrow it
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    fireEvent.keyDown(popover as Element, { key: 'Escape' });
+
+    expect(takeOverlayFocusReturnMark(entry.id)).toBe(true);
   });
 });

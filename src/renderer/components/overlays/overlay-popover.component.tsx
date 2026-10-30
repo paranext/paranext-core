@@ -9,6 +9,7 @@
 
 import { Popover as PopoverPrimitive } from 'radix-ui';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { markOverlayFocusReturnIfFocusInside } from '@renderer/services/overlays/overlay-focus-return.util';
 import { resolveAndRemoveOverlay } from '@renderer/services/overlays/overlay-store';
 import {
   OverlayEntry,
@@ -52,6 +53,13 @@ export type OverlayPopoverPresentationalProps = {
   onAction?: (actionId: string) => void;
   /** Called when the popover is dismissed */
   onDismiss: () => void;
+  /**
+   * Called when the user presses Escape in the popover, just before {@link onDismiss}. Lets the
+   * owner tell an Escape close apart from a click away.
+   *
+   * @experimental This property is unstable and may change or disappear without notice
+   */
+  onEscape?: () => void;
 };
 
 // ── Constants ──
@@ -162,6 +170,7 @@ export function OverlayPopoverPresentational({
   showArrow = true,
   onAction,
   onDismiss,
+  onEscape,
 }: OverlayPopoverPresentationalProps) {
   // The caller's own maxWidth/maxHeight fall back to this component's own defaults when unsupplied.
   const resolvedMaxWidth = maxWidth ?? DEFAULT_MAX_WIDTH;
@@ -178,10 +187,11 @@ export function OverlayPopoverPresentational({
     (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
+        onEscape?.();
         onDismiss();
       }
     },
-    [onDismiss],
+    [onDismiss, onEscape],
   );
 
   const handleAction = useCallback(
@@ -224,6 +234,7 @@ export function OverlayPopoverPresentational({
           width: 'auto',
         }}
         onKeyDown={handleKeyDown}
+        onEscapeKeyDown={() => onEscape?.()}
         // The shared wrappers turn a window blur into an outside press. The overlay
         // service owns blur dismissal for this surface (creation grace period,
         // `dismissOnClickOutside`), so that press is ignored here.
@@ -365,6 +376,10 @@ export function OverlayPopover({ overlay }: OverlayPopoverProps) {
     resolveAndRemoveOverlay(overlay.id, overlay.type, undefined);
   }, [overlay]);
 
+  const handleEscape = useCallback(() => {
+    markOverlayFocusReturnIfFocusInside(overlay.id);
+  }, [overlay]);
+
   return (
     <OverlayPopoverPresentational
       content={localizedContent}
@@ -379,6 +394,7 @@ export function OverlayPopover({ overlay }: OverlayPopoverProps) {
       showArrow={overlay.request.showArrow}
       onAction={handleAction}
       onDismiss={handleDismiss}
+      onEscape={handleEscape}
     />
   );
 }
