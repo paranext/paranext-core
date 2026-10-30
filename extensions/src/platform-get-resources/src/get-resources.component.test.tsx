@@ -621,9 +621,11 @@ describe('GetResources language filter', () => {
       ...STRINGS,
       '%getResources_waitingForSync_label%': 'Waiting for sync…',
     };
+    /** The spinning icon `Spinner` renders */
+    const spinnerIn = (container: HTMLElement) => container.querySelector('svg.tw\\:animate-spin');
 
     it('shows the waiting label, not the install spinner, for a resource the sync holds', () => {
-      render(
+      const { container } = render(
         <GetResources
           localizedStringsWithLoadingState={[waitingStrings, false]}
           resources={[heldResource]}
@@ -633,10 +635,11 @@ describe('GetResources language filter', () => {
       );
 
       expect(screen.getByText('Waiting for sync…')).toBeInTheDocument();
+      expect(spinnerIn(container)).toBeNull();
     });
 
     it('shows no waiting label while the action is merely in progress', () => {
-      render(
+      const { container } = render(
         <GetResources
           localizedStringsWithLoadingState={[waitingStrings, false]}
           resources={[heldResource]}
@@ -646,6 +649,8 @@ describe('GetResources language filter', () => {
       );
 
       expect(screen.queryByText('Waiting for sync…')).not.toBeInTheDocument();
+      // The same query finds the spinner of an action in progress
+      expect(spinnerIn(container)).not.toBeNull();
     });
 
     it('shows no waiting label for a resource the user did not click', () => {

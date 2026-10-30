@@ -275,7 +275,9 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const idsBeingHandled = useMemo(() => installInfo.map((info) => info.dblEntryUid), [installInfo]);
 
   // The data provider holds a resource's action until the running sync releases that resource; the
-  // row says so while it waits, then returns to its ordinary progress state.
+  // row says so while it waits, then returns to its ordinary progress state. Hidden case: nothing
+  // to defer or catch up on — the waiting label is data, so a hidden tab shows the current state
+  // when it is next shown.
   const syncActivity = useSyncActivity();
   const idsWaitingForSync = useMemo(
     () => getIdsWaitingForSync(idsBeingHandled, syncActivity.resourceIds),
