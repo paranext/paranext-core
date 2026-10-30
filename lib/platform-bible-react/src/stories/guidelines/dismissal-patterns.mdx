@@ -115,16 +115,17 @@ Dismissal is a keyboard and screen-reader concern, not just a pointer one:
   restore anyway; the wrappers make the outcome the same for all three. Inside a web view focus
   stays where the user put it. `Select` follows the same rule through `SelectContent`. A
   hand-rolled dismissal (a `window` listener that sets your own state) runs *outside* Radix's
-  lifecycle: it must NOT focus the trigger on a blur dismissal, and must call `trigger.focus()` on
-  other dismissals (Escape, a choice) — otherwise keyboard users are stranded on a closed surface's
-  dead anchor. A consumer
-  `onCloseAutoFocus` that calls `preventDefault()` and then focuses something explicitly bypasses
-  the rule, so it must gate that focus call with `shouldSuppressFocusReturn` (exported by this
-  library, together with `isRunningInWebView`). Restoring focus is not the same as showing a
-  focus ring: after a close the user drove with the pointer, the ring would sit on a control the
-  pointer has left. Suppress the ring for that case rather than withholding the focus — see
-  `TabDropdownMenu`, which marks its trigger with `data-quiet-focus` and clears the mark on the next
-  keydown. The ring stays under forced colors (Windows High Contrast), where it is the only focus
+  lifecycle: it must not focus the trigger on a blur dismissal in a web view, or when the active
+  element is an iframe (`shouldSuppressFocusReturn`); in the main document after an OS-level
+  deactivation it should return focus to the trigger, as the shared wrappers do. It must call
+  `trigger.focus()` on other dismissals (Escape, a choice) — otherwise keyboard users are stranded
+  on a closed surface's dead anchor. A consumer `onCloseAutoFocus` that calls `preventDefault()`
+  and then focuses something explicitly bypasses the rule, so it must gate that focus call with
+  `shouldSuppressFocusReturn` (exported by this library, together with `isRunningInWebView`).
+  Restoring focus is not the same as showing a focus ring: after a close the user drove with the
+  pointer, the ring would sit on a control the pointer has left. Suppress the ring for that case
+  rather than withholding the focus — see `TabDropdownMenu`, which marks its trigger with
+  `data-quiet-focus` and clears the mark on the next keydown. The ring stays under forced colors (Windows High Contrast), where it is the only focus
   indicator left. For why the browser's own "focus without the indicator" option is not usable here,
   see the `adr-menu-close-focus-restores-without-the-ring` entry in
   `.context/standards/Architecture-Decisions.md`. The helpers behind this (`QUIET_FOCUS_*`,
