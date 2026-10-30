@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom';
 import {
   Menubar,
@@ -82,5 +82,70 @@ describe('MenubarContent window blur', () => {
     blurWindow();
 
     expect(screen.getByRole('menu')).toBeInTheDocument();
+  });
+});
+
+describe('MenubarContent focus after dismissal', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    Reflect.deleteProperty(document, 'activeElement');
+    document.querySelectorAll('iframe').forEach((iframe) => iframe.remove());
+  });
+
+  function renderMenubar() {
+    render(
+      <Menubar>
+        <MenubarMenu>
+          <MenubarTrigger>file</MenubarTrigger>
+          <MenubarContent>
+            <MenubarItem>item</MenubarItem>
+          </MenubarContent>
+        </MenubarMenu>
+      </Menubar>,
+    );
+  }
+
+  async function waitForCloseAutoFocus() {
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+    // Let FocusScope's own zero-delay close-auto-focus timer run before asserting
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  }
+
+  it('returns focus to the trigger after an alt-tab close in the main document', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    renderMenubar();
+    const trigger = screen.getByText('file');
+    await user.click(trigger);
+    expect(await screen.findByRole('menu')).toBeInTheDocument();
+    expect(document.activeElement).not.toBe(trigger);
+
+    // The OS window was deactivated: the main document no longer has focus
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    blurWindow();
+
+    await waitForCloseAutoFocus();
+    expect(screen.getByText('file')).toHaveFocus();
+  });
+
+  it('leaves focus on an iframe the user clicked into', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    renderMenubar();
+    const trigger = screen.getByText('file');
+    await user.click(trigger);
+    expect(await screen.findByRole('menu')).toBeInTheDocument();
+    expect(document.activeElement).not.toBe(trigger);
+    const iframe = document.createElement('iframe');
+    document.body.appendChild(iframe);
+    Object.defineProperty(document, 'activeElement', { configurable: true, get: () => iframe });
+    const focusSpy = vi.spyOn(trigger, 'focus');
+
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    blurWindow();
+
+    await waitForCloseAutoFocus();
+    expect(focusSpy).not.toHaveBeenCalled();
   });
 });

@@ -267,6 +267,31 @@ describe('PopoverContent focus after dismissal', () => {
     expect(document.activeElement).not.toBe(screen.getByText('open'));
   });
 
+  it('returns focus to the trigger of a non-modal popover after an alt-tab close in the main document', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <Popover>
+        <PopoverTrigger>open</PopoverTrigger>
+        <PopoverContent>body</PopoverContent>
+      </Popover>,
+    );
+    const trigger = screen.getByText('open');
+    await user.click(trigger);
+    expect(await screen.findByText('body')).toBeInTheDocument();
+    expect(document.activeElement).not.toBe(trigger);
+
+    // The OS window was deactivated: the main document no longer has focus
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    blurWindow();
+
+    await waitFor(() => expect(screen.queryByText('body')).not.toBeInTheDocument());
+    // Let FocusScope's own zero-delay close-auto-focus timer run before asserting
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    expect(screen.getByText('open')).toHaveFocus();
+  });
+
   it('returns focus to the trigger after Escape', async () => {
     // jsdom reports no document focus by default; a browser tab the user is working in has it
     vi.spyOn(document, 'hasFocus').mockReturnValue(true);

@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
-import { render } from '@testing-library/react';
-import { createRef, Ref } from 'react';
+import { render, screen } from '@testing-library/react';
+import { createRef, ReactNode, Ref } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import '@testing-library/jest-dom';
 import {
   isRunningInWebView,
   shouldSuppressFocusReturn,
@@ -198,9 +199,45 @@ describe('useDismissOnWindowBlur', () => {
       document.querySelectorAll('iframe').forEach((iframe) => iframe.remove());
     });
 
+    /**
+     * Renders `trigger` beside a `<section>` holding the content element that carries the hook's
+     * ref, so the handler can look the trigger up from the content the way a Radix surface sees
+     * it.
+     */
+    function renderTriggeredProbe(
+      trigger: ReactNode = (
+        <button type="button" aria-controls="c">
+          trigger
+        </button>
+      ),
+      content: { id?: string; labelledBy?: string; children?: ReactNode } = { id: 'c' },
+    ) {
+      let handler: ((event: Event) => void) | undefined;
+      function Probe({ triggerMarkup }: { triggerMarkup: ReactNode }) {
+        const blurDismissal = useDismissOnWindowBlur<HTMLDivElement>({});
+        handler = blurDismissal.onCloseAutoFocus;
+        return (
+          <>
+            {triggerMarkup}
+            <section>
+              <div id={content.id} aria-labelledby={content.labelledBy} ref={blurDismissal.ref}>
+                {content.children}
+              </div>
+            </section>
+          </>
+        );
+      }
+      const { rerender } = render(<Probe triggerMarkup={trigger} />);
+      return {
+        onCloseAutoFocus: (event: Event) => handler?.(event),
+        rerenderTrigger: (nextTrigger: ReactNode) =>
+          rerender(<Probe triggerMarkup={nextTrigger} />),
+      };
+    }
+
     // The main document is its own top window, so an unfocused document there means the OS window
     // was deactivated
-    it('restores focus in the main document even when the document is not focused', () => {
+    it("leaves Radix's default alone when no trigger controls the content", () => {
       vi.spyOn(document, 'hasFocus').mockReturnValue(false);
       expect(isRunningInWebView()).toBe(false);
       const onCloseAutoFocus = renderProbe();
@@ -250,6 +287,136 @@ describe('useDismissOnWindowBlur', () => {
       // Only the caller's call: the hook sees the default already prevented and leaves it alone
       expect(preventDefault).toHaveBeenCalledTimes(1);
       expect(event.defaultPrevented).toBe(true);
+    });
+
+    it('restores focus to the trigger whose aria-controls names the content, in an unfocused main document', () => {
+      const { onCloseAutoFocus } = renderTriggeredProbe();
+      const button = screen.getByRole('button', { name: 'trigger' });
+      expect(button).not.toHaveFocus();
+      vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+
+      const event = cancelable();
+      onCloseAutoFocus(event);
+
+      expect(button).toHaveFocus();
+      expect(event.defaultPrevented).toBe(true);
+    });
+
+    it("falls back to the element the content's aria-labelledby names", () => {
+      const { onCloseAutoFocus } = renderTriggeredProbe(
+        <button type="button" id="t">
+          trigger
+        </button>,
+        { labelledBy: 't' },
+      );
+      const button = screen.getByRole('button', { name: 'trigger' });
+      expect(button).not.toHaveFocus();
+      vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+
+      const event = cancelable();
+      onCloseAutoFocus(event);
+
+      expect(button).toHaveFocus();
+      expect(event.defaultPrevented).toBe(true);
+    });
+
+    it('ignores an aria-labelledby that names an element inside the content', () => {
+      const { onCloseAutoFocus } = renderTriggeredProbe(undefined, {
+        labelledBy: 'h',
+        children: <span id="h" tabIndex={-1} />,
+      });
+      vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+
+      const event = cancelable();
+      onCloseAutoFocus(event);
+
+      expect(document.activeElement).toBe(document.body);
+      expect(event.defaultPrevented).toBe(false);
+    });
+
+    it('does not match an empty aria-controls when the content has no id', () => {
+      const { onCloseAutoFocus } = renderTriggeredProbe(
+        <button type="button" aria-controls="">
+          trigger
+        </button>,
+        {},
+      );
+      vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+
+      const event = cancelable();
+      onCloseAutoFocus(event);
+
+      expect(screen.getByRole('button', { name: 'trigger' })).not.toHaveFocus();
+      expect(event.defaultPrevented).toBe(false);
+    });
+
+    it('does not take focus from an element the user focused elsewhere', () => {
+      const { onCloseAutoFocus } = renderTriggeredProbe(
+        <>
+          <button type="button" aria-controls="c">
+            trigger
+          </button>
+          <input aria-label="elsewhere" />
+        </>,
+      );
+      const input = screen.getByRole('textbox', { name: 'elsewhere' });
+      input.focus();
+      vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+
+      const event = cancelable();
+      onCloseAutoFocus(event);
+
+      expect(input).toHaveFocus();
+      expect(event.defaultPrevented).toBe(false);
+    });
+
+    it('finds a trigger that was replaced after the content attached', () => {
+      const triggerWithKey = (key: string) => (
+        <button key={key} type="button" aria-controls="c">
+          trigger
+        </button>
+      );
+      const { onCloseAutoFocus, rerenderTrigger } = renderTriggeredProbe(triggerWithKey('first'));
+      const firstButton = screen.getByRole('button', { name: 'trigger' });
+      rerenderTrigger(triggerWithKey('second'));
+      const secondButton = screen.getByRole('button', { name: 'trigger' });
+      expect(secondButton).not.toBe(firstButton);
+      expect(secondButton).not.toHaveFocus();
+      vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+
+      const event = cancelable();
+      onCloseAutoFocus(event);
+
+      expect(secondButton).toHaveFocus();
+      expect(event.defaultPrevented).toBe(true);
+    });
+
+    it('restores nothing inside a web view', () => {
+      // A web view's `top` is its host window, not itself; the hook reads it once, on mount
+      vi.stubGlobal('top', {});
+      const { onCloseAutoFocus } = renderTriggeredProbe();
+      vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+
+      const event = cancelable();
+      onCloseAutoFocus(event);
+
+      expect(screen.getByRole('button', { name: 'trigger' })).not.toHaveFocus();
+      expect(event.defaultPrevented).toBe(true);
+    });
+
+    it('does not focus a trigger that is no longer in the document', () => {
+      const { onCloseAutoFocus, rerenderTrigger } = renderTriggeredProbe();
+      const button = screen.getByRole('button', { name: 'trigger' });
+      // Removed through React, which would otherwise fail to unmount a node taken out behind its back
+      rerenderTrigger(undefined);
+      expect(button.isConnected).toBe(false);
+      vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+
+      const event = cancelable();
+      onCloseAutoFocus(event);
+
+      expect(document.activeElement).toBe(document.body);
+      expect(event.defaultPrevented).toBe(false);
     });
   });
 });

@@ -1300,6 +1300,7 @@ export function BookChapterControl({
           variant={triggerVariant}
           role="combobox"
           aria-expanded={isCommandOpen}
+          {...(id !== undefined ? { 'aria-controls': id } : {})}
           disabled={disabled}
           // `tw:shrink` overrides the `tw:shrink-0` in the shadcn Button base, and it is what makes
           // the abbreviation ladder above worth anything: `tw:w-full` gives this a flex base of the
@@ -1345,7 +1346,11 @@ export function BookChapterControl({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        id={id}
+        // Radix names the content by its own id and puts that id in the trigger's `aria-controls`.
+        // The content id and the trigger's `aria-controls` must agree (assistive technology and the
+        // window-blur focus return both follow the link), so a given id is applied to both, and
+        // only when one is given.
+        {...(id !== undefined ? { id } : {})}
         forceMount
         className="tw:w-[280px] tw:p-0"
         align={align}
