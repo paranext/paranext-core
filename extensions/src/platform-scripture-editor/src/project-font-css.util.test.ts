@@ -1,7 +1,7 @@
 import { generateUsjCss } from '@eten-tech-foundation/platform-editor';
 import type { MarkerStyleInfo, StyleInfo } from '@eten-tech-foundation/platform-editor';
 import { describe, expect, it } from 'vitest';
-import { generateProjectFontCss } from './project-font-css.util';
+import { FOOTNOTE_ROWS_SELECTOR, generateProjectFontCss } from './project-font-css.util';
 
 const FALLBACK = 'var(--usj-font-fallback, serif)';
 const SCOPE = '.editor-input.usfm';
@@ -43,6 +43,23 @@ describe('generateProjectFontCss', () => {
     expect(generateProjectFontCss(styleInfo({ defaultFontSize: 12 }))).toBe(
       `${SCOPE} { font-size: 12pt; }`,
     );
+  });
+
+  it('scopes base and marker rules to a given container', () => {
+    const css = generateProjectFontCss(
+      styleInfo({
+        defaultFont: 'Ezra SIL',
+        defaultFontSize: 14,
+        markers: { ft: marker('ft', { fontName: 'Noto', bold: true }) },
+      }),
+      { containerSelector: FOOTNOTE_ROWS_SELECTOR },
+    );
+    expect(css).toBe(
+      `${FOOTNOTE_ROWS_SELECTOR} { font-family: "Ezra SIL", ${FALLBACK}; font-size: 14pt; }\n` +
+        `${FOOTNOTE_ROWS_SELECTOR} .usfm_ft { font-family: "Noto", "Ezra SIL", ${FALLBACK}; }`,
+    );
+    expect(css).not.toContain('.editor-input');
+    expect(css).not.toContain('bold');
   });
 
   it('escapes quotes and backslashes in font names', () => {

@@ -1,7 +1,19 @@
 import type { StyleInfo } from '@eten-tech-foundation/platform-editor';
 
-/** Scope the project stylesheet package uses: the editor's content element carries both classes. */
+/**
+ * Default scope, the one the project stylesheet package uses: the editor's content element carries
+ * both classes.
+ */
 const CONTAINER_SELECTOR = '.editor-input.usfm';
+
+/**
+ * Scope for the footnotes pane's read-only rows: the rows of the pane's list, never the row being
+ * edited (the editor in that row has its own project sheet) and never the main editor. It targets
+ * each row's `<li>` because that element carries the platform's `scripture-font` family, which
+ * would beat anything inherited from the list.
+ */
+export const FOOTNOTE_ROWS_SELECTOR =
+  "[data-footnotes-pane] .formatted-font > li:not([data-state='editing'])";
 
 /**
  * Font fallbacks after a project font. `--usj-font-fallback` is defined on `.usfm` in
@@ -11,8 +23,8 @@ const CONTAINER_SELECTOR = '.editor-input.usfm';
  */
 const FONT_FALLBACK = 'var(--usj-font-fallback, serif)';
 
-// TODO(PT-4974): Use the editor package's generateUsjFontCss and delete this file. Until then the
-// parity tests in project-font-css.util.test.ts pin this output to generateUsjCss.
+// TODO(PT-4974): Use the editor package's generateUsjFontCss({ containerSelector }) for both the
+// editor scope and the footnote rows scope, and delete this file. Until then the parity tests in project-font-css.util.test.ts pin this output to generateUsjCss.
 
 /** Escape a value for a double-quoted CSS string. */
 function escapeCssString(value: string): string {
@@ -49,11 +61,16 @@ function fontFamilyDeclaration(fontName: string, projectDefaultFont?: string): s
  * deliberately left out.
  *
  * @param styleInfo Project stylesheet info, or `undefined` when not loaded
+ * @param options.containerSelector Selector every rule is scoped under; defaults to the editor's
+ *   content element. Pass only module constants: the value is written into the sheet unescaped.
  * @returns CSS text, empty when there is nothing to emit
  */
-export function generateProjectFontCss(styleInfo: StyleInfo | undefined): string {
+export function generateProjectFontCss(
+  styleInfo: StyleInfo | undefined,
+  options?: { containerSelector?: string },
+): string {
   if (!styleInfo) return '';
-  const scope = CONTAINER_SELECTOR;
+  const scope = options?.containerSelector ?? CONTAINER_SELECTOR;
   const rules: string[] = [];
 
   const baseDeclarations: string[] = [];
