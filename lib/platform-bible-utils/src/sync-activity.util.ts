@@ -64,8 +64,8 @@ export type SyncActivity = {
 /**
  * Whether a value read from the wire is a usable sync-activity snapshot. Checked rather than
  * trusted: the payload comes from another process, and a build may send another shape. `isSyncing`
- * must be a boolean; `projectIds` may be absent, `undefined`, `null` or a list of strings, and
- * anything else makes the whole snapshot unusable.
+ * must be a boolean; `projectIds` and `resourceIds` may each be absent, `undefined`, `null` or a
+ * list of strings, and anything else makes the whole snapshot unusable.
  *
  * @param value The raw payload of the command or event
  * @returns `true` if the value is a {@link SyncActivityValue}
@@ -74,11 +74,18 @@ export type SyncActivity = {
 export function isSyncActivitySnapshot(value: unknown): value is SyncActivityValue {
   if (typeof value !== 'object' || !value) return false;
   if (!('isSyncing' in value) || typeof value.isSyncing !== 'boolean') return false;
+  return (
+    isOptionalStringList('projectIds' in value ? value.projectIds : undefined) &&
+    isOptionalStringList('resourceIds' in value ? value.resourceIds : undefined)
+  );
+}
+
+/** Whether a wire value is absent, `undefined`, `null` or a list of strings */
+function isOptionalStringList(list: unknown): boolean {
   // The wire may send null for an absent list, so null has to be compared against
   // eslint-disable-next-line no-null/no-null
-  if (!('projectIds' in value) || value.projectIds === undefined || value.projectIds === null)
-    return true;
-  return Array.isArray(value.projectIds) && value.projectIds.every((id) => typeof id === 'string');
+  if (list === undefined || list === null) return true;
+  return Array.isArray(list) && list.every((id) => typeof id === 'string');
 }
 
 /**
