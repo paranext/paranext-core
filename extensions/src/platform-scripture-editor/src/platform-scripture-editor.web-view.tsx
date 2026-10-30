@@ -97,7 +97,6 @@ import {
   isLocalizeKey,
   isPlatformError,
   LocalizeKey,
-  MenuItemContainingCommand,
   serialize,
 } from 'platform-bible-utils';
 import {
@@ -163,7 +162,6 @@ import {
   type EditMenuActionCommand,
   handleEditMenuCommand,
   isEditMenuCommand,
-  shouldMenuReturnFocusAfterEditCommand,
 } from './edit-menu-actions.util';
 import { createFlushableDebouncer } from './flushable-debouncer.util';
 import {
@@ -2193,16 +2191,6 @@ function PlatformScriptureEditor({
       localizedStrings,
       notifySyncEditBlocked,
     ],
-  );
-
-  /** The Project menu's `shouldProjectMenuReturnFocusOnSelect`, read at the moment of the select */
-  const shouldProjectMenuReturnFocusOnSelect = useCallback(
-    (item: MenuItemContainingCommand) =>
-      shouldMenuReturnFocusAfterEditCommand(item.command, {
-        hasEditor: !!editorRef.current,
-        isReadOnly: isReadOnlyEffective,
-      }),
-    [isReadOnlyEffective],
   );
 
   // listen to messages from the web view controller
@@ -5618,7 +5606,6 @@ function PlatformScriptureEditor({
     >
       <TabToolbar
         onSelectProjectMenuItem={menuCommandHandler}
-        shouldProjectMenuReturnFocusOnSelect={shouldProjectMenuReturnFocusOnSelect}
         onSelectViewInfoMenuItem={menuCommandHandler}
         projectMenuData={projectMenuData}
         className={[

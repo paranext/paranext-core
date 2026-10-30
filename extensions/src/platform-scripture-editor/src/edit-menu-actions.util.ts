@@ -30,24 +30,6 @@ export function isEditMenuCommand(command: string): command is EditMenuCommand {
 }
 
 /**
- * Whether the Project menu should hand focus back to its trigger as it closes after `command` was
- * selected. Not after Cut, Copy or Paste on an editable editor: {@link handleEditMenuCommand}
- * returns focus to the editor's text itself, and a return arriving after that would take it from
- * the text — and a native paste the editor has already asked for would land on the trigger. With no
- * editor, or a read-only one whose root cannot take focus, the menu keeps its own return, or focus
- * would end on nothing.
- *
- * @param command The command of the menu item that was selected
- * @param editor Whether an editor is loaded, and whether it is read-only
- */
-export function shouldMenuReturnFocusAfterEditCommand(
-  command: string,
-  { hasEditor, isReadOnly }: { hasEditor: boolean; isReadOnly: boolean },
-): boolean {
-  return !(isEditMenuCommand(command) && hasEditor && !isReadOnly);
-}
-
-/**
  * Runs an Edit flyout action on the editor. For Cut, Copy and Paste, call it synchronously from the
  * menu's select handler: the clipboard is only reachable while the click still counts as user
  * activation. Undo and Redo also arrive from a command message, where there is no click to keep.
@@ -153,8 +135,6 @@ export function handleEditMenuCommand<TEditor extends EditMenuTarget>(
   } catch (e) {
     effects.onActionError(e);
   }
-  // Return focus to the text from wherever the menu left it: its trigger, or nowhere after Cut, Copy
-  // or Paste. A Paste waits for focus to come back before asking the host to paste, since the host
-  // pastes into whatever has focus.
+  // The menu hands focus back to its trigger as it closes; return it to the text
   effects.focusEditor();
 }
