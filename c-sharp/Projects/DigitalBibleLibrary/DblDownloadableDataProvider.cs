@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Paranext.DataProvider.NetworkObjects.Documentation;
 using Paranext.DataProvider.ParatextUtils;
+using Paranext.DataProvider.Projects.SendReceive;
 using Paranext.DataProvider.Services;
 using Paranext.DataProvider.Users;
 using Paratext.Data;
@@ -715,14 +716,25 @@ internal class DblResourcesDataProvider(
     }
 
     /// <summary>
-    /// Try to install DBL resource with specified DBL id
+    /// Try to install DBL resource with specified DBL id. Waits first while a running sync is
+    /// updating the same resource (see <see cref="SyncRunResourceGuard"/>).
     /// </summary>
     [NetworkTimeout(DBL_NETWORK_TIMEOUT)]
-    private Task InstallDblResource(string DBLEntryUid) =>
+    internal Task InstallDblResource(string DBLEntryUid) =>
         // Run the blocking Install()/RefreshScrTexts() on a background thread so the reading loop
         // stays responsive; the lock keeps it from overlapping a fetch or an uninstall.
         Task.Run(() =>
         {
+            // Before taking _providerGate, never inside it: a wait that can last a whole sync run
+            // must not hold up the fetches, uninstalls and other installs that need the gate.
+            if (!SyncRunResourceGuard.WaitIfHeld(DBLEntryUid))
+                // Installing is idempotent and _providerGate still serializes provider work, so a
+                // run that outlived the wait (most likely one whose end was never signalled) is
+                // better answered by installing than by failing a request the user still wants.
+                Console.WriteLine(
+                    $"Warning: gave up after {SyncRunResourceGuard.WaitTimeout} waiting for a sync to finish updating DBL resource {DBLEntryUid}; installing anyway."
+                );
+
             lock (_providerGate)
             {
                 EnsureResourcesLoadedCore();

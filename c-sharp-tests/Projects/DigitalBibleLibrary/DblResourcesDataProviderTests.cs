@@ -3,6 +3,7 @@ using System.Text.Json;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Projects.DigitalBibleLibrary;
+using Paranext.DataProvider.Projects.SendReceive;
 using Paratext.Data;
 using Paratext.Data.Archiving;
 using PtxUtils;
@@ -810,5 +811,109 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
                 Does.Contain("non-fatal warning during a successful fetch")
             );
         }
+
+        #region Waiting for a sync that updates the same resource
+
+        // The guard is process-wide; end any run a test left open so it cannot hold the next test.
+        [TearDown]
+        public void EndSyncRunResourceGuardRun() => SyncRunResourceGuard.ResetForTests();
+
+        private static readonly TimeSpan s_stillBlockedWindow = TimeSpan.FromMilliseconds(300);
+        private static readonly TimeSpan s_shouldFinishBound = TimeSpan.FromSeconds(10);
+
+        /// <summary>
+        /// A provider whose catalog holds one installed, up-to-date resource, so an install of it
+        /// succeeds without touching the DBL or the disk.
+        /// </summary>
+        private DblResourcesDataProvider ProviderWithInstalledResource(ScrText existing) =>
+            new(Client, ParatextProjects, () => [UpToDateResource(WhitelistedUid, existing)]);
+
+        private static async Task<bool> FinishesWithin(Task task, TimeSpan bound) =>
+            await Task.WhenAny(task, Task.Delay(bound)) == task;
+
+        [Test]
+        public async Task InstallDblResource_WaitsForARunningSyncThatUpdatesTheResource()
+        {
+            using DummyScrText existing = new();
+            var provider = ProviderWithInstalledResource(existing);
+            var run = SyncRunResourceGuard.BeginRun([WhitelistedUid]);
+
+            var install = provider.InstallDblResource(WhitelistedUid);
+
+            Assert.That(
+                await FinishesWithin(install, s_stillBlockedWindow),
+                Is.False,
+                "the install must wait while the sync run holds the resource"
+            );
+
+            run.Dispose();
+
+            Assert.That(
+                await FinishesWithin(install, s_shouldFinishBound),
+                Is.True,
+                "the install must proceed once the run ends"
+            );
+            await install; // surfaces a fault, so "finished" cannot mean "failed"
+        }
+
+        [Test]
+        public async Task InstallDblResource_DoesNotWaitForARunThatUpdatesOtherResources()
+        {
+            using DummyScrText existing = new();
+            var provider = ProviderWithInstalledResource(existing);
+            using var run = SyncRunResourceGuard.BeginRun(["6c21e835eb8ca3b2"]);
+
+            var install = provider.InstallDblResource(WhitelistedUid);
+
+            Assert.That(await FinishesWithin(install, s_shouldFinishBound), Is.True);
+            await install;
+        }
+
+        [Test]
+        public async Task InstallDblResource_AWaitingInstallDoesNotBlockOtherResourceOperations()
+        {
+            using DummyScrText existing = new();
+            var provider = ProviderWithInstalledResource(existing);
+            using var run = SyncRunResourceGuard.BeginRun([WhitelistedUid]);
+            var install = provider.InstallDblResource(WhitelistedUid);
+            Assert.That(await FinishesWithin(install, s_stillBlockedWindow), Is.False);
+
+            // GetDblResources takes the provider's lock, so it finishes only if the waiting install
+            // is not holding that lock while it waits.
+            var list = provider.GetDblResources(default);
+
+            Assert.That(await FinishesWithin(list, s_shouldFinishBound), Is.True);
+            Assert.That(install.IsCompleted, Is.False, "the install is still waiting for the run");
+        }
+
+        [Test]
+        public async Task InstallDblResource_ProceedsWithAWarningWhenTheWaitTimesOut()
+        {
+            using DummyScrText existing = new();
+            var provider = ProviderWithInstalledResource(existing);
+            SyncRunResourceGuard.WaitTimeout = TimeSpan.FromMilliseconds(50);
+            using var run = SyncRunResourceGuard.BeginRun([WhitelistedUid]);
+
+            using var output = new StringWriter();
+            TextWriter previousOut = Console.Out;
+            Console.SetOut(output);
+            try
+            {
+                var install = provider.InstallDblResource(WhitelistedUid);
+                Assert.That(await FinishesWithin(install, s_shouldFinishBound), Is.True);
+                await install;
+            }
+            finally
+            {
+                Console.SetOut(previousOut);
+            }
+
+            Assert.That(
+                output.ToString(),
+                Does.Contain(WhitelistedUid).And.Contain("installing anyway")
+            );
+        }
+
+        #endregion
     }
 }
