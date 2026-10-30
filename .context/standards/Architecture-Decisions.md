@@ -3728,8 +3728,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   The user decided that a Power user who switches to Simple has already set the app up, so with
   internet on and a valid registration they go straight to the Sync step rather than repeating
   setup. Requiring the current internet setting and registration, not only what was once saved, is
-  deliberate: a user whose sync failed and whose internet then read as off must be sent to the step
-  that fixes it, not to a Sync step that errors. The surrounding first-sync gate is
+  deliberate: an unfinished setup whose sync failed and whose internet then read as off must be sent
+  to the step that fixes it, not to a Sync step that errors; a finished one goes to the app (see
+  `adr-first-sync-state-recorded-by-backend`). The surrounding first-sync gate is
   `adr-first-sync-state-recorded-by-backend`.
 
 ## adr-first-run-sync-consent: Sync consent is enforced per sync trigger, never by one global gate

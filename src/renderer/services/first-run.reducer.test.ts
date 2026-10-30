@@ -97,7 +97,7 @@ describe('decideFirstRun', () => {
 
     // The earlier steps can trap a finished user: the internet step's only way forward turns
     // internet on, and Identify needs a valid registration. Automatic syncs stay gated meanwhile.
-    it.each(['valid', 'invalid'] as const)(
+    it.each(['valid', 'invalid', 'unknown'] as const)(
       'shows the app to a completed first run that cannot sync now (registration %s)',
       (registrationValidity) => {
         expect(
@@ -144,14 +144,13 @@ describe('decideFirstRun', () => {
       ).toEqual({ action: 'showApp' });
     });
 
-    it('waits for registration when the first sync is required but validity is unknown', () => {
+    it('waits for registration when an unfinished first run requires a first sync but validity is unknown', () => {
       expect(
         decideFirstRun(
           facts({
-            firstRunComplete: true,
             firstSyncRequired: true,
             sendReceiveAvailable: true,
-            canSyncNow: true,
+            canSyncNow: false,
             registrationValidity: 'unknown',
           }),
         ),
