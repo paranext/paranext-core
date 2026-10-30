@@ -619,7 +619,7 @@ describe('GetResources language filter', () => {
     };
     const waitingStrings = {
       ...STRINGS,
-      '%getResources_waitingForSync_label%': 'Waiting for sync…',
+      '%resources_waitingForSync_label%': 'Waiting for sync…',
     };
     /** The spinning icon `Spinner` renders */
     const spinnerIn = (container: HTMLElement) => container.querySelector('svg.tw\\:animate-spin');

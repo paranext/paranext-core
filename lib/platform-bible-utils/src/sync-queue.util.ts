@@ -6,6 +6,16 @@
  */
 
 /**
+ * Ends the message of a `paratextBibleSendReceive.requestSync` rejection for a request that never
+ * ran because it was removed from the sync queue, or dropped when the queue was disposed at quit.
+ * An error that crosses papi arrives as a plain error carrying only its message, so this stable
+ * token is how a caller recognizes that outcome.
+ *
+ * @experimental This is unstable and may change or disappear without notice
+ */
+export const SYNC_REQUEST_REMOVED_MARKER = ' (SR_REMOVED)';
+
+/**
  * The part of a sync-queue snapshot a consumer relies on, as it arrives on the wire.
  * `waitingProjectIds` may be absent or `null`; both mean "no project is waiting".
  *

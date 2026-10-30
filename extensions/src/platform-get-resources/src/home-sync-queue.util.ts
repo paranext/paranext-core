@@ -1,4 +1,5 @@
 import { getErrorMessage, normalizeProjectId } from 'platform-bible-utils';
+import { SYNC_REQUEST_REMOVED_MARKER } from 'platform-bible-utils/experimental';
 
 /**
  * What a Home row's Get/Sync action shows: `running` shows the spinner, `waiting` shows the button
@@ -27,12 +28,6 @@ export function getRowSyncState(
 }
 
 /**
- * The marker the Send/Receive extension puts in the message of a `requestSync` rejection when the
- * request was taken out of the sync queue before it ran (by the user, or dropped at quit).
- */
-const SYNC_REQUEST_REMOVED_REGEX = /\(SR_REMOVED\)/;
-
-/**
  * Whether a `paratextBibleSendReceive.requestSync` rejection only says the request was taken out of
  * the queue. That is the outcome of a user action, not a failure to report.
  *
@@ -40,5 +35,5 @@ const SYNC_REQUEST_REMOVED_REGEX = /\(SR_REMOVED\)/;
  * @returns `true` if the rejection carries the removed-from-queue marker
  */
 export function isSyncRequestRemovedError(error: unknown): boolean {
-  return SYNC_REQUEST_REMOVED_REGEX.test(getErrorMessage(error));
+  return getErrorMessage(error).includes(SYNC_REQUEST_REMOVED_MARKER);
 }

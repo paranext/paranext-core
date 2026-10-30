@@ -49,6 +49,7 @@ import {
   UsjReaderWriter,
   UsjTextContentLocation,
 } from 'platform-bible-utils';
+import { SYNC_REQUEST_REMOVED_MARKER } from 'platform-bible-utils/experimental';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import type { ScriptureEditorViewType, ScriptureRange } from 'platform-scripture-editor';
 import type { SharedProjectsInfo } from 'platform-scripture';
@@ -2070,9 +2071,9 @@ export function isCommandNotRegisteredError(error: unknown, command: string): bo
 /**
  * Asks the Send/Receive extension's sync queue to sync `projectIds` as an automatic sync. Falls
  * back to `directSync` once when the queue's command is not registered (the extension is absent). A
- * request that was taken out of the queue before it ran (`(SR_REMOVED)`: the user removed it, or it
- * was dropped at quit) is not a failure and only logs at info. Any other rejection is rethrown for
- * the caller to report.
+ * request that was taken out of the queue before it ran (`SYNC_REQUEST_REMOVED_MARKER`: the user
+ * removed it, or it was dropped at quit) is not a failure and only logs at info. Any other
+ * rejection is rethrown for the caller to report.
  */
 async function requestAutoSync(
   papi: typeof PapiBackend,
@@ -2083,7 +2084,7 @@ async function requestAutoSync(
   try {
     await papi.commands.sendCommand(REQUEST_SYNC_COMMAND, projectIds, 'autoSync', options);
   } catch (e) {
-    if (getErrorMessage(e).includes('(SR_REMOVED)')) {
+    if (getErrorMessage(e).includes(SYNC_REQUEST_REMOVED_MARKER)) {
       papi.logger.info(
         `Automatic sync of ${projectIds.join(', ')} was removed from the sync queue`,
       );
