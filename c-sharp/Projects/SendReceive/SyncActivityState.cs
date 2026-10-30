@@ -23,8 +23,9 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// Normalized with <see cref="SendReceiveWriteLock.NormalizeProjectIds"/> by whoever publishes it,
 /// so these are exactly the ids the write gate blocks rather than a caller's raw list.</param>
 /// <remarks>
-/// Serializes to <c>{ isSyncing, projectIds }</c>, plus <c>outcome</c> and <c>completedAt</c> once a
-/// run has completed (see <see cref="Outcome"/>), via the shared PAPI camelCase JSON options
+/// Serializes to <c>{ isSyncing, projectIds, resourceIds }</c>, plus <c>outcome</c> and
+/// <c>completedAt</c> once a run has completed (see <see cref="Outcome"/>), via the shared PAPI
+/// camelCase JSON options
 /// (<c>PropertyNamingPolicy = CamelCase</c>, configured on the JSON-RPC formatter in
 /// <c>SerializationOptions</c>), so no per-property naming attributes are needed. Sent unchanged as
 /// both the <c>onSyncActivityChanged</c> event payload and the <c>getSyncActivity</c> command return;
@@ -93,8 +94,27 @@ public readonly record struct SyncActivityState(
     public DateTimeOffset? CompletedAt { get; init; }
 
     /// <summary>
-    /// Compares by VALUE, including the contents of <see cref="ProjectIds"/> and the
-    /// <see cref="Outcome"/>.
+    /// DBL entry uids of the resources the running run will update — the set it declared through
+    /// <see cref="SyncRunResourceGuard.BeginRun"/>, which
+    /// <see cref="SyncRunResourceGuard.CurrentResourceIds"/> reads back. Lets a consumer show a
+    /// resource install as waiting for the run; the DBL provider's own wait is what keeps the two
+    /// writers apart. Empty when no run is open, and while a run has not named its resources yet.
+    /// <para>
+    /// Never null, including on a <c>default</c> instance, so it always reaches the wire as an array.
+    /// An <c>init</c> property for the same reason as <see cref="Outcome"/>.
+    /// </para>
+    /// </summary>
+    public IReadOnlyCollection<string> ResourceIds
+    {
+        get => _resourceIds ?? [];
+        init => _resourceIds = value;
+    }
+
+    private readonly IReadOnlyCollection<string>? _resourceIds;
+
+    /// <summary>
+    /// Compares by VALUE, including the contents of <see cref="ProjectIds"/> and
+    /// <see cref="ResourceIds"/> and the <see cref="Outcome"/>.
     /// <para>
     /// The synthesized equality a record struct would give this compares
     /// <see cref="IReadOnlyCollection{T}"/> with the default comparer, i.e. by REFERENCE — so two
@@ -122,11 +142,8 @@ public readonly record struct SyncActivityState(
         // A `default` instance has a null ProjectIds, and a publisher's dedupe field starts there:
         // `if (snapshot == _last) return;` against an unassigned `_last` would throw on the very
         // first snapshot it compared.
-        IReadOnlyCollection<string> ids = ProjectIds ?? [];
-        IReadOnlyCollection<string> otherIds = other.ProjectIds ?? [];
-        if (ids.Count != otherIds.Count)
-            return false;
-        return ids.ToHashSet(StringComparer.OrdinalIgnoreCase).SetEquals(otherIds);
+        return SameIds(ProjectIds ?? [], other.ProjectIds ?? [])
+            && SameIds(ResourceIds, other.ResourceIds);
     }
 
     /// <summary>
@@ -137,10 +154,34 @@ public readonly record struct SyncActivityState(
     {
         // Null-tolerant for the same reason as Equals: a `default` instance has no ProjectIds.
         IReadOnlyCollection<string> ids = ProjectIds ?? [];
-        int idsHash = 0;
-        foreach (string projectId in ids)
+        return HashCode.Combine(
+            IsSyncing,
+            ids.Count,
+            IdsHash(ids),
+            ResourceIds.Count,
+            IdsHash(ResourceIds),
+            Outcome,
+            CompletedAt
+        );
+    }
+
+    /// <summary>
+    /// Whether two id lists name the same set. Order is ignored because the ids are a normalized
+    /// set, not a sequence; case is ignored because project ids and DBL entry uids both are.
+    /// </summary>
+    private static bool SameIds(IReadOnlyCollection<string> ids, IReadOnlyCollection<string> other)
+    {
+        if (ids.Count != other.Count)
+            return false;
+        return ids.ToHashSet(StringComparer.OrdinalIgnoreCase).SetEquals(other);
+    }
+
+    private static int IdsHash(IReadOnlyCollection<string> ids)
+    {
+        int hash = 0;
+        foreach (string id in ids)
             // XOR: commutative, so the hash does not depend on enumeration order.
-            idsHash ^= StringComparer.OrdinalIgnoreCase.GetHashCode(projectId);
-        return HashCode.Combine(IsSyncing, ids.Count, idsHash, Outcome, CompletedAt);
+            hash ^= StringComparer.OrdinalIgnoreCase.GetHashCode(id);
+        return hash;
     }
 }
