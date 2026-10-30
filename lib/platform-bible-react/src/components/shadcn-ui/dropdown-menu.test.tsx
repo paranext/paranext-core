@@ -12,6 +12,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 
 // jsdom doesn't ship a ResizeObserver, which Radix's Popper-positioned content instantiates on
 // mount. A no-op stub is sufficient since the tests inspect presence, not layout. The
@@ -111,6 +112,39 @@ describe('DropdownMenuContent window blur', () => {
     blurWindow();
 
     expect(screen.getByRole('menu')).toBeInTheDocument();
+  });
+
+  // Deliberate: a blur is an outside press, and Radix ignores outside presses on a layer beneath a
+  // modal one, exactly as for a real click outside both. The first blur therefore closes only the
+  // modal menu; the second closes the popover.
+  it('a modal menu inside a popover takes a blur alone; the next blur closes the popover', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <Popover>
+        <PopoverTrigger>pick</PopoverTrigger>
+        <PopoverContent>
+          popover body
+          <DropdownMenu>
+            <DropdownMenuTrigger>group</DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem>item</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </PopoverContent>
+      </Popover>,
+    );
+    await user.click(screen.getByText('pick'));
+    await user.click(await screen.findByText('group'));
+    expect(await screen.findByRole('menu')).toBeInTheDocument();
+
+    blurWindow();
+
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+    expect(screen.getByText('popover body')).toBeInTheDocument();
+
+    blurWindow();
+
+    await waitFor(() => expect(screen.queryByText('popover body')).not.toBeInTheDocument());
   });
 });
 
