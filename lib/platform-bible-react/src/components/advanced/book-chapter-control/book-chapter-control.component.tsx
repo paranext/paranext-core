@@ -1522,7 +1522,9 @@ export function BookChapterControl({
                             onClick();
                           }}
                           // `aria-disabled` rather than `disabled`: see the tooltip wrapper below.
-                          // The `aria-disabled:` classes match Button's `disabled:` look.
+                          // The `aria-disabled:` classes match Button's `disabled:` look and drop the
+                          // ghost variant's hover and pressed styling, which only `disabled:` would
+                          // otherwise suppress; `!` wins over the variant's own (dark) hover rules.
                           aria-disabled={isQuickNavDisabled}
                           // `rounded-lg!` re-asserts all four corners against `ButtonGroup`'s
                           // horizontal variant, which squares off the inner edges so that flush
@@ -1532,7 +1534,7 @@ export function BookChapterControl({
                           // the row produced a ring that changed shape from button to button. The
                           // radius matches what `size="sm"` already applies inside a button group,
                           // so only the corners the group removed come back.
-                          className="tw:h-8.5 tw:w-6 tw:rounded-lg! tw:p-0 tw:aria-disabled:cursor-default tw:aria-disabled:opacity-50"
+                          className="tw:h-8.5 tw:w-6 tw:rounded-lg! tw:p-0 tw:aria-disabled:cursor-default tw:aria-disabled:opacity-50 tw:aria-disabled:hover:bg-transparent! tw:aria-disabled:hover:text-inherit! tw:dark:aria-disabled:hover:bg-transparent! tw:aria-disabled:active:transform-none!"
                           aria-label={title}
                           onKeyDown={handleQuickNavButtonKeyDown}
                         >
