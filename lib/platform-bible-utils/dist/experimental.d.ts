@@ -378,8 +378,8 @@ export type SyncActivity = {
 /**
  * Whether a value read from the wire is a usable sync-activity snapshot. Checked rather than
  * trusted: the payload comes from another process, and a build may send another shape. `isSyncing`
- * must be a boolean; `projectIds` may be absent, `undefined`, `null` or a list of strings, and
- * anything else makes the whole snapshot unusable.
+ * must be a boolean; `projectIds` and `resourceIds` may each be absent, `undefined`, `null` or a
+ * list of strings, and anything else makes the whole snapshot unusable.
  *
  * @param value The raw payload of the command or event
  * @returns `true` if the value is a {@link SyncActivityValue}

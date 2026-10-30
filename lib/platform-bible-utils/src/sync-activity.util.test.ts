@@ -18,6 +18,11 @@ describe('isSyncActivitySnapshot', () => {
     // A real null: the wire writes `null` for a list it cannot name
     ['projectIds null', { isSyncing: true, projectIds: null }, true],
     ['extra fields', { isSyncing: false, projectIds: [], outcome: 'failed' }, true],
+    ['resourceIds with ids', { isSyncing: true, resourceIds: ['x'] }, true],
+    ['resourceIds null', { isSyncing: true, resourceIds: null }, true],
+    ['resourceIds undefined', { isSyncing: true, resourceIds: undefined }, true],
+    ['resourceIds a string', { isSyncing: true, resourceIds: 'x' }, false],
+    ['resourceIds with a number', { isSyncing: true, resourceIds: [1] }, false],
     ['isSyncing a string', { isSyncing: 'yes' }, false],
     ['isSyncing missing', {}, false],
     ['projectIds a string', { isSyncing: true, projectIds: 'A' }, false],

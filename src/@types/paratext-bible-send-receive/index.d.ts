@@ -719,8 +719,10 @@ declare module 'papi-shared-types' {
      * An `autoSync` request never re-queues a project that is running or already waiting; the other
      * sources do not carry that rule. Set `options.includeConnected` to run with
      * `paratextBibleSendReceive.syncProjects` semantics (which also syncs connected projects and
-     * resources) rather than `sendReceiveProjects` semantics; a combined run uses the former when
-     * any request in it asks for it.
+     * resources) rather than `sendReceiveProjects` semantics. A run never mixes the two kinds: it
+     * takes the kind of the oldest waiting request and covers only the waiting projects requested
+     * that way, and the other kind runs next. A project requested both ways runs once, in the
+     * oldest request's kind, and satisfies both requesters.
      *
      * @param projectIds Ids of the projects to sync
      * @param source Which surface asks, so the queue can apply the source's rules
