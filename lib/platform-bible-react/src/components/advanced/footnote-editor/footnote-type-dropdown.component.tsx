@@ -13,10 +13,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
-import {
-  isRunningInWebView,
-  shouldSuppressFocusReturn,
-} from '@/hooks/use-dismiss-on-window-blur.hook';
+import { focusUnlessSuppressed } from '@/hooks/use-dismiss-on-window-blur.hook';
 import { FunctionSquare, SquareSigma, SquareX } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
 import { Z_INDEX_ABOVE_POPOVER } from '@/components/z-index';
@@ -127,7 +124,7 @@ export function FootnoteTypeDropdown({
           event.preventDefault();
           // Explicit focus bypasses the shared focus-return rule, so gate it on that rule: focus
           // must stay where the user put it when that is a web view.
-          if (!shouldSuppressFocusReturn(document, isRunningInWebView())) focusNoteText();
+          focusUnlessSuppressed(focusNoteText);
         }}
       >
         <DropdownMenuLabel>

@@ -22,10 +22,7 @@ import { Label } from '@/components/shadcn-ui/label';
 import { PopoverPortalContainerProvider } from '@/components/shadcn-ui/popover';
 import { RadioGroup, RadioGroupItem } from '@/components/shadcn-ui/radio-group';
 import { Scope, ScopeWithRange } from '@/components/utils/scripture.util';
-import {
-  isRunningInWebView,
-  shouldSuppressFocusReturn,
-} from '@/hooks/use-dismiss-on-window-blur.hook';
+import { focusUnlessSuppressed } from '@/hooks/use-dismiss-on-window-blur.hook';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Check, ChevronDown } from 'lucide-react';
@@ -987,9 +984,7 @@ export function ScopeSelector({
                             // Explicit focus bypasses the shared focus-return rule, so gate it
                             // on that rule: focus must stay where the user put it when that is
                             // a web view.
-                            if (!shouldSuppressFocusReturn(document, isRunningInWebView())) {
-                              navMenuItemRef.current?.focus();
-                            }
+                            focusUnlessSuppressed(() => navMenuItemRef.current?.focus());
                           }}
                           // Modal so the picker gets its own FocusScope: opening BCV
                           // from inside the modal DropdownMenu would otherwise collide
