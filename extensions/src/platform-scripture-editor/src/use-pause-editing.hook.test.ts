@@ -79,6 +79,9 @@ describe('usePauseEditing', () => {
     ['pasting', 'v', { ctrlKey: true }],
     ['pasting as plain text', 'V', { ctrlKey: true, shiftKey: true }],
     ['pasting on macOS', 'v', { metaKey: true }],
+    // The editor takes the cut chord itself and dispatches its cut command, with no `cut` event.
+    ['cutting', 'x', { ctrlKey: true }],
+    ['cutting on macOS', 'x', { metaKey: true }],
   ])('holds off %s while paused', (_label, key, init) => {
     pause();
     const event = press(key, init);
@@ -94,6 +97,8 @@ describe('usePauseEditing', () => {
 
   it.each([
     ['copying', 'c', { ctrlKey: true }],
+    ['a Ctrl+Shift+X chord, which is not a cut', 'X', { ctrlKey: true, shiftKey: true }],
+    ['a Ctrl+Alt+X chord, which is not a cut', 'x', { ctrlKey: true, altKey: true }],
     ['an application shortcut', 'f', { ctrlKey: true }],
     ['a function key', 'F8', {}],
     ['an Alt chord', 'd', { altKey: true }],

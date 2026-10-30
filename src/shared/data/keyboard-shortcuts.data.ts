@@ -374,19 +374,19 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'extensions/src/platform-scripture-editor/src/model-text-panel.web-view.tsx',
     ],
   },
-  // The paste itself is the scripture-editors repo's ClipboardPlugin (Ctrl+V reads the clipboard);
-  // `usePauseEditing` holds the chords off while the editor still shows the chapter being left, as
+  // The paste and cut themselves are the scripture-editors repo's ClipboardPlugin (Ctrl+V reads the
+  // clipboard, Ctrl+X dispatches a cut command); `usePauseEditing` holds the chords off while the editor still shows the chapter being left, as
   // it does typing, undo and caret moves.
   {
-    id: 'scripture-paste-held-off-chapter-loading',
+    id: 'scripture-cut-paste-held-off-chapter-loading',
     purpose:
-      'While the next chapter is loading, the Paste and Paste as plain text keys do nothing. A paste pressed just before the load started reads the clipboard in the background, so it can still land',
+      'While the next chapter is loading, the Cut, Paste and Paste as plain text keys do nothing. A paste pressed just before the load started reads the clipboard in the background, so it can still land',
     category: 'Editing',
     context: 'Scripture editor, while it moves to another chapter',
     keys: {
-      macOS: '⌘V / ⇧⌘V',
-      windows: 'Ctrl+V / Ctrl+Shift+V',
-      linux: 'Ctrl+V / Ctrl+Shift+V',
+      macOS: '⌘X / ⌘V / ⇧⌘V',
+      windows: 'Ctrl+X / Ctrl+V / Ctrl+Shift+V',
+      linux: 'Ctrl+X / Ctrl+V / Ctrl+Shift+V',
     },
     locations: [
       'extensions/src/platform-scripture-editor/src/use-pause-editing.hook.ts',

@@ -17,7 +17,7 @@ const CARET_KEYS = new Set([
 
 /**
  * Whether a key press is held off while editing is paused: one that edits the document (a key that
- * types a character, Enter, Backspace, Delete, Tab, and the undo, redo, word-delete and paste
+ * types a character, Enter, Backspace, Delete, Tab, and the undo, redo, word-delete, paste and cut
  * chords) or moves the caret (the arrow and page keys, Home, End, and select-all). The caret counts
  * because the editor still shows the chapter being left: moving it there reports that chapter's
  * verse as the current reference, which pulls the reference back to the chapter the user just left.
@@ -27,7 +27,8 @@ const CARET_KEYS = new Set([
  * shortcuts keep working. A paste the browser runs itself is held off as the `paste` event it
  * raises, and the Edit flyout's Paste is refused by the web view's read-only check while a chapter
  * loads. Nothing holds off the right-click menu's Paste, which reads the clipboard as the chords
- * do, or Ctrl+X, which dispatches the editor's cut command with no `cut` event.
+ * do. The cut chord counts because the editor takes it itself and dispatches its cut command, with
+ * no `cut` event; as in the editor, Shift or Alt with it makes it some other chord.
  */
 function isHeldOffKey(event: KeyboardEvent): boolean {
   if (event.isComposing || CARET_KEYS.has(event.key)) return true;
@@ -38,6 +39,7 @@ function isHeldOffKey(event: KeyboardEvent): boolean {
       key === 'y' ||
       key === 'a' ||
       key === 'v' ||
+      (key === 'x' && !event.shiftKey && !event.altKey) ||
       key === 'backspace' ||
       key === 'delete'
     );
