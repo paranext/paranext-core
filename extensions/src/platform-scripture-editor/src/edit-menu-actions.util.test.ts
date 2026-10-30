@@ -5,7 +5,6 @@ import {
   handleEditMenuCommand,
   isEditMenuCommand,
   runEditMenuAction,
-  shouldMenuReturnFocusAfterEditCommand,
 } from './edit-menu-actions.util';
 import { restoreSelectionIfLost } from './platform-scripture-editor.web-view.utils';
 
@@ -198,37 +197,5 @@ describe('handleEditMenuCommand', () => {
     handleEditMenuCommand(PASTE, editor, EDITABLE, effects);
     expect(effects.onActionError).toHaveBeenCalledWith(error);
     expect(effects.focusEditor).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('shouldMenuReturnFocusAfterEditCommand', () => {
-  const editable = { hasEditor: true, isReadOnly: false };
-
-  it('leaves focus to the editor after Cut, Copy and Paste in an editable editor', () => {
-    EDIT_MENU_COMMANDS.forEach((command) =>
-      expect(shouldMenuReturnFocusAfterEditCommand(command, editable)).toBe(false),
-    );
-  });
-
-  // `handleEditMenuCommand` focuses no editor when there is none, and a read-only editor's root
-  // cannot take focus, so declining the menu's return would leave focus on the frame's body
-  it('returns focus to the trigger when there is no editor or it is read-only', () => {
-    EDIT_MENU_COMMANDS.forEach((command) => {
-      expect(
-        shouldMenuReturnFocusAfterEditCommand(command, { hasEditor: false, isReadOnly: false }),
-      ).toBe(true);
-      expect(
-        shouldMenuReturnFocusAfterEditCommand(command, { hasEditor: true, isReadOnly: true }),
-      ).toBe(true);
-    });
-  });
-
-  it('returns focus to the trigger after every other menu command', () => {
-    expect(shouldMenuReturnFocusAfterEditCommand('platformScripture.openFind', editable)).toBe(
-      true,
-    );
-    expect(shouldMenuReturnFocusAfterEditCommand('platformScriptureEditor.undo', editable)).toBe(
-      true,
-    );
   });
 });

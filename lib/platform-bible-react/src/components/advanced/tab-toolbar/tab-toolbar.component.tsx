@@ -58,7 +58,6 @@ export function TabToolbar({
   onSelectProjectMenuItem,
   onSelectViewInfoMenuItem,
   projectMenuData,
-  shouldProjectMenuReturnFocusOnSelect,
   tabViewMenuData,
   id,
   className,
@@ -72,7 +71,6 @@ export function TabToolbar({
       {projectMenuData && (
         <TabDropdownMenu
           onSelectMenuItem={onSelectProjectMenuItem}
-          shouldReturnFocusOnSelect={shouldProjectMenuReturnFocusOnSelect}
           menuData={projectMenuData}
           tabLabel="Project"
           icon={menuButtonIcon ?? <Menu />}
