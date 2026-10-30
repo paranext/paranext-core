@@ -123,6 +123,22 @@ describe('OverlayCommandPalettePresentational', () => {
       expect(calls).toEqual(['dismiss']);
     });
 
+    it('writes the overlay id to its content', () => {
+      const { container } = render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+          overlayId="palette-x"
+        />,
+      );
+
+      expect(container.querySelector('[data-overlay-command-palette]')).toHaveAttribute(
+        'data-overlay-id',
+        'palette-x',
+      );
+    });
+
     it('should call onDismiss when clicking the backdrop', () => {
       const onSelect = vi.fn();
       const onDismiss = vi.fn();
@@ -1656,6 +1672,8 @@ describe('OverlayCommandPalette (store-connected)', () => {
     const { unmount } = render(<OverlayCommandPalette overlay={escaped} />);
     fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
     expect(takeOverlayFocusReturnMark(escaped.id)).toBe(true);
+    // Nothing is left behind by the key handler's own Escape report after the dismissal
+    expect(takeOverlayFocusReturnMark(escaped.id)).toBe(false);
     unmount();
 
     const picked = createPaletteEntry();

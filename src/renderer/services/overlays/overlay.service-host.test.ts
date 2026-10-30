@@ -2191,12 +2191,10 @@ describe('overlay.service-host', () => {
       return element;
     }
 
-    /** Focuses a button inside the DOM the given overlay type renders for its own content */
-    function focusInsideOverlayContent(type: 'contextMenu' | 'popover' | 'commandPalette'): void {
+    /** Focuses a button inside the DOM the given overlay renders for its own content */
+    function focusInsideOverlayContent(overlayId: string): void {
       const content = addToBody(document.createElement('div'));
-      if (type === 'contextMenu') content.className = 'overlay-context-menu-content';
-      else if (type === 'popover') content.setAttribute('data-overlay-popover', '');
-      else content.setAttribute('data-overlay-command-palette', '');
+      content.setAttribute('data-overlay-id', overlayId);
       const button = document.createElement('button');
       content.appendChild(button);
       button.focus();
@@ -2388,7 +2386,7 @@ describe('overlay.service-host', () => {
     describe('on Escape', () => {
       it('returns focus when the app-window Escape arrives with focus inside the menu', async () => {
         const { dismissed } = await openContextMenuPastGrace();
-        focusInsideOverlayContent('contextMenu');
+        focusInsideOverlayContent(getOverlays()[0].id);
 
         emitInput('escape');
 
@@ -2419,9 +2417,9 @@ describe('overlay.service-host', () => {
         expect(windowService.setFocus).not.toHaveBeenCalled();
       });
 
-      it('returns focus when the menu reports its own Escape (including a submenu) with focus inside', async () => {
+      it('returns focus when the menu reports its own Escape with focus inside', async () => {
         const { dismissed } = await openContextMenuPastGrace();
-        focusInsideOverlayContent('contextMenu');
+        focusInsideOverlayContent(getOverlays()[0].id);
         const [menu] = getOverlays();
 
         markOverlayFocusReturnIfFocusInside(menu.id);
@@ -2448,7 +2446,7 @@ describe('overlay.service-host', () => {
 
       it('does not return focus for a close that carries no reason, even with focus inside', async () => {
         const { dismissed } = await openContextMenuPastGrace();
-        focusInsideOverlayContent('contextMenu');
+        focusInsideOverlayContent(getOverlays()[0].id);
 
         getOverlays()[0].resolve(undefined);
 
@@ -2468,7 +2466,7 @@ describe('overlay.service-host', () => {
 
       it('returns focus after a popover Escape with focus inside the popover', async () => {
         await openPopoverPastGrace();
-        focusInsideOverlayContent('popover');
+        focusInsideOverlayContent(getOverlays()[0].id);
 
         emitInput('escape');
 
@@ -2493,7 +2491,7 @@ describe('overlay.service-host', () => {
     describe("when the opener's own dismiss closes the overlay", () => {
       it('returns focus after dismissPopover with focus inside the popover', async () => {
         const id = await openPopoverPastGrace();
-        focusInsideOverlayContent('popover');
+        focusInsideOverlayContent(getOverlays()[0].id);
 
         await overlayService.dismissPopover(id);
 
@@ -2501,6 +2499,20 @@ describe('overlay.service-host', () => {
           focusType: 'webView',
           id: 'test-webview',
         });
+      });
+
+      it("does not return focus after dismissPopover when focus is inside another web view's popover", async () => {
+        framedWebViewIds.add('other-webview');
+        const hoverPopoverId = await openPopoverPastGrace();
+        resetDebounceState();
+        const clickedPopoverId = await overlayService.showPopover(popoverRequest, 'other-webview');
+        expectPopoverId(clickedPopoverId);
+        focusInsideOverlayContent(clickedPopoverId);
+
+        await overlayService.dismissPopover(hoverPopoverId);
+
+        expect(getOverlays().map((o) => o.id)).toEqual([clickedPopoverId]);
+        expect(windowService.setFocus).not.toHaveBeenCalled();
       });
 
       it('does not return focus after dismissPopover with focus outside the popover', async () => {
@@ -2514,7 +2526,7 @@ describe('overlay.service-host', () => {
 
       it('returns focus after dismissCommandPalette with focus inside the palette', async () => {
         const { dismissed } = await openPaletteBeyondGrace();
-        focusInsideOverlayContent('commandPalette');
+        focusInsideOverlayContent(getOverlays()[0].id);
 
         await overlayService.dismissCommandPalette('test-webview');
 
@@ -2539,7 +2551,7 @@ describe('overlay.service-host', () => {
     describe('when the app loses focus', () => {
       it('returns focus on a parent window blur with the app deactivated and focus inside', async () => {
         const { dismissed } = await openContextMenuPastGrace();
-        focusInsideOverlayContent('contextMenu');
+        focusInsideOverlayContent(getOverlays()[0].id);
         setAppFocused(false);
 
         window.dispatchEvent(new Event('blur'));
@@ -2564,7 +2576,7 @@ describe('overlay.service-host', () => {
 
       it('does not return focus on a blur caused by a click into a pane', async () => {
         const { dismissed } = await openContextMenuPastGrace();
-        focusInsideOverlayContent('contextMenu');
+        focusInsideOverlayContent(getOverlays()[0].id);
         setAppFocused(true);
 
         window.dispatchEvent(new Event('blur'));
@@ -2577,7 +2589,7 @@ describe('overlay.service-host', () => {
     describe('when the overlay closes any other way', () => {
       it('does not return focus after a click-away, even with focus inside the overlay', async () => {
         const { dismissed } = await openContextMenuPastGrace();
-        focusInsideOverlayContent('contextMenu');
+        focusInsideOverlayContent(getOverlays()[0].id);
 
         emitInput('mouseDown');
 
@@ -2590,6 +2602,9 @@ describe('overlay.service-host', () => {
         expect(onFocusChange).toBeDefined();
         onFocusChange?.({ focusType: 'webView', id: 'test-webview' });
         const { dismissed } = await openContextMenuPastGrace();
+        // Focus inside the overlay, so a focus-change dismissal that marked the close as returning
+        // focus would restore
+        focusInsideOverlayContent(getOverlays()[0].id);
 
         onFocusChange?.({ focusType: 'tab', id: 'other-tab', tabType: 'x' });
 
@@ -2599,7 +2614,7 @@ describe('overlay.service-host', () => {
 
       it('does not return focus when the parent document scrolls', async () => {
         const { dismissed } = await openContextMenuPastGrace();
-        focusInsideOverlayContent('contextMenu');
+        focusInsideOverlayContent(getOverlays()[0].id);
 
         window.dispatchEvent(new Event('scroll'));
 
@@ -2609,7 +2624,7 @@ describe('overlay.service-host', () => {
 
       it('does not return focus when a popover times out', async () => {
         await openPopoverPastGrace({ ...popoverRequest, dismissAfterMs: 5000 });
-        focusInsideOverlayContent('popover');
+        focusInsideOverlayContent(getOverlays()[0].id);
 
         vi.advanceTimersByTime(5000);
 

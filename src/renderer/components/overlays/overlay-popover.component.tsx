@@ -60,6 +60,13 @@ export type OverlayPopoverPresentationalProps = {
    * @experimental This property is unstable and may change or disappear without notice
    */
   onEscape?: () => void;
+  /**
+   * Id of the overlay this renders, written to the content as `data-overlay-id` so the overlay
+   * service can tell whether focus is inside this overlay's own content rather than another's.
+   *
+   * @experimental This property is unstable and may change or disappear without notice
+   */
+  overlayId?: string;
 };
 
 // ── Constants ──
@@ -171,6 +178,7 @@ export function OverlayPopoverPresentational({
   onAction,
   onDismiss,
   onEscape,
+  overlayId,
 }: OverlayPopoverPresentationalProps) {
   // The caller's own maxWidth/maxHeight fall back to this component's own defaults when unsupplied.
   const resolvedMaxWidth = maxWidth ?? DEFAULT_MAX_WIDTH;
@@ -218,6 +226,7 @@ export function OverlayPopoverPresentational({
       </PopoverAnchor>
       <PopoverContent
         data-overlay-popover
+        data-overlay-id={overlayId}
         // PopoverContent must not carry a fixed width or padding, so the inner wrapper below owns
         // width, padding and layout instead. `tw:p-0` strips the shared class's `tw:p-2.5` padding
         // only; the shared `tw:w-72` survives the class merge and is overridden by the inline
@@ -377,6 +386,9 @@ export function OverlayPopover({ overlay }: OverlayPopoverProps) {
   }, [overlay]);
 
   const handleEscape = useCallback(() => {
+    // Radix reports Escape first and the dismissal settles the overlay; a later report from the
+    // key handler must not leave a mark behind
+    if (hasResolved.current) return;
     markOverlayFocusReturnIfFocusInside(overlay.id);
   }, [overlay]);
 
@@ -395,6 +407,7 @@ export function OverlayPopover({ overlay }: OverlayPopoverProps) {
       onAction={handleAction}
       onDismiss={handleDismiss}
       onEscape={handleEscape}
+      overlayId={overlay.id}
     />
   );
 }
