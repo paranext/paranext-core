@@ -74,8 +74,8 @@ describe('usePauseEditing', () => {
     ['going to the line end', 'End', {}],
     ['paging down', 'PageDown', {}],
     ['selecting everything', 'a', { ctrlKey: true }],
-    // The editor takes the paste chords itself and asks the host for a paste whose event can come
-    // after the pause has ended, so the chord is held off as well as the event.
+    // The editor takes the paste chords itself and reads the clipboard, which raises no `paste`
+    // event, so only the chord can be held off.
     ['pasting', 'v', { ctrlKey: true }],
     ['pasting as plain text', 'V', { ctrlKey: true, shiftKey: true }],
     ['pasting on macOS', 'v', { metaKey: true }],
