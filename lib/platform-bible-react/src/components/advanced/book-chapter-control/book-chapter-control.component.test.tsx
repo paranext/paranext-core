@@ -971,7 +971,7 @@ describe('BookChapterControl additional books', () => {
     await user.click(await screen.findByRole('button', { name: 'Show more books' }));
 
     const nextChapter = await screen.findByRole('button', { name: 'Next chapter' });
-    await waitFor(() => expect(nextChapter).toBeEnabled());
+    expect(nextChapter).not.toHaveAttribute('aria-disabled', 'true');
 
     await user.click(nextChapter);
 
