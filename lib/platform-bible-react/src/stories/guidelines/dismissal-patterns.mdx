@@ -99,9 +99,13 @@ Radix (shadcn) primitives expose the triggers as props on the content element:
   not such a surface — losing a half-typed filter is not losing work.
 - **An explicit-dismissal picker: the compact `BookChapterControl`.** After the user clicks one of
   its quick-nav arrows (previous or next chapter or verse) the book list is hidden and the popover
-  becomes a small stepper. In that state it stays open through outside clicks, window blur and focus
-  leaving, because the user steps through chapters while working elsewhere. Only a click on its
-  trigger, or Escape while focus is in the popover or on the trigger, closes it. Clicks elsewhere
+  becomes a small stepper. A non-modal picker in that state stays open through outside clicks,
+  window blur and focus leaving, because the user steps through chapters while working elsewhere.
+  Only a click on its trigger, or Escape while focus is in the popover or on the trigger, closes it.
+  A modal picker makes everything outside inert, its trigger included, so it keeps the normal rules
+  and closes on an outside press and on Escape. A compact picker whose tab becomes hidden stays open
+  on purpose; it closes through its trigger once the tab is visible again, or on Escape with focus
+  in it. Clicks elsewhere
   still act where the user clicked; only the dismissal is prevented. Once the book list returns
   (the search input takes focus, or the user types), the normal picker rules apply again.
 
@@ -120,7 +124,10 @@ Dismissal is a keyboard and screen-reader concern, not just a pointer one:
   themselves for keyboard users coming back from another application. After an outside interaction
   a non-modal `Popover` and a `Menubar` would skip that restore, while a modal `DropdownMenu` would
   restore anyway; the wrappers make the outcome the same for all three. Inside a web view focus
-  stays where the user put it. `Select` follows the same rule through `SelectContent`. A
+  stays where the user put it. The renderer's overlay service also leaves focus where the user moved
+  it, with a wider check than the shared wrappers' iframe test: focus on any pane frame, on a
+  focusable shell control outside the overlay, or on a tab the window service already reports as
+  focused. `Select` follows the same rule through `SelectContent`. A
   hand-rolled dismissal (a `window` listener that sets your own state) runs *outside* Radix's
   lifecycle: it must not focus the trigger on a blur dismissal in a web view, or when the active
   element is an iframe (`shouldSuppressFocusReturn`); in the main document after an OS-level
