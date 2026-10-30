@@ -22,6 +22,7 @@ const BCV_TRIGGER = '[aria-label="book-chapter-trigger"]';
 // The control's search box is a plain input inside the Radix popper (it renders no cmdk input)
 const BCV_SEARCH_INPUT = '[data-radix-popper-content-wrapper] input';
 const OPEN_MENU = '[role=menu][data-state=open]';
+const TOOLBAR_LOGO = 'img[alt="Application Logo"]';
 // Long enough for a late close or focus return to land before a "stays open" assertion repeats
 const SETTLE_MS = 300;
 
@@ -55,29 +56,61 @@ async function getEditorClickPoint(mainPage: Page, editorFrame: Frame): Promise<
 }
 
 /**
- * An empty spot on the main window's top toolbar row: level with the top BCV trigger, 350 px to its
- * right (past the font-size select), clamped to stay clear of the right-hand user button. Asserted
- * to be plain main-document chrome: not an iframe and not an interactive control.
+ * The application logo at the start of the main toolbar: a non-interactive image inside the
+ * toolbar's no-drag area, so a real click on it reaches the page (a click on the window-drag region
+ * is taken by the OS). Asserted to be plain main-document chrome that is not in the drag region.
  */
-async function getToolbarEmptySpot(mainPage: Page): Promise<Point> {
-  const box = await mainPage.locator(BCV_TRIGGER).first().boundingBox();
-  if (!box) throw new Error('Top BCV trigger has no bounding box');
-  const viewportWidth = await mainPage.evaluate(() => window.innerWidth);
-  const point = {
-    x: Math.min(box.x + box.width + 350, viewportWidth - 150),
-    y: box.y + box.height / 2,
-  };
+async function getToolbarLogoPoint(mainPage: Page): Promise<Point> {
+  const box = await mainPage.locator(TOOLBAR_LOGO).first().boundingBox();
+  if (!box) throw new Error('Toolbar logo has no bounding box');
+  const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
   const hit = await mainPage.evaluate(({ x, y }) => {
     const element = document.elementFromPoint(x, y);
+    // The effective app region is the nearest ancestor's that is not `none`; a profile without a
+    // drag area reports `none` everywhere.
+    let appRegion = 'none';
+    for (let current = element; current; current = current.parentElement) {
+      const style = getComputedStyle(current);
+      const value =
+        style.getPropertyValue('app-region') || style.getPropertyValue('-webkit-app-region');
+      if (value && value !== 'none') {
+        appRegion = value;
+        break;
+      }
+    }
     return {
       tagName: element?.tagName ?? 'none',
       interactive: !!element?.closest('button, a, input, [role=menuitem], [role=combobox]'),
+      appRegion,
     };
   }, point);
-  expect(hit.tagName).not.toBe('IFRAME');
-  expect(hit.tagName).not.toBe('none');
+  expect(hit.tagName).toBe('IMG');
   expect(hit.interactive).toBe(false);
+  expect(hit.appRegion).not.toBe('drag');
   return point;
+}
+
+/** Clicks the logo and proves the press reached the page with the logo as its target */
+async function clickToolbarLogo(mainPage: Page, point: Point): Promise<void> {
+  await mainPage.evaluate(() => {
+    document.addEventListener(
+      'pointerdown',
+      (event) => {
+        document.documentElement.dataset.e2eLogoPress =
+          event.target instanceof HTMLImageElement && event.target.alt === 'Application Logo'
+            ? 'logo'
+            : 'other';
+      },
+      { capture: true, once: true },
+    );
+  });
+  await mainPage.mouse.click(point.x, point.y);
+  await expect
+    .poll(async () => mainPage.evaluate(() => document.documentElement.dataset.e2eLogoPress))
+    .toBe('logo');
+  await mainPage.evaluate(() => {
+    delete document.documentElement.dataset.e2eLogoPress;
+  });
 }
 
 test.describe('menus dismiss when the click lands in another frame', () => {
@@ -125,18 +158,18 @@ test.describe('menus dismiss when the click lands in another frame', () => {
 
   test('editor hamburger closes on a click on the main toolbar', async ({ mainPage }) => {
     const editorFrame = await openEditor(mainPage);
-    const toolbarSpot = await getToolbarEmptySpot(mainPage);
+    const toolbarLogo = await getToolbarLogoPoint(mainPage);
 
     await editorFrame.locator("button[aria-label='Project']").first().click();
     await expect(editorFrame.locator(OPEN_MENU)).toHaveCount(1);
 
-    await mainPage.mouse.click(toolbarSpot.x, toolbarSpot.y);
+    await clickToolbarLogo(mainPage, toolbarLogo);
     await expect(editorFrame.locator(OPEN_MENU)).toHaveCount(0);
   });
 
   test('inline markers menu closes on a click on the main toolbar', async ({ mainPage }) => {
     const editorFrame = await openEditor(mainPage);
-    const toolbarSpot = await getToolbarEmptySpot(mainPage);
+    const toolbarLogo = await getToolbarLogoPoint(mainPage);
 
     // Typing the backslash in the text opens the inline markers menu
     await editorFrame.locator('[contenteditable=true]').first().click();
@@ -149,7 +182,7 @@ test.describe('menus dismiss when the click lands in another frame', () => {
     const markersMenu = await poppers.last().elementHandle();
     if (!markersMenu) throw new Error('Markers menu popper not found');
 
-    await mainPage.mouse.click(toolbarSpot.x, toolbarSpot.y);
+    await clickToolbarLogo(mainPage, toolbarLogo);
     await expect.poll(async () => markersMenu.isVisible()).toBe(false);
   });
 
@@ -184,12 +217,12 @@ test.describe('menus dismiss when the click lands in another frame', () => {
 
     test('a main-frame click still closes the Platform menu', async ({ mainPage }) => {
       await openEditor(mainPage);
-      const toolbarSpot = await getToolbarEmptySpot(mainPage);
+      const toolbarLogo = await getToolbarLogoPoint(mainPage);
 
       await mainPage.getByRole('menuitem', { name: 'Platform' }).first().click();
       await expect(mainPage.locator(OPEN_MENU)).toHaveCount(1);
 
-      await mainPage.mouse.click(toolbarSpot.x, toolbarSpot.y);
+      await clickToolbarLogo(mainPage, toolbarLogo);
       await expect(mainPage.locator(OPEN_MENU)).toHaveCount(0);
     });
   });
