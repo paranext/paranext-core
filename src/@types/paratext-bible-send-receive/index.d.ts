@@ -21,6 +21,8 @@
 //     build, but the shape may lag the Paratext 10 patch that reports real activity, and an older
 //     Paratext 10 build may omit these two fields, the same way as for the write-gate seam
 //     (`getAutoSyncBlocking` / `onSyncWriteLockChanged`).
+// Also declared here with no upstream counterpart yet, though not a divergence in optionality:
+//   * `isAvailable` — ahead of the Paratext 10 patch that overrides core's answer to it.
 //
 // Why this lives in `src/@types` and not under an extension's `src/types`:
 //
@@ -647,6 +649,19 @@ declare module 'papi-shared-types' {
      * @experimental This command is unstable and may change or disappear without notice
      */
     'paratextBibleSendReceive.getSyncActivity': () => Promise<SyncActivitySnapshot>;
+
+    /**
+     * Whether this build can run Send/Receive. Core's own implementation answers `false`, and the
+     * Paratext 10 patch answers `true`. Like `getSyncActivity`, it is registered by core's own
+     * service, so plain Platform.Bible answers it too.
+     *
+     * A rejection means the answer is unknown (for example, the command is not registered yet on a
+     * cold start). Do not treat it as `false`; ask again or stay conservative.
+     *
+     * @returns `true` if this build can run Send/Receive
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.isAvailable': () => Promise<boolean>;
 
     /**
      * Commits changes in the specified project to the version history. Unless `forceCommit` is

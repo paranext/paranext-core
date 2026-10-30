@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { READ_THROWS } from '@main/settings-stub.test-util';
 import { logger } from '@shared/services/logger.service';
 import { settingsService } from '@shared/services/settings.service';
 import {
@@ -16,6 +17,18 @@ vi.mock('@shared/services/logger.service', () => ({
 
 const mockSettingsGet = vi.mocked(settingsService.get);
 const mockLoggerWarn = vi.mocked(logger.warn);
+
+/** Answers the two settings the gate reads. A value of `READ_THROWS` makes that read reject. */
+function stubGateSettings(
+  firstRunComplete: boolean | typeof READ_THROWS,
+  firstSyncState: string | typeof READ_THROWS,
+) {
+  mockSettingsGet.mockImplementation(async (key: string) => {
+    const value = key === 'platform.firstSyncState' ? firstSyncState : firstRunComplete;
+    if (value === READ_THROWS) throw new Error('settings unavailable');
+    return value;
+  });
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -70,5 +83,45 @@ describe('getAutomaticSyncConsent', () => {
 
     await expect(getAutomaticSyncConsent()).resolves.toBe('deferred');
     await expect(getAutomaticSyncConsent()).resolves.toBe('deferred');
+  });
+
+  describe('first successful sync', () => {
+    it('withholds consent while the first sync is pending, with the wizard finished', async () => {
+      stubGateSettings(true, 'pending');
+
+      await expect(getAutomaticSyncConsent()).resolves.toBe('notYetSynced');
+    });
+
+    it.each(['unknown', 'synced'])(
+      'grants consent when the first-sync state is %s',
+      async (state) => {
+        // Only a literal 'pending' withholds, so a settings file that predates the setting still syncs
+        stubGateSettings(true, state);
+
+        await expect(getAutomaticSyncConsent()).resolves.toBe('granted');
+      },
+    );
+
+    it('answers unconfirmed before notYetSynced when the wizard is unfinished', async () => {
+      stubGateSettings(false, 'pending');
+
+      await expect(getAutomaticSyncConsent()).resolves.toBe('unconfirmed');
+    });
+
+    it('answers unreadable, and warns, when the first-sync state cannot be read', async () => {
+      stubGateSettings(true, READ_THROWS);
+
+      await expect(getAutomaticSyncConsent()).resolves.toBe('unreadable');
+      expect(mockLoggerWarn).toHaveBeenCalledWith(
+        expect.stringContaining('Could not read platform.firstSyncState'),
+      );
+    });
+
+    it('answers deferred before anything else', async () => {
+      stubGateSettings(true, 'pending');
+      deferAutomaticSyncForSession();
+
+      await expect(getAutomaticSyncConsent()).resolves.toBe('deferred');
+    });
   });
 });

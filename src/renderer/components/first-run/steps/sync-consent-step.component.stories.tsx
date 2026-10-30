@@ -28,6 +28,13 @@ export const WithBack: Story = {
   },
 };
 
+/** The wizard reopened here because the user has not synced yet, so the step says it will return. */
+export const FirstSyncRequired: Story = {
+  args: {
+    firstSyncRequired: true,
+  },
+};
+
 /** "Sync" has been clicked: it shows a spinner and is disabled, and "Don't sync yet" is withdrawn. */
 export const Syncing: Story = {
   args: {

@@ -52,6 +52,8 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_step_syncConsent_heading%': 'Sync your projects',
       '%firstRun_step_syncConsent_body%':
         'When working on shared projects, syncing updates your local copy and shares your changes with others.',
+      '%firstRun_step_syncConsent_untilFirstSync%':
+        'This step will show when you start the app until a sync succeeds.',
       '%firstRun_button_sync%': 'Sync',
       '%firstRun_button_dontSyncYet%': "Don't sync yet",
       '%firstRun_step_syncProgress_heading%': 'Syncing your projects.',
@@ -244,6 +246,20 @@ describe('FirstRunOverlay', () => {
     mockGetStatus.mockReturnValue({ kind: 'wizard', step: 'language' });
     render(<FirstRunOverlay />);
     expect(screen.getByText(/choose your language/i)).toBeInTheDocument();
+  });
+
+  it('tells the Sync step when a first sync is required', () => {
+    mockGetStatus.mockReturnValue({
+      kind: 'wizard',
+      step: 'syncConsent',
+      firstSyncRequired: true,
+    });
+    render(<FirstRunOverlay />);
+
+    expect(screen.getByText('Sync your projects')).toBeInTheDocument();
+    expect(
+      screen.getByText('This step will show when you start the app until a sync succeeds.'),
+    ).toBeInTheDocument();
   });
 
   it('does not dismiss on Escape (non-dismissable gate)', async () => {

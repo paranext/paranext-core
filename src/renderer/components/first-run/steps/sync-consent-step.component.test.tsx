@@ -24,6 +24,8 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_button_back%': 'Back',
       '%firstRun_step_syncProgress_heading%': 'Syncing your projects.',
       '%firstRun_step_syncConsent_internetBlocked%': 'Internet access is disabled, translated',
+      '%firstRun_step_syncConsent_untilFirstSync%':
+        'This step will show when you start the app until a sync succeeds.',
     };
     const result: Record<string, string> = {};
     keys.forEach((k) => {
@@ -52,6 +54,16 @@ describe('SyncConsentStep', () => {
   it('renders the sync consent body', () => {
     render(<SyncConsentStep onNext={vi.fn()} onSync={makeOnSync()} />);
     expect(screen.getByText(/shared projects/i)).toBeInTheDocument();
+  });
+
+  it('tells the user the step returns on startup while a first sync is required', () => {
+    render(<SyncConsentStep onNext={vi.fn()} onSync={makeOnSync()} firstSyncRequired />);
+    expect(screen.getByText(/until a sync succeeds/i)).toBeInTheDocument();
+  });
+
+  it('omits the startup line when no first sync is required', () => {
+    render(<SyncConsentStep onNext={vi.fn()} onSync={makeOnSync()} />);
+    expect(screen.queryByText(/until a sync succeeds/i)).not.toBeInTheDocument();
   });
 
   it('calls setCanDeclineSync(true) on mount so the shell supplies the decline action', async () => {

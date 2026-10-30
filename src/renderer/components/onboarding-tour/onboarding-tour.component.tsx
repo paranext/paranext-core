@@ -2,6 +2,7 @@ import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { getFirstRunStatus, subscribeToFirstRun } from '@renderer/services/first-run-store';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useIsConnectionLost } from '@renderer/hooks/use-is-connection-lost.hook';
+import { useTourHeldForFirstSync } from '@renderer/hooks/use-tour-held-for-first-sync.hook';
 import { LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import {
@@ -27,6 +28,11 @@ import {
 // yet seen it (new users after the wizard, existing users on their next launch), then never again
 // on its own thanks to the localStorage flag. That is the intended behavior; Help > Show the tour
 // again is the deliberate way back to it.
+//
+// One exception to "anyone with status `app`": where Send/Receive is available, the tour is held
+// until the user's first sync has succeeded, so it does not open over the wizard's returning Sync
+// step. Holding only delays the opening — it never writes the done flag — and a replay is never
+// held.
 
 /**
  * The toolbar's Profile button. The only stop Power mode shares with Simple, so it is both a step
@@ -60,6 +66,8 @@ function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
   const [finishedThisSession, setFinishedThisSession] = useState(false);
   const persistedTourDone = useSyncExternalStore(subscribeToTourDone, readTourDone);
   const tourDone = finishedThisSession || (!isReplay && persistedTourDone);
+
+  const isTourHeldForFirstSync = useTourHeldForFirstSync();
 
   const [strings, isLoading] = useLocalizedStrings(LOCALIZE_KEYS);
 
@@ -124,7 +132,11 @@ function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
   // moved") describes a layout Power does not have. Auto-showing that single stop unprompted to
   // every Power user would be noise, so the unrequested path stays Simple-only.
   const mightShow =
-    (!isPowerMode || isReplay) && firstRunStatus.kind === 'app' && !tourDone && !isLoading;
+    (!isPowerMode || isReplay) &&
+    firstRunStatus.kind === 'app' &&
+    !tourDone &&
+    !isLoading &&
+    (isReplay || !isTourHeldForFirstSync);
   // What "ready" means depends on the mode, because the modes anchor to different things: Simple
   // waits for the dock layout's project panel, Power for the toolbar button its one stop spotlights.
   // The wait exists because the dock layout initializes asynchronously (loadLayout() is a PAPI
@@ -189,6 +201,7 @@ function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
  *   replay runs in Power too, reduced by `Tour` to the stops whose anchors exist there)
  * - The app is not yet unlocked (`firstRunStatus.kind !== 'app'` — still loading or in the wizard)
  * - The tour has already been completed or skipped, and no replay has been requested
+ * - The first sync is still pending where Send/Receive is available, and this is not a replay
  * - This renderer has lost its connection to the network
  *
  * Completion is recorded on Done and on Skip (Escape routes through Skip), and only then. Quitting

@@ -3186,7 +3186,13 @@ type SyncGateStub = {
   /** `platform.interfaceMode` */
   mode?: 'simple' | 'power' | typeof READ_THROWS;
   /** The `platform.getAutomaticSyncConsent` command */
-  consent?: 'granted' | 'unconfirmed' | 'unreadable' | 'deferred' | typeof READ_THROWS;
+  consent?:
+    | 'granted'
+    | 'unconfirmed'
+    | 'unreadable'
+    | 'deferred'
+    | 'notYetSynced'
+    | typeof READ_THROWS;
 };
 
 /**
@@ -3414,6 +3420,7 @@ describe('syncOnProjectSwitch', () => {
     ['the first-run wizard has not been answered', 'unconfirmed'],
     ['the first-run flag cannot be read', 'unreadable'],
     ['the user chose "Don\'t sync yet" earlier this session', 'deferred'],
+    ['the first successful sync has not happened yet', 'notYetSynced'],
   ] as const)('syncs nothing while %s', async (_, consent) => {
     const { papi, mockSendCommand, mockInfo } = createSyncMockPapi({ consent });
 
@@ -3892,6 +3899,20 @@ describe('syncOnSwitchToPower', () => {
     ]);
     // Every other automatic sync would skip here, so the log has to say why this one ran
     expect(mockInfo).toHaveBeenCalledWith(expect.stringContaining('does not stop this sync'));
+  });
+
+  it('syncs when the first successful sync has not happened yet', async () => {
+    // Leaving Simple is the user's own act, and the unsent changes are what it exists to send
+    const { papi, mockSendCommand } = createSwitchToPowerMockPapi({
+      consent: 'notYetSynced',
+      seed: PROJ_1_UNSENT,
+    });
+
+    await syncOnSwitchToPower(papi, 'proj-1');
+
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
+      'proj-1',
+    ]);
   });
 
   it('syncs nothing when the consent check rejects (fails closed)', async () => {

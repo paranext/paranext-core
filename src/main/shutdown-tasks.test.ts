@@ -519,6 +519,20 @@ describe('performShutdownTasks', () => {
       );
     });
 
+    it('does NOT S/R on shutdown while the first successful sync is pending', async () => {
+      stubSettings({ mode: 'simple', firstRunComplete: true, firstSyncState: 'pending' });
+      stubWritableEditorOpen();
+
+      await performShutdownTasks();
+
+      expect(mockRequestNoRetry.mock.calls.map(([cmd]) => cmd)).not.toContainEqual(
+        expect.stringContaining('sendReceiveProjects'),
+      );
+      expect(mockLoggerInfo).toHaveBeenCalledWith(
+        expect.stringContaining('Sync on shutdown skipped: no successful sync yet'),
+      );
+    });
+
     it('leaves the power-mode shutdown sync ungated by the consent setting', async () => {
       // The gate is Simple-mode only, on purpose (see getAutomaticSyncConsent): the setting is never
       // written in Power mode, so gating there would permanently kill scheduled sync.
@@ -795,6 +809,16 @@ describe('performWindowCloseTasks', () => {
     );
   });
 
+  it('does NOT sync a closing window while the first successful sync is pending', async () => {
+    stubSettings({ mode: 'simple', firstRunComplete: true, firstSyncState: 'pending' });
+    mockGetOpenWebViewsForWindow.mockResolvedValue(asWindowWebViews([writableEditor('p1')]));
+
+    await performWindowCloseTasks('2');
+
+    expect(mockRequestNoRetry).not.toHaveBeenCalled();
+    expect(mockLoggerInfo).toHaveBeenCalledWith(expect.stringContaining('no successful sync yet'));
+  });
+
   it('skips the sync and warns when the interface mode cannot be read', async () => {
     mockSettingsGet.mockRejectedValue(new Error('extension host is going away'));
 
@@ -897,6 +921,7 @@ describe('startWindowCloseTasksWithoutWaiting', () => {
     let resolveModeRead: (mode: SettingTypes['platform.interfaceMode']) => void = () => {};
     mockSettingsGet.mockImplementation(async (key: string) => {
       if (key === 'platform.firstRunComplete') return true;
+      if (key === 'platform.firstSyncState') return 'synced';
       return new Promise((resolve) => {
         resolveModeRead = resolve;
       });

@@ -189,6 +189,17 @@ internal class ParatextProjectSendReceiveService(
                 CancelSync
             ),
             PapiClient.RegisterRequestHandlerAsync(
+                "command:paratextBibleSendReceive.isAvailable",
+                IsSendReceiveAvailable,
+                documentation: Create(
+                    "Whether this build can run Send/Receive. A rejection means the answer is "
+                        + "unknown (for example, the command is not registered yet on a cold "
+                        + "start). Do not treat it as false; ask again or stay conservative.",
+                    [],
+                    ResultOf("boolean", "True when this build can run Send/Receive")
+                )
+            ),
+            PapiClient.RegisterRequestHandlerAsync(
                 "command:paratextBibleSendReceive.breakSyncLock",
                 BreakSyncLock,
                 s_sendReceiveTimeout,
@@ -220,6 +231,16 @@ internal class ParatextProjectSendReceiveService(
     #region Protected properties and methods
 
     protected PapiClient PapiClient { get; } = papiClient;
+
+    /// <summary>
+    /// Whether this build can run Send/Receive.
+    /// <para>
+    /// Scaffolding: public Platform.Bible runs no Send/Receive, so this stub answers
+    /// <see langword="false"/> in Platform.Bible. The Paratext 10 patch replaces the body to answer
+    /// <see langword="true"/>. Do not remove — removing it breaks the patch.
+    /// </para>
+    /// </summary>
+    protected internal virtual bool IsSendReceiveAvailable() => false;
 
     /// <summary>
     /// The local Mercurial tip id recorded after this project's last successful Send/Receive, or

@@ -72,6 +72,7 @@ export function FirstRunShell({
   allowContinueWithoutRegistration,
   registrationValidAtStart,
   registrationPreexisting,
+  firstSyncRequired,
 }: {
   entryStep: FirstRunStep;
   stepComponents?: Record<FirstRunStep, ComponentType<FirstRunStepProps>>;
@@ -83,6 +84,8 @@ export function FirstRunShell({
   registrationValidAtStart?: boolean;
   /** The registration was copied from Paratext 9 rather than entered in this wizard. */
   registrationPreexisting?: boolean;
+  /** The Sync step tells the user it returns on startup until they have synced. */
+  firstSyncRequired?: boolean;
 }) {
   const [step, setStep] = useState<FirstRunStep>(entryStep);
   // Numbered steps the user has moved forward from during this wizard session.
@@ -256,6 +259,7 @@ export function FirstRunShell({
           isBusy={isBusy}
           allowContinueWithoutRegistration={allowContinueWithoutRegistration}
           registrationValidAtStart={registrationValidAtStart}
+          firstSyncRequired={firstSyncRequired}
         />
 
         {error && (

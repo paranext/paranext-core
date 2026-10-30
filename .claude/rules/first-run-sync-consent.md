@@ -25,6 +25,15 @@ unasked cannot be undone, while a missed automatic sync is picked up at the next
 **"Don't sync yet" lasts the session.** Declining completes the wizard, but the gate answers
 `deferred` until the app restarts.
 
+**No automatic sync before the first successful one.** Finishing the wizard is not enough on its
+own: while `platform.firstSyncState` is `'pending'` (a first run started and no Send/Receive has
+succeeded yet), the gate answers `notYetSynced`. The .NET backend writes `'synced'` after any
+successful sync, however it was started, and the gate reads the setting on every call, so it opens
+in the same session. Any value other than `'pending'` counts as synced, including the `'unknown'`
+default of a setup that predates the state; an unreadable state answers `unreadable`. Do not
+re-derive this from the setting at a call site either — ask the gate. See
+`adr-first-sync-state-recorded-by-backend`.
+
 **Simple mode only — establish it before asking.** `platform.firstRunComplete` is written solely by
 the Simple-mode wizard, so in Power mode it stays `false` forever. Gating a Power-mode path on it
 would permanently disable that path with no UI to recover — `startup-tasks.test.ts` carries a
@@ -34,8 +43,9 @@ the gate: skip the sync, or treat the mode as Simple.
 **The switch from Simple to Power is the one exception.** Its sync (`syncOnSwitchToPower` in
 `platform-scripture-editor`) runs in Power mode and lets `unconfirmed` through, because a user who
 started in Power mode reads `unconfirmed` for the whole session — see
-`adr-switch-to-power-sends-unsent-changes`. It still skips on `deferred`, on `unreadable`, and on a
-rejected request.
+`adr-switch-to-power-sends-unsent-changes`. It lets `notYetSynced` through too: the switch is the
+user's own act, and it only sends unsent changes. It still skips on `deferred`, on `unreadable`, on
+a rejected request, and on any answer it does not know.
 
 ## What is NOT gated
 
