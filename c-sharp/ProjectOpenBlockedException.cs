@@ -13,10 +13,9 @@ namespace Paranext.DataProvider;
 /// <c>OpenBlockedReasonTests</c> pins this.
 /// <para>
 /// It also carries <see cref="PlatformErrorCodes.FailedPrecondition"/> in <c>Exception.Data</c>, for
-/// C# callers that read it with <see cref="PlatformErrorCodes.TryGetCode"/>. The code does not
-/// cross JSON-RPC: <c>PapiClient</c> uses StreamJsonRpc's default <c>CommonErrorData</c> exception
-/// strategy, which sends the type, message, stack and inner exception but not <c>Exception.Data</c>.
-/// TypeScript therefore relies on <see cref="Sentinel"/>.
+/// C# callers that read it with <see cref="PlatformErrorCodes.TryGetCode"/>. The code also crosses
+/// JSON-RPC (see <c>PapiJsonRpc</c>), but TypeScript still keys on <see cref="Sentinel"/>, because
+/// <c>FAILED_PRECONDITION</c> alone does not identify this refusal.
 /// </para>
 /// </remarks>
 public class ProjectOpenBlockedException : InvalidOperationException

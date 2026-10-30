@@ -62,14 +62,15 @@ async function relayErrorResponse(error: unknown) {
 }
 
 describe('RpcServer relaying an error response between clients', () => {
-  test("keeps the handler's error data, so a platform error code reaches the requester", async () => {
+  test('relays the platform error code and nothing else from the error data', async () => {
     const error = {
       code: -32000,
       message: 'A sync is already in progress',
       data: {
         type: 'System.InvalidOperationException',
         message: 'A sync is already in progress',
-        stack: '   at Somewhere()',
+        stack: '   at C:\\Users\\someone\\Somewhere()',
+        inner: { type: 'System.IO.IOException', message: 'C:\\Users\\someone\\file' },
         code: -2146233079,
         data: { platformErrorCode: 'FAILED_PRECONDITION' },
       },
@@ -77,7 +78,34 @@ describe('RpcServer relaying an error response between clients', () => {
 
     const relayed = await relayErrorResponse(error);
 
-    expect(relayed).toEqual({ jsonrpc: '2.0', id: 42, error });
+    expect(relayed).toEqual({
+      jsonrpc: '2.0',
+      id: 42,
+      error: {
+        code: -32000,
+        message: 'A sync is already in progress',
+        data: { data: { platformErrorCode: 'FAILED_PRECONDITION' } },
+      },
+    });
+    expect(relayed.error.data).not.toHaveProperty('stack');
+    expect(relayed.error.data).not.toHaveProperty('inner');
+    expect(relayed.error.data).not.toHaveProperty('type');
+  });
+
+  test('relays no data when the error data carries no platform error code', async () => {
+    const error = {
+      code: -32000,
+      message: 'Plain failure',
+      data: { type: 'System.Exception', stack: '   at Somewhere()' },
+    };
+
+    const relayed = await relayErrorResponse(error);
+
+    expect(relayed).toEqual({
+      jsonrpc: '2.0',
+      id: 42,
+      error: { code: -32000, message: 'Plain failure' },
+    });
   });
 
   test('relays an error without data unchanged', async () => {

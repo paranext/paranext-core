@@ -5,6 +5,7 @@ import {
   isJSONRPCResponses,
   JSONRPCClient,
   JSONRPCErrorCode,
+  JSONRPCErrorResponse,
   JSONRPCRequest,
   JSONRPCResponse,
   JSONRPCServer,
@@ -42,6 +43,26 @@ import {
   SingleNotificationDocumentation,
 } from '@shared/models/openrpc.model';
 import { getErrorMessage } from 'platform-bible-utils';
+
+/**
+ * Narrows a handler's error to what requesters need: its `code` and `message`, plus the platform
+ * error code the .NET data provider sends in `error.data.data.platformErrorCode` (read by
+ * `doRequest` in the network service). The rest of `error.data` (exception type names, stack, inner
+ * exceptions) can hold absolute paths and is never relayed, because browser pages connect to this
+ * server too.
+ */
+function relayableError(error: JSONRPCErrorResponse['error']): JSONRPCErrorResponse['error'] {
+  const { code, message } = error;
+  const outer: unknown = error.data;
+  const inner: unknown =
+    outer && typeof outer === 'object' && 'data' in outer ? outer.data : undefined;
+  const platformErrorCode: unknown =
+    inner && typeof inner === 'object' && 'platformErrorCode' in inner
+      ? inner.platformErrorCode
+      : undefined;
+  if (typeof platformErrorCode !== 'string') return { code, message };
+  return { code, message, data: { data: { platformErrorCode } } };
+}
 
 /**
  * Whether the app is on its way down, as {@link RpcServer.onWebSocketClose} needs to know to
@@ -449,13 +470,14 @@ export class RpcServer implements IRpcHandler {
             request.method as SerializedRequestType,
             request.params,
           );
-          // The error goes on whole: its `data` carries what the handler attached, such as the
-          // platform error code the .NET data provider sends in `error.data.data.platformErrorCode`
-          // for the requester's network service to read.
           const payload =
             'result' in response
               ? createSuccessResponse(response.result, request.id)
-              : { ...response, id: request.id };
+              : {
+                  jsonrpc: response.jsonrpc,
+                  id: request.id,
+                  error: relayableError(response.error),
+                };
           sendPayloadToWebSocket(this.ws, payload);
         } catch (error) {
           this.handleError(`Error handling request: ${getErrorMessage(error)}`, request);
