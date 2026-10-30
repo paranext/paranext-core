@@ -202,7 +202,11 @@ import { usePauseEditing } from './use-pause-editing.hook';
 import { EditorDocumentSelector, useEditorPdpSync } from './use-editor-pdp-sync.hook';
 import { toBookChapterKey, useScrollToRange } from './use-scroll-to-range.hook';
 import { applyEditorScrRefReport } from './editor-scr-ref-report.util';
-import { useFootnotePaneFontStylesheet, useProjectStylesheet } from './use-project-stylesheet.hook';
+import {
+  projectStylesheetMode,
+  useFootnotePaneFontStylesheet,
+  useProjectStylesheet,
+} from './use-project-stylesheet.hook';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import {
   availableScrollGroupIds,
@@ -3062,7 +3066,7 @@ function PlatformScriptureEditor({
   useProjectStylesheet(
     styleInfo,
     textDirectionEffective === 'rtl',
-    viewType === 'standard' ? 'full' : 'fonts',
+    projectStylesheetMode(viewType),
   );
 
   // The footnotes pane's read-only rows need the project fonts in every view. This is pure CSS, so a

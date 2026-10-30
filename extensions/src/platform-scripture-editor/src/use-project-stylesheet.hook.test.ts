@@ -5,7 +5,11 @@ import { renderHook } from '@testing-library/react';
 import { useStylesheet } from 'platform-bible-react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FOOTNOTE_ROWS_SELECTOR, generateProjectFontCss } from './project-font-css.util';
-import { useFootnotePaneFontStylesheet, useProjectStylesheet } from './use-project-stylesheet.hook';
+import {
+  projectStylesheetMode,
+  useFootnotePaneFontStylesheet,
+  useProjectStylesheet,
+} from './use-project-stylesheet.hook';
 
 vi.mock('platform-bible-react', () => ({ useStylesheet: vi.fn() }));
 // The full-sheet generator is the editor package's; only the hook's choice of generator is under test.
@@ -69,5 +73,17 @@ describe('useFootnotePaneFontStylesheet', () => {
   it("passes '' without style info", () => {
     renderHook(() => useFootnotePaneFontStylesheet(undefined));
     expect(mockUseStylesheet.mock.lastCall?.[0]).toBe('');
+  });
+});
+
+describe('projectStylesheetMode', () => {
+  // Both sheets set the project font family and size, so nothing rendered tells them apart; this
+  // pins which view gets which.
+  it.each([
+    ['standard', 'full'],
+    ['formatted', 'fonts'],
+    ['markers', 'fonts'],
+  ] as const)("gives the '%s' view the '%s' sheet", (viewType, mode) => {
+    expect(projectStylesheetMode(viewType)).toBe(mode);
   });
 });

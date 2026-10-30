@@ -1,7 +1,16 @@
 import { generateUsjCss, StyleInfo } from '@eten-tech-foundation/platform-editor';
+import type { ScriptureEditorViewType } from 'platform-scripture-editor';
 import { useStylesheet } from 'platform-bible-react';
 import { useMemo } from 'react';
 import { FOOTNOTE_ROWS_SELECTOR, generateProjectFontCss } from './project-font-css.util';
+
+/**
+ * Which project sheet a view gets from {@link useProjectStylesheet}: the whole sheet in the Standard
+ * view, fonts only in every other view.
+ */
+export function projectStylesheetMode(viewType: ScriptureEditorViewType): 'full' | 'fonts' {
+  return viewType === 'standard' ? 'full' : 'fonts';
+}
 
 /**
  * Injects project-stylesheet-derived CSS layered after the static usj-nodes.css base, so project
