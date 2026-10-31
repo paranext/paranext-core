@@ -104,7 +104,8 @@ export const LOSSY_WARN_MEMORY_LIMIT = 32;
  * reset so that the editor is properly re-initialized with content when it remounts. Without this
  * reset, returning to the same chapter after passing through a non-existent book would leave the
  * fresh editor empty because the stale `usjSentToPdp` value would match the incoming PDP data and
- * skip the `setEditorUsj` call.
+ * skip the `setEditorUsj` call. That holds whether or not a chapter is being delivered at the time:
+ * the web view gives this hook no chapter while it holds one back, and takes the editor down too.
  */
 export function useEditorPdpSync({
   usjFromPdp,
@@ -236,7 +237,6 @@ export function useEditorPdpSync({
   // delivery when it lands. Gating on a genuinely new delivery keeps the pair honest.
   const lastProcessedUsjFromPdp = useRef<Usj | undefined>(undefined);
   useEffect(() => {
-    if (!usjFromPdp) return;
     if (!editorRef.current) {
       // Editor unmounted — reset so it re-initializes when it remounts (see TSDoc). The applied
       // identity describes the CURRENT editor instance's content, so it resets with it.
@@ -248,6 +248,7 @@ export function useEditorPdpSync({
       lastProcessedUsjFromPdp.current = undefined;
       return;
     }
+    if (!usjFromPdp) return;
     // A re-run with no new delivery (the selector moved ahead of its data, or an unrelated dep
     // changed) carries no information to act on. Reference equality is the right test: each
     // delivery hands down a new object, and a re-delivery of identical content under

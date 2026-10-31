@@ -1104,6 +1104,75 @@ describe('useEditorPdpSync', () => {
     expect(setUsjSpy).toHaveBeenCalledWith(levUsj);
   });
 
+  describe('an editor unmounted while the web view holds its chapter back', () => {
+    /** Mounts the hook on `levUsj`, then unmounts the editor while no chapter is given to it. */
+    function renderThenHoldChapterBack() {
+      const setUsjSpy = vi.fn();
+      const saveUsjToPdpIfUpdated = vi.fn();
+      const editorRef: { current: EditorRef | null } = {
+        // EditorRef has many members; casting from a minimal stub is intentional in tests
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        current: { setUsj: setUsjSpy, isFocused: () => false } as unknown as EditorRef,
+      };
+      const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
+      const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
+      const { rerender } = renderHook<void, { usjFromPdp: Usj | undefined }>(
+        ({ usjFromPdp }) => {
+          useEditorPdpSync({
+            usjFromPdp,
+            documentSelector: lev14Selector,
+            editorRef,
+            usjSentToPdp,
+            lastLocalEditTimestamp,
+            setEditorUsj,
+            saveUsjToPdpIfUpdated,
+          });
+        },
+        { initialProps: { usjFromPdp: levUsj } },
+      );
+      // Positive control: the first load reached the editor, so the calls below are its second.
+      expect(setUsjSpy).toHaveBeenCalledOnce();
+      setUsjSpy.mockClear();
+
+      // Simulates React unmounting an element ref, which uses null
+      // eslint-disable-next-line no-null/no-null
+      editorRef.current = null;
+      act(() => rerender({ usjFromPdp: undefined }));
+
+      const remountEditor = () => {
+        // EditorRef has many members; casting from a minimal stub is intentional in tests
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        editorRef.current = { setUsj: setUsjSpy, isFocused: () => false } as unknown as EditorRef;
+      };
+      return { rerender, remountEditor, setUsjSpy, saveUsjToPdpIfUpdated };
+    }
+
+    it('gives the fresh editor the chapter when the same delivery comes back', () => {
+      const { rerender, remountEditor, setUsjSpy, saveUsjToPdpIfUpdated } =
+        renderThenHoldChapterBack();
+
+      remountEditor();
+      act(() => rerender({ usjFromPdp: levUsj }));
+
+      expect(setUsjSpy).toHaveBeenCalledOnce();
+      expect(setUsjSpy).toHaveBeenCalledWith(levUsj);
+      expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled();
+    });
+
+    it('gives the fresh editor the chapter when a new delivery of it comes back, rather than saving', () => {
+      const { rerender, remountEditor, setUsjSpy, saveUsjToPdpIfUpdated } =
+        renderThenHoldChapterBack();
+
+      const levUsjNewRef = { ...levUsj, content: [...levUsj.content] };
+      remountEditor();
+      act(() => rerender({ usjFromPdp: levUsjNewRef }));
+
+      expect(setUsjSpy).toHaveBeenCalledOnce();
+      expect(setUsjSpy).toHaveBeenCalledWith(levUsjNewRef);
+      expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled();
+    });
+  });
+
   // Logging: an incoming update that the hook does NOT apply to the editor is logged. A single
   // deferral during active editing is almost always the editor's own USFM round-trip, so it is a
   // debug line, not a warning.
