@@ -1286,15 +1286,21 @@ export default function FootnoteEditor({
     ],
   );
 
-  const showInlineMarkersMenu = useCallback(() => {
+  /**
+   * Opens the inline markers menu at the DOM selection.
+   *
+   * @returns Whether the menu opened: not without a selection to anchor it or with no marker items
+   *   to offer.
+   */
+  const showInlineMarkersMenu = useCallback((): boolean => {
     // Only shows the markers menu if there is currently a selection in the editor and there are
     // existing marker menu items to be shown
     const currentSelection = window.getSelection();
     if (!inlineMarkerMenuItems.length || !currentSelection || currentSelection.rangeCount === 0)
-      return;
+      return false;
     // A selection with nothing to anchor to has nowhere to place the menu.
     const contextElement = editorParentRef.current;
-    if (!contextElement) return;
+    if (!contextElement) return false;
     const range = currentSelection.getRangeAt(0).cloneRange();
     markersMenuAnchor.setSource({
       measure: () => {
@@ -1304,6 +1310,7 @@ export default function FootnoteEditor({
       contextElement,
     });
     setShowMarkersMenu(true);
+    return true;
   }, [inlineMarkerMenuItems, markersMenuAnchor]);
 
   /**
@@ -1645,6 +1652,24 @@ export default function FootnoteEditor({
       event.stopPropagation();
     };
 
+    // A hidden-marker view's editor refuses a typed `\` and tells the user so, from its own keydown
+    // handling, which runs before the bubble-phase listener below: left to that listener, the menu
+    // opens AND the "can't be typed" notice shows. So in that view the trigger is claimed here, in
+    // capture, whenever it is used — the menu opens, or this popover's right-click menu swallows it
+    // as the main editor's does — and the editor never sees it. With no menu to open, the key still
+    // reaches the editor, which refuses it and says why.
+    const claimTriggerInHiddenView = (event: KeyboardEvent) => {
+      if (event.key !== defaultMarkerMenuTrigger || showMarkersMenu) return;
+      if (isImeCompositionKeyEvent(event)) return;
+      const editorInput = getEditorInput();
+      if (!editorInput || document.activeElement !== editorInput) return;
+      if (isEditorContextMenuOpenFor(editorParentRef.current) || showInlineMarkersMenu()) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+    const isHiddenMarkerView = options.view?.markerMode === 'hidden';
+
     const handleKeyDown = (event: KeyboardEvent) => {
       const editorInput = getEditorInput();
       // Shows the marker menu if it isn't already being shown and if the editor is currently selected
@@ -1665,8 +1690,12 @@ export default function FootnoteEditor({
     document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('keydown', swallowEnter, { capture: true });
     document.addEventListener('beforeinput', swallowParagraphInput, { capture: true });
+    if (isHiddenMarkerView)
+      document.addEventListener('keydown', claimTriggerInHiddenView, { capture: true });
 
     return () => {
+      if (isHiddenMarkerView)
+        document.removeEventListener('keydown', claimTriggerInHiddenView, { capture: true });
       document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('keydown', swallowEnter, { capture: true });
       document.removeEventListener('beforeinput', swallowParagraphInput, { capture: true });

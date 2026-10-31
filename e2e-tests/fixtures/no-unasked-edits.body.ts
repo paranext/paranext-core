@@ -417,8 +417,7 @@ function typingExpectation(unit: string, point: TextPoint, typed: string): UnitR
 
 /**
  * The copy-and-paste gestures' exact expectation: the destination verse gains the source range's
- * USFM bytes at the paste point, character span or footnote included. `transformCopied` rewrites
- * those bytes for a {@link KnownDeviation} pin.
+ * USFM bytes at the paste point, character span or footnote included.
  */
 function copyPasteExpectation(
   destinationUnit: string,
@@ -427,16 +426,12 @@ function copyPasteExpectation(
   from: TextPoint,
   to: TextPoint,
   destination: TextPoint,
-  transformCopied: (copied: string) => string = (copied) => copied,
 ): UnitReplacements {
   const source = getUsfmUnit(bookBefore, sourceUnit);
   if (source === undefined) throw new Error(`The book has no unit ${sourceUnit}`);
   return {
     [destinationUnit]: [
-      [
-        pointText(destination),
-        insertAtPoint(destination, transformCopied(usfmBetween(source, from, to))),
-      ],
+      [pointText(destination), insertAtPoint(destination, usfmBetween(source, from, to))],
     ],
   };
 }
@@ -530,26 +525,6 @@ const CHAPTERS: ChapterCase[] = [
             NOTE_COPY_TO,
             NOTE_PASTE_POINT,
           ),
-        // TODO(PT-4921): the html flavor carries `closed="false"`; then remove this pin.
-        knownDeviation: {
-          finding: 'CB-3',
-          summary:
-            'a footnote pasted in a hidden-marker view gains explicit `\\fr*`/`\\ft*` closers: the paste reads the copy\'s text/html, whose char spans do not carry `closed="false"`',
-          applies: (view) => !view.areMarkersText,
-          expected: (bookBefore) =>
-            copyPasteExpectation(
-              '3:14',
-              bookBefore,
-              '3:13',
-              NOTE_COPY_FROM,
-              NOTE_COPY_TO,
-              NOTE_PASTE_POINT,
-              (copied) =>
-                copied
-                  .replace('\\fr 3:13 \\ft ', '\\fr 3:13 \\fr*\\ft ')
-                  .replace('River\\f*', 'River\\ft*\\f*'),
-            ),
-        },
       },
       {
         label: 'deleting a selection that runs into the \\wj span (3:15)',
