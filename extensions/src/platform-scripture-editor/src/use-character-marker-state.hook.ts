@@ -11,7 +11,6 @@ import {
 } from './character-marker-coverage.utils';
 import { generateCharacterMarkerMenuListItems } from './character-marker-menu.utils';
 import { CharacterMarkerControlProps } from './character-marker-control/character-marker-control.component';
-import { correctEditorUsjVersion } from './platform-scripture-editor.utils';
 
 export type UseCharacterMarkerStateOptions = {
   /** The editor, used to insert markers and to read USJ when the menu opens. */
@@ -82,7 +81,7 @@ function computeCoverage(
   const editorUsj = editorRef.current?.getUsj();
   if (!selection || !editorUsj) return undefined;
 
-  const computed = computeCharacterMarkerCoverage(correctEditorUsjVersion(editorUsj), selection);
+  const computed = computeCharacterMarkerCoverage(editorUsj, selection);
   return isEmptyCoverage(computed) ? undefined : computed;
 }
 

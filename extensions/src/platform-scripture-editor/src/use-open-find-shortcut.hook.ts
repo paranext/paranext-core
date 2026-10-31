@@ -1,3 +1,4 @@
+import { toUsfmNbspSpelling, ViewOptions } from '@eten-tech-foundation/platform-editor';
 import papi, { logger } from '@papi/frontend';
 import { getErrorMessage } from 'platform-bible-utils';
 import { useEffect } from 'react';
@@ -18,8 +19,15 @@ import { getOpenFindTriggerArgs } from './find-trigger.util';
  * @param webViewId The tab's own web view id, forwarded to the Find command.
  * @param sourceProjectId Project id of the scripture to search, or `undefined` while none is
  *   resolved.
+ * @param viewOptions The view options of the editor the selection is in, when the tab shows one, so
+ *   a no-break space the editor holds as its internal stand-in is searched for as the project
+ *   spells it (see `toUsfmNbspSpelling`).
  */
-export function useOpenFindShortcut(webViewId: string, sourceProjectId: string | undefined): void {
+export function useOpenFindShortcut(
+  webViewId: string,
+  sourceProjectId: string | undefined,
+  viewOptions?: ViewOptions,
+): void {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       // Ctrl+F and nothing more: Ctrl+Shift+F / Ctrl+Alt+F (and macOS Ctrl+Cmd+F) belong to whoever
@@ -31,7 +39,7 @@ export function useOpenFindShortcut(webViewId: string, sourceProjectId: string |
       const args = getOpenFindTriggerArgs(
         webViewId,
         sourceProjectId,
-        window.getSelection()?.toString(),
+        toUsfmNbspSpelling(window.getSelection()?.toString() ?? '', viewOptions),
       );
       if (!args) {
         logger.debug(
@@ -52,5 +60,5 @@ export function useOpenFindShortcut(webViewId: string, sourceProjectId: string |
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [webViewId, sourceProjectId]);
+  }, [webViewId, sourceProjectId, viewOptions]);
 }

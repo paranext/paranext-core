@@ -23,6 +23,8 @@ const BLOCK_MARKER_TYPES = ['chapter', 'book', 'para', 'row', 'sidebar', USJ_TYP
 
 const ZWSP = '\u200B';
 const NBSP = '\u00A0';
+/** The only characters Paratext 9 treats as direction marks when deciding whether text changed. */
+const DIRECTION_MARKS_REGEX = /[\u200E\u200F]/g;
 
 const scrBookData: BookInfo[] = [
   { shortName: 'ERR', fullNames: ['ERROR'], chapters: -1 },
@@ -876,12 +878,14 @@ function normalizeScriptureSpacesTreatingNbspAsContent(str: string): string {
  * @param aParent Parent object of `a`. If `a` is a USJ document, this should be `undefined`.
  * @param b Second USJ document or marker to compare
  * @param bParent Parent object of `b`. If `b` is a USJ document, this should be `undefined`.
+ * @param ignoreDirectionMarks Whether LRM/RLM characters are dropped from text before comparing
  */
 function areUsjContentsEqualExceptWhitespaceInternal(
   a: MarkerContent | Usj | undefined,
   aParent: MarkerObject | Usj | undefined,
   b: MarkerContent | Usj | undefined,
   bParent: MarkerObject | Usj | undefined,
+  ignoreDirectionMarks: boolean,
 ) {
   if (!a && !b) return true;
   if (!a || !b) return false;
@@ -889,8 +893,12 @@ function areUsjContentsEqualExceptWhitespaceInternal(
   const aIsString = isString(a);
   const bIsString = isString(b);
   if (aIsString && bIsString) {
-    const aNormalized = normalizeScriptureSpacesTreatingNbspAsContent(a);
-    const bNormalized = normalizeScriptureSpacesTreatingNbspAsContent(b);
+    const aNormalized = normalizeScriptureSpacesTreatingNbspAsContent(
+      ignoreDirectionMarks ? a.replace(DIRECTION_MARKS_REGEX, '') : a,
+    );
+    const bNormalized = normalizeScriptureSpacesTreatingNbspAsContent(
+      ignoreDirectionMarks ? b.replace(DIRECTION_MARKS_REGEX, '') : b,
+    );
     // Check to see if their regularized forms are equal. If so, they're equal. If not, they may still
     // be equal if they are at the end of a block-level marker and the only difference is space at the end.
     // If at the end of a block-level marker with space at the end, take off the final space and compare again
@@ -959,7 +967,13 @@ function areUsjContentsEqualExceptWhitespaceInternal(
       if (aContent.length !== bContent.length) return false;
       for (let i = 0; i < aContent.length; i += 1) {
         if (
-          !areUsjContentsEqualExceptWhitespaceInternal(aContent[i], aObject, bContent[i], bObject)
+          !areUsjContentsEqualExceptWhitespaceInternal(
+            aContent[i],
+            aObject,
+            bContent[i],
+            bObject,
+            ignoreDirectionMarks,
+          )
         )
           return false;
       }
@@ -978,9 +992,24 @@ function areUsjContentsEqualExceptWhitespaceInternal(
  * Note that this will not work properly if there ever exist any properties of USJ document or USJ
  * markers other than `content` that are complex objects like arrays or objects as the properties
  * are shallow equaled.
+ *
+ * @param options `ignoreDirectionMarks`: also treat text that differs only by left-to-right
+ *   (U+200E) or right-to-left (U+200F) marks as equal, as Paratext 9 does when deciding whether a
+ *   save changed anything. Off by default because a sync that adopts incoming text must still see
+ *   an added direction mark.
  */
-export function areUsjContentsEqualExceptWhitespace(a: Usj | undefined, b: Usj | undefined) {
-  return areUsjContentsEqualExceptWhitespaceInternal(a, undefined, b, undefined);
+export function areUsjContentsEqualExceptWhitespace(
+  a: Usj | undefined,
+  b: Usj | undefined,
+  options?: { ignoreDirectionMarks?: boolean },
+) {
+  return areUsjContentsEqualExceptWhitespaceInternal(
+    a,
+    undefined,
+    b,
+    undefined,
+    options?.ignoreDirectionMarks ?? false,
+  );
 }
 
 // #endregion

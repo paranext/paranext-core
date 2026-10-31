@@ -1,6 +1,10 @@
 import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { UsjDocumentLocation } from 'platform-bible-utils';
+import {
+  LegacyCommentUsjOverlayPDPs,
+  LegacyCommentUsjProjectDataProviderEngine,
+} from './legacy-comment-manager-usj-pdpe.model';
 import { extractCommentScriptureText } from './legacy-comment-manager-usj.utils';
 
 /**
@@ -87,6 +91,7 @@ describe('extractCommentScriptureText', () => {
         selectedTextEnd,
         sampleGenesisUsj,
         'GEN',
+        false,
       );
 
       expect(result).toBeDefined();
@@ -113,6 +118,7 @@ describe('extractCommentScriptureText', () => {
         selectedTextEnd,
         sampleGenesisUsj,
         'GEN',
+        false,
       );
 
       expect(result).toBeDefined();
@@ -136,6 +142,7 @@ describe('extractCommentScriptureText', () => {
         selectedTextEnd,
         sampleGenesisUsj,
         'GEN',
+        false,
       );
 
       expect(result).toBeDefined();
@@ -161,6 +168,7 @@ describe('extractCommentScriptureText', () => {
         selectedTextEnd,
         sampleUsjWithMarkers,
         'JHN',
+        false,
       );
 
       expect(result).toBeDefined();
@@ -186,6 +194,7 @@ describe('extractCommentScriptureText', () => {
         selectedTextEnd,
         sampleGenesisUsj,
         'GEN',
+        false,
       );
 
       expect(result).toBeDefined();
@@ -210,6 +219,7 @@ describe('extractCommentScriptureText', () => {
         selectedTextEnd,
         sampleGenesisUsj,
         'GEN',
+        false,
       );
 
       expect(result).toBeDefined();
@@ -235,7 +245,7 @@ describe('extractCommentScriptureText', () => {
       };
 
       expect(() =>
-        extractCommentScriptureText(selectedTextStart, selectedTextEnd, invalidUsj, 'GEN'),
+        extractCommentScriptureText(selectedTextStart, selectedTextEnd, invalidUsj, 'GEN', false),
       ).toThrow();
     });
 
@@ -253,8 +263,113 @@ describe('extractCommentScriptureText', () => {
       };
 
       expect(() =>
-        extractCommentScriptureText(selectedTextStart, selectedTextEnd, sampleGenesisUsj, 'GEN'),
+        extractCommentScriptureText(
+          selectedTextStart,
+          selectedTextEnd,
+          sampleGenesisUsj,
+          'GEN',
+          false,
+        ),
       ).toThrow();
     });
+  });
+});
+
+describe('the project setting platformScripture.allowInvisibleCharacters', () => {
+  const NBSP = '\u00A0';
+  const verseRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
+  const usjWithNbsp: Usj = {
+    type: USJ_TYPE,
+    version: USJ_VERSION,
+    content: [
+      { type: 'book', marker: 'id', code: 'GEN', content: ['Genesis'] },
+      { type: 'chapter', marker: 'c', number: '1', sid: 'GEN 1' },
+      {
+        type: 'para',
+        marker: 'p',
+        content: [
+          { type: 'verse', marker: 'v', number: '1', sid: 'GEN 1:1' },
+          `In the beginning God${NBSP}Almighty created.`,
+        ],
+      },
+    ],
+  };
+  // "God" + NBSP + "Almighty"
+  const selectedTextStart: UsjDocumentLocation = {
+    jsonPath: '$.content[2].content[1]',
+    offset: 17,
+  };
+  const selectedTextEnd: UsjDocumentLocation = { jsonPath: '$.content[2].content[1]', offset: 29 };
+
+  describe('extractCommentScriptureText spells a no-break space in the selected text as the project USFM does', () => {
+    it('off: as ~', () => {
+      expect(
+        extractCommentScriptureText(selectedTextStart, selectedTextEnd, usjWithNbsp, 'GEN', false)
+          .selectedText,
+      ).toBe('God~Almighty');
+    });
+
+    it('on: as itself, because ~ would be a literal tilde', () => {
+      expect(
+        extractCommentScriptureText(selectedTextStart, selectedTextEnd, usjWithNbsp, 'GEN', true)
+          .selectedText,
+      ).toBe(`God${NBSP}Almighty`);
+    });
+  });
+
+  /** An engine whose project reads `allowInvisibleCharacters` from `getAllowInvisibleCharacters` */
+  function createEngine(getAllowInvisibleCharacters: () => Promise<unknown>) {
+    const createComment = vi.fn().mockResolvedValue('new-comment-id');
+    // Only the members createComment uses
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const pdps = {
+      'platform.base': {
+        getSetting: vi
+          .fn()
+          .mockImplementation((key: string) =>
+            key === 'platformScripture.allowInvisibleCharacters'
+              ? getAllowInvisibleCharacters()
+              : Promise.resolve(undefined),
+          ),
+      },
+      'platformScripture.USJ_Chapter': { getChapterUSJ: vi.fn().mockResolvedValue(usjWithNbsp) },
+      'legacyCommentManager.comments': { createComment },
+    } as unknown as LegacyCommentUsjOverlayPDPs;
+    return {
+      engine: new LegacyCommentUsjProjectDataProviderEngine('project-id', pdps),
+      createComment,
+    };
+  }
+
+  it("createComment stores the selected text as the project's own USFM spells it", async () => {
+    const { engine, createComment } = createEngine(() => Promise.resolve(true));
+
+    await engine.createComment(
+      { contents: 'A comment' },
+      verseRef,
+      selectedTextStart,
+      selectedTextEnd,
+    );
+
+    expect(createComment).toHaveBeenCalledWith(
+      expect.objectContaining({ selectedText: `God${NBSP}Almighty` }),
+    );
+  });
+
+  it('createComment still creates the comment, without the selected text, when the setting cannot be read', async () => {
+    const { engine, createComment } = createEngine(() =>
+      Promise.reject(new Error('setting unavailable')),
+    );
+
+    await engine.createComment(
+      { contents: 'A comment' },
+      verseRef,
+      selectedTextStart,
+      selectedTextEnd,
+    );
+
+    expect(createComment).toHaveBeenCalledWith(
+      expect.objectContaining({ contents: 'A comment', selectedText: undefined }),
+    );
   });
 });

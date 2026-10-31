@@ -26,8 +26,9 @@
  * call and surface errors. This pipeline exists because scripture typing hits all three at once.
  */
 
-import { Usj } from '@eten-tech-foundation/scripture-utilities';
+import { MarkerContent, Usj } from '@eten-tech-foundation/scripture-utilities';
 import { areUsjContentsEqualExceptWhitespace } from 'platform-bible-utils';
+import { deepEqualAcrossIframes } from './platform-scripture-editor.utils';
 
 /**
  * Inputs to a single fire of the debounced keystroke-driven PDP save. Everything the fire needs is
@@ -65,9 +66,43 @@ export interface DebouncedPdpSaveParams {
   getEditorUsj: () => Usj | undefined;
 }
 
+const ZERO_WIDTH_NO_BREAK_SPACE = '\uFEFF';
+
+function contentWithoutZeroWidthNoBreakSpaces(content: MarkerContent[]): MarkerContent[] {
+  return content.flatMap((item): MarkerContent[] => {
+    if (typeof item === 'string') {
+      const text = item.replaceAll(ZERO_WIDTH_NO_BREAK_SPACE, '');
+      return text === '' && item !== '' ? [] : [text];
+    }
+    return item.content
+      ? [{ ...item, content: contentWithoutZeroWidthNoBreakSpaces(item.content) }]
+      : [item];
+  });
+}
+
+/**
+ * `usj` with every zero-width no-break space (U+FEFF) taken out of its text. Paratext 9's editor
+ * uses the character only to position its caret and removes every one from the text it saves,
+ * whatever `AllowInvisibleChars` says; marker attributes are left as they are.
+ *
+ * The editor goes on holding a stored one until the chapter is next loaded: taking it out there
+ * would move the offsets the caret and the pending-marker settle work in under the user's typing.
+ * So what the editor reports and what the file holds differ by this character after a save, and
+ * every comparison between the two goes through this function.
+ */
+export function withoutZeroWidthNoBreakSpaces(usj: Usj): Usj {
+  return { ...usj, content: contentWithoutZeroWidthNoBreakSpaces(usj.content) };
+}
+
 /**
  * Decides what an imperative "save the editor's USJ if it changed" should write to the PDP: returns
  * the USJ to save, or `undefined` when there is nothing new to write.
+ *
+ * A stored zero-width no-break space is dropped from what is written and never counts as a change
+ * ({@link withoutZeroWidthNoBreakSpaces}), which gives this Paratext 9's scope: a save the user's
+ * edit caused drops every one in the chapter it rewrites, and a chapter nobody edited is not
+ * written. Other writers of the chapter (Find & Replace, the USFM and USX setters) do not come
+ * through here and keep them, as Paratext 9's do.
  *
  * No literal stripping is needed here: an in-editor command surface with input in flight declares
  * it to the editor (`EditorRef.setTransientInput`), which excludes those bytes from the settled USJ
@@ -78,7 +113,23 @@ export function resolveUsjToSaveToPdp(
   usjFromEditor: Usj,
   usjFromPdp: Usj | undefined,
 ): Usj | undefined {
-  return areUsjContentsEqualExceptWhitespace(usjFromPdp, usjFromEditor) ? undefined : usjFromEditor;
+  const usjToSave = withoutZeroWidthNoBreakSpaces(usjFromEditor);
+  return areUsjContentsEqualExceptWhitespace(
+    usjFromPdp && withoutZeroWidthNoBreakSpaces(usjFromPdp),
+    usjToSave,
+    { ignoreDirectionMarks: true },
+  )
+    ? undefined
+    : usjToSave;
+}
+
+/**
+ * Whether the editor holds more than `savedUsj`, the document a save just sent. The editor's own
+ * document can still hold a zero-width no-break space that save dropped, which is not a change, and
+ * a retry on it would send the same document again for as long as the backend declines it.
+ */
+export function editorHoldsUnsavedChanges(editorUsj: Usj | undefined, savedUsj: Usj): boolean {
+  return !editorUsj || !deepEqualAcrossIframes(withoutZeroWidthNoBreakSpaces(editorUsj), savedUsj);
 }
 
 /**

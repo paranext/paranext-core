@@ -37,7 +37,6 @@ import {
   usfmDeletesMarkers,
 } from '../find/structure-protection.util';
 import { USFM_VERSE_TEXT_MARKERS_SET } from '../find/usfm-verse-text-markers';
-import { correctUsjVersion } from './scripture.util';
 
 /**
  * Extracts the book ID and chapter number from a scripture location without needing a reader
@@ -255,6 +254,9 @@ export class ScriptureFinderProjectDataProviderEngine
           'platformScripture.allowInvisibleCharacters',
           () => {
             this.#invalidateCharacterCategorizerCache();
+            // The cached reader writers spell no-break spaces in the USFM Replace writes by this
+            // setting
+            this.#invalidateCaches();
           },
           { retrieveDataImmediately: false },
         ),
@@ -1083,6 +1085,15 @@ export class ScriptureFinderProjectDataProviderEngine
       for (let attempt = 0; attempt <= MAX_CACHE_INVALIDATION_RETRIES; attempt++) {
         const versionBeforeFetch = this.#cacheVersion;
 
+        // Read after taking the version, so a change to the setting during the fetch is caught by
+        // the version check below. Never guessed: Replace writes the whole book or chapter back,
+        // and the wrong value rewrites every no-break space in it.
+        const allowInvisibleCharacters = await this.#pdps['platform.base'].getSetting(
+          'platformScripture.allowInvisibleCharacters',
+        );
+        if (typeof allowInvisibleCharacters !== 'boolean')
+          throw new Error(`Did not get 'platformScripture.allowInvisibleCharacters' setting`);
+
         // Must ask USX PDPs for the data for now then transform to USJ ourselves instead of
         // asking USJ PDPs for the data because of the following layering PDP wait bug. Turtles
         // all the way down. https://paratextstudio.atlassian.net/browse/PT-3233
@@ -1107,9 +1118,10 @@ export class ScriptureFinderProjectDataProviderEngine
         }
         /* eslint-enable no-await-in-loop */
 
-        const scripture: Usj | undefined = correctUsjVersion(usxStringToUsj(usx));
+        const scripture: Usj | undefined = usxStringToUsj(usx);
         const usjReaderWriter = new UsjReaderWriter(scripture, {
           markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
+          shouldAllowInvisibleCharacters: allowInvisibleCharacters,
         });
 
         cache.set(cacheKey, usjReaderWriter);

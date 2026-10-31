@@ -3429,8 +3429,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                     StringComparison.InvariantCulture
                 );
 
-        // Wrap the verse text in a usx element so it is a whole valid usx document
-        return $"<usx version=\"{scrText.Settings.UsfmVersion}\">{allXmlData.Substring(verseIndex, nextVerseIndex - verseIndex)}</usx>";
+        // Wrap the verse text in a usx element so it is a whole valid usx document, stamped with the
+        // same USX version the chapter and book paths' converter stamps
+        return $"<usx version=\"{UsfmToUsx.UsxVersionNumber}\">{allXmlData.Substring(verseIndex, nextVerseIndex - verseIndex)}</usx>";
     }
 
     private static string VerseXPath(int chapterNum, int verseNum)

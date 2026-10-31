@@ -38,6 +38,26 @@ editor behaviors exist only to satisfy these, so changing one changes the editor
 
 4. **End of file always gets a newline**, likely replacing a space.
 
+5. **A no-break space is spelled the way the project stores it.** The project setting
+   `platformScripture.allowInvisibleCharacters` (Paratext's `AllowInvisibleChars`) decides: off
+   (the default), the USFM spells U+00A0 as `~` and the project cannot hold a literal tilde; on, the
+   USFM holds U+00A0 itself and `~` is an ordinary character. Every `UsjReaderWriter` that writes a
+   project's USFM gets the setting as `shouldAllowInvisibleCharacters`, and every editor host puts
+   it in the editor's `ViewOptions.allowInvisibleCharacters` (`getEditorViewOptions` in the
+   scripture editor web view), so Standard view keeps `~` and U+00A0 apart (with the setting on it
+   holds a stored U+00A0 as an internal stand-in, U+001A, drawn as a blank the width of a space by
+   the editor's `NBSP_STAND_IN_FONT_FAMILY`, which must lead every Scripture `font-family` — the
+   vendored `_usj-nodes.scss` puts it first). Every op, clipboard flavor and callback text the
+   editor gives a host has U+00A0, but text a host reads from the editor's display (a DOM
+   selection, an element's `textContent`) still holds the stand-in, so it goes through the editor's
+   `toUsfmNbspSpelling` before it is copied or searched for. Attribute values follow Paratext 9,
+   which never converts `~` or U+00A0 inside a value: Standard and Unformatted views hold a value's
+   U+00A0 as the stand-in under either setting, and a value's `~` is always a tilde (`\periph`
+   attributes and a `\vp` not folded into its verse are body text, as in Paratext 9).
+
+   _Consequence:_ a writer or editor that does not get the setting rewrites every no-break space or
+   every tilde of such a project the next time it saves.
+
 ---
 
 ## 2. The markers map is the declared-property source

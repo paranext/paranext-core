@@ -1,0 +1,14 @@
+{
+  "about": "Shrink-only list of the bytes UsfmUsxRoundTripCorpusSweepTests sees change. See that suite's summary for the legs and the rules.",
+  "entries": [
+    {
+      "fixture": "testUSFM-2SA-5.usfm",
+      "chapter": 5,
+      "leg": "trip1",
+      "line": 1,
+      "before": "",
+      "after": "\r\n",
+      "reason": "ChapterMarkerCorrection (the port of Paratext 9's UsfmEditorTextLoader.FixChapterNumbers wired into SetChapterUsx) puts a chapter's \\ca run on the line after \\c N, as Paratext 9 saves it. Layout whitespace only; stable after the first save."
+    }
+  ]
+}

@@ -273,6 +273,14 @@ describe('prepareUsjForChapterSave', () => {
     expect(usjToSave).toBeUndefined();
   });
 
+  it("saves a repair without a zero-width no-break space, and keeps it in the editor's own document", () => {
+    const fromPdp = usjOf(chapter('3'), para('p', 'body'));
+    const fromEditor = usjOf(chapter('5'), para('p', 'bo\uFEFFdy edited'));
+    const { repairedUsj, usjToSave } = prepareUsjForChapterSave(fromEditor, fromPdp, 3);
+    expect(repairedUsj?.content).toEqual([chapter('3'), para('p', 'bo\uFEFFdy edited')]);
+    expect(usjToSave?.content).toEqual([chapter('3'), para('p', 'body edited')]);
+  });
+
   it('reports no repair and saves normally for an ordinary edit', () => {
     const fromPdp = usjOf(chapter('3'), para('p', 'body'));
     const fromEditor = usjOf(chapter('3'), para('p', 'body edited'));
@@ -322,6 +330,17 @@ describe('prepareUsjForChapterSave', () => {
       start: { jsonPath: "$.content[0]['number']", propertyOffset: 1 },
     };
     const stored = usjOf(chapter('2', { sid: 'GEN 2' }), para('p', 'body'), para('q1', 'poem'));
+
+    // After an earlier save has dropped a stored U+FEFF, the editor's text differs from the file's
+    // by that character alone, which must not read as more than the marker having been deleted.
+    it('to the end of the chapter line when the editor still holds a character a save dropped', () => {
+      const { caretTarget } = prepareUsjForChapterSave(
+        usjOf(para('p', 'bo\uFEFFdy'), para('q1', 'poem')),
+        stored,
+        2,
+      );
+      expect(caretTarget).toEqual(RESTORED_CHAPTER_2_NUMBER);
+    });
 
     // The caret is in the line that moved up into the deleted marker's place, which is not what is
     // left of the chapter line, so it does not stay there.

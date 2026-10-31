@@ -517,6 +517,11 @@ export type ReadOnlyInputs = {
   /** Whether the user's Scripture-edit permission is genuinely still resolving */
   isCanUserEditScriptureUnresolved: boolean;
   canUserEditScripture: boolean;
+  /**
+   * Whether the project's `platformScripture.allowInvisibleCharacters` could not be read, which
+   * leaves the editor unsure how the project spells a no-break space
+   */
+  isAllowInvisibleCharactersUnreadable: boolean;
   /** Whether an automatic Send/Receive is freezing editing */
   isSyncBlocked: boolean;
   /** Whether `platform.interfaceMode` is still loading */
@@ -530,12 +535,12 @@ export type ReadOnlyInputs = {
  * Derives the three read-only flags the editor web view uses.
  *
  * - `isReadOnlyEffective`: whether the editor is effectively read-only: the `isReadOnly` option, the
- *   project's `platform.isEditable` setting, the user's Scripture-edit permission, a sync block, or
- *   the read-only Preview (the formatted view in Power mode). Fails CLOSED (read-only) while
- *   editability or permission is genuinely still resolving and while `platform.interfaceMode` loads
- *   (which decides whether the formatted view is Preview), rather than relying on the fail-open
- *   default values during that window: a briefly-writable editor is worse than a briefly-read-only
- *   one.
+ *   project's `platform.isEditable` setting, the user's Scripture-edit permission, an unreadable
+ *   `allowInvisibleCharacters` setting, a sync block, or the read-only Preview (the formatted view
+ *   in Power mode). Fails CLOSED (read-only) while editability or permission is genuinely still
+ *   resolving and while `platform.interfaceMode` loads (which decides whether the formatted view is
+ *   Preview), rather than relying on the fail-open default values during that window: a
+ *   briefly-writable editor is worse than a briefly-read-only one.
  * - `isDurablyReadOnly`: the same reasons minus the loading states and minus `isSyncBlocked`, a
  *   transient freeze during an automatic Send/Receive rather than a real read-only state. Used for
  *   the tab title so it does not relabel "(Read-only)" and back on every scheduled sync; the
@@ -550,6 +555,7 @@ export function deriveReadOnlyFlags({
   isProjectEditable,
   isCanUserEditScriptureUnresolved,
   canUserEditScripture,
+  isAllowInvisibleCharactersUnreadable,
   isSyncBlocked,
   isInterfaceModeLoading,
   viewType,
@@ -567,6 +573,7 @@ export function deriveReadOnlyFlags({
     !isProjectEditable ||
     isCanUserEditScriptureUnresolved ||
     !canUserEditScripture ||
+    isAllowInvisibleCharactersUnreadable ||
     isSyncBlocked ||
     isInterfaceModeLoading ||
     isPreview;

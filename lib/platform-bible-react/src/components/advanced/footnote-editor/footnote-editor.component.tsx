@@ -54,7 +54,6 @@ import {
   deepEqual,
   getErrorMessage,
   isPlatformError,
-  truncateToCopyLimit,
   type PaletteItem,
 } from 'platform-bible-utils';
 import type { PaletteDriver, PaletteKeyForwarding } from 'platform-bible-utils/experimental';
@@ -79,7 +78,11 @@ import { FootnoteTypeDropdown } from './footnote-type-dropdown.component';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
 import { isEditorContextMenuOpenFor } from '../editor-context-menu.util';
 import { MarkerMenu } from '../marker-menu.component';
-import { generateInlineMarkerMenuListItems, isUnclosedNoteOp } from './footnote-editor.utils';
+import {
+  generateInlineMarkerMenuListItems,
+  getWholeNoteSelection,
+  isUnclosedNoteOp,
+} from './footnote-editor.utils';
 import { FootnoteCaretPosition } from '../footnotes/footnotes.types';
 
 /**
@@ -1112,17 +1115,40 @@ export default function FootnoteEditor({
     }
   }, [scrRef.book, scrRef.chapterNum]);
 
-  const handleCopy = async () => {
-    const editorInput = editorParentRef.current?.getElementsByClassName('editor-input')[0];
-    if (!editorInput?.textContent) return;
-    // The Copy button honors the same copy limit as a copy from the editor itself.
-    const text = truncateToCopyLimit(editorInput.textContent, editorOptions.copyLimit);
-    if (!text) return;
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch (error) {
-      console.warn(`Could not copy the footnote to the clipboard: ${getErrorMessage(error)}`);
-    }
+  /**
+   * Copies the whole note through the editor's own copy, so the clipboard gets what Ctrl+C on the
+   * note puts there: its USFM, with each space the editor displays as a no-break space written as a
+   * space and a stored no-break space as the project spells it, cut to the copy limit the way the
+   * editor cuts any copy (a note that does not fit whole copies nothing).
+   *
+   * The copy works on the editor's selection, so the note is selected for it and the user's
+   * selection is put back afterwards — all in this one handler: the editor commits the three
+   * selection changes as one, so the caret never visibly leaves where it was and a marker edit
+   * pending under it is not settled by a departure. When focus left the editor for the click,
+   * Lexical may have dropped the selection; the one captured as focus left is then what the user
+   * last saw, and the note's own text is the last resort, as {@link restoreSelectionIfLost} chooses.
+   * The copy moves DOM focus into the editor, so focus goes back to whatever held it — the Copy
+   * button itself after a click.
+   */
+  const handleCopy = () => {
+    const editor = editorRef.current;
+    const wholeNote = getWholeNoteSelection(editor?.getUsj());
+    if (!editor || !wholeNote) return;
+    const ownerDocument = editorParentRef.current?.ownerDocument ?? document;
+    const { activeElement: focusedBefore } = ownerDocument;
+    const selectionBefore = editor.getSelection() ?? lastFocusOutSelectionRef.current;
+    editor.setSelection(wholeNote);
+    editor.copy();
+    if (selectionBefore) editor.setSelection(selectionBefore);
+    else editor.selectNote(0);
+    // Reading the selection back commits the queued selection update now (it answers against the
+    // document `getUsj` would return), and that commit is what moves DOM focus into the editor, so
+    // focus can only be handed back after it.
+    editor.getSelection();
+    if (ownerDocument.activeElement === focusedBefore) return;
+    if (focusedBefore instanceof HTMLElement && focusedBefore !== ownerDocument.body)
+      focusedBefore.focus({ preventScroll: true });
+    else if (ownerDocument.activeElement instanceof HTMLElement) ownerDocument.activeElement.blur();
   };
 
   const handleCallerChange = useCallback(
@@ -1591,6 +1617,34 @@ export default function FootnoteEditor({
       };
     }
 
+    // Enter inside the note is the `\fp` footnote-paragraph break only in the editor's marker-edit
+    // engine, which runs only when markers are editable. Here Enter (and Shift+Enter) would be
+    // Lexical's own paragraph split / line break: the split puts the caret in the scaffolding
+    // paragraph after the note, where whatever is typed next is dropped on Save (Save writes only
+    // the note). So Enter does nothing here, as the editor's own `NoteEnterGuardPlugin` also
+    // swallows Enter inside a note in these views. Claimed in CAPTURE so Lexical's root-element
+    // listeners never see it; `beforeinput` covers the platforms and input methods that request
+    // the break without a keydown.
+    // TODO(PT-4909): Let Enter insert `\fp` here once these views support it.
+    const isEditorFocusedWithoutMenu = () => {
+      const editorInput = getEditorInput();
+      if (!editorInput || document.activeElement !== editorInput) return false;
+      // The popover's own right-click menu takes Enter to run its highlighted item.
+      return !isEditorContextMenuOpenFor(editorParentRef.current);
+    };
+    const swallowEnter = (event: KeyboardEvent) => {
+      if (event.key !== 'Enter' || isImeCompositionKeyEvent(event)) return;
+      if (!isEditorFocusedWithoutMenu()) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    const swallowParagraphInput = (event: InputEvent) => {
+      if (event.inputType !== 'insertParagraph' && event.inputType !== 'insertLineBreak') return;
+      if (!isEditorFocusedWithoutMenu()) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
     const handleKeyDown = (event: KeyboardEvent) => {
       const editorInput = getEditorInput();
       // Shows the marker menu if it isn't already being shown and if the editor is currently selected
@@ -1609,9 +1663,13 @@ export default function FootnoteEditor({
     };
 
     document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keydown', swallowEnter, { capture: true });
+    document.addEventListener('beforeinput', swallowParagraphInput, { capture: true });
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keydown', swallowEnter, { capture: true });
+      document.removeEventListener('beforeinput', swallowParagraphInput, { capture: true });
     };
   }, [
     showMarkersMenu,

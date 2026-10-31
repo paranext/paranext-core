@@ -25,6 +25,12 @@ export interface OpenScriptureEditorOptions {
    * over, which is what this guard exists to prove in the first place.
    */
   skipInitialLayoutGuard?: boolean;
+  /**
+   * The `OpenEditorOptions` passed to the open command as its second argument, e.g. `{ viewType:
+   * 'formatted' }` to open a view other than the interface mode's default. A view type passed here
+   * is persisted in the web view's state, so it wins over the power-mode Standard default.
+   */
+  editorOptions?: Record<string, unknown>;
 }
 const WEBSOCKET_PORT = 8876;
 const COMMAND_TIMEOUT_MS = 30_000;
@@ -199,7 +205,9 @@ export function installSampleProjectWithFont(options: {
  * registered or finished installing the sample project into an empty isolated root — observed as a
  * `-32601 'object:platform.Paratext-pdpf.…' not found` failure on cold first launches.
  */
-async function waitForSampleProjectMetadata(timeoutMs = LAUNCH_PHASE_TIMEOUT_MS): Promise<void> {
+export async function waitForSampleProjectMetadata(
+  timeoutMs = LAUNCH_PHASE_TIMEOUT_MS,
+): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
@@ -460,7 +468,7 @@ async function openEditorViaCommand(
 
     const editorId = await sendPapiRequestOnce<string | undefined>(
       `command:${commandName}`,
-      [projectId],
+      options.editorOptions ? [projectId, options.editorOptions] : [projectId],
       WEBSOCKET_PORT,
       60_000,
     );
@@ -484,17 +492,20 @@ async function openEditorViaCommand(
  *
  * @param mainPage The Electron main window page
  * @param projectId The id of the project to open the editable Scripture editor for
+ * @param options Caller overrides — see {@link OpenScriptureEditorOptions}
  * @returns The editor's webViewId
  */
 export async function openEditableScriptureEditorForProject(
   mainPage: Page,
   projectId: string,
+  options: OpenScriptureEditorOptions = {},
 ): Promise<string> {
   return openEditorViaCommand(
     mainPage,
     'platformScriptureEditor.openScriptureEditor',
     projectId,
     'an editable Scripture editor',
+    options,
   );
 }
 

@@ -67,7 +67,10 @@ type SearchResultsInBookProps = {
   replaceConfig?: ReplaceConfig;
   /** Options controlling how the replace preview is displayed. Forwarded to each result. */
   previewOptions?: PreviewOptions;
-  /** Whether the project has AllowInvisibleChars enabled. Forwarded to each result. */
+  /**
+   * Whether the project has AllowInvisibleChars enabled. Decides how the verse context spells a
+   * no-break space, and forwarded to each result.
+   */
   allowInvisibleCharacters?: boolean;
   localizedStrings: {
     [localizedInventoryKey in (typeof SEARCH_RESULT_LOCALIZED_STRING_KEYS)[number]]?: LocalizedStringValue;
@@ -124,14 +127,17 @@ export function SearchResultsInBook({
   const usjReaderWriter = useMemo(() => {
     if (!usjBook) return undefined;
     try {
-      return new UsjReaderWriter(usjBook, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
+      return new UsjReaderWriter(usjBook, {
+        markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
+        shouldAllowInvisibleCharacters: allowInvisibleCharacters,
+      });
     } catch (error) {
       // Same best-effort policy: fall back to no-context rendering, but log unexpected parse
       // failures so they aren't silently lost.
       logger?.warn(`Find: failed to parse USJ for book ${bookId}:`, error);
       return undefined;
     }
-  }, [usjBook, bookId, logger]);
+  }, [usjBook, bookId, allowInvisibleCharacters, logger]);
 
   // Cache the USFM string once per book so individual result cards don't each serialize the book.
   const cachedUsfm = useMemo(() => {

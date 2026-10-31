@@ -21,13 +21,8 @@ import type PapiBackend from '@papi/backend';
 import type PapiFrontend from '@papi/frontend';
 // Type-only: `main.ts` reaches this module in the extension host, where the `require` shim supplies
 // only `papi`, so this package must never become a runtime import here (see the note at the top of
-// this file). `USJ_VERSION` is used solely under `typeof`, so `import type` keeps it erased.
-import type {
-  MarkerContent,
-  MarkerObject,
-  Usj,
-  USJ_VERSION,
-} from '@eten-tech-foundation/scripture-utilities';
+// this file).
+import type { MarkerContent, MarkerObject, Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
   aggregateUnsubscribers,
   formatReplacementString,
@@ -274,21 +269,6 @@ export function valuesAreDeeplyEqual(a: unknown, b: unknown): boolean {
 // Alias that makes the "across iframes" intent explicit for callers that prefer it.
 // Exported with this syntax to preserve the TSDocs
 export { valuesAreDeeplyEqual as deepEqualAcrossIframes };
-
-/**
- * Corrects editor USJ version from 3.1 to 3.0. Returns a shallow clone of the object passed in.
- *
- * Currently, this is appropriate to do because the editor seems to work properly with 3.0, but it
- * doesn't handle the version well right now. It always sets it to 3.1 even if it started as 3.0.
- * When we better deal with USFM version differences and when Paratext 9 adds 3.1.2 support, we will
- * need to change how we're handling this.
- */
-export function correctEditorUsjVersion(editorUsj: Usj): Usj {
-  // Use version 3.0 because `ParatextData.dll` serves 3.0 but the editor isn't handling version
-  // well right now
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return { ...editorUsj, version: '3.0' as typeof USJ_VERSION };
-}
 
 /** Whether `jsonPath` names the very last item of `usj`: the last item at every level. */
 function isFinalItemOfDocument(usj: Usj, jsonPath: string): boolean {
@@ -876,15 +856,11 @@ export function decideNoteSessionUpdate(state: NoteSessionUpdateState): NoteSess
  * The notes in a document the editor produced, in document order - the list the footnotes pane
  * shows and `EditorRef.getNoteIndex` indexes.
  *
- * The editor stamps its documents with a USJ version the markers map is not declared for, and
- * `UsjReaderWriter` warns on every read when that happens; this corrects the version first (see
- * {@link correctEditorUsjVersion}) so reading the notes on every keystroke logs nothing.
- *
  * @param editorUsj A document from the editor (`EditorRef.getUsj`) or the PDP
  * @returns The notes, as `UsjReaderWriter.findAllNotes` returns them
  */
 export function findEditorUsjNotes(editorUsj: Usj): MarkerObject[] {
-  return new UsjReaderWriter(correctEditorUsjVersion(editorUsj), {
+  return new UsjReaderWriter(editorUsj, {
     markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
   }).findAllNotes();
 }
@@ -944,8 +920,7 @@ export function resolveNoteVerseRef(
 ): SerializedVerseRef | undefined {
   if (!usj || noteIndex < 0) return undefined;
   try {
-    // Corrected for the same reason as in `findEditorUsjNotes`.
-    const usjReaderWriter = new UsjReaderWriter(correctEditorUsjVersion(usj), {
+    const usjReaderWriter = new UsjReaderWriter(usj, {
       markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
     });
     const note = usjReaderWriter.findAllNotes()[noteIndex];

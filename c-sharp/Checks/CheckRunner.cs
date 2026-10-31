@@ -202,7 +202,12 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
 
         var scrText = LocalParatextProjects.GetParatextProject(projectId);
         scrText.ThrowIfOpenBlocked();
-        var check = _createCheck(checkId, new ChecksDataSource(scrText));
+        var dataSource = new ChecksDataSource(scrText);
+        ScriptureCheckBase check;
+        // Creating the check initializes it, which can save the project's settings
+        // TODO(PT-4971): wait for the sync to end instead of refusing, as Paratext 9 does
+        using (SendReceiveWriteLock.EnterWrite(projectId))
+            check = _createCheck(checkId, dataSource);
         return CheckSetupStatusLookup.Lookup(checkId, check, scrText);
     }
 
@@ -229,7 +234,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         // would get through without this.
         LocalParatextProjects.GetParatextProject(projectId).ThrowIfOpenBlocked();
 
-        var check = _checkCache.GetCheck(checkId, projectId);
+        var check = _checkCache.GetCheckInWriteScope(checkId, projectId);
         var denials = GetOrCreateDenials(projectId);
         denials.AddDenial(new Enum<MessageId>(checkResultType), vRef, null, itemText);
         denials.Save();
@@ -254,7 +259,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         // As in DenyCheckResult: covers a check cached before the project became unopenable.
         LocalParatextProjects.GetParatextProject(projectId).ThrowIfOpenBlocked();
 
-        var check = _checkCache.GetCheck(checkId, projectId);
+        var check = _checkCache.GetCheckInWriteScope(checkId, projectId);
         var denials = GetOrCreateDenials(projectId);
         denials.RemoveDenial(new Enum<MessageId>(checkResultType), vRef, null, itemText);
         denials.Save();

@@ -3130,6 +3130,28 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       }
     }
 
+    // A character marker that directly follows a chapter marker (e.g. the second run in
+    // `\c 5 \ca 5a\ca* \ca 5b\ca*`) needs the space ParatextData writes after the chapter and its
+    // folded `\ca`/`\cp` attributes (`UsxFragmenter.AppendStartUsfm` ends every `\c` with a space).
+    // USJ has no whitespace node there, so without this the two runs fuse together. The output is
+    // tested for a trailing space only once the sibling is known to be a chapter: `usfmOutput` is
+    // the whole document so far, and testing it for every character marker slows a book down.
+    if (
+      typeof markerParentOrIsInsideMarkerWithSameType === 'object' &&
+      !('isClosingMarker' in marker) &&
+      marker.type === 'char'
+    ) {
+      const siblings = markerParentOrIsInsideMarkerWithSameType.content;
+      const markerIndex = siblings?.indexOf(marker) ?? -1;
+      const previousSibling = markerIndex > 0 ? siblings?.[markerIndex - 1] : undefined;
+      if (
+        typeof previousSibling === 'object' &&
+        previousSibling.type === 'chapter' &&
+        !/\s$/.test(usfmOutput)
+      )
+        usfmOutput += ' ';
+    }
+
     // Add the marker fragments and USFM into the existing fragments and USFM
     if (fragmentsInfo)
       UsjReaderWriter.mergeFragmentsInfoIntoExistingArray(
@@ -3716,9 +3738,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
           UsjReaderWriter.isTopLevelUsjMarker(nodeOrClosingFragment, workingStack) &&
           !topLevelUsjMarker
         ) {
-          // The USJ types aren't set up to know about 3.0 right now, but we should handle it anyway
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          if ((nodeOrClosingFragment.version as string) !== '3.0') {
+          if (nodeOrClosingFragment.version !== '3.0') {
             // Don't output the USJ marker if it is 3.0 (3.0 is assumed and should not appear in
             // the USFM)
             topLevelUsjMarker = nodeOrClosingFragment;

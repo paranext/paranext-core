@@ -9,18 +9,18 @@ import { ArmedHintKind } from './two-step-delete-tooltip.utils';
  * verse markers, or a paragraph merge is armed. The real editor (shared-react's
  * `StructureKeyboardPlugin`) arms/disarms this purely by toggling DOM signals —
  * `data-verse-delete-intent`/`data-verse-delete-kind` on its root, and a `verse-selected` class on
- * the armed verse marker or `para-merge-armed` on the armed paragraph's marker — which this overlay
- * picks up via a `MutationObserver`. The buttons below simulate the editor by toggling those same
- * DOM signals directly (bypassing React), the same way the real editor does, so this story
- * exercises the overlay's actual observe/arm/disarm/re-anchor machinery rather than a fake standing
- * in for it.
+ * the armed verse marker, or `para-merge-armed` on the armed paragraph's marker — which this
+ * overlay picks up via a `MutationObserver`. The buttons below simulate the editor by toggling
+ * those same DOM signals directly (bypassing React), the same way the real editor does, so this
+ * story exercises the overlay's actual observe/arm/disarm/re-anchor machinery rather than a fake
+ * standing in for it.
  *
  * **Try it**: click an "Arm" button to show the hint anchored to the verse-5 marker below, then
  * scroll the box — the hint follows the marker (the scroll-triggered re-anchor path). "Arm:
  * Backspace on selection" also highlights a range of text spanning the marker, standing in for a
  * real editor selection that happens to contain a verse marker. The three paragraph buttons anchor
- * the hint to the `\p` marker before verse 6 instead, one per paragraph-merge message. Click Disarm
- * to hide it again (simulates either confirming or cancelling the delete in the real editor).
+ * it to the `\p` marker before verse 6, one per paragraph-merge message. Click Disarm to hide it
+ * again (simulates either confirming or cancelling the delete in the real editor).
  */
 const meta: Meta<typeof TwoStepDeleteTooltipOverlay> = {
   title: 'Bundled Extensions/platform-scripture-editor/TwoStepDeleteTooltipOverlay',
@@ -66,8 +66,9 @@ const SELECTION_HIGHLIGHT_COLOR = 'rgba(250, 204, 21, 0.4)';
 /**
  * Mock editor content plus the buttons that simulate the real `StructureKeyboardPlugin`: they set
  * `data-verse-delete-intent`/`data-verse-delete-kind` on `rootRef` and toggle `verse-selected` on
- * `markerRef` by calling DOM methods directly (not via React state), the same non-React mutation
- * the overlay's `MutationObserver` is built to observe.
+ * `markerRef`, or `para-merge-armed` on `paraMarkerRef` for a paragraph merge, by calling DOM
+ * methods directly (not via React state), the same non-React mutation the overlay's
+ * `MutationObserver` is built to observe.
  */
 function TwoStepDeleteDemo() {
   // The ref needs to start out with null for it to work as an element ref

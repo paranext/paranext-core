@@ -187,6 +187,38 @@ const testUSFM2SACh3Usj = JSON.parse(readTestDataFile('testUSFM-2SA-3.usj'));
  */
 const testUSFM2SACh3UsjCorrected = JSON.parse(readTestDataFile('testUSFM-2SA-3-corrected.usj'));
 
+/** TestUSFM 2 Samuel 4 in USFM, at rest in Paratext 9: standard USFM chapters 1-3 do not use. */
+const testUSFM2SACh4Usfm = readTestDataFile('testUSFM-2SA-4.usfm');
+
+/** TestUSFM 2 Samuel 5 in USFM, at rest in Paratext 9: deliberately damaged USFM. */
+const testUSFM2SACh5Usfm = readTestDataFile('testUSFM-2SA-5.usfm');
+
+/** TestUSFM 1 Samuel 1 in USFM, at rest in Paratext 9: a book start with introduction material. */
+const testUSFM1SACh1Usfm = readTestDataFile('testUSFM-1SA-1.usfm');
+
+/**
+ * TestUSFM 2 Samuel 4: ParatextData's USX (`pdp-usx/testUSFM-2SA-4-ch4.usx`) converted by
+ * `usxStringToUsj`, with version 3.1 replaced with 3.0 in the USJ marker.
+ */
+const testUSFM2SACh4Usj = JSON.parse(readTestDataFile('testUSFM-2SA-4.usj'));
+
+/**
+ * TestUSFM 2 Samuel 5: ParatextData's USX (`pdp-usx/testUSFM-2SA-5-ch5.usx`) converted by
+ * `usxStringToUsj`, with the following modifications:
+ *
+ * - Version 3.1 replaced with 3.0 in the USJ marker.
+ * - Each of the three nameless paragraphs (`<para style="">`, from `\ 2`, `\ text` and the bare `\`
+ *   at the end of verse 3) has `marker: ""` in place of the `style: ""` property `usxStringToUsj`
+ *   leaves behind when it drops an empty style. The empty marker is the author's own bytes.
+ */
+const testUSFM2SACh5Usj = JSON.parse(readTestDataFile('testUSFM-2SA-5.usj'));
+
+/**
+ * TestUSFM 1 Samuel 1: ParatextData's USX (`pdp-usx/testUSFM-1SA-1-ch1.usx`) converted by
+ * `usxStringToUsj`, with version 3.1 replaced with 3.0 in the USJ marker.
+ */
+const testUSFM1SACh1Usj = JSON.parse(readTestDataFile('testUSFM-1SA-1.usj'));
+
 // #endregion testUSFM test data - in Paratext 9 USFM 3.0 format
 
 // #region testUSFM test data - in canonical 3.1 format
@@ -2550,6 +2582,48 @@ describe('toUsfm transforms USJ 3.0 to Paratext USFM 3.0', () => {
     expect(resultingUsfm).toBe(testUSFM2SACh3Usfm);
   });
 
+  test('2SA 4 testUSFM', () => {
+    const usjDoc = new UsjReaderWriter(testUSFM2SACh4Usj, usjReaderWriterOptionsParatext3_0);
+
+    const resultingUsfm = usjDoc.toUsfm();
+    expect(resultingUsfm).toBe(testUSFM2SACh4Usfm);
+  });
+
+  // Byte-for-byte equal to the at-rest text except for the accepted writer convention of breaking
+  // the line after `\c 5` before `\ca` (the 2SA 1-3 fixtures, saved in Paratext 9's Unformatted
+  // view, keep that break too). Normalizing only that break keeps every other byte pinned.
+  test('2SA 5 testUSFM matches modulo the line break before the chapter alternate number', () => {
+    const usjDoc = new UsjReaderWriter(testUSFM2SACh5Usj, usjReaderWriterOptionsParatext3_0);
+
+    const resultingUsfm = usjDoc.toUsfm();
+    expect(resultingUsfm.replace('\\c 5\n \\ca', '\\c 5 \\ca')).toBe(testUSFM2SACh5Usfm);
+  });
+
+  test('2SA 5 keeps the space between the chapter alternate number and a following top-level ca', () => {
+    const usjDoc = new UsjReaderWriter(testUSFM2SACh5Usj, usjReaderWriterOptionsParatext3_0);
+
+    expect(usjDoc.toUsfm()).toContain('\\ca 5a\\ca* \\ca 5b\\ca*');
+  });
+
+  test('2SA 5 testUSFM after the chapter line', () => {
+    const usjDoc = new UsjReaderWriter(testUSFM2SACh5Usj, usjReaderWriterOptionsParatext3_0);
+    const afterChapterLine = (usfm: string) => {
+      const firstParagraph = usfm.indexOf('\\p\n');
+      expect(firstParagraph).toBeGreaterThan(0);
+      return usfm.slice(firstParagraph);
+    };
+
+    const resultingUsfm = usjDoc.toUsfm();
+    expect(afterChapterLine(resultingUsfm)).toBe(afterChapterLine(testUSFM2SACh5Usfm));
+  });
+
+  test('1SA 1 testUSFM', () => {
+    const usjDoc = new UsjReaderWriter(testUSFM1SACh1Usj, usjReaderWriterOptionsParatext3_0);
+
+    const resultingUsfm = usjDoc.toUsfm();
+    expect(resultingUsfm).toBe(testUSFM1SACh1Usfm);
+  });
+
   // Pins closing-marker suppression for implicitly closed char markers. ParatextData emits
   // `closed="false"` on char markers whose closing marker is absent in the source USFM (common for
   // footnote/cross-reference content like \fr and \ft), and editors that skip rendering those
@@ -2968,6 +3042,75 @@ describe('Marker problems are reported once each, not once per occurrence', () =
     // document is malformed, and the writer silently emits the USJ's type instead.
     expect(fewReports.some((report) => report.includes('Mismatching marker type'))).toBe(true);
     expect(manyReports).toHaveLength(fewReports.length);
+  });
+});
+
+describe('shouldAllowInvisibleCharacters (the project setting platformScripture.allowInvisibleCharacters)', () => {
+  const NBSP = '\u00A0';
+  /** A chapter carrying a no-break space and a tilde in verse text and inside a character span. */
+  const usjWithNbspAndTilde: Usj = {
+    type: USJ_TYPE,
+    // testing 3.0. Usj can be any version, but the `Usj` type says only 3.1
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    version: '3.0' as typeof USJ_VERSION,
+    content: [
+      { type: 'book', marker: 'id', code: 'MAT', content: [] },
+      { type: 'chapter', marker: 'c', number: '1', sid: 'MAT 1' },
+      {
+        type: 'para',
+        marker: 'p',
+        content: [
+          { type: 'verse', marker: 'v', number: '1', sid: 'MAT 1:1' },
+          `one${NBSP}two three~four `,
+          { type: 'char', marker: 'nd', content: [`five${NBSP}six`] },
+          ' seven',
+        ],
+      },
+    ],
+  };
+
+  function readerWriter(shouldAllowInvisibleCharacters?: boolean): UsjReaderWriter {
+    return new UsjReaderWriter(usjWithNbspAndTilde, {
+      ...usjReaderWriterOptionsParatext3_0,
+      shouldAllowInvisibleCharacters,
+    });
+  }
+
+  test('off (the default): toUsfm spells a no-break space as ~, and a ~ stays ~', () => {
+    const usfm = readerWriter().toUsfm();
+
+    expect(usfm).toContain('one~two three~four \\nd five~six\\nd* seven');
+    expect(usfm).not.toContain(NBSP);
+    expect(readerWriter(false).toUsfm()).toBe(usfm);
+  });
+
+  test('on: toUsfm writes a no-break space and a ~ verbatim and distinct', () => {
+    const usfm = readerWriter(true).toUsfm();
+
+    expect(usfm).toContain(`one${NBSP}two three~four \\nd five${NBSP}six\\nd* seven`);
+  });
+
+  test('either way, USFM indices and USJ locations agree, because ~ and a no-break space are one code unit each', () => {
+    const textAfterNbsps: UsjDocumentLocation = { jsonPath: '$.content[2].content[3]', offset: 1 };
+    const [off, on] = [readerWriter(false), readerWriter(true)];
+
+    const offLocation = off.usjDocumentLocationToUsfmVerseRefVerseLocation(textAfterNbsps);
+    const onLocation = on.usjDocumentLocationToUsfmVerseRefVerseLocation(textAfterNbsps);
+    expect(onLocation).toEqual(offLocation);
+
+    const offIndex = off.usfmVerseLocationToIndexInUsfm(offLocation);
+    expect(on.usfmVerseLocationToIndexInUsfm(onLocation)).toBe(offIndex);
+    expect(off.toUsfm().substring(offIndex)).toMatch(/^seven\s*$/);
+    expect(on.toUsfm().substring(offIndex)).toMatch(/^seven\s*$/);
+  });
+
+  test('either way, search reads the USJ text, so ~ matches only a tilde and a no-break space matches only itself', () => {
+    [false, true].forEach((shouldAllowInvisibleCharacters) => {
+      const rw = readerWriter(shouldAllowInvisibleCharacters);
+
+      expect(rw.search(/~/g).map(({ text }) => text)).toEqual(['~']);
+      expect(rw.search(/\u00A0/g)).toHaveLength(2);
+    });
   });
 });
 

@@ -10,16 +10,12 @@ import {
   getEnterMenuItems,
   getMarkerMenuItems,
   GENERATOR_NOTE_CALLER,
-  getDefaultViewOptions,
-  getViewOptions,
   HIDDEN_NOTE_CALLER,
   isInsertEmbedOpOfType,
   MarkerMenuContext,
   MarkerMenuItem,
-  PARAGRAPH_STRUCTURE_VIEW_MODE,
   SelectionRange,
   SetUsjOptions,
-  STANDARD_VIEW_MODE,
   StructureProtectionMode,
   StyleInfo,
   TypedMarkOnClick,
@@ -28,12 +24,7 @@ import {
   UsjNodeOptions,
   ViewOptions,
 } from '@eten-tech-foundation/platform-editor';
-import {
-  MarkerObject,
-  Usj,
-  USJ_TYPE,
-  USJ_VERSION,
-} from '@eten-tech-foundation/scripture-utilities';
+import { MarkerObject, Usj, USJ_TYPE } from '@eten-tech-foundation/scripture-utilities';
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
@@ -173,13 +164,18 @@ import {
   isEditMenuCommand,
 } from './edit-menu-actions.util';
 import { createFlushableDebouncer } from './flushable-debouncer.util';
-import { isEditorContentForChapter, performDebouncedPdpSave } from './debounced-pdp-save.util';
+import {
+  editorHoldsUnsavedChanges,
+  isEditorContentForChapter,
+  performDebouncedPdpSave,
+} from './debounced-pdp-save.util';
 import {
   PLATFORM_CARET_RESTORE_TIMERS,
   isCaretPlacedAt,
   scheduleCaretRestore,
   ScheduledCaretRestore,
 } from './caret-restore.util';
+import { getEditorViewOptions } from './editor-view-options.util';
 import {
   applyChapterSavePreparation,
   CARET_AT_DOCUMENT_END,
@@ -195,11 +191,15 @@ import {
   SYNC_EDIT_BLOCKED_REGEX,
 } from './save-failure-report.util';
 import { withWriteInFlightGuard } from './write-in-flight-guard.util';
-import { resolveFindSelectionText } from './find-trigger.util';
+import { resolveMenuFindSelectionText } from './find-trigger.util';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useSelectionSnapshot } from './use-selection-snapshot.hook';
 import { usePauseEditing } from './use-pause-editing.hook';
 import { EditorDocumentSelector, useEditorPdpSync } from './use-editor-pdp-sync.hook';
+import {
+  getChapterForEditor,
+  useAllowInvisibleCharacters,
+} from './use-allow-invisible-characters.hook';
 import { toBookChapterKey, useScrollToRange } from './use-scroll-to-range.hook';
 import { applyEditorScrRefReport } from './editor-scr-ref-report.util';
 import {
@@ -212,7 +212,6 @@ import {
   availableScrollGroupIds,
   bookHoldsChapters,
   canAddChapterNumber,
-  correctEditorUsjVersion,
   decideNoteCallerClickAction,
   decideNoteSessionUpdate,
   deepEqualAcrossIframes,
@@ -303,6 +302,10 @@ import {
   SyncBlockedBanner,
   SYNC_BLOCKED_BANNER_STRING_KEYS,
 } from './sync-blocked-banner.component';
+import {
+  SettingUnreadableBanner,
+  SETTING_UNREADABLE_BANNER_STRING_KEYS,
+} from './setting-unreadable-banner.component';
 import { COPYRIGHT_NOTICE_STRING_KEYS } from './copyright-notice/copyright-notice.const';
 import { ProjectCopyrightNotice } from './copyright-notice/project-copyright-notice.component';
 import {
@@ -345,6 +348,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...NO_PROJECT_VIEW_STRING_KEYS,
   ...TEAM_LAYOUT_BUTTON_STRING_KEYS,
   ...SYNC_BLOCKED_BANNER_STRING_KEYS,
+  ...SETTING_UNREADABLE_BANNER_STRING_KEYS,
   ...COPYRIGHT_NOTICE_STRING_KEYS,
   HIDDEN_CONTENT_DELETE_PROMPT_KEY,
   // Not read by this file. Loaded here so that whichever component mounts the character-marker menu
@@ -437,11 +441,17 @@ const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availabl
  */
 // scripture text extraction now handled by legacyCommentManager.createCommentUsj
 
-const defaultUsj: Usj = correctEditorUsjVersion({
+/**
+ * Stands in for the chapter until the PDP delivers it. "3.0" because that is the version
+ * ParatextData serves, and this web view reads the editor's documents with a 3.0 markers map that
+ * warns on any other version. The editor itself is never handed this placeholder (a spinner shows
+ * instead); the footnotes pane and the blank-chapter check read it until the chapter arrives.
+ */
+const defaultUsj: Usj = {
   type: USJ_TYPE,
-  version: USJ_VERSION,
+  version: '3.0',
   content: [],
-});
+};
 
 const defaultEditorDecorations: EditorDecorations = {};
 
@@ -514,22 +524,6 @@ function runInsertFromContextMenu(
  */
 type MarkerMenuAnchorContext = MarkerMenuContext & {
   anchorRect?: { x: number; y: number; width: number; height: number };
-};
-
-// Return the appropriate ViewOptions for the given webview `viewType`.
-// Centralizes the logic so initialization and effects can call the same helper
-// instead of duplicating the shallow-copy code.
-const getViewOptionsForType = (
-  viewType: ScriptureEditorViewType,
-  isPowerMode: boolean,
-): ViewOptions => {
-  if (viewType === 'standard') {
-    return getViewOptions(STANDARD_VIEW_MODE) ?? getDefaultViewOptions();
-  }
-  // Power users get to choose their own view options, so don't force the paragraph-structure
-  // preset on them.
-  if (isPowerMode) return getDefaultViewOptions();
-  return getViewOptions(PARAGRAPH_STRUCTURE_VIEW_MODE) ?? getDefaultViewOptions();
 };
 
 /**
@@ -691,7 +685,7 @@ function PlatformScriptureEditor({
       pendingComment?.anchoredText === undefined ||
       !hasPendingCommentTextChanged(
         { range: pendingComment.range, anchoredText: pendingComment.anchoredText },
-        correctEditorUsjVersion(usj),
+        usj,
       )
     )
       return;
@@ -916,6 +910,15 @@ function PlatformScriptureEditor({
     // Using || to make sure we get default if it is an empty string or if it is undefined
     return textDirectionPossiblyError || defaultTextDirection;
   }, [textDirectionPossiblyError]);
+
+  // Whether the project keeps `~` (a literal tilde) and a no-break space distinct. Off, its USFM
+  // spells a no-break space `~`; on, both are written as themselves. Anything here that turns this
+  // project's USJ into USFM has to spell it the project's way. Never guessed: the chapter is held
+  // back from the editor until it has been read (`usjForEditor`), and a read error makes the editor
+  // read-only (`isReadOnlyEffective`). `false` below only fills the view options of an editor that
+  // either is not showing yet or cannot save.
+  const allowInvisibleCharactersSetting = useAllowInvisibleCharacters(projectId);
+  const allowInvisibleCharacters = allowInvisibleCharactersSetting.value ?? false;
 
   // The next two reactive signals gate whether the Scripture Editor is writable: whether the
   // project itself is editable (`platform.isEditable`) and whether the current user has a
@@ -1215,8 +1218,7 @@ function PlatformScriptureEditor({
    * Publishes the editor's document to the pane, but only when the NOTES in it differ from what the
    * pane already holds — see {@link shouldPublishPaneDocument} for why, and for the rule itself.
    */
-  const publishLiveEditorUsjIfNotesChanged = useCallback((editorUsj: Usj) => {
-    const usj = correctEditorUsjVersion(editorUsj);
+  const publishLiveEditorUsjIfNotesChanged = useCallback((usj: Usj) => {
     let notes: MarkerObject[] | undefined;
     try {
       notes = findEditorUsjNotes(usj);
@@ -1239,7 +1241,7 @@ function PlatformScriptureEditor({
    */
   const replacePaneDocument = useCallback((editorUsj: Usj | undefined) => {
     publishedPaneNotesRef.current = undefined;
-    setLiveEditorUsj(editorUsj && correctEditorUsjVersion(editorUsj));
+    setLiveEditorUsj(editorUsj);
   }, []);
 
   /**
@@ -1428,6 +1430,7 @@ function PlatformScriptureEditor({
         isProjectEditable,
         isCanUserEditScriptureUnresolved,
         canUserEditScripture,
+        isAllowInvisibleCharactersUnreadable: allowInvisibleCharactersSetting.isUnreadable,
         isSyncBlocked,
         isInterfaceModeLoading,
         viewType,
@@ -1439,6 +1442,7 @@ function PlatformScriptureEditor({
       isProjectEditable,
       isCanUserEditScriptureUnresolved,
       canUserEditScripture,
+      allowInvisibleCharactersSetting.isUnreadable,
       isSyncBlocked,
       isInterfaceModeLoading,
       viewType,
@@ -1735,9 +1739,10 @@ function PlatformScriptureEditor({
     });
   }, [newTitleIfUpdated, updateWebViewDefinition]);
 
-  const viewOptions = useMemo<ViewOptions>(() => {
-    return getViewOptionsForType(viewType, isPowerMode);
-  }, [viewType, isPowerMode]);
+  const viewOptions = useMemo<ViewOptions>(
+    () => getEditorViewOptions(viewType, isPowerMode, allowInvisibleCharacters),
+    [viewType, isPowerMode, allowInvisibleCharacters],
+  );
 
   /**
    * Always-current {@link closeFootnoteEditor}, which is declared far below this point: the ref
@@ -1978,10 +1983,9 @@ function PlatformScriptureEditor({
     // document end). The validation turns either case into a warning instead of a mis-anchored
     // comment or a crash.
     const editorUsj = editorRef.current?.getUsj();
-    const editorUsjCorrected = editorUsj ? correctEditorUsjVersion(editorUsj) : undefined;
     let anchoredText: string | undefined;
-    if (editorUsjCorrected) {
-      const validation = validateCommentSelection(selection, editorUsjCorrected);
+    if (editorUsj) {
+      const validation = validateCommentSelection(selection, editorUsj);
       if ('notice' in validation) {
         if (validation.warning) logger.warn(validation.warning);
         papi.notifications.send({ message: validation.notice, severity: 'warning' });
@@ -1989,7 +1993,7 @@ function PlatformScriptureEditor({
       }
       annotationRange.start = { ...validation.range.start };
       annotationRange.end = { ...validation.range.end };
-      anchoredText = readCommentRangeText(validation.range, editorUsjCorrected);
+      anchoredText = readCommentRangeText(validation.range, editorUsj);
     }
 
     // Try to find the selected text element to anchor the popover to. No rendered editor content
@@ -2813,7 +2817,7 @@ function PlatformScriptureEditor({
 
   // Ctrl+F opens Find for this editor's own project. Uses the same hook as the read-only reference
   // panels so there is a single Ctrl+F→openFind implementation across every scripture tab type.
-  useOpenFindShortcut(webViewId, projectId);
+  useOpenFindShortcut(webViewId, projectId, viewOptions);
 
   // `.editor-input` is the Lexical content element (the same selector the marker-menu handler uses).
   const getSelectionBeforePointerPress = useSelectionSnapshot('.editor-input');
@@ -2831,8 +2835,12 @@ function PlatformScriptureEditor({
    */
   const getMenuFindSelectionText = useCallback(
     () =>
-      resolveFindSelectionText(window.getSelection()?.toString(), getSelectionBeforePointerPress()),
-    [getSelectionBeforePointerPress],
+      resolveMenuFindSelectionText(
+        window.getSelection()?.toString(),
+        getSelectionBeforePointerPress(),
+        viewOptions,
+      ),
+    [getSelectionBeforePointerPress, viewOptions],
   );
 
   // Listen for the marker menu trigger to open the marker menu, for F7 (footnotes), Ctrl+E (toggle
@@ -3218,9 +3226,13 @@ function PlatformScriptureEditor({
         isPowerMode,
         isInterfaceModeLoading,
         mainViewOptions: options.view,
-        standardViewOptions: getViewOptionsForType('standard', isPowerMode),
+        standardViewOptions: getEditorViewOptions(
+          'standard',
+          isPowerMode,
+          allowInvisibleCharacters,
+        ),
       }),
-    [isPowerMode, isInterfaceModeLoading, options.view],
+    [isPowerMode, isInterfaceModeLoading, options.view, allowInvisibleCharacters],
   );
   /**
    * {@link footnotesPaneViewOptions}, held while a row-editor session ends. When the pane stops
@@ -3295,6 +3307,11 @@ function PlatformScriptureEditor({
 
     return [defaultUsj, !isBookMissingHere];
   }, [usjFromPdpError, usjFromPdpPossiblyError, currentBookNum, projectId]);
+
+  // The chapter as the editor may have it: withheld (the spinner shows) until the project's
+  // `allowInvisibleCharacters` has been read — see `getChapterForEditor`. Everything that mounts or
+  // fills the editor reads this rather than `usjFromPdp`, so the content arrives with the editor.
+  const usjForEditor = getChapterForEditor(usjFromPdp, allowInvisibleCharactersSetting);
 
   // A book the project simply lacks is ordinary navigation rather than a fault, so it is logged at
   // `debug`, which packaged builds drop (`global-this.model.ts` runs at `info` when packaged). That
@@ -3845,7 +3862,7 @@ function PlatformScriptureEditor({
       // (`setTransientInput`), so what arrives here is already the document we mean to save.
       const { usjToSave, shouldAnnounceRepairOnWrite } = applyChapterSavePreparation({
         preparation: prepareUsjForChapterSave(
-          correctEditorUsjVersion(usjFromEditor),
+          usjFromEditor,
           usjFromPdp,
           savedChapterSelector.chapterNum,
           // Only acted on when the repair is pushed back, which happens only while this editor
@@ -3965,9 +3982,7 @@ function PlatformScriptureEditor({
           hasLoadedDocument: () => {
             if (outgoingFirstBlock && editorRoot?.contains(outgoingFirstBlock)) return false;
             const editorUsj = editorRef.current?.getUsj();
-            return (
-              !!editorUsj && deepEqualAcrossIframes(correctEditorUsjVersion(editorUsj), repairedUsj)
-            );
+            return !!editorUsj && deepEqualAcrossIframes(editorUsj, repairedUsj);
           },
           setSelection: (selection) => editorRef.current?.setSelection(selection),
           isCaretAt: (target) => {
@@ -4152,9 +4167,9 @@ function PlatformScriptureEditor({
             );
             return true;
           }
-          let editorUsj = editorRef.current?.getUsj();
-          if (editorUsj) editorUsj = correctEditorUsjVersion(editorUsj);
-          if (!deepEqualAcrossIframes(editorUsj, newUsj)) saveUsjToPdpIfUpdatedInternal(editorUsj);
+          const editorUsj = editorRef.current?.getUsj();
+          if (editorHoldsUnsavedChanges(editorUsj, newUsj))
+            saveUsjToPdpIfUpdatedInternal(editorUsj);
         }
         return true;
       } catch (e) {
@@ -4886,7 +4901,7 @@ function PlatformScriptureEditor({
     return activity.isActive;
   }, [closeFootnoteEditor]);
   useEditorPdpSync({
-    usjFromPdp,
+    usjFromPdp: usjForEditor,
     documentSelector: chapterUsjSelector,
     editorRef,
     usjSentToPdp,
@@ -4901,8 +4916,8 @@ function PlatformScriptureEditor({
   // On loading the first time, scroll the selected verse into view and set focus to the editor
   useEffect(() => {
     if (
-      usjFromPdp &&
-      (usjFromPdp.content?.length ?? 0) > 0 &&
+      usjForEditor &&
+      (usjForEditor.content?.length ?? 0) > 0 &&
       !hasFirstRetrievedScripture.current
     ) {
       // Wait before scrolling to make sure there is time for the editor to load
@@ -4925,7 +4940,7 @@ function PlatformScriptureEditor({
 
     // Do nothing in destructor since we didn't do anything. TypeScript requires a returned function
     return () => {};
-  }, [usjFromPdp, scrRef, consumeRangeScrollClaimFor]);
+  }, [usjForEditor, scrRef, consumeRangeScrollClaimFor]);
 
   // Scroll the selected verse into view
   useEffect(() => {
@@ -5112,7 +5127,7 @@ function PlatformScriptureEditor({
   useEffect(() => {
     // Do not add the scripture-font class if the editor isn't rendered (see `renderEditor`)
     if (!bookExists) return;
-    if (!usjFromPdp || usjFromPdp === defaultUsj) return;
+    if (!usjForEditor || usjForEditor === defaultUsj) return;
 
     const cancelRunOnLoad = runOnFirstLoad(() => {
       const editorElement = document.querySelector('.editor-inner');
@@ -5124,7 +5139,7 @@ function PlatformScriptureEditor({
     return () => {
       cancelRunOnLoad();
     };
-  }, [bookExists, usjFromPdp]);
+  }, [bookExists, usjForEditor]);
 
   const [webViewMenuPossiblyError] = useData(papi.menuData.dataProviderName).WebViewMenu(
     SCRIPTURE_EDITOR_WEBVIEW_TYPE,
@@ -5335,7 +5350,7 @@ function PlatformScriptureEditor({
         </>
       );
     }
-    if (!usjFromPdp || usjFromPdp === defaultUsj) {
+    if (!usjForEditor || usjForEditor === defaultUsj) {
       return (
         <div className="tw:flex tw:items-center tw:justify-center tw:h-full">
           <Spinner />
@@ -5584,6 +5599,11 @@ function PlatformScriptureEditor({
       {/* Slim, non-covering banner while an automatic Send/Receive freezes editing. Shown only when
           sync-blocked and not genuinely read-only (a real viewer shouldn't say "editing paused"). */}
       {isSyncBlocked && !isReadOnly && <SyncBlockedBanner localizedStrings={localizedStrings} />}
+      {/* The editor goes read-only when this setting cannot be read; say why, unless the view is
+          read-only anyway. */}
+      {allowInvisibleCharactersSetting.isUnreadable && !isDurablyReadOnly && (
+        <SettingUnreadableBanner localizedStrings={localizedStrings} />
+      )}
       {/* Outside the zoomed, scrolling text area, so the notice stays put while the text scrolls.
           Every project is asked, because a "Notification:" copyright shows its banner on any text,
           as in Paratext 9. */}
@@ -5695,6 +5715,7 @@ function PlatformScriptureEditor({
                 isLoading={!liveEditorUsj && usjFromPdp === defaultUsj}
                 zoomAreaLabel={localizedStrings[FOOTNOTES_ZOOM_AREA_LABEL_KEY]}
                 copyLimit={editorOptionsWithCopyLimit.copyLimit}
+                rowEditorViewOptions={rowEditorViewOptions}
               >
                 {/* Render the editor inside the container decorations without re-mounting on re-parent */}
                 <OutPortal node={editorPortalNode} />

@@ -24,7 +24,7 @@ import {
   type UsjDocumentLocation,
 } from '@eten-tech-foundation/scripture-utilities';
 import { USFM_MARKERS_MAP_PARATEXT_3_0, UsjReaderWriter } from 'platform-bible-utils';
-import { correctEditorUsjVersion, deepEqualAcrossIframes } from './platform-scripture-editor.utils';
+import { deepEqualAcrossIframes } from './platform-scripture-editor.utils';
 
 /** How often a caret placement that could not be made yet is retried. */
 const CARET_RESTORE_RETRY_MS = 50;
@@ -95,8 +95,13 @@ export interface ScheduledCaretRestore {
   cancel: () => void;
 }
 
-/** USFM that is a line break and nothing else. */
-const LINE_BREAK_ONLY_REGEX = /^[^\S\n]*\n\s*$/;
+/**
+ * USFM that is a line break and nothing else. A no-break space is text, though `\s` matches it. It
+ * is excluded in both of its USFM spellings (`~`, and itself in a project that allows invisible
+ * characters), and each is one UTF-16 code unit, so the project's spelling changes neither this
+ * test nor any index it is applied between.
+ */
+const LINE_BREAK_ONLY_REGEX = /^[^\S\n\u00A0]*\n[^\S\u00A0]*$/;
 
 /**
  * `location`, with the one alias the location model allows spelled the canonical way: a position at
@@ -141,9 +146,7 @@ export function isCaretPlacedAt(
   if (deepEqualAcrossIframes(canonicalLocation(usj, caret), canonicalLocation(usj, target)))
     return true;
   try {
-    const usjReaderWriter = new UsjReaderWriter(correctEditorUsjVersion(usj), {
-      markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
-    });
+    const usjReaderWriter = new UsjReaderWriter(usj, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
     const indexOf = (location: UsjDocumentLocation) =>
       usjReaderWriter.usfmVerseLocationToIndexInUsfm(
         usjReaderWriter.usjDocumentLocationToUsfmVerseRefVerseLocation(location, bookId),

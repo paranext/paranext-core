@@ -6907,14 +6907,14 @@ describe('resolveNoteVerseRef (picking a note navigates to its verse)', () => {
     });
   });
 
-  // The editor stamps its documents 3.1 and the markers map is declared for 3.0; left uncorrected,
-  // the reader warns on every pick.
-  it("reads the editor's own document version without logging it", () => {
-    expect(chapterWithNotesInTwoVerses.version).toBe('3.1');
+  // The editor hands back the version the PDP served (3.0 from ParatextData), which is the version
+  // the markers map is declared for; a mismatch would warn on every pick.
+  it('reads a document at the version ParatextData serves without logging it', () => {
+    const servedChapter: Usj = { ...chapterWithNotesInTwoVerses, version: '3.0' };
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      expect(resolveNoteVerseRef(chapterWithNotesInTwoVerses, 1, currentScrRef)?.verseNum).toBe(4);
-      expect(findEditorUsjNotes(chapterWithNotesInTwoVerses)).toHaveLength(2);
+      expect(resolveNoteVerseRef(servedChapter, 1, currentScrRef)?.verseNum).toBe(4);
+      expect(findEditorUsjNotes(servedChapter)).toHaveLength(2);
       expect(warn).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();

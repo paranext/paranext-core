@@ -26,6 +26,8 @@ interface ExtractedCommentScriptureText {
  * @param selectedTextEnd The end location of the selected text in the USJ document
  * @param usjChapter The USJ chapter containing the selected text
  * @param bookId The book ID for the USJ chapter
+ * @param allowInvisibleCharacters The project's `platformScripture.allowInvisibleCharacters`
+ *   setting. The selected text is USFM, which spells a no-break space differently depending on it
  * @returns Information about the selection and its context that are used to create a comment
  */
 export function extractCommentScriptureText(
@@ -33,8 +35,12 @@ export function extractCommentScriptureText(
   selectedTextEnd: UsjDocumentLocation,
   usjChapter: Usj,
   bookId: string,
+  allowInvisibleCharacters: boolean,
 ): ExtractedCommentScriptureText {
-  const usjRW = new UsjReaderWriter(usjChapter, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
+  const usjRW = new UsjReaderWriter(usjChapter, {
+    markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
+    shouldAllowInvisibleCharacters: allowInvisibleCharacters,
+  });
 
   // Get the verse ref and offset for the start and end of the selected text
   const selectedTextStartUsfmLocation = usjRW.usjDocumentLocationToUsfmVerseRefVerseLocation(

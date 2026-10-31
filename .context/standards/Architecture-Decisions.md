@@ -1224,6 +1224,40 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   PT-4602 (open as of 2026-09-21), since it's a code fix in the Studio patch, not a doc fix.
 - **Source:** PT-4483, review of #2771.
 
+## adr-collab-ot-two-coordinate-systems: The editor keeps two named OT coordinate systems rather than unifying them
+
+- **Date:** 2026-10-20
+- **Status:** Accepted
+- **Context:** The scripture editor's collab/OT layer counts document positions in two subtly
+  different ways, and they diverge only in editable marker mode: the doc delta that
+  `DeltaOnChangePlugin` serializes counts an editable chapter embed (1 unit) PLUS its glyph text
+  (`"\c 1 "`, 5 units), while `$applyUpdate`'s insert/delete traversals treat every element embed
+  as one opaque unit. Producing an op in one counting and applying or reverse-looking-it-up in the
+  other lands it offset by the glyph length of each preceding editable chapter — a real bug
+  (footnote-popover Save ops displaced by `"\c 1 "`) before the two countings were made explicit.
+  The standard-view epic (PT-4186) deferred the "apply vs delta-doc" question; PT-4197's audit
+  requires the decision recorded.
+- **Decision:** Keep BOTH countings and name them: `OTCoordinateSystem` is an explicit two-member
+  type (`"delta-doc" | "apply"`) in scripture-editors
+  `libs/shared-react/src/plugins/usj/collab/delta-common.utils.ts`, and the position helpers take
+  it as a parameter. The TSDoc at that definition is the normative specification — the counting
+  rules, a worked example, and the choose-which-one rule by caller (reading or agreeing with the
+  `DeltaOnChangePlugin`/`getEditorDelta` op stream → `"delta-doc"`; building ops for `$applyUpdate`
+  or reverse-looking-up where it placed a node → `"apply"`). This log entry records that the
+  decision was made and where the rules live; it does not restate them.
+- **Alternatives:**
+  - *Unify on one counting.* Rejected for now: the OT collab path was never fully completed, no
+    live flow routes ops across an editable chapter into `$applyUpdate`, and unifying editable-mode
+    doc-delta coordinates with the apply-side traversals is future collab work, not a bug fix.
+  - *Leave the difference implicit.* Rejected: that is what produced the displaced-op bug — the two
+    countings coincide in every non-editable marker mode, so an implicit convention looks correct
+    until an editable chapter precedes the op.
+- **Consequences:** Callers must say which counting they mean, and the type surfaces the question
+  at every new call site. The remaining editable-chapter divergence between the two systems is
+  accepted. **Revisit** when OT collab work resumes and ops can cross an editable chapter into
+  `$applyUpdate` — that is when unification earns its cost.
+- **Source:** PT-4197 (WI-10 audit, item 3).
+
 ## adr-collapsed-multi-axis-filter-toolbar: A multi-axis filter surface collapses behind one trigger with a chip per active axis
 
 - **Date:** 2026-09-15
@@ -2967,6 +3001,66 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   inlining a fourth copy.
 - **Source:** Review of PR #2665 (`remove-character-marker`) — reuse findings on duplicated snapshot
   and sync-notice blocks.
+
+## adr-editor-nbsp-spelling-follows-project-setting: The editor learns the project's `AllowInvisibleChars` through `ViewOptions`, and Standard view holds a stored U+00A0 as an internal U+001A stand-in, drawn as a blank, where `~` is an ordinary character
+
+- **Date:** 2026-10-26
+- **Status:** Accepted (2026-10-29) as the interim design; PT-4931 is meant to replace it.
+- **Context:** Paratext's per-project `AllowInvisibleChars` (`platformScripture.allowInvisibleCharacters`)
+  decides how the USFM spells a no-break space. Measured with ParatextData 9.5: off, the file spells
+  U+00A0 as `~` and a literal tilde cannot exist; on, the file, the USX/USJ and the save all carry
+  `~` and U+00A0 verbatim and distinct. Standard view shows a stored U+00A0 as `~`, so an editor
+  that does not know the setting saves a literal `~` as U+00A0 in a project with it on. Standard
+  view cannot hold the U+00A0 itself: a displayed NBSP means a space (a space-run member or a marker
+  separator) throughout the marker-edit engine.
+- **Decision:** The editor gets the setting as `ViewOptions.allowInvisibleCharacters`, which the
+  scripture editor web view sets for every view type (`getEditorViewOptions`) and the footnote
+  editor inherits; `getViewMode` ignores it. With it on, Standard view holds a stored U+00A0 as
+  `NBSP_STAND_IN`, U+001A (SUBSTITUTE) — in its tree, in the settle's USFM fragments, in paste and
+  for a typed U+00A0 — and `~` is an ordinary character. One helper in the editor
+  (`getNbspSpelling`) supplies the spelling to every layer.
+  - **Why U+001A:** ParatextData's `ScrText.GetText` turns U+0001–U+0008 and U+000E–U+001F into
+    spaces on every read (measured), so no project text can hold it and the stand-in collides with
+    nothing. Bidi class BN, line-break class CM (no break before it), one grapheme. Not U+0000 (the
+    editor's settle-scope signature separator), U+000B/U+000C (whitespace to JavaScript) or
+    U+001C–U+001F (bidi separators).
+  - **It looks like a no-break space:** a one-glyph font family, `PlatformEditorNbspStandIn` (an
+    empty glyph a quarter of an em wide, `unicode-range: U+1A`), draws it as a blank about the width
+    of a space. The editor adds the face to its document through the CSS Font Loading API, from
+    bytes, so no content security policy is involved. Chromium draws a control character as a box
+    unless the FIRST family in the font stack has a glyph for it, so the family leads every
+    Scripture `font-family`, both in the editor's generated CSS and in host stylesheets.
+  - **It never leaves the editor:** `getUsj`/`onUsjChange`, the ops the editor gives out
+    (`onUsjChange`, `getNoteOps`, `getOpsAfterNote`, `takeOpsAfterNote`, and the `getNoteOps` a
+    note caller's click handler receives), the clipboard and drag flavors, annotation callback text
+    and note-caller previews all carry U+00A0. Ops going out also carry a space where the view shows
+    a space of a run as an NBSP, and ops coming in (`applyUpdate`, `replaceEmbedUpdate`) take a
+    U+00A0 that is not a marker's separator as a stored no-break space, so the footnote popover's
+    op round trip keeps both. Text a host reads from the editor's DOM still holds the stand-in; host
+    code respells it with `toUsfmNbspSpelling`.
+  - **Nothing from outside becomes it:** Standard view turns every incoming C0 control character but
+    tab, LF and CR into a space (load, paste, drop, typing, applied ops), as ParatextData would read
+    it back; a drop goes in as a paste of the same data does.
+- **Alternatives:** **`⍽` (U+237D), a visible picture of a no-break space** — rejected: U+237D can
+  occur in Paratext 9 text, so a literal one would be saved as a no-break space. **A noncharacter or private-use code point** — private use is used by some projects' scripts;
+  a noncharacter has no blank rendering and the editor already uses U+FDD0 as an internal placeholder.
+  **A top-level `EditorOptions` field** (where `styleInfo` lives) — rejected: every place the
+  whitespace regime is decided already receives `ViewOptions`, so a separate field would have to be
+  threaded to all of them and a missed one would load under one spelling and save under another.
+  **Hold the real U+00A0, as Paratext 9 does** — deferred to PT-4931, as the long-term fix that
+  replaces this decision. Standard view would keep a stored U+00A0 as itself and tell it apart
+  from the engine's display spaces some other way (for example, by node identity), and the
+  stand-in, its font and the incoming control-character rule would go. Deferred, not done now,
+  because the marker-edit engine reads a displayed U+00A0 as a space in dozens of rules (space
+  runs, separators, lone-NBSP spacers, positions, caret), so the change is too risky to make just
+  before a release. **Escape a literal `~` instead** — no 1:1 spelling exists, and positions
+  depend on display and data lengths agreeing.
+- **Consequences:** No project character is lost to the stand-in. Every editing host must pass the
+  setting, or Standard view corrupts the project's tildes, and every host stylesheet that sets a
+  Scripture `font-family` of its own must name `PlatformEditorNbspStandIn` first or the stand-in
+  shows as a box. The ops Standard view hands out with the setting on carry spaces, not U+00A0, for
+  displayed space runs. Revisit with PT-4931, which is meant to retire the stand-in.
+- **Source:** PT-4197 data-fidelity catalog row AI-1.
 
 ## adr-editor-opener-rename-renames-closer: A char opener rename renames its closer, and a pending `getUsj()` equals the settled document
 
