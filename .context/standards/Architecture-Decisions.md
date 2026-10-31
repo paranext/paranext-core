@@ -2945,7 +2945,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     (2026-10-30). Any program can also write the attribute, which goes through the same guarded parse
     as the flavor; TJ does not mind forged data (2026-10-30).
   - A copy that goes through another editor loses the attribute and pastes as html (catalog row
-    CB-14).
+    CB-14; open work on PT-4984).
   - The read raises no `paste` event, so during a chapter load `usePauseEditing` holds off the paste
     chords by key (and the cut chord, which raises no `cut` event), and the Edit flyout's Paste is
     refused by the web view's read-only check. The right-click menu's Paste and Cut are not held
@@ -2956,7 +2956,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     clipboard read landing after the flush, is not held off and is not saved
     (`isEditorContentForChapter` refuses it): it shows in the chapter being left until the new one
     replaces it. A read started in that gap can also outlast a short load, and then lands in the new
-    chapter and is saved there (seen in `in-editor-paste.spec.ts`).
+    chapter and is saved there (seen in `in-editor-paste.spec.ts`). TJ chose to leave this window
+    as it is (2026-10-30): it only affects an edit made after asking to leave the chapter.
   - Checked on Electron 39 on Linux and on Windows (probes), and end to end on Linux by
     `in-editor-paste.spec.ts`. macOS was researched, not run.
 - **Source:** PT-4921; paranext-core#2976, paranext/scripture-editors#43.
