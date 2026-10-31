@@ -99,6 +99,7 @@ describe('usePauseEditing', () => {
     ['copying', 'c', { ctrlKey: true }],
     ['a Ctrl+Shift+X chord, which is not a cut', 'X', { ctrlKey: true, shiftKey: true }],
     ['a Ctrl+Alt+X chord, which is not a cut', 'x', { ctrlKey: true, altKey: true }],
+    ['a Ctrl+Alt+V chord, which is not a paste', 'v', { ctrlKey: true, altKey: true }],
     ['an application shortcut', 'f', { ctrlKey: true }],
     ['a function key', 'F8', {}],
     ['an Alt chord', 'd', { altKey: true }],
