@@ -199,7 +199,7 @@ html-and-plain pair that Ctrl+V and the context-menu Paste actually deliver; pla
 cut, cut then paste back, and undo/redo; paragraph-structure runs every row under each structure
 protection (off, guarded, and protected, Simple's default). With PT-4911: 899 rows, 833 pass, 66
 pinned — 60 under PT-4921, 6 under PT-4388. With PT-4921 (as of 2026-10-30, scripture-editors at
-`934b29b4`, default run) the suite also pastes with Ctrl+V as the app delivers it (the copy's html,
+`b79ccc65`, default run) the suite also pastes with Ctrl+V as the app delivers it (the copy's html,
 with its attribute in the hidden-marker views, and its plain text), as a paste the browser runs
 itself (every flavor) and as another program's html, and pastes a copy from each other view into
 paragraph-structure: 1561 rows, 1460 pass, 101 pinned — 80 under the accepted html rule (CB-14), 2
