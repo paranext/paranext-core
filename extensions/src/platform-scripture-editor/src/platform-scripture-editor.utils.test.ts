@@ -4016,9 +4016,9 @@ describe('syncOnSwitchToPower', () => {
 
     await syncOnSwitchToPower(papi, 'proj-1');
 
-    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
-      'proj-1',
-    ]);
+    expect(mockSendCommand).toHaveBeenCalledWith(REQUEST_SYNC, ['proj-1'], 'autoSync', {
+      includeConnected: false,
+    });
   });
 
   it('syncs nothing when the consent check rejects (fails closed)', async () => {
