@@ -441,9 +441,9 @@ export function PlatformTabTitle({
 
   /**
    * The contributed menu with its when-expressions applied (`when` hides an item, `enabledWhen`
-   * disables it, `checkedWhen` checks it). Re-evaluated whenever a context key it read changes,
-   * including while the menu is open: an item appears, disappears or changes state under the open
-   * menu, and a menu left with no items closes.
+   * disables a command item; tab menus reject `checkedWhen` at load). Re-evaluated whenever a
+   * context key it read changes, including while the menu is open: an item appears, disappears or
+   * changes state under the open menu, and a menu left with no items closes.
    */
   const evaluatedTabMenu =
     useEvaluatedMenu(contributedTabMenu, tabMenuTemplateVars) ?? EMPTY_TAB_MENU;
