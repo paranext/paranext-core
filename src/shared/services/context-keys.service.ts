@@ -133,5 +133,4 @@ export const papiContextKeysService: IContextKeysService = {
   set,
   get,
   remove,
-  onDidChange: onDidChangeEmitter.event,
 };

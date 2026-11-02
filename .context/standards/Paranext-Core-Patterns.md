@@ -1637,8 +1637,9 @@ instead of letting it reach the data provider. The typed shared-store keys in
 (the file says to keep them in sync); a change to one needs the same change in the other.
 
 **From an extension (extension host).** Call `papi.contextKeys.set(key, value)` when the fact
-changes and `papi.contextKeys.remove(key)` when it stops applying. Read with `papi.contextKeys.get`
-and subscribe with `papi.contextKeys.onDidChange`.
+changes and `papi.contextKeys.remove(key)` when it stops applying. Read with `papi.contextKeys.get`.
+There is no public change subscription: context keys are facts for menus, not a state bus; react
+to the underlying state's own data provider or event.
 
 **From a web view.** Publish from an effect that owns the state, set a key when its value changes,
 and remove every key it set in the effect's cleanup so a closed tab leaves nothing behind. Key the

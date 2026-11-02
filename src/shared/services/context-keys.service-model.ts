@@ -1,10 +1,6 @@
-import { ContextKeyValue, PlatformEvent } from 'platform-bible-utils';
+import { ContextKeyValue } from 'platform-bible-utils';
 
-/**
- * Event emitted when a context key's value changes
- *
- * @experimental This type is unstable and may change or disappear without notice
- */
+/** Event emitted when a context key's value changes; platform-internal, not part of PAPI */
 export type ContextKeyChangeEvent = {
   /**
    * The context key that changed (without any internal storage prefix)
@@ -22,14 +18,6 @@ export type ContextKeyChangeEvent = {
 
 /** JSDOC DESTINATION contextKeysService */
 export interface IContextKeysService {
-  /**
-   * Event that fires when any context key changes, whether the change was made in this process or
-   * in another one. The event's `key` is the context key without any internal storage prefix, and
-   * its `value` is `undefined` when the key was removed.
-   *
-   * @experimental This field is unstable and may change or disappear without notice
-   */
-  onDidChange: PlatformEvent<ContextKeyChangeEvent>;
   /**
    * Sets or updates a context key.
    *
