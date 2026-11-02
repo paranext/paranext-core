@@ -5716,9 +5716,10 @@ function PlatformScriptureEditor({
                 isPaneVisible={footnotesPaneRendered}
                 // The editor's live document when it has one: the pane and the editor's
                 // `getNoteIndex` must index the same document, and `usjFromPdp` lags the editor
-                // by the save debounce. The pane is shown only once `usjFromPdp` exists, so the
-                // placeholder is never what it lists.
-                usj={liveEditorUsj ?? usjFromPdp ?? defaultUsj}
+                // by the save debounce. Otherwise the chapter as the editor may have it, so the
+                // pane lists nothing (under `isLoading`) while the chapter is withheld from an
+                // editor that is not mounted and could not open a row for editing.
+                usj={liveEditorUsj ?? usjForEditor ?? defaultUsj}
                 onFootnoteSelected={handleFootnoteSelected}
                 useWebViewState={useWebViewState}
                 localizedStrings={localizedStrings}
@@ -5745,9 +5746,10 @@ function PlatformScriptureEditor({
                 // editor or the popover) owns focus and the pane must not pull it away.
                 focusRowOnFocusRequest={usesPaneModel && noteEditingSurface === 'none'}
                 onPaneFocusChange={handlePaneFocusChange}
-                // The placeholder the data hook serves until the chapter arrives, while the text
-                // beside it shows a spinner.
-                isLoading={!liveEditorUsj && usjFromPdp === defaultUsj}
+                // The placeholder the data hook serves until the chapter arrives, or the chapter
+                // withheld from the editor until the project's `allowInvisibleCharacters` is read:
+                // the text beside the pane shows a spinner for both.
+                isLoading={!liveEditorUsj && (!usjForEditor || usjForEditor === defaultUsj)}
                 zoomAreaLabel={localizedStrings[FOOTNOTES_ZOOM_AREA_LABEL_KEY]}
                 copyLimit={editorOptionsWithCopyLimit.copyLimit}
                 rowEditorViewOptions={rowEditorViewOptions}
