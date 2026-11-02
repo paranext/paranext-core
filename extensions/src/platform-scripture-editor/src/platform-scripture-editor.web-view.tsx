@@ -265,6 +265,7 @@ import {
   CONTEXT_MENU_ACTION_TO_NOTE_KIND,
   createInsertContextMenuItems,
   deriveReadOnlyFlags,
+  getEditorWebViewContextKeyNames,
   getEditorWebViewContextKeys,
   flushRowEditsThenSave,
   forgetCaretSnapshotIfParaMarkerSelected,
@@ -1195,13 +1196,7 @@ function PlatformScriptureEditor({
 
   useEffect(() => {
     return () => {
-      Object.keys(
-        getEditorWebViewContextKeys(webViewId, {
-          isPreview: false,
-          isSyncBlocked: false,
-          footnotesPaneVisible: false,
-        }),
-      ).forEach((key) => papi.contextKeys.remove(key));
+      getEditorWebViewContextKeyNames(webViewId).forEach((key) => papi.contextKeys.remove(key));
     };
   }, [webViewId]);
 

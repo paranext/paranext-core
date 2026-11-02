@@ -26,6 +26,7 @@ import {
   generateInlineMarkerMenuListItems,
   getChapterKey,
   getEditorFocusLocation,
+  getEditorWebViewContextKeyNames,
   getEditorWebViewContextKeys,
   INSERT_CONTEXT_MENU_STRING_KEYS,
   insertNoteAtCurrentSelectionCore,
@@ -1267,6 +1268,24 @@ describe('getEditorWebViewContextKeys', () => {
       footnotesPaneVisible: false,
     });
     expect(Object.keys(keys).sort()).toEqual([
+      'platformScriptureEditor.webView.wv1.footnotesPaneVisible',
+      'platformScriptureEditor.webView.wv1.isPreview',
+      'platformScriptureEditor.webView.wv1.isSyncBlocked',
+    ]);
+  });
+
+  it('lists the same key names as it publishes, from the web view id alone', () => {
+    const names = getEditorWebViewContextKeyNames('wv1');
+    expect(names).toEqual(
+      Object.keys(
+        getEditorWebViewContextKeys('wv1', {
+          isPreview: true,
+          isSyncBlocked: true,
+          footnotesPaneVisible: true,
+        }),
+      ),
+    );
+    expect([...names].sort()).toEqual([
       'platformScriptureEditor.webView.wv1.footnotesPaneVisible',
       'platformScriptureEditor.webView.wv1.isPreview',
       'platformScriptureEditor.webView.wv1.isSyncBlocked',
