@@ -9,7 +9,9 @@ import {
   type ResourceSelectionsByPanel,
 } from './resource-selection-state.utils';
 import {
+  notifySelectionNotStored,
   SELECTION_NOT_STORED_KEY,
+  SELECTION_NOT_STORED_NOTIFICATION_ID,
   useProjectResourceSelection,
 } from './use-project-resource-selection.hook';
 
@@ -117,25 +119,41 @@ describe('useProjectResourceSelection', () => {
     expect(papi.commands.sendCommand).not.toHaveBeenCalled();
   });
 
-  test('tells the user, rather than throwing, when a change could not be stored', async () => {
-    // The panel stays on the old resource, so without a message the click would look ignored.
+  test('logs, and leaves telling the user to the caller, when a change could not be stored', async () => {
+    // Only the caller knows whether the change was the user's pick or a correction of its own.
     vi.mocked(papi.commands.sendCommand).mockRejectedValueOnce(new Error('host gone'));
     const { result } = renderHook(() => useProjectResourceSelection('ScriptureResource', PROJECT));
 
     expect(await result.current[1]({ selectedResourceId: 'bible-b' })).toBe(false);
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('host gone'));
-    expect(papi.notifications.send).toHaveBeenCalledWith({
-      message: SELECTION_NOT_STORED_KEY,
-      severity: 'error',
-    });
+    expect(papi.notifications.send).not.toHaveBeenCalled();
+  });
+});
+
+describe('notifySelectionNotStored', () => {
+  test('sends one error notification that repeated failures update rather than stack', async () => {
+    await notifySelectionNotStored();
+    await notifySelectionNotStored();
+
+    expect(papi.notifications.send).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(papi.notifications.send).mock.calls.map(([options]) => options)).toEqual([
+      {
+        message: SELECTION_NOT_STORED_KEY,
+        severity: 'error',
+        notificationId: SELECTION_NOT_STORED_NOTIFICATION_ID,
+      },
+      {
+        message: SELECTION_NOT_STORED_KEY,
+        severity: 'error',
+        notificationId: SELECTION_NOT_STORED_NOTIFICATION_ID,
+      },
+    ]);
   });
 
-  test('logs a failure message that could not be sent instead of throwing', async () => {
-    vi.mocked(papi.commands.sendCommand).mockRejectedValueOnce(new Error('host gone'));
+  test('logs a notification that could not be sent instead of rejecting', async () => {
     vi.mocked(papi.notifications.send).mockRejectedValueOnce(new Error('no notifications'));
-    const { result } = renderHook(() => useProjectResourceSelection('ScriptureResource', PROJECT));
 
-    expect(await result.current[1]({ selectedResourceId: 'bible-b' })).toBe(false);
+    await expect(notifySelectionNotStored()).resolves.toBeUndefined();
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('no notifications'));
   });
 });

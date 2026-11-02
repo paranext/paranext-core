@@ -25,7 +25,10 @@ import {
   type ResourceSelectionsByPanel,
   type StoredResourceSelection,
 } from './resource-selection-state.utils';
-import { SELECTION_NOT_STORED_KEY } from './use-project-resource-selection.hook';
+import {
+  SELECTION_NOT_STORED_KEY,
+  SELECTION_NOT_STORED_NOTIFICATION_ID,
+} from './use-project-resource-selection.hook';
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks — must be before any import that touches the component
@@ -274,6 +277,10 @@ const selectionSetting: {
   unreportedValue: ResourceSelectionsByPanel | undefined;
   /** Whether storing a change fails */
   doWritesFail: boolean;
+  /** A resource whose selection fails to store, while others store */
+  failingResourceId: string | undefined;
+  /** While set, changes wait for it before they are stored or fail */
+  writeGate: Promise<void> | undefined;
   /** Every change the panel asked to store, in order */
   writes: SelectionWrite[];
   listeners: Set<() => void>;
@@ -284,6 +291,8 @@ const selectionSetting: {
   isReportingLater: false,
   unreportedValue: undefined,
   doWritesFail: false,
+  failingResourceId: undefined,
+  writeGate: undefined,
   writes: [],
   listeners: new Set(),
 };
@@ -338,7 +347,13 @@ async function fakeSendCommand(
   if (command !== 'platformScriptureEditor.updateResourceSelection') return [];
   const write: SelectionWrite = { resourceType, projectId, update };
   selectionSetting.writes.push(write);
-  if (selectionSetting.doWritesFail) throw new Error('could not store the selection');
+  await selectionSetting.writeGate;
+  if (
+    selectionSetting.doWritesFail ||
+    (selectionSetting.failingResourceId !== undefined &&
+      update.selectedResourceId === selectionSetting.failingResourceId)
+  )
+    throw new Error('could not store the selection');
   const next = updateResourceSelectionsByPanel(
     selectionSetting.unreportedValue ?? selectionSetting.value,
     write.resourceType,
@@ -559,6 +574,8 @@ beforeEach(() => {
   selectionSetting.isReportingLater = false;
   selectionSetting.unreportedValue = undefined;
   selectionSetting.doWritesFail = false;
+  selectionSetting.failingResourceId = undefined;
+  selectionSetting.writeGate = undefined;
   selectionSetting.writes = [];
   selectionSetting.listeners.clear();
 });
@@ -1127,6 +1144,31 @@ describe('ResourceTextPanel — storing the selection', () => {
     projectId: 'picked-project-id',
   };
 
+  const OTHER_TEXT: PickerResource = {
+    ...STORED_TEXT,
+    reference: { type: 'project', name: 'OTHER', id: 'other-project-id' },
+    projectId: 'other-project-id',
+  };
+
+  /** Picks the row with `rowId` from the panel's dropdown. */
+  const pickInDropdown = (rowId: string) =>
+    React.act(async () => {
+      await capturedResourceTextPanelProps.mock.lastCall?.[0].onSelectResource(rowId);
+    });
+
+  /** Holds every change the panel asks to store until the returned function is called. */
+  const holdWrites = () => {
+    let release = () => {};
+    selectionSetting.writeGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return () =>
+      React.act(async () => {
+        selectionSetting.writeGate = undefined;
+        release();
+      });
+  };
+
   /** Picks `PICKED_TEXT` in the resource picker, which stores it in the user's list first. */
   const pickInPicker = () =>
     React.act(async () => {
@@ -1221,9 +1263,125 @@ describe('ResourceTextPanel — storing the selection', () => {
       expect(papi.notifications.send).toHaveBeenCalledWith({
         message: SELECTION_NOT_STORED_KEY,
         severity: 'error',
+        notificationId: SELECTION_NOT_STORED_NOTIFICATION_ID,
       }),
     );
     await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('stored-project-id'));
+  });
+
+  it('does not tell the user when a fallback it stores by itself cannot be stored', async () => {
+    // The user asked for nothing, so a message about a switch would make no sense to them.
+    selectionSetting.value = {};
+    seedSelection({
+      selectedResourceId: 'project:gone-project-id',
+      userPickedResourceId: 'project:gone-project-id',
+    });
+    selectionSetting.doWritesFail = true;
+    renderWithWebViewState();
+
+    await waitFor(() =>
+      expect(writtenSelections()).toContainEqual(
+        expect.objectContaining({ selectedResourceId: 'project:stored-project-id' }),
+      ),
+    );
+    await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('stored-project-id'));
+    expect(papi.notifications.send).not.toHaveBeenCalled();
+  });
+
+  it('follows a selection stored from elsewhere once its own pick has been stored', async () => {
+    // A pick held after it is stored would keep the panel on it, and write it back over the change.
+    renderWithWebViewState();
+    await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('stored-project-id'));
+    await pickInPicker();
+    await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('picked-project-id'));
+    const writesBefore = selectionSetting.writes.length;
+
+    React.act(() =>
+      setSelectionSetting(
+        updateResourceSelectionsByPanel(
+          selectionSetting.value,
+          'ScriptureResource',
+          DEFAULT_PROJECT_ID,
+          {
+            selectedResourceId: 'project:stored-project-id',
+            userPickedResourceId: 'project:stored-project-id',
+          },
+        ),
+      ),
+    );
+
+    await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('stored-project-id'));
+    expect(selectionSetting.writes.slice(writesBefore)).toEqual([]);
+  });
+
+  it('keeps a dropdown choice made while a picker pick is still being stored', async () => {
+    // The stored value still names the resource chosen, so it reads as stored already; only a
+    // write of its own puts it after the picker pick's write.
+    selectionSetting.isReportingLater = true;
+    renderWithWebViewState();
+    await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('stored-project-id'));
+
+    await pickInPicker();
+    await waitFor(() => expect(writtenSelections()).toHaveLength(1));
+    await pickInDropdown('project:stored-project-id');
+    await waitFor(() => expect(writtenSelections()).toHaveLength(2));
+    // Both changes report back at once, so the panel never sees the picker pick stored.
+    reportStoredSelections();
+
+    await waitFor(() =>
+      expect(storedSelection()).toEqual({
+        selectedResourceId: 'project:stored-project-id',
+        userPickedResourceId: 'project:stored-project-id',
+      }),
+    );
+    await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('stored-project-id'));
+    expect(writtenSelections()).toHaveLength(2);
+    // The dropdown still works: nothing is left holding the panel on an earlier pick.
+    await pickInDropdown('project:picked-project-id');
+    reportStoredSelections();
+    await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('picked-project-id'));
+  });
+
+  it('keeps a newer pick when an earlier one cannot be stored', async () => {
+    mockUseResourcePickerResources.mockReturnValue([[STORED_TEXT, PICKED_TEXT, OTHER_TEXT], false]);
+    selectionSetting.isReportingLater = true;
+    selectionSetting.failingResourceId = 'project:picked-project-id';
+    renderWithWebViewState();
+    await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('stored-project-id'));
+    const releaseWrites = holdWrites();
+
+    await pickInPicker();
+    await waitFor(() => expect(writtenSelections()).toHaveLength(1));
+    await pickInDropdown('project:other-project-id');
+    await waitFor(() => expect(writtenSelections()).toHaveLength(2));
+    // The earlier pick fails while the newer one is stored but not yet reported back.
+    await releaseWrites();
+
+    await waitFor(() => expect(selectionSetting.unreportedValue).toBeDefined());
+    expect(lastSelectedRef()?.projectId).toBe('other-project-id');
+    reportStoredSelections();
+    await waitFor(() =>
+      expect(storedSelection().selectedResourceId).toBe('project:other-project-id'),
+    );
+    expect(lastSelectedRef()?.projectId).toBe('other-project-id');
+  });
+
+  it('stores a picker pick while the stored selection cannot be read', async () => {
+    selectionSetting.readError = newPlatformError('settings unavailable');
+    renderWithWebViewState();
+    await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('stored-project-id'));
+
+    await pickInPicker();
+
+    await waitFor(() =>
+      expect(writtenSelections()).toEqual([
+        {
+          selectedResourceId: 'project:picked-project-id',
+          userPickedResourceId: 'project:picked-project-id',
+        },
+      ]),
+    );
+    expect(lastSelectedRef()?.projectId).toBe('picked-project-id');
   });
 });
 

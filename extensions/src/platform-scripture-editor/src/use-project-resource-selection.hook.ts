@@ -16,6 +16,31 @@ const NO_SELECTIONS: ResourceSelectionsByPanel = {};
 /** Sent when a selection could not be stored, as a notification, which localizes it. */
 export const SELECTION_NOT_STORED_KEY = '%webView_resourcePanel_selectionNotStored%';
 
+/** Repeated failures update one notification rather than stacking a new one each time. */
+export const SELECTION_NOT_STORED_NOTIFICATION_ID =
+  'platformScriptureEditor.resourceSelectionNotStored';
+
+/**
+ * Tells the user a resource they picked could not be stored. The panel stays on the old resource,
+ * so without it the pick would look ignored. Only for the user's own picks: a correction the panel
+ * stores by itself is nothing the user asked for, so its failure is only logged.
+ *
+ * Never rejects: a notification that cannot be sent is logged.
+ */
+export async function notifySelectionNotStored(): Promise<void> {
+  try {
+    await papi.notifications.send({
+      message: SELECTION_NOT_STORED_KEY,
+      severity: 'error',
+      notificationId: SELECTION_NOT_STORED_NOTIFICATION_ID,
+    });
+  } catch (e) {
+    logger.warn(
+      `Failed to send the ${SELECTION_NOT_STORED_KEY} notification: ${getErrorMessage(e)}`,
+    );
+  }
+}
+
 /**
  * The selection a Bible texts or Commentaries panel keeps for the project it is showing. Each
  * project keeps its own, in a user setting, so switching projects or restarting shows that
@@ -23,8 +48,9 @@ export const SELECTION_NOT_STORED_KEY = '%webView_resourcePanel_selectionNotStor
  *
  * Writes go through `platformScriptureEditor.updateResourceSelection`, which merges one project's
  * entry into the setting and runs writes one at a time, so this hook keeps no copy of its own. A
- * write shows once the setting reports it back. A write that fails is reported to the user, since
- * the panel stays on the old resource and the click would otherwise look ignored.
+ * write shows once the setting reports it back. A write that fails is logged and resolves to
+ * `false`; telling the user is left to the caller, which alone knows whether the write was the
+ * user's pick (see {@link notifySelectionNotStored}).
  *
  * A setting that cannot be read reads as no selection, which the panel cannot tell from a project
  * that has none, so the hook says when that is the case: a fallback resolved from it must not be
@@ -97,13 +123,6 @@ export function useProjectResourceSelection(
         logger.warn(
           `Could not store the ${resourceType} selection for project ${projectId}: ${getErrorMessage(e)}`,
         );
-        try {
-          await papi.notifications.send({ message: SELECTION_NOT_STORED_KEY, severity: 'error' });
-        } catch (notifyError) {
-          logger.warn(
-            `Failed to send the ${SELECTION_NOT_STORED_KEY} notification: ${getErrorMessage(notifyError)}`,
-          );
-        }
         return false;
       }
     },

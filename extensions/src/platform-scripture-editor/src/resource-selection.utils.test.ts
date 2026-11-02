@@ -50,6 +50,7 @@ const resolve = (rows: PickerResource[], inputs: Partial<ResourceSelectionInputs
     selectedResourceId: undefined,
     userPickedResourceId: undefined,
     pendingResourceId: undefined,
+    isPendingPickWritten: false,
     heldFallbackRowId: undefined,
     isListComplete: true,
     areSourcesSettled: true,
@@ -117,6 +118,7 @@ describe('resolveResourceSelection', () => {
       selectedResourceId: 'dbl:new',
       userPickedResourceId: 'dbl:new',
       pendingResourceId: 'dbl:new',
+      isPendingPickWritten: true,
     });
     expect(stored).toEqual({
       nextSelectedResourceId: undefined,
@@ -125,6 +127,52 @@ describe('resolveResourceSelection', () => {
       selectedRow: rows[1],
       shownFallbackRowId: undefined,
     });
+  });
+
+  it('writes a pick its own write has not stored yet, even if the stored selection names it', () => {
+    // The stored value may be one an earlier pick's write is about to replace, as when the user picks
+    // back the stored resource while another pick is still landing.
+    const rows = [dblRow('old'), dblRow('new')];
+    const result = resolve(rows, {
+      selectedResourceId: 'dbl:old',
+      userPickedResourceId: 'dbl:old',
+      pendingResourceId: 'dbl:old',
+    });
+    expect(result.nextSelectedResourceId).toBe('dbl:old');
+    expect(result.nextUserPickedResourceId).toBe('dbl:old');
+    expect(result.shouldClearPending).toBe(false);
+  });
+
+  it('writes nothing more for a written pick while the stored selection does not name it yet', () => {
+    const rows = [dblRow('old'), dblRow('new')];
+    const result = resolve(rows, {
+      selectedResourceId: 'dbl:old',
+      userPickedResourceId: 'dbl:old',
+      pendingResourceId: 'dbl:new',
+      isPendingPickWritten: true,
+    });
+    expect(result.nextSelectedResourceId).toBeUndefined();
+    expect(result.nextUserPickedResourceId).toBeUndefined();
+    expect(result.shouldClearPending).toBe(false);
+    expect(result.selectedRow).toBe(rows[1]);
+  });
+
+  it.each([
+    ['only as the selection, as a fallback', { selectedResourceId: 'dbl:new' }],
+    ['only as the user’s pick', { userPickedResourceId: 'dbl:new' }],
+  ])('keeps a written pick pending while the stored selection names it %s', (_, stored) => {
+    // Both ids must name the pick: otherwise a pick of the resource already shown as a fallback
+    // would never be recorded as the user's, and a downloaded one could later be replaced.
+    const rows = [dblRow('old'), dblRow('new')];
+    const result = resolve(rows, {
+      selectedResourceId: 'dbl:old',
+      userPickedResourceId: 'dbl:old',
+      ...stored,
+      pendingResourceId: 'dbl:new',
+      isPendingPickWritten: true,
+    });
+    expect(result.shouldClearPending).toBe(false);
+    expect(result.selectedRow).toBe(rows[1]);
   });
 
   it('commits a pick of a locally-installed non-DBL resource, which stores a project reference', () => {

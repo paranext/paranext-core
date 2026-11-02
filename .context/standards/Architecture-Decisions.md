@@ -6499,9 +6499,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     write, so two writers each reading it first would undo each other; one serialized
     read-modify-write in one process rules that out for both panels and the provider alike. Both ids
     are written in one update, so no render sees the selection without the pick. A pick from the
-    resource picker stays pending, and on screen, until the setting reports it back, so the panel
-    does not show the old selection again for the round trip. A write that fails tells the user with
-    an error notification and lets go of a pending pick; the panel stays on the stored resource.
+    dropdown or the resource picker stays pending, and on screen, until its own write has finished
+    and the setting reports it back, so the panel does not show the old selection again for the
+    round trip. Each pick replaces the one before, so the user's last choice wins even while an
+    earlier pick is still landing. A pick the panel cannot store tells the user with an error
+    notification and is let go; the panel stays on the stored resource. A correction the panel
+    stores by itself (a fallback, a rewritten id) and a Home write that fails are only logged: the
+    user asked for nothing they would see fail.
   - **Stale renders.** The hook writes only for the project the panel mounted with. During a switch
     the outgoing document can render once more with the incoming project's id while it still holds
     the outgoing project's resources; a fallback resolved from those would otherwise be stored as
