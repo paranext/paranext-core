@@ -3209,6 +3209,57 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   documents is `insertCommentAtCurrentSelection` in
   `extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx`.
 
+## adr-editor-yields-to-window-focus-subject: The Scripture editor's typing hold yields to the window focus subject
+
+- **Date:** 2026-10-29
+- **Status:** Accepted
+- **Context:** A focused editor that was edited recently keeps its own copy of the chapter over a
+  differing incoming one. Each web view's iframe keeps its own focused element, so after the user
+  clicked into Find the editor still reported focus, and its copy overwrote Find's replacement.
+- **Decision:**
+  - The window focus subject decides where the user is (`useEditorFocusLocation`). In another web
+    view, the incoming chapter is applied.
+  - `document.hasFocus()` only means "not settled yet". While the subject still names the editor's
+    own iframe and the document lacks focus, the delivery is held, neither applied nor pushed back,
+    until the subject moves (it lags a click by the window service's 250 ms debounce).
+  - If the subject has not moved within `FOCUS_SETTLE_GRACE_MS` (1000 ms), the user has left the
+    window, and the incoming chapter is applied.
+  - When the subject names another web view, the claim ends for good: the last edit is forgotten,
+    so the incoming chapter is applied even if the user has clicked back by the time it arrives.
+    The next edit claims the chapter again.
+  - A Send/Receive (`isSyncBlocked`) ends the claim, and no pending save is flushed over its merge.
+  - The block outlasts the write gate by `HIDE_GRACE_MS` (1000 ms, in
+    `auto-sync-blocking-store.ts`), because the merged chapter's delivery and the gate's clear race
+    to the web view, and a keystroke between them would claim the chapter again.
+  - The footnotes pane claims on the same terms (`isFootnotesPaneOwner`): another web view ends its
+    claim, a Send/Receive ends it, and a delivery is held while focus settles.
+- **Alternatives:** `document.hasFocus()` as the release test: rejected, because menus and overlays
+  outside the iframe also clear it, so the editor would give up its copy while the user is still
+  working in it. Asking where focus is only when a delivery arrives: rejected, because a replacement
+  that lands after the user clicks back would then find the editor focused and be overwritten.
+  Keeping the editor read-only until the merged chapter arrives, rather than for a
+  fixed time: not done, because a sync that changes nothing in the chapter may deliver nothing, so
+  it still needs a time limit, and every sync whose delivery beat the clear would wait out that
+  limit anyway.
+- **Consequences:** A pending save (typed in the last ~700 ms) and an open marker palette or
+  footnote popover can still overwrite a replacement: out of scope, tracked by PT-4970. So can
+  typing after clicking back but before the replacement arrives, a visit shorter than the subject's
+  250 ms debounce, and a visit to Find in another window, since neither of the last two names
+  another web view. PT-4970 covers these by ending the hold once the editor's own save has
+  finished. After visiting another tab and returning without typing, the editor has no claim until
+  the next keystroke, so an update arriving then moves the caret.
+  A manual Send/Receive arms the same write gate (as of the 2026-10-22 Studio build,
+  `ParatextProjectSendReceiveService.cs`), so it should set `isSyncBlocked` and yield the same way,
+  but that has not been tested in the app.
+  A merged chapter delivered more than `HIDE_GRACE_MS` after the gate clears can still lose to a
+  keystroke, and that grace is unmeasured because the gate only arms in Paratext 10 builds. An open
+  footnote popover survives a Send/Receive, so its session still pushes the pre-merge text over the
+  merge once writes are accepted again.
+  Alt-tabbing away mid-edit in the footnotes pane applies a delivery once the grace period ends,
+  after flushing pending saves, as the text editor does.
+  Revisit the grace period if the window service's focus debounce changes.
+- **Source:** PT-4968
+
 ## adr-empty-is-zero-state-primitive: shadcn `Empty` is the zero-state-with-action primitive; `EmptyState` stays message-only
 
 - **Formerly:** ADR-0016
@@ -3782,6 +3833,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   Consequences section singles out. That is knowingly given up: the position licensing makes the false positives rare enough
   not to warrant a third toggle.
 
+- **Amended by:** [adr-nfd-search-drops-partial-character-matches](#adr-nfd-search-drops-partial-character-matches-ignore-diacritics-search-drops-matches-that-start-or-end-inside-a-character) (2026-10-29). With
+  `ignoreDiacritics` on, a match that starts or ends inside a character is dropped rather than
+  reported. The query still reaches the engine byte-identical.
+
 ## adr-first-run-existing-registration-is-prefill: An existing registration prefills the first-run wizard; it never skips it
 
 - **Date:** 2026-09-25
@@ -3828,6 +3883,26 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   they are not re-onboarded. Installs seeded before the copy was recorded never show the banner.
   `platform.resetFirstRun` is callable by any PAPI client and can delete the registration; it is
   documented as a developer and tester tool.
+- **Amended 2026-10-29 (PT-4327, wizard opens at the Sync step):** "An unfinished first run always
+  starts at the first step" no longer holds without a condition. When Send/Receive is available,
+  the wizard opens straight at the Sync step whenever a first sync could run right now — the user
+  saved an internet-use choice in this app (`platform.internetUseChoiceAsked === true`, whether from
+  the wizard or Power mode's internet prompt), the internet settings the registration provider
+  reports allow internet use (`permittedInternetUse === 'Enabled'`), and the registration is valid —
+  whether or not setup was ever finished (a finished setup only while its first sync is pending,
+  and only then: a finished setup that cannot sync now goes to the app; see `decideFirstRun` in `first-run.reducer.ts`, fed by `resolveInternal` in `first-run-store.ts`).
+  Otherwise the full wizard starts at the first step, as before. The reason this entry gave still
+  holds and is what the first condition preserves: a user who carried over only a Paratext 9
+  registration never answered the internet question in this app, so they still see the language,
+  internet-settings and identify steps before consenting to sync.
+  The user decided that a Power user who switches to Simple has already set the app up, so with
+  internet on and a valid registration they go straight to the Sync step rather than repeating
+  setup. Requiring the current internet setting and registration, not only what was once saved, is
+  deliberate: an unfinished setup whose sync failed and whose internet then read as off must be sent
+  to the step that fixes it, not to a Sync step that errors; a finished one goes to the app (see
+  `adr-first-sync-state-recorded-by-backend`). The surrounding first-sync gate is
+  `adr-first-sync-state-recorded-by-backend`.
+
 ## adr-first-run-sync-consent: Sync consent is enforced per sync trigger, never by one global gate
 
 - **Date:** 2026-08-16 (decline scope revised 2026-09-11)
@@ -3932,6 +4007,129 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   is not gated here (PT-4606).
 - **Source:** PT-4369; adversarial review of the initial fix plan, which refuted the ticket's stated
   cause and both first-draft fixes; PR #2700 review (2026-09-09).
+- **Amended 2026-10-29 (PT-4327, first successful sync):** the gate now also needs a first
+  successful Send/Receive. `getAutomaticSyncConsent` answers `granted` only when
+  `platform.firstRunComplete` is literally `true`, there is no session deferral, **and**
+  `platform.firstSyncState` is not `'pending'`; a `'pending'` state answers the new withheld value
+  `notYetSynced`, which has its own line in `WITHHELD_SYNC_CONSENT_REASONS` so the skip log explains
+  it. Any other value — `'synced'`, or `'unknown'` from a setup that predates the state — grants, so
+  users who finished setup before this shipped keep their automatic syncs. It still fails closed:
+  a first-sync state that cannot be read answers `unreadable`. So the startup, shutdown,
+  window-close and project-switch syncs all stay off for a user whose first sync has not
+  succeeded; that first sync can only come from the wizard's Sync step, the Send/Receive dialog or
+  Home, which are user-initiated and ungated. The gate reads the setting on every call, so the
+  first success opens it for the rest of the session with no restart. The switch-to-Power sync lets
+  `notYetSynced` through, as it does `unconfirmed` (see the amendment to
+  `adr-switch-to-power-sends-unsent-changes`). Where the state comes from is
+  `adr-first-sync-state-recorded-by-backend`.
+
+## adr-first-sync-state-recorded-by-backend: The first successful sync is recorded by the .NET backend from the sync-activity outcome, as a three-valued hidden setting
+
+- **Date:** 2026-10-29
+- **Status:** Accepted
+- **Context:** PT-4327: a Simple-mode user who finished the first-run wizard without syncing (for
+  example with "Don't sync yet") can land in an app with no projects and no idea how to get one. The
+  product rule is that, when Send/Receive is available, the wizard's Sync step keeps coming back at
+  startup until the user's first Send/Receive succeeds, no automatic sync runs before then,
+  and the onboarding tour shows once after that first sync, because before it there is no project
+  to tour. That needs a durable "has synced at least once" fact that the renderer can read at
+  startup, that the consent gate can read in main, and that is recorded however the sync ran: the
+  wizard, the Send/Receive dialog, Home, a project switch, startup, window close or shutdown. It
+  also needs a way to tell at startup whether this build has Send/Receive at all, because public
+  Platform.Bible, CI and dev builds have only core's stub and must behave exactly as before.
+  Existing users who finished setup before this shipped must not be sent back to the Sync step,
+  lose their automatic syncs, or see the tour again.
+- **Decision:**
+  - **A three-valued hidden core setting, `platform.firstSyncState`** (`papi-shared-types.ts`,
+    validated in `core-settings-info.data.ts`, mirrored in C# as `Settings.FIRST_SYNC_STATE`):
+    `'unknown'` (the default, never written), `'pending'` (a first run started on this version and
+    no sync has succeeded) and `'synced'`. "Has synced" means `!== 'pending'`, so an upgrading user
+    — `'unknown'` with `platform.firstRunComplete === true` — counts as synced with no migration
+    step, and the e2e fixtures that seed only `firstRunComplete: true` keep working. A string is used
+    because core settings have no `null` default that could tell "never written" apart from
+    `false`. The renderer writes `'pending'` whenever it starts the wizard for a setup that still
+    needs a first sync, re-reading first and never overwriting `'synced'` (`markFirstSyncPending` in
+    `first-run-store.ts`); the developer reset `platform.resetFirstRun` writes `'pending'` too.
+  - **The backend records `'synced'`.** `FirstSyncRecorder`
+    (`c-sharp/Projects/SendReceive/FirstSyncRecorder.cs`, started in `Program.cs`) subscribes
+    in-process to `ParatextProjectSendReceiveService.SyncActivityChanged`, as
+    `UnsyncedChangesTracker` and `RemoteChangesPoller` do. On a snapshot that has stopped syncing
+    with `SyncOutcome.Succeeded` (the PT-4570 rule: every covered project succeeded, and a run with
+    nothing to sync counts), it writes `'synced'` unless the state already reads `'synced'`. The
+    event is raised from the sync worker's `finally` and `SettingsService.SetSetting` blocks on a
+    PAPI round trip, so the read and write run on a background task; a failed write, including one
+    lost at shutdown, is logged and retried on the next success. Any successful sync counts,
+    Power mode included: the state is only read in Simple mode, and "synced once" means synced once.
+    It is a user setting, not project data, so the Send/Receive write gate does not apply.
+  - **A backend answer to "is Send/Receive available?"**: the `paratextBibleSendReceive.isAvailable`
+    command, registered next to the other Send/Receive commands. Core's stub service answers
+    `false`; the Paratext 10 Studio patch makes it answer `true`. A rejection means the answer is
+    unknown, not `false`: on a cold start the command may not be registered yet, so callers ask
+    again or stay conservative (below). Only when it still cannot be answered once the backend is
+    up does it count as unavailable, which fails toward today's behavior rather than toward
+    "wizard on every launch".
+  - **The renderer's startup decision** (`resolveInternal` and `decideFirstRun`) consults the state
+    and availability only in Simple mode. A completed setup reopens the wizard only when
+    Send/Receive is available, the state is `'pending'`, and a first sync can run right now (an
+    internet choice saved, internet on, a valid registration); it then opens straight at the Sync
+    step, where "Don't sync yet" is always available. Otherwise it goes to the app with the usual
+    background registration re-check: the earlier steps could trap it, because the internet step's
+    only way forward turns internet on and Identify cannot be left without a valid registration.
+    The consent gate keeps automatic syncs waiting either way. Because the store seeds its first status synchronously
+    from localStorage, a localStorage mirror, `platform-bible.firstSyncPending`, makes a
+    completed-but-unsynced user start on the loading gate rather than flash the app before the
+    wizard returns. On a cold start the early availability question can reject before the backend
+    registers the command; for an unfinished setup it is asked again after the registration probe
+    has proven the backend is up, because treating that rejection as final would leave the setup
+    unmarked, and finishing it would then read as a pre-existing setup, exempt for good.
+  - **The tour waits while the state is `'pending'`** (`useTourHeldForFirstSync`), and otherwise
+    keeps its existing one-time localStorage marker. It holds conservatively: while the setting is
+    loading or cannot be read, or availability is unanswered, a possibly-pending user stays held, only a definite
+    "not available" releases them, and availability is asked again once the first-run status
+    reaches `app`, when a rejection then counts as "not available" rather than holding the tour
+    forever. The hook subscribes to the setting, so the tour can show in the same session once the
+    backend records the first sync.
+- **Alternatives:** **Record the success in the renderer**, when the wizard's own sync or the
+  dialog's sync reports success — rejected: syncs run from many places, some (the shutdown sync, a
+  sync while no window is listening) have no renderer to hear them, so the fact would be missed;
+  only the backend sees every run's outcome. **Reuse `platformGetResources.isSendReceiveAvailable`**
+  (and `use-send-receive-availability.hook.ts`) to decide whether the gate applies — rejected: it is
+  privileged, hosted in an extension, and briefly reports `false` early in startup, which is exactly
+  when the startup decision is made. **A second tour marker, "tour done since the first sync"** —
+  rejected: users who finished setup before this shipped would not have it, so the tour would come
+  back for them after their next sync; holding the existing marker while `'pending'` already gives
+  "show once after the first sync". **A boolean setting** — rejected: a `false` default cannot tell
+  an upgrading user from one whose first sync is outstanding, so it would need a migration that
+  races startup. **Record `'synced'` from a main-process subscriber** to
+  `paratextBibleSendReceive.onSyncActivityChanged`, next to the consent gate and the shutdown syncs
+  main already owns, which would keep settings logic in a TypeScript host as the logic-placement
+  guidance prefers — rejected: main has no subscription to that event today, and a network
+  subscriber misses any run that ends while it is not yet subscribed or its connection is down,
+  whereas the in-process `SyncActivityChanged` event is raised synchronously from the sync worker
+  for every run. The recorder also sits beside the event's other in-process consumers
+  (`UnsyncedChangesTracker`, `RemoteChangesPoller`). The cost is one setting written from C#.
+- **Consequences:** Builds without Send/Receive behave exactly as before, CI e2e included. A user
+  who finished setup but cannot sync right now (internet off, a registration that has become
+  invalid) gets the app, not the wizard; the Sync step comes back on a later launch when a sync can
+  run, and automatic syncs stay off until then. Only a run whose outcome is `Succeeded` counts, and
+  that outcome means every covered project succeeded, so a user with one project that keeps
+  failing (for example `NotUpgraded`, waiting on a teammate) never records the first sync even
+  after others synced: the Sync step's sync includes that project and fails again, and every
+  automatic sync stays off. A per-project Send/Receive from Home or the Send/Receive dialog is the
+  way out. Recording the first sync when at least one project succeeds needs per-project results
+  or a partial outcome in the sync-activity snapshot, which the Studio patch would have to report;
+  that is follow-up work, not part of this decision. The renderer's `'pending'` write is a read-then-write, so a sync that finishes while
+  the wizard is starting can be overwritten and the wizard reopens once more until the next
+  success — rare, and the cost is one extra sync. Writing `'pending'` and the consent gate's
+  `notYetSynced` (`adr-first-run-sync-consent`) together mean a never-synced user gets no automatic
+  sync; the switch-to-Power sync is the exception. The Studio patch must override
+  `IsSendReceiveAvailable` and re-apply over `ParatextProjectSendReceiveService.cs`, where
+  `isAvailable` joins the `RegisterRequestHandlerAsync` list and `IsSendReceiveAvailable` sits next
+  to Studio's `LastSyncedTipRecord`; a resolution that drops the override silently leaves this
+  feature off. Core's PR must merge first. When the wizard opens straight at the Sync step instead of step 1 is
+  `adr-first-run-existing-registration-is-prefill` (amended 2026-10-29). Offering the sample project
+  to never-synced users (PT-4333) builds on this state.
+- **Source:** PT-4327 (sub-task of PT-4323); design reviewed with the developer 2026-10-28.
 
 ## adr-focus-in-a-background-window-is-latent: A `focus()` call inside a backgrounded window sets the active element without raising the window
 
@@ -5845,6 +6043,22 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   **Revisit** if a reader ever needs more than project ids from a declaring view, which would call
   for a typed surface rather than a state key.
 - **Source:** PT-4346, global BCV control showing books from open resources.
+
+## adr-nfd-search-drops-partial-character-matches: Ignore-diacritics search drops matches that start or end inside a character
+
+- **Date:** 2026-10-29
+- **Status:** Accepted
+- **Context:** With "ignore diacritics" on, the search runs over NFD text. A Hangul syllable
+  decomposes into jamo, so a search for one syllable matched the first jamo of another.
+- **Decision:** `UsjReaderWriter.search` drops a match that starts or ends inside a character. A
+  syllable stored decomposed counts as one character: a position just before a Hangul vowel or
+  final consonant jamo (U+1160-11FF, U+D7B0-D7FF) is inside it.
+- **Alternatives:** Widening a partial match to the whole character: rejected, because the leftover
+  jamo are letters, so the result is not what the user searched for.
+- **Consequences:** Paratext 9 (ParatextData 9.5.0.24) finds no Hangul at all with the option on.
+  Paratext 10 deliberately keeps finding whole syllables (approved 2026-10-29, recorded on
+  PT-4968).
+- **Source:** PT-4968
 
 ## adr-no-agpl-notice-in-the-application-ui: the application UI names the Terms of Service and no license
 
@@ -8533,6 +8747,31 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Amended 2026-09-24 (PT-1641):** Root cause identified: Chromium's `TCPClientSocket::OnSuspend` closes the renderer's socket on the OS suspend signal; see `adr-renderer-papi-transport-is-messageport`, which supersedes the reconnect direction for the renderer (the renderer no longer uses a WebSocket). Shape 3, the 17-minute `forEach` stall, is consistent with shape 1 observed on Windows with the log straddling the sleep: the close arrives, main logs one removal line, Windows freezes the process within its ~2 s allotment, and on resume the loop finishes in 60 ms while the extension host's overdue hourly timer fires in the same second. The January 2025 log predates the power-monitor logging, so the suspend is inferred, not recorded. The heartbeat deferral stands, on stronger ground. The four reconnect blockers remain true statements about `RpcClient` and now apply to the extension host only.
 - **Source:** PT-4434; diagnosed on macOS 2026-08-26. Reviewed in PR #2731, which is where the severity, unreachable-4000 and third-peer consequences above were established.
 
+## adr-replace-verifies-expected-usfm: Replace writes only text that is unchanged since the search
+
+- **Date:** 2026-10-29
+- **Status:** Accepted
+- **Context:** Find & Replace wrote at the offsets Find reported, so text that changed after the
+  search could be overwritten.
+- **Decision:** `replace(ranges, usfm, expectedUsfm?)` on the Scripture Finder data provider
+  compares, byte for byte, the USFM span each range covers now with `FindResult.matchedUsfm` (the
+  span Find recorded). A mismatch is skipped, never written, and reported in
+  `ReplaceOutcome.changedIndexes`; the Find tab tells the user and searches again. The comparison
+  is on USFM because that is what a replace removes.
+- **Alternatives:** Comparing plain text: rejected, because the removed span includes character
+  markers (`the \nd Lord\nd*` vs `the Lord`), `\w` attributes and `~`, which plain text cannot
+  see.
+- **Consequences:**
+  - The check reads the finder's cached chapter, which a change notification invalidates, and the
+    write replaces the whole chapter. An edit whose notification has not arrived yet can still be
+    overwritten: there is no compare-and-swap.
+  - An identical token shifted onto the old offsets passes the check (deleting the first `a ` of
+    `a a a`).
+  - If PR #2922 lands (open as of 2026-10-29), toggling `allowInvisibleCharacters` between Find and
+    Replace re-spells no-break spaces, so every match containing one reads as changed. That fails
+    safe: nothing is written.
+- **Source:** PT-4968
+
 ## adr-resource-missing-book-message: A missing book in a *published resource* is mode-agnostic and action-free; a *project* splits Simple/Power
 
 - **Date:** 2026-08-20
@@ -10187,6 +10426,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   decided by the Send/Receive implementation, not by this trigger; as of 2026-10-23 both are
   verified only by hand in a Paratext 10 build.
 - **Source:** PT-4826.
+- **Amended 2026-10-29 (PT-4327, first successful sync):** the gate gained a withheld answer,
+  `notYetSynced`, for a Simple-mode user whose first Send/Receive has not succeeded
+  (`adr-first-run-sync-consent`). This sync lets it through alongside `unconfirmed`
+  (`getSwitchToPowerSyncConsent` in `platform-scripture-editor.utils.ts`): the switch is the user's
+  own act, the sync only runs when there are unsent changes, and a never-synced user who moves to
+  Power should get Power mode's normal behavior. `deferred`, `unreadable`, a rejected request and
+  any answer the function does not know still stop it.
 
 ## adr-sync-activity-outcome-is-coarse: The all-paths sync-activity signal reports a coarse outcome, not per-project results
 

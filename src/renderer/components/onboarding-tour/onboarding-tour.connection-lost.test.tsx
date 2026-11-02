@@ -42,6 +42,11 @@ vi.mock('@renderer/hooks/use-is-power-mode.hook', async () => {
   return powerModeMock();
 });
 
+vi.mock('@renderer/hooks/use-tour-held-for-first-sync.hook', async () => {
+  const { tourHeldForFirstSyncMock } = await import('./onboarding-tour.test-utils');
+  return tourHeldForFirstSyncMock();
+});
+
 vi.mock('@renderer/hooks/papi-hooks', async () => {
   const { papiHooksMock } = await import('./onboarding-tour.test-utils');
   return papiHooksMock();

@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useCallback, useState, type ComponentType } from 'react';
 import type { WebViewProps } from '@papi/core';
+import papi from '@papi/frontend';
+import { useProjectDataProvider } from '@papi/frontend/react';
+import { sonner } from 'platform-bible-react';
 import { booksPresentFor } from './find/find-book-lists.test-utils';
 
 // jsdom implements none of ResizeObserver, IntersectionObserver or matchMedia, and the Find render
@@ -46,6 +49,15 @@ const { mockBooksPresent, mockSettingValues } = vi.hoisted(() => {
   const settingValues: Record<string, unknown> = {};
   return { mockBooksPresent: booksPresent, mockSettingValues: settingValues };
 });
+
+// Real components, with `sonner` replaced by a spy the Replace tests read the toasts from.
+vi.mock('platform-bible-react', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('platform-bible-react')>()),
+  sonner: Object.assign(
+    vi.fn(() => 'toast-id'),
+    { dismiss: vi.fn() },
+  ),
+}));
 
 vi.mock('@papi/frontend', () => ({
   default: {
@@ -236,5 +248,90 @@ describe('Find web view — Replace mode', () => {
       await screen.findByRole('button', { name: '%webView_find_replace%' }),
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '%webView_find_replaceAll%' })).toBeNull();
+  });
+});
+
+describe('Find web view — Replace on a match whose text changed after the search', () => {
+  const MATCH_TEXT = 'ZzMatchTextZz';
+  const verseRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
+
+  const findPdp = {
+    beginFindJob: vi.fn(async () => 'job-1'),
+    abandonFindJob: vi.fn(async () => true),
+    stopFindJob: vi.fn(async () => true),
+    retrieveFindJobUpdate: vi.fn(async () => ({
+      jobId: 'job-1',
+      status: 'completed',
+      percentComplete: 100,
+      totalResultsCount: 1,
+      nextResults: [
+        {
+          text: MATCH_TEXT,
+          start: { verseRef, offset: 0 },
+          end: { verseRef, offset: MATCH_TEXT.length },
+          matchedUsfm: MATCH_TEXT,
+        },
+      ],
+      totalExecutionTimeMs: 1,
+    })),
+  };
+  // The project's text no longer matches what the search saw, so the write is skipped.
+  const replacePdp = { replace: vi.fn(async () => ({ changedIndexes: [0] })) };
+
+  beforeEach(() => {
+    mockBooksPresent.value = booksPresentFor(['GEN']);
+    mockSettingValues['platform.interfaceMode'] = 'power';
+    // The real hook is generic over every project interface; the fake covers only the two Replace reads.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    vi.mocked(useProjectDataProvider).mockImplementation(((projectInterface: string) => {
+      if (projectInterface === 'platformScripture.findInScripture') return findPdp;
+      if (projectInterface === 'platformScripture.replaceWithUsfm') return replacePdp;
+      return undefined;
+    }) as unknown as typeof useProjectDataProvider);
+    // `commitChanges` resolves true; the command map has no single return type to satisfy.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    vi.mocked(papi.commands.sendCommand).mockImplementation((async () => true) as never);
+  });
+
+  afterEach(() => {
+    delete mockSettingValues['platform.interfaceMode'];
+    vi.mocked(useProjectDataProvider).mockImplementation(() => undefined);
+    vi.mocked(papi.commands.sendCommand).mockImplementation(async () => undefined);
+    vi.mocked(sonner).mockClear();
+    findPdp.beginFindJob.mockClear();
+    replacePdp.replace.mockClear();
+  });
+
+  it('reports a changed match on Replace, writes no version-history commit after it, and searches again', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const FindWebView = getFindWebView();
+    render(
+      <FindWebView
+        {...makeProps(
+          { findActiveMode: 'replace', findSearchTerm: 'God', findReplaceTerm: 'Lord' },
+          vi.fn(),
+        )}
+      />,
+    );
+    // The first search starts on its own once the provider is available.
+    await waitFor(() => expect(findPdp.beginFindJob).toHaveBeenCalledTimes(1));
+
+    // The result card has its own Replace button, in addition to the toolbar's.
+    const replaceButtons = await screen.findAllByRole('button', { name: '%webView_find_replace%' });
+    await user.click(replaceButtons[replaceButtons.length - 1]);
+
+    await waitFor(() =>
+      expect(sonner).toHaveBeenCalledWith('%webView_find_replace_textChangedError%'),
+    );
+    expect(replacePdp.replace).toHaveBeenCalledTimes(1);
+    // The version-history commit before the replace happens; the one after it does not.
+    const commitCalls = vi
+      .mocked(papi.commands.sendCommand)
+      .mock.calls.filter(([command]) => command === 'paratextBibleSendReceive.commitChanges');
+    expect(commitCalls.map((call) => call[3])).toEqual([true]);
+    // The list is refreshed against the project as it now stands.
+    await waitFor(() => expect(findPdp.beginFindJob).toHaveBeenCalledTimes(2));
+    // Nothing was written, so no "replaced" confirmation.
+    expect(sonner).not.toHaveBeenCalledWith('%webView_find_replacedOneOccurrence%');
   });
 });

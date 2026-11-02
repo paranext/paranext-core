@@ -216,7 +216,7 @@ function runSearch(params: SearchParams): HidableFindResult[] {
           verseRef: verse,
           offset: offset + match[0].length,
         };
-        results.push({ start, end, text: match[0] });
+        results.push({ start, end, text: match[0], matchedUsfm: match[0] });
       });
     });
   });

@@ -214,6 +214,9 @@ public static class Program
                 paratextProjects
             );
             unsyncedChangesTracker.Start();
+
+            // Record the first successful sync so the first-run wizard's Sync step stops coming back.
+            new FirstSyncRecorder(papi, paratextSendReceiveService).Start();
             var remoteChangesPoller = new RemoteChangesPoller(
                 paratextSendReceiveService,
                 paratextProjects
