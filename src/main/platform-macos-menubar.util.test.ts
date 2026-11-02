@@ -59,7 +59,7 @@ const { fakeMenuFromTemplate } = vi.hoisted(() => {
           if (Array.isArray(entry.submenu)) walk(entry.submenu);
         });
       walk(template);
-      return { getMenuItemById: (id: string) => items.get(id) ?? null };
+      return { getMenuItemById: (id: string) => items.get(id) };
     },
   };
 });
@@ -341,8 +341,8 @@ describe('subscribeCurrentMacosMenubar', () => {
   }
 
   function lastAppliedMenu() {
-    const results = vi.mocked(Menu.buildFromTemplate).mock.results;
-    return results[results.length - 1].value;
+    const { results } = vi.mocked(Menu.buildFromTemplate).mock;
+    return results.at(-1)?.value;
   }
 
   it('updates enabled in place when a key it reads changes', async () => {

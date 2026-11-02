@@ -1,14 +1,12 @@
 import { vi } from 'vitest';
 import { SingleColumnMenu } from 'platform-bible-utils';
+import { evaluateMenuRecordingReads } from './evaluate-menu-recording-reads.util';
 
 const mockKeyValues = new Map<string, string | number | boolean>();
 
 vi.mock('@shared/services/context-keys.service', () => ({
   contextKeysService: { get: (key: string) => mockKeyValues.get(key) },
 }));
-
-// eslint-disable-next-line import/first
-import { evaluateMenuRecordingReads } from './evaluate-menu-recording-reads.util';
 
 const menu: SingleColumnMenu = {
   groups: { 'test.group': { order: 1 } },
