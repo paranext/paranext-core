@@ -3138,6 +3138,8 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     // the whole document so far, and testing it for every character marker slows a book down.
     if (
       typeof markerParentOrIsInsideMarkerWithSameType === 'object' &&
+      // A chapter is only ever a direct child of the document root.
+      markerParentOrIsInsideMarkerWithSameType.type === USJ_TYPE &&
       !('isClosingMarker' in marker) &&
       marker.type === 'char'
     ) {
