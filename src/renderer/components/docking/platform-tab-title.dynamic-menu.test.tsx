@@ -89,9 +89,19 @@ vi.mock('@shared/services/command.service', () => ({
   sendCommand: vi.fn(),
 }));
 
+const { zoomableByWebViewId, zoomableListeners } = vi.hoisted(() => ({
+  zoomableByWebViewId: new Map<string, boolean>(),
+  zoomableListeners: new Set<(event: { webViewId: string; isContentZoomable: boolean }) => void>(),
+}));
+
 vi.mock('@renderer/services/web-view-content-zoom.service', () => ({
-  isContentZoomable: () => true,
-  onDidChangeContentZoomable: () => () => {},
+  isContentZoomable: (webViewId: string) => zoomableByWebViewId.get(webViewId) ?? true,
+  onDidChangeContentZoomable: (
+    listener: (event: { webViewId: string; isContentZoomable: boolean }) => void,
+  ) => {
+    zoomableListeners.add(listener);
+    return () => zoomableListeners.delete(listener);
+  },
 }));
 
 vi.mock('@shared/services/menu-data.service', () => ({
@@ -160,6 +170,31 @@ vi.mock('platform-bible-react', async (importOriginal) => {
 
 const FLAG_KEY = 'test.webView.wv-1.flag';
 
+/** A tab menu whose only item is gated by the flag key, so the tab has no menu until it is set */
+function menuWithOnlyGatedItem(
+  options: { isZoomItem?: boolean } = {},
+): Awaited<ReturnType<typeof menuDataService.getWebViewMenu>> {
+  const group = options.isZoomItem ? 'platform.tabZoom' : 'test.group';
+  return {
+    includeDefaults: false,
+    topMenu: undefined,
+    contextMenu: undefined,
+    tabMenu: {
+      groups: { [group]: { order: 1 } },
+      items: [
+        {
+          label: '%test_item%',
+          localizeNotes: 'Test item',
+          group,
+          order: 1,
+          command: options.isZoomItem ? 'platform.webViewContentZoomIn' : 'test.cmd',
+          when: 'test.webView.{webViewId}.flag',
+        },
+      ],
+    },
+  };
+}
+
 /** A tab menu with one item gated by the per-tab flag key through the given condition property */
 function menuGatedBy(conditionProperty: 'when' | 'enabledWhen') {
   const menu: Awaited<ReturnType<typeof menuDataService.getWebViewMenu>> = {
@@ -219,6 +254,7 @@ describe('PlatformTabTitle tab menu follows context keys', () => {
     contextKeyValues.clear();
     contextKeyListeners.clear();
     changeSequence.value = 0;
+    zoomableByWebViewId.clear();
     __resetTabMenuCacheForTesting();
   });
 
@@ -253,6 +289,45 @@ describe('PlatformTabTitle tab menu follows context keys', () => {
 
     setKey(FLAG_KEY, false);
     expect(screen.getByText('Test item').closest('button')).toHaveAttribute('data-disabled');
+  });
+
+  it('gains a menu when the only item becomes visible, and loses it when it is hidden again', async () => {
+    vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue(menuWithOnlyGatedItem());
+    await renderTab();
+    expect(screen.queryByTestId('open-menu')).toBeNull();
+
+    setKey(FLAG_KEY, true);
+    fireEvent.click(screen.getByTestId('open-menu'));
+    expect(screen.getByText('Test item')).toBeInTheDocument();
+
+    setKey(FLAG_KEY, undefined);
+    expect(screen.queryByTestId('open-menu')).toBeNull();
+  });
+
+  it('releases the zoomability held for an open menu when the menu empties while open', async () => {
+    vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue(
+      menuWithOnlyGatedItem({ isZoomItem: true }),
+    );
+    contextKeyValues.set(FLAG_KEY, true);
+    await renderTab();
+    fireEvent.click(screen.getByTestId('open-menu'));
+    expect(screen.getByText('Test item')).toBeInTheDocument();
+
+    // The menu empties while open: it unmounts without a close event
+    setKey(FLAG_KEY, undefined);
+    expect(screen.queryByTestId('open-menu')).toBeNull();
+
+    // The pane stops being zoomable, then the item returns: the zoom item must follow the live
+    // zoomability, not the value captured when the earlier menu opened
+    zoomableByWebViewId.set('wv-1', false);
+    act(() => {
+      zoomableListeners.forEach((listener) =>
+        listener({ webViewId: 'wv-1', isContentZoomable: false }),
+      );
+    });
+    setKey(FLAG_KEY, true);
+
+    expect(screen.queryByTestId('open-menu')).toBeNull();
   });
 
   it('requests the label of an item hidden at open', async () => {

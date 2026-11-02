@@ -475,7 +475,9 @@ export function PlatformTabTitle({
   // The contributed items' own keys are resolved here rather than in a second hook, so a tab asks
   // for everything it needs to render in one round trip. They arrive unresolved whenever the menu
   // data provider is serving its combiner's raw output — before the extension host's first
-  // contribution resync — and the tab menu is read once, so a label left raw would stay raw
+  // contribution resync — and the contributed menu is read once, so a label left raw would stay
+  // raw.
+  //
   // Collected from the menu before its when-expressions apply, so the label of an item hidden now
   // is already resolved when a context key reveals it.
   const contributedKeys = useMemo(
@@ -1068,6 +1070,13 @@ export function PlatformTabTitle({
     () => buildTabMenuItems(localizedContributedItems, menuContext, emptyWindowLabel),
     [localizedContributedItems, menuContext, emptyWindowLabel],
   );
+
+  // A menu emptied while open unmounts without a close event, so the zoomability held for the open
+  // menu is released here.
+  const hasTabMenuItems = tabMenuItems.length > 0;
+  useEffect(() => {
+    if (!hasTabMenuItems) setZoomabilityForOpenMenu(undefined);
+  }, [hasTabMenuItems]);
 
   // Give this menu a keyboard path. rc-tabs renders the focusable tab as `.dock-tab-btn`, and the
   // context-menu trigger inside it sets no tabIndex — so pressing Shift+F10 or the Menu key on a
