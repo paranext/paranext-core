@@ -14,6 +14,7 @@ import {
   createUnstorableTextNotifier,
   UNSTORABLE_TEXT_BLOCKED_TYPING_KEY,
   UNSTORABLE_TEXT_NOTIFICATION_ID,
+  UNSTORABLE_TEXT_REFUSED_DELETION_KEY,
   UNSTORABLE_TEXT_REMOVED_FROM_PASTE_KEY,
 } from './unstorable-text-notice.utils';
 
@@ -49,6 +50,20 @@ describe('createUnstorableTextNotifier', () => {
       severity: 'info',
       notificationId: UNSTORABLE_TEXT_NOTIFICATION_ID,
       webViewId: 'web-view-2',
+    });
+  });
+
+  it('sends the refused-deletion notice for a delete refused for joining two /', () => {
+    const send = vi.fn().mockResolvedValue(1);
+
+    createUnstorableTextNotifier(send, 'web-view-3')({ source: 'deletion', removed: ['//'] });
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith({
+      message: UNSTORABLE_TEXT_REFUSED_DELETION_KEY,
+      severity: 'info',
+      notificationId: UNSTORABLE_TEXT_NOTIFICATION_ID,
+      webViewId: 'web-view-3',
     });
   });
 
