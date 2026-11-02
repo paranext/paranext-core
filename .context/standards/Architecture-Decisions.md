@@ -6072,8 +6072,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     (`menuExpressionsUseTemplateVar`). If the lookup fails, the menu is evaluated without a project
     for that open (positive project gates read as unset).
   - **D5:** Release depends on the network method registry: main releases on removal of
-    `shared-store:owner:<id>` at disconnect, and .NET registers no marker. Extension-host restart
-    live check: pending as of 2026-11-02.
+    `shared-store:owner:<id>` at disconnect, and .NET registers no marker. Live-checked
+    2026-11-02 in the dev app: after `platform.restartExtensionHost`, main removed the old
+    extension host's owner-marker method and the open editor's keys and menu state stayed
+    correct; an editor tab moved with `platform.moveWebViewToNewWindow` had its keys re-owned by
+    the new window's process. As of 2026-11-02 no bundled extension-host producer exists in this
+    repo, so a restarted producer re-claiming its own keys is covered by unit tests only.
   - **D6:** C# `SharedStore.Set` skips a publish whose JSON equals the stored value, and TS
     `setFromRemote` does not emit an equal remote value. There is still no ownership check in C#;
     keeping one producer per key is the producer's job.
