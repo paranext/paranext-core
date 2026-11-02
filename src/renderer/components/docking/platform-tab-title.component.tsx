@@ -1,4 +1,5 @@
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { useEvaluatedMenu } from '@renderer/hooks/papi-hooks/use-evaluated-menu.hook';
 import { useIsFocusedWindow } from '@renderer/hooks/use-is-focused-window.hook';
 import { useInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
 import { useIsContentZoomable } from '@renderer/hooks/use-is-content-zoomable.hook';
@@ -34,7 +35,6 @@ import {
 } from '@shared/models/web-view-move.model';
 import { WebViewId } from '@shared/models/web-view.model';
 import { sendCommand } from '@shared/services/command.service';
-import { contextKeysService } from '@shared/services/context-keys.service';
 import { logger } from '@shared/services/logger.service';
 import { notificationService } from '@shared/services/notification.service';
 import { windowService } from '@shared/services/window.service';
@@ -55,7 +55,6 @@ import {
 } from 'platform-bible-react';
 import { LUCIDE_ICON_NAMES, LucideIcon, ShortcutKeys } from 'platform-bible-react/experimental';
 import {
-  evaluateMenu,
   getErrorMessage,
   isLocalizeKey,
   isPlatformError,
@@ -138,6 +137,20 @@ const cssHighlightDurationMilliseconds = 3000;
 
 /** A tab menu with nothing in it, for a tab whose menu has not loaded or failed to */
 const EMPTY_TAB_MENU: Localized<SingleColumnMenu> = Object.freeze({ groups: {}, items: [] });
+
+/**
+ * The tab menu as a mode offers it: all of it in Power mode, the zoom group alone in Simple mode,
+ * and nothing while the mode is not yet known
+ */
+function narrowTabMenuToMode(
+  menu: Localized<SingleColumnMenu>,
+  isPowerMode: boolean,
+  isSimpleMode: boolean,
+): Localized<SingleColumnMenu> {
+  if (isPowerMode) return menu;
+  if (isSimpleMode) return filterTabMenuToGroup(menu, CONTENT_ZOOM_TAB_MENU_GROUP);
+  return EMPTY_TAB_MENU;
+}
 
 /**
  * Web view type asked for on behalf of a tab that hosts none — a dialog, or an error tab.
@@ -424,40 +437,30 @@ export function PlatformTabTitle({
   const [contributedTabMenu, setContributedTabMenu] =
     useState<Localized<SingleColumnMenu>>(EMPTY_TAB_MENU);
 
-  /**
-   * The contributed menu with its when-expressions applied. Evaluated once per read: a
-   * when-expression on a tab item reflects the context keys as they stand when the read lands, not
-   * as they change afterwards. Only visibility applies here, since the converted items carry no
-   * disabled or checked state.
-   */
-  const evaluatedTabMenu = useMemo(
-    () =>
-      evaluateMenu(
-        contributedTabMenu,
-        contextKeysService.get,
-        { webViewId, webViewType },
-        (expression, error) =>
-          logger.warn(
-            `Error evaluating tab menu when-expression '${expression}': ${getErrorMessage(error)}`,
-          ),
-      ),
-    [contributedTabMenu, webViewId, webViewType],
-  );
+  const tabMenuTemplateVars = useMemo(() => ({ webViewId, webViewType }), [webViewId, webViewType]);
 
   /**
-   * The contributed menu as this mode offers it. Simple mode shows the zoom group alone: every
-   * other tab item is a no-op there — floating is off for its groups, and moving reaches a second
-   * window Simple mode does not have — while zooming this tab's content behaves identically in both
+   * The contributed menu with its when-expressions applied (`when` hides an item, `enabledWhen`
+   * disables it, `checkedWhen` checks it). Re-evaluated whenever a context key it read changes,
+   * including while the menu is open: an item appears, disappears or changes state under the open
+   * menu, and a menu left with no items closes.
+   */
+  const evaluatedTabMenu =
+    useEvaluatedMenu(contributedTabMenu, tabMenuTemplateVars) ?? EMPTY_TAB_MENU;
+
+  /**
+   * The evaluated menu as this mode offers it. Simple mode shows the zoom group alone: every other
+   * tab item is a no-op there — floating is off for its groups, and moving reaches a second window
+   * Simple mode does not have — while zooming this tab's content behaves identically in both
    * modes.
    *
    * Narrowed before conversion because the converter flattens groups into one list with separators
    * and a converted item no longer says which group it came from.
    */
-  const tabMenuForMode = useMemo(() => {
-    if (isPowerMode) return evaluatedTabMenu;
-    if (isSimpleMode) return filterTabMenuToGroup(evaluatedTabMenu, CONTENT_ZOOM_TAB_MENU_GROUP);
-    return EMPTY_TAB_MENU;
-  }, [isPowerMode, isSimpleMode, evaluatedTabMenu]);
+  const tabMenuForMode = useMemo(
+    () => narrowTabMenuToMode(evaluatedTabMenu, isPowerMode, isSimpleMode),
+    [isPowerMode, isSimpleMode, evaluatedTabMenu],
+  );
 
   /**
    * The contributed tab menu, converted for rendering. Empty until the read below lands, and for a
@@ -473,9 +476,16 @@ export function PlatformTabTitle({
   // for everything it needs to render in one round trip. They arrive unresolved whenever the menu
   // data provider is serving its combiner's raw output — before the extension host's first
   // contribution resync — and the tab menu is read once, so a label left raw would stay raw
+  // Collected from the menu before its when-expressions apply, so the label of an item hidden now
+  // is already resolved when a context key reveals it.
   const contributedKeys = useMemo(
-    () => collectContextMenuKeys(contributedItems),
-    [contributedItems],
+    () =>
+      collectContextMenuKeys(
+        convertContributionToContextMenuItems(
+          narrowTabMenuToMode(contributedTabMenu, isPowerMode, isSimpleMode),
+        ),
+      ),
+    [contributedTabMenu, isPowerMode, isSimpleMode],
   );
   const [localizedStrings] = useLocalizedStrings(
     useMemo(
@@ -576,6 +586,10 @@ export function PlatformTabTitle({
    * Simple-mode menu, whose only items are the zoom group, never unmounts itself while open.
    * `undefined` while the menu is closed. Only zoomability is held: the window targets below still
    * arrive after the menu opens.
+   *
+   * Held on purpose as the one exception to the menu following live changes while open: zoomability
+   * is layout state, not a context key, and items that come and go with the layout would move under
+   * the pointer.
    */
   const [zoomabilityForOpenMenu, setZoomabilityForOpenMenu] = useState<boolean | undefined>(
     undefined,
