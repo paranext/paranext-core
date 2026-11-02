@@ -234,21 +234,31 @@ function checkWhenExpressionsOnItems(
   allowedTemplateVars: string[],
   menuDescription: string,
   /**
-   * True for surfaces that only evaluate `when` (tab menus and context menus): they have no way to
-   * show a disabled or checked item, so `enabledWhen` and `checkedWhen` are rejected there
+   * True for tab menus and context menus: they can disable a command item but show no checkmarks
+   * and cannot disable a submenu
    */
-  whenOnly = false,
+  limitedSurface = false,
 ): void {
   if (!menuItems) return;
   menuItems.forEach((menuItem) => {
     if (!menuItem) return;
     WHEN_EXPRESSION_PROPERTIES.forEach((expressionProperty) => {
-      if (whenOnly && expressionProperty !== 'when') {
-        // checkedWhen only exists on command items; reading it off the union is safe
+      if (limitedSurface) {
+        // enabledWhen and checkedWhen only exist on the item types that declare them; reading them
+        // off the union is safe
         // eslint-disable-next-line no-type-assertion/no-type-assertion
-        if ((menuItem as Partial<MenuItemContainingCommand>)[expressionProperty] !== undefined)
+        const limitedItem = menuItem as Partial<MenuItemContainingCommand>;
+        if (expressionProperty === 'checkedWhen' && limitedItem.checkedWhen !== undefined)
           throw new Error(
-            `Menu item '${menuItem.label}' in ${menuDescription} uses ${expressionProperty}, but this menu only supports 'when'. Remove ${expressionProperty} or move the item to a menu that supports it (mainMenu or a top menu)`,
+            `Menu item '${menuItem.label}' in ${menuDescription} uses checkedWhen, but this menu shows no checkmarks. Remove checkedWhen or move the item to mainMenu or a top menu`,
+          );
+        if (
+          expressionProperty === 'enabledWhen' &&
+          limitedItem.enabledWhen !== undefined &&
+          limitedItem.command === undefined
+        )
+          throw new Error(
+            `Menu item '${menuItem.label}' in ${menuDescription} uses enabledWhen on a submenu, but this menu can only disable command items`,
           );
       }
       // checkedWhen only exists on command items; reading it off the union is safe
