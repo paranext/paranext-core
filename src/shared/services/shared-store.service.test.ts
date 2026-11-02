@@ -291,7 +291,7 @@ describe('sharedStoreService', () => {
       expect(sharedStoreService.get(testKey)).toBe(testValue);
     });
 
-    it('should remove a value, emitting a deleted change event', () => {
+    it('should remove a value, emitting a released deleted change event', () => {
       const testValue = 5000;
       sharedStoreService.set(testKey, testValue);
 
@@ -304,6 +304,7 @@ describe('sharedStoreService', () => {
         key: testKey,
         value: undefined,
         deleted: true,
+        released: true,
         clock: expect.objectContaining({
           counter: expect.any(Number),
           processId: expect.any(String),
@@ -689,15 +690,76 @@ describe('sharedStoreService', () => {
       expect(logger.error).not.toHaveBeenCalled();
     });
 
-    it('still refuses to set a key another live process removed', async () => {
+    it('a key its producer removed is claimable by another process', async () => {
       await initializeSharedStore(networkService);
       remoteChange(testKey, 1, 100, 'other-process');
-      remoteChange(testKey, undefined, 101, 'other-process', true);
+      remoteChange(testKey, undefined, 101, 'other-process', true, true);
 
       sharedStoreService.set(testKey, 7000);
 
+      expect(sharedStoreService.get(testKey)).toBe(7000);
+      expect(logger.error).not.toHaveBeenCalled();
+    });
+
+    it('applies a refused set once the owner removes the key (late source)', async () => {
+      await initializeSharedStore(networkService);
+      remoteChange(testKey, 1, 100, 'other-process');
+      sharedStoreService.set(testKey, 2);
+      expect(sharedStoreService.get(testKey)).toBe(1);
+      const handler = vi.fn();
+      const unsubscribe = onDidChangeSharedStore(handler);
+      vi.mocked(mockEmitter.emit).mockClear();
+
+      remoteChange(testKey, undefined, 101, 'other-process', true, true);
+
+      expect(sharedStoreService.get(testKey)).toBe(2);
+      expect(handler).toHaveBeenCalledWith({ key: testKey, value: 2 });
+      expect(handler).not.toHaveBeenCalledWith({ key: testKey, value: undefined });
+      expect(vi.mocked(mockEmitter.emit).mock.calls[0][0]).toMatchObject({
+        key: testKey,
+        value: 2,
+      });
+      expect(vi.mocked(mockEmitter.emit).mock.calls[0][0].clock.counter).toBeGreaterThan(101);
+      unsubscribe();
+    });
+
+    it('applies a refused set when the release arrives after a restart snapshot', async () => {
+      globalThis.processType = ProcessType.ExtensionHost;
+      vi.mocked(networkService.request).mockResolvedValue({
+        [testKey]: { value: 1, clock: { counter: 5, processId: 'extension-host-old' } },
+      });
+      await initializeSharedStore(networkService);
+      sharedStoreService.set(testKey, 2);
+
+      remoteChange(testKey, undefined, 6, 'main-abc', true, true);
+
+      expect(sharedStoreService.get(testKey)).toBe(2);
+    });
+
+    it('a local remove withdraws a pending claim', async () => {
+      await initializeSharedStore(networkService);
+      remoteChange(testKey, 1, 100, 'other-process');
+      sharedStoreService.set(testKey, 2);
+      sharedStoreService.remove(testKey);
+
+      remoteChange(testKey, undefined, 101, 'other-process', true, true);
+
       expect(sharedStoreService.get(testKey)).toBeUndefined();
-      expect(logger.error).toHaveBeenCalled();
+    });
+
+    it('applies a refused set held in main when the owner process disconnects', async () => {
+      await initializeSharedStore(networkService);
+      remoteChange(testKey, 1, 10, 'extension-host-abc');
+      sharedStoreService.set(testKey, 2);
+      expect(sharedStoreService.get(testKey)).toBe(1);
+      vi.mocked(mockEmitter.emit).mockClear();
+
+      disconnectHandler({ removedMethodNames: ['shared-store:owner:extension-host-abc'] });
+
+      expect(sharedStoreService.get(testKey)).toBe(2);
+      expect(mockEmitter.emit).toHaveBeenCalledWith(
+        expect.objectContaining({ key: testKey, value: 2 }),
+      );
     });
 
     it('registers an owner marker method in non-main processes', async () => {

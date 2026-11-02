@@ -2083,6 +2083,10 @@ declare module 'shared/services/shared-store.service' {
    * key already exists, it can only be set again by the process that created it. This is to prevent
    * race conditions between processes setting values that don't incorporate each others' updates.
    *
+   * A set refused because another process owns the key is held (the latest one per key) and applied
+   * if that owner later removes the key or disconnects. Setting or removing the key from this process
+   * drops the held set.
+   *
    * This runs synchronously and throws if the shared store service has not started initializing (it
    * must be able to broadcast the change). Use {@link setAsync} if you need to wait for initialization
    * before setting.
@@ -2095,6 +2099,12 @@ declare module 'shared/services/shared-store.service' {
   function set<K extends SharedStoreKeys>(key: K, value?: SharedStoreValues[K]): void;
   /**
    * Remove a value from the shared store and notify other processes of the change.
+   *
+   * Removing a key releases it: any process may set it afterwards, and a set another process had
+   * refused while this one owned the key is applied. This holds for every shared-store caller
+   * (context keys, the network request timeouts in `network.service.ts`, `dialog.service-router.ts`).
+   * The .NET `SharedStore.Remove` writes a live default value (for example `null`, or `false` for a
+   * bool), never a released tombstone, so release semantics do not apply to keys written from C#.
    *
    * After removal the key is treated as absent — reads return no value (a removed key is distinct
    * from a key whose value is `undefined`). The entry and its Lamport clock are retained internally
@@ -12458,7 +12468,9 @@ declare module 'shared/services/context-keys.service-model' {
    * - Scoping is by key construction, e.g. `myExt.project.<projectId>.isEditable` — menu expressions
    *   reference these with template variables like `{projectId}`
    * - Each key should have exactly one producer. A key first set in one process can only be updated
-   *   from that same process
+   *   from that same process until that process removes the key or disconnects
+   * - A producer hands a key over by removing it: any process may set a removed key, and a set that
+   *   was refused while another process owned the key is applied once the owner removes it
    *
    * @experimental This constant is unstable and may change or disappear without notice
    */
@@ -12479,8 +12491,10 @@ declare module 'shared/services/context-keys.service-model' {
      *
      * Conventions: prefix keys with your extension's name (`platform.` is reserved); give each key
      * exactly one producer. A key first set in one process can only be updated from that same process
-     * until that process disconnects, which releases the key for any process to claim (ownership
-     * violations are logged, not thrown).
+     * until that process removes the key or disconnects, which releases the key for any process to
+     * claim (ownership violations are logged, not thrown). A set refused for ownership is held and
+     * applied when the owner releases the key, so a producer hands a key over by removing it: a moved
+     * tab's new process wins once the old one removes.
      *
      * @param key The context key to set, e.g. `myExtension.project.<projectId>.isEditable`
      * @param value The value to set (string, number, or boolean)
@@ -12503,7 +12517,8 @@ declare module 'shared/services/context-keys.service-model' {
      *
      * Throws if the key is not structurally valid. Like {@link IContextKeysService.set}, a key first
      * set in one process can only be removed from that same process (ownership violations are logged,
-     * not thrown).
+     * not thrown). Removing a key releases it: any process may set it afterwards, and a set another
+     * process had refused while this one owned the key is applied.
      *
      * @param key The context key to remove
      * @experimental This function is unstable and may change or disappear without notice
@@ -12538,7 +12553,9 @@ declare module 'shared/services/context-keys.service' {
    * - Scoping is by key construction, e.g. `myExt.project.<projectId>.isEditable` — menu expressions
    *   reference these with template variables like `{projectId}`
    * - Each key should have exactly one producer. A key first set in one process can only be updated
-   *   from that same process
+   *   from that same process until that process removes the key or disconnects
+   * - A producer hands a key over by removing it: any process may set a removed key, and a set that
+   *   was refused while another process owned the key is applied once the owner removes it
    *
    * @experimental This constant is unstable and may change or disappear without notice
    */
@@ -15070,7 +15087,9 @@ declare module '@papi/backend' {
      * - Scoping is by key construction, e.g. `myExt.project.<projectId>.isEditable` — menu expressions
      *   reference these with template variables like `{projectId}`
      * - Each key should have exactly one producer. A key first set in one process can only be updated
-     *   from that same process
+     *   from that same process until that process removes the key or disconnects
+     * - A producer hands a key over by removing it: any process may set a removed key, and a set that
+     *   was refused while another process owned the key is applied once the owner removes it
      *
      * @experimental This constant is unstable and may change or disappear without notice
      */
@@ -15361,7 +15380,9 @@ declare module '@papi/backend' {
    * - Scoping is by key construction, e.g. `myExt.project.<projectId>.isEditable` — menu expressions
    *   reference these with template variables like `{projectId}`
    * - Each key should have exactly one producer. A key first set in one process can only be updated
-   *   from that same process
+   *   from that same process until that process removes the key or disconnects
+   * - A producer hands a key over by removing it: any process may set a removed key, and a set that
+   *   was refused while another process owned the key is applied once the owner removes it
    *
    * @experimental This constant is unstable and may change or disappear without notice
    */
@@ -16065,7 +16086,9 @@ declare module '@papi/frontend' {
      * - Scoping is by key construction, e.g. `myExt.project.<projectId>.isEditable` — menu expressions
      *   reference these with template variables like `{projectId}`
      * - Each key should have exactly one producer. A key first set in one process can only be updated
-     *   from that same process
+     *   from that same process until that process removes the key or disconnects
+     * - A producer hands a key over by removing it: any process may set a removed key, and a set that
+     *   was refused while another process owned the key is applied once the owner removes it
      *
      * @experimental This constant is unstable and may change or disappear without notice
      */
@@ -16267,7 +16290,9 @@ declare module '@papi/frontend' {
    * - Scoping is by key construction, e.g. `myExt.project.<projectId>.isEditable` — menu expressions
    *   reference these with template variables like `{projectId}`
    * - Each key should have exactly one producer. A key first set in one process can only be updated
-   *   from that same process
+   *   from that same process until that process removes the key or disconnects
+   * - A producer hands a key over by removing it: any process may set a removed key, and a set that
+   *   was refused while another process owned the key is applied once the owner removes it
    *
    * @experimental This constant is unstable and may change or disappear without notice
    */

@@ -98,7 +98,9 @@ onDidChangeSharedStore((event) => {
  * - Scoping is by key construction, e.g. `myExt.project.<projectId>.isEditable` — menu expressions
  *   reference these with template variables like `{projectId}`
  * - Each key should have exactly one producer. A key first set in one process can only be updated
- *   from that same process
+ *   from that same process until that process removes the key or disconnects
+ * - A producer hands a key over by removing it: any process may set a removed key, and a set that was
+ *   refused while another process owned the key is applied once the owner removes it
  *
  * @experimental This constant is unstable and may change or disappear without notice
  */

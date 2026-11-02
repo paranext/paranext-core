@@ -75,8 +75,8 @@ type StoreEntry = {
   // is treated as absent: reads return no value. A removed key is distinct from a key whose value
   // is `undefined`.
   deleted?: boolean;
-  // True for a removed key released because the process that wrote it disconnected. Unlike an
-  // ordinary removal, a released key is claimable by any process.
+  // True for a removed key released because its producer withdrew it (`remove`) or the process that
+  // wrote it disconnected. Any process may set a released key.
   released?: boolean;
 };
 
@@ -87,6 +87,19 @@ export type StoreChangeEvent = StoreEntry & {
 
 // Copy of the store within this process
 const localStore: Record<string, StoreEntry> = {};
+
+// The latest `set` this process had refused because another process owned the key, per key. Each
+// closure re-runs that `set`; it runs once, when the key is released, and is dropped when this
+// process sets or removes the key itself.
+const pendingClaims = new Map<string, () => void>();
+
+/** Runs and forgets the claim held for the key, if any. The claim is deleted before it runs. */
+function applyPendingClaim(key: string): void {
+  const claim = pendingClaims.get(key);
+  if (!claim) return;
+  pendingClaims.delete(key);
+  claim();
+}
 
 /**
  * Event describing a change to a value in the shared store
@@ -185,6 +198,11 @@ function releaseKeysOfDisconnectedProcesses(removedMethodNames: string[]): void 
       storeChangeEmitter?.emit({ key, value: undefined, clock, deleted: true, released: true });
     } catch (error) {
       logger.error(`Error releasing shared store key ${key}: ${getErrorMessage(error)}`);
+    }
+    // A claim held for the key supersedes the release; `set` emits the claimed value instead.
+    if (pendingClaims.has(key)) {
+      applyPendingClaim(key);
+      return;
     }
     // No caller is left to see a subscriber's throw, and the rest of the dead process's keys must
     // still be released, so isolate each subscriber failure.
@@ -419,6 +437,7 @@ export function resetForTesting(): void {
   isFullyInitialized = false;
   localCounter = 0;
   Object.keys(localStore).forEach((key) => delete localStore[key]);
+  pendingClaims.clear();
   storeChangeEmitter = undefined;
   initializationPromise = undefined;
   resetInitializationStartedSignal();
@@ -462,6 +481,10 @@ function get<K extends SharedStoreKeys>(key: K): SharedStoreValues[K] | undefine
  * key already exists, it can only be set again by the process that created it. This is to prevent
  * race conditions between processes setting values that don't incorporate each others' updates.
  *
+ * A set refused because another process owns the key is held (the latest one per key) and applied
+ * if that owner later removes the key or disconnects. Setting or removing the key from this process
+ * drops the held set.
+ *
  * This runs synchronously and throws if the shared store service has not started initializing (it
  * must be able to broadcast the change). Use {@link setAsync} if you need to wait for initialization
  * before setting.
@@ -476,8 +499,12 @@ function set<K extends SharedStoreKeys>(key: K, value?: SharedStoreValues[K]): v
   let clonedValue: SharedStoreValues[K] | undefined;
   try {
     const currentEntry = localStore[key];
-    if (currentEntry && !currentEntry.released && currentEntry.clock.processId !== processId)
+    if (currentEntry && !currentEntry.released && currentEntry.clock.processId !== processId) {
+      const claimedValue: SharedStoreValues[K] | undefined = deserialize(serialize(value));
+      pendingClaims.set(key, () => set(key, claimedValue));
       throw new Error('Cannot set value from a different process than the one that created it');
+    }
+    pendingClaims.delete(key);
     // Skip a redundant set only when there is already a live (non-removed) value equal to the new
     // one. A removed key must be re-set even if its stored value also happens to equal `value`.
     if (currentEntry && !currentEntry.deleted && deepEqual(currentEntry.value, value)) return;
@@ -514,6 +541,10 @@ function setFromRemote(key: string, entry: StoreEntry): void {
   const previous = localStore[key];
   if (!previous || compareClocks(entry.clock, previous.clock) > 0) {
     localStore[key] = entry;
+    if (entry.released && pendingClaims.has(key)) {
+      applyPendingClaim(key);
+      return;
+    }
     // The newer clock is stored either way; subscribers only hear about an actual change
     const unchanged =
       previous && !previous.deleted && !entry.deleted && deepEqual(previous.value, entry.value);
@@ -530,6 +561,12 @@ function hasValue(key: string): boolean {
 /**
  * Remove a value from the shared store and notify other processes of the change.
  *
+ * Removing a key releases it: any process may set it afterwards, and a set another process had
+ * refused while this one owned the key is applied. This holds for every shared-store caller
+ * (context keys, the network request timeouts in `network.service.ts`, `dialog.service-router.ts`).
+ * The .NET `SharedStore.Remove` writes a live default value (for example `null`, or `false` for a
+ * bool), never a released tombstone, so release semantics do not apply to keys written from C#.
+ *
  * After removal the key is treated as absent — reads return no value (a removed key is distinct
  * from a key whose value is `undefined`). The entry and its Lamport clock are retained internally
  * for conflict resolution (so the removal can win against concurrent sets and the key can be re-set
@@ -542,6 +579,7 @@ function hasValue(key: string): boolean {
  */
 function remove<K extends SharedStoreKeys>(key: K): void {
   if (!processId || !storeChangeEmitter) throw new Error('Shared store service is not initialized');
+  pendingClaims.delete(key);
   try {
     const currentEntry = localStore[key];
     if (currentEntry && !currentEntry.released && currentEntry.clock.processId !== processId)
@@ -549,8 +587,8 @@ function remove<K extends SharedStoreKeys>(key: K): void {
     // Nothing to remove if the key is already absent or already removed.
     if (!currentEntry || currentEntry.deleted) return;
     const clock = getNextClock();
-    localStore[key] = { value: undefined, clock, deleted: true };
-    storeChangeEmitter.emit({ key, value: undefined, clock, deleted: true });
+    localStore[key] = { value: undefined, clock, deleted: true, released: true };
+    storeChangeEmitter.emit({ key, value: undefined, clock, deleted: true, released: true });
   } catch (error) {
     logger.error(`Error removing value for key ${key} from shared store:`, getErrorMessage(error));
     return;
