@@ -12610,8 +12610,8 @@ declare module 'renderer/hooks/papi-hooks/use-evaluated-menu.hook' {
   import { EvaluatableMenu } from 'platform-bible-utils';
   /**
    * Evaluates the when-expressions (`when`, `enabledWhen`, `checkedWhen`) in a menu document against
-   * the current context keys and re-evaluates when a context key it read changes, local or remote. Use
-   * it in a web view that renders its own menu and must react to keys it does not own.
+   * the current context keys and re-evaluates when a context key it read changes, local or remote.
+   * Use it in a web view that renders its own menu and must react to keys it does not own.
    *
    * @param menuData The menu document to evaluate (pass a referentially stable object, e.g. state or
    *   memoized data)
@@ -12666,6 +12666,7 @@ declare module 'renderer/services/overlays/overlay-store' {
    * menus, modal dialogs, popovers) and notifies subscribers on changes.
    */
   import type { PlatformError } from 'platform-bible-utils';
+  import type { OverlayContextMenuItem } from 'renderer/components/overlays/overlay-context-menu.component';
   import {
     OverlayEntry,
     OverlayResolveType,
@@ -12747,6 +12748,15 @@ declare module 'renderer/services/overlays/overlay-store' {
    * @returns True if the overlay was found and updated, false otherwise
    */
   export function updateOverlayContent(id: string, content: PopoverContent): boolean;
+  /**
+   * Replaces the items of an open context menu and notifies subscribers.
+   *
+   * @param id The overlay id to update
+   * @param items The new menu items
+   * @returns True if the overlay was found and is a context menu, false otherwise
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function updateContextMenuItems(id: string, items: OverlayContextMenuItem[]): boolean;
   /**
    * Updates the mutable `filterText`/`selectedIndex` state of a command palette overlay and notifies
    * subscribers. `selectedIndex` is always clamped to `[0, itemCount - 1]` (or `0` when `itemCount`
@@ -13376,6 +13386,13 @@ declare module 'renderer/services/overlays/overlay.service-model' {
         webViewId: string;
         /** Menu items to render */
         items: OverlayContextMenuItem[];
+        /**
+         * Keys for every item the menu can show, collected from the unevaluated menu so that an item
+         * that appears while the menu is open already has its label localized.
+         *
+         * @experimental This field is unstable and may change or disappear without notice
+         */
+        localizeKeys?: LocalizeKey[];
         /** Document-relative position (already translated from iframe coordinates and clamped) */
         position: {
           x: number;
