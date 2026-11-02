@@ -4,6 +4,8 @@ import type { Localized, WebViewMenu } from 'platform-bible-utils';
 import { menuDataService } from '@shared/services/menu-data.service';
 import { logger } from '@shared/services/logger.service';
 import { webViewService } from '@shared/services/web-view.service';
+import type { SavedWebViewDefinition } from '@shared/models/web-view.model';
+import type { OverlayEntry } from './overlay.service-model';
 import { overlayService, resetDebounceState } from './overlay.service-host';
 import {
   getOverlays,
@@ -114,6 +116,14 @@ function emitKey(key: string, value: unknown) {
 }
 
 const mockGetWebViewMenu = vi.mocked(menuDataService.getWebViewMenu);
+
+type ContextMenuOverlay = Extract<OverlayEntry, { type: 'contextMenu' }>;
+
+/** Narrows an overlay entry to a context menu, failing the test if it is anything else */
+function asContextMenuOverlay(overlay: OverlayEntry | undefined): ContextMenuOverlay {
+  if (overlay?.type !== 'contextMenu') throw new Error('Expected an open context menu overlay');
+  return overlay;
+}
 
 describe('showContextMenu contribution integration', () => {
   beforeEach(() => {
@@ -301,11 +311,7 @@ describe('showContextMenu contribution integration', () => {
     const promise = overlayService.showContextMenu('ext.myWebView', 'lookup-fails-webview');
 
     await vi.waitFor(() => expect(getOverlays()).toHaveLength(1));
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const overlay = getOverlays()[0] as Extract<
-      ReturnType<typeof getOverlays>[number],
-      { type: 'contextMenu' }
-    >;
+    const overlay = asContextMenuOverlay(getOverlays()[0]);
     expect(overlay.items).toEqual([{ type: 'item', id: 'ext.a', label: 'A' }]);
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('{projectId}'));
 
@@ -314,11 +320,6 @@ describe('showContextMenu contribution integration', () => {
   });
 
   describe('live updates while open', () => {
-    type ContextMenuOverlay = Extract<
-      ReturnType<typeof getOverlays>[number],
-      { type: 'contextMenu' }
-    >;
-
     type ContextMenu = NonNullable<Localized<WebViewMenu>['contextMenu']>;
 
     const fixtureMenu: ContextMenu = {
@@ -351,14 +352,12 @@ describe('showContextMenu contribution integration', () => {
       });
       const promise = overlayService.showContextMenu('ext.myWebView', webViewId);
       await vi.waitFor(() => expect(getOverlays()).toHaveLength(1));
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const overlay = getOverlays()[0] as ContextMenuOverlay;
+      const overlay = asContextMenuOverlay(getOverlays()[0]);
       return { promise, overlay };
     }
 
     function currentOverlay(id: string): ContextMenuOverlay {
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      return getOverlayById(id) as ContextMenuOverlay;
+      return asContextMenuOverlay(getOverlayById(id));
     }
 
     it('enables an item while open', async () => {
@@ -454,10 +453,12 @@ describe('showContextMenu contribution integration', () => {
     });
 
     it('re-evaluates with the project it looked up once', async () => {
-      vi.mocked(webViewService.getOpenWebViewDefinition).mockResolvedValue(
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        { projectId: 'proj1' } as never,
-      );
+      const definition: SavedWebViewDefinition = {
+        id: 'live-webview',
+        webViewType: 'ext.myWebView',
+        projectId: 'proj1',
+      };
+      vi.mocked(webViewService.getOpenWebViewDefinition).mockResolvedValue(definition);
       const { promise, overlay } = await openMenu({
         groups: { 'ext.group1': { order: 1 } },
         items: [
