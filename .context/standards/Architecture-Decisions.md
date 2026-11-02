@@ -6063,8 +6063,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     open is unverified on a real Mac as of 2026-11-02. `enabledWhen` became allowed on tab-menu and
     overlay-context-menu command items; `checkedWhen` there, and `enabledWhen` on their submenu
     items, stay rejected when the contribution loads (`limitedSurface` in
-    `menu-document-combiner.ts`). That is the one exception to the authoring rule below, because
-    those surfaces show no check marks. Authoring rule: use `enabledWhen`/`checkedWhen` for state
+    `menu-document-combiner.ts`): those surfaces show no check marks and can disable only command
+    items, so there the authoring rule below has these exceptions. Authoring rule: use `enabledWhen`/`checkedWhen` for state
     that can change while a menu is open, and `when` for state that does not. Handlers keep their
     own guards. A tab's zoomability is held for one open, as layout state.
   - **D4:** No network call while building a menu, with one exception: the overlay context menu
