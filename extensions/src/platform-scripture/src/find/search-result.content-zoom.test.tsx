@@ -13,6 +13,7 @@ const RESULT: HidableFindResult = {
   text: 'beginning',
   start: { verseRef: VERSE_REF, offset: 7 },
   end: { verseRef: VERSE_REF, offset: 16 },
+  matchedUsfm: 'beginning',
 };
 
 // The card only computes its verse context once visible; report it as visible at once.

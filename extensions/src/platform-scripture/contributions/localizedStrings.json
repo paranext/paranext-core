@@ -84,6 +84,21 @@
         "message": "Superseded by the platform-wide %projectSelector_otherProjectsSectionHeading% key."
       }
     },
+    "%webView_find_replacedNOfMResultsTextChanged%": {
+      "notes": "Toast after Replace All in the Find tab, when some results were replaced and the rest were skipped because their text changed after the search. {replacedCount} can be 1, while {totalCount} is always at least 2."
+    },
+    "%webView_find_replacedNOfMResultsTextChangedOrMarker%": {
+      "notes": "Toast after Replace All in the Find tab, when some results were replaced and the rest were skipped, either because their text changed after the search or because replacing them would delete a marker. {replacedCount} can be 1, while {totalCount} is always at least 2."
+    },
+    "%webView_find_replace_textChangedAllResults%": {
+      "notes": "Toast after Replace All in the Find tab, when nothing was replaced because the text of every result changed after the search."
+    },
+    "%webView_find_replace_textChangedError%": {
+      "notes": "Toast after Replace in the Find tab, when the one result being replaced was not replaced because its text changed after the search."
+    },
+    "%webView_find_replace_textChangedOrMarkerAllResults%": {
+      "notes": "Toast after Replace All in the Find tab, when nothing was replaced: each result either changed after the search or would delete a marker if replaced."
+    },
     "%manageBooks_projectSelector_boundButClosedTooltip%": {
       "fallbackKey": "%projectSelector_boundButClosedTooltip%",
       "deprecationInfo": {
@@ -718,6 +733,8 @@
       "%webView_find_replacedOneOccurrenceSkippedNResults%": "Replaced 1 occurrence. Skipped {skippedCount} results that would delete a marker.",
       "%webView_find_replacedNOccurrencesSkippedOneResult%": "Replaced {replacedCount} occurrences. Skipped 1 result that would delete a marker.",
       "%webView_find_replacedNOccurrencesSkippedNResults%": "Replaced {replacedCount} occurrences. Skipped {skippedCount} results that would delete a marker.",
+      "%webView_find_replacedNOfMResultsTextChanged%": "Replaced {replacedCount} of {totalCount} results. The rest changed after the search and were skipped.",
+      "%webView_find_replacedNOfMResultsTextChangedOrMarker%": "Replaced {replacedCount} of {totalCount} results. The rest changed after the search or would delete a marker, and were skipped.",
       "%webView_find_replacementReverted%": "Replacement reverted",
       "%webView_find_replace_failedMessage%": "Couldn't replace all results. Nothing in the project was changed.",
       "%webView_find_replace_markerDeletionError%": "Couldn't replace: the replacement would delete a paragraph, verse, chapter, table, sidebar, footnote, endnote, or cross-reference marker that it doesn't put back. Edit this text in the Scripture editor instead.",
@@ -730,6 +747,9 @@
       "%webView_find_replace_structureProtectedError%": "Couldn't replace: structure is locked, and this replacement would change a paragraph, verse, or chapter marker.",
       "%webView_find_replace_structureProtectedMarkerTooltip%": "This replacement adds a paragraph, verse, or chapter marker, which isn't allowed while structure is locked.",
       "%webView_find_replace_structureProtectedNote%": "Structure is locked. Replacements that change paragraph, verse, or chapter markers will be rejected.",
+      "%webView_find_replace_textChangedAllResults%": "Nothing was replaced. The text changed after the search.",
+      "%webView_find_replace_textChangedError%": "Couldn't replace: this text changed after the search.",
+      "%webView_find_replace_textChangedOrMarkerAllResults%": "Nothing was replaced. Each result either changed after the search or would delete a marker.",
       "%webView_find_previewOptions_toggle%": "Preview style",
       "%webView_find_previewOptions_layout%": "Layout",
       "%webView_find_previewOptions_layout_arrow%": "Arrow",

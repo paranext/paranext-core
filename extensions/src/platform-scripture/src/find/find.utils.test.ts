@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { newPlatformError, SEARCH_WHITESPACE_GROUP_PREFIX } from 'platform-bible-utils';
-import { FindJobStatusReport, FindOptions } from 'platform-scripture';
+import { FindJobStatusReport, FindOptions, ReplaceOutcome } from 'platform-scripture';
 import {
   CharacterCategorizer,
   FIND_AVAILABLE_SCOPES,
@@ -13,6 +13,7 @@ import {
   callControllerSafely,
   classifyPollAttempt,
   gateStartSearch,
+  getChangedResults,
   isDifferentProjectSelection,
   isFindQueryValid,
   isScopeBlockedByExtraMaterial,
@@ -24,6 +25,7 @@ import {
   resolveTargetEditorWebViewId,
   resolveTargetReferencePanelWebViewId,
   selectWrittenBookSnapshots,
+  shouldSearchAgainAfterReplaceAll,
   shouldClearResultsForInvalidQuery,
 } from './find.utils';
 
@@ -1507,7 +1509,9 @@ describe('selectWrittenBookSnapshots', () => {
   ]);
   const BOOK_ORDER = ['GEN', 'EXO', 'LEV'];
 
-  function outcomes(...statuses: ('fulfilled' | 'rejected')[]): PromiseSettledResult<unknown>[] {
+  function outcomes(
+    ...statuses: ('fulfilled' | 'rejected')[]
+  ): PromiseSettledResult<ReplaceOutcome | undefined>[] {
     return statuses.map((status) =>
       status === 'fulfilled'
         ? { status, value: undefined }
@@ -1582,5 +1586,172 @@ describe('selectWrittenBookSnapshots', () => {
 
     expect([...selection.writtenBookSnapshots.keys()]).toEqual(['GEN']);
     expect(selection.writtenBookIdsWithoutSnapshot).toEqual(['EXO']);
+  });
+
+  describe('given how many ranges each call sent', () => {
+    /** GEN sent two ranges, EXO one, LEV three */
+    const RANGE_COUNTS = [2, 1, 3];
+
+    it('drops a fulfilled book whose every range was skipped as changed, since it wrote nothing', () => {
+      const selection = selectWrittenBookSnapshots(
+        SNAPSHOTS,
+        BOOK_ORDER,
+        [
+          { status: 'fulfilled', value: { changedIndexes: [] } },
+          { status: 'fulfilled', value: { changedIndexes: [0] } },
+          { status: 'fulfilled', value: { changedIndexes: [0, 1, 2] } },
+        ],
+        RANGE_COUNTS,
+      );
+
+      expect([...selection.writtenBookSnapshots.keys()]).toEqual(['GEN']);
+      expect(selection.writtenBookIdsWithoutSnapshot).toEqual([]);
+    });
+
+    it('keeps a fulfilled book that wrote some of its ranges', () => {
+      const { writtenBookSnapshots } = selectWrittenBookSnapshots(
+        SNAPSHOTS,
+        BOOK_ORDER,
+        [
+          { status: 'fulfilled', value: { changedIndexes: [1] } },
+          { status: 'fulfilled', value: { changedIndexes: [0] } },
+          { status: 'fulfilled', value: { changedIndexes: [0, 2] } },
+        ],
+        RANGE_COUNTS,
+      );
+
+      expect([...writtenBookSnapshots.keys()]).toEqual(['GEN', 'LEV']);
+    });
+
+    it('still drops a rejected book', () => {
+      const { writtenBookSnapshots } = selectWrittenBookSnapshots(
+        SNAPSHOTS,
+        BOOK_ORDER,
+        [
+          { status: 'fulfilled', value: { changedIndexes: [] } },
+          { status: 'rejected', reason: new Error('refused') },
+          { status: 'fulfilled', value: { changedIndexes: [] } },
+        ],
+        RANGE_COUNTS,
+      );
+
+      expect([...writtenBookSnapshots.keys()]).toEqual(['GEN', 'LEV']);
+    });
+  });
+});
+
+describe('shouldSearchAgainAfterReplaceAll', () => {
+  it('keeps the list after a successful revert when no result was skipped as changed', () => {
+    expect(
+      shouldSearchAgainAfterReplaceAll({
+        isCancelled: true,
+        isRevertSuccessful: true,
+        changedCount: 0,
+      }),
+    ).toBe(false);
+  });
+
+  it('searches again after a successful revert when some results were skipped as changed', () => {
+    expect(
+      shouldSearchAgainAfterReplaceAll({
+        isCancelled: true,
+        isRevertSuccessful: true,
+        changedCount: 2,
+      }),
+    ).toBe(true);
+  });
+
+  it('searches again when the revert failed', () => {
+    expect(
+      shouldSearchAgainAfterReplaceAll({
+        isCancelled: true,
+        isRevertSuccessful: false,
+        changedCount: 0,
+      }),
+    ).toBe(true);
+  });
+
+  it('searches again when the replacement was kept', () => {
+    expect(
+      shouldSearchAgainAfterReplaceAll({
+        isCancelled: false,
+        isRevertSuccessful: false,
+        changedCount: 0,
+      }),
+    ).toBe(true);
+  });
+});
+
+describe('getChangedResults', () => {
+  const a = { name: 'a' };
+  const b = { name: 'b' };
+  const c = { name: 'c' };
+  const groups = [{ results: [a, b] }, { results: [c] }];
+
+  it("maps each group's changed indexes onto that group's results", () => {
+    expect(getChangedResults(groups, [{ changedIndexes: [1] }, { changedIndexes: [] }])).toEqual(
+      new Set([b]),
+    );
+  });
+
+  it('collects every skipped result across groups', () => {
+    expect(
+      getChangedResults(groups, [{ changedIndexes: [0, 1] }, { changedIndexes: [0] }]),
+    ).toEqual(new Set([a, b, c]));
+  });
+
+  it('is empty when nothing was skipped', () => {
+    expect(getChangedResults(groups, [{ changedIndexes: [] }, { changedIndexes: [] }]).size).toBe(
+      0,
+    );
+  });
+});
+
+describe('buildReplacedAllMessage with results that changed after the search', () => {
+  const STRINGS = {
+    '%webView_find_replacedOneOccurrence%': 'Replaced 1 occurrence',
+    '%webView_find_replacedNOccurrences%': 'Replaced {count} occurrences',
+    '%webView_find_replacedOneOccurrenceSkippedOneResult%':
+      'Replaced 1 occurrence. Skipped 1 result that would delete a marker.',
+    '%webView_find_replacedNOccurrencesSkippedOneResult%':
+      'Replaced {replacedCount} occurrences. Skipped 1 result that would delete a marker.',
+    '%webView_find_replace_textChangedAllResults%':
+      'Nothing was replaced. The text changed after the search.',
+    '%webView_find_replace_textChangedOrMarkerAllResults%':
+      'Nothing was replaced. Each result either changed after the search or would delete a marker.',
+    '%webView_find_replacedNOfMResultsTextChanged%':
+      'Replaced {replacedCount} of {totalCount} results. The rest changed after the search and were skipped.',
+    '%webView_find_replacedNOfMResultsTextChangedOrMarker%':
+      'Replaced {replacedCount} of {totalCount} results. The rest changed after the search or would delete a marker, and were skipped.',
+  };
+
+  it('reports replaced of total when some results changed', () => {
+    expect(buildReplacedAllMessage(STRINGS, 2, 0, 1)).toBe(
+      'Replaced 2 of 3 results. The rest changed after the search and were skipped.',
+    );
+  });
+
+  it('reports replaced of total when results changed or would delete a marker', () => {
+    expect(buildReplacedAllMessage(STRINGS, 1, 1, 1)).toBe(
+      'Replaced 1 of 3 results. The rest changed after the search or would delete a marker, and were skipped.',
+    );
+  });
+
+  it('reports that nothing was replaced when every result changed', () => {
+    expect(buildReplacedAllMessage(STRINGS, 0, 0, 2)).toBe(
+      STRINGS['%webView_find_replace_textChangedAllResults%'],
+    );
+  });
+
+  it('reports that nothing was replaced when the rest would delete a marker', () => {
+    expect(buildReplacedAllMessage(STRINGS, 0, 1, 1)).toBe(
+      STRINGS['%webView_find_replace_textChangedOrMarkerAllResults%'],
+    );
+  });
+
+  it('reports replaced and marker-skipped counts when no result changed', () => {
+    expect(buildReplacedAllMessage(STRINGS, 2, 1)).toBe(
+      'Replaced 2 occurrences. Skipped 1 result that would delete a marker.',
+    );
   });
 });

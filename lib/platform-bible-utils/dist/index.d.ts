@@ -3546,7 +3546,9 @@ export type UsjSearchOptions = {
 	 * positions are mapped back to the original string. This is required for correct
 	 * `ignoreDiacritics` behaviour on NFC source text: a pre-composed character such as `é` (U+00E9)
 	 * will not match `e[combining]*` unless the text is first decomposed. Returned `text` values are
-	 * always slices of the original (non-NFD) string.
+	 * always slices of the original (non-NFD) string. A match that starts or ends inside an original
+	 * character (for example part of a Hangul syllable, stored precomposed or decomposed) is not
+	 * returned.
 	 */
 	normalizationForm?: "NFD";
 	/**
@@ -6901,6 +6903,23 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 * @param index Position to advance from
 	 */
 	private static advancePastCodePoint;
+	/**
+	 * True when either end of an NFD match falls inside a character: between two NFD code units that
+	 * came from the same original code point, or inside a Hangul syllable the source text stores
+	 * decomposed.
+	 *
+	 * The position map sends every part of a split character to that character's start, so such a
+	 * match would be shorter than, or shifted from, what Find displays, and Replace would insert
+	 * instead of replacing. A decomposed syllable has no single original code point to compare, and
+	 * Replace would leave its remaining jamo behind in the text. Widening the match to the whole
+	 * character is wrong: the leftover parts can be letters (Hangul jamo), not diacritics.
+	 *
+	 * @param matchStart Index of the match start in the NFD text
+	 * @param matchEnd Index just past the match end in the NFD text
+	 * @param searchText NFD text the match was found in
+	 * @param nfdToOriginalMap Position map from {@link buildNFDToOriginalPositionMap}
+	 */
+	private static isMatchInsideCharacter;
 	/**
 	 * True when a match must be discarded because one of its whitespace groups matched zero
 	 * characters somewhere other than a block boundary. A group that matched real whitespace is
