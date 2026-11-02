@@ -9,9 +9,9 @@ import {
   PlatformError,
   isPlatformError,
   getErrorMessage,
-  evaluateMenu,
 } from 'platform-bible-utils';
 import { contextKeysService } from '@shared/services/context-keys.service';
+import { evaluateMenuRecordingReads } from '@shared/utils/evaluate-menu-recording-reads.util';
 import {
   macosMenubarObject,
   LocalizedMacosMenubar,
@@ -30,60 +30,167 @@ import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 let latestRebuildGeneration = 0;
 
 /**
+ * The id a contributed platform menu item carries in the native macOS menu, so a later evaluation
+ * can find the item and update it in place.
+ */
+export function getMacosMenuItemId(
+  item:
+    | MenuItemContainingCommand
+    | MenuItemContainingSubmenu
+    | Localized<MenuItemContainingCommand>
+    | Localized<MenuItemContainingSubmenu>,
+): string {
+  return `platformMenu:${item.group}:${'command' in item ? item.command : item.id}`;
+}
+
+/**
+ * Describes everything about an evaluated menu except `disabled`/`checked` values: which columns,
+ * groups and items exist, in what order, with what label, and whether an item is a checkbox. Two
+ * evaluations with equal signatures differ only in values that can be updated on the existing
+ * native items.
+ *
+ * @returns The signature, or `undefined` when two items share an id (an item cannot then be found
+ *   unambiguously by id)
+ */
+function getMenuStructureSignature(menu: MultiColumnMenu): string | undefined {
+  const ids = menu.items.map(getMacosMenuItemId);
+  if (new Set(ids).size !== ids.length) return undefined;
+  return JSON.stringify({
+    columns: Object.keys(menu.columns).sort(),
+    groups: Object.keys(menu.groups).sort(),
+    items: menu.items.map((item, index) => [
+      ids[index],
+      item.label,
+      item.order,
+      'command' in item && item.checked !== undefined,
+    ]),
+  });
+}
+
+/**
  * Subscribe to changes in the main menu data and context keys, and update the macOS menubar
  * accordingly.
  *
- * Whenever the main menu data or any context key changes, the menu data is re-evaluated
- * (when/enabledWhen/checkedWhen expressions), translated and combined into the structure expected
- * by the Electron Menu API, and the macOS menubar is updated.
+ * Whenever the main menu data changes, the menu data is evaluated (when/enabledWhen/checkedWhen
+ * expressions), translated (which also re-localizes it) and combined into the structure expected by
+ * the Electron Menu API, and the macOS menubar is rebuilt.
+ *
+ * A context key change matters only if the last evaluation read that key. Then the `enabled` and
+ * `checked` state of the existing native items is updated in place. A change to which items are
+ * visible (a `when` expression) or to the menu's structure rebuilds the whole menubar, since
+ * evaluation removes hidden items rather than marking them.
  *
  * If there is an error during the translation and combination process, the default macOS menubar
  * will be used instead.
  */
 export async function subscribeCurrentMacosMenubar() {
   let currentMainMenu: MultiColumnMenu | undefined;
+  let appliedMenu: Menu | undefined;
+  let appliedSignature: string | undefined;
+  // The context keys the latest evaluation of `currentMainMenu` read
+  let readKeys: ReadonlySet<string> = new Set();
+  // Rebuilds that have started and not finished; an in-place update could be overwritten by, or
+  // applied to a menu already replaced by, one of them
+  let pendingRebuilds = 0;
+
+  const onWhenExpressionError = (expression: string, error: unknown) =>
+    logger.warn(
+      `Error evaluating macOS menubar when-expression '${expression}': ${getErrorMessage(error)}`,
+    );
 
   // Reads `currentMainMenu` from the enclosing scope; falls back to the default menubar when no
   // valid menu data is available (e.g. after a PlatformError, which is logged by the subscriber)
   async function rebuildMacosMenubar(): Promise<void> {
-    latestRebuildGeneration += 1;
-    const thisRebuildGeneration = latestRebuildGeneration;
-    let currentMacosMenubarTemplate;
-    if (!currentMainMenu) {
-      // If this fallback fails, the current menubar stays in place, by design
-      currentMacosMenubarTemplate = await fallbackToDefaultMacosMenubar();
-    } else {
-      try {
-        // The main menu has no template variables; its expressions can reference only global keys
-        const evaluatedMainMenu = evaluateMenu(
-          currentMainMenu,
-          contextKeysService.get,
-          {},
-          (expression, error) =>
-            logger.warn(
-              `Error evaluating macOS menubar when-expression '${expression}': ${getErrorMessage(error)}`,
-            ),
-        );
-        currentMacosMenubarTemplate = await translatePlatformMenuItemsAndCombine(evaluatedMainMenu);
-      } catch (error) {
-        logger.error(
-          'Failed to get current platform menus. Falling back to default macOS menubar.',
-          error,
-        );
-        currentMacosMenubarTemplate = await fallbackToDefaultMacosMenubar();
-      }
-    }
-
-    // A newer rebuild started while this one awaited, so this result is stale
-    if (thisRebuildGeneration !== latestRebuildGeneration) return;
-
+    pendingRebuilds += 1;
     try {
-      const coreMacosMenubar = Menu.buildFromTemplate(currentMacosMenubarTemplate);
-      Menu.setApplicationMenu(coreMacosMenubar);
-    } catch (error) {
-      logger.error('Failed to build current macOS menubar', error);
+      latestRebuildGeneration += 1;
+      const thisRebuildGeneration = latestRebuildGeneration;
+      let currentMacosMenubarTemplate;
+      let signature: string | undefined;
+      if (!currentMainMenu) {
+        readKeys = new Set();
+        // If this fallback fails, the current menubar stays in place, by design
+        currentMacosMenubarTemplate = await fallbackToDefaultMacosMenubar();
+      } else {
+        try {
+          // The main menu has no template variables; its expressions can reference only global keys
+          const { evaluatedMenu, readKeys: evaluatedReadKeys } = evaluateMenuRecordingReads(
+            currentMainMenu,
+            {},
+            onWhenExpressionError,
+          );
+          readKeys = evaluatedReadKeys;
+          signature = getMenuStructureSignature(evaluatedMenu);
+          currentMacosMenubarTemplate = await translatePlatformMenuItemsAndCombine(evaluatedMenu);
+        } catch (error) {
+          logger.error(
+            'Failed to get current platform menus. Falling back to default macOS menubar.',
+            error,
+          );
+          readKeys = new Set();
+          signature = undefined;
+          currentMacosMenubarTemplate = await fallbackToDefaultMacosMenubar();
+        }
+      }
+
+      // A newer rebuild started while this one awaited, so this result is stale
+      if (thisRebuildGeneration !== latestRebuildGeneration) return;
+
+      try {
+        const coreMacosMenubar = Menu.buildFromTemplate(currentMacosMenubarTemplate);
+        Menu.setApplicationMenu(coreMacosMenubar);
+        appliedMenu = coreMacosMenubar;
+        appliedSignature = signature;
+      } catch (error) {
+        logger.error('Failed to build current macOS menubar', error);
+      }
+    } finally {
+      pendingRebuilds -= 1;
     }
   }
+
+  function updateAppliedMenuInPlace(menu: Menu, evaluatedMenu: MultiColumnMenu) {
+    evaluatedMenu.items.forEach((item) => {
+      const nativeItem = menu.getMenuItemById(getMacosMenuItemId(item));
+      if (!nativeItem) return;
+      nativeItem.enabled = !item.disabled;
+      if ('command' in item && item.checked !== undefined) nativeItem.checked = item.checked;
+    });
+  }
+
+  function handleContextKeyChange(key: string) {
+    if (!readKeys.has(key)) return;
+    if (pendingRebuilds > 0 || !appliedMenu || !currentMainMenu) {
+      rebuildMacosMenubar().catch((error) =>
+        logger.error('Failed to rebuild macOS menubar after context key change', error),
+      );
+      return;
+    }
+    const { evaluatedMenu, readKeys: evaluatedReadKeys } = evaluateMenuRecordingReads(
+      currentMainMenu,
+      {},
+      onWhenExpressionError,
+    );
+    const signature = getMenuStructureSignature(evaluatedMenu);
+    if (signature === undefined || signature !== appliedSignature) {
+      rebuildMacosMenubar().catch((error) =>
+        logger.error('Failed to rebuild macOS menubar after context key change', error),
+      );
+      return;
+    }
+    readKeys = evaluatedReadKeys;
+    updateAppliedMenuInPlace(appliedMenu, evaluatedMenu);
+  }
+
+  // Subscribed before the first menu delivery so a key that changes during the first build is not
+  // missed
+  const unsubscribeContextKeys = contextKeysService.onDidChange((event) => {
+    try {
+      handleContextKeyChange(event.key);
+    } catch (error) {
+      logger.error('Failed to update macOS menubar after context key change', error);
+    }
+  });
 
   const unsubscribeMenuData = await menuDataService.subscribeUnlocalizedMainMenu(
     undefined,
@@ -97,12 +204,6 @@ export async function subscribeCurrentMacosMenubar() {
       await rebuildMacosMenubar();
     },
   );
-
-  const unsubscribeContextKeys = contextKeysService.onDidChange(() => {
-    rebuildMacosMenubar().catch((error) =>
-      logger.error('Failed to rebuild macOS menubar after context key change', error),
-    );
-  });
 
   return async () => {
     unsubscribeContextKeys();
@@ -211,6 +312,7 @@ function getMenubarColumnContent(
         .map((item) =>
           'command' in item
             ? {
+                id: getMacosMenuItemId(item),
                 label: item.label,
                 // Since the item has a command, we know it is a MenuItemContainingCommand.
                 // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -222,6 +324,7 @@ function getMenubarColumnContent(
                   : { type: 'checkbox' as const, checked: item.checked }),
               }
             : {
+                id: getMacosMenuItemId(item),
                 label: item.label,
                 enabled: !item.disabled,
                 submenu: getMenubarColumnContent(

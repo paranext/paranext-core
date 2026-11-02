@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { EvaluatableMenu, evaluateMenu, getErrorMessage } from 'platform-bible-utils';
+import { EvaluatableMenu, getErrorMessage } from 'platform-bible-utils';
 import { contextKeysService } from '@shared/services/context-keys.service';
+import { evaluateMenuRecordingReads } from '@shared/utils/evaluate-menu-recording-reads.util';
 import { logger } from '@shared/services/logger.service';
 
 /**
  * Evaluates the when-expressions (`when`, `enabledWhen`, `checkedWhen`) in a menu document against
- * the current context keys and re-evaluates on every context key change, local or remote. Use it in
- * a web view that renders its own menu and must react to keys it does not own.
+ * the current context keys and re-evaluates when a context key it read changes, local or remote.
+ * Use it in a web view that renders its own menu and must react to keys it does not own.
  *
  * @param menuData The menu document to evaluate (pass a referentially stable object, e.g. state or
  *   memoized data)
@@ -27,10 +28,14 @@ export function useEvaluatedMenu<T extends EvaluatableMenu>(
   // reuses the memoized result cannot advance it past that evaluation
   const evaluatedChangeSequenceRef = useRef(0);
 
+  // The context keys the committed evaluation read; only a change to one of them can change the
+  // result, so only those changes re-evaluate
+  const readKeysRef = useRef<ReadonlySet<string>>(new Set());
+
   useEffect(() => {
-    const unsubscribe = contextKeysService.onDidChange(() =>
-      setContextKeysVersion((version) => version + 1),
-    );
+    const unsubscribe = contextKeysService.onDidChange((event) => {
+      if (readKeysRef.current.has(event.key)) setContextKeysVersion((version) => version + 1);
+    });
     // A key can change between the render that evaluated and this subscription (for example in a
     // sibling effect); re-evaluate only in that case so a plain mount evaluates once
     if (contextKeysService.getChangeSequence() !== evaluatedChangeSequenceRef.current)
@@ -42,12 +47,21 @@ export function useEvaluatedMenu<T extends EvaluatableMenu>(
 
   return useMemo(() => {
     evaluatedChangeSequenceRef.current = contextKeysService.getChangeSequence();
-    if (!menuData) return undefined;
-    return evaluateMenu(menuData, contextKeysService.get, templateVars, (expression, error) => {
-      logger.warn(
-        `Error evaluating menu when-expression '${expression}': ${getErrorMessage(error)}`,
-      );
-    });
+    if (!menuData) {
+      readKeysRef.current = new Set();
+      return undefined;
+    }
+    const { evaluatedMenu, readKeys } = evaluateMenuRecordingReads(
+      menuData,
+      templateVars,
+      (expression, error) => {
+        logger.warn(
+          `Error evaluating menu when-expression '${expression}': ${getErrorMessage(error)}`,
+        );
+      },
+    );
+    readKeysRef.current = readKeys;
+    return evaluatedMenu;
     // contextKeysVersion intentionally triggers re-evaluation when any context key changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [menuData, templateVars, contextKeysVersion]);
