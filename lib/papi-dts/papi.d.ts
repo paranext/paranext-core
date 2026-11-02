@@ -12432,7 +12432,11 @@ declare module 'renderer/hooks/papi-hooks/use-recent-scripture-refs.hook' {
 }
 declare module 'shared/services/context-keys.service-model' {
   import { ContextKeyValue } from 'platform-bible-utils';
-  /** Event emitted when a context key's value changes; platform-internal, not part of PAPI */
+  /**
+   * Event emitted when a context key's value changes; platform-internal, not part of PAPI
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
   export type ContextKeyChangeEvent = {
     /**
      * The context key that changed (without any internal storage prefix)
@@ -12581,12 +12585,18 @@ declare module 'shared/utils/evaluate-menu-recording-reads.util' {
    * @experimental This type is unstable and may change or disappear without notice
    */
   export type MenuEvaluationWithReads<T extends EvaluatableMenu> = {
-    /** The evaluated menu, as {@link evaluateMenu} returns it */
+    /**
+     * The evaluated menu, as {@link evaluateMenu} returns it
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
     evaluatedMenu: T;
     /**
      * Every context key the evaluation looked up. A key outside this set cannot change the result
      * until a key inside it changes: unresolved template variables return before any lookup, and
      * `&&`/`||` short-circuit.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
      */
     readKeys: ReadonlySet<string>;
   };

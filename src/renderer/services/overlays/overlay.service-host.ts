@@ -585,14 +585,15 @@ async function showContextMenu(
   // The only network call while building a menu, made only when an item's expression uses
   // {projectId}. Through the shared proxy rather than the renderer's own web view service shard: the
   // shard's import graph reaches back to this module through the frontend PAPI, which would be a
-  // cycle. A failed lookup leaves the project unset, so items gated on it stay hidden.
+  // cycle. A failed lookup leaves the project unset: the menu is evaluated without a project, so positive
+  // {projectId} gates read as unset.
   let projectId: string | undefined;
   if (menuExpressionsUseTemplateVar(contextMenu, 'projectId')) {
     try {
       projectId = (await webViewService.getOpenWebViewDefinition(webViewId))?.projectId;
     } catch (error) {
       logger.warn(
-        `Could not look up the project of web view ${webViewId}; context menu items gated on {projectId} stay hidden: ${getErrorMessage(error)}`,
+        `Could not look up the project of web view ${webViewId}; the context menu is evaluated without a project (positive {projectId} gates read as unset): ${getErrorMessage(error)}`,
       );
     }
   }

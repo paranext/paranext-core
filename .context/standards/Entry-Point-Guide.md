@@ -146,7 +146,7 @@ contribution'). So is `checkedWhen` on an item of a tab menu or overlay context 
 | Surface | Variables | Honors |
 |---|---|---|
 | Main menu (toolbar, macOS menubar) | none | `when`, `enabledWhen`, `checkedWhen`; the macOS menubar updates enabled/checked in place and rebuilds when visibility or structure changes |
-| Web view top menu | `{webViewId}`, `{webViewType}`, `{projectId}` | `when`, `enabledWhen`, `checkedWhen`, re-evaluated on every key change |
+| Web view top menu | `{webViewId}`, `{webViewType}`, `{projectId}` | `when`, `enabledWhen`, `checkedWhen`, re-evaluated whenever a key it reads changes, including while open |
 | Web view that renders its own menu | `{webViewId}`, `{webViewType}`, `{projectId}` (contribution validation rejects the whole contribution if any other is used); the web view evaluates through `useEvaluatedMenu` from `@papi/frontend/react`, supplying their values as a memoized object | same |
 | Web view tab menu | `{webViewId}`, `{webViewType}` | `when`, `enabledWhen` (command items); re-evaluated whenever a key it reads changes, including while open; `checkedWhen` rejected at load |
 | Web view overlay context menu | `{webViewId}`, `{webViewType}`, `{projectId}` | `when`, `enabledWhen` (command items); re-evaluated whenever a key it reads changes, including while open; `checkedWhen` rejected at load. `{projectId}` is looked up once per open, only when an item uses it |

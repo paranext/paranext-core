@@ -723,6 +723,32 @@ describe('sharedStoreService', () => {
       unsubscribe();
     });
 
+    it('logs a refused set at info with the key and owner, not as an error, and applies it on release', async () => {
+      await initializeSharedStore(networkService);
+      remoteChange(testKey, 1, 100, 'other-process');
+
+      sharedStoreService.set(testKey, 2);
+
+      expect(logger.error).not.toHaveBeenCalled();
+      expect(logger.info).toHaveBeenCalledTimes(1);
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining(`Holding set of ${testKey} until other-process releases it`),
+      );
+      remoteChange(testKey, undefined, 101, 'other-process', true, true);
+      expect(sharedStoreService.get(testKey)).toBe(2);
+    });
+
+    it('applies the latest refused set when the owner releases the key', async () => {
+      await initializeSharedStore(networkService);
+      remoteChange(testKey, 1, 100, 'other-process');
+      sharedStoreService.set(testKey, 2);
+      sharedStoreService.set(testKey, 3);
+
+      remoteChange(testKey, undefined, 101, 'other-process', true, true);
+
+      expect(sharedStoreService.get(testKey)).toBe(3);
+    });
+
     it('applies a refused set when the release arrives after a restart snapshot', async () => {
       globalThis.processType = ProcessType.ExtensionHost;
       vi.mocked(networkService.request).mockResolvedValue({
@@ -882,7 +908,10 @@ describe('sharedStoreService', () => {
 
       remoteChange(testKey, undefined, 30, 'other-process', true);
       sharedStoreService.remove(testKey);
-      expect(logger.error).toHaveBeenCalledTimes(1);
+      expect(logger.error).not.toHaveBeenCalled();
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining(`Ignoring remove of ${testKey}`),
+      );
     });
 
     it('does nothing on disconnect in a non-main process', async () => {
