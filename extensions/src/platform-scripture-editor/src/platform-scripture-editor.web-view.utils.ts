@@ -783,6 +783,30 @@ export function isEditorContextMenuOpen(editorContainer: Element | null | undefi
   return isEditorContextMenuOpenFor(editorContainer);
 }
 
+/** The facts one editor web view publishes about itself; both key functions below map over this */
+const EDITOR_WEB_VIEW_CONTEXT_FACTS = [
+  'isPreview',
+  'isSyncBlocked',
+  'footnotesPaneVisible',
+] as const;
+
+function getEditorWebViewContextKeyPrefix(webViewId: string): string {
+  return `platformScriptureEditor.webView.${webViewId}`;
+}
+
+/**
+ * Lists the names of the context keys one editor web view publishes, for removing them when it
+ * closes. Derived from the same fact list as {@link getEditorWebViewContextKeys}, so the two cannot
+ * disagree.
+ *
+ * @param webViewId The web view's id
+ * @returns The full context key names, one per published fact
+ */
+export function getEditorWebViewContextKeyNames(webViewId: string): string[] {
+  const prefix = getEditorWebViewContextKeyPrefix(webViewId);
+  return EDITOR_WEB_VIEW_CONTEXT_FACTS.map((fact) => `${prefix}.${fact}`);
+}
+
 /**
  * Where keyboard focus is, from this editor's point of view (see {@link EditorFocusLocation}).
  * Projects the subject to a web view id as core's `getWebViewIdFromFocusSubject` does (extensions
@@ -823,12 +847,10 @@ export function getEditorFocusLocation(
  */
 export function getEditorWebViewContextKeys(
   webViewId: string,
-  state: { isPreview: boolean; isSyncBlocked: boolean; footnotesPaneVisible: boolean },
+  state: Record<(typeof EDITOR_WEB_VIEW_CONTEXT_FACTS)[number], boolean>,
 ): Record<string, boolean> {
-  const prefix = `platformScriptureEditor.webView.${webViewId}`;
-  return {
-    [`${prefix}.isPreview`]: state.isPreview,
-    [`${prefix}.isSyncBlocked`]: state.isSyncBlocked,
-    [`${prefix}.footnotesPaneVisible`]: state.footnotesPaneVisible,
-  };
+  const prefix = getEditorWebViewContextKeyPrefix(webViewId);
+  return Object.fromEntries(
+    EDITOR_WEB_VIEW_CONTEXT_FACTS.map((fact) => [`${prefix}.${fact}`, state[fact]]),
+  );
 }
