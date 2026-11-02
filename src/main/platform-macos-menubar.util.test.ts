@@ -42,17 +42,24 @@ vi.mock('@shared/services/command.service', () => ({
 }));
 /** Minimal stand-in for an Electron Menu: item state by id, mutable like the real items */
 const { fakeMenuFromTemplate } = vi.hoisted(() => {
-  type Template = { id?: string; enabled?: boolean; checked?: boolean; submenu?: unknown };
+  type Template = {
+    id?: string;
+    type?: string;
+    enabled?: boolean;
+    checked?: boolean;
+    submenu?: unknown;
+  };
   function isTemplate(candidate: unknown): candidate is Template {
     return !!candidate && typeof candidate === 'object';
   }
   return {
     fakeMenuFromTemplate: (template: unknown[]) => {
-      const items = new Map<string, { enabled: boolean; checked: boolean }>();
+      const items = new Map<string, { type: string; enabled: boolean; checked: boolean }>();
       const walk = (entries: unknown[]) =>
         entries.filter(isTemplate).forEach((entry) => {
           if (entry.id)
             items.set(entry.id, {
+              type: entry.type ?? 'normal',
               enabled: entry.enabled ?? true,
               checked: entry.checked ?? false,
             });
@@ -373,6 +380,60 @@ describe('subscribeCurrentMacosMenubar', () => {
     expect(applied.getMenuItemById('platformMenu:test.group:test.checked').checked).toBe(true);
     expect(Menu.setApplicationMenu).toHaveBeenCalledTimes(1);
     expect(Menu.buildFromTemplate).toHaveBeenCalledTimes(1);
+  });
+
+  describe('clicking a command item', () => {
+    const CHECKED_ID = 'platformMenu:test.group:test.checked';
+    const GATED_ID = 'platformMenu:test.group:test.gated';
+
+    /** Gets the native item and the template's click handler, called the way Electron calls it */
+    function clickLikeElectron(id: string, applied: ReturnType<typeof lastAppliedMenu>) {
+      const nativeItem = applied.getMenuItemById(id);
+      const entry = findTemplateEntry(vi.mocked(Menu.buildFromTemplate).mock.calls[0][0], id);
+      const click = entry?.click;
+      if (typeof click !== 'function') throw new Error(`No click handler for ${id}`);
+      return { nativeItem, click: () => click(nativeItem, undefined, {}) };
+    }
+
+    it('keeps a checkbox item at its evaluated state when Electron toggles it natively', async () => {
+      const deliver = await subscribe();
+      await deliver(menuWithGatedItems());
+      const applied = lastAppliedMenu();
+      const { nativeItem, click } = clickLikeElectron(CHECKED_ID, applied);
+
+      nativeItem.checked = !nativeItem.checked;
+      click();
+
+      expect(nativeItem.checked).toBe(false);
+    });
+
+    it('keeps a checkbox item at the state an in-place update gave it', async () => {
+      const deliver = await subscribe();
+      await deliver(menuWithGatedItems());
+      const applied = lastAppliedMenu();
+      mockKeyValues.set('test.checkFlag', true);
+      emitKey('test.checkFlag', true);
+      await flushRebuilds();
+      const { nativeItem, click } = clickLikeElectron(CHECKED_ID, applied);
+      expect(nativeItem.checked).toBe(true);
+
+      nativeItem.checked = !nativeItem.checked;
+      click();
+
+      expect(nativeItem.checked).toBe(true);
+    });
+
+    it('does not touch the checked state of a non-checkbox item', async () => {
+      const deliver = await subscribe();
+      await deliver(menuWithGatedItems());
+      const applied = lastAppliedMenu();
+      const { nativeItem, click } = clickLikeElectron(GATED_ID, applied);
+
+      nativeItem.checked = true;
+      click();
+
+      expect(nativeItem.checked).toBe(true);
+    });
   });
 
   it('rebuilds when a visibility key changes', async () => {

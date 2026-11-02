@@ -19,7 +19,7 @@ import {
 } from '@main/platform-macos-menubar.data';
 import { menuDataService } from '@shared/services/menu-data.service';
 import { localizationService } from '@shared/services/localization.service';
-import { Menu, MenuItemConstructorOptions } from 'electron';
+import { Menu, MenuItem, MenuItemConstructorOptions } from 'electron';
 import { logger } from '@shared/services/logger.service';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 
@@ -318,9 +318,17 @@ function getMenubarColumnContent(
             ? {
                 id: getMacosMenuItemId(item),
                 label: item.label,
-                // Since the item has a command, we know it is a MenuItemContainingCommand.
-                // eslint-disable-next-line no-type-assertion/no-type-assertion
-                click: () => handleMenuCommand(item as MenuItemContainingCommand, groupKey),
+                click: (menuItem: MenuItem) => {
+                  // Electron flips a checkbox item's mark natively before calling `click`. The mark
+                  // belongs to the `checkedWhen` key, which a failed command never changes, so
+                  // undo the flip; the in-place update rewrites it when the key does change. Undo
+                  // from the live item, not the template's value: in-place updates change the
+                  // native item without touching the template.
+                  if (menuItem.type === 'checkbox') menuItem.checked = !menuItem.checked;
+                  // Since the item has a command, we know it is a MenuItemContainingCommand.
+                  // eslint-disable-next-line no-type-assertion/no-type-assertion
+                  handleMenuCommand(item as MenuItemContainingCommand, groupKey);
+                },
                 order: item.order,
                 enabled: !item.disabled,
                 ...(item.checked === undefined
