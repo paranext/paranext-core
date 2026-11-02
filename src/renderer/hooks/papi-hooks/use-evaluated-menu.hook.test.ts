@@ -119,6 +119,44 @@ describe('useEvaluatedMenu', () => {
     expect(result.current?.items.map((item) => item.label)).toEqual(['%always%', '%conditional%']);
   });
 
+  it('does not re-evaluate when a key the menu did not read changes', () => {
+    let renders = 0;
+    const vars = { webViewId: 'wv1' };
+    const { result } = renderHook(() => {
+      renders += 1;
+      return useEvaluatedMenu(menuData, vars);
+    });
+    const before = result.current;
+    const rendersBefore = renders;
+    act(() => {
+      mockChangeSequence += 1;
+      mockOnDidChangeEmitter.emit({ key: 'other.unrelated', value: true });
+    });
+    expect(result.current).toBe(before);
+    expect(renders).toBe(rendersBefore);
+  });
+
+  it('picks up a short-circuited key once the key before it changes', () => {
+    const menu: SingleColumnMenu = {
+      ...menuData,
+      items: [{ ...menuData.items[1], when: 'test.a && test.b' }],
+    };
+    const vars = {};
+    const { result } = renderHook(() => useEvaluatedMenu(menu, vars));
+    act(() => {
+      mockContextKeyValues.set('test.b', true);
+      mockChangeSequence += 1;
+      mockOnDidChangeEmitter.emit({ key: 'test.b', value: true });
+    });
+    expect(result.current?.items).toHaveLength(0);
+    act(() => {
+      mockContextKeyValues.set('test.a', true);
+      mockChangeSequence += 1;
+      mockOnDidChangeEmitter.emit({ key: 'test.a', value: true });
+    });
+    expect(result.current?.items.map((item) => item.label)).toEqual(['%conditional%']);
+  });
+
   it('should unsubscribe from context key changes on unmount', () => {
     const { unmount } = renderHook(() => useEvaluatedMenu(menuData, { webViewId: 'wv1' }));
     expect(mockUnsubscribe).not.toHaveBeenCalled();
