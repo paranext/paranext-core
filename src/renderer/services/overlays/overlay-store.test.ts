@@ -13,6 +13,7 @@ import {
   resolveAndRemoveOverlay,
   rejectAndRemoveOverlay,
   updateOverlayContent,
+  updateContextMenuItems,
   updateCommandPaletteState,
   hasOverlayOfType,
 } from './overlay-store';
@@ -284,6 +285,43 @@ describe('overlay-store', () => {
 
       updateOverlayContent('popover-1', { type: 'text', body: 'Updated' });
       expect(listener).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('updateContextMenuItems', () => {
+    it('replaces the items of a context menu, returns true and notifies once', () => {
+      addOverlay(createContextMenuEntry('menu-1', 'webview-1'));
+      const listener = vi.fn();
+      subscribe(listener);
+
+      const nextItems: OverlayContextMenuItem[] = [{ type: 'item', id: 'next', label: 'Next' }];
+      expect(updateContextMenuItems('menu-1', nextItems)).toBe(true);
+
+      const overlay = getOverlayById('menu-1');
+      expect(overlay?.type === 'contextMenu' && overlay.items).toEqual(nextItems);
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns false without notifying for a popover', () => {
+      addOverlay({
+        type: 'popover',
+        id: 'popover-1',
+        webViewId: 'webview-1',
+        request: { anchor: { x: 1, y: 2 }, content: { type: 'text', body: 'x' } },
+        content: { type: 'text', body: 'x' },
+        position: { x: 1, y: 2 },
+        resolve: vi.fn(),
+        reject: vi.fn(),
+      });
+      const listener = vi.fn();
+      subscribe(listener);
+
+      expect(updateContextMenuItems('popover-1', [])).toBe(false);
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('returns false when the overlay is missing', () => {
+      expect(updateContextMenuItems('nonexistent', [])).toBe(false);
     });
   });
 

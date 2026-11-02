@@ -1,11 +1,17 @@
 import { vi } from 'vitest';
 import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import {
+  OverlayContextMenu,
   OverlayContextMenuPresentational,
   OverlayContextMenuItem,
   OverlayContextMenuResult,
 } from './overlay-context-menu.component';
+
+vi.mock('@renderer/hooks/papi-hooks', () => ({
+  useLocalizedStrings: vi.fn(() => [{}]),
+}));
 
 // Radix DropdownMenu uses ResizeObserver internally; jsdom doesn't provide it, so we stub a no-op
 // implementation. The methods intentionally don't use `this` since they're empty stubs.
@@ -186,6 +192,70 @@ describe('OverlayContextMenuPresentational', () => {
 
       vi.useRealTimers();
     });
+
+    describe('when the items change while open', () => {
+      const renameSubmenu = (rename: OverlayContextMenuItem): OverlayContextMenuItem => ({
+        type: 'submenu',
+        id: 'ext.more',
+        label: 'More Actions',
+        items: [rename],
+      });
+      const rename: OverlayContextMenuItem = { type: 'item', id: 'rename', label: 'Rename' };
+
+      function renderOpenSubmenu(items: OverlayContextMenuItem[]) {
+        vi.useFakeTimers();
+        const view = render(
+          <OverlayContextMenuPresentational
+            items={items}
+            position={position}
+            onSelect={vi.fn()}
+            onDismiss={vi.fn()}
+          />,
+        );
+        fireEvent.pointerEnter(screen.getByText('More Actions'));
+        act(() => {
+          vi.advanceTimersByTime(200);
+        });
+        return view;
+      }
+
+      function rerenderWith(view: ReturnType<typeof render>, items: OverlayContextMenuItem[]) {
+        view.rerender(
+          <OverlayContextMenuPresentational
+            items={items}
+            position={position}
+            onSelect={vi.fn()}
+            onDismiss={vi.fn()}
+          />,
+        );
+      }
+
+      afterEach(() => {
+        vi.useRealTimers();
+      });
+
+      it('keeps an open submenu open when an item appears above it', () => {
+        const view = renderOpenSubmenu([renameSubmenu(rename)]);
+        expect(screen.getByText('Rename')).toBeInTheDocument();
+
+        rerenderWith(view, [{ type: 'item', id: 'ext.new', label: 'New' }, renameSubmenu(rename)]);
+
+        expect(screen.getByText('Rename')).toBeInTheDocument();
+      });
+
+      it('disables a submenu item in place', () => {
+        const view = renderOpenSubmenu([renameSubmenu(rename)]);
+
+        rerenderWith(view, [
+          renameSubmenu({ ...rename, disabled: true } as OverlayContextMenuItem),
+        ]);
+
+        expect(screen.getByRole('menuitem', { name: 'Rename' })).toHaveAttribute(
+          'aria-disabled',
+          'true',
+        );
+      });
+    });
   });
 
   describe('dismissal', () => {
@@ -346,6 +416,27 @@ describe('OverlayContextMenuPresentational', () => {
       // jsdom leaves an unassigned inline style property `undefined` rather than '', so check both.
       expect(menu.style.zoom || '').toBe('');
       expect(menu.style.maxWidth).toBe('');
+    });
+  });
+
+  describe('OverlayContextMenu', () => {
+    it("requests the menu's prefetched keys", () => {
+      render(
+        <OverlayContextMenu
+          overlay={{
+            type: 'contextMenu',
+            id: 'menu-1',
+            webViewId: 'wv',
+            items: [{ type: 'item', id: 'a', label: '%a%' }],
+            localizeKeys: ['%a%', '%b%'],
+            position,
+            resolve: vi.fn(),
+            reject: vi.fn(),
+          }}
+        />,
+      );
+
+      expect(useLocalizedStrings).toHaveBeenCalledWith(['%a%', '%b%']);
     });
   });
 });

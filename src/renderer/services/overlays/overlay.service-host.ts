@@ -25,7 +25,6 @@ import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
 import { sendCommand } from '@shared/services/command.service';
 import {
-  evaluateMenu,
   formatReplacementString,
   isLocalizeKey,
   getErrorMessage,
@@ -47,6 +46,8 @@ import type {
   SingleColumnMenu,
 } from 'platform-bible-utils';
 import { contextKeysService } from '@shared/services/context-keys.service';
+import { evaluateMenuRecordingReads } from '@shared/utils/evaluate-menu-recording-reads.util';
+import { collectContextMenuKeys } from '@renderer/components/overlays/overlay-context-menu-localization.util';
 import { webViewService } from '@shared/services/web-view.service';
 import type { ReactElement } from 'react';
 import {
@@ -73,6 +74,7 @@ import {
   getOverlayById,
   getTopmostOverlay,
   updateOverlayContent,
+  updateContextMenuItems,
   updateCommandPaletteState,
 } from './overlay-store';
 import {
@@ -595,25 +597,30 @@ async function showContextMenu(
     }
   }
   const templateVars = createMenuTemplateVars({ webViewId, webViewType, projectId });
-  // Overlay context menus apply `when` only (hidden items removed); `enabledWhen`/`checkedWhen` are
-  // rejected for them at load, and the OverlayContextMenuItem model does not render disabled/checked
-  // state.
-  const evaluatedContextMenu = evaluateMenu(
-    webViewMenu.contextMenu,
-    contextKeysService.get,
+  // `when` hides an item and `enabledWhen` on a command item disables it. `checkedWhen`, and
+  // `enabledWhen` on a submenu, are rejected at load. While the menu is open it re-evaluates
+  // whenever a context key it read changes, and closes if every item becomes hidden.
+  const contextMenu = webViewMenu.contextMenu;
+  const onEvaluationError = (expression: string, error: unknown) =>
+    logger.warn(
+      `Error evaluating context menu when-expression '${expression}': ${getErrorMessage(error)}`,
+    );
+  // eslint-disable-next-line prefer-const -- readKeys is reassigned on each re-evaluation
+  let { evaluatedMenu, readKeys } = evaluateMenuRecordingReads(
+    contextMenu,
     templateVars,
-    (expression, error) =>
-      logger.warn(
-        `Error evaluating context menu when-expression '${expression}': ${getErrorMessage(error)}`,
-      ),
+    onEvaluationError,
   );
-  const items = convertContributionToContextMenuItems(evaluatedContextMenu);
+  const items = convertContributionToContextMenuItems(evaluatedMenu);
 
   if (items.length === 0) {
     return undefined;
   }
 
   validateContextMenuItems(items);
+  // Every item the menu can show, hidden ones included, so a label that appears later is already
+  // localized. The converter ignores `when`/`enabledWhen`, so the unevaluated menu is safe to use.
+  const localizeKeys = collectContextMenuKeys(convertContributionToContextMenuItems(contextMenu));
 
   const existingOverlays = getOverlaysByWebView(webViewId).filter((o) => o.type === 'contextMenu');
   existingOverlays.forEach((existing) => {
@@ -633,12 +640,15 @@ async function showContextMenu(
   announceLocalizedToScreenReader('%overlay_aria_contextMenuOpened%');
   noteOverlayCreated(overlayId);
 
-  const selectedCommand = await new Promise<string | undefined>((resolve, reject) => {
+  // Nothing between the first evaluation and the subscription below may await: a key change in
+  // that gap would be missed.
+  const selectedCommandPromise = new Promise<string | undefined>((resolve, reject) => {
     addOverlay({
       type: 'contextMenu',
       id: overlayId,
       webViewId,
       items,
+      localizeKeys,
       position: clampedPosition,
       resolve: (result) => {
         settleTransientOverlayFocus(overlayId, result !== undefined);
@@ -650,6 +660,30 @@ async function showContextMenu(
       },
     });
   });
+
+  const unsubscribe = contextKeysService.onDidChange((event) => {
+    if (!readKeys.has(event.key)) return;
+    try {
+      if (!getOverlayById(overlayId)) return;
+      const next = evaluateMenuRecordingReads(contextMenu, templateVars, onEvaluationError);
+      readKeys = next.readKeys;
+      const nextItems = convertContributionToContextMenuItems(next.evaluatedMenu);
+      if (nextItems.length === 0) {
+        resolveAndRemoveOverlay(overlayId, 'contextMenu', undefined);
+        return;
+      }
+      validateContextMenuItems(nextItems);
+      updateContextMenuItems(overlayId, nextItems);
+    } catch (error) {
+      logger.warn(`Could not refresh open context menu ${overlayId}: ${getErrorMessage(error)}`);
+    }
+  });
+  let selectedCommand: string | undefined;
+  try {
+    selectedCommand = await selectedCommandPromise;
+  } finally {
+    unsubscribe();
+  }
 
   if (selectedCommand) {
     try {

@@ -4,6 +4,7 @@
  */
 
 import type { PlatformError } from 'platform-bible-utils';
+import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
 import { OverlayEntry, OverlayResolveType, PopoverContent } from './overlay.service-model';
 
 /**
@@ -157,6 +158,22 @@ export function updateOverlayContent(id: string, content: PopoverContent): boole
   const entry = overlays.get(id);
   if (!entry || entry.type !== 'popover') return false;
   overlays.set(id, { ...entry, content });
+  notifyListeners();
+  return true;
+}
+
+/**
+ * Replaces the items of an open context menu and notifies subscribers.
+ *
+ * @param id The overlay id to update
+ * @param items The new menu items
+ * @returns True if the overlay was found and is a context menu, false otherwise
+ * @experimental This function is unstable and may change or disappear without notice
+ */
+export function updateContextMenuItems(id: string, items: OverlayContextMenuItem[]): boolean {
+  const entry = overlays.get(id);
+  if (!entry || entry.type !== 'contextMenu') return false;
+  overlays.set(id, { ...entry, items });
   notifyListeners();
   return true;
 }

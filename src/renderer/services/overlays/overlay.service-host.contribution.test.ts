@@ -5,7 +5,13 @@ import { menuDataService } from '@shared/services/menu-data.service';
 import { logger } from '@shared/services/logger.service';
 import { webViewService } from '@shared/services/web-view.service';
 import { overlayService, resetDebounceState } from './overlay.service-host';
-import { getOverlays, clearAllOverlays } from './overlay-store';
+import {
+  getOverlays,
+  getOverlayById,
+  clearAllOverlays,
+  resolveAndRemoveOverlay,
+} from './overlay-store';
+import { validateContextMenuItems } from './overlay-validation';
 
 // Mock the menu data service
 vi.mock('@shared/services/menu-data.service', () => ({
@@ -82,18 +88,38 @@ vi.mock('@shared/services/web-view.service', () => ({
   },
 }));
 
+const { keyValues, keyListeners, unsubscribeKeyListener } = vi.hoisted(() => ({
+  keyValues: new Map<string, unknown>(),
+  keyListeners: new Set<(event: { key: string; value: unknown }) => void>(),
+  unsubscribeKeyListener: vi.fn(),
+}));
+
 vi.mock('@shared/services/context-keys.service', () => ({
   contextKeysService: {
-    get: vi.fn(() => undefined),
-    onDidChange: vi.fn(() => vi.fn()),
+    get: vi.fn((key: string) => keyValues.get(key)),
+    onDidChange: vi.fn((listener: (event: { key: string; value: unknown }) => void) => {
+      keyListeners.add(listener);
+      return () => {
+        unsubscribeKeyListener();
+        keyListeners.delete(listener);
+      };
+    }),
   },
 }));
+
+/** Sets a context key and notifies the listeners, as the real service does */
+function emitKey(key: string, value: unknown) {
+  keyValues.set(key, value);
+  keyListeners.forEach((listener) => listener({ key, value }));
+}
 
 const mockGetWebViewMenu = vi.mocked(menuDataService.getWebViewMenu);
 
 describe('showContextMenu contribution integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    keyValues.clear();
+    keyListeners.clear();
     resetDebounceState();
     clearAllOverlays();
   });
@@ -285,5 +311,183 @@ describe('showContextMenu contribution integration', () => {
 
     overlay.resolve(undefined);
     return promise;
+  });
+
+  describe('live updates while open', () => {
+    type ContextMenuOverlay = Extract<
+      ReturnType<typeof getOverlays>[number],
+      { type: 'contextMenu' }
+    >;
+
+    type ContextMenu = NonNullable<Localized<WebViewMenu>['contextMenu']>;
+
+    const fixtureMenu: ContextMenu = {
+      groups: { 'ext.group1': { order: 1 } },
+      items: [
+        {
+          command: 'ext.cmd',
+          group: 'ext.group1',
+          label: 'Cmd',
+          order: 1,
+          localizeNotes: '',
+          enabledWhen: 'ext.flag',
+        },
+        {
+          command: 'ext.extra',
+          group: 'ext.group1',
+          label: '%hidden%',
+          order: 2,
+          localizeNotes: '',
+          when: 'ext.show',
+        },
+      ],
+    };
+
+    async function openMenu(contextMenu: ContextMenu, webViewId = 'live-webview') {
+      mockGetWebViewMenu.mockResolvedValue({
+        includeDefaults: false,
+        topMenu: undefined,
+        contextMenu,
+      });
+      const promise = overlayService.showContextMenu('ext.myWebView', webViewId);
+      await vi.waitFor(() => expect(getOverlays()).toHaveLength(1));
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const overlay = getOverlays()[0] as ContextMenuOverlay;
+      return { promise, overlay };
+    }
+
+    function currentOverlay(id: string): ContextMenuOverlay {
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      return getOverlayById(id) as ContextMenuOverlay;
+    }
+
+    it('enables an item while open', async () => {
+      const { promise, overlay } = await openMenu(fixtureMenu);
+      expect(overlay.items[0]).toMatchObject({ id: 'ext.cmd', disabled: true });
+
+      emitKey('ext.flag', true);
+
+      expect(currentOverlay(overlay.id).items[0]).not.toHaveProperty('disabled');
+      overlay.resolve(undefined);
+      await promise;
+    });
+
+    it('shows an item while open', async () => {
+      const { promise, overlay } = await openMenu(fixtureMenu);
+      expect(overlay.items.some((i) => i.type === 'item' && i.id === 'ext.extra')).toBe(false);
+
+      emitKey('ext.show', true);
+
+      expect(
+        currentOverlay(overlay.id).items.some((i) => i.type === 'item' && i.id === 'ext.extra'),
+      ).toBe(true);
+      overlay.resolve(undefined);
+      await promise;
+    });
+
+    it('ignores a key the menu did not read', async () => {
+      const { promise, overlay } = await openMenu(fixtureMenu);
+      const before = getOverlayById(overlay.id);
+
+      emitKey('other.key', 1);
+
+      expect(getOverlayById(overlay.id)).toBe(before);
+      overlay.resolve(undefined);
+      await promise;
+    });
+
+    it('closes when every item becomes hidden', async () => {
+      keyValues.set('ext.show', true);
+      const { promise } = await openMenu({
+        groups: { 'ext.group1': { order: 1 } },
+        items: [
+          {
+            command: 'ext.extra',
+            group: 'ext.group1',
+            label: 'Extra',
+            order: 1,
+            localizeNotes: '',
+            when: 'ext.show',
+          },
+        ],
+      });
+
+      emitKey('ext.show', false);
+
+      await expect(promise).resolves.toBeUndefined();
+      expect(getOverlays()).toEqual([]);
+    });
+
+    it('stops following keys once resolved', async () => {
+      const { promise, overlay } = await openMenu(fixtureMenu);
+
+      resolveAndRemoveOverlay(overlay.id, 'contextMenu', undefined);
+      await promise;
+
+      expect(unsubscribeKeyListener).toHaveBeenCalledTimes(1);
+      emitKey('ext.flag', true);
+      expect(getOverlays()).toEqual([]);
+    });
+
+    it('keeps the menu and logs when re-evaluation throws', async () => {
+      vi.mocked(validateContextMenuItems)
+        .mockImplementationOnce(() => {})
+        .mockImplementationOnce(() => {
+          throw new Error('bad');
+        });
+      const { promise, overlay } = await openMenu(fixtureMenu);
+
+      expect(() => emitKey('ext.flag', true)).not.toThrow();
+
+      expect(getOverlayById(overlay.id)).toBeDefined();
+      expect(logger.warn).toHaveBeenCalled();
+      overlay.resolve(undefined);
+      await promise;
+    });
+
+    it('prefetches keys of hidden items', async () => {
+      const { promise, overlay } = await openMenu(fixtureMenu);
+
+      expect(overlay.localizeKeys).toContain('%hidden%');
+      overlay.resolve(undefined);
+      await promise;
+    });
+
+    it('re-evaluates with the project it looked up once', async () => {
+      vi.mocked(webViewService.getOpenWebViewDefinition).mockResolvedValue(
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        { projectId: 'proj1' } as never,
+      );
+      const { promise, overlay } = await openMenu({
+        groups: { 'ext.group1': { order: 1 } },
+        items: [
+          {
+            command: 'ext.plain',
+            group: 'ext.group1',
+            label: 'Plain',
+            order: 1,
+            localizeNotes: '',
+          },
+          {
+            command: 'ext.cmd',
+            group: 'ext.group1',
+            label: 'Cmd',
+            order: 2,
+            localizeNotes: '',
+            when: 'ext.project.{projectId}.flag',
+          },
+        ],
+      });
+      expect(webViewService.getOpenWebViewDefinition).toHaveBeenCalledTimes(1);
+      keyValues.set('ext.project.PROJ1.flag', false);
+
+      emitKey('ext.project.PROJ1.flag', true);
+
+      expect(webViewService.getOpenWebViewDefinition).toHaveBeenCalledTimes(1);
+      expect(overlay.items).toHaveLength(1);
+      expect(currentOverlay(overlay.id).items).toHaveLength(2);
+      overlay.resolve(undefined);
+      await promise;
+    });
   });
 });
