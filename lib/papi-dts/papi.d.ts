@@ -12431,12 +12431,8 @@ declare module 'renderer/hooks/papi-hooks/use-recent-scripture-refs.hook' {
   };
 }
 declare module 'shared/services/context-keys.service-model' {
-  import { ContextKeyValue, PlatformEvent } from 'platform-bible-utils';
-  /**
-   * Event emitted when a context key's value changes
-   *
-   * @experimental This type is unstable and may change or disappear without notice
-   */
+  import { ContextKeyValue } from 'platform-bible-utils';
+  /** Event emitted when a context key's value changes; platform-internal, not part of PAPI */
   export type ContextKeyChangeEvent = {
     /**
      * The context key that changed (without any internal storage prefix)
@@ -12469,20 +12465,12 @@ declare module 'shared/services/context-keys.service-model' {
    *   reference these with template variables like `{projectId}`
    * - Each key should have exactly one producer. A key first set in one process can only be updated
    *   from that same process until that process removes the key or disconnects
-   * - A producer hands a key over by removing it: any process may set a removed key, and a set that
-   *   was refused while another process owned the key is applied once the owner removes it
+   * - A producer hands a key over by removing it: any process may set a removed key, and a set that was
+   *   refused while another process owned the key is applied once the owner removes it
    *
    * @experimental This constant is unstable and may change or disappear without notice
    */
   export interface IContextKeysService {
-    /**
-     * Event that fires when any context key changes, whether the change was made in this process or
-     * in another one. The event's `key` is the context key without any internal storage prefix, and
-     * its `value` is `undefined` when the key was removed.
-     *
-     * @experimental This field is unstable and may change or disappear without notice
-     */
-    onDidChange: PlatformEvent<ContextKeyChangeEvent>;
     /**
      * Sets or updates a context key.
      *
@@ -12554,8 +12542,8 @@ declare module 'shared/services/context-keys.service' {
    *   reference these with template variables like `{projectId}`
    * - Each key should have exactly one producer. A key first set in one process can only be updated
    *   from that same process until that process removes the key or disconnects
-   * - A producer hands a key over by removing it: any process may set a removed key, and a set that
-   *   was refused while another process owned the key is applied once the owner removes it
+   * - A producer hands a key over by removing it: any process may set a removed key, and a set that was
+   *   refused while another process owned the key is applied once the owner removes it
    *
    * @experimental This constant is unstable and may change or disappear without notice
    */
@@ -14220,10 +14208,7 @@ declare module '@papi/core' {
     UpdateWebViewEvent,
   } from 'shared/services/web-view.service-model';
   export type { AppInfo } from 'shared/services/app.service-model';
-  export type {
-    ContextKeyChangeEvent,
-    IContextKeysService,
-  } from 'shared/services/context-keys.service-model';
+  export type { IContextKeysService } from 'shared/services/context-keys.service-model';
   export type {
     NamedSqlParameters,
     SqlOutputRow,
@@ -15088,8 +15073,8 @@ declare module '@papi/backend' {
      *   reference these with template variables like `{projectId}`
      * - Each key should have exactly one producer. A key first set in one process can only be updated
      *   from that same process until that process removes the key or disconnects
-     * - A producer hands a key over by removing it: any process may set a removed key, and a set that
-     *   was refused while another process owned the key is applied once the owner removes it
+     * - A producer hands a key over by removing it: any process may set a removed key, and a set that was
+     *   refused while another process owned the key is applied once the owner removes it
      *
      * @experimental This constant is unstable and may change or disappear without notice
      */
@@ -15381,8 +15366,8 @@ declare module '@papi/backend' {
    *   reference these with template variables like `{projectId}`
    * - Each key should have exactly one producer. A key first set in one process can only be updated
    *   from that same process until that process removes the key or disconnects
-   * - A producer hands a key over by removing it: any process may set a removed key, and a set that
-   *   was refused while another process owned the key is applied once the owner removes it
+   * - A producer hands a key over by removing it: any process may set a removed key, and a set that was
+   *   refused while another process owned the key is applied once the owner removes it
    *
    * @experimental This constant is unstable and may change or disappear without notice
    */
@@ -16087,8 +16072,8 @@ declare module '@papi/frontend' {
      *   reference these with template variables like `{projectId}`
      * - Each key should have exactly one producer. A key first set in one process can only be updated
      *   from that same process until that process removes the key or disconnects
-     * - A producer hands a key over by removing it: any process may set a removed key, and a set that
-     *   was refused while another process owned the key is applied once the owner removes it
+     * - A producer hands a key over by removing it: any process may set a removed key, and a set that was
+     *   refused while another process owned the key is applied once the owner removes it
      *
      * @experimental This constant is unstable and may change or disappear without notice
      */
@@ -16291,8 +16276,8 @@ declare module '@papi/frontend' {
    *   reference these with template variables like `{projectId}`
    * - Each key should have exactly one producer. A key first set in one process can only be updated
    *   from that same process until that process removes the key or disconnects
-   * - A producer hands a key over by removing it: any process may set a removed key, and a set that
-   *   was refused while another process owned the key is applied once the owner removes it
+   * - A producer hands a key over by removing it: any process may set a removed key, and a set that was
+   *   refused while another process owned the key is applied once the owner removes it
    *
    * @experimental This constant is unstable and may change or disappear without notice
    */
