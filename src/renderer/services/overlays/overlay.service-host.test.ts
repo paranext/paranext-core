@@ -177,8 +177,7 @@ describe('overlay.service-host', () => {
     it('should create an overlay entry of type contextMenu', async () => {
       const promise = overlayService.showContextMenu('ext.testWebView', 'test-webview');
 
-      // Flush getWebViewMenu then getOpenWebViewDefinition so addOverlay is called
-      await Promise.resolve();
+      // Flush getWebViewMenu so addOverlay is called
       await Promise.resolve();
 
       const overlays = getOverlays();
@@ -194,8 +193,7 @@ describe('overlay.service-host', () => {
     it('should resolve with the selected command string', async () => {
       const promise = overlayService.showContextMenu('ext.testWebView', 'test-webview');
 
-      // Flush getWebViewMenu then getOpenWebViewDefinition so addOverlay is called
-      await Promise.resolve();
+      // Flush getWebViewMenu so addOverlay is called
       await Promise.resolve();
 
       const overlays = getOverlays();
@@ -211,8 +209,7 @@ describe('overlay.service-host', () => {
     it('should resolve with undefined when dismissed', async () => {
       const promise = overlayService.showContextMenu('ext.testWebView', 'test-webview');
 
-      // Flush getWebViewMenu then getOpenWebViewDefinition so addOverlay is called
-      await Promise.resolve();
+      // Flush getWebViewMenu so addOverlay is called
       await Promise.resolve();
 
       const overlays = getOverlays();
@@ -230,8 +227,7 @@ describe('overlay.service-host', () => {
 
       const promise1 = overlayService.showContextMenu('ext.testWebView', 'test-webview');
 
-      // Flush getWebViewMenu then getOpenWebViewDefinition for the first call
-      await Promise.resolve();
+      // Flush getWebViewMenu for the first call so addOverlay is called
       await Promise.resolve();
 
       vi.advanceTimersByTime(DEBOUNCE_COOLDOWN_MS);
@@ -240,8 +236,7 @@ describe('overlay.service-host', () => {
         position: { x: 60, y: 110 },
       });
 
-      // Flush getWebViewMenu then getOpenWebViewDefinition for the second call
-      await Promise.resolve();
+      // Flush getWebViewMenu for the second call so addOverlay is called
       await Promise.resolve();
 
       await expect(promise1).rejects.toSatisfy(
@@ -261,8 +256,7 @@ describe('overlay.service-host', () => {
     it('should reject with RESOURCE_EXHAUSTED within debounce cooldown', async () => {
       const promise1 = overlayService.showContextMenu('ext.testWebView', 'test-webview');
 
-      // Flush getWebViewMenu then getOpenWebViewDefinition for the first call so the overlay is registered
-      await Promise.resolve();
+      // Flush getWebViewMenu for the first call so the overlay is registered
       await Promise.resolve();
 
       // Second call within 50ms should throw (debounce check happens before menu fetch)
@@ -1413,8 +1407,7 @@ describe('overlay.service-host', () => {
     it('should call sendCommand when a context menu item is selected', async () => {
       const promise = overlayService.showContextMenu('ext.testWebView', 'test-webview');
 
-      // Flush getWebViewMenu then getOpenWebViewDefinition
-      await Promise.resolve();
+      // Flush getWebViewMenu so addOverlay is called
       await Promise.resolve();
 
       const overlays = getOverlays();
@@ -1431,8 +1424,7 @@ describe('overlay.service-host', () => {
       vi.mocked(sendCommand).mockClear();
       const promise = overlayService.showContextMenu('ext.testWebView', 'cmd-webview');
 
-      // Flush getWebViewMenu then getOpenWebViewDefinition
-      await Promise.resolve();
+      // Flush getWebViewMenu so addOverlay is called
       await Promise.resolve();
 
       const overlays = getOverlays();
@@ -1457,8 +1449,7 @@ describe('overlay.service-host', () => {
       vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue(DEFAULT_WEB_VIEW_MENU);
       const promise = overlayService.showContextMenu('ext.testWebView', 'aria-webview');
 
-      // Flush getWebViewMenu, then getOpenWebViewDefinition, then announceLocalizedToScreenReader's getLocalizedStrings
-      await Promise.resolve();
+      // Flush getWebViewMenu, then announceLocalizedToScreenReader's getLocalizedStrings
       await Promise.resolve();
       await Promise.resolve();
 
@@ -1736,8 +1727,7 @@ describe('overlay.service-host', () => {
       vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue(DEFAULT_WEB_VIEW_MENU);
 
       const promise = overlayService.showContextMenu('ext.testWebView', 'scroll-webview');
-      // Flush getWebViewMenu then getOpenWebViewDefinition
-      await Promise.resolve();
+      // Flush getWebViewMenu so addOverlay is called
       await Promise.resolve();
 
       expect(getOverlays().filter((o) => o.type === 'contextMenu')).toHaveLength(1);
@@ -1756,8 +1746,7 @@ describe('overlay.service-host', () => {
       vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue(DEFAULT_WEB_VIEW_MENU);
 
       const promise = overlayService.showContextMenu('ext.testWebView', 'blur-webview');
-      // Flush getWebViewMenu then getOpenWebViewDefinition
-      await Promise.resolve();
+      // Flush getWebViewMenu so addOverlay is called
       await Promise.resolve();
 
       expect(getOverlays().filter((o) => o.type === 'contextMenu')).toHaveLength(1);

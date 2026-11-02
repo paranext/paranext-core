@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Localized, WebViewMenu } from 'platform-bible-utils';
 
 import { menuDataService } from '@shared/services/menu-data.service';
+import { logger } from '@shared/services/logger.service';
+import { webViewService } from '@shared/services/web-view.service';
 import { overlayService, resetDebounceState } from './overlay.service-host';
 import { getOverlays, clearAllOverlays } from './overlay-store';
 
@@ -122,8 +124,7 @@ describe('showContextMenu contribution integration', () => {
       'test-webview',
     );
 
-    // Flush getWebViewMenu then getOpenWebViewDefinition so addOverlay is called
-    await Promise.resolve();
+    // Flush getWebViewMenu so addOverlay is called
     await Promise.resolve();
 
     expect(mockGetWebViewMenu).toHaveBeenCalledWith('platformScripture.checkingResultsListWebView');
@@ -179,8 +180,7 @@ describe('showContextMenu contribution integration', () => {
       position: { x: 100, y: 200 },
     });
 
-    // Flush getWebViewMenu then getOpenWebViewDefinition so addOverlay is called
-    await Promise.resolve();
+    // Flush getWebViewMenu so addOverlay is called
     await Promise.resolve();
 
     // Verify the overlay was added to the real store with correctly converted items
@@ -226,5 +226,64 @@ describe('showContextMenu contribution integration', () => {
 
     const result = await overlayService.showContextMenu('ext.emptyMenu', 'empty-webview');
     expect(result).toBeUndefined();
+  });
+  it("does not look up the web view's project when no item uses {projectId}", async () => {
+    mockGetWebViewMenu.mockResolvedValue({
+      includeDefaults: false,
+      topMenu: undefined,
+      contextMenu: {
+        groups: { 'ext.group1': { order: 1 } },
+        items: [{ command: 'ext.a', group: 'ext.group1', label: 'A', order: 1, localizeNotes: '' }],
+      },
+    });
+
+    const promise = overlayService.showContextMenu('ext.myWebView', 'no-lookup-webview');
+
+    // Flush getWebViewMenu so addOverlay is called
+    await Promise.resolve();
+
+    expect(getOverlays()).toHaveLength(1);
+    expect(webViewService.getOpenWebViewDefinition).not.toHaveBeenCalled();
+
+    getOverlays()[0].resolve(undefined);
+    return promise;
+  });
+
+  it('opens the menu without project-gated items when the project lookup fails', async () => {
+    mockGetWebViewMenu.mockResolvedValue({
+      includeDefaults: false,
+      topMenu: undefined,
+      contextMenu: {
+        groups: { 'ext.group1': { order: 1 } },
+        items: [
+          { command: 'ext.a', group: 'ext.group1', label: 'A', order: 1, localizeNotes: '' },
+          {
+            command: 'ext.b',
+            group: 'ext.group1',
+            label: 'B',
+            order: 2,
+            localizeNotes: '',
+            when: 'ext.project.{projectId}.flag',
+          },
+        ],
+      },
+    });
+    vi.mocked(webViewService.getOpenWebViewDefinition).mockRejectedValueOnce(
+      new Error('window gone'),
+    );
+
+    const promise = overlayService.showContextMenu('ext.myWebView', 'lookup-fails-webview');
+
+    await vi.waitFor(() => expect(getOverlays()).toHaveLength(1));
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const overlay = getOverlays()[0] as Extract<
+      ReturnType<typeof getOverlays>[number],
+      { type: 'contextMenu' }
+    >;
+    expect(overlay.items).toEqual([{ type: 'item', id: 'ext.a', label: 'A' }]);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('{projectId}'));
+
+    overlay.resolve(undefined);
+    return promise;
   });
 });
