@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react';
 import type { FirstRunStatus } from '@renderer/services/first-run-store';
 import {
   SIMPLE_PANEL_ID_MODEL_TEXT,
@@ -26,12 +27,14 @@ export const knobs: {
   isLocalizationLoading: boolean;
   tourDone: boolean;
   replayCount: number;
+  isHeldForFirstSync: boolean;
 } = {
   firstRunStatus: { kind: 'app' },
   isPowerMode: false,
   isLocalizationLoading: false,
   tourDone: false,
   replayCount: 0,
+  isHeldForFirstSync: false,
 };
 
 // Mirrors the real store's done-flag subscription, which exists so a write in another window
@@ -39,6 +42,9 @@ export const knobs: {
 const tourDoneListeners = new Set<() => void>();
 // Stands in for the store's replay channel — a count plus its listeners, exactly as the real one.
 const replayListeners = new Set<() => void>();
+// Stands in for the first-sync setting's subscription, which re-renders the hook's consumer when
+// the backend records the first sync. Tests drive it through `setHeldForFirstSync`.
+const heldForFirstSyncListeners = new Set<() => void>();
 
 /** Payload for `vi.mock('@renderer/services/first-run-store', …)`. */
 export function firstRunStoreMock() {
@@ -81,6 +87,28 @@ export function powerModeMock() {
   return { useIsPowerMode: () => knobs.isPowerMode };
 }
 
+/** Payload for `vi.mock('@renderer/hooks/use-tour-held-for-first-sync.hook', …)`. */
+export function tourHeldForFirstSyncMock() {
+  return {
+    useTourHeldForFirstSync: () =>
+      useSyncExternalStore(
+        (listener: () => void) => {
+          heldForFirstSyncListeners.add(listener);
+          return () => {
+            heldForFirstSyncListeners.delete(listener);
+          };
+        },
+        () => knobs.isHeldForFirstSync,
+      ),
+  };
+}
+
+/** Changes whether the first sync holds the tour, notifying any mounted tour. */
+export function setHeldForFirstSync(isHeld: boolean) {
+  knobs.isHeldForFirstSync = isHeld;
+  heldForFirstSyncListeners.forEach((listener) => listener());
+}
+
 /**
  * Payload for `vi.mock('@renderer/hooks/papi-hooks', …)`. `useLocalizedStrings` returns `[strings,
  * isLoading]` — mirror that shape; echo keys as values.
@@ -109,6 +137,8 @@ export function resetTourHarness() {
   knobs.replayCount = 0;
   tourDoneListeners.clear();
   replayListeners.clear();
+  knobs.isHeldForFirstSync = false;
+  heldForFirstSyncListeners.clear();
 }
 
 /**

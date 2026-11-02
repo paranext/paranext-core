@@ -26,4 +26,16 @@ export interface FirstRunFacts {
    * or changed internet settings (a one-launch flag).
    */
   wizardJustRestarted: boolean;
+  /**
+   * The Sync step must be shown (again) because no Send/Receive has succeeded yet. Always false
+   * when Send/Receive is unavailable.
+   */
+  firstSyncRequired: boolean;
+  /** Send/Receive exists in this build and backend. */
+  sendReceiveAvailable: boolean;
+  /**
+   * A first sync could start right now: the internet choice was saved, internet is on, and the
+   * registration is valid.
+   */
+  canSyncNow: boolean;
 }

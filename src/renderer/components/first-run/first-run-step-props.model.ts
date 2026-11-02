@@ -66,4 +66,10 @@ export interface FirstRunStepProps {
    * read-only instead of the form.
    */
   registrationValidAtStart?: boolean;
+  /**
+   * The wizard started while Send/Receive is available and the user has not synced yet, so the Sync
+   * step comes back on later launches when a sync can run, until a sync succeeds. The Sync step
+   * says so.
+   */
+  firstSyncRequired?: boolean;
 }
