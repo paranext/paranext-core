@@ -1621,7 +1621,10 @@ hold for every producer:
   key another process wrote first; the .NET store does not check, so a C# write to another
   process's key takes it over. Either way two producers on one key race, so keep exactly one. The
   store releases a TypeScript process's keys when it disconnects, so a restarted producer
-  republishes under the same key (the .NET process has no in-app restart and is not tracked).
+  republishes under the same key (the .NET process has no in-app restart and is not tracked). A
+  producer's `remove` also releases its key for any process, and a `set` refused because another
+  live process owned the key is applied once the key is released. C# `Remove` writes a live default
+  value (for example `null`, or `false` for a bool), not a release.
 - Publishing must never break the producer: a failed `Set` is logged and the work continues.
 - Publish when the fact becomes known and again whenever it changes. Consumers treat an unpublished
   key as false.
