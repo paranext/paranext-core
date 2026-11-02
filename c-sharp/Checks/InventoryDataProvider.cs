@@ -89,7 +89,9 @@ internal sealed class InventoryDataProvider(
         foreach (var inventoryId in InventoryFactory.GetAvailableInventoryIds())
         {
             // Nobody asked for anything to be written to this project, so the inventories are
-            // only described here, never initialized against it where that can be avoided
+            // only described here, never initialized against it where that can be avoided. The
+            // one exception is the paragraph-final punctuation inventory (see
+            // InventoryFactory.CreateInventoryToDescribe), which can leave one default in memory.
             _inventoryDetailsByInventoryId[inventoryId] = new InventoryDetails(
                 InventoryFactory.CreateInventoryToDescribe(inventoryId, dataSource)
             );

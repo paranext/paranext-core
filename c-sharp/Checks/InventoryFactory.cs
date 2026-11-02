@@ -74,6 +74,9 @@ internal static class InventoryFactory
     /// others set default parameter values in memory that the project's next save writes.
     /// <c>ParagraphFinalPunctuationCheck</c> is still initialized; it saves nothing, and only sets
     /// a value in memory when the project uses the advanced sentence-final view with no valid items.
+    /// That is accepted: the value is the default valid-items list, which Paratext 9 writes the
+    /// first time its inventory or check is initialized, and only Paratext 9's Inventory dialog can
+    /// turn the advanced view on.
     /// </summary>
     public static ScriptureInventoryBase CreateInventoryToDescribe(
         string inventoryId,

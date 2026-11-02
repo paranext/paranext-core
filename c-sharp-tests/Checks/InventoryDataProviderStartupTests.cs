@@ -11,6 +11,9 @@ namespace TestParanextDataProvider.Checks;
 /// project it finds. Nobody asked for anything to be written to that project, so starting must not
 /// write to it, nor leave changes behind for the project's next save to write. Runs against an
 /// on-disk copy of the bundled sample project, which has never had the characters inventory used.
+/// One accepted exception is not covered here: a project with the advanced sentence-final view on
+/// and no valid paragraph-final punctuation items gets that list's default in memory (see
+/// <c>InventoryFactory.CreateInventoryToDescribe</c>).
 /// </summary>
 [ExcludeFromCodeCoverage]
 [TestFixture]
