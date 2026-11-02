@@ -27,20 +27,15 @@ import {
 import { debounce, getErrorMessage, isPlatformError, LocalizeKey } from 'platform-bible-utils';
 import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CommandNames } from 'papi-shared-types';
-import { HELLO_ROCK_3_REACT_WEBVIEW_TYPE } from '../util';
 import Logo from '../../assets/offline.svg';
 import { Clock } from './components/clock.component';
 import { ProjectSettingsEditor } from './hello-rock3-project/project-settings-editor.component';
 import { useHelloRock3ProjectSettings } from './hello-rock3-project/use-hello-rock3-project-settings.hook';
+import { useHelloRock3TopMenu } from './use-hello-rock3-top-menu.hook';
 
 const NAME = 'Hello Rock3 React WebView';
 
 const defaultExcludePdpFactoryIds: string[] = [];
-const defaultWebViewMenu = {
-  topMenu: undefined,
-  includeDefaults: true,
-  contextMenu: undefined,
-};
 
 // Test fetching
 papi
@@ -48,6 +43,7 @@ papi
   .catch((e) => logger.error(`Could not get data from example.com! Reason: ${e}`));
 
 globalThis.webViewComponent = function HelloRock3({
+  id: webViewId,
   title,
   projectId,
   useWebViewState,
@@ -367,22 +363,7 @@ globalThis.webViewComponent = function HelloRock3({
     projectWebViewId,
   );
 
-  const [webViewMenuPossiblyError] = useData(papi.menuData.dataProviderName).WebViewMenu(
-    HELLO_ROCK_3_REACT_WEBVIEW_TYPE,
-    defaultWebViewMenu,
-  );
-
-  const webViewMenu = useMemo(() => {
-    if (isPlatformError(webViewMenuPossiblyError)) {
-      logger.warn(
-        `Failed to load web view menu for ${HELLO_ROCK_3_REACT_WEBVIEW_TYPE}: ${getErrorMessage(
-          webViewMenuPossiblyError,
-        )}`,
-      );
-      return defaultWebViewMenu;
-    }
-    return webViewMenuPossiblyError;
-  }, [webViewMenuPossiblyError]);
+  const projectMenuData = useHelloRock3TopMenu(webViewId, projectId);
 
   const projectMenuCommandHandler: SelectMenuItemHandler = async (selectedMenuItem) => {
     const commandName = selectedMenuItem.command;
@@ -587,7 +568,7 @@ globalThis.webViewComponent = function HelloRock3({
     <div onContextMenu={handleContextMenu}>
       <TabFloatingMenu
         onSelectProjectMenuItem={projectMenuCommandHandler}
-        projectMenuData={webViewMenu.topMenu}
+        projectMenuData={projectMenuData}
       />
       <div className="title">
         {localizedHelloRock3} <span className="framework">{localizedReact}</span>
