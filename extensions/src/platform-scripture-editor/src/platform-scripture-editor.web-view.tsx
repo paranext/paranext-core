@@ -199,6 +199,7 @@ import { EditorDocumentSelector, useEditorPdpSync } from './use-editor-pdp-sync.
 import {
   getChapterForEditor,
   useAllowInvisibleCharacters,
+  useReloadOnceAllowInvisibleCharactersIsRead,
 } from './use-allow-invisible-characters.hook';
 import { toBookChapterKey, useScrollToRange } from './use-scroll-to-range.hook';
 import { applyEditorScrRefReport } from './editor-scr-ref-report.util';
@@ -919,6 +920,12 @@ function PlatformScriptureEditor({
   // either is not showing yet or cannot save.
   const allowInvisibleCharactersSetting = useAllowInvisibleCharacters(projectId);
   const allowInvisibleCharacters = allowInvisibleCharactersSetting.value ?? false;
+  // Set far below, once the chapter (`usjForEditor`) and `setEditorUsj` exist.
+  const reloadEditorFromProject = useRef(() => {});
+  const isAwaitingAllowInvisibleCharacters = useReloadOnceAllowInvisibleCharactersIsRead(
+    allowInvisibleCharactersSetting,
+    useCallback(() => reloadEditorFromProject.current(), []),
+  );
 
   // The next two reactive signals gate whether the Scripture Editor is writable: whether the
   // project itself is editable (`platform.isEditable`) and whether the current user has a
@@ -1430,7 +1437,8 @@ function PlatformScriptureEditor({
         isProjectEditable,
         isCanUserEditScriptureUnresolved,
         canUserEditScripture,
-        isAllowInvisibleCharactersUnreadable: allowInvisibleCharactersSetting.isUnreadable,
+        // Also true for the render the setting is first read in, until the chapter is reloaded
+        isAllowInvisibleCharactersUnreadable: isAwaitingAllowInvisibleCharacters,
         isSyncBlocked,
         isInterfaceModeLoading,
         viewType,
@@ -1442,7 +1450,7 @@ function PlatformScriptureEditor({
       isProjectEditable,
       isCanUserEditScriptureUnresolved,
       canUserEditScripture,
-      allowInvisibleCharactersSetting.isUnreadable,
+      isAwaitingAllowInvisibleCharacters,
       isSyncBlocked,
       isInterfaceModeLoading,
       viewType,
@@ -3312,6 +3320,10 @@ function PlatformScriptureEditor({
   // `allowInvisibleCharacters` has been read — see `getChapterForEditor`. Everything that mounts or
   // fills the editor reads this rather than `usjFromPdp`, so the content arrives with the editor.
   const usjForEditor = getChapterForEditor(usjFromPdp, allowInvisibleCharactersSetting);
+  reloadEditorFromProject.current = () => {
+    if (usjForEditor && usjForEditor !== defaultUsj)
+      setEditorUsj.current(usjForEditor, { force: true });
+  };
 
   // A book the project simply lacks is ordinary navigation rather than a fault, so it is logged at
   // `debug`, which packaged builds drop (`global-this.model.ts` runs at `info` when packaged). That

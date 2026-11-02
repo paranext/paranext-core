@@ -19,8 +19,10 @@ vi.mock('@papi/frontend', () => ({
 // Imported after the mocks so the hook picks up the mocked `useProjectSetting` and `logger`.
 // eslint-disable-next-line import/first
 import {
+  AllowInvisibleCharactersSetting,
   getChapterForEditor,
   useAllowInvisibleCharacters,
+  useReloadOnceAllowInvisibleCharactersIsRead,
 } from './use-allow-invisible-characters.hook';
 
 afterEach(() => {
@@ -63,5 +65,81 @@ describe('useAllowInvisibleCharacters', () => {
     );
     // The chapter still loads, so the text can be read; the web view makes the editor read-only.
     expect(getChapterForEditor(chapter, result.current)).toBe(chapter);
+  });
+});
+
+describe('useReloadOnceAllowInvisibleCharactersIsRead', () => {
+  const unreadable: AllowInvisibleCharactersSetting = {
+    value: undefined,
+    isLoading: false,
+    isUnreadable: true,
+  };
+  const loading: AllowInvisibleCharactersSetting = {
+    value: undefined,
+    isLoading: true,
+    isUnreadable: false,
+  };
+  const known = (value: boolean): AllowInvisibleCharactersSetting => ({
+    value,
+    isLoading: false,
+    isUnreadable: false,
+  });
+
+  it('reloads once, and holds the editor until then, when an unreadable setting is read', () => {
+    // The editor showed the chapter under a stand-in value while the setting was unreadable, and
+    // a view-option change rebuilds it from its own export under that stand-in, not from the
+    // project's text, so the project's text has to be loaded again before anything is saved.
+    const reload = vi.fn();
+    const { result, rerender } = renderHook(
+      ({ setting }) => useReloadOnceAllowInvisibleCharactersIsRead(setting, reload),
+      { initialProps: { setting: unreadable } },
+    );
+    expect(result.current).toBe(true);
+    expect(reload).not.toHaveBeenCalled();
+
+    rerender({ setting: known(true) });
+    expect(reload).toHaveBeenCalledOnce();
+    expect(result.current).toBe(false);
+
+    rerender({ setting: known(true) });
+    rerender({ setting: known(false) });
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it('holds the editor for as long as the setting stays unreadable', () => {
+    const reload = vi.fn();
+    const { result, rerender } = renderHook(
+      ({ setting }) => useReloadOnceAllowInvisibleCharactersIsRead(setting, reload),
+      { initialProps: { setting: unreadable } },
+    );
+    rerender({ setting: unreadable });
+    expect(result.current).toBe(true);
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('leaves a reload to the editor that mounts when the setting goes back to loading', () => {
+    const reload = vi.fn();
+    const { result, rerender } = renderHook(
+      ({ setting }) => useReloadOnceAllowInvisibleCharactersIsRead(setting, reload),
+      { initialProps: { setting: unreadable } },
+    );
+    rerender({ setting: loading });
+    expect(result.current).toBe(false);
+    rerender({ setting: known(true) });
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('never reloads a setting that was read the first time', () => {
+    // A pending read holds the chapter back from the editor, so nothing was shown under a guess.
+    const reload = vi.fn();
+    const { result, rerender } = renderHook(
+      ({ setting }) => useReloadOnceAllowInvisibleCharactersIsRead(setting, reload),
+      { initialProps: { setting: loading } },
+    );
+    expect(result.current).toBe(false);
+    rerender({ setting: known(true) });
+    rerender({ setting: known(false) });
+    expect(result.current).toBe(false);
+    expect(reload).not.toHaveBeenCalled();
   });
 });

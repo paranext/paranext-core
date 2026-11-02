@@ -1,7 +1,7 @@
 import { logger } from '@papi/frontend';
 import { useProjectSetting } from '@papi/frontend/react';
 import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 /** What is known of a project's `platformScripture.allowInvisibleCharacters`. */
 export interface AllowInvisibleCharactersSetting {
@@ -64,4 +64,42 @@ export function getChapterForEditor<T>(
   allowInvisibleCharacters: AllowInvisibleCharactersSetting,
 ): T | undefined {
   return allowInvisibleCharacters.isLoading ? undefined : chapter;
+}
+
+/**
+ * Has the editor load the project's text again once a setting that could not be read is read.
+ *
+ * While the setting is unreadable the editor shows the chapter read-only under a stand-in value.
+ * When the real value arrives the editor rebuilds from its own export, which it made under the
+ * stand-in and so may have respelled: with the setting on, a literal `~` exported under `false`
+ * comes back as a no-break space. So the project's text is loaded again, and the editor stays
+ * read-only until it has been. A setting still loading needs none of this: the chapter is held back
+ * from the editor until it is read, and the editor that mounts then loads the project's text.
+ *
+ * @param allowInvisibleCharacters What is known of the project's setting
+ * @param reload Loads the project's text into the editor again. Called after the editor has been
+ *   given the new value, since the editor's effects run before its host's.
+ * @returns Whether the editor must stay read-only until the setting is read and the text reloaded
+ */
+export function useReloadOnceAllowInvisibleCharactersIsRead(
+  allowInvisibleCharacters: AllowInvisibleCharactersSetting,
+  reload: () => void,
+): boolean {
+  const { value, isLoading, isUnreadable } = allowInvisibleCharacters;
+  const [hasShownTextUnderStandIn, setHasShownTextUnderStandIn] = useState(false);
+  useEffect(() => {
+    if (isUnreadable) {
+      setHasShownTextUnderStandIn(true);
+      return;
+    }
+    if (!hasShownTextUnderStandIn) return;
+    if (isLoading) {
+      setHasShownTextUnderStandIn(false);
+      return;
+    }
+    if (value === undefined) return;
+    reload();
+    setHasShownTextUnderStandIn(false);
+  }, [value, isLoading, isUnreadable, hasShownTextUnderStandIn, reload]);
+  return isUnreadable || hasShownTextUnderStandIn;
 }
