@@ -110,8 +110,10 @@ describe('note pane model wiring', () => {
       'platform-scripture-editor.web-view.tsx': [
         // Standard view's own view options
         'getViewOptionsForType',
+      ],
+      'use-project-stylesheet.hook.ts': [
         // Which stylesheet mode the text renders in; not a note check
-        'useProjectStylesheet',
+        "projectStylesheetMode: return viewType === 'standard' ? 'full' : 'fonts';",
       ],
     });
   });
