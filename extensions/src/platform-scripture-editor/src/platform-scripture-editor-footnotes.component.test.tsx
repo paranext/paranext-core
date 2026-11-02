@@ -1660,6 +1660,54 @@ describe('FootnotesLayout copy reaching into the row editor', () => {
     },
   );
 
+  describe('while the project setting is not known', () => {
+    // The web view hands the row editor the view options it falls back to while the setting loads
+    // or cannot be read (`false`), and the pane the setting itself (`undefined`). The pane must
+    // spell by the second, not by the first.
+    const fallbackViewOptions = getEditorViewOptions('standard', false, false);
+
+    it('leaves a copy of read-only rows alone, so a stored no-break space stays one', () => {
+      const { container } = renderPane({
+        usj: usjWithStoredNbsp,
+        copyLimit: undefined,
+        rowEditorViewOptions: fallbackViewOptions,
+        allowInvisibleCharacters: undefined,
+      });
+
+      const { setData, isCancelled, selectedText } = copyWholePane(container);
+
+      expect(selectedText).toContain(`be${NBSP}ta`);
+      expect(isCancelled).toBe(false);
+      expect(setData).not.toHaveBeenCalled();
+    });
+
+    it("writes a read-only row's stored no-break space as itself beside an open row editor", () => {
+      const editorDisplay = `\\f +${NBSP}\\ft${NBSP}al${STAND_IN}pha`;
+      const { container } = renderPane({
+        usj: usjWithStoredNbsp,
+        copyLimit: undefined,
+        rowEditorViewOptions: fallbackViewOptions,
+        allowInvisibleCharacters: undefined,
+        editingFootnoteIndex: 0,
+        renderEditingFootnote: () => (
+          <div className="editor-input" contentEditable suppressContentEditableWarning>
+            {editorDisplay}
+          </div>
+        ),
+      });
+
+      const { setData, isCancelled, selectedText } = copyWholePane(container);
+
+      // A positive control: the selection spans the row editor and a read-only row.
+      expect(selectedText).toContain(`be${NBSP}ta`);
+      expect(isCancelled).toBe(true);
+      expect(setData).toHaveBeenCalledTimes(1);
+      const [, text] = setData.mock.calls[0];
+      expect(text).toContain(`be${NBSP}ta`);
+      expect(text).not.toContain('be~ta');
+    });
+  });
+
   it('leaves a copy of read-only rows alone, stored no-break spaces and all', () => {
     const { container } = renderPane({
       usj: usjWithStoredNbsp,
