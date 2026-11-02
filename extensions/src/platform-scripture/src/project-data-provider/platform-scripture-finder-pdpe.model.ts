@@ -1087,19 +1087,20 @@ export class ScriptureFinderProjectDataProviderEngine
 
         // Read after taking the version, so a change to the setting during the fetch is caught by
         // the version check below. Never guessed: Replace writes the whole book or chapter back,
-        // and the wrong value rewrites every no-break space in it.
-        const allowInvisibleCharacters = await this.#pdps['platform.base'].getSetting(
-          'platformScripture.allowInvisibleCharacters',
-        );
-        if (typeof allowInvisibleCharacters !== 'boolean')
-          throw new Error(`Did not get 'platformScripture.allowInvisibleCharacters' setting`);
-
+        // and the wrong value rewrites every no-break space in it. Independent of the USX read, so
+        // both start together.
+        //
         // Must ask USX PDPs for the data for now then transform to USJ ourselves instead of
         // asking USJ PDPs for the data because of the following layering PDP wait bug. Turtles
         // all the way down. https://paratextstudio.atlassian.net/browse/PT-3233
-        const usx = isChapterLevel
-          ? await this.#pdps['platformScripture.USX_Chapter'].getChapterUSX(verseRef)
-          : await this.#pdps['platformScripture.USX_Book'].getBookUSX(verseRef);
+        const [allowInvisibleCharacters, usx] = await Promise.all([
+          this.#pdps['platform.base'].getSetting('platformScripture.allowInvisibleCharacters'),
+          isChapterLevel
+            ? this.#pdps['platformScripture.USX_Chapter'].getChapterUSX(verseRef)
+            : this.#pdps['platformScripture.USX_Book'].getBookUSX(verseRef),
+        ]);
+        if (typeof allowInvisibleCharacters !== 'boolean')
+          throw new Error(`Did not get 'platformScripture.allowInvisibleCharacters' setting`);
         if (!usx) throw createScriptureNotFoundError(bookId, chapter);
 
         // If the cache was invalidated during the fetch, the data we just got may be stale.

@@ -1309,6 +1309,48 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
     });
   });
 
+  describe('fetch parallelism', () => {
+    it('starts the USX fetch without waiting for the allowInvisibleCharacters setting', async () => {
+      const baseGetSetting = mockPdps['platform.base'].getSetting;
+      let resolveSetting: (value: boolean) => void = () => {};
+      vi.mocked(mockPdps['platform.base'].getSetting).mockImplementation((key: string) => {
+        if (key === 'platformScripture.allowInvisibleCharacters')
+          return new Promise<boolean>((resolve) => {
+            resolveSetting = resolve;
+          });
+        return baseGetSetting(key);
+      });
+      let resolveUsx: (value: string) => void = () => {};
+      vi.mocked(mockPdps['platformScripture.USX_Chapter'].getChapterUSX).mockImplementation(
+        () =>
+          new Promise<string>((resolve) => {
+            resolveUsx = resolve;
+          }),
+      );
+
+      const replacePromise = engine.replace(
+        [
+          {
+            start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 9 },
+            end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 13 },
+          },
+        ],
+        'REPLACED',
+      );
+      await flushPromises();
+
+      // Both reads are in flight while neither has resolved.
+      expect(mockPdps['platform.base'].getSetting).toHaveBeenCalledWith(
+        'platformScripture.allowInvisibleCharacters',
+      );
+      expect(mockPdps['platformScripture.USX_Chapter'].getChapterUSX).toHaveBeenCalled();
+
+      resolveSetting(false);
+      resolveUsx(TEST_CHAPTER_1_USX);
+      await replacePromise;
+    });
+  });
+
   describe('race condition with external changes', () => {
     /**
      * Gets the subscribe callback captured by the mock `subscribeChapterUSX`. The constructor
