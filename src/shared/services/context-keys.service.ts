@@ -1,9 +1,11 @@
 import {
   ContextKeyValue,
+  getErrorMessage,
   isValidContextKey,
   isValidContextKeyValue,
   PlatformEventEmitter,
 } from 'platform-bible-utils';
+import { logger } from '@shared/services/logger.service';
 import {
   ContextKeySharedStoreKey,
   onDidChangeSharedStore,
@@ -64,12 +66,18 @@ function getChangeSequence(): number {
 onDidChangeSharedStore((event) => {
   if (!event.key.startsWith(CONTEXT_KEYS_STORE_PREFIX)) return;
   changeSequence += 1;
-  onDidChangeEmitter.emit({
-    key: event.key.substring(CONTEXT_KEYS_STORE_PREFIX.length),
-    // Values in the contextKeys namespace are constrained to ContextKeyValue on every writer
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    value: event.value as ContextKeyValue | undefined,
-  });
+  const key = event.key.substring(CONTEXT_KEYS_STORE_PREFIX.length);
+  // Isolated so one failing subscriber neither starves later ones nor throws into the writer
+  onDidChangeEmitter.emitIsolated(
+    {
+      key,
+      // Values in the contextKeys namespace are constrained to ContextKeyValue on every writer
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      value: event.value as ContextKeyValue | undefined,
+    },
+    (error) =>
+      logger.error(`Subscriber threw on context key change ${key}: ${getErrorMessage(error)}`),
+  );
 });
 
 /**

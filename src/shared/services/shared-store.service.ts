@@ -255,38 +255,45 @@ export function initialize(networkService: NetworkService): Promise<void> {
         // Marks this process as a shared store writer: main watches for the marker's removal to
         // release this process's keys. The .NET process registers no marker because its shared store
         // never checks ownership and it has no in-app restart.
-        try {
-          await networkService.registerRequestHandler(
-            `${SHARED_STORE_OWNER_METHOD_PREFIX}${processId}`,
-            () => processId,
-            {
-              method: {
-                'x-experimental': true,
-                summary:
-                  'Marks this process as a shared store writer so main can release its keys when it disconnects',
-                params: [],
-                result: {
-                  name: 'return value',
-                  summary: 'The shared store process ID of this process',
-                  schema: { type: 'string' },
+        const registerOwnerMarker = async (): Promise<void> => {
+          try {
+            await networkService.registerRequestHandler(
+              `${SHARED_STORE_OWNER_METHOD_PREFIX}${processId}`,
+              () => processId,
+              {
+                method: {
+                  'x-experimental': true,
+                  summary:
+                    'Marks this process as a shared store writer so main can release its keys when it disconnects',
+                  params: [],
+                  result: {
+                    name: 'return value',
+                    summary: 'The shared store process ID of this process',
+                    schema: { type: 'string' },
+                  },
                 },
               },
-            },
-          );
-        } catch (error) {
-          logger.error(
-            `Could not register the shared store owner marker; this process's keys will not be released if it disconnects: ${getErrorMessage(error)}`,
-          );
-        }
-        // Outside the main process, sync the local store to the main store's data initially.
-        try {
-          const initial = await networkService.request<[], Record<string, StoreEntry>>(
-            STORE_GET_REQUEST,
-          );
-          if (initial) Object.entries(initial).forEach(([key, entry]) => setFromRemote(key, entry));
-        } catch (error) {
-          logger.warn(`Error initializing local store: ${getErrorMessage(error)}`);
-        }
+            );
+          } catch (error) {
+            logger.error(
+              `Could not register the shared store owner marker; this process's keys will not be released if it disconnects: ${getErrorMessage(error)}`,
+            );
+          }
+        };
+        // Outside the main process, sync the local store to the main store's data initially. Runs
+        // alongside the marker registration so a slow registration does not delay the snapshot.
+        const syncInitialStore = async (): Promise<void> => {
+          try {
+            const initial = await networkService.request<[], Record<string, StoreEntry>>(
+              STORE_GET_REQUEST,
+            );
+            if (initial)
+              Object.entries(initial).forEach(([key, entry]) => setFromRemote(key, entry));
+          } catch (error) {
+            logger.warn(`Error initializing local store: ${getErrorMessage(error)}`);
+          }
+        };
+        await Promise.all([registerOwnerMarker(), syncInitialStore()]);
       } else {
         // Inside the main process, register the handler that serves the other processes' initial-fetch
         // requests.
@@ -489,8 +496,16 @@ function set<K extends SharedStoreKeys>(key: K, value?: SharedStoreValues[K]): v
     logger.error(`Error setting value for key ${key} in shared store:`, getErrorMessage(error));
     return;
   }
-  // Outside the try so a throwing subscriber isn't mislabeled as a store write failure
-  onDidChangeStoreEmitter.emit({ key, value: clonedValue });
+  // Outside the try so a subscriber failure is reported as one, not as a failed write; isolated so
+  // it neither reaches the caller nor starves later subscribers
+  emitStoreChange(key, clonedValue);
+}
+
+/** Notifies in-process subscribers of a store change, isolating each subscriber's failure */
+function emitStoreChange(key: string, value: unknown): void {
+  onDidChangeStoreEmitter.emitIsolated({ key, value }, (error) =>
+    logger.error(`Subscriber threw on shared store change ${key}: ${getErrorMessage(error)}`),
+  );
 }
 
 /** Update the local store based on an update from another process */
@@ -498,7 +513,7 @@ function setFromRemote(key: string, entry: StoreEntry): void {
   localCounter = Math.max(localCounter, entry.clock.counter);
   if (!localStore[key] || compareClocks(entry.clock, localStore[key].clock) > 0) {
     localStore[key] = entry;
-    onDidChangeStoreEmitter.emit({ key, value: entry.value });
+    emitStoreChange(key, entry.value);
   }
 }
 
@@ -536,8 +551,9 @@ function remove<K extends SharedStoreKeys>(key: K): void {
     logger.error(`Error removing value for key ${key} from shared store:`, getErrorMessage(error));
     return;
   }
-  // Outside the try so a throwing subscriber isn't mislabeled as a store write failure
-  onDidChangeStoreEmitter.emit({ key, value: undefined });
+  // Outside the try so a subscriber failure is reported as one, not as a failed write; isolated so
+  // it neither reaches the caller nor starves later subscribers
+  emitStoreChange(key, undefined);
 }
 
 /**
