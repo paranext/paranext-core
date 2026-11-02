@@ -8,12 +8,14 @@
  *    lands in with one space, its footnote included, and adds no paragraph.
  * 2. **Locked structure, paste a URL from another app.** The view cannot store `\` or `//`, so the
  *    paste goes in without them (`https:example.org`) and the user is told.
- * 3. **Unlocked structure, cut across a paragraph break and paste it straight back.** The book file is
+ * 3. **Locked structure, a Backspace that would join two `/` into `//`.** The delete is refused, the
+ *    text stays as it was, and the user is told.
+ * 4. **Unlocked structure, cut across a paragraph break and paste it straight back.** The book file is
  *    byte-identical to before the cut: the paragraph break and its marker come back.
  *
  * Saved text is compared whitespace-normalized in steps 1 and 2, because the chapter's first save
  * rewrites line endings and trailing spaces (catalog rows S-2 and E-1 in
- * `.context/standards/Scripture-Data-Fidelity-Catalog.md`); step 3 compares bytes, from a file the
+ * `.context/standards/Scripture-Data-Fidelity-Catalog.md`); step 4 compares bytes, from a file the
  * app has already saved.
  *
  * The pasted footnote's own markup is not pinned here: it gains `\fr*`/`\ft*` closers (catalog row
@@ -89,7 +91,17 @@ const PASTED_URL = 'https://example.org ';
 const URL_SITE = 'yet I will look again toward';
 const URL_SITE_AFTER = 'yet I will look https:example.org again toward';
 
-// Step 3. Jonah 2:3, from the `\q2` line "in the heart of the seas." across the `\q1` break.
+// Step 3. Jonah 2:4, in the URL step 2 pasted: `/x/` typed into it, then the `x` deleted.
+const SLASHES_TYPING_POINT = 'https:|example.org';
+const TYPED_SLASHES = '/x/';
+const SLASHES_SITE = 'https:/x/example.org';
+const SLASHES_DELETE_POINT = 'https:/x|/example.org';
+
+/** The notice for a delete refused because it would join two `/` into `//`. */
+const REFUSED_DELETION_MESSAGE =
+  "Not deleted: that would join two / into //, which can't be added in this view.";
+
+// Step 4. Jonah 2:3, from the `\q2` line "in the heart of the seas." across the `\q1` break.
 const CUT_FROM = 'in the heart |of the seas.';
 const CUT_TO = 'The flood |was all around me.';
 const CUT_TEXT_GONE = 'in the heart was all around me.';
@@ -105,7 +117,7 @@ function countOf(haystack: string, needle: string): number {
 }
 
 test.describe('the clipboard in Simple mode’s paragraph-structure view', () => {
-  test('a copy across a paragraph break pastes as joined text, a URL loses its slashes with a notice, and an unlocked cut pastes back byte for byte', async ({
+  test('a copy across a paragraph break pastes as joined text, a URL loses its slashes with a notice, a delete joining two slashes is refused with a notice, and an unlocked cut pastes back byte for byte', async ({
     mainPage,
     electronApp,
   }) => {
@@ -220,6 +232,27 @@ test.describe('the clipboard in Simple mode’s paragraph-structure view', () =>
           timeout: 20_000,
         })
         .toEqual(expect.arrayContaining([expect.stringContaining(REMOVED_FROM_PASTE_MESSAGE)]));
+    });
+
+    await test.step('locked: a Backspace that would join two / into // deletes nothing, with a notice', async () => {
+      const before = fs.readFileSync(bookPath);
+      await selectInEditor(editorInput, SLASHES_TYPING_POINT);
+      await editorInput.pressSequentially(TYPED_SLASHES);
+      const afterTyping = await waitForSaveToSettle(mainPage, bookPath, before);
+      expect(afterTyping, 'the typing never saved to disk').toBeDefined();
+      expect(countOf(readNormalizedBook(), SLASHES_SITE)).toBe(1);
+
+      await clearRecordedToasts(mainPage);
+      await selectInEditor(editorInput, SLASHES_DELETE_POINT);
+      await editorInput.press('Backspace');
+      await expect
+        .poll(() => recordedToasts(mainPage), {
+          message: 'the refused delete should tell the user why',
+          timeout: 20_000,
+        })
+        .toEqual(expect.arrayContaining([expect.stringContaining(REFUSED_DELETION_MESSAGE)]));
+      await expect(editorInput).toContainText(SLASHES_SITE);
+      expect(countOf(readNormalizedBook(), SLASHES_SITE), 'the file should keep the `x`').toBe(1);
     });
 
     await test.step('unlocked: a cut across a paragraph break pasted straight back restores the file byte for byte', async () => {
