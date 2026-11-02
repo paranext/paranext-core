@@ -1,5 +1,6 @@
 import { vi } from 'vitest';
 import * as networkService from '@shared/services/network.service';
+import { logger } from '@shared/services/logger.service';
 import { ProcessType } from '@shared/global-this.model';
 import { PlatformEventEmitter } from 'platform-bible-utils';
 import {
@@ -55,6 +56,22 @@ describe('contextKeysService', () => {
   afterEach(() => {
     globalThis.processType = originalProcessType;
     resetForTesting();
+  });
+
+  it('keeps notifying later subscribers when one throws, and never throws from set', () => {
+    const throwing = contextKeysService.onDidChange(() => {
+      throw new Error('subscriber failure');
+    });
+    const second = vi.fn();
+    const unsubscribe = contextKeysService.onDidChange(second);
+    try {
+      expect(() => contextKeysService.set('testExt.someFlag', true)).not.toThrow();
+      expect(second).toHaveBeenCalledWith({ key: 'testExt.someFlag', value: true });
+      expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('testExt.someFlag'));
+    } finally {
+      throwing();
+      unsubscribe();
+    }
   });
 
   it('should round-trip values through set and get', () => {
