@@ -177,15 +177,18 @@ export type FootnotesLayoutProps = PropsWithChildren<{
   copyLimit: number | undefined;
   /**
    * The view options the pane's row editor renders with, or `undefined` when the pane has no row
-   * editor. Even without a row editor, carry the project's `allowInvisibleCharacters` in these
-   * options: a copy spells the stored no-break spaces of read-only rows from it, and with
-   * `undefined` it falls back to the `~` spelling. A copy from the pane that reaches into the row
-   * editor carries the editor's display, so the pane writes that part the way the editor's own copy
-   * would: its display spacing as spaces, and each no-break space the editor holds as its internal
-   * stand-in the way the project spells it (see `getFootnotesPaneCopyText`). Required so a caller
-   * states it.
+   * editor. A copy from the pane that reaches into the row editor carries the editor's display, so
+   * the pane writes that part the way the editor's own copy would: its display spacing as spaces,
+   * and each no-break space the editor holds as its internal stand-in the way the project spells it
+   * (see `getFootnotesPaneCopyText`). Required so a caller states it.
    */
   rowEditorViewOptions: ViewOptions | undefined;
+  /**
+   * The project's `platformScripture.allowInvisibleCharacters`, or `undefined` while it is not
+   * known. A copy spells the stored no-break spaces of read-only rows by it (see
+   * `getFootnotesPaneCopyText`). Required so a caller states it.
+   */
+  allowInvisibleCharacters: boolean | undefined;
 }>;
 
 /** Panel id of the Scripture text in the layout group. Stable, so its panel never remounts. */
@@ -226,6 +229,7 @@ function FootnotesPane({
   listLayout,
   copyLimit,
   rowEditorViewOptions,
+  allowInvisibleCharacters,
 }: FootnotesPaneProps) {
   const [footnotes, setFootnotes] = useState<MarkerObject[]>([]);
 
@@ -549,7 +553,12 @@ function FootnotesPane({
       const selectedText = selection?.toString() ?? '';
       const rowEditorRoot = paneContainerRef.current?.querySelector('.editor-input') ?? undefined;
       const text = truncateToCopyLimit(
-        getFootnotesPaneCopyText(selection, rowEditorRoot, rowEditorViewOptions),
+        getFootnotesPaneCopyText(
+          selection,
+          rowEditorRoot,
+          rowEditorViewOptions,
+          allowInvisibleCharacters,
+        ),
         copyLimit,
       );
       if (text === selectedText) return;
@@ -558,7 +567,7 @@ function FootnotesPane({
       // stays blocked rather than letting the browser copy the whole selection.
       if (text && event.clipboardData) event.clipboardData.setData('text/plain', text);
     },
-    [copyLimit, rowEditorViewOptions],
+    [copyLimit, rowEditorViewOptions, allowInvisibleCharacters],
   );
 
   return (

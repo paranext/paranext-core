@@ -63,18 +63,18 @@ afterEach(() => {
 // A stored no-break space is written as the project spells it, as Paratext 9 copies one: `~` with
 // the setting off, U+00A0 with it on. A marker's separator in a read-only row stays a U+00A0.
 describe.each([
-  { setting: 'off', viewOptions: notAllowing, shown: '~', copied: '~' },
-  { setting: 'on', viewOptions: allowing, shown: STAND_IN, copied: NBSP },
+  { setting: 'off', viewOptions: notAllowing, isAllowing: false, shown: '~', copied: '~' },
+  { setting: 'on', viewOptions: allowing, isAllowing: true, shown: STAND_IN, copied: NBSP },
 ])(
   'getFootnotesPaneCopyText with allowInvisibleCharacters $setting',
-  ({ viewOptions, shown, copied }) => {
+  ({ viewOptions, isAllowing, shown, copied }) => {
     const editorUsfm = `\\f + \\ft see${copied}x \\+nd L\\+nd*${copied}z  w\\f*`;
 
     it("writes the row editor's display spacing as spaces and the rows' stored no-break spaces as the project spells them", () => {
       const { rowEditorRoot, firstRow, lastRow } = renderPane(shown);
       const selection = selectFrom(firstRow, 0, lastRow, lastRow.childNodes.length);
 
-      expect(getFootnotesPaneCopyText(selection, rowEditorRoot, viewOptions)).toBe(
+      expect(getFootnotesPaneCopyText(selection, rowEditorRoot, viewOptions, isAllowing)).toBe(
         `\\ft${NBSP}one${copied}two${editorUsfm}\\ft${NBSP}three${copied}four`,
       );
     });
@@ -87,7 +87,7 @@ describe.each([
       const end = editorText.textContent?.indexOf('L') ?? -1;
       const selection = selectFrom(firstRow, 0, editorText, end + 1);
 
-      expect(getFootnotesPaneCopyText(selection, rowEditorRoot, viewOptions)).toBe(
+      expect(getFootnotesPaneCopyText(selection, rowEditorRoot, viewOptions, isAllowing)).toBe(
         `\\ft${NBSP}one${copied}two\\f + \\ft see${copied}x \\+nd L`,
       );
     });
@@ -99,7 +99,7 @@ describe.each([
       const start = editorText.textContent?.indexOf('L') ?? -1;
       const selection = selectFrom(editorText, start, lastRow, lastRow.childNodes.length);
 
-      expect(getFootnotesPaneCopyText(selection, rowEditorRoot, viewOptions)).toBe(
+      expect(getFootnotesPaneCopyText(selection, rowEditorRoot, viewOptions, isAllowing)).toBe(
         `L\\+nd*${copied}z  w\\f*\\ft${NBSP}three${copied}four`,
       );
     });
@@ -110,7 +110,9 @@ describe.each([
       if (!editorText?.textContent) throw new Error('row editor text missing');
       const selection = selectFrom(editorText, 0, editorText, editorText.textContent.length);
 
-      expect(getFootnotesPaneCopyText(selection, rowEditorRoot, viewOptions)).toBe(editorUsfm);
+      expect(getFootnotesPaneCopyText(selection, rowEditorRoot, viewOptions, isAllowing)).toBe(
+        editorUsfm,
+      );
     });
 
     it('keeps the line breaks the browser puts between the rows', () => {
@@ -122,7 +124,7 @@ describe.each([
         `\\ft${NBSP}one${NBSP}two\n${editorDisplay}\n\\ft${NBSP}three${NBSP}four`,
       );
 
-      expect(getFootnotesPaneCopyText(selection, rowEditorRoot, viewOptions)).toBe(
+      expect(getFootnotesPaneCopyText(selection, rowEditorRoot, viewOptions, isAllowing)).toBe(
         `\\ft${NBSP}one${copied}two\n${editorUsfm}\n\\ft${NBSP}three${copied}four`,
       );
       expect(logger.debug).not.toHaveBeenCalled();
@@ -140,7 +142,7 @@ describe.each([
         editorText.textContent.indexOf('w'),
       );
 
-      expect(getFootnotesPaneCopyText(selection, rowEditorRoot, viewOptions)).toBe(
+      expect(getFootnotesPaneCopyText(selection, rowEditorRoot, viewOptions, isAllowing)).toBe(
         `\\ft see${copied}x \\+nd L\\+nd*${copied}z  `,
       );
     });
@@ -149,7 +151,7 @@ describe.each([
       const { rowEditorRoot, firstRow } = renderPane(shown);
       const selection = selectFrom(firstRow, 0, firstRow, firstRow.childNodes.length);
 
-      expect(getFootnotesPaneCopyText(selection, rowEditorRoot, viewOptions)).toBe(
+      expect(getFootnotesPaneCopyText(selection, rowEditorRoot, viewOptions, isAllowing)).toBe(
         `\\ft${NBSP}one${copied}two`,
       );
     });
@@ -159,7 +161,7 @@ describe.each([
       document.querySelector('.editor-input')?.closest('li')?.remove();
       const selection = selectFrom(firstRow, 0, lastRow, lastRow.childNodes.length);
 
-      expect(getFootnotesPaneCopyText(selection, undefined, viewOptions)).toBe(
+      expect(getFootnotesPaneCopyText(selection, undefined, viewOptions, isAllowing)).toBe(
         `\\ft${NBSP}one${copied}two\\ft${NBSP}three${copied}four`,
       );
     });
@@ -192,7 +194,7 @@ describe("getFootnotesPaneCopyText placing the row editor's part", () => {
       `\\ft${NBSP}a${NBSP}b${NBSP}c\n\\f +${NBSP}\\ft${NBSP}see\n\\fp${NBSP}more\\f*\n\\ft${NBSP}d${NBSP}e`,
     );
 
-    expect(getFootnotesPaneCopyText(selection, rowEditorRoot, notAllowing)).toBe(
+    expect(getFootnotesPaneCopyText(selection, rowEditorRoot, notAllowing, false)).toBe(
       `\\ft${NBSP}a~b~c\n\\f + \\ft see\n\\fp more\\f*\n\\ft${NBSP}d~e`,
     );
   });
@@ -205,7 +207,7 @@ describe("getFootnotesPaneCopyText placing the row editor's part", () => {
     const selection = selectFrom(rowText, rowText.textContent.indexOf('b'), secondParagraph, 1);
     serializeAs(selection, `b${NBSP}c\n\\f +${NBSP}\\ft${NBSP}see\n\\fp${NBSP}`);
 
-    expect(getFootnotesPaneCopyText(selection, rowEditorRoot, notAllowing)).toBe(
+    expect(getFootnotesPaneCopyText(selection, rowEditorRoot, notAllowing, false)).toBe(
       `b~c\n\\f + \\ft see\n\\fp `,
     );
   });
@@ -214,7 +216,7 @@ describe("getFootnotesPaneCopyText placing the row editor's part", () => {
     const { rowEditorRoot, firstRow, firstParagraph } = renderUnevenPane();
     const selection = selectFrom(firstRow, 0, firstParagraph, 0);
 
-    expect(getFootnotesPaneCopyText(selection, rowEditorRoot, notAllowing)).toBe(
+    expect(getFootnotesPaneCopyText(selection, rowEditorRoot, notAllowing, false)).toBe(
       `\\ft${NBSP}a~b~c`,
     );
   });
@@ -226,7 +228,7 @@ describe('getFootnotesPaneCopyText without a row editor to place', () => {
     const selection = selectFrom(firstRow, 0, lastRow, lastRow.childNodes.length);
     const selectedText = selection?.toString() ?? '';
 
-    expect(getFootnotesPaneCopyText(selection, undefined, allowing)).toBe(
+    expect(getFootnotesPaneCopyText(selection, undefined, allowing, true)).toBe(
       selectedText.replaceAll(STAND_IN, NBSP),
     );
   });
@@ -239,11 +241,28 @@ describe('getFootnotesPaneCopyText without a row editor to place', () => {
     const serialized = selection.toString().replace(NBSP, '');
     serializeAs(selection, serialized);
 
-    expect(getFootnotesPaneCopyText(selection, rowEditorRoot, notAllowing)).toBe(serialized);
+    expect(getFootnotesPaneCopyText(selection, rowEditorRoot, notAllowing, false)).toBe(serialized);
     expect(logger.debug).toHaveBeenCalledTimes(1);
   });
 
+  it('writes a stored no-break space as itself while the setting is not known', () => {
+    // `~` would paste back as a literal tilde in a project that allows invisible characters; a
+    // U+00A0 pastes back as a no-break space under either setting.
+    document.body.innerHTML = `<ul>${readOnlyRow(`one${NBSP}two`)}</ul>`;
+    const row = document.querySelector('li');
+    if (!row) throw new Error('no row');
+    const selection = selectFrom(row, 0, row, row.childNodes.length);
+    const selectedText = selection?.toString() ?? '';
+    // A positive control: the row stores a no-break space.
+    expect(selectedText).toContain(`one${NBSP}two`);
+
+    expect(getFootnotesPaneCopyText(selection, undefined, undefined, undefined)).toBe(selectedText);
+    expect(getFootnotesPaneCopyText(selection, undefined, undefined, false)).toBe(
+      selectedText.replace(`one${NBSP}two`, 'one~two'),
+    );
+  });
+
   it('copies nothing from an empty selection', () => {
-    expect(getFootnotesPaneCopyText(undefined, undefined, allowing)).toBe('');
+    expect(getFootnotesPaneCopyText(undefined, undefined, allowing, true)).toBe('');
   });
 });

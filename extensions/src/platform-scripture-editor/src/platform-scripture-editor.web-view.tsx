@@ -5728,6 +5728,7 @@ function PlatformScriptureEditor({
                 zoomAreaLabel={localizedStrings[FOOTNOTES_ZOOM_AREA_LABEL_KEY]}
                 copyLimit={editorOptionsWithCopyLimit.copyLimit}
                 rowEditorViewOptions={rowEditorViewOptions}
+                allowInvisibleCharacters={allowInvisibleCharactersSetting.value}
               >
                 {/* Render the editor inside the container decorations without re-mounting on re-parent */}
                 <OutPortal node={editorPortalNode} />

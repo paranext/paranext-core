@@ -43,7 +43,9 @@ function nbspKindsIn(range: Range, rowEditorRoot: Element | undefined): NbspKind
  *   separator it shows after a marker (inside the marker's `.marker` span), which stays as it is (a
  *   paste reads it as the marker's separator), or a no-break space the text stores, which is
  *   written as the project spells it, as Paratext 9 copies one: `~`, or U+00A0 itself when the
- *   project allows invisible characters (`ViewOptions.allowInvisibleCharacters`).
+ *   project allows invisible characters. While the setting is not known it is written as U+00A0,
+ *   which a paste reads as a no-break space under either setting, where `~` would become a literal
+ *   tilde in a project that allows invisible characters.
  * - The row editor is a Standard-view editor, which shows a stored no-break space as `~` or as an
  *   internal stand-in, and shows a U+00A0 only as display spacing: each space of a run of spaces,
  *   the separator after a marker, a note's layout spacers. Each U+00A0 the selection takes from it
@@ -60,14 +62,16 @@ function nbspKindsIn(range: Range, rowEditorRoot: Element | undefined): NbspKind
  *
  * @param selection The page selection being copied
  * @param rowEditorRoot The row editor's content-editable root, if the pane has a row editor
- * @param rowEditorViewOptions The view options the row editor renders with, which carry the
- *   project's `allowInvisibleCharacters`
+ * @param rowEditorViewOptions The view options the row editor renders with
+ * @param allowInvisibleCharacters The project's `platformScripture.allowInvisibleCharacters`, or
+ *   `undefined` while it is not known
  * @returns The text to copy
  */
 export function getFootnotesPaneCopyText(
   selection: Selection | undefined,
   rowEditorRoot: Element | undefined,
   rowEditorViewOptions: ViewOptions | undefined,
+  allowInvisibleCharacters: boolean | undefined,
 ): string {
   const selectedText = selection?.toString() ?? '';
   const range = selection?.rangeCount === 1 ? selection.getRangeAt(0) : undefined;
@@ -83,7 +87,7 @@ export function getFootnotesPaneCopyText(
     return toUsfmNbspSpelling(selectedText, rowEditorViewOptions);
   }
 
-  const storedSpelling = rowEditorViewOptions?.allowInvisibleCharacters ? NBSP : '~';
+  const storedSpelling = allowInvisibleCharacters === false ? '~' : NBSP;
   // Code units, not graphemes: a display no-break space is one code unit wherever it sits, even in
   // front of a combining mark, and the editor's own copy writes a space for it the same way.
   let nbspIndex = 0;

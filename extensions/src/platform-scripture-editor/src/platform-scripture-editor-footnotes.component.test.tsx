@@ -103,6 +103,7 @@ function renderPane(overrides: Partial<ComponentProps<typeof FootnotesLayout>> =
     <FootnotesLayout
       copyLimit={undefined}
       rowEditorViewOptions={undefined}
+      allowInvisibleCharacters={false}
       usj={usjWithTwoNotes}
       showMarkers
       useWebViewState={useWebViewStateMock}
@@ -181,6 +182,7 @@ describe('FootnotesLayout Scripture text across pane visibility', () => {
       <FootnotesLayout
         copyLimit={undefined}
         rowEditorViewOptions={undefined}
+        allowInvisibleCharacters={false}
         usj={usjWithTwoNotes}
         showMarkers
         useWebViewState={useWebViewStateMock}
@@ -455,6 +457,7 @@ describe('FootnotesLayout reporting that the user left the pane', () => {
         <FootnotesLayout
           copyLimit={undefined}
           rowEditorViewOptions={undefined}
+          allowInvisibleCharacters={false}
           usj={usjWithTwoNotes}
           showMarkers
           useWebViewState={useWebViewStateMock}
@@ -530,6 +533,7 @@ describe('FootnotesLayout reporting that the user left the pane', () => {
       <FootnotesLayout
         copyLimit={undefined}
         rowEditorViewOptions={undefined}
+        allowInvisibleCharacters={false}
         {...props}
         editingFootnoteIndex={1}
         renderEditingFootnote={() => <input data-testid="row-editor" />}
@@ -541,7 +545,12 @@ describe('FootnotesLayout reporting that the user left the pane', () => {
     expect(onPaneFocusChange).toHaveBeenLastCalledWith(true);
 
     rerender(
-      <FootnotesLayout copyLimit={undefined} rowEditorViewOptions={undefined} {...props}>
+      <FootnotesLayout
+        copyLimit={undefined}
+        rowEditorViewOptions={undefined}
+        allowInvisibleCharacters={false}
+        {...props}
+      >
         <div />
       </FootnotesLayout>,
     );
@@ -587,6 +596,7 @@ describe('FootnotesLayout editing seam', () => {
       <FootnotesLayout
         copyLimit={undefined}
         rowEditorViewOptions={undefined}
+        allowInvisibleCharacters={false}
         usj={usjWithTwoNotes}
         showMarkers
         useWebViewState={useWebViewStateMock}
@@ -614,6 +624,7 @@ describe('FootnotesLayout editing seam', () => {
       <FootnotesLayout
         copyLimit={undefined}
         rowEditorViewOptions={undefined}
+        allowInvisibleCharacters={false}
         {...props}
         usj={usjWithTwoNotes}
         focusRequest={{ index: 1 }}
@@ -639,6 +650,7 @@ describe('FootnotesLayout editing seam', () => {
       <FootnotesLayout
         copyLimit={undefined}
         rowEditorViewOptions={undefined}
+        allowInvisibleCharacters={false}
         {...props}
         usj={usjWithOneNote}
         focusRequest={{ index: 1 }}
@@ -717,7 +729,12 @@ describe('FootnotesLayout pane focus reporting', () => {
       usj: usjWithTwoNotes,
     };
     const { rerender } = render(
-      <FootnotesLayout copyLimit={undefined} rowEditorViewOptions={undefined} {...props}>
+      <FootnotesLayout
+        copyLimit={undefined}
+        rowEditorViewOptions={undefined}
+        allowInvisibleCharacters={false}
+        {...props}
+      >
         <div />
       </FootnotesLayout>,
     );
@@ -728,6 +745,7 @@ describe('FootnotesLayout pane focus reporting', () => {
       <FootnotesLayout
         copyLimit={undefined}
         rowEditorViewOptions={undefined}
+        allowInvisibleCharacters={false}
         {...props}
         editingFootnoteIndex={1}
         renderEditingFootnote={() => <RowEditor />}
@@ -778,6 +796,7 @@ describe('FootnotesLayout selection across USJ changes', () => {
       <FootnotesLayout
         copyLimit={undefined}
         rowEditorViewOptions={undefined}
+        allowInvisibleCharacters={false}
         {...props}
         usj={usjWithTwoNotes}
         focusRequest={{ index: 1 }}
@@ -796,6 +815,7 @@ describe('FootnotesLayout selection across USJ changes', () => {
       <FootnotesLayout
         copyLimit={undefined}
         rowEditorViewOptions={undefined}
+        allowInvisibleCharacters={false}
         {...props}
         usj={echo}
         focusRequest={{ index: 1 }}
@@ -821,6 +841,7 @@ describe('FootnotesLayout selection across USJ changes', () => {
       <FootnotesLayout
         copyLimit={undefined}
         rowEditorViewOptions={undefined}
+        allowInvisibleCharacters={false}
         {...props}
         usj={usjWithTwoNotes}
       >
@@ -832,7 +853,13 @@ describe('FootnotesLayout selection across USJ changes', () => {
 
     const echo: Usj = JSON.parse(JSON.stringify(usjWithTwoNotes));
     rerender(
-      <FootnotesLayout copyLimit={undefined} rowEditorViewOptions={undefined} {...props} usj={echo}>
+      <FootnotesLayout
+        copyLimit={undefined}
+        rowEditorViewOptions={undefined}
+        allowInvisibleCharacters={false}
+        {...props}
+        usj={echo}
+      >
         <div />
       </FootnotesLayout>,
     );
@@ -857,6 +884,7 @@ describe('FootnotesLayout selection across USJ changes', () => {
       <FootnotesLayout
         copyLimit={undefined}
         rowEditorViewOptions={undefined}
+        allowInvisibleCharacters={false}
         {...props}
         usj={usjWithTwoNotes}
         focusRequest={{ index: 1 }}
@@ -889,6 +917,7 @@ describe('FootnotesLayout selection across USJ changes', () => {
       <FootnotesLayout
         copyLimit={undefined}
         rowEditorViewOptions={undefined}
+        allowInvisibleCharacters={false}
         {...props}
         usj={edited}
         focusRequest={{ index: 1 }}
@@ -917,6 +946,7 @@ describe('FootnotesLayout selection across USJ changes', () => {
       <FootnotesLayout
         copyLimit={undefined}
         rowEditorViewOptions={undefined}
+        allowInvisibleCharacters={false}
         {...props}
         usj={usjWithTwoNotes}
         editingFootnoteIndex={1}
@@ -931,6 +961,7 @@ describe('FootnotesLayout selection across USJ changes', () => {
       <FootnotesLayout
         copyLimit={undefined}
         rowEditorViewOptions={undefined}
+        allowInvisibleCharacters={false}
         {...props}
         usj={usjWithNotes('alpha', 'beta typed more')}
       >
@@ -961,6 +992,7 @@ describe('FootnotesLayout selection across USJ changes', () => {
       <FootnotesLayout
         copyLimit={undefined}
         rowEditorViewOptions={undefined}
+        allowInvisibleCharacters={false}
         {...props}
         usj={usjWithThreeNotes}
         editingFootnoteIndex={1}
@@ -977,6 +1009,7 @@ describe('FootnotesLayout selection across USJ changes', () => {
       <FootnotesLayout
         copyLimit={undefined}
         rowEditorViewOptions={undefined}
+        allowInvisibleCharacters={false}
         {...props}
         usj={usjWithThreeNotes}
       >
@@ -990,6 +1023,7 @@ describe('FootnotesLayout selection across USJ changes', () => {
       <FootnotesLayout
         copyLimit={undefined}
         rowEditorViewOptions={undefined}
+        allowInvisibleCharacters={false}
         {...props}
         usj={usjWithNotes('beta', 'gamma')}
       >
@@ -1019,6 +1053,7 @@ describe('FootnotesLayout selection across USJ changes', () => {
       <FootnotesLayout
         copyLimit={undefined}
         rowEditorViewOptions={undefined}
+        allowInvisibleCharacters={false}
         {...props}
         usj={usjWithTwoNotes}
       >
@@ -1032,6 +1067,7 @@ describe('FootnotesLayout selection across USJ changes', () => {
       <FootnotesLayout
         copyLimit={undefined}
         rowEditorViewOptions={undefined}
+        allowInvisibleCharacters={false}
         {...props}
         usj={usjWithTwoNotes}
         editingFootnoteIndex={1}
@@ -1047,6 +1083,7 @@ describe('FootnotesLayout selection across USJ changes', () => {
       <FootnotesLayout
         copyLimit={undefined}
         rowEditorViewOptions={undefined}
+        allowInvisibleCharacters={false}
         {...props}
         usj={usjWithNotes('alpha', 'beta typed more')}
         editingFootnoteIndex={1}
@@ -1083,6 +1120,7 @@ describe('FootnotesLayout list identity across USJ changes', () => {
       <FootnotesLayout
         copyLimit={undefined}
         rowEditorViewOptions={undefined}
+        allowInvisibleCharacters={false}
         {...props}
         usj={usjWithTwoNotes}
       >
@@ -1113,6 +1151,7 @@ describe('FootnotesLayout list identity across USJ changes', () => {
       <FootnotesLayout
         copyLimit={undefined}
         rowEditorViewOptions={undefined}
+        allowInvisibleCharacters={false}
         {...props}
         usj={edited}
       >
@@ -1142,6 +1181,7 @@ describe('FootnotesLayout list identity across USJ changes', () => {
       <FootnotesLayout
         copyLimit={undefined}
         rowEditorViewOptions={undefined}
+        allowInvisibleCharacters={false}
         {...props}
         usj={usjWithTwoNotes}
         editingFootnoteIndex={1}
@@ -1156,6 +1196,7 @@ describe('FootnotesLayout list identity across USJ changes', () => {
       <FootnotesLayout
         copyLimit={undefined}
         rowEditorViewOptions={undefined}
+        allowInvisibleCharacters={false}
         {...props}
         usj={usjWithNotes('new', 'alpha', 'beta')}
         editingFootnoteIndex={2}
@@ -1179,6 +1220,7 @@ describe('FootnotesLayout list identity across USJ changes', () => {
       <FootnotesLayout
         copyLimit={undefined}
         rowEditorViewOptions={undefined}
+        allowInvisibleCharacters={false}
         {...props}
         usj={usjWithTwoNotes}
       >
@@ -1210,6 +1252,7 @@ describe('FootnotesLayout list identity across USJ changes', () => {
       <FootnotesLayout
         copyLimit={undefined}
         rowEditorViewOptions={undefined}
+        allowInvisibleCharacters={false}
         {...props}
         usj={withThree}
       >
@@ -1464,6 +1507,7 @@ describe('FootnotesLayout copy of a no-break space the row editor holds as its s
     const { container } = renderPaneWithStandInRow({
       copyLimit: undefined,
       rowEditorViewOptions: allowing,
+      allowInvisibleCharacters: true,
     });
 
     const { setData, isCancelled, selectedText } = copyWholePane(container);
@@ -1482,6 +1526,7 @@ describe('FootnotesLayout copy of a no-break space the row editor holds as its s
     const { container } = renderPaneWithStandInRow({
       copyLimit: 1000,
       rowEditorViewOptions: allowing,
+      allowInvisibleCharacters: true,
     });
     const { selectedText: wholeSelection } = copyWholePane(container);
     const limit = wholeSelection.indexOf(STAND_IN) + 'Abraham'.length;
@@ -1489,6 +1534,7 @@ describe('FootnotesLayout copy of a no-break space the row editor holds as its s
     const { container: limitedContainer } = renderPaneWithStandInRow({
       copyLimit: limit,
       rowEditorViewOptions: allowing,
+      allowInvisibleCharacters: true,
     });
 
     const { setData, isCancelled, selectedText } = copyWholePane(limitedContainer);
@@ -1506,14 +1552,23 @@ describe('FootnotesLayout copy of a no-break space the row editor holds as its s
   });
 
   it.each([
-    { label: 'the setting is off', rowEditorViewOptions: notAllowing },
-    { label: 'the pane has no row editor view options', rowEditorViewOptions: undefined },
+    {
+      label: 'the setting is off',
+      rowEditorViewOptions: notAllowing,
+      allowInvisibleCharacters: false,
+    },
+    {
+      label: 'the pane has no row editor view options',
+      rowEditorViewOptions: undefined,
+      allowInvisibleCharacters: false,
+    },
   ])(
     'copies it as a no-break space when $label, as an attribute value holds one under either setting',
-    ({ rowEditorViewOptions }) => {
+    ({ rowEditorViewOptions, allowInvisibleCharacters }) => {
       const { container } = renderPaneWithStandInRow({
         copyLimit: undefined,
         rowEditorViewOptions,
+        allowInvisibleCharacters,
       });
 
       const { setData, isCancelled, selectedText } = copyWholePane(container);
@@ -1535,75 +1590,82 @@ describe('FootnotesLayout copy reaching into the row editor', () => {
     {
       setting: 'off',
       rowEditorViewOptions: getEditorViewOptions('standard', false, false),
+      allowInvisibleCharacters: false,
       shown: '~',
       copied: '~',
     },
     {
       setting: 'on',
       rowEditorViewOptions: getEditorViewOptions('standard', false, true),
+      allowInvisibleCharacters: true,
       shown: STAND_IN,
       copied: NBSP,
     },
-  ])('with allowInvisibleCharacters $setting', ({ rowEditorViewOptions, shown, copied }) => {
-    // How Standard view shows the first note: a separator after each opening marker, a run of two
-    // spaces, and its stored no-break space as `shown`.
-    const editorDisplay = `\\f +${NBSP}\\ft${NBSP}al${shown}pha \\+nd${NBSP}L\\+nd*${NBSP}${NBSP}x\\f*`;
-    const editorUsfm = `\\f + \\ft al${copied}pha \\+nd L\\+nd*  x\\f*`;
+  ])(
+    'with allowInvisibleCharacters $setting',
+    ({ rowEditorViewOptions, allowInvisibleCharacters, shown, copied }) => {
+      // How Standard view shows the first note: a separator after each opening marker, a run of two
+      // spaces, and its stored no-break space as `shown`.
+      const editorDisplay = `\\f +${NBSP}\\ft${NBSP}al${shown}pha \\+nd${NBSP}L\\+nd*${NBSP}${NBSP}x\\f*`;
+      const editorUsfm = `\\f + \\ft al${copied}pha \\+nd L\\+nd*  x\\f*`;
 
-    function renderPaneEditingFirstRow(copyLimit: number | undefined) {
-      return renderPane({
-        usj: usjWithStoredNbsp,
-        copyLimit,
-        rowEditorViewOptions,
-        editingFootnoteIndex: 0,
-        renderEditingFootnote: () => (
-          <div className="editor-input" contentEditable suppressContentEditableWarning>
-            {editorDisplay}
-          </div>
-        ),
+      function renderPaneEditingFirstRow(copyLimit: number | undefined) {
+        return renderPane({
+          usj: usjWithStoredNbsp,
+          copyLimit,
+          rowEditorViewOptions,
+          allowInvisibleCharacters,
+          editingFootnoteIndex: 0,
+          renderEditingFootnote: () => (
+            <div className="editor-input" contentEditable suppressContentEditableWarning>
+              {editorDisplay}
+            </div>
+          ),
+        });
+      }
+
+      it("writes the row editor's part as its USFM and the read-only row's stored no-break space as the project spells it", () => {
+        const { container } = renderPaneEditingFirstRow(undefined);
+
+        const { setData, isCancelled, selectedText } = copyWholePane(container);
+
+        // A positive control: the selection spans the row editor and a read-only row.
+        expect(selectedText).toContain(editorDisplay);
+        expect(selectedText).toContain(`be${NBSP}ta`);
+        expect(isCancelled).toBe(true);
+        expect(setData).toHaveBeenCalledTimes(1);
+        const [format, text] = setData.mock.calls[0];
+        expect(format).toBe('text/plain');
+        expect(text).toBe(
+          selectedText.replace(editorDisplay, editorUsfm).replace(`be${NBSP}ta`, `be${copied}ta`),
+        );
       });
-    }
 
-    it("writes the row editor's part as its USFM and the read-only row's stored no-break space as the project spells it", () => {
-      const { container } = renderPaneEditingFirstRow(undefined);
+      it('shortens the written copy to the copy limit', () => {
+        const { container: measuring } = renderPaneEditingFirstRow(undefined);
+        const { selectedText: whole } = copyWholePane(measuring);
+        const limit = whole.indexOf(editorDisplay) + editorDisplay.length;
+        cleanup();
+        const { container } = renderPaneEditingFirstRow(limit);
 
-      const { setData, isCancelled, selectedText } = copyWholePane(container);
+        const { setData, isCancelled, selectedText } = copyWholePane(container);
 
-      // A positive control: the selection spans the row editor and a read-only row.
-      expect(selectedText).toContain(editorDisplay);
-      expect(selectedText).toContain(`be${NBSP}ta`);
-      expect(isCancelled).toBe(true);
-      expect(setData).toHaveBeenCalledTimes(1);
-      const [format, text] = setData.mock.calls[0];
-      expect(format).toBe('text/plain');
-      expect(text).toBe(
-        selectedText.replace(editorDisplay, editorUsfm).replace(`be${NBSP}ta`, `be${copied}ta`),
-      );
-    });
-
-    it('shortens the written copy to the copy limit', () => {
-      const { container: measuring } = renderPaneEditingFirstRow(undefined);
-      const { selectedText: whole } = copyWholePane(measuring);
-      const limit = whole.indexOf(editorDisplay) + editorDisplay.length;
-      cleanup();
-      const { container } = renderPaneEditingFirstRow(limit);
-
-      const { setData, isCancelled, selectedText } = copyWholePane(container);
-
-      // A positive control: the copy is over the limit, and the row editor falls inside it.
-      expect(selectedText.length).toBeGreaterThan(limit);
-      expect(isCancelled).toBe(true);
-      expect(setData).toHaveBeenCalledTimes(1);
-      const [, text] = setData.mock.calls[0];
-      expect(text).toBe(selectedText.replace(editorDisplay, editorUsfm).slice(0, limit));
-    });
-  });
+        // A positive control: the copy is over the limit, and the row editor falls inside it.
+        expect(selectedText.length).toBeGreaterThan(limit);
+        expect(isCancelled).toBe(true);
+        expect(setData).toHaveBeenCalledTimes(1);
+        const [, text] = setData.mock.calls[0];
+        expect(text).toBe(selectedText.replace(editorDisplay, editorUsfm).slice(0, limit));
+      });
+    },
+  );
 
   it('leaves a copy of read-only rows alone, stored no-break spaces and all', () => {
     const { container } = renderPane({
       usj: usjWithStoredNbsp,
       copyLimit: undefined,
       rowEditorViewOptions: getEditorViewOptions('standard', false, true),
+      allowInvisibleCharacters: true,
     });
 
     const { setData, isCancelled, selectedText } = copyWholePane(container);
