@@ -237,6 +237,30 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
     });
   });
 
+  describe('gutter-view section headings', () => {
+    // The gutter marker glyph sits inside its paragraph, so a case transform on a heading would
+    // also show `\s1` as the invalid `\S1`, besides hiding the case the translator typed.
+    const code = scss.replace(/\/\*[\s\S]*?\*\//g, '');
+    const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const headings = ['s', 's1', 's2', 's3'].map((marker) => `.psc-gutter-markers .usfm_${marker}`);
+    const headingRule = new RegExp(
+      `(?:^|\\}|;)\\s*${headings.map(escapeRegExp).join(',\\s*')}\\s*\\{([^}]*)\\}`,
+    ).exec(code)?.[1];
+
+    it('keeps the small, regular-weight, muted heading look', () => {
+      expect(headingRule).toBeDefined();
+      expect(headingRule).toContain('font-size: calc(var(--psc-base-font-size) * 0.8);');
+      // Without it `.formatted-font .usfm_s1` makes the heading bold.
+      expect(headingRule).toContain('font-weight: 400;');
+      expect(headingRule).toMatch(/(?:^|[;\s])color: var\(--muted-foreground, #6b7280\);/);
+    });
+
+    it('transforms no heading and uppercases nothing, so marker glyphs keep their typed case', () => {
+      expect(headingRule).not.toContain('text-transform');
+      expect(code).not.toMatch(/text-transform\s*:[^;}]*uppercase/i);
+    });
+  });
+
   describe('cross-copy drift pins (must agree with the demo copy in platform-bible-react)', () => {
     // The two vendored copies of the editor stylesheet (this one and
     // lib/platform-bible-react/src/components/demo/scripture-editor/usj-nodes.css) are pinned at
