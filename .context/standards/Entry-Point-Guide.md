@@ -137,19 +137,24 @@ that no producer has published is unknown and counts as false, so a gate on a ne
 (`!…isResource`) is enabled until the producer publishes. Expressions are validated when the
 contribution loads: a malformed expression or a template variable the surface does not provide
 rejects the extension's whole `menus.json` contribution (extension-host log: 'Could not add menu
-contribution'). So is `enabledWhen` or `checkedWhen` on an item of a tab menu or overlay context
-menu, which only honor `when`. At runtime an expression that still fails to evaluate fails safe
+contribution'). So is `checkedWhen` on an item of a tab menu or overlay context menu, or
+`enabledWhen` on a submenu item there. At runtime an expression that still fails to evaluate fails safe
 (`when` hides, `enabledWhen` disables, `checkedWhen` unchecks).
 
 **Template variables per surface.**
 
 | Surface | Variables | Honors |
 |---|---|---|
-| Main menu (toolbar, macOS menubar) | none | `when`, `enabledWhen`, `checkedWhen` |
+| Main menu (toolbar, macOS menubar) | none | `when`, `enabledWhen`, `checkedWhen`; the macOS menubar updates enabled/checked in place and rebuilds when visibility or structure changes |
 | Web view top menu | `{webViewId}`, `{webViewType}`, `{projectId}` | `when`, `enabledWhen`, `checkedWhen`, re-evaluated on every key change |
 | Web view that renders its own menu | `{webViewId}`, `{webViewType}`, `{projectId}` (contribution validation rejects the whole contribution if any other is used); the web view evaluates through `useEvaluatedMenu` from `@papi/frontend/react`, supplying their values as a memoized object | same |
-| Web view tab menu | `{webViewId}`, `{webViewType}` | `when` only, evaluated once when the menu is read; `enabledWhen` and `checkedWhen` are rejected at load |
-| Web view overlay context menu | `{webViewId}`, `{webViewType}`, `{projectId}` | `when` only; `enabledWhen` and `checkedWhen` are rejected at load |
+| Web view tab menu | `{webViewId}`, `{webViewType}` | `when`, `enabledWhen` (command items); re-evaluated whenever a key it reads changes, including while open; `checkedWhen` rejected at load |
+| Web view overlay context menu | `{webViewId}`, `{webViewType}`, `{projectId}` | `when`, `enabledWhen` (command items); re-evaluated whenever a key it reads changes, including while open; `checkedWhen` rejected at load. `{projectId}` is looked up once per open, only when an item uses it |
+
+**Choosing `when` vs `enabledWhen`.** Use `enabledWhen` and `checkedWhen` for state that can change
+while a menu is open, and `when` for state that does not. The one exception is tab menus and overlay
+context menus, which show no check marks: there only `when` and `enabledWhen` (on command items)
+apply. Menus re-evaluate only when a key they read changes.
 
 **Key vocabulary.** Prefix every key with its owner. The platform uses `platform.project.{projectId}.*`
 and `platform.*`; an extension uses `<extension>.project.{projectId}.*` for facts about a project
@@ -160,7 +165,10 @@ under (`ProjectMetadata.Id` is upper case), so producers must build keys from th
 Each key has exactly **one producer process**: a TypeScript process refuses (logs, does not throw)
 a write to a key another process wrote first; the .NET store does not check, so a C# write to
 another process's key takes it over. A key released after its writer disconnected is claimable by
-any process. Either way two producers on one key race, so keep exactly one.
+any process, and so is a key its producer withdrew with `remove`; a `set` refused because another
+live process owned the key is applied once the key is released. C# `Remove` writes a live default
+value (for example `null`, or `false` for a bool), not a release. Either way two producers on one
+key race, so keep exactly one.
 
 **Handlers still check.** Keyboard shortcuts and direct PAPI calls bypass menus, and a key can lag
 the state it describes, so the command handler keeps its submission-time check and its
