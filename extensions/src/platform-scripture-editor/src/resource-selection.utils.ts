@@ -18,6 +18,13 @@ export type ResourceSelectionInputs = {
   userPickedResourceId: string | undefined;
   /** The row id of a pick still propagating, if any */
   pendingResourceId: string | undefined;
+  /**
+   * Whether the pending pick's own write has finished. Until it has, the pick is written even if
+   * the stored selection already names it: that may be a value an earlier write is about to
+   * replace, which is what happens when the user picks back the stored resource while another pick
+   * is still landing.
+   */
+  isPendingPickWritten: boolean;
   /** The row id of the downloaded fallback the panel showed last, if any (never persisted) */
   heldFallbackRowId: string | undefined;
   /**
@@ -40,7 +47,11 @@ export type ResourceSelectionResolution = {
    * committed, and when the selection the user picked is rewritten to another form of its id.
    */
   nextUserPickedResourceId: string | undefined;
-  /** Whether the in-flight pick has arrived in the list and can stop suppressing auto-correct. */
+  /**
+   * Whether the in-flight pick has been stored and can stop suppressing auto-correct. Not as soon
+   * as its row arrives: the stored selection changes only once the write is reported back, so a
+   * pick let go any sooner would show the old selection again in between.
+   */
   shouldClearPending: boolean;
   /** The row to display, or `undefined` when there is nothing to show. */
   selectedRow: PickerResource | undefined;
@@ -108,10 +119,12 @@ export function findSelectedRow(
  * Three jobs, in priority order, so that they cannot fight each other across renders:
  *
  * 1. Commit a pick that has arrived. `pendingResourceId` holds the row id of a resource the user just
- *    chose, while the write propagates through the settings chain into the list. It is compared as
- *    a row id, so it must be derived from the reference that was actually stored — a bare DBL entry
- *    UID never matches, and for a locally-installed non-DBL resource the stored reference is a
- *    project reference whose id is the project id, not the UID.
+ *    chose, from the dropdown or the picker, while it propagates into the list and the setting. It
+ *    is compared as a row id, so a picker pick must be derived from the reference that was actually
+ *    stored — a bare DBL entry UID never matches, and for a locally-installed non-DBL resource the
+ *    stored reference is a project reference whose id is the project id, not the UID. The pick
+ *    stays pending, and on screen, until its write has finished and the stored selection names it.
+ *    The newest pick replaces any earlier one still pending, so the user's last choice wins.
  * 2. Hold still while a pick is in flight. Auto-correct must not overwrite the selection before the
  *    new resource shows up.
  * 3. Auto-correct otherwise — rewrite a legacy bare id to its namespaced form (and a selection found
@@ -146,6 +159,7 @@ export function resolveResourceSelection(
     selectedResourceId,
     userPickedResourceId,
     pendingResourceId,
+    isPendingPickWritten,
     heldFallbackRowId,
     isListComplete,
   } = inputs;
@@ -189,14 +203,19 @@ export function resolveResourceSelection(
     const pendingRow = rows.find(
       (row) => getResourceReferenceRowId(row.reference) === pendingResourceId,
     );
-    if (pendingRow)
+    if (pendingRow) {
+      const isStored =
+        isPendingPickWritten &&
+        selectedResourceId === pendingResourceId &&
+        userPickedResourceId === pendingResourceId;
       return {
-        nextSelectedResourceId: pendingResourceId,
-        nextUserPickedResourceId: pendingResourceId,
-        shouldClearPending: true,
+        nextSelectedResourceId: isPendingPickWritten ? undefined : pendingResourceId,
+        nextUserPickedResourceId: isPendingPickWritten ? undefined : pendingResourceId,
+        shouldClearPending: isStored,
         selectedRow: pendingRow,
         shownFallbackRowId: undefined,
       };
+    }
     const heldRow = selectedRow ?? configuredFallback ?? pickUnsavedFallback();
     return {
       nextSelectedResourceId: undefined,
