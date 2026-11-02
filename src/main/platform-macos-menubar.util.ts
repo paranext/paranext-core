@@ -112,6 +112,9 @@ export async function subscribeCurrentMacosMenubar() {
         // If this fallback fails, the current menubar stays in place, by design
         currentMacosMenubarTemplate = await fallbackToDefaultMacosMenubar();
       } else {
+        // Set once evaluation succeeds; a later translation failure keeps these keys, so a change to
+        // one of them still triggers the rebuild that retries the real menu
+        let evaluationReadKeys: ReadonlySet<string> = new Set();
         try {
           // The main menu has no template variables; its expressions can reference only global keys
           const { evaluatedMenu, readKeys: evaluatedReadKeys } = evaluateMenuRecordingReads(
@@ -119,6 +122,7 @@ export async function subscribeCurrentMacosMenubar() {
             {},
             onWhenExpressionError,
           );
+          evaluationReadKeys = evaluatedReadKeys;
           readKeys = evaluatedReadKeys;
           signature = getMenuStructureSignature(evaluatedMenu);
           currentMacosMenubarTemplate = await translatePlatformMenuItemsAndCombine(evaluatedMenu);
@@ -127,7 +131,7 @@ export async function subscribeCurrentMacosMenubar() {
             'Failed to get current platform menus. Falling back to default macOS menubar.',
             error,
           );
-          readKeys = new Set();
+          if (thisRebuildGeneration === latestRebuildGeneration) readKeys = evaluationReadKeys;
           signature = undefined;
           currentMacosMenubarTemplate = await fallbackToDefaultMacosMenubar();
         }

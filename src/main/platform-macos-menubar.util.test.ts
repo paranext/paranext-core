@@ -447,6 +447,49 @@ describe('subscribeCurrentMacosMenubar', () => {
     expect(Menu.buildFromTemplate).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps tracking keys after an overtaken rebuild fails', async () => {
+    const deliver = await subscribe();
+    let rejectFirst: (reason: Error) => void = () => {};
+    vi.mocked(localizationService.getLocalizedStrings).mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectFirst = reject;
+        }),
+    );
+    const first = deliver(menuWithGatedItems());
+    await deliver(menuWithGatedItems());
+    rejectFirst(new Error('localization failed'));
+    await first;
+    await flushRebuilds();
+
+    mockKeyValues.set('test.flag', true);
+    emitKey('test.flag', true);
+    await flushRebuilds();
+
+    expect(lastAppliedMenu().getMenuItemById('platformMenu:test.group:test.gated').enabled).toBe(
+      true,
+    );
+  });
+
+  it('rebuilds on a read key after the only rebuild fell back to the default menubar', async () => {
+    const deliver = await subscribe();
+    vi.mocked(localizationService.getLocalizedStrings).mockRejectedValueOnce(
+      new Error('localization failed'),
+    );
+    await deliver(menuWithGatedItems());
+    expect(Menu.buildFromTemplate).toHaveBeenCalledTimes(1);
+
+    mockKeyValues.set('test.flag', true);
+    emitKey('test.flag', true);
+    await flushRebuilds();
+
+    expect(Menu.buildFromTemplate).toHaveBeenCalledTimes(2);
+    const lastTemplate = vi.mocked(Menu.buildFromTemplate).mock.calls.at(-1)?.[0] ?? [];
+    expect(findTemplateEntry(lastTemplate, 'platformMenu:test.group:test.gated')?.enabled).toBe(
+      true,
+    );
+  });
+
   it('the default fallback reads no keys', async () => {
     const deliver = await subscribe();
     await deliver(newPlatformError('test failure'));
