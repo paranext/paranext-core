@@ -797,14 +797,41 @@ describe('when expression validation', () => {
     ).not.toThrow();
   });
 
-  it('rejects enabledWhen on a tab menu item', () => {
+  it('accepts enabledWhen on a tab menu item', () => {
     const combiner = new MenuDocumentCombiner(baseDocument);
     expect(() =>
       combiner.addOrUpdateContribution(
         'ext1',
         makeContributionWithSurfaceItem('defaultWebViewTabMenu', { enabledWhen: 'ext1.flag' }),
       ),
-    ).toThrow(/'%item%' in defaultWebViewTabMenu uses enabledWhen/);
+    ).not.toThrow();
+  });
+
+  it('rejects enabledWhen on a submenu item of a context menu', () => {
+    const combiner = new MenuDocumentCombiner(baseDocument);
+    expect(() =>
+      combiner.addOrUpdateContribution('ext1', {
+        mainMenu: { columns: {}, groups: {}, items: [] },
+        defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
+        defaultWebViewContextMenu: {
+          groups: {
+            'ext1.group': { order: 1 },
+            'ext1.subGroup': { menuItem: 'ext1.sub', order: 1 },
+          },
+          items: [
+            {
+              label: '%item%',
+              localizeNotes: '',
+              group: 'ext1.group',
+              order: 1,
+              id: 'ext1.sub',
+              enabledWhen: 'ext1.flag',
+            },
+          ],
+        },
+        webViewMenus: {},
+      }),
+    ).toThrow(/'%item%' in defaultWebViewContextMenu uses enabledWhen on a submenu/);
   });
 
   it('rejects checkedWhen on a context menu item', () => {
@@ -846,14 +873,14 @@ describe('when expression validation', () => {
     };
   }
 
-  it('rejects enabledWhen on a web view tab menu item', () => {
+  it('accepts enabledWhen on a web view tab menu item', () => {
     const combiner = new MenuDocumentCombiner(baseDocument);
     expect(() =>
       combiner.addOrUpdateContribution(
         'ext1',
         makeContributionWithWebViewSurfaceItem('tabMenu', { enabledWhen: 'ext1.flag' }),
       ),
-    ).toThrow(/'%item%' in webViewMenus\.ext1\.webView\.tabMenu uses enabledWhen/);
+    ).not.toThrow();
   });
 
   it('rejects checkedWhen on a web view context menu item', () => {
@@ -866,7 +893,7 @@ describe('when expression validation', () => {
     ).toThrow(/'%item%' in webViewMenus\.ext1\.webView\.contextMenu uses checkedWhen/);
   });
 
-  it('rejects enabledWhen on a tab menu item in the base document (validateOutput path)', () => {
+  it('accepts enabledWhen on a tab menu item in the base document (validateOutput path)', () => {
     const badBaseDocument = {
       ...baseDocument,
       defaultWebViewTabMenu: {
@@ -883,9 +910,7 @@ describe('when expression validation', () => {
         ],
       },
     };
-    expect(() => new MenuDocumentCombiner(badBaseDocument)).toThrow(
-      /'%bad%' in defaultWebViewTabMenu uses enabledWhen/,
-    );
+    expect(() => new MenuDocumentCombiner(badBaseDocument)).not.toThrow();
   });
 
   it('rejects an invalid expression in the base document (validateOutput path)', () => {
