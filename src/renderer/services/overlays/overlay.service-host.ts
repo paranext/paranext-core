@@ -576,9 +576,9 @@ async function showContextMenu(
 
   // Fetch menu contributions for this webViewType
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const webViewMenu = await menuDataService.getWebViewMenu(webViewType as ReferencedItem);
+  const { contextMenu } = await menuDataService.getWebViewMenu(webViewType as ReferencedItem);
 
-  if (!webViewMenu.contextMenu) {
+  if (!contextMenu) {
     return undefined;
   }
 
@@ -587,7 +587,7 @@ async function showContextMenu(
   // shard's import graph reaches back to this module through the frontend PAPI, which would be a
   // cycle. A failed lookup leaves the project unset, so items gated on it stay hidden.
   let projectId: string | undefined;
-  if (menuExpressionsUseTemplateVar(webViewMenu.contextMenu, 'projectId')) {
+  if (menuExpressionsUseTemplateVar(contextMenu, 'projectId')) {
     try {
       projectId = (await webViewService.getOpenWebViewDefinition(webViewId))?.projectId;
     } catch (error) {
@@ -600,18 +600,17 @@ async function showContextMenu(
   // `when` hides an item and `enabledWhen` on a command item disables it. `checkedWhen`, and
   // `enabledWhen` on a submenu, are rejected at load. While the menu is open it re-evaluates
   // whenever a context key it read changes, and closes if every item becomes hidden.
-  const contextMenu = webViewMenu.contextMenu;
   const onEvaluationError = (expression: string, error: unknown) =>
     logger.warn(
       `Error evaluating context menu when-expression '${expression}': ${getErrorMessage(error)}`,
     );
-  // eslint-disable-next-line prefer-const -- readKeys is reassigned on each re-evaluation
-  let { evaluatedMenu, readKeys } = evaluateMenuRecordingReads(
+  const initialEvaluation = evaluateMenuRecordingReads(
     contextMenu,
     templateVars,
     onEvaluationError,
   );
-  const items = convertContributionToContextMenuItems(evaluatedMenu);
+  let { readKeys } = initialEvaluation;
+  const items = convertContributionToContextMenuItems(initialEvaluation.evaluatedMenu);
 
   if (items.length === 0) {
     return undefined;

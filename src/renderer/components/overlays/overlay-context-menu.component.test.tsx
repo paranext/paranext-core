@@ -246,9 +246,13 @@ describe('OverlayContextMenuPresentational', () => {
       it('disables a submenu item in place', () => {
         const view = renderOpenSubmenu([renameSubmenu(rename)]);
 
-        rerenderWith(view, [
-          renameSubmenu({ ...rename, disabled: true } as OverlayContextMenuItem),
-        ]);
+        const disabledRename: OverlayContextMenuItem = {
+          type: 'item',
+          id: 'rename',
+          label: 'Rename',
+          disabled: true,
+        };
+        rerenderWith(view, [renameSubmenu(disabledRename)]);
 
         expect(screen.getByRole('menuitem', { name: 'Rename' })).toHaveAttribute(
           'aria-disabled',
