@@ -542,12 +542,12 @@ declare module 'platform-scripture' {
      */
     matchedUsfm: string;
     /**
-     * Every marker that lies inside this result's USFM span, in order, and would therefore be
-     * deleted by replacing it with plain text. Absent when the span contains none, which is the
-     * common case.
+     * Every marker that lies inside this result's USFM span, and would therefore be deleted by
+     * replacing it with plain text. Absent when the span contains none, which is the common case.
      *
-     * A closing marker keeps its `*` (`nd*`), and a verse or chapter marker keeps its number
-     * (`v:3`, `c:2`). A nested marker loses its `+`.
+     * Markers with a backslash are listed in order. A closing marker keeps its `*` (`nd*`), and a
+     * verse or chapter marker keeps its number (`v:3`, `c:2`). A nested marker loses its `+`. Each
+     * optional line break (`//`) is listed after all of them, wherever it falls in the span.
      *
      * Unless the replacement USFM puts the same markers back, `replace()` refuses such a result
      * with the `MARKER_DELETION_ERROR` or `ONE_ENDED_MARKER_ERROR` sentinel. Consumers should show
@@ -787,6 +787,8 @@ declare module 'platform-scripture' {
        * @throws Error if `usfmToInsert` or `expectedUsfm` array length doesn't match
        *   `rangesToReplace` length
        * @throws Error if {@link ReplaceOptions.allowMarkerDeletion} is set without `expectedUsfm`
+       * @throws Error if any range's start or end offset is negative, whether or not `expectedUsfm`
+       *   is given
        * @throws Error if any range spans multiple books
        * @throws Error if any ranges overlap
        * @throws Error whose message is the `STRUCTURE_PROTECTED_ERROR` sentinel

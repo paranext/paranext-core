@@ -181,6 +181,29 @@ describe('skipped match messages', () => {
   });
 });
 
+/** What Find's Replace asks or tells the user about the markers in a match. */
+const MARKER_PROMPT_STRING_KEYS = [
+  '%webView_find_replace_markersPrompt_confirm%',
+  '%webView_find_replace_markersPrompt_message%',
+  '%webView_find_replace_markersPrompt_title%',
+  '%webView_find_replace_skippedChapterMarker%',
+  '%webView_find_replace_skippedOneEndedMarker%',
+  '%webView_find_replace_skippedStructureProtected%',
+  '%webView_find_replace_skipped_title%',
+];
+
+describe.each(MARKER_PROMPT_STRING_KEYS)('marker prompt %s', (key) => {
+  it('has a Spanish string that differs from English', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+
+  it('keeps every placeholder in Spanish', () => {
+    const placeholders = localizedStrings.en[key].match(/\{\w+\}/g) ?? [];
+    placeholders.forEach((placeholder) => expect(localizedStrings.es[key]).toContain(placeholder));
+  });
+});
+
 describe.each(TEXT_CHANGED_TOAST_KEYS)('text-changed toast %s', (key) => {
   it('has an English string and translator notes', () => {
     expect(localizedStrings.en[key]).toBeTruthy();

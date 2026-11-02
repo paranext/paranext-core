@@ -33,13 +33,10 @@ import {
 import { buildSearchRegex, buildWordEdgeTests, CharacterCategorizer } from '../find/find.utils';
 import {
   extractGuardedMarkers,
+  getMarkerReplaceAction,
   MARKER_DELETION_ERROR,
-  markersDeleteChapter,
   ONE_ENDED_MARKER_ERROR,
   STRUCTURE_PROTECTED_ERROR,
-  usfmChangesStructure,
-  usfmDeletesMarkers,
-  usfmDeletesOneEndOfMarker,
 } from '../find/structure-protection.util';
 import { USFM_VERSE_TEXT_MARKERS_SET } from '../find/usfm-verse-text-markers';
 import { correctUsjVersion } from './scripture.util';
@@ -168,6 +165,12 @@ export class ScriptureFinderProjectDataProviderEngine
    * "GEN:1", "MAT:5").
    */
   readonly #chapterCache = new Map<string, UsjReaderWriter>();
+
+  /**
+   * The USX each cached UsjReaderWriter was built from, so `replace()` can tell whether a cached
+   * copy is still current before writing over it.
+   */
+  readonly #sourceUsx = new WeakMap<UsjReaderWriter, string>();
 
   /** Mutex map to prevent concurrent fetches of the same book/chapter data */
   readonly #readerWriterMutexMap = new MutexMap();
@@ -533,6 +536,9 @@ export class ScriptureFinderProjectDataProviderEngine
         entry.chapters.add(endInfo.chapterNum);
       });
 
+      // Copies fetched by this call rather than found in the cache, which are already current
+      const readDuringThisCall = new WeakSet<UsjReaderWriter>();
+
       // Retry Phase 1 if the cache is invalidated during computation. Similar to the retry logic
       // in #getOrCreateCachedReaderWriter, this handles race conditions where external changes
       // occur while we're computing replacements.
@@ -554,6 +560,8 @@ export class ScriptureFinderProjectDataProviderEngine
           bookId: string;
           singleChapter: number | undefined;
           modifiedUsfm: string;
+          /** The USX of the cached copy it was computed from; `undefined` if fetched by this call */
+          baseUsx: string | undefined;
         }> = [];
 
         // Shared early-exit signal: when one parallel book task errors, other tasks can
@@ -571,9 +579,11 @@ export class ScriptureFinderProjectDataProviderEngine
             const singleChapter = chapters.size === 1 ? [...chapters][0] : undefined;
 
             try {
+              const wasCached = this.#hasCachedReaderWriter(bookId, singleChapter);
               let usjReaderWriter: UsjReaderWriter;
               try {
                 usjReaderWriter = await this.#getOrCreateCachedReaderWriter(bookId, singleChapter);
+                if (!wasCached) readDuringThisCall.add(usjReaderWriter);
               } catch (e) {
                 // A chapter or book that no longer exists is a location that can no longer be
                 // found: when the caller says what each range should contain, report every range
@@ -695,28 +705,20 @@ export class ScriptureFinderProjectDataProviderEngine
                   rangeWithIndex.startIndex,
                   rangeWithIndex.endIndex,
                 );
-                if (isStructureProtected && usfmChangesStructure(removed, replacement)) {
-                  throw new Error(STRUCTURE_PROTECTED_ERROR);
-                }
-                // Deleting one end of a pair is never right, confirmed or not: what is left is a
-                // style that never ends or a note with no start.
-                if (usfmDeletesOneEndOfMarker(removed, replacement)) {
-                  throw new Error(ONE_ENDED_MARKER_ERROR);
-                }
-                // Marker deletion is guarded in every interface mode, including where structure
-                // protection is on: a match may span a block boundary, and replacing across one
-                // would drop the `\p`/`\q1`/`\tc2` or footnote that sat in the gap. It takes the
-                // caller's explicit word that the user saw and agreed to that, and no word covers
-                // merging two chapters. The guards are sequential rather than exclusive because
-                // `usfmChangesStructure` deliberately ignores notes, so it cannot see a swallowed
-                // `\f …\f*` that this one refuses.
-                const removedMarkers = extractGuardedMarkers(removed);
-                if (
-                  (!allowMarkerDeletion && usfmDeletesMarkers(removed, replacement)) ||
-                  markersDeleteChapter(removedMarkers, replacement)
-                ) {
+                // The same decision the Find web view makes before asking the user, so the two
+                // cannot disagree. Marker deletion is guarded in every interface mode: a match may
+                // span a block boundary, and replacing across one would drop the `\p`/`\q1`/`\tc2`
+                // or footnote that sat in the gap. It takes the caller's explicit word that the user
+                // saw and agreed to that, and no word covers merging two chapters.
+                const action = getMarkerReplaceAction(
+                  { matchedUsfm: removed, removedMarkers: extractGuardedMarkers(removed) },
+                  replacement,
+                  isStructureProtected,
+                );
+                if (action === 'structureProtected') throw new Error(STRUCTURE_PROTECTED_ERROR);
+                if (action === 'oneEndedMarker') throw new Error(ONE_ENDED_MARKER_ERROR);
+                if (action === 'chapterMarker' || (action === 'confirm' && !allowMarkerDeletion))
                   throw new Error(MARKER_DELETION_ERROR);
-                }
                 modifiedUsfm =
                   modifiedUsfm.substring(0, rangeWithIndex.startIndex) +
                   replacement +
@@ -725,7 +727,14 @@ export class ScriptureFinderProjectDataProviderEngine
 
               // Collect the pending write if USFM was actually changed
               if (modifiedUsfm !== originalUsfm) {
-                pendingWrites.push({ bookId, singleChapter, modifiedUsfm });
+                pendingWrites.push({
+                  bookId,
+                  singleChapter,
+                  modifiedUsfm,
+                  baseUsx: readDuringThisCall.has(usjReaderWriter)
+                    ? undefined
+                    : this.#sourceUsx.get(usjReaderWriter),
+                });
               }
             } catch (e) {
               // Signal other tasks to bail out early
@@ -741,8 +750,13 @@ export class ScriptureFinderProjectDataProviderEngine
         // Check if the cache was invalidated during Phase 1 (after computing replacements but
         // before writing). If so, the computed modifications are based on stale data and would
         // overwrite any external changes that occurred during Phase 1. Retry Phase 1 to get
-        // fresh data and re-compute the modifications.
-        if (this.#cacheVersion !== versionBeforePhase1) {
+        // fresh data and re-compute the modifications. A cached copy is also read again, because
+        // a change whose notification has not arrived yet leaves no other sign: the save the
+        // editor sends when a click on Replace takes its focus is the usual one.
+        if (
+          this.#cacheVersion !== versionBeforePhase1 ||
+          (await this.#invalidateOutdatedCopies(pendingWrites))
+        ) {
           if (attempt === MAX_CACHE_INVALIDATION_RETRIES) {
             throw new Error(
               `Cache was invalidated ${MAX_CACHE_INVALIDATION_RETRIES + 1} times during replace operation. ` +
@@ -1158,6 +1172,67 @@ export class ScriptureFinderProjectDataProviderEngine
   }
 
   /**
+   * Reads the current USX of a book, or of one chapter when `chapter` is given, bypassing the
+   * cache.
+   *
+   * @param bookId The book ID (e.g., "GEN", "MAT")
+   * @param chapter Optional chapter number. If not provided, reads the whole book.
+   * @returns The USX, or a falsy value when the provider has none
+   */
+  async #fetchUsx(bookId: string, chapter?: number): Promise<string | undefined> {
+    const verseRef: SerializedVerseRef = { book: bookId, chapterNum: chapter ?? 1, verseNum: 0 };
+    // Must ask USX PDPs for the data for now then transform to USJ ourselves instead of asking USJ
+    // PDPs for the data because of the following layering PDP wait bug. Turtles all the way down.
+    // https://paratextstudio.atlassian.net/browse/PT-3233
+    return chapter !== undefined
+      ? this.#pdps['platformScripture.USX_Chapter'].getChapterUSX(verseRef)
+      : this.#pdps['platformScripture.USX_Book'].getBookUSX(verseRef);
+  }
+
+  /**
+   * True when a cached copy of the book or chapter exists, so reading it costs no fetch.
+   *
+   * @param bookId The book ID (e.g., "GEN", "MAT")
+   * @param chapter Optional chapter number. If not provided, asks about the book-level copy.
+   */
+  #hasCachedReaderWriter(bookId: string, chapter?: number): boolean {
+    return chapter !== undefined
+      ? this.#chapterCache.has(`${bookId}:${chapter}`)
+      : this.#bookCache.has(bookId);
+  }
+
+  /**
+   * Reads again each book or chapter that `writes` were computed from a cached copy of, and
+   * invalidates every one whose USX has changed since that copy was made. A change notification can
+   * arrive after the change itself, so a cached copy can be out of date with no sign of it.
+   *
+   * @param writes The pending writes, each with the USX its cached copy was built from, or
+   *   `undefined` when that copy was fetched during this attempt and so is already current
+   * @returns `true` if any copy was out of date
+   */
+  async #invalidateOutdatedCopies(
+    writes: { bookId: string; singleChapter: number | undefined; baseUsx: string | undefined }[],
+  ): Promise<boolean> {
+    const outdated = await Promise.all(
+      writes.map(async ({ bookId, singleChapter, baseUsx }) => {
+        if (baseUsx === undefined) return false;
+        let currentUsx: string | undefined;
+        try {
+          currentUsx = await this.#fetchUsx(bookId, singleChapter);
+        } catch (e) {
+          // Phase 1 decides what a book or chapter that cannot be read means; a retry gets there.
+          logger.debug(`Scripture Finder: could not re-read ${bookId}: ${getErrorMessage(e)}`);
+        }
+        if (currentUsx === baseUsx) return false;
+        if (singleChapter !== undefined) this.#invalidateCachesForChapter(bookId, singleChapter);
+        else this.#invalidateCachesForBook(bookId);
+        return true;
+      }),
+    );
+    return outdated.includes(true);
+  }
+
+  /**
    * Gets or creates a cached UsjReaderWriter for the specified book/chapter.
    *
    * If no chapter is specified, returns the book-level reader writer. If a chapter is specified,
@@ -1179,25 +1254,13 @@ export class ScriptureFinderProjectDataProviderEngine
       const cached = cache.get(cacheKey);
       if (cached) return cached;
 
-      // Need to fetch and cache the data
-      const verseRef: SerializedVerseRef = {
-        book: bookId,
-        chapterNum: chapter ?? 1,
-        verseNum: 0,
-      };
-
       // We intentionally await inside this loop to retry fetching USX when the cache is
       // invalidated during a fetch. The loop is sequential by design.
       /* eslint-disable no-await-in-loop */
       for (let attempt = 0; attempt <= MAX_CACHE_INVALIDATION_RETRIES; attempt++) {
         const versionBeforeFetch = this.#cacheVersion;
 
-        // Must ask USX PDPs for the data for now then transform to USJ ourselves instead of
-        // asking USJ PDPs for the data because of the following layering PDP wait bug. Turtles
-        // all the way down. https://paratextstudio.atlassian.net/browse/PT-3233
-        const usx = isChapterLevel
-          ? await this.#pdps['platformScripture.USX_Chapter'].getChapterUSX(verseRef)
-          : await this.#pdps['platformScripture.USX_Book'].getBookUSX(verseRef);
+        const usx = await this.#fetchUsx(bookId, chapter);
         if (!usx) throw createScriptureNotFoundError(bookId, chapter);
 
         // If the cache was invalidated during the fetch, the data we just got may be stale.
@@ -1221,6 +1284,7 @@ export class ScriptureFinderProjectDataProviderEngine
           markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
         });
 
+        this.#sourceUsx.set(usjReaderWriter, usx);
         cache.set(cacheKey, usjReaderWriter);
         return usjReaderWriter;
       }

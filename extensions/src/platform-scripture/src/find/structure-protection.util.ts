@@ -22,7 +22,7 @@ export const STRUCTURE_PROTECTED_ERROR = 'platformScripture.replace.structurePro
  * identifier that follows them (e.g. `v:4`, `v:4-5`, `c:1`) so renumbering is detected. Table rows
  * and cells (`tr`, `tc2`, `thc3`) and sidebar boundaries (`esb`, `esbe`) are structural too, since
  * each begins its own block. Non-structural (inline/character) markers and notes are ignored — for
- * notes see {@link usfmDeletesMarkers}, which counts them.
+ * notes see {@link extractGuardedMarkers}, which counts them.
  */
 export function extractStructuralMarkers(usfm: string): string[] {
   const result: string[] = [];
@@ -72,7 +72,7 @@ export const MARKER_DELETION_ERROR = 'platformScripture.replace.markerDeletion';
 /**
  * Sentinel error message thrown by the Scripture Finder PDP's `replace()` when a replacement would
  * delete only one end of a marker pair. Unlike {@link MARKER_DELETION_ERROR} no confirmation lifts
- * this: the result is a style that never ends or a note with no start.
+ * this: see {@link getMarkerReplaceAction}.
  */
 export const ONE_ENDED_MARKER_ERROR = 'platformScripture.replace.oneEndedMarker';
 
@@ -145,19 +145,11 @@ function findLostMarkers(removedMarkers: string[], inserted: string): string[] {
  * protection. Losing a marker that was there is not policy — it is content loss the user has to
  * have agreed to.
  *
- * Split from {@link usfmDeletesMarkers} so the Find UI can extract a result's markers once, when
- * results are built, and re-test them cheaply against each replacement term the user types.
+ * Takes markers already extracted, so a result's markers, extracted once when results are built,
+ * can be tested against a replacement without reading its USFM again.
  */
 export function markersDeletedBy(removedMarkers: string[], inserted: string): boolean {
   return findLostMarkers(removedMarkers, inserted).length > 0;
-}
-
-/**
- * True when replacing `removed` with `inserted` would delete a marker that the replacement does not
- * put back. See {@link markersDeletedBy} for the rule.
- */
-export function usfmDeletesMarkers(removed: string, inserted: string): boolean {
-  return markersDeletedBy(extractGuardedMarkers(removed), inserted);
 }
 
 /**
@@ -195,16 +187,11 @@ function markersLoseOneEnd(removedMarkers: string[], inserted: string): boolean 
   return findOneEndedMarkers(findLostMarkers(removedMarkers, inserted)).length > 0;
 }
 
-/** True when replacing `removed` with `inserted` would delete only one end of a marker pair. */
-export function usfmDeletesOneEndOfMarker(removed: string, inserted: string): boolean {
-  return markersLoseOneEnd(extractGuardedMarkers(removed), inserted);
-}
-
 /**
  * True when `inserted` does not put back a chapter marker in `removedMarkers`. A confirmed Replace
  * still may not do this: it would merge two chapters.
  */
-export function markersDeleteChapter(removedMarkers: string[], inserted: string): boolean {
+function markersDeleteChapter(removedMarkers: string[], inserted: string): boolean {
   return findLostMarkers(removedMarkers, inserted).some((marker) => marker.startsWith('c:'));
 }
 
@@ -225,8 +212,8 @@ export type MarkerReplaceAction =
 
 /**
  * Decides what a single Replace of `result` with `replacement` has to do about the markers in the
- * match. Mirrors, in the same order, the guards `replace()` enforces, so that the user is asked or
- * told before the click can only fail.
+ * match. The Find web view asks it before replacing, so the user is asked or told before the click
+ * can only fail, and `replace()` enforces the same answer.
  *
  * @param result The result being replaced
  * @param replacement The USFM that will actually be written, after any preserve-case change
@@ -238,10 +225,12 @@ export function getMarkerReplaceAction(
   isStructureProtected: boolean,
 ): MarkerReplaceAction {
   const removedMarkers = result.removedMarkers ?? [];
-  // Whether this should skip or ask is still open with UX (PT-4969). To change it, this is the only
-  // line the web view depends on; `replace()` refuses a structural change either way.
+  // Skipping rather than asking here is a UX choice. To change it, this is the only line the web
+  // view depends on; `replace()` refuses a structural change either way.
   if (isStructureProtected && usfmChangesStructure(result.matchedUsfm, replacement))
     return 'structureProtected';
+  // Skipped for now, to avoid leaving broken text. Replacing one end can be intended, so Find with
+  // markers (PT-3199) may allow it behind a clearly labeled Replace button.
   if (markersLoseOneEnd(removedMarkers, replacement)) return 'oneEndedMarker';
   if (markersDeleteChapter(removedMarkers, replacement)) return 'chapterMarker';
   return markersDeletedBy(removedMarkers, replacement) ? 'confirm' : 'replace';

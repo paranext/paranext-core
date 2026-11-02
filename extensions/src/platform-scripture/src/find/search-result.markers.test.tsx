@@ -5,7 +5,14 @@ import userEvent from '@testing-library/user-event';
 import { UsjReaderWriter } from 'platform-bible-utils';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import SearchResult, { HidableFindResult } from './search-result.component';
+import { renderWithInvisibleChars } from './find.utils';
 import { PreviewOptions } from './replace-preview-types';
+
+// Spied on to see when the text between markers is rendered again.
+vi.mock('./find.utils', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./find.utils')>();
+  return { ...actual, renderWithInvisibleChars: vi.fn(actual.renderWithInvisibleChars) };
+});
 
 const VERSE_REF = { book: 'GEN', chapterNum: 1, verseNum: 1 };
 const USFM = 'of b\n\\p And the rest';
@@ -52,7 +59,14 @@ function renderCard(
   searchResult: HidableFindResult,
   overrides: Partial<Parameters<typeof SearchResult>[0]> = {},
 ) {
-  return render(
+  return render(card(searchResult, overrides));
+}
+
+function card(
+  searchResult: HidableFindResult,
+  overrides: Partial<Parameters<typeof SearchResult>[0]> = {},
+) {
+  return (
     <SearchResult
       searchResult={searchResult}
       globalResultsIndex={0}
@@ -70,7 +84,7 @@ function renderCard(
       shouldShowMarkers
       localizedStrings={{ '%webView_find_copyVerseText%': COPY_VERSE_TEXT }}
       {...overrides}
-    />,
+    />
   );
 }
 
@@ -126,6 +140,55 @@ describe('SearchResult with a match that includes markers', () => {
       expect(markerChips(withMarker).length).toBeGreaterThan(1);
     },
   );
+
+  it('renders only the start of a long match in the one-line summary, and all of it below', () => {
+    const wordCount = 600;
+    const longResult: HidableFindResult = {
+      ...RESULT_WITH_MARKER,
+      matchedUsfm: 'x \\w a\\w* '.repeat(wordCount),
+      removedMarkers: Array<string[]>(wordCount).fill(['w', 'w*']).flat(),
+    };
+    const { container } = renderCard(longResult);
+
+    const mark = container.querySelector('mark');
+    const summary = container.querySelector('[class~="tw:truncate"]');
+    if (!mark || !summary) throw new Error('Expected a highlighted match and a one-line summary');
+    expect(markerChips(mark)).toHaveLength(wordCount * 2);
+    expect(markerChips(summary).length).toBeGreaterThan(0);
+    expect(markerChips(summary).length).toBeLessThan(wordCount * 2);
+    expect(summary.textContent?.endsWith('…')).toBe(true);
+  });
+
+  it('does not render the markers again when only the replacement changes', () => {
+    const previewOptions: PreviewOptions = {
+      layout: 'arrow',
+      highlightShape: 'rounded',
+      color: 'red-green',
+      monospace: false,
+      showInvisible: true,
+    };
+    const replaceProps = { isReplaceMode: true, previewOptions };
+    const view = renderCard(RESULT_WITH_MARKER, {
+      ...replaceProps,
+      replaceConfig: { term: 'X', preserveCase: false },
+    });
+    // Only the text between markers holds "And"; the replacement is "X", then "Y".
+    const textBetweenMarkersRenders = () =>
+      vi.mocked(renderWithInvisibleChars).mock.calls.filter(([text]) => text.includes('And'))
+        .length;
+    const rendersBefore = textBetweenMarkersRenders();
+    expect(rendersBefore).toBeGreaterThan(0);
+
+    view.rerender(
+      card(RESULT_WITH_MARKER, {
+        ...replaceProps,
+        replaceConfig: { term: 'Y', preserveCase: false },
+      }),
+    );
+
+    expect(view.container).toHaveTextContent('Y');
+    expect(textBetweenMarkersRenders()).toBe(rendersBefore);
+  });
 
   it('keeps markers out of the copied verse text', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });

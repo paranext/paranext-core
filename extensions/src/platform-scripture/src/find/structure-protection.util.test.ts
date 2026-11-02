@@ -9,10 +9,12 @@ import {
   getMarkerReplaceAction,
   markersDeletedBy,
   usfmChangesStructure,
-  usfmDeletesMarkers,
-  usfmDeletesOneEndOfMarker,
   replacementContainsStructuralMarker,
 } from './structure-protection.util';
+
+/** True when replacing the span `removed` with `inserted` deletes a marker. */
+const deletesMarkers = (removed: string, inserted: string) =>
+  markersDeletedBy(extractGuardedMarkers(removed), inserted);
 
 describe('structure-protection.util', () => {
   describe('STRUCTURE_PROTECTED_ERROR', () => {
@@ -126,56 +128,56 @@ describe('structure-protection.util', () => {
         'tcr1',
       ]);
       expect(extractStructuralMarkers('\\thc3-4 spans two columns')).toEqual(['thc3-4']);
-      expect(usfmDeletesMarkers('Header\\thc3 centred', 'Header centred')).toBe(true);
+      expect(deletesMarkers('Header\\thc3 centred', 'Header centred')).toBe(true);
     });
 
     it('recognizes sidebar boundaries', () => {
       // `esb`/`esbe` open and close a block; swallowing one half orphans the other.
       expect(extractStructuralMarkers('\\esb side matter \\esbe')).toEqual(['esb', 'esbe']);
-      expect(usfmDeletesMarkers('text\\esbe after', 'text after')).toBe(true);
+      expect(deletesMarkers('text\\esbe after', 'text after')).toBe(true);
     });
   });
 
-  describe('usfmDeletesMarkers', () => {
+  describe('markersDeletedBy, from a span', () => {
     it('is false when nothing structural is removed', () => {
-      expect(usfmDeletesMarkers('just words', 'other words')).toBe(false);
+      expect(deletesMarkers('just words', 'other words')).toBe(false);
     });
 
     it('is false when the replacement puts the marker back', () => {
-      expect(usfmDeletesMarkers('\\p one', '\\p two')).toBe(false);
+      expect(deletesMarkers('\\p one', '\\p two')).toBe(false);
     });
 
     it('is true when a paragraph marker is dropped', () => {
-      expect(
-        usfmDeletesMarkers('of Abraham.\\p Abraham became', 'of Abraham. Abraham became'),
-      ).toBe(true);
+      expect(deletesMarkers('of Abraham.\\p Abraham became', 'of Abraham. Abraham became')).toBe(
+        true,
+      );
     });
 
     it('is true when a table cell marker is dropped', () => {
-      expect(usfmDeletesMarkers('Abraham\\tc2 became', 'Abraham became')).toBe(true);
+      expect(deletesMarkers('Abraham\\tc2 became', 'Abraham became')).toBe(true);
     });
 
     it('is true when a footnote is dropped, though a footnote is not structural', () => {
       // A note does not begin a block, so extractStructuralMarkers ignores it — but a replacement
       // that swallows one destroys authored text with nothing on screen to show for it.
       expect(extractStructuralMarkers('\\f + \\ft note\\f*')).toEqual([]);
-      expect(usfmDeletesMarkers('earth.\\f + \\ft note\\f* Blessed', 'earth. Blessed')).toBe(true);
+      expect(deletesMarkers('earth.\\f + \\ft note\\f* Blessed', 'earth. Blessed')).toBe(true);
     });
 
     it('counts the extended study-Bible note markers, which the shared map omits', () => {
-      expect(usfmDeletesMarkers('text\\ef + \\ft note\\ef* after', 'text after')).toBe(true);
-      expect(usfmDeletesMarkers('text\\ex + \\xt ref\\ex* after', 'text after')).toBe(true);
+      expect(deletesMarkers('text\\ef + \\ft note\\ef* after', 'text after')).toBe(true);
+      expect(deletesMarkers('text\\ex + \\xt ref\\ex* after', 'text after')).toBe(true);
     });
 
     it('is false when a marker is added rather than removed', () => {
       // Narrower than usfmChangesStructure on purpose: additions stay a matter of editorial policy
       // and are only refused by the opt-in Simple-mode protection.
-      expect(usfmDeletesMarkers('one', '\\p one')).toBe(false);
+      expect(deletesMarkers('one', '\\p one')).toBe(false);
       expect(usfmChangesStructure('one', '\\p one')).toBe(true);
     });
 
     it('counts duplicates, so dropping one of two identical markers is caught', () => {
-      expect(usfmDeletesMarkers('\\p a\\p b', '\\p ab')).toBe(true);
+      expect(deletesMarkers('\\p a\\p b', '\\p ab')).toBe(true);
     });
   });
 
@@ -267,22 +269,6 @@ describe('structure-protection.util', () => {
     });
   });
 
-  describe('usfmDeletesOneEndOfMarker', () => {
-    it('asks about the markers lost, not the markers in the span', () => {
-      // The span holds a balanced pair, but this replacement keeps only one end of it.
-      expect(usfmDeletesOneEndOfMarker('\\nd Lord\\nd* God', 'X\\nd*')).toBe(true);
-      expect(usfmDeletesOneEndOfMarker('\\nd Lord\\nd* God', '\\nd X')).toBe(true);
-    });
-
-    it('is satisfied when the replacement puts the missing end back', () => {
-      expect(usfmDeletesOneEndOfMarker('Lord\\nd* God', 'X\\nd* Y')).toBe(false);
-    });
-
-    it('is satisfied when a whole pair goes', () => {
-      expect(usfmDeletesOneEndOfMarker('\\nd Lord\\nd* God', 'X')).toBe(false);
-    });
-  });
-
   describe('getMarkerReplaceAction', () => {
     const classify = (matchedUsfm: string, replacement: string, isStructureProtected = false) =>
       getMarkerReplaceAction(
@@ -305,7 +291,8 @@ describe('structure-protection.util', () => {
       ['the start of a custom span', 'before \\zx word', 'X', 'oneEndedMarker'],
       ['the start of a cross reference target', '1:1 \\xt Gen', 'X', 'oneEndedMarker'],
       ['an optional line break', 'Lord //said', 'X', 'confirm'],
-      ['one end kept of a whole pair', '\\nd Lord\\nd* God', 'X\\nd*', 'oneEndedMarker'],
+      ['the end kept of a whole pair', '\\nd Lord\\nd* God', 'X\\nd*', 'oneEndedMarker'],
+      ['the start kept of a whole pair', '\\nd Lord\\nd* God', '\\nd X', 'oneEndedMarker'],
       ['a chapter', 'first\n\\c 2\n\\p\n\\v 1 Next', 'X', 'chapterMarker'],
       ['every marker put back', 'b\n\\p And', 'X\n\\p Y', 'replace'],
       ['the missing end put back', 'Lord\\nd* God', 'X\\nd* Y', 'replace'],

@@ -8,7 +8,7 @@ import {
 } from 'platform-bible-react';
 import { LocalizedStringValue, LocalizeKey, UsjReaderWriter } from 'platform-bible-utils';
 import { FindResult } from 'platform-scripture';
-import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LocalizedBookData } from './find-types';
 import {
   applyPreserveCase,
@@ -30,6 +30,12 @@ export type HidableFindResult = FindResult & { isHidden?: boolean; isReplaced?: 
 
 /** How many words to show around the search result */
 const WORDS_AROUND_SEARCH_RESULT = 15;
+
+/**
+ * How much of a match with markers the one-line card header renders. Far more than the widest line
+ * can show, so cutting there changes nothing on screen.
+ */
+const HEADER_MAX_CHARACTERS = 1000;
 
 export const SEARCH_RESULT_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%general_cancel%',
@@ -268,16 +274,21 @@ export default function SearchResult({
   }, [usjReaderWriter, cachedUsfm, searchResult, isVisible, logger]);
 
   /** Applies the showInvisible option to a string. */
-  const displayText = (text: string) =>
-    previewOptions.showInvisible ? renderWithInvisibleChars(text, allowInvisibleCharacters) : text;
+  const displayText = useCallback(
+    (text: string) =>
+      previewOptions.showInvisible
+        ? renderWithInvisibleChars(text, allowInvisibleCharacters)
+        : text,
+    [previewOptions.showInvisible, allowInvisibleCharacters],
+  );
 
   // The match with its markers showing, when it includes any, so the user can see what Replace
   // would delete. Stands in only where the match is displayed: `textParts` stays marker-free, since
   // the clipboard copies are built from it.
-  const matchWithMarkers =
-    shouldShowMarkers && searchResult.removedMarkers?.length ? (
-      <MatchedUsfmText matchedUsfm={searchResult.matchedUsfm} renderText={displayText} />
-    ) : undefined;
+  const hasMarkersToShow = shouldShowMarkers && !!searchResult.removedMarkers?.length;
+  const matchWithMarkers = hasMarkersToShow ? (
+    <MatchedUsfmText matchedUsfm={searchResult.matchedUsfm} renderText={displayText} />
+  ) : undefined;
 
   const fontClass = previewOptions.monospace ? 'tw:font-mono' : 'scripture-font';
 
@@ -530,7 +541,15 @@ export default function SearchResult({
           as="span"
           className="scripture-font tw:min-w-0 tw:truncate tw:font-normal tw:text-muted-foreground"
         >
-          {matchWithMarkers ?? searchResult.text ?? ''}
+          {hasMarkersToShow ? (
+            <MatchedUsfmText
+              matchedUsfm={searchResult.matchedUsfm}
+              renderText={displayText}
+              maxCharacters={HEADER_MAX_CHARACTERS}
+            />
+          ) : (
+            (searchResult.text ?? '')
+          )}
         </ContentZoomRoot>
       )}
       {searchResult.isReplaced && (

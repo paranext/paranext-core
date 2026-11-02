@@ -3315,7 +3315,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
 - **Date:** 2026-09-09
 - **Status:** Accepted
-- **Amended by:** [adr-find-replace-confirms-marker-deletion](#adr-find-replace-confirms-marker-deletion-a-confirmed-replace-may-delete-markers-but-never-one-end-of-a-pair-or-a-chapter) (2026-10-30). The marker-deletion guard below is no longer unconditional: Replace asks instead of being disabled, and a confirmed Replace may delete whole markers. `isNoteMarker` is gone, because every marker now counts. Whole-word Find at a block boundary, left out of scope below, is fixed there too.
+- **Amended by:** [adr-find-replace-confirms-marker-deletion](#adr-find-replace-confirms-marker-deletion-a-confirmed-replace-may-delete-markers-but-never-one-end-of-a-pair-or-a-chapter) (2026-10-30). The marker-deletion guard below is no longer unconditional: Replace asks instead of being disabled, and a confirmed Replace may delete whole markers. `isNoteMarker` is gone, because every marker now counts, and `usfmDeletesMarkers` is gone, because `replace()` decides with `getMarkerReplaceAction`. Whole-word Find at a block boundary, left out of scope below, is fixed there too.
 - **Context:** `UsjReaderWriter.search` builds the text it searches by concatenating every USJ text
   node with no separator, and paragraph-final whitespace is stripped during the USFM→USX conversion,
   so a phrase copied out of the editor across a paragraph, table, or sidebar break (e.g. `of Abraham.
@@ -3656,11 +3656,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     style that never ends or a note with no start; **a chapter marker**, which merges two chapters;
     and structure protection. These are decided on the markers the replacement loses, not the markers
     in the span, because a span can hold a balanced pair and a replacement can keep one end of it.
-  - The Find web view classifies a Replace with `getMarkerReplaceAction`, in the same order
-    `replace()` applies its guards, before the pre-replace version-history commit, so backing out
-    leaves nothing behind. A refused match is skipped: one `ReplaceMarkersPrompt` either asks or says
-    so with only OK, and the selection stays on the result. A replacement that puts every marker
-    back deletes nothing and asks nothing.
+  - Refusing one end of a pair is a temporary safeguard against broken text, not the final design.
+    Replacing one end can be intended, such as replacing every start marker matching one thing and
+    then every end marker matching another, so Find with markers (PT-3199) may allow it behind a
+    clearly labeled Replace button.
+  - `getMarkerReplaceAction` is the one place that makes these decisions. The Find web view asks it
+    before the pre-replace version-history commit, so backing out leaves nothing behind, and
+    `replace()` enforces its answer. A refused match is skipped: one `ReplaceMarkersPrompt` either
+    asks or says so with only OK, and the selection stays on the result. A replacement that puts
+    every marker back deletes nothing and asks nothing.
   - Results show the markers only where Replace exists. Simple mode has no Replace, and nothing else
     there exposes USFM markers.
   - Which markers pair comes from the markers map (`isCloseable`, `independentClosingMarkers`),
@@ -3687,7 +3691,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     relies on the engine backtracking to satisfy the lookaround, so regex mode keeps its lookarounds.
 - **Consequences:** `the Lord` over `\nd Lord\nd*` holds only the opening marker, so it can be found
   but not replaced; a user searches `Lord` or `the Lord said` instead. Extending a match to take in
-  the start marker just before it would ease that, and is possible later work. A structure marker
+  the start marker just before it (PT-4979) is on hold until PT-3199 is designed. A structure marker
   under structure protection is skipped the same way, but that answer is still open with UX; it is
   one line in `getMarkerReplaceAction`, and is unreachable from the UI today because Replace is
   Power-only and protection is Simple-only. Skipping chapter markers is stricter than the ticket
@@ -3695,7 +3699,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   chapters does to their notes and references.
 
   Replace All is unchanged: it stays disabled, never passes `allowMarkerDeletion`, and skips every
-  result that would delete a marker, which now includes character markers. Its messages still list
+  result whose term, as typed, would delete a marker, which now includes character markers. It
+  judges the term before Preserve case changes it, so an all-caps match can still reach a refusal
+  from `replace()`, which fails the whole run. Its messages still list
   only the structural and note markers. Regex-mode whole-word search keeps the block-edge gap, and a
   note boundary is still not a word boundary: `Isaac\f + \ft And\f*` reads `IsaacAnd`, because a note
   is not a block. Revisit all of this when Find can search for markers (PT-3199); an option to match
@@ -8806,7 +8812,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 ## adr-replace-verifies-expected-usfm: Replace writes only text that is unchanged since the search
 
 - **Date:** 2026-10-29
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-11-02 — `replace()` reads a cached chapter again before
+  writing over it
 - **Context:** Find & Replace wrote at the offsets Find reported, so text that changed after the
   search could be overwritten.
 - **Decision:** `replace(ranges, usfm, expectedUsfm?)` on the Scripture Finder data provider
@@ -8819,8 +8826,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   see.
 - **Consequences:**
   - The check reads the finder's cached chapter, which a change notification invalidates, and the
-    write replaces the whole chapter. An edit whose notification has not arrived yet can still be
-    overwritten: there is no compare-and-swap.
+    write replaces the whole chapter. A notification can arrive after its change, such as the save
+    the editor sends when a click on Replace takes its focus, so `replace()` reads a cached chapter
+    again just before writing and starts over if it changed. A chapter it fetched itself during the
+    call is not read twice. *(Amended 2026-11-02; before, such an edit was overwritten.)*
+  - There is still no compare-and-swap: a save the data provider has not finished by that second
+    read can still be overwritten. Closing that needs `SetChapterUsfm` to compare the stored text
+    with what the change was based on, inside its write lock.
   - An identical token shifted onto the old offsets passes the check (deleting the first `a ` of
     `a a a`).
   - If PR #2922 lands (open as of 2026-10-29), toggling `allowInvisibleCharacters` between Find and

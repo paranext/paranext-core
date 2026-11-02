@@ -1353,7 +1353,18 @@ describe('Find USJ details for text searches', () => {
     });
 
     test('is not confused by an NFD search, whose offsets differ from the original', () => {
-      const usjDoc = new UsjReaderWriter(matthew1And2Usj);
+      // Each precomposed letter before the match decomposes into two, so the NFD offset of the
+      // block change is past the original one. A letter follows it, so only the block change passes.
+      const usjDoc = new UsjReaderWriter({
+        type: 'USJ',
+        // testing 3.0. Usj can be any version, but the `Usj` type says only 3.1
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        version: '3.0' as typeof USJ_VERSION,
+        content: [
+          { type: 'para', marker: 'p', content: ['Café crème brûlée of Abraham.'] },
+          { type: 'para', marker: 'p', content: ['Abraham became'] },
+        ],
+      });
 
       const results = usjDoc.search(/of Abraham\./g, {
         normalizationForm: 'NFD',

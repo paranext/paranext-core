@@ -1457,6 +1457,27 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       expect(writtenUsfm).toContain(String.raw`\v 1 XXX REPLACED`);
     });
 
+    it('keeps a change whose notification has not arrived when the chapter was cached', async () => {
+      const verse1Range = (startOffset: number, endOffset: number) => ({
+        start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: startOffset },
+        end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: endOffset },
+      });
+      // An empty range with an empty replacement writes nothing, but reads chapter 1 into the cache
+      await engine.replace([verse1Range(5, 5)], '');
+      // Another writer, such as the editor saving, changes verse 2; its notification never comes
+      const setChapterUsfm = vi.mocked(mockPdps['platformScripture.USFM_Chapter'].setChapterUSFM);
+      await setChapterUsfm(
+        { book: 'MAT', chapterNum: 1, verseNum: 0 },
+        TEST_CHAPTER_1_USFM.replace('Abraham was', 'Abram was'),
+      );
+      setChapterUsfm.mockClear();
+
+      await engine.replace([verse1Range(5, 8)], 'FIRST');
+
+      expect(getWrittenUsfm()).toContain(String.raw`\v 1 FIRST book`);
+      expect(getWrittenUsfm()).toContain(String.raw`\v 2 Abram was`);
+    });
+
     it('should throw if disposed before writing (Phase 2)', async () => {
       // This test verifies that replace operations fail gracefully if the PDPE is disposed
       // after Phase 1 (computation) but before Phase 2 (writing)
@@ -3085,7 +3106,7 @@ describe('ScriptureFinderProjectDataProviderEngine word restriction at a block e
     expect(results.map((result) => result.start.verseRef.chapterNum)).toEqual([1, 1, 2]);
   });
 
-  it('leaves a search with no word restriction as it was', async () => {
+  it('matches inside a word when there is no word restriction', async () => {
     expect(await find('saac', { wordRestriction: 'none' })).toEqual(['saac']);
   });
 
