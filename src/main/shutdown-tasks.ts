@@ -41,10 +41,11 @@ import { AsyncVariable, getErrorMessage } from 'platform-bible-utils';
  *   was caught. Warned.
  * - `skipped`: nothing ran — nothing scheduled, not due, or already syncing (Power: `'skipped'`), or
  *   every window answered and nothing writable was open anywhere (Simple).
- * - `skipped-consent-unconfirmed` / `skipped-consent-unreadable` / `skipped-consent-deferred`: the
- *   Simple-mode consent gate withheld the sync (see {@link getAutomaticSyncConsent}) — the wizard is
- *   unanswered, its flag could not be read, or the user chose "Don't sync yet" this session.
- *   Separate from `skipped` so the log never reads a withheld sync as "nothing was open".
+ * - `skipped-consent-unconfirmed` / `skipped-consent-unreadable` / `skipped-consent-deferred` /
+ *   `skipped-consent-notYetSynced`: the Simple-mode consent gate withheld the sync (see
+ *   {@link getAutomaticSyncConsent}) — the wizard is unanswered, its flag could not be read, the
+ *   user chose "Don't sync yet" this session, or no sync has succeeded yet. Separate from `skipped`
+ *   so the log never reads a withheld sync as "nothing was open".
  * - `unreachable`: the S/R call rejected before the timeout (e.g. the command isn't registered). The
  *   failure detail was already warned inside {@link runBoundedShutdownSync}.
  * - `timed-out`: neither settled within {@link AUTO_SYNC_MAX_DURATION_MS} (also already warned there).
@@ -58,6 +59,7 @@ type ShutdownSyncOutcome =
   | 'skipped-consent-unconfirmed'
   | 'skipped-consent-unreadable'
   | 'skipped-consent-deferred'
+  | 'skipped-consent-notYetSynced'
   | 'unreachable'
   | 'timed-out';
 
@@ -570,6 +572,9 @@ function logShutdownSyncOutcome(outcome: ShutdownSyncOutcome): void {
       break;
     case 'skipped-consent-deferred':
       logger.info(`Sync on shutdown skipped: ${WITHHELD_SYNC_CONSENT_REASONS.deferred}`);
+      break;
+    case 'skipped-consent-notYetSynced':
+      logger.info(`Sync on shutdown skipped: ${WITHHELD_SYNC_CONSENT_REASONS.notYetSynced}`);
       break;
     case 'unreachable':
     case 'timed-out':
