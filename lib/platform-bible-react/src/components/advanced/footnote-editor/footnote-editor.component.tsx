@@ -1138,17 +1138,23 @@ export default function FootnoteEditor({
     const { activeElement: focusedBefore } = ownerDocument;
     const selectionBefore = editor.getSelection() ?? lastFocusOutSelectionRef.current;
     editor.setSelection(wholeNote);
-    editor.copy();
-    if (selectionBefore) editor.setSelection(selectionBefore);
-    else editor.selectNote(0);
-    // Reading the selection back commits the queued selection update now (it answers against the
-    // document `getUsj` would return), and that commit is what moves DOM focus into the editor, so
-    // focus can only be handed back after it.
-    editor.getSelection();
-    if (ownerDocument.activeElement === focusedBefore) return;
-    if (focusedBefore instanceof HTMLElement && focusedBefore !== ownerDocument.body)
-      focusedBefore.focus({ preventScroll: true });
-    else if (ownerDocument.activeElement instanceof HTMLElement) ownerDocument.activeElement.blur();
+    try {
+      editor.copy();
+    } finally {
+      // A copy that throws still leaves the user's selection and focus where they were.
+      if (selectionBefore) editor.setSelection(selectionBefore);
+      else editor.selectNote(0);
+      // Reading the selection back commits the queued selection update now (it answers against the
+      // document `getUsj` would return), and that commit is what moves DOM focus into the editor, so
+      // focus can only be handed back after it.
+      editor.getSelection();
+      if (ownerDocument.activeElement !== focusedBefore) {
+        if (focusedBefore instanceof HTMLElement && focusedBefore !== ownerDocument.body)
+          focusedBefore.focus({ preventScroll: true });
+        else if (ownerDocument.activeElement instanceof HTMLElement)
+          ownerDocument.activeElement.blur();
+      }
+    }
   };
 
   const handleCallerChange = useCallback(

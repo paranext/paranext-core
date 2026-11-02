@@ -436,6 +436,37 @@ describe('FootnoteEditor Copy button', () => {
     expect(button).toHaveFocus();
   });
 
+  it('puts the selection and focus back when the editor copy throws', () => {
+    // React reports an error thrown in an event handler to the window rather than to the caller.
+    const reported: unknown[] = [];
+    const onWindowError = (event: ErrorEvent) => {
+      reported.push(event.error);
+      event.preventDefault();
+    };
+    window.addEventListener('error', onWindowError);
+    let rendered: ReturnType<typeof renderAndClickCopy>;
+    try {
+      rendered = renderAndClickCopy({
+        copy: () => {
+          document.querySelector<HTMLElement>('[data-testid="popover-editor-input"]')?.focus();
+          throw new Error('copy failed');
+        },
+      });
+    } finally {
+      window.removeEventListener('error', onWindowError);
+    }
+    const { button, editorRef } = rendered;
+
+    // The failure is not swallowed.
+    expect(reported).toEqual([expect.objectContaining({ message: 'copy failed' })]);
+    expect(selectionAndCopyCalls(editorRef)).toEqual([
+      ['setSelection', expect.anything()],
+      ['copy'],
+      ['setSelection', USER_SELECTION],
+    ]);
+    expect(button).toHaveFocus();
+  });
+
   it('leaves focus where it is when the copy does not move it', () => {
     const { editorInput, editorRef } = renderFootnoteEditor({ view: editableView });
     vi.mocked(editorRef.getUsj).mockReturnValue(
