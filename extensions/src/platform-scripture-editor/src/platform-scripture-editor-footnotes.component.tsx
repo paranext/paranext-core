@@ -177,10 +177,13 @@ export type FootnotesLayoutProps = PropsWithChildren<{
   copyLimit: number | undefined;
   /**
    * The view options the pane's row editor renders with, or `undefined` when the pane has no row
-   * editor. A copy from the pane that reaches into the row editor carries the editor's display, so
-   * the pane writes that part the way the editor's own copy would: its display spacing as spaces,
-   * and each no-break space the editor holds as its internal stand-in the way the project spells it
-   * (see `getFootnotesPaneCopyText`). Required so a caller states it.
+   * editor. Even without a row editor, carry the project's `allowInvisibleCharacters` in these
+   * options: a copy spells the stored no-break spaces of read-only rows from it, and with
+   * `undefined` it falls back to the `~` spelling. A copy from the pane that reaches into the row
+   * editor carries the editor's display, so the pane writes that part the way the editor's own copy
+   * would: its display spacing as spaces, and each no-break space the editor holds as its internal
+   * stand-in the way the project spells it (see `getFootnotesPaneCopyText`). Required so a caller
+   * states it.
    */
   rowEditorViewOptions: ViewOptions | undefined;
 }>;
