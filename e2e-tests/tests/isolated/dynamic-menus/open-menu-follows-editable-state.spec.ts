@@ -56,6 +56,8 @@ test.describe('Dynamic menu items', () => {
     // The menu stays open across the change.
     await makeSampleProjectEditable();
 
+    await expect(insertItem('Insert footnote')).toBeVisible();
+
     await expect(insertItem('Insert footnote')).not.toHaveAttribute('aria-disabled', 'true', {
       timeout: 30_000,
     });
