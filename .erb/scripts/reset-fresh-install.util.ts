@@ -43,25 +43,28 @@ const PRODUCT_NAMES: Record<FreshInstallTarget, { appName: string; homeFolder: s
 /** Keep in sync with `APP_DATA_FOLDER_NAME` in `c-sharp/ParatextUtils/PlatformParatextInfo.cs`. */
 const PARATEXT_DATA_FOLDER_NAME = 'Paratext100';
 
+// These use `||`, not `??`: an empty variable means unset (as the XDG spec says), and keeping it
+// would make every path relative to wherever the script runs.
+
 /** Electron's `appData` folder, which holds each app's `userData` folder. */
 function getElectronAppDataDir({ platform, homeDir, env }: FreshInstallEnvironment): string {
-  if (platform === 'win32') return env.APPDATA ?? path.join(homeDir, 'AppData', 'Roaming');
+  if (platform === 'win32') return env.APPDATA || path.join(homeDir, 'AppData', 'Roaming');
   if (platform === 'darwin') return path.join(homeDir, 'Library', 'Application Support');
-  return env.XDG_CONFIG_HOME ?? path.join(homeDir, '.config');
+  return env.XDG_CONFIG_HOME || path.join(homeDir, '.config');
 }
 
 /** .NET's `Environment.SpecialFolder.LocalApplicationData`, where ParatextData keeps its folder. */
 function getDotNetLocalAppDataDir({ platform, homeDir, env }: FreshInstallEnvironment): string {
-  if (platform === 'win32') return env.LOCALAPPDATA ?? path.join(homeDir, 'AppData', 'Local');
+  if (platform === 'win32') return env.LOCALAPPDATA || path.join(homeDir, 'AppData', 'Local');
   if (platform === 'darwin') return path.join(homeDir, 'Library', 'Application Support');
-  return env.XDG_DATA_HOME ?? path.join(homeDir, '.local', 'share');
+  return env.XDG_DATA_HOME || path.join(homeDir, '.local', 'share');
 }
 
 /** Where `electron-updater` keeps its `<app name>-updater` download cache. */
 function getUpdaterCacheDir({ platform, homeDir, env }: FreshInstallEnvironment): string {
-  if (platform === 'win32') return env.LOCALAPPDATA ?? path.join(homeDir, 'AppData', 'Local');
+  if (platform === 'win32') return env.LOCALAPPDATA || path.join(homeDir, 'AppData', 'Local');
   if (platform === 'darwin') return path.join(homeDir, 'Library', 'Caches');
-  return env.XDG_CACHE_HOME ?? path.join(homeDir, '.cache');
+  return env.XDG_CACHE_HOME || path.join(homeDir, '.cache');
 }
 
 /**
@@ -126,11 +129,19 @@ export function parseTarget(argv: string[]): { target: FreshInstallTarget } | { 
 }
 
 /**
+ * The data provider's executable as a whole path segment: the packaged executable, the apphost a
+ * dev build's `dotnet run`/`dotnet watch` starts, or its `.dll`. Not a command line that merely
+ * names `ParanextDataProvider.csproj` or `.sln`, such as a build or an editor. Not split on
+ * whitespace, because installed macOS paths contain spaces.
+ */
+const DATA_PROVIDER_PROCESS_PATTERN = /(^|[/\\"\s])ParanextDataProvider(\.exe|\.dll)?($|[\s",])/m;
+
+/**
  * Whether the data provider appears in a process listing (`tasklist` on Windows, `ps` elsewhere).
  * Every build runs it, so it is running whenever any Platform.Bible or Paratext 10 build is.
  */
 export function isDataProviderRunning(processListOutput: string): boolean {
-  return processListOutput.includes('ParanextDataProvider');
+  return DATA_PROVIDER_PROCESS_PATTERN.test(processListOutput);
 }
 
 export function isConfirmation(answer: string): boolean {

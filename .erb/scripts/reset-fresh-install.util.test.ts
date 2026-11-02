@@ -104,6 +104,18 @@ describe('getFreshInstallFolders', () => {
     expect(paths).toContain(path.join('/xdg/cache', 'platform-bible-updater'));
   });
 
+  it('treats empty app data and XDG variables as unset', () => {
+    expect(pathsOf('p10', { ...WINDOWS, env: { APPDATA: '', LOCALAPPDATA: '' } })).toEqual(
+      pathsOf('p10', { ...WINDOWS, env: {} }),
+    );
+    expect(
+      pathsOf('core', {
+        ...LINUX,
+        env: { XDG_CONFIG_HOME: '', XDG_DATA_HOME: '', XDG_CACHE_HOME: '' },
+      }),
+    ).toEqual(pathsOf('core', LINUX));
+  });
+
   it('marks only the Linux snap folder as needing its snap removed first', () => {
     const snapFolders = getFreshInstallFolders('core', LINUX).filter((folder) => folder.snapName);
     expect(snapFolders).toEqual([
@@ -148,6 +160,23 @@ describe('isDataProviderRunning', () => {
         '/sbin/launchd\n/Applications/Paratext 10.app/Contents/Resources/c-sharp/ParanextDataProvider\n',
       ),
     ).toBe(true);
+  });
+
+  it('finds the data provider a dev build starts through dotnet', () => {
+    expect(
+      isDataProviderRunning(
+        'dotnet exec /home/tester/paranext-core/c-sharp/bin/Debug/net8.0/ParanextDataProvider.dll\n',
+      ),
+    ).toBe(true);
+  });
+
+  it('ignores processes that only name the data provider project or solution', () => {
+    expect(isDataProviderRunning('dotnet build c-sharp/ParanextDataProvider.sln\n')).toBe(false);
+    expect(
+      isDataProviderRunning(
+        '/usr/bin/code /home/tester/paranext-core/c-sharp/ParanextDataProvider.csproj\n',
+      ),
+    ).toBe(false);
   });
 
   it('reports nothing running when the data provider is absent', () => {
