@@ -546,6 +546,55 @@ describe('sharedStoreService', () => {
       expect(updatedValue).toEqual(newValue);
     });
 
+    it('does not emit an equal remote value but keeps its newer clock', () => {
+      const changeEventHandler = vi.mocked(mockEmitter.event).mock.calls[0][0];
+      changeEventHandler({
+        key: testKey,
+        value: 5,
+        clock: { counter: 10, processId: 'other-process' },
+      });
+      const handler = vi.fn();
+      const unsubscribe = onDidChangeSharedStore(handler);
+      changeEventHandler({
+        key: testKey,
+        value: 5,
+        clock: { counter: 11, processId: 'other-process' },
+      });
+      expect(handler).not.toHaveBeenCalled();
+      // Loses the tie at counter 11 only if counter 11 was stored
+      changeEventHandler({
+        key: testKey,
+        value: 7,
+        clock: { counter: 11, processId: 'aaa-process' },
+      });
+      expect(sharedStoreService.get(testKey)).toBe(5);
+      unsubscribe();
+    });
+
+    it('emits a re-set after a remote removal', () => {
+      const changeEventHandler = vi.mocked(mockEmitter.event).mock.calls[0][0];
+      changeEventHandler({
+        key: testKey,
+        value: 5,
+        clock: { counter: 10, processId: 'other-process' },
+      });
+      changeEventHandler({
+        key: testKey,
+        value: undefined,
+        deleted: true,
+        clock: { counter: 11, processId: 'other-process' },
+      });
+      const handler = vi.fn();
+      const unsubscribe = onDidChangeSharedStore(handler);
+      changeEventHandler({
+        key: testKey,
+        value: 5,
+        clock: { counter: 12, processId: 'other-process' },
+      });
+      expect(handler).toHaveBeenLastCalledWith({ key: testKey, value: 5 });
+      unsubscribe();
+    });
+
     it('should ignore remote changes with lower counter values', () => {
       const initialValue = 5000;
       const newValue = 6000;

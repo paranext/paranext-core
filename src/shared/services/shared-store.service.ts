@@ -511,9 +511,13 @@ function emitStoreChange(key: string, value: unknown): void {
 /** Update the local store based on an update from another process */
 function setFromRemote(key: string, entry: StoreEntry): void {
   localCounter = Math.max(localCounter, entry.clock.counter);
-  if (!localStore[key] || compareClocks(entry.clock, localStore[key].clock) > 0) {
+  const previous = localStore[key];
+  if (!previous || compareClocks(entry.clock, previous.clock) > 0) {
     localStore[key] = entry;
-    emitStoreChange(key, entry.value);
+    // The newer clock is stored either way; subscribers only hear about an actual change
+    const unchanged =
+      previous && !previous.deleted && !entry.deleted && deepEqual(previous.value, entry.value);
+    if (!unchanged) emitStoreChange(key, entry.value);
   }
 }
 
