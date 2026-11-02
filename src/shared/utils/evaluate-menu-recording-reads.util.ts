@@ -7,12 +7,18 @@ import { contextKeysService } from '@shared/services/context-keys.service';
  * @experimental This type is unstable and may change or disappear without notice
  */
 export type MenuEvaluationWithReads<T extends EvaluatableMenu> = {
-  /** The evaluated menu, as {@link evaluateMenu} returns it */
+  /**
+   * The evaluated menu, as {@link evaluateMenu} returns it
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
   evaluatedMenu: T;
   /**
    * Every context key the evaluation looked up. A key outside this set cannot change the result
    * until a key inside it changes: unresolved template variables return before any lookup, and
    * `&&`/`||` short-circuit.
+   *
+   * @experimental This field is unstable and may change or disappear without notice
    */
   readKeys: ReadonlySet<string>;
 };

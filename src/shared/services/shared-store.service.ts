@@ -502,7 +502,10 @@ function set<K extends SharedStoreKeys>(key: K, value?: SharedStoreValues[K]): v
     if (currentEntry && !currentEntry.released && currentEntry.clock.processId !== processId) {
       const claimedValue: SharedStoreValues[K] | undefined = deserialize(serialize(value));
       pendingClaims.set(key, () => set(key, claimedValue));
-      throw new Error('Cannot set value from a different process than the one that created it');
+      logger.info(
+        `Holding set of ${key} until ${currentEntry.clock.processId} releases it (the key is owned by another process)`,
+      );
+      return;
     }
     pendingClaims.delete(key);
     // Skip a redundant set only when there is already a live (non-removed) value equal to the new
@@ -582,8 +585,13 @@ function remove<K extends SharedStoreKeys>(key: K): void {
   pendingClaims.delete(key);
   try {
     const currentEntry = localStore[key];
-    if (currentEntry && !currentEntry.released && currentEntry.clock.processId !== processId)
-      throw new Error('Cannot remove value from a different process than the one that created it');
+    if (currentEntry && !currentEntry.released && currentEntry.clock.processId !== processId) {
+      // Normal during a handover: the old owner's cleanup can run after another process claimed the key
+      logger.info(
+        `Ignoring remove of ${key}: it is owned by process ${currentEntry.clock.processId}`,
+      );
+      return;
+    }
     // Nothing to remove if the key is already absent or already removed.
     if (!currentEntry || currentEntry.deleted) return;
     const clock = getNextClock();

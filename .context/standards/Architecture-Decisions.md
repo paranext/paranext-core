@@ -6001,7 +6001,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 ## adr-menus-gate-declaratively-with-context-keys: Menu items may be gated by when-expressions over context keys; handlers keep submission-time checks
 
 - **Date:** 2026-10-28
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-11-02
 - **Context:** Menu items that cannot act (Insert footnote in a read-only project, Sync on a
   resource, Insert comment without the comment role) were clickable and failed only at submission
   with an error, which users read as a dead click. The earlier decision
@@ -6043,7 +6043,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   on command items; revisit when key volume becomes noticeable.
 - **Amendments (2026-11-02, review of #2959):**
   - **D1:** A producer's `remove` releases its key for any process. A `set` refused because another
-    live process owns the key is held and applied when that key is released
+    live process owns the key is held (and logged once at info) and applied when that key is released
     (`applyPendingClaim` in `shared-store.service.ts`). This covers a moved tab whose old
     renderer's cleanup (the deferred `setTimeout` `unmountRoot` in `web-view.component.tsx`, or the
     late "unload never ran" path) lands after the new renderer's first set, and a restarted

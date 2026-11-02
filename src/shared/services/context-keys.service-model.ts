@@ -1,6 +1,10 @@
 import { ContextKeyValue } from 'platform-bible-utils';
 
-/** Event emitted when a context key's value changes; platform-internal, not part of PAPI */
+/**
+ * Event emitted when a context key's value changes; platform-internal, not part of PAPI
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
 export type ContextKeyChangeEvent = {
   /**
    * The context key that changed (without any internal storage prefix)

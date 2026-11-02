@@ -62,7 +62,7 @@ export function useEvaluatedMenu<T extends EvaluatableMenu>(
     );
     readKeysRef.current = readKeys;
     return evaluatedMenu;
-    // contextKeysVersion intentionally triggers re-evaluation when any context key changes
+    // contextKeysVersion intentionally triggers re-evaluation when a context key it read changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [menuData, templateVars, contextKeysVersion]);
 }
