@@ -34,12 +34,18 @@ import {
   newGuid,
   newPlatformError,
   createMenuTemplateVars,
+  getTemplateVarNames,
   ReferencedItem,
   ABORTED,
   FAILED_PRECONDITION,
   RESOURCE_EXHAUSTED,
 } from 'platform-bible-utils';
-import type { LanguageStrings, PlatformError } from 'platform-bible-utils';
+import type {
+  LanguageStrings,
+  Localized,
+  PlatformError,
+  SingleColumnMenu,
+} from 'platform-bible-utils';
 import { contextKeysService } from '@shared/services/context-keys.service';
 import { webViewService } from '@shared/services/web-view.service';
 import type { ReactElement } from 'react';
@@ -527,6 +533,20 @@ function dismissTransientOverlays(
   });
 }
 
+/** Whether any item's `when` or `enabledWhen` uses the template variable `{name}`. */
+function menuExpressionsUseTemplateVar(menu: Localized<SingleColumnMenu>, name: string): boolean {
+  return menu.items.some((item) =>
+    [item.when, item.enabledWhen].some((expression) => {
+      if (!expression) return false;
+      try {
+        return getTemplateVarNames(expression).includes(name);
+      } catch {
+        return false;
+      }
+    }),
+  );
+}
+
 // ── Core Service Methods ──
 
 /**
@@ -560,20 +580,28 @@ async function showContextMenu(
     return undefined;
   }
 
-  // Through the shared proxy rather than the renderer's own web view service shard: the shard's
-  // import graph reaches back to this module through the frontend PAPI, which would be a cycle
-  const webViewDefinition = await webViewService.getOpenWebViewDefinition(webViewId);
+  // The only network call while building a menu, made only when an item's expression uses
+  // {projectId}. Through the shared proxy rather than the renderer's own web view service shard: the
+  // shard's import graph reaches back to this module through the frontend PAPI, which would be a
+  // cycle. A failed lookup leaves the project unset, so items gated on it stay hidden.
+  let projectId: string | undefined;
+  if (menuExpressionsUseTemplateVar(webViewMenu.contextMenu, 'projectId')) {
+    try {
+      projectId = (await webViewService.getOpenWebViewDefinition(webViewId))?.projectId;
+    } catch (error) {
+      logger.warn(
+        `Could not look up the project of web view ${webViewId}; context menu items gated on {projectId} stay hidden: ${getErrorMessage(error)}`,
+      );
+    }
+  }
+  const templateVars = createMenuTemplateVars({ webViewId, webViewType, projectId });
   // Overlay context menus apply `when` only (hidden items removed); `enabledWhen`/`checkedWhen` are
   // rejected for them at load, and the OverlayContextMenuItem model does not render disabled/checked
   // state.
   const evaluatedContextMenu = evaluateMenu(
     webViewMenu.contextMenu,
     contextKeysService.get,
-    createMenuTemplateVars({
-      webViewId,
-      webViewType,
-      projectId: webViewDefinition?.projectId,
-    }),
+    templateVars,
     (expression, error) =>
       logger.warn(
         `Error evaluating context menu when-expression '${expression}': ${getErrorMessage(error)}`,
