@@ -1,15 +1,21 @@
 import { logger } from '@papi/frontend';
 import { useProjectSetting } from '@papi/frontend/react';
 import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 /** What is known of a project's `platformScripture.allowInvisibleCharacters`. */
 export interface AllowInvisibleCharactersSetting {
-  /** The setting's value, or `undefined` while it is still loading or when it could not be read. */
+  /**
+   * The setting's value, or `undefined` while it is still loading or when it could not be read and
+   * no value has been read for this project.
+   */
   value: boolean | undefined;
   /** Whether the first read of the setting has not come back yet. */
   isLoading: boolean;
-  /** Whether reading the setting failed. */
+  /**
+   * Whether reading the setting failed before any value was read for this project. A failure after
+   * a value was read keeps that value and is not reported here.
+   */
   isUnreadable: boolean;
 }
 
@@ -21,7 +27,9 @@ export interface AllowInvisibleCharactersSetting {
  * default here: the value decides how the editor spells what it saves, so a wrong guess turns a
  * literal `~` into a no-break space (or the reverse) on the next save. A pending read reports
  * `isLoading` and an error reports `isUnreadable` (and is logged), both with no `value`, and the
- * caller decides what to hold back.
+ * caller decides what to hold back. A read error after a value was read for the same project keeps
+ * that value: a failed read does not mean the setting changed, and the editor already built from
+ * it. The remembered value is dropped when `projectId` changes.
  *
  * @param projectId The project to read from
  * @returns What is known of the setting
@@ -34,6 +42,9 @@ export function useAllowInvisibleCharacters(
     'platformScripture.allowInvisibleCharacters',
     false,
   );
+  const lastKnown = useRef<{ projectId: string | undefined; value: boolean } | undefined>(
+    undefined,
+  );
   useEffect(() => {
     if (!isPlatformError(valuePossiblyError)) return;
     logger.warn(
@@ -41,65 +52,35 @@ export function useAllowInvisibleCharacters(
     );
   }, [valuePossiblyError]);
   return useMemo(() => {
-    if (isPlatformError(valuePossiblyError))
+    if (lastKnown.current && lastKnown.current.projectId !== projectId)
+      lastKnown.current = undefined;
+    if (isPlatformError(valuePossiblyError)) {
+      if (lastKnown.current)
+        return { value: lastKnown.current.value, isLoading: false, isUnreadable: false };
       return { value: undefined, isLoading: false, isUnreadable: true };
+    }
     if (isLoading) return { value: undefined, isLoading: true, isUnreadable: false };
+    lastKnown.current = { projectId, value: valuePossiblyError };
     return { value: valuePossiblyError, isLoading: false, isUnreadable: false };
-  }, [valuePossiblyError, isLoading]);
+  }, [valuePossiblyError, isLoading, projectId]);
 }
 
 /**
  * The chapter to give the editor: none until `allowInvisibleCharacters` has been read, because the
  * editor turns what it displays back into USJ by that setting, so content loaded under a guess
- * would be respelled the moment the real value arrives. A setting that could not be read still lets
- * the chapter through — the caller makes the editor read-only instead, so the text can be read but
- * nothing is saved under a guess.
+ * would be respelled the moment the real value arrives. A setting that cannot be read holds the
+ * chapter back too, rather than showing it under a stand-in: the editor that mounts once the value
+ * arrives loads the project's text under it, exactly as after a slow first read.
  *
  * @param chapter The chapter's USJ from the project
  * @param allowInvisibleCharacters What is known of the project's setting
- * @returns `chapter`, or `undefined` while the setting is loading
+ * @returns `chapter`, or `undefined` while the setting is loading or unreadable
  */
 export function getChapterForEditor<T>(
   chapter: T,
   allowInvisibleCharacters: AllowInvisibleCharactersSetting,
 ): T | undefined {
-  return allowInvisibleCharacters.isLoading ? undefined : chapter;
-}
-
-/**
- * Has the editor load the project's text again once a setting that could not be read is read.
- *
- * While the setting is unreadable the editor shows the chapter read-only under a stand-in value.
- * When the real value arrives the editor rebuilds from its own export, which it made under the
- * stand-in and so may have respelled: with the setting on, a literal `~` exported under `false`
- * comes back as a no-break space. So the project's text is loaded again, and the editor stays
- * read-only until it has been. A setting still loading needs none of this: the chapter is held back
- * from the editor until it is read, and the editor that mounts then loads the project's text.
- *
- * @param allowInvisibleCharacters What is known of the project's setting
- * @param reload Loads the project's text into the editor again. Called after the editor has been
- *   given the new value, since the editor's effects run before its host's.
- * @returns Whether the editor must stay read-only until the setting is read and the text reloaded
- */
-export function useReloadOnceAllowInvisibleCharactersIsRead(
-  allowInvisibleCharacters: AllowInvisibleCharactersSetting,
-  reload: () => void,
-): boolean {
-  const { value, isLoading, isUnreadable } = allowInvisibleCharacters;
-  const [hasShownTextUnderStandIn, setHasShownTextUnderStandIn] = useState(false);
-  useEffect(() => {
-    if (isUnreadable) {
-      setHasShownTextUnderStandIn(true);
-      return;
-    }
-    if (!hasShownTextUnderStandIn) return;
-    if (isLoading) {
-      setHasShownTextUnderStandIn(false);
-      return;
-    }
-    if (value === undefined) return;
-    reload();
-    setHasShownTextUnderStandIn(false);
-  }, [value, isLoading, isUnreadable, hasShownTextUnderStandIn, reload]);
-  return isUnreadable || hasShownTextUnderStandIn;
+  return allowInvisibleCharacters.isLoading || allowInvisibleCharacters.isUnreadable
+    ? undefined
+    : chapter;
 }

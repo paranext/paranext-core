@@ -1,6 +1,7 @@
 import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 
-const BANNER_TEXT_KEY: LocalizeKey = '%webView_platformScriptureEditor_settingUnreadable_banner%';
+const BANNER_TEXT_KEY: LocalizeKey =
+  '%webView_platformScriptureEditor_settingUnreadable_withheld_banner%';
 
 export const SETTING_UNREADABLE_BANNER_STRING_KEYS: LocalizeKey[] = [BANNER_TEXT_KEY];
 
@@ -10,9 +11,9 @@ type Props = {
 };
 
 /**
- * Slim banner across the top of the Scripture editor pane while a project setting the editor needs
- * to save safely (`platformScripture.allowInvisibleCharacters`) could not be read. The editor is
- * read-only then, and nothing else on screen says why typing does nothing.
+ * Banner shown in place of the Scripture editor while a project setting the editor needs to save
+ * safely (`platformScripture.allowInvisibleCharacters`) could not be read. The chapter is held back
+ * until the setting is read, and nothing else on screen says why no text shows.
  */
 export function SettingUnreadableBanner({ localizedStrings }: Props) {
   return (

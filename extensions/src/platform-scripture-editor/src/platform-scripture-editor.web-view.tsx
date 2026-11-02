@@ -199,7 +199,6 @@ import { EditorDocumentSelector, useEditorPdpSync } from './use-editor-pdp-sync.
 import {
   getChapterForEditor,
   useAllowInvisibleCharacters,
-  useReloadOnceAllowInvisibleCharactersIsRead,
 } from './use-allow-invisible-characters.hook';
 import { useEditorFocusLocation } from './use-editor-focus-location.hook';
 import { toBookChapterKey, useScrollToRange } from './use-scroll-to-range.hook';
@@ -918,17 +917,11 @@ function PlatformScriptureEditor({
   // Whether the project keeps `~` (a literal tilde) and a no-break space distinct. Off, its USFM
   // spells a no-break space `~`; on, both are written as themselves. Anything here that turns this
   // project's USJ into USFM has to spell it the project's way. Never guessed: the chapter is held
-  // back from the editor until it has been read (`usjForEditor`), and a read error makes the editor
-  // read-only (`isReadOnlyEffective`). `false` below only fills the view options of an editor that
-  // either is not showing yet or cannot save.
+  // back from the editor until it has been read (`usjForEditor`), and a setting that cannot be
+  // read shows a banner in place of the editor. `false` below only fills the view options while no
+  // editor is showing.
   const allowInvisibleCharactersSetting = useAllowInvisibleCharacters(projectId);
   const allowInvisibleCharacters = allowInvisibleCharactersSetting.value ?? false;
-  // Set far below, once the chapter (`usjForEditor`) and `setEditorUsj` exist.
-  const reloadEditorFromProject = useRef(() => {});
-  const isAwaitingAllowInvisibleCharacters = useReloadOnceAllowInvisibleCharactersIsRead(
-    allowInvisibleCharactersSetting,
-    useCallback(() => reloadEditorFromProject.current(), []),
-  );
 
   // The next two reactive signals gate whether the Scripture Editor is writable: whether the
   // project itself is editable (`platform.isEditable`) and whether the current user has a
@@ -1440,8 +1433,6 @@ function PlatformScriptureEditor({
         isProjectEditable,
         isCanUserEditScriptureUnresolved,
         canUserEditScripture,
-        // Also true for the render the setting is first read in, until the chapter is reloaded
-        isAllowInvisibleCharactersUnreadable: isAwaitingAllowInvisibleCharacters,
         isSyncBlocked,
         isInterfaceModeLoading,
         viewType,
@@ -1453,7 +1444,6 @@ function PlatformScriptureEditor({
       isProjectEditable,
       isCanUserEditScriptureUnresolved,
       canUserEditScripture,
-      isAwaitingAllowInvisibleCharacters,
       isSyncBlocked,
       isInterfaceModeLoading,
       viewType,
@@ -3320,13 +3310,10 @@ function PlatformScriptureEditor({
   }, [usjFromPdpError, usjFromPdpPossiblyError, currentBookNum, projectId]);
 
   // The chapter as the editor may have it: withheld (the spinner shows) until the project's
-  // `allowInvisibleCharacters` has been read — see `getChapterForEditor`. Everything that mounts or
-  // fills the editor reads this rather than `usjFromPdp`, so the content arrives with the editor.
+  // `allowInvisibleCharacters` has been read (a banner shows instead when it cannot be) — see
+  // `getChapterForEditor`. Everything that mounts or fills the editor reads this rather than
+  // `usjFromPdp`, so the content arrives with the editor.
   const usjForEditor = getChapterForEditor(usjFromPdp, allowInvisibleCharactersSetting);
-  reloadEditorFromProject.current = () => {
-    if (usjForEditor && usjForEditor !== defaultUsj)
-      setEditorUsj.current(usjForEditor, { force: true });
-  };
 
   // A book the project simply lacks is ordinary navigation rather than a fault, so it is logged at
   // `debug`, which packaged builds drop (`global-this.model.ts` runs at `info` when packaged). That
@@ -5385,6 +5372,11 @@ function PlatformScriptureEditor({
         </>
       );
     }
+    // The chapter is withheld while the setting that decides how it is saved cannot be read; the
+    // banner says why nothing shows, and the editor mounts once the setting is read.
+    if (allowInvisibleCharactersSetting.isUnreadable) {
+      return <SettingUnreadableBanner localizedStrings={localizedStrings} />;
+    }
     if (!usjForEditor || usjForEditor === defaultUsj) {
       return (
         <div className="tw:flex tw:items-center tw:justify-center tw:h-full">
@@ -5634,11 +5626,6 @@ function PlatformScriptureEditor({
       {/* Slim, non-covering banner while an automatic Send/Receive freezes editing. Shown only when
           sync-blocked and not genuinely read-only (a real viewer shouldn't say "editing paused"). */}
       {isSyncBlocked && !isReadOnly && <SyncBlockedBanner localizedStrings={localizedStrings} />}
-      {/* The editor goes read-only when this setting cannot be read; say why, unless the view is
-          read-only anyway. */}
-      {allowInvisibleCharactersSetting.isUnreadable && !isDurablyReadOnly && (
-        <SettingUnreadableBanner localizedStrings={localizedStrings} />
-      )}
       {/* Outside the zoomed, scrolling text area, so the notice stays put while the text scrolls.
           Every project is asked, because a "Notification:" copyright shows its banner on any text,
           as in Paratext 9. */}

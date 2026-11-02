@@ -483,3 +483,54 @@ describe('Scripture editor footnotes pane while the chapter is held back from th
     expect(screen.getAllByRole('option')).toHaveLength(1);
   });
 });
+
+describe('Scripture editor while the invisible-characters setting cannot be read', () => {
+  const ALLOW_INVISIBLE_KEY = 'platformScripture.allowInvisibleCharacters';
+  const BANNER_KEY = '%webView_platformScriptureEditor_settingUnreadable_withheld_banner%';
+
+  const chapterWithFootnote = {
+    type: 'USJ',
+    version: '3.1',
+    content: [
+      { type: 'book', marker: 'id', code: 'GEN' },
+      { type: 'chapter', marker: 'c', number: '1' },
+      {
+        type: 'para',
+        marker: 'p',
+        content: [
+          { type: 'verse', marker: 'v', number: '1' },
+          'a~b',
+          { type: 'note', marker: 'f', caller: '+', content: ['A footnote text'] },
+        ],
+      },
+    ],
+  };
+
+  const EditorWebView = getEditorWebView();
+  /** A new element each time, so a rerender is not skipped for identical props. */
+  const webViewElement = () => (
+    <EditorWebView {...makeProps('', { footnotesPaneVisible: true, isReadOnly: false })} />
+  );
+
+  it('shows the banner and no editor or footnote rows, then mounts the editor once it is read', async () => {
+    chapterUsjValue.current = chapterWithFootnote;
+    projectSettings.set(ALLOW_INVISIBLE_KEY, newPlatformError('project unavailable'));
+    let result: ReturnType<typeof render> | undefined;
+    await act(async () => {
+      result = render(webViewElement());
+    });
+
+    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(BANNER_KEY);
+    expect(screen.queryByRole('option')).not.toBeInTheDocument();
+
+    projectSettings.set(ALLOW_INVISIBLE_KEY, true);
+    await act(async () => {
+      result?.rerender(webViewElement());
+    });
+
+    expect(screen.getByTestId('editorial')).toBeInTheDocument();
+    expect(screen.queryByText(BANNER_KEY)).not.toBeInTheDocument();
+    expect(screen.getAllByRole('option')).toHaveLength(1);
+  });
+});

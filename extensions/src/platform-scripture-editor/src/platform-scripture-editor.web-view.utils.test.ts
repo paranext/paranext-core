@@ -918,7 +918,6 @@ describe('deriveReadOnlyFlags', () => {
     isProjectEditable: true,
     isCanUserEditScriptureUnresolved: false,
     canUserEditScripture: true,
-    isAllowInvisibleCharactersUnreadable: false,
     isSyncBlocked: false,
     isInterfaceModeLoading: false,
     viewType: 'standard',
@@ -944,12 +943,6 @@ describe('deriveReadOnlyFlags', () => {
       isDurablyReadOnly: true,
       isReadOnlyForTitle: true,
     });
-  });
-
-  it('freezes editing but is not durably read-only when allowInvisibleCharacters is unreadable', () => {
-    expect(
-      deriveReadOnlyFlags({ ...writable, isAllowInvisibleCharactersUnreadable: true }),
-    ).toEqual({ isReadOnlyEffective: true, isDurablyReadOnly: false, isReadOnlyForTitle: false });
   });
 
   it('freezes editing but is not durably read-only while a sync blocks it', () => {

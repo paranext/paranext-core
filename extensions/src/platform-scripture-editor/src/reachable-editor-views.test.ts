@@ -86,7 +86,6 @@ function describeReachableView(persistedViewType: PersistedViewType, isPowerMode
     isProjectEditable: true,
     isCanUserEditScriptureUnresolved: false,
     canUserEditScripture: true,
-    isAllowInvisibleCharactersUnreadable: false,
     isSyncBlocked: false,
     isInterfaceModeLoading,
     viewType,

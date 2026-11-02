@@ -9,10 +9,12 @@ import {
 } from './setting-unreadable-banner.component';
 
 describe('SettingUnreadableBanner', () => {
-  it('announces the localized reason the editor is read-only', () => {
+  it('announces the localized reason the text is not shown', () => {
     const [key] = SETTING_UNREADABLE_BANNER_STRING_KEYS;
-    render(<SettingUnreadableBanner localizedStrings={{ [key]: 'Read-only: settings unread' }} />);
+    render(
+      <SettingUnreadableBanner localizedStrings={{ [key]: 'Text withheld: settings unread' }} />,
+    );
 
-    expect(screen.getByRole('status')).toHaveTextContent('Read-only: settings unread');
+    expect(screen.getByRole('status')).toHaveTextContent('Text withheld: settings unread');
   });
 });
