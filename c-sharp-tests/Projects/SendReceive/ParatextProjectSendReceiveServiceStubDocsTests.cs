@@ -70,6 +70,61 @@ namespace TestParanextDataProvider.Projects.SendReceive
             Assert.That(docs!.Method.Experimental, Is.True, "isAvailable marked experimental");
         }
 
+        [Test]
+        public async Task InitializeAsync_RegistersReshowSyncNotificationWithExperimentalDocs()
+        {
+            const string wireName = "command:paratextBibleSendReceive.reshowSyncNotification";
+            var service = new ParatextProjectSendReceiveService(
+                Client,
+                new ParatextProjectDataProviderFactory(Client, ParatextProjects),
+                new AppInfo("test", "1.0.0", "test"),
+                ParatextProjects
+            );
+
+            await service.InitializeAsync();
+
+            Assert.That(
+                Client.IsHandlerRegistered(wireName),
+                Is.True,
+                "reshowSyncNotification handler registered under its exact wire name"
+            );
+            var docs = Client.GetDocumentationFor(wireName);
+            Assert.That(
+                docs,
+                Is.Not.Null,
+                "reshowSyncNotification registered with OpenRPC documentation"
+            );
+            Assert.That(
+                docs!.Method.Experimental,
+                Is.True,
+                "reshowSyncNotification marked experimental"
+            );
+            Assert.That(docs.Method.Params, Is.Empty, "takes no parameters");
+        }
+
+        [Test]
+        public async Task ReshowSyncNotificationCommand_IsANoOpInThisBuild()
+        {
+            var service = new ParatextProjectSendReceiveService(
+                Client,
+                new ParatextProjectDataProviderFactory(Client, ParatextProjects),
+                new AppInfo("test", "1.0.0", "test"),
+                ParatextProjects
+            );
+            await service.InitializeAsync();
+            var eventsBefore = Client.SentEventCount;
+            var requestsBefore = Client.SentRequestCount;
+
+            Assert.DoesNotThrow(
+                () =>
+                    Client.InvokeRequestHandler(
+                        "command:paratextBibleSendReceive.reshowSyncNotification"
+                    )
+            );
+            Assert.That(Client.SentEventCount, Is.EqualTo(eventsBefore), "sends no event");
+            Assert.That(Client.SentRequestCount, Is.EqualTo(requestsBefore), "sends no request");
+        }
+
         // Pins the seam, not the stub's own answer: the Paratext 10 patch replaces
         // IsSendReceiveAvailable's body, so asserting core's `false` here would fail in the patched
         // suite. What both builds rely on is that the command answers whatever that method answers.

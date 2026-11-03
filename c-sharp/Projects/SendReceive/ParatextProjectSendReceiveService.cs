@@ -222,6 +222,16 @@ internal class ParatextProjectSendReceiveService(
                         "Map of (upper-cased) project id → whether that project's lock was broken"
                     )
                 )
+            ),
+            PapiClient.RegisterRequestHandlerAsync(
+                "command:paratextBibleSendReceive.reshowSyncNotification",
+                ReshowSyncNotification,
+                documentation: Create(
+                    "Shows the current Send/Receive progress notification again, with its latest "
+                        + "text, under the same id. Does nothing when no sync notification is active.",
+                    [],
+                    ResultOf("null", "No return value")
+                )
             )
         );
     }
@@ -241,6 +251,15 @@ internal class ParatextProjectSendReceiveService(
     /// </para>
     /// </summary>
     protected internal virtual bool IsSendReceiveAvailable() => false;
+
+    /// <summary>
+    /// Shows the current Send/Receive progress notification again.
+    /// <para>
+    /// Scaffolding: public Platform.Bible shows no sync notification, so this stub does nothing.
+    /// The Paratext 10 patch replaces the body. Do not remove — removing it breaks the patch.
+    /// </para>
+    /// </summary>
+    protected internal virtual Task ReshowSyncNotification() => Task.CompletedTask;
 
     /// <summary>
     /// The local Mercurial tip id recorded after this project's last successful Send/Receive, or
