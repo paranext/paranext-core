@@ -529,17 +529,66 @@ describe('HomeWebView requests through the sync queue', () => {
     expect(home).toHaveAttribute('data-active-projects', '["RH3"]');
   });
 
-  it('shows a project as running only once the queue accepts its run', async () => {
+  it('shows the spinner at once for a click on an idle queue, then follows the queue', async () => {
     mockAvailableQueue(() => new Promise(() => {}));
     const home = await renderSubscribed();
 
     fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    // Optimistic: the queue has nothing running or waiting, so the click is expected to start.
+    expect(home).toHaveAttribute('data-active-projects', '["RH2"]');
     await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
-    await act(async () => {});
-    expect(home).toHaveAttribute('data-active-projects', '[]');
 
     await emit(syncQueueEvents, { waitingProjectIds: [], runningProjectIds: ['RH2'] });
     expect(home).toHaveAttribute('data-active-projects', '["RH2"]');
+  });
+
+  it('shows Waiting instead of the optimistic spinner when the queue reports the project waiting', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    const home = await renderSubscribed();
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    expect(home).toHaveAttribute('data-active-projects', '["RH2"]');
+
+    // The backend refused the run as busy and the queue holds the project for the next one.
+    await emit(syncQueueEvents, { waitingProjectIds: ['RH2'], runningProjectIds: ['RH3'] });
+
+    expect(home).toHaveAttribute('data-waiting-projects', '["RH2"]');
+    expect(home).toHaveAttribute('data-active-projects', '["RH3"]');
+  });
+
+  it('shows no spinner for a click while the queue already has a run', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    const home = await renderSubscribed();
+    await emit(syncQueueEvents, { waitingProjectIds: [], runningProjectIds: ['RH3'] });
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+    expect(home).toHaveAttribute('data-active-projects', '["RH3"]');
+
+    await emit(syncQueueEvents, { waitingProjectIds: ['RH2'], runningProjectIds: ['RH3'] });
+    expect(home).toHaveAttribute('data-waiting-projects', '["RH2"]');
+    expect(home).toHaveAttribute('data-active-projects', '["RH3"]');
+  });
+
+  it('shows no spinner for a click while the queue has a project waiting', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    const home = await renderSubscribed();
+    await emit(syncQueueEvents, { waitingProjectIds: ['RH4'], runningProjectIds: [] });
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+
+    expect(home).toHaveAttribute('data-active-projects', '[]');
+  });
+
+  it('drops the optimistic spinner when its request ends', async () => {
+    mockAvailableQueue(async () => ({}));
+    const home = await renderSubscribed();
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+
+    await waitFor(() => expect(home).toHaveAttribute('data-active-projects', '[]'));
   });
 
   it('merges the queue and the activity running sets once each', async () => {
@@ -683,7 +732,9 @@ describe('HomeWebView requests through the sync queue', () => {
     await waitFor(() => expect(requestSyncCalls()).toHaveLength(2));
   });
 
-  it('hands Home the waiting state between the two clicks of a double-click, leaving the pair to its settle window', async () => {
+  // The double-click itself is exercised against the real Home in
+  // `home.web-view.double-click.test.tsx`; Home is a stub here.
+  it('reports the waiting state to Home and issues no removal or second request by itself', async () => {
     mockAvailableQueue(() => new Promise(() => {}));
     const home = await renderSubscribed();
     const button = screen.getByRole('button', { name: 'send/receive' });
@@ -695,8 +746,6 @@ describe('HomeWebView requests through the sync queue', () => {
     expect(home).toHaveAttribute('data-waiting-projects', '["RH2"]');
     expect(home).toHaveAttribute('data-active-projects', '[]');
 
-    // Home's row (stubbed here) decides what the second click does; the web view neither removes
-    // the project from the queue nor asks again on its own.
     expect(
       mockSendCommand.mock.calls.filter(([name]) => name === REMOVE_FROM_SYNC_QUEUE),
     ).toHaveLength(0);

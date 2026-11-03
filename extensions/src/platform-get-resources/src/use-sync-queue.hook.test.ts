@@ -41,14 +41,17 @@ describe('useSyncQueue', () => {
   it('reports an empty queue until the first answer', () => {
     mockSendCommand.mockReturnValue(new Promise(() => {}));
     const { result } = renderHook(() => useSyncQueue(true));
-    expect(result.current).toEqual(IDLE);
+    expect(result.current).toMatchObject(IDLE);
   });
 
   it('reports the seeded snapshot', async () => {
     mockSendCommand.mockResolvedValue({ waitingProjectIds: ['RH3', 'ABC'] });
     const { result } = renderHook(() => useSyncQueue(true));
     await waitFor(() =>
-      expect(result.current).toEqual({ waitingProjectIds: ['RH3', 'ABC'], runningProjectIds: [] }),
+      expect(result.current).toMatchObject({
+        waitingProjectIds: ['RH3', 'ABC'],
+        runningProjectIds: [],
+      }),
     );
     expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.getSyncQueue');
   });
@@ -58,7 +61,7 @@ describe('useSyncQueue', () => {
     const { result } = renderHook(() => useSyncQueue(true));
     await waitFor(() => expect(mockSendCommand).toHaveBeenCalled());
     await act(async () => {});
-    expect(result.current).toEqual(IDLE);
+    expect(result.current).toMatchObject(IDLE);
   });
 
   it('treats a rejecting command as an empty queue', async () => {
@@ -66,7 +69,7 @@ describe('useSyncQueue', () => {
     const { result } = renderHook(() => useSyncQueue(true));
     await waitFor(() => expect(mockSendCommand).toHaveBeenCalled());
     await act(async () => {});
-    expect(result.current).toEqual(IDLE);
+    expect(result.current).toMatchObject(IDLE);
   });
 
   it('follows the change event', async () => {
@@ -75,9 +78,9 @@ describe('useSyncQueue', () => {
     await waitFor(() => expect(result.current.waitingProjectIds).toEqual(['RH3']));
     expect(mockGetNetworkEvent).toHaveBeenCalledWith('paratextBibleSendReceive.onSyncQueueChanged');
     act(() => emitter.emit({ waitingProjectIds: ['XYZ'] }));
-    expect(result.current).toEqual({ waitingProjectIds: ['XYZ'], runningProjectIds: [] });
+    expect(result.current).toMatchObject({ waitingProjectIds: ['XYZ'], runningProjectIds: [] });
     act(() => emitter.emit({ waitingProjectIds: [] }));
-    expect(result.current).toEqual(IDLE);
+    expect(result.current).toMatchObject(IDLE);
   });
 
   it('ignores a malformed event and keeps the last known queue', async () => {
@@ -85,7 +88,7 @@ describe('useSyncQueue', () => {
     const { result } = renderHook(() => useSyncQueue(true));
     await waitFor(() => expect(result.current.waitingProjectIds).toEqual(['RH3']));
     act(() => emitter.emit({ waitingProjectIds: 'RH3' }));
-    expect(result.current).toEqual({ waitingProjectIds: ['RH3'], runningProjectIds: [] });
+    expect(result.current).toMatchObject({ waitingProjectIds: ['RH3'], runningProjectIds: [] });
   });
 
   it('reports an empty queue when the only answer is malformed', async () => {
@@ -93,7 +96,7 @@ describe('useSyncQueue', () => {
     const { result } = renderHook(() => useSyncQueue(true));
     await waitFor(() => expect(mockSendCommand).toHaveBeenCalled());
     await act(async () => {});
-    expect(result.current).toEqual(IDLE);
+    expect(result.current).toMatchObject(IDLE);
   });
 
   it.each([false, undefined])(
@@ -103,7 +106,7 @@ describe('useSyncQueue', () => {
       const { result } = renderHook(() => useSyncQueue(availability));
       await act(async () => {});
       expect(mockSendCommand).not.toHaveBeenCalled();
-      expect(result.current).toEqual(IDLE);
+      expect(result.current).toMatchObject(IDLE);
     },
   );
 
@@ -117,6 +120,19 @@ describe('useSyncQueue', () => {
     rerender();
     await waitFor(() => expect(result.current.waitingProjectIds).toEqual(['RH3']));
     expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.getSyncQueue');
+  });
+
+  it('says whether a snapshot has arrived yet', async () => {
+    mockSendCommand.mockResolvedValue({ waitingProjectIds: ['RH3'] });
+    const { result } = renderHook(() => useSyncQueue(true));
+    expect(result.current.isKnown).toBe(false);
+    await waitFor(() => expect(result.current.isKnown).toBe(true));
+  });
+
+  it('is not known while Send/Receive is not available', async () => {
+    const { result } = renderHook(() => useSyncQueue(false));
+    await act(async () => {});
+    expect(result.current.isKnown).toBe(false);
   });
 
   it('exposes the running ids', async () => {

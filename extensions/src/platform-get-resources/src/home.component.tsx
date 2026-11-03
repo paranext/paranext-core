@@ -49,7 +49,7 @@ import {
 } from 'platform-bible-utils';
 import { withoutSyncBusyMarker } from 'platform-bible-utils/experimental';
 import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
-import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { HomeItemDropdownMenu } from './home-item-menu';
 import { getRowSyncState, type RowSyncState } from './home-sync-queue.util';
 import {
@@ -376,6 +376,12 @@ export type HomeProps = {
    */
   waitingProjectIds?: readonly string[];
   /**
+   * Whether `waitingProjectIds` is what the queue reported, as opposed to the empty list a caller
+   * passes before the queue's first answer. The states the first answer reports count as the ones
+   * rows had at mount, so a click right after it is not held back. Defaults to `true`.
+   */
+  isSyncQueueKnown?: boolean;
+  /**
    * Localized text for each `unsupportedReason` key in the list, plus
    * `%project_unsupported_generic%`, which is shown for a reason that is not a key or has no entry.
    * With neither, no reason text is shown.
@@ -415,6 +421,7 @@ export type HomeProps = {
  *   send/receive server.
  * @param {activeSendReceiveProjects} - Array of project IDs that are currently being sent/received.
  * @param {waitingProjectIds} - IDs of the projects waiting in the sync queue.
+ * @param {isSyncQueueKnown} - Whether the queue has reported yet.
  * @param {localizedUnsupportedReasons} - Localized text for each `unsupportedReason` key in the
  *   list, plus `%project_unsupported_generic%` for a reason that cannot be shown itself.
  * @param {headerContent} - Content for the header, e.g. <><HomeIcon
@@ -441,6 +448,7 @@ export function Home({
   sharedProjectsInfo = NO_SHARED_PROJECTS,
   activeSendReceiveProjects = NO_ACTIVE_SEND_RECEIVE_PROJECTS,
   waitingProjectIds = NO_WAITING_PROJECTS,
+  isSyncQueueKnown = true,
   localizedUnsupportedReasons = NO_LOCALIZED_UNSUPPORTED_REASONS,
   headerContent,
 }: HomeProps) {
@@ -469,7 +477,12 @@ export function Home({
   // small as the set of rows that ever left idle.
   const rowStateSinceRef = useRef(new Map<string, { state: RowSyncState; at: number }>());
   const isFirstRowStateRunRef = useRef(true);
-  useEffect(() => {
+  // A layout effect, so the window starts in the commit that shows the new state: a click cannot
+  // reach the new button before the window is recorded.
+  useLayoutEffect(() => {
+    // Until the queue's first snapshot has arrived, the empty lists are a placeholder, not a state
+    // the rows were in; what the snapshot then reports counts as the state Home mounted with.
+    if (!isSyncQueueKnown) return;
     const now = performance.now();
     const rowStateSince = rowStateSinceRef.current;
     const trackedIds = new Set([
@@ -484,7 +497,7 @@ export function Home({
       rowStateSince.set(id, { state, at: isFirstRowStateRunRef.current ? -Infinity : now });
     });
     isFirstRowStateRunRef.current = false;
-  }, [normalizedRunningProjectIds, normalizedWaitingProjectIds]);
+  }, [isSyncQueueKnown, normalizedRunningProjectIds, normalizedWaitingProjectIds]);
 
   /** Whether the row's last state change is far enough back for a click on it to count. */
   const isRowSettled = (projectId: string) => {
@@ -585,6 +598,8 @@ export function Home({
     setActionErrors((errors) => errors.filter(isOtherProject));
     try {
       await onSendReceiveProject(projectId);
+      // A request that succeeded supersedes a failure an earlier, overlapping request reported.
+      setActionErrors((errors) => errors.filter(isOtherProject));
     } catch (e) {
       const message = withoutSyncBusyMarker(withoutJsonRpcErrorPrefix(getErrorMessage(e)));
       setActionErrors((errors) => [

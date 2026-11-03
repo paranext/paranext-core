@@ -280,7 +280,7 @@ describe('Home send/receive failures', () => {
       name,
       fullName: `${name} full name`,
       language: 'en',
-      editedStatus: 'notEdited',
+      editedStatus: '',
       lastSendReceiveDate: '2026-08-16T00:00:00.000Z',
     });
     const renderThree = () =>
@@ -305,7 +305,11 @@ describe('Home send/receive failures', () => {
 
     beforeEach(() => {
       rejections.clear();
-      onSendReceiveProject.mockClear();
+      onSendReceiveProject.mockReset();
+      onSendReceiveProject.mockImplementation(async (projectId: string) => {
+        const rejection = rejections.get(projectId);
+        if (rejection) throw rejection;
+      });
     });
 
     it('shows each project failure separately, named', async () => {
@@ -350,6 +354,32 @@ describe('Home send/receive failures', () => {
 
       await waitFor(() => expect(screen.queryByText('ONE: Locked')).toBeNull());
       expect(screen.getByText('TWO: Disk full')).toBeInTheDocument();
+    });
+
+    it("drops a project's failure when another request for it resolves", async () => {
+      // Two requests for one project overlap; the first fails after the second was sent.
+      const settlers: { resolve: () => void; reject: (reason: Error) => void }[] = [];
+      onSendReceiveProject.mockImplementation(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            settlers.push({ resolve, reject });
+          }),
+      );
+      renderThree();
+      clickGetOf('ONE');
+      clickGetOf('ONE');
+      expect(settlers).toHaveLength(2);
+
+      await act(async () => {
+        settlers[0].reject(new Error('Locked'));
+      });
+      await waitFor(() => expect(screen.getByText('ONE: Locked')).toBeInTheDocument());
+
+      await act(async () => {
+        settlers[1].resolve();
+      });
+
+      expect(screen.queryByText('ONE: Locked')).toBeNull();
     });
 
     it('shows only the latest failure of a project', async () => {
@@ -2507,14 +2537,17 @@ describe('Home click settle window after a row changes state', () => {
   const homeWith = ({
     waitingProjectIds = [],
     activeSendReceiveProjects = [],
+    isSyncQueueKnown = true,
   }: {
     waitingProjectIds?: string[];
     activeSendReceiveProjects?: string[];
+    isSyncQueueKnown?: boolean;
   } = {}) => (
     <Home
       headerContent={undefined}
       sharedProjectsInfo={{ projectOne: sharedProject('ONE'), projectTwo: sharedProject('TWO') }}
       remoteProjectsState="loaded"
+      isSyncQueueKnown={isSyncQueueKnown}
       isSendReceiveInProgress={activeSendReceiveProjects.length > 0}
       activeSendReceiveProjects={activeSendReceiveProjects}
       waitingProjectIds={waitingProjectIds}
@@ -2586,6 +2619,26 @@ describe('Home click settle window after a row changes state', () => {
     fireEvent.click(waitingButton('ONE'));
 
     expect(onRemoveFromQueue).toHaveBeenCalledWith('projectOne');
+  });
+
+  it('accepts the first click on a row that is waiting in the queue snapshot that arrives after mount', () => {
+    // The queue's first snapshot lands asynchronously; what it reports was already true at mount.
+    const { rerender } = render(homeWith({ isSyncQueueKnown: false }));
+    rerender(homeWith({ isSyncQueueKnown: true, waitingProjectIds: ['projectOne'] }));
+
+    fireEvent.click(waitingButton('ONE'));
+
+    expect(onRemoveFromQueue).toHaveBeenCalledWith('projectOne');
+  });
+
+  it('still settles a change that follows the first snapshot', () => {
+    const { rerender } = render(homeWith({ isSyncQueueKnown: false }));
+    rerender(homeWith({ isSyncQueueKnown: true, waitingProjectIds: ['projectOne'] }));
+    rerender(homeWith({ isSyncQueueKnown: true }));
+
+    fireEvent.click(getButton('ONE'));
+
+    expect(onSendReceiveProject).not.toHaveBeenCalled();
   });
 
   it('settles each row on its own: a change on one row leaves the others clickable', () => {

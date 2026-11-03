@@ -23,13 +23,18 @@ const readSyncQueue = () =>
  * Nothing is read while Send/Receive is not known to be available: its commands are not registered
  * then, so a read could only fail.
  *
+ * `isKnown` is `false` until a first snapshot (seed or event) has arrived, which lets a consumer
+ * tell the empty queue it starts with from one that was read.
+ *
  * Hidden case: nothing to defer — the lists are data, so a hidden Home shows the current lists when
  * it is next shown.
  *
  * @param isSendReceiveAvailable Whether Send/Receive is available; the queue is read only when
  *   `true`
  */
-export function useSyncQueue(isSendReceiveAvailable: boolean | undefined): SyncQueue {
+export function useSyncQueue(
+  isSendReceiveAvailable: boolean | undefined,
+): SyncQueue & { isKnown: boolean } {
   const event = useMemo(
     () => papi.network.getNetworkEvent('paratextBibleSendReceive.onSyncQueueChanged'),
     [],
@@ -41,7 +46,7 @@ export function useSyncQueue(isSendReceiveAvailable: boolean | undefined): SyncQ
     enabled: isSendReceiveAvailable === true,
   });
 
-  return useMemo(() => toSyncQueue(value), [value]);
+  return useMemo(() => ({ ...toSyncQueue(value), isKnown: value !== undefined }), [value]);
 }
 
 export default useSyncQueue;

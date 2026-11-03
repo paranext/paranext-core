@@ -228,9 +228,14 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
     syncActivity.isSyncing ||
     syncQueue.waitingProjectIds.length > 0 ||
     syncQueue.runningProjectIds.length > 0;
-  // The backend alone says which projects are running: the sync queue names the ones in the run it
-  // accepted, and the sync activity names every run, including those started elsewhere. Home's own
-  // request may only be waiting, so it shows a spinner only once one of these names its project.
+  // Normalized ids of Home's own requests that were sent to an idle queue, which is expected to
+  // start them right away: they show the spinner at once instead of waiting for the queue's
+  // report. An id leaves as soon as the queue or the sync activity names it (running or waiting),
+  // or its request ends. A request sent while the queue already has a run or a waiting project
+  // gets no optimistic spinner, since it will probably wait.
+  const [optimisticRunningProjectIds, setOptimisticRunningProjectIds] = useState<string[]>([]);
+  // The backend says which projects are running: the sync queue names the ones in the run it
+  // accepted, and the sync activity names every run, including those started elsewhere.
   const activeSendReceiveProjects = useMemo(
     () =>
       Array.from(
@@ -238,10 +243,17 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
           [
             ...syncQueue.runningProjectIds,
             ...(syncActivity.isSyncing ? syncActivity.projectIds : []),
-          ].map(normalizeProjectId),
+          ]
+            .map(normalizeProjectId)
+            .concat(optimisticRunningProjectIds),
         ),
       ),
-    [syncQueue.runningProjectIds, syncActivity.isSyncing, syncActivity.projectIds],
+    [
+      syncQueue.runningProjectIds,
+      syncActivity.isSyncing,
+      syncActivity.projectIds,
+      optimisticRunningProjectIds,
+    ],
   );
   const isRunReported = syncActivity.isSyncing || syncQueue.runningProjectIds.length > 0;
   const isOwnRequestRunning = useMemo(() => {
@@ -293,6 +305,20 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
     ].forEach((id) => unreportedRequestsRef.current.delete(normalizeProjectId(id)));
   }, [syncActivity.projectIds, syncQueue.waitingProjectIds, syncQueue.runningProjectIds]);
 
+  // Once the backend names a project, the optimistic spinner has done its job.
+  useEffect(() => {
+    const reportedIds = new Set(
+      [
+        ...syncActivity.projectIds,
+        ...syncQueue.waitingProjectIds,
+        ...syncQueue.runningProjectIds,
+      ].map(normalizeProjectId),
+    );
+    setOptimisticRunningProjectIds((ids) =>
+      ids.some((id) => reportedIds.has(id)) ? ids.filter((id) => !reportedIds.has(id)) : ids,
+    );
+  }, [syncActivity.projectIds, syncQueue.waitingProjectIds, syncQueue.runningProjectIds]);
+
   // Every click is handed to the sync queue, which starts it right away or keeps it waiting for the
   // next run. A sync that is already running does not refuse a click: it queues the project's next
   // run. Only a repeat click on a project whose own request the queue has not yet reported as
@@ -318,6 +344,11 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
     unreportedRequestsRef.current.add(normalizedProjectId);
 
     setOwnActiveSendReceiveProjects((prev) => [...prev, projectId]);
+    const isQueueIdle =
+      !syncActivity.isSyncing &&
+      syncQueue.waitingProjectIds.length === 0 &&
+      syncQueue.runningProjectIds.length === 0;
+    if (isQueueIdle) setOptimisticRunningProjectIds((ids) => [...ids, normalizedProjectId]);
     try {
       // Get of a project not on this computer yet downloads it through the same request.
       await papi.commands.sendCommand('paratextBibleSendReceive.requestSync', [projectId], 'home', {
@@ -357,6 +388,8 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
       throw e;
     } finally {
       unreportedRequestsRef.current.delete(normalizedProjectId);
+      if (isMounted.current)
+        setOptimisticRunningProjectIds((ids) => ids.filter((id) => id !== normalizedProjectId));
       endOwnRequest(projectId);
     }
   };
@@ -544,6 +577,7 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
       sharedProjectsInfo={sharedProjectsInfo}
       activeSendReceiveProjects={activeSendReceiveProjects}
       waitingProjectIds={syncQueue.waitingProjectIds}
+      isSyncQueueKnown={syncQueue.isKnown}
       localizedUnsupportedReasons={localizedUnsupportedReasons}
       headerContent={
         <>
