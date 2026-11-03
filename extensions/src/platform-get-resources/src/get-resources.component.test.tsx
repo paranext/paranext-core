@@ -638,6 +638,49 @@ describe('GetResources language filter', () => {
       expect(spinnerIn(container)).toBeNull();
     });
 
+    it('keeps keyboard focus on the action button from Get through the spinner to waiting and back', () => {
+      const renderWith = (idsBeingHandled: string[], idsWaitingForSync: string[]) => (
+        <GetResources
+          localizedStringsWithLoadingState={[waitingStrings, false]}
+          resources={[heldResource]}
+          idsBeingHandled={idsBeingHandled}
+          idsWaitingForSync={idsWaitingForSync}
+        />
+      );
+      const { rerender } = render(renderWith([], []));
+      const getButton = screen.getByRole('button', { name: 'Get' });
+      getButton.focus();
+      expect(document.activeElement).toBe(getButton);
+
+      rerender(renderWith(['uid-1'], []));
+      expect(document.activeElement).toBe(getButton);
+
+      rerender(renderWith(['uid-1'], ['uid-1']));
+      expect(document.activeElement).toBe(getButton);
+      expect(getButton).toHaveTextContent('Waiting for sync…');
+      expect(getButton).toHaveAttribute('aria-disabled', 'true');
+
+      rerender(renderWith(['uid-1'], []));
+      expect(document.activeElement).toBe(getButton);
+    });
+
+    it('does nothing when the waiting button is clicked', () => {
+      const onInstallOrRemoveResource = vi.fn();
+      render(
+        <GetResources
+          localizedStringsWithLoadingState={[waitingStrings, false]}
+          resources={[heldResource]}
+          idsBeingHandled={['uid-1']}
+          idsWaitingForSync={['uid-1']}
+          onInstallOrRemoveResource={onInstallOrRemoveResource}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Waiting for sync…' }));
+
+      expect(onInstallOrRemoveResource).not.toHaveBeenCalled();
+    });
+
     it('shows no waiting label while the action is merely in progress', () => {
       const { container } = render(
         <GetResources

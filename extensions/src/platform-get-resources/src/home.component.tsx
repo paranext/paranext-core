@@ -1044,51 +1044,35 @@ export function Home({
   };
 
   /**
-   * The action of a project waiting in the sync queue. Greyed but never disabled: clicking it takes
-   * the project out of the queue, which its tooltip (or, in a menu, its second line) says.
+   * Every waiting row reads "Waiting…", so the name says which project a click takes out of the
+   * queue, starting with the visible text.
    */
-  const waitingButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
-    // Every waiting row reads "Waiting…", so the name says which project a click takes out of the
-    // queue, starting with the visible text.
-    const removeName = formatReplacementString(syncWaitingRemoveFormat, { name: project.name });
-    if (isMenuItem)
-      return (
-        <DropdownMenuItem
-          aria-label={removeName}
-          onSelect={() => handleRemoveFromQueue(project.projectId)}
-        >
-          {/* `min-w-0` lets the explanation wrap instead of widening the menu. */}
-          <div className="tw:flex tw:min-w-0 tw:flex-col tw:text-muted-foreground">
-            <span>{syncWaitingLabelText}</span>
-            <span className="tw:text-xs tw:italic tw:whitespace-normal">
-              {syncWaitingClickToRemoveText}
-            </span>
-          </div>
-        </DropdownMenuItem>
-      );
-    // Under the list's `TooltipProvider`, so it opens with the same delay as the row tooltips.
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="secondary"
-            className="tw:text-muted-foreground"
-            aria-label={removeName}
-            onClick={() => handleRemoveFromQueue(project.projectId)}
-          >
-            {syncWaitingLabelText}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p className="tw:max-w-xs">{syncWaitingClickToRemoveText}</p>
-        </TooltipContent>
-      </Tooltip>
-    );
-  };
+  const getRemoveFromQueueName = (project: MergedProjectInfo) =>
+    formatReplacementString(syncWaitingRemoveFormat, { name: project.name });
+
+  /**
+   * The menu item of a project waiting in the sync queue. Never disabled: selecting it takes the
+   * project out of the queue, which its second line says.
+   */
+  const waitingMenuItem = (project: MergedProjectInfo) => (
+    <DropdownMenuItem
+      aria-label={getRemoveFromQueueName(project)}
+      onSelect={() => handleRemoveFromQueue(project.projectId)}
+    >
+      {/* `min-w-0` lets the explanation wrap instead of widening the menu. The foreground colour,
+          not the muted one: muted text on a menu's highlighted item is below the 4.5:1 minimum. */}
+      <div className="tw:flex tw:min-w-0 tw:flex-col tw:text-foreground">
+        <span>{syncWaitingLabelText}</span>
+        <span className="tw:text-xs tw:italic tw:whitespace-normal">
+          {syncWaitingClickToRemoveText}
+        </span>
+      </div>
+    </DropdownMenuItem>
+  );
 
   const syncOrGetButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
     const syncState = getProjectSyncState(project.projectId);
-    if (syncState === 'waiting') return waitingButton(project, isMenuItem);
+    if (syncState === 'waiting' && isMenuItem) return waitingMenuItem(project);
     // Home reuses `unsupportedReason` (the can't-open signal) to block Sync and Get too. Today that
     // is only Study Bible Additions (see `adr-sba-not-syncable-from-dialog-or-home`). A project type
     // that becomes openable (removed from `ScrTextExtensions.GetOpenBlockedReason`) stops being
@@ -1111,19 +1095,43 @@ export function Home({
         isBusy: isRunning,
         onActivate: () => handleSendReceiveProject(project.projectId),
       });
+    const isWaiting = syncState === 'waiting';
+    let ariaLabel: string | undefined;
+    // The spinner has no text, so the button keeps its name while it shows; a waiting button names
+    // the project a click takes out of the queue; otherwise its visible text is the name.
+    if (isWaiting) ariaLabel = getRemoveFromQueueName(project);
+    else if (isRunning) ariaLabel = sendReceiveLabel;
+    // One tree for every state, so a keyboard user who pressed the button keeps their focus when
+    // the project is queued or unqueued: only the label, name, colour and click handler change.
+    // Never disabled for waiting: clicking it takes the project out of the queue, which its
+    // tooltip says.
     return blockableTooltip(
       isBlocked,
       unsupportedReasonText,
-      <Button
-        disabled={isBlocked}
-        aria-busy={isRunning}
-        // The spinner has no text, so the button keeps its name while it shows; otherwise its
-        // visible text is the name.
-        aria-label={isRunning ? sendReceiveLabel : undefined}
-        onClick={() => handleSendReceiveProject(project.projectId)}
-      >
-        {getSendReceiveButtonContent(project)}
-      </Button>,
+      // The delay of the list's other tooltips: `blockableTooltip` wraps this in a provider whose
+      // default delay would otherwise apply.
+      <Tooltip delayDuration={TOOLTIP_DELAY_MS}>
+        <TooltipTrigger asChild>
+          <Button
+            variant={isWaiting ? 'secondary' : undefined}
+            disabled={isBlocked}
+            aria-busy={isRunning}
+            aria-label={ariaLabel}
+            onClick={() =>
+              isWaiting
+                ? handleRemoveFromQueue(project.projectId)
+                : handleSendReceiveProject(project.projectId)
+            }
+          >
+            {isWaiting ? syncWaitingLabelText : getSendReceiveButtonContent(project)}
+          </Button>
+        </TooltipTrigger>
+        {isWaiting && (
+          <TooltipContent>
+            <p className="tw:max-w-xs">{syncWaitingClickToRemoveText}</p>
+          </TooltipContent>
+        )}
+      </Tooltip>,
     );
   };
 

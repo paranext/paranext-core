@@ -1981,6 +1981,86 @@ describe('Home while a sync runs', () => {
     );
   });
 
+  describe('one button for a row that is idle, running or waiting', () => {
+    const homeWith = ({
+      waitingProjectIds = [],
+      activeSendReceiveProjects = [],
+    }: {
+      waitingProjectIds?: string[];
+      activeSendReceiveProjects?: string[];
+    }) => (
+      <Home
+        headerContent={undefined}
+        sharedProjectsInfo={{ waitingProject: sharedProject('waitingProject', 'WAI') }}
+        remoteProjectsState="loaded"
+        isSendReceiveInProgress={activeSendReceiveProjects.length > 0}
+        activeSendReceiveProjects={activeSendReceiveProjects}
+        waitingProjectIds={waitingProjectIds}
+        localizedStringsWithLoadingState={[EN_STRINGS, false]}
+      />
+    );
+
+    it('keeps keyboard focus on the same button when the project is queued and unqueued', () => {
+      const { rerender } = render(homeWith({}));
+      const button = within(rowOf('WAI')).getByRole('button', { name: 'Get' });
+      button.focus();
+      expect(document.activeElement).toBe(button);
+
+      rerender(homeWith({ waitingProjectIds: ['waitingProject'] }));
+      expect(document.activeElement).toBe(button);
+      expect(button).toHaveAccessibleName(waitingName('WAI'));
+      expect(button).toHaveTextContent(WAITING_LABEL);
+
+      rerender(homeWith({}));
+      expect(document.activeElement).toBe(button);
+      expect(button).toHaveAccessibleName('Get');
+    });
+
+    it('keeps keyboard focus through the running spinner as well', () => {
+      const { rerender } = render(homeWith({}));
+      const button = within(rowOf('WAI')).getByRole('button', { name: 'Get' });
+      button.focus();
+
+      rerender(homeWith({ activeSendReceiveProjects: ['waitingProject'] }));
+      expect(document.activeElement).toBe(button);
+
+      rerender(
+        homeWith({
+          activeSendReceiveProjects: ['waitingProject'],
+          waitingProjectIds: ['waitingProject'],
+        }),
+      );
+      expect(document.activeElement).toBe(button);
+    });
+
+    it('does not dim the waiting button with the muted text colour', () => {
+      // The secondary variant's own text colour has the contrast the muted one lacks on it.
+      render(homeWith({ waitingProjectIds: ['waitingProject'] }));
+      const button = within(rowOf('WAI')).getByRole('button', { name: waitingName('WAI') });
+      expect(button).toHaveClass('tw:text-secondary-foreground');
+      expect(button).not.toHaveClass('tw:text-muted-foreground');
+    });
+
+    it('uses the foreground colour for the waiting menu item text', async () => {
+      render(
+        <Home
+          headerContent={undefined}
+          localProjectsInfo={[
+            { projectId: 'localProject', isPublished: false, name: 'LOC', language: 'en' },
+          ]}
+          sharedProjectsInfo={{ localProject: sharedProject('localProject', 'LOC') }}
+          remoteProjectsState="loaded"
+          waitingProjectIds={['localProject']}
+          localizedStringsWithLoadingState={[EN_STRINGS, false]}
+        />,
+      );
+      const item = await openLocalRowMenuItem();
+      const text = within(item).getByText(WAITING_LABEL).parentElement;
+      expect(text).toHaveClass('tw:text-foreground');
+      expect(text).not.toHaveClass('tw:text-muted-foreground');
+    });
+  });
+
   it('shows a running project that was asked for again as waiting for the next run', () => {
     renderHomeDuringSync({
       activeSendReceiveProjects: ['syncingProject'],

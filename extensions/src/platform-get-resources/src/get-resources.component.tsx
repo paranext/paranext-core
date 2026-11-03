@@ -186,8 +186,15 @@ const getActionContent = (
   onInstallOrRemoveResource: (dblEntryUid: string, action: ResourceAction) => void,
 ) => {
   const isBeingHandled = idsBeingHandled.includes(resource.dblEntryUid);
+  // The same `Button` for Get, the spinner and waiting, so a keyboard user who pressed Get keeps
+  // their focus while the action runs or waits for a sync. Waiting is `aria-disabled` rather than
+  // `disabled` for the same reason, and its click does nothing.
   if (isBeingHandled && idsWaitingForSync.includes(resource.dblEntryUid)) {
-    return <Label className="tw:my-2 tw:flex tw:h-6 tw:items-center">{waitingForSyncText}</Label>;
+    return (
+      <Button className="tw:bg-muted" variant="ghost" aria-disabled onClick={() => {}}>
+        {waitingForSyncText}
+      </Button>
+    );
   }
   if (isBeingHandled) {
     return (
