@@ -19,7 +19,9 @@
  * through a mock channel per step: `first-run-language-mock-channel.ts` drives the language step's
  * data — qualifying setup languages, available-language autonyms, the current interface language
  * (interactive), the loading flag — and `internet-settings-mock-channel.ts` stands in the internet
- * settings provider and its settings. Real English strings are rendered either way.
+ * settings provider and its settings, and `main-menu-mock-channel.ts` serves the title bar's main
+ * menu, and `interface-mode-mock-channel.ts` shares one `platform.interfaceMode` across a story.
+ * Real English strings are rendered either way.
  */
 import { useContext, useState } from 'react';
 import type { LanguageInfo } from 'platform-bible-react';
@@ -27,6 +29,8 @@ import type { LocalizeKey } from 'platform-bible-utils';
 import { getLocalizedStrings } from '../localization.utils';
 import { FirstRunLanguageMockContext } from './first-run-language-mock-channel';
 import { InternetSettingsMockContext } from './internet-settings-mock-channel';
+import { InterfaceModeMockContext } from './interface-mode-mock-channel';
+import { MainMenuMockContext } from './main-menu-mock-channel';
 
 // Pass every other renderer hook straight through to the real implementation (explicit re-export,
 // not `export *`, so it never collides with the four replaced exports below). Keep in sync if the
@@ -52,16 +56,31 @@ export function useLocalizedStrings(keys: LocalizeKey[]): [Record<string, string
  * language moves the selection live; otherwise just echoes the caller's default. Never touches the
  * real settings service (absent in Storybook).
  */
+// Typed with `unknown`: callers are type-checked against the real hook (this file is only swapped in
+// by webpack), and the settings it stands in for are not all string arrays.
 export function useSetting(
-  _key: string,
-  defaultState: string[],
-): [string[], (newData: string[]) => Promise<undefined>, () => void, boolean] {
+  key: string,
+  defaultState: unknown,
+): [unknown, (newData: unknown) => Promise<undefined>, () => void, boolean] {
   const mock = useContext(FirstRunLanguageMockContext);
+  const interfaceModeMock = useContext(InterfaceModeMockContext);
   const initial = mock?.interfaceLanguage ?? defaultState;
-  const [value, setValue] = useState<string[]>(initial);
+  const [value, setValue] = useState<unknown>(initial);
+  if (key === 'platform.interfaceMode' && interfaceModeMock) {
+    const { mode, setMode } = interfaceModeMock;
+    return [
+      mode,
+      async (newData: unknown) => {
+        if (newData === 'simple' || newData === 'power') setMode(newData);
+        return undefined;
+      },
+      () => {},
+      false,
+    ];
+  }
   return [
     value,
-    async (newData: string[]) => {
+    async (newData: unknown) => {
       setValue(newData);
       return undefined;
     },
@@ -97,6 +116,7 @@ type InternetSettingsDataTuple = [unknown, () => Promise<undefined>, boolean];
 export function useData(): unknown {
   const language = useContext(FirstRunLanguageMockContext);
   const internetSettings = useContext(InternetSettingsMockContext);
+  const mainMenu = useContext(MainMenuMockContext);
   return new Proxy(
     {},
     {
@@ -115,6 +135,9 @@ export function useData(): unknown {
             async () => undefined,
             internetSettings.isLoading,
           ];
+        // Opt-in via `main-menu-mock-channel.ts`; without a provider this falls through unchanged.
+        if (mainMenu && dataType === 'MainMenu')
+          return (): [unknown, undefined, boolean] => [mainMenu, undefined, false];
         return (_selector: unknown, def: unknown): [unknown, undefined, boolean] => [
           def,
           undefined,

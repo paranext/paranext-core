@@ -1,3 +1,8 @@
+/*
+ * OUTDATED EARLY DRAFT — not the current app. Backs the `platform/Drafts (outdated)/10Simple layout`
+ * and `10Power layout` stories. For the current window use `CurrentAppShell`
+ * (`current-app-shell.tsx`). The exported pieces stay because design-ideas stories import them.
+ */
 import {
   createContext,
   createElement,
@@ -599,7 +604,7 @@ function GnbScripturePanel() {
   );
 }
 
-function MarkersOnlyPanel() {
+export function MarkersOnlyPanel() {
   const rows = [
     ['1', '2', '3', '4', '5'],
     ['6', '7', '8', '9'],
@@ -811,7 +816,7 @@ function SourceLanguageToolsTabContent() {
   );
 }
 
-function CommentsTabContent() {
+export function CommentsTabContent() {
   const comments = [
     {
       initials: 'JD',
