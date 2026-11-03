@@ -48,9 +48,13 @@ export {
 } from './sync-activity.util';
 export {
   IDLE_SYNC_QUEUE,
+  isSyncBusyError,
   isSyncQueueSnapshot,
+  isSyncRequestRemovedError,
+  SYNC_BUSY_MARKER,
   SYNC_REQUEST_REMOVED_MARKER,
   toSyncQueue,
+  withoutSyncBusyMarker,
   type SyncQueue,
   type SyncQueueValue,
 } from './sync-queue.util';
