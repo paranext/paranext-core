@@ -366,8 +366,9 @@ export function SyncStatusButton() {
   // `isSyncing: true` window spans however many overlapping claims the sync paths take out — so a
   // project can release and re-claim without a new sync having started, and "an id this cancel did
   // not cover" is not evidence of a different sync. A pending cancel is therefore settled only by
-  // the status leaving `syncing` and by the popover being reopened, at the cost of a genuinely new
-  // overlapping sync keeping a dim "Cancelling…" until the whole union goes idle. That is the safe
+  // the status leaving `syncing`, by the popover being reopened, and by a new run's epoch (below),
+  // at the cost of a genuinely new overlapping sync keeping a dim "Cancelling…" until the whole
+  // union goes idle or the backend opens a new run. That is the safe
   // half of the trade: the alternative offers a live Cancel while a cancel is still in flight.
   // Settling it positively needs a monotonic sync-episode id in `SyncState` (`adr-toolbar-sync-status-is-local` follow-up 4).
   //
