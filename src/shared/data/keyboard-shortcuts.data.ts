@@ -377,11 +377,14 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   // The paste and cut themselves are the scripture-editors repo's ClipboardPlugin (Ctrl+V reads the
   // clipboard, Ctrl+X dispatches a cut command); `usePauseEditing` holds the chords off while the
   // editor still shows the chapter being left, as it does typing, undo and caret moves. The
-  // right-click menu's Cut and Paste are not held off.
+  // right-click menu's Cut and Paste are not held off. The hold-off starts a moment after the
+  // chapter changes: a paste or cut in that moment, or a paste whose clipboard read finishes then,
+  // still shows in the chapter being left but is not saved, or can land in the new chapter if the
+  // load is short (`usePauseEditing` says why).
   {
     id: 'scripture-cut-paste-held-off-chapter-loading',
     purpose:
-      'While the next chapter is loading, the Cut, Paste and Paste as plain text keys do nothing. This starts a moment after the chapter changes: a paste or cut in that moment, or a paste whose clipboard read finishes then, still shows in the chapter being left but is not saved, or can land in the new chapter if the load is short',
+      'While the next chapter is loading, the Cut, Paste and Paste as plain text keys do nothing',
     category: 'Editing',
     context: 'Scripture editor, while it moves to another chapter',
     keys: {
@@ -844,9 +847,12 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
     id: 'footnote-markers-menu',
     purpose:
-      'Open the inline markers menu in the footnote editor. Does nothing while the popover’s own right-click menu is open',
+      'Open the inline markers menu in the footnote editor. Does nothing while the popover’s own right-click menu is open. In a view that hides markers, with no menu to open, the editor refuses the key and shows a notice',
     category: 'Editing',
     context: 'Footnote editor',
+    // In a view that hides markers the popover claims this key in the capture phase, so the editor
+    // (the scripture-editors repo's UnstorableTextPlugin), which refuses a typed `\`, sees it only
+    // when no menu opens.
     keys: { macOS: '\\', windows: '\\', linux: '\\' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',

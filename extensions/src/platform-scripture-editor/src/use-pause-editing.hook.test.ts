@@ -79,6 +79,7 @@ describe('usePauseEditing', () => {
     ['pasting', 'v', { ctrlKey: true }],
     ['pasting as plain text', 'V', { ctrlKey: true, shiftKey: true }],
     ['pasting on macOS', 'v', { metaKey: true }],
+    ['pasting as plain text on macOS', 'V', { metaKey: true, shiftKey: true }],
     // The editor takes the cut chord itself and dispatches its cut command, with no `cut` event.
     ['cutting', 'x', { ctrlKey: true }],
     ['cutting on macOS', 'x', { metaKey: true }],
