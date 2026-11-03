@@ -92,6 +92,57 @@ test('overlay command palette rendering and interaction', async ({ mainPage }) =
     await expect.poll(async () => frame.evaluate(() => document.hasFocus())).toBe(true);
   });
 
+  await test.step('a click away from a passive palette leaves focus in its web view', async () => {
+    const webViewId = await (await frame.frameElement()).getAttribute('data-web-view-id');
+    if (!webViewId) throw new Error('The Hello Rock3 frame has no web view id');
+
+    // A passive palette leaves focus in the web view that opened it, as the marker palette leaves
+    // it in the editor. Give the web view focus first, then open a centred passive palette for it.
+    await mainPage.evaluate((id) => {
+      document.querySelector<HTMLIFrameElement>(`iframe[data-web-view-id="${id}"]`)?.focus();
+    }, webViewId);
+    await expect.poll(async () => frame.evaluate(() => document.hasFocus())).toBe(true);
+    await mainPage.evaluate((id) => {
+      // `globalThis.papi` is set by the renderer and untyped in the Playwright context.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion -- Playwright page has no PAPI types
+      const { papi } = window as unknown as {
+        papi: {
+          overlays: {
+            showCommandPalette: (
+              request: { items: { id: string; label: string }[]; passive: boolean },
+              requesterId: string,
+            ) => Promise<string | undefined>;
+          };
+        };
+      };
+      // Not awaited: the promise settles only when the palette closes
+      papi.overlays
+        .showCommandPalette({ items: [{ id: 'p', label: 'Paragraph (p)' }], passive: true }, id)
+        .catch(() => {});
+    }, webViewId);
+
+    const palette = mainPage.locator('[data-overlay-command-palette]');
+    await expect(palette).toBeVisible({ timeout: 10_000 });
+    const backdrop = mainPage.locator('[data-overlay-command-palette-backdrop]');
+    await expect(backdrop).toBeVisible();
+    // Opening a passive palette must not have taken focus from the web view
+    await expect.poll(async () => frame.evaluate(() => document.hasFocus())).toBe(true);
+    // Stay clear of the overlay service's creation grace, so its focus tracking is live
+    await mainPage.waitForTimeout(500);
+
+    const box = await backdrop.boundingBox();
+    if (!box) throw new Error('The palette backdrop has no bounding box');
+    await mainPage.mouse.click(box.x + 40, box.y + box.height - 40, { delay: 120 });
+
+    await expect(palette).not.toBeVisible({ timeout: 3_000 });
+    await expect
+      .poll(async () => mainPage.evaluate(() => document.activeElement?.tagName), {
+        timeout: 3_000,
+      })
+      .toBe('IFRAME');
+    await expect.poll(async () => frame.evaluate(() => document.hasFocus())).toBe(true);
+  });
+
   await test.step('keyboard navigation works', async () => {
     const palette = await openCommandPalette(mainPage, frame);
 
