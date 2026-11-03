@@ -77,14 +77,10 @@ test('overlay command palette rendering and interaction', async ({ mainPage }) =
     const backdrop = mainPage.locator('[data-overlay-command-palette-backdrop]');
     await expect(backdrop).toBeVisible();
     const box = await backdrop.boundingBox();
-    expect(box).not.toBeNull();
-    if (!box) return;
+    if (!box) throw new Error('The palette backdrop has no bounding box');
 
     // Press well away from the palette and hold briefly, like a real click
-    await mainPage.mouse.move(box.x + 40, box.y + box.height - 40);
-    await mainPage.mouse.down();
-    await mainPage.waitForTimeout(120);
-    await mainPage.mouse.up();
+    await mainPage.mouse.click(box.x + 40, box.y + box.height - 40, { delay: 120 });
 
     await expect(palette).not.toBeVisible({ timeout: 3_000 });
     // Focus goes back to the web view that opened the palette, not to the document body
