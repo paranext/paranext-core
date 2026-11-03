@@ -8555,7 +8555,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   tears down the whole C# connection (an unaddressed platform-level issue), so the response is
   bounded by an aggregate size cap and fails with a documented error whose machine-readable
   contract is the RESOURCE_EXHAUSTED platform error code (exception types do not cross the RPC
-  boundary, but the platform error code in Exception.Data does); the documented message prefix remains the fallback for
+  boundary, but Exception.Data does); the documented message prefix remains the fallback for
   consumers that see only the message. Schema evolution now moves at platform speed: a field the
   payload drops costs a core release to recover, which is why the setup records deliberately
   carry the model text's identity even though nothing consumes it yet. A future PT9-legacy import
@@ -8563,6 +8563,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   change detection, unpublished-only advertisement - rather than re-litigating it.
 - **Source:** PR #2707 review of the PT9 interlinear projectInterface - finding that the PR's
   architecture decisions had no recorded precedent for the next PT9-legacy import to follow.
+- **Amended 2026-11-03:** a C# `WithCode` code now crosses JSON-RPC to TypeScript
+  (`adr-platform-error-code-crosses-json-rpc`), so "the platform error code in Exception.Data"
+  reaches a TypeScript caller as the error's `code`. The documented message prefix remains a
+  fallback only where a caller may meet a core build without that change.
 
 ## adr-range-scroll-owned-by-editor: The editor, not the requesting panel, owns bringing a Find/Checks/Comments jump target into view
 
@@ -8766,8 +8770,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `InternetServicesGate`'s saved-setting check, which also refuses "Disable access to some Bible
   translation services", is for Send/Receive and the DBL, so it doesn't apply here. Failures come
   back from C# as a result object and become
-  `PlatformError` codes in the extension host, a contract set while C# codes didn't cross the RPC
-  boundary; moving to thrown codes is PT-4884.
+  `PlatformError` codes in the extension host, because C# codes don't cross the RPC boundary yet
+  (PT-4750).
 - **Alternatives:** An open `paratextRegistration.*` command: every extension could impersonate the
   user to every registered service. A one-time user-consent prompt: the extra step we want to avoid,
   though it can be layered on later. The OAuth browser flow: users don't know their Registry login.
@@ -8794,8 +8798,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   refuses them only this request type. Authenticating the clients the main process launches, so
   sensitive request types can be limited to the extension host, is open work in PT-2893, deferred
   as of 2026-10-20 until after the November release; a renderer connection can't be trusted with
-  them because a web view can drive it. Revisit with PT-4884 (throw codes instead of
-  returning them; codes now cross — see `adr-platform-error-code-crosses-json-rpc`), when the WebSocket authenticates its clients (and remove the `Origin` stopgap
+  them because a web view can drive it. Revisit when PT-4750 lands (throw codes instead of
+  returning them), when the WebSocket authenticates its clients (and remove the `Origin` stopgap
   then), or if a consent prompt becomes necessary.
 - **Amended 2026-10-22 (PT-4893):** "Disable access to some Bible translation services" now saves
   `Disabled`, so tokens are refused for it in every location. A saved `VpnRequired`, the
@@ -8804,6 +8808,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   look up the location for it, so a slow lookup cannot turn the refusal into `UNAVAILABLE`. See
   `adr-internet-use-options-follow-pt9-values`.
 - **Source:** PT-4865 (design spec attached there).
+- **Amended 2026-11-03:** C# codes now cross JSON-RPC (`adr-platform-error-code-crosses-json-rpc`),
+  so the extension host no longer has to rely on returned codes because thrown ones are lost. The
+  follow-up above, previously tracked as PT-4750, is retargeted to PT-4884 (throw codes instead of
+  returning them); revisit it together with the WebSocket-authentication and consent-prompt
+  conditions above.
 
 ## adr-renderer-crash-reload-is-user-driven-and-uncapped: React-level crash recovery is one user-driven reload with no budget, unlike the process-level path
 
@@ -11821,9 +11830,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     `EnterWrite`. It is not in `LocalParatextProjects.GetParatextProject`, which S/R, settings and
     metadata share. `OpenBlockedCoverageTests` scans the guarded services for text reads and
     writes and fails on any that neither refuses first nor carries an `// open-block: exempt`
-    marker naming its guarded caller. The exception's `FAILED_PRECONDITION` code crosses JSON-RPC
-    (`adr-platform-error-code-crosses-json-rpc`), but TypeScript still relies on the sentinel,
-    because that code alone does not identify this refusal.
+    marker naming its guarded caller. The exception's `FAILED_PRECONDITION` code is for C# callers
+    only: `CommonErrorData` drops `Exception.Data` at the JSON-RPC boundary, so TypeScript relies on
+    the sentinel.
   - **TypeScript shows the reason.** Tools that surface the refusal detect the sentinel and show the
     localized reason (`%project_unsupported_generic%` if the key can't be read). The inventory,
     checks, Checklist and Manage Books `open*` commands also refuse such a project; `openFind`
@@ -11919,7 +11928,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     - Deferred to a follow-up: each editor build adds a `getMetadataForProject` fan-out, and
       auto-open its own metadata lookup, rather than reusing lookups they already make.
 - **Source:** PT-4685.
-- **Amended 2026-10-30:** the C# refusal's `FAILED_PRECONDITION` code now reaches TypeScript too
+- **Amended 2026-11-03:** the C# refusal's `FAILED_PRECONDITION` code now reaches TypeScript too
   (`adr-platform-error-code-crosses-json-rpc`), so "for C# callers only" above no longer holds. The
   TypeScript callers still detect the sentinel, which also identifies this refusal among other
   `FAILED_PRECONDITION` failures.
