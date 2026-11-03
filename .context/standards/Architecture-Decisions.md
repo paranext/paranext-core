@@ -10831,8 +10831,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - **Busy refusals are retried on a marker.** The C# semaphore is also held briefly with the
     activity already idle (the shared-project list fetch, a run's closing project-list refresh).
     The backend's two busy refusals keep their codes (`FAILED_PRECONDITION` / `UNAVAILABLE`) and end
-    their message with ` (SYNC_BUSY)`. The queue retries only on that marker, with backoff, and
-    after a 2-minute cap rejects the waiting requests with the last error. A busy refusal is never
+    their message with ` (SYNC_BUSY)`. The queue retries only on that marker, with backoff; while
+    the activity signal reports no sync, after about 2 minutes of retrying (the retry delays
+    count toward it) it rejects the waiting requests with the last error. A busy refusal is never
     reported as a failure or stamped while the queue is still retrying; an `INTERNAL` "not
     responding" error is never retried. A code alone does not identify the refusal, and the marker
     survives a TypeScript handler hop that keeps only the message. Core's quit sync retries on the
@@ -10842,7 +10843,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     install or update, and skips any resource with an open user install or removal: it does not
     wait, logs the skip, and does not count it as a failure. A user write on a registered resource
     still waits for the sync's update, bounded by a timeout that restarts for each run that holds
-    the resource; the wait is cancellable on the sync side and not on the install side. An install
+    the resource; that wait cannot be cancelled, and the sync side never waits at all. An install
     waits only for the running run, never a waiting one.
   - **The queue is in memory** and is dropped at quit; rows are plain again on restart. The
     extension host is killed in `will-quit` without deactivating, so core's shutdown tasks drop the
@@ -10881,9 +10882,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - Revisit if a core-authoritative "a sync is running" signal (PT-4214) lands — the 30 s recheck
     could then be dropped.
 - **Amended 2026-11-03:** busy refusals carry a ` (SYNC_BUSY)` message marker and the queue retries
-  only on it (backoff, 2-minute cap, then the waiting requests reject with the last error;
-  `INTERNAL` is never retried); a sync skips a resource with an open user install or removal
-  instead of waiting; quit drops the waiting requests first, the extension host is killed in
+  only on it (backoff; while the activity signal reports no sync, after about 2 minutes of
+  retrying the waiting requests reject with the last error; `INTERNAL` is never retried); a sync
+  skips a resource with an open user install or removal instead of waiting, so only a user write
+  waits, and that wait is bounded and cannot be cancelled; quit drops the waiting requests first, the extension host is killed in
   `will-quit`, and on macOS closing the last window pauses the queue until a window opens again
   (`resumeSyncQueue`); the fallbacks for a missing command are gone, with the three pull requests
   merging on one working day in the order core, Studio, internal-extensions; the snapshot carries
