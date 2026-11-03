@@ -3,6 +3,7 @@ import type { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { areUsjContentsEqualExceptWhitespace } from 'platform-bible-utils';
 import { MutableRefObject, useEffect, useRef } from 'react';
+import { withoutZeroWidthNoBreakSpaces } from './debounced-pdp-save.util';
 import {
   areUsjContentDivergencesEquivalent,
   describeUsjContentDivergence,
@@ -56,17 +57,21 @@ export interface EditorDocumentSelector {
  * Whether the editor's USJ holds the same content as a PDP document, IGNORING the `version` field.
  *
  * `areUsjContentsEqualExceptWhitespace` shallow-compares every top-level property except `content`
- * — `version` included — while the editor always reports its USJ as 3.1 and the PDP serves 3.0
- * (which is why every save path runs `correctEditorUsjVersion` on the way out). Comparing the two
- * documents raw is therefore FALSE whatever the content says, so an editor-vs-PDP equality check
- * that does not neutralize `version` can never report a converged round trip.
+ * — `version` included. Convergence is a question about content: the editor reports the version of
+ * the document it was loaded with, which normally is the PDP's, but a version-only difference must
+ * not keep a round trip that converged from being reported as converged. Nor must a stored
+ * zero-width no-break space, which the editor goes on holding after a save has dropped it (see
+ * {@link withoutZeroWidthNoBreakSpaces}).
  */
 function areUsjContentsEqualIgnoringVersion(
   editorUsj: Usj | undefined,
   pdpUsj: Usj | undefined,
 ): boolean {
   if (!editorUsj || !pdpUsj) return areUsjContentsEqualExceptWhitespace(editorUsj, pdpUsj);
-  return areUsjContentsEqualExceptWhitespace({ ...editorUsj, version: pdpUsj.version }, pdpUsj);
+  return areUsjContentsEqualExceptWhitespace(
+    withoutZeroWidthNoBreakSpaces({ ...editorUsj, version: pdpUsj.version }),
+    withoutZeroWidthNoBreakSpaces(pdpUsj),
+  );
 }
 
 /** Whether two selectors identify the same chapter document (see {@link EditorDocumentSelector}). */
@@ -99,7 +104,8 @@ export const LOSSY_WARN_MEMORY_LIMIT = 32;
  * reset so that the editor is properly re-initialized with content when it remounts. Without this
  * reset, returning to the same chapter after passing through a non-existent book would leave the
  * fresh editor empty because the stale `usjSentToPdp` value would match the incoming PDP data and
- * skip the `setEditorUsj` call.
+ * skip the `setEditorUsj` call. That holds whether or not a chapter is being delivered at the time:
+ * the web view gives this hook no chapter while it holds one back, and takes the editor down too.
  */
 export function useEditorPdpSync({
   usjFromPdp,
@@ -231,7 +237,6 @@ export function useEditorPdpSync({
   // delivery when it lands. Gating on a genuinely new delivery keeps the pair honest.
   const lastProcessedUsjFromPdp = useRef<Usj | undefined>(undefined);
   useEffect(() => {
-    if (!usjFromPdp) return;
     if (!editorRef.current) {
       // Editor unmounted — reset so it re-initializes when it remounts (see TSDoc). The applied
       // identity describes the CURRENT editor instance's content, so it resets with it.
@@ -243,6 +248,7 @@ export function useEditorPdpSync({
       lastProcessedUsjFromPdp.current = undefined;
       return;
     }
+    if (!usjFromPdp) return;
     // A re-run with no new delivery (the selector moved ahead of its data, or an unrelated dep
     // changed) carries no information to act on. Reference equality is the right test: each
     // delivery hands down a new object, and a re-delivery of identical content under

@@ -41,8 +41,6 @@ function labelStandardCheck(sourceFile: ts.SourceFile, check: ts.Node): string {
     check.getStart(sourceFile) >= container.getStart(sourceFile) &&
     check.getEnd() <= container.getEnd();
   for (let node = check.parent; node; node = node.parent) {
-    if (ts.isVariableDeclaration(node) && node.name.getText(sourceFile) === 'getViewOptionsForType')
-      return 'getViewOptionsForType';
     if (ts.isIfStatement(node) && contains(node.expression)) {
       const condition = node.expression.getText(sourceFile);
       if (condition.includes("=== 't'")) return 'Ctrl+T insert';
@@ -93,6 +91,8 @@ describe('note pane model wiring', () => {
       }),
     );
     expect(checksByFile).toEqual({
+      // Standard view's own view options
+      'editor-view-options.util.ts': ["getViewOptionsForType: if (viewType === 'standard') {"],
       // This router serves only the main text's marker palette, which only Standard view has
       'palette-key-routing.util.ts': [
         "shouldRoutePaletteKey: if (viewType !== 'standard') return false;",
@@ -107,10 +107,6 @@ describe('note pane model wiring', () => {
         // The one place the note model itself is decided
         "usesPaneNoteModel: if (viewType === 'standard') return true;",
       ],
-      'platform-scripture-editor.web-view.tsx': [
-        // Standard view's own view options
-        'getViewOptionsForType',
-      ],
       'use-project-stylesheet.hook.ts': [
         // Which stylesheet mode the text renders in; not a note check
         "projectStylesheetMode: return viewType === 'standard' ? 'full' : 'fonts';",
@@ -121,6 +117,30 @@ describe('note pane model wiring', () => {
   it('feeds the main editor its own view options, never the pane’s', () => {
     expect(propExpressions(sourceFile, 'Editorial', 'options')).toEqual([
       'editorOptionsWithCopyLimit',
+    ]);
+  });
+
+  it('gives the pane’s Standard view options the project’s no-break-space spelling', () => {
+    // Simple's pane renders in Standard view, which reads a literal `~` as a no-break space unless
+    // it knows the project stores invisible characters literally.
+    const standardViewOptions = descendants(sourceFile)
+      .filter(
+        (node): node is ts.CallExpression =>
+          ts.isCallExpression(node) &&
+          node.expression.getText(sourceFile) === 'resolveFootnotesPaneViewOptions',
+      )
+      .flatMap((call) => call.arguments.filter(ts.isObjectLiteralExpression))
+      .flatMap((argument) => argument.properties.filter(ts.isPropertyAssignment))
+      .filter((property) => property.name.getText(sourceFile) === 'standardViewOptions')
+      .map(({ initializer }) =>
+        ts.isCallExpression(initializer)
+          ? [initializer.expression, ...initializer.arguments].map((node) =>
+              node.getText(sourceFile),
+            )
+          : initializer.getText(sourceFile),
+      );
+    expect(standardViewOptions).toEqual([
+      ['getEditorViewOptions', "'standard'", 'isPowerMode', 'allowInvisibleCharacters'],
     ]);
   });
 

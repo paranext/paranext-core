@@ -165,6 +165,20 @@ vi.mock('@eten-tech-foundation/platform-editor', () => ({
     React.useImperativeHandle(ref, () => ({ setUsj: setUsjSpy }));
     return <div data-testid="editorial" />;
   }),
+  getDefaultViewOptions: () => ({}),
+}));
+
+// The project's `allowInvisibleCharacters` setting, as each test wants it read.
+const allowInvisibleCharactersSetting = vi.hoisted(() => {
+  const current: { value: boolean | undefined; isLoading: boolean; isUnreadable: boolean } = {
+    value: false,
+    isLoading: false,
+    isUnreadable: false,
+  };
+  return { current };
+});
+vi.mock('./use-allow-invisible-characters.hook', () => ({
+  useAllowInvisibleCharacters: () => allowInvisibleCharactersSetting.current,
 }));
 
 // Captures the props handed to the real ResourceTextPanel component on every render, then renders
@@ -1423,6 +1437,53 @@ function renderSelectedResource(projectDataMethods: Record<string, unknown>, cha
 }
 
 const STALE_USJ = { type: 'USJ', version: '3.1', content: [] };
+
+describe('ResourceTextPanel — allowInvisibleCharacters', () => {
+  afterEach(() => {
+    allowInvisibleCharactersSetting.current = {
+      value: false,
+      isLoading: false,
+      isUnreadable: false,
+    };
+  });
+
+  it.each([
+    { name: 'on', setting: { value: true, isLoading: false, isUnreadable: false }, expected: true },
+    {
+      name: 'off',
+      setting: { value: false, isLoading: false, isUnreadable: false },
+      expected: false,
+    },
+    {
+      name: 'still loading',
+      setting: { value: undefined, isLoading: true, isUnreadable: false },
+      expected: false,
+    },
+    {
+      name: 'unreadable',
+      setting: { value: undefined, isLoading: false, isUnreadable: true },
+      expected: false,
+    },
+  ])(
+    'hands the panel $expected while the project setting is $name',
+    async ({ setting, expected }) => {
+      allowInvisibleCharactersSetting.current = setting;
+      renderSelectedResource(
+        {
+          ChapterUSJ: vi.fn(() => [STALE_USJ, vi.fn(), false]),
+          BookCopyLimits: vi.fn(() => [[undefined, 9], vi.fn(), false]),
+        },
+        1,
+      );
+
+      await waitFor(() =>
+        expect(capturedResourceTextPanelProps).toHaveBeenLastCalledWith(
+          expect.objectContaining({ allowInvisibleCharacters: expected }),
+        ),
+      );
+    },
+  );
+});
 
 describe('ResourceTextPanel — copy limit', () => {
   afterEach(() => {

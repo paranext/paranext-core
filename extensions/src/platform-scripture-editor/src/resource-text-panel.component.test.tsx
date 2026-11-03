@@ -27,6 +27,9 @@ import { RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID } from './resource-book-not-availab
  */
 const setUsjSpy = vi.fn();
 
+/** Collects the `options` prop passed to each Editorial render. */
+const capturedEditorOptions = vi.fn();
+
 // jsdom implements no `IntersectionObserver`, and the panel's reveal-scroll effect reaches one
 // through `useViewVisibility`. A no-op stub keeps rendering from throwing; the tests below assert on
 // content states rather than on scroll behaviour, so nothing depends on it reporting visibility.
@@ -44,10 +47,12 @@ beforeAll(() => {
 });
 
 vi.mock('@eten-tech-foundation/platform-editor', () => ({
-  Editorial: React.forwardRef((_props: Record<string, unknown>, ref: React.Ref<unknown>) => {
+  Editorial: React.forwardRef((props: Record<string, unknown>, ref: React.Ref<unknown>) => {
+    capturedEditorOptions(props.options);
     React.useImperativeHandle(ref, () => ({ setUsj: setUsjSpy }));
     return <div data-testid="editorial" />;
   }),
+  getDefaultViewOptions: () => ({ viewOptionsFor: 'default' }),
 }));
 
 const BIBLE_TEXT_MISSING_BOOK = 'This book does not exist in this Bible text.';
@@ -187,6 +192,7 @@ function makeProps(overrides: Partial<ResourceTextPanelProps> = {}): ResourceTex
     isUsjLoading: false,
     textDirection: 'ltr',
     copyLimit: undefined,
+    allowInvisibleCharacters: false,
     isSelecting: false,
     isInstalling: false,
     installFailed: false,
@@ -256,6 +262,21 @@ const WAITING_FOR_CONTENT = {
 afterEach(() => {
   vi.restoreAllMocks();
   setUsjSpy.mockClear();
+});
+
+describe('ResourceTextPanel copy spelling', () => {
+  it.each([true, false])(
+    "gives the editor the project's allowInvisibleCharacters (%s) in its view options",
+    (allowInvisibleCharacters) => {
+      renderPanel({ allowInvisibleCharacters });
+
+      expect(capturedEditorOptions).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          view: { viewOptionsFor: 'default', allowInvisibleCharacters },
+        }),
+      );
+    },
+  );
 });
 
 describe('ResourceTextPanel book not in this resource', () => {

@@ -24,7 +24,6 @@ import { render, act, waitFor } from '@testing-library/react';
 import { Editorial, type DeltaOp, type EditorRef } from '@eten-tech-foundation/platform-editor';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { UsjReaderWriter } from 'platform-bible-utils';
-import { correctEditorUsjVersion } from './platform-scripture-editor.utils';
 
 const PARA_TEXT = 'In the beginning';
 
@@ -49,12 +48,9 @@ const initialUsj: Usj = {
  */
 const END_OF_PARA_TEXT = 1 + 1 + 1 + PARA_TEXT.length;
 
-/**
- * The USFM this extension would hand to the PDP for `usj`, through the same version shim its save
- * path applies (`correctEditorUsjVersion` — the editor stamps 3.1, the writer serves 3.0).
- */
+/** The USFM this extension would hand to the PDP for `usj`. */
 function toUsfm(usj: Usj): string {
-  return new UsjReaderWriter(correctEditorUsjVersion(usj)).toUsfm();
+  return new UsjReaderWriter(usj).toUsfm();
 }
 
 /** A remote peer's insertion of a `\nd` span, with or without the implicit-close flag. */
