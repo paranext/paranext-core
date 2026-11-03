@@ -717,8 +717,10 @@ internal class DblResourcesDataProvider(
 
     /// <summary>
     /// Try to install DBL resource with specified DBL id. Waits first while a running sync is
-    /// updating the same resource, and makes a sync that starts meanwhile wait for this install
-    /// (see <see cref="SyncRunResourceGuard"/>).
+    /// updating the same resource, and a sync that starts meanwhile skips this resource (see
+    /// <see cref="SyncRunResourceGuard"/>). The write scope counts from the moment
+    /// <c>EnterResourceWrite</c> returns, before the provider gate is held, so a sync also skips a
+    /// resource whose install is still queued behind other DBL work; that is intended.
     /// </summary>
     [NetworkTimeout(DBL_NETWORK_TIMEOUT)]
     internal Task InstallDblResource(string DBLEntryUid) =>
@@ -827,8 +829,8 @@ internal class DblResourcesDataProvider(
 
     /// <summary>
     /// Try to uninstall DBL resource with specified DBL id. Waits first while a running sync is
-    /// updating the same resource, and makes a sync that starts meanwhile wait for this removal
-    /// (see <see cref="SyncRunResourceGuard"/>).
+    /// updating the same resource, and a sync that starts meanwhile skips this resource (see
+    /// <see cref="SyncRunResourceGuard"/>).
     /// </summary>
     // Catalog may load on-demand here, and a sync updating the resource may hold it up, so allow the
     // caller to wait without timing out.

@@ -6,8 +6,8 @@ namespace TestParanextDataProvider.Projects.SendReceive
 {
     /// <summary>
     /// Unit tests for <see cref="SyncRunResourceGuard"/>: a running sync and a user-started DBL
-    /// resource write (install, uninstall) never write the same resource at once — whichever comes
-    /// second waits for the other.
+    /// resource write (install, uninstall) never write the same resource at once: a user write waits
+    /// for a run that holds its resource.
     /// <para>
     /// The guard is process-wide state, so every test resets it (TearDown). That is safe because no
     /// fixture in c-sharp-tests is <c>[Parallelizable]</c>.
@@ -34,24 +34,6 @@ namespace TestParanextDataProvider.Projects.SendReceive
 
         private static async Task<bool> FinishesWithin(Task task, TimeSpan bound) =>
             await Task.WhenAny(task, Task.Delay(bound)) == task;
-
-        /// <summary>
-        /// Waits until a <see cref="SyncRunResourceGuardTestHelpers.RegisterRunAndDrain"/> on another thread has registered
-        /// its run, so a test can act while that run is still waiting for writes to drain.
-        /// </summary>
-        private static void WaitUntilRunIsRegistered(string uid)
-        {
-            var elapsed = Stopwatch.StartNew();
-            while (!SyncRunResourceGuard.CurrentResourceIds.Contains(uid))
-            {
-                Assert.That(
-                    elapsed.Elapsed,
-                    Is.LessThan(s_shouldReturnBound),
-                    "run never registered"
-                );
-                Thread.Sleep(5);
-            }
-        }
 
         private static string CaptureConsole(Action action)
         {
@@ -82,7 +64,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
         [Test]
         public async Task EnterResourceWrite_IsNotBlockedByARunThatHoldsOtherResources()
         {
-            using var run = SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([HeldUid]);
+            using var run = SyncRunResourceGuardTestHelpers.StartRun([HeldUid]);
 
             var write = Task.Run(() => SyncRunResourceGuard.EnterResourceWrite(OtherUid).Dispose());
 
@@ -92,7 +74,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
         [Test]
         public async Task EnterResourceWrite_WaitsForASyncRunThatHoldsItsResource()
         {
-            var run = SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([HeldUid]);
+            var run = SyncRunResourceGuardTestHelpers.StartRun([HeldUid]);
 
             var write = Task.Run(() => SyncRunResourceGuard.EnterResourceWrite(HeldUid).Dispose());
 
@@ -114,7 +96,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
         [Test]
         public void EnterResourceWrite_ReturnsWhenTheRunIsDisposedFromAnotherThread()
         {
-            var run = SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([HeldUid]);
+            var run = SyncRunResourceGuardTestHelpers.StartRun([HeldUid]);
             var disposer = Task.Run(async () =>
             {
                 await Task.Delay(s_stillBlockedWindow);
@@ -133,9 +115,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
         [Test]
         public async Task EnterResourceWrite_MatchesIdsIgnoringCase()
         {
-            var run = SyncRunResourceGuardTestHelpers.RegisterRunAndDrain(
-                [HeldUid.ToUpperInvariant()]
-            );
+            var run = SyncRunResourceGuardTestHelpers.StartRun([HeldUid.ToUpperInvariant()]);
 
             var write = Task.Run(() => SyncRunResourceGuard.EnterResourceWrite(HeldUid).Dispose());
 
@@ -160,7 +140,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
             // write that starts waiting late) cannot make it fail.
             var budget = TimeSpan.FromSeconds(4);
             SyncRunResourceGuard.WaitTimeout = budget;
-            var runA = SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([HeldUid]);
+            var runA = SyncRunResourceGuardTestHelpers.StartRun([HeldUid]);
             IDisposable? runB = null;
 
             using var output = new StringWriter();
@@ -178,7 +158,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
                 SyncRunResourceGuard.InsideGuardLockForTests(() =>
                 {
                     runA.Dispose();
-                    runB = SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([HeldUid]);
+                    runB = SyncRunResourceGuardTestHelpers.StartRun([HeldUid]);
                 });
 
                 var untilCheck = budget + TimeSpan.FromSeconds(1) - started.Elapsed;
@@ -210,7 +190,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
         public void EnterResourceWrite_TimesOutLogsAndProceeds()
         {
             SyncRunResourceGuard.WaitTimeout = TimeSpan.FromMilliseconds(50);
-            using var run = SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([HeldUid]);
+            using var run = SyncRunResourceGuardTestHelpers.StartRun([HeldUid]);
 
             var log = CaptureConsole(
                 () => SyncRunResourceGuard.EnterResourceWrite(HeldUid).Dispose()
@@ -228,268 +208,15 @@ namespace TestParanextDataProvider.Projects.SendReceive
 
         #endregion
 
-        #region A starting run waits for writes of its resources
-
-        [Test]
-        public async Task WaitForResourceWrites_WaitsForAWriteOfOneOfItsResourcesToFinish()
-        {
-            var write = SyncRunResourceGuard.EnterResourceWrite(HeldUid);
-
-            var begin = Task.Run(
-                () => SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([OtherUid, HeldUid])
-            );
-
-            Assert.That(
-                await FinishesWithin(begin, s_stillBlockedWindow),
-                Is.False,
-                "the run must wait while a write of one of its resources is open"
-            );
-
-            write.Dispose();
-
-            Assert.That(
-                await FinishesWithin(begin, s_shouldReturnBound),
-                Is.True,
-                "the run must start once the write ends"
-            );
-            (await begin).Dispose();
-        }
-
-        [Test]
-        public async Task WaitForResourceWrites_IsNotBlockedByWritesOfOtherResources()
-        {
-            using var write = SyncRunResourceGuard.EnterResourceWrite(OtherUid);
-
-            var begin = Task.Run(
-                () => SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([HeldUid])
-            );
-
-            Assert.That(await FinishesWithin(begin, s_shouldReturnBound), Is.True);
-            (await begin).Dispose();
-        }
-
-        [Test]
-        public async Task WaitForResourceWrites_WaitsForEveryOpenWriteOfTheSameResource()
-        {
-            var first = SyncRunResourceGuard.EnterResourceWrite(HeldUid);
-            var second = SyncRunResourceGuard.EnterResourceWrite(HeldUid);
-
-            var begin = Task.Run(
-                () => SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([HeldUid])
-            );
-            first.Dispose();
-            first.Dispose(); // a repeat Dispose must not also release the second write
-
-            Assert.That(
-                await FinishesWithin(begin, s_stillBlockedWindow),
-                Is.False,
-                "the second write is still open"
-            );
-
-            second.Dispose();
-
-            Assert.That(await FinishesWithin(begin, s_shouldReturnBound), Is.True);
-            (await begin).Dispose();
-        }
-
-        [Test]
-        public async Task RegisterRun_MakesNewWritesOfItsResourcesWaitWhileTheRunDrains()
-        {
-            // Registering before draining is what keeps a stream of installs from starving a sync.
-            var inFlight = SyncRunResourceGuard.EnterResourceWrite(HeldUid);
-            var begin = Task.Run(
-                () => SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([HeldUid])
-            );
-            WaitUntilRunIsRegistered(HeldUid);
-
-            var arriving = Task.Run(
-                () => SyncRunResourceGuard.EnterResourceWrite(HeldUid).Dispose()
-            );
-            Assert.That(
-                await FinishesWithin(arriving, s_stillBlockedWindow),
-                Is.False,
-                "a write arriving after the run registered must wait for the run"
-            );
-
-            inFlight.Dispose();
-            Assert.That(await FinishesWithin(begin, s_shouldReturnBound), Is.True);
-            Assert.That(
-                arriving.IsCompleted,
-                Is.False,
-                "the run is open now; the write still waits"
-            );
-
-            (await begin).Dispose();
-            Assert.That(await FinishesWithin(arriving, s_shouldReturnBound), Is.True);
-        }
-
-        [Test]
-        public void WaitForResourceWrites_TimesOutOnAStuckWriteScopeLogsAndProceeds()
-        {
-            SyncRunResourceGuard.WaitTimeout = TimeSpan.FromMilliseconds(50);
-            var stuck = SyncRunResourceGuard.EnterResourceWrite(HeldUid);
-            IDisposable? run = null;
-
-            var log = CaptureConsole(
-                () => run = SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([HeldUid])
-            );
-
-            Assert.That(log, Does.Contain("Warning").And.Contain(HeldUid).And.Contain("anyway"));
-            Assert.That(
-                SyncRunResourceGuard.CurrentResourceIds,
-                Is.EquivalentTo(new[] { HeldUid }),
-                "the run proceeds and holds its resources"
-            );
-            run!.Dispose();
-            stuck.Dispose();
-        }
-
-        #endregion
-
-        #region Registering and draining as two steps
-
-        [Test]
-        public async Task RegisterRun_NeverWaits()
-        {
-            var inFlight = SyncRunResourceGuard.EnterResourceWrite(HeldUid);
-
-            var register = Task.Run(() => SyncRunResourceGuard.RegisterRun([HeldUid]));
-
-            Assert.That(
-                await FinishesWithin(register, s_shouldReturnBound),
-                Is.True,
-                "registering does not wait for the write already open"
-            );
-            Assert.That(
-                SyncRunResourceGuard.CurrentResourceIds,
-                Is.EquivalentTo(new[] { HeldUid }),
-                "the run holds its resources from registration"
-            );
-            var arriving = Task.Run(
-                () => SyncRunResourceGuard.EnterResourceWrite(HeldUid).Dispose()
-            );
-            Assert.That(
-                await FinishesWithin(arriving, s_stillBlockedWindow),
-                Is.False,
-                "a write arriving after registration waits for the run"
-            );
-
-            (await register).Dispose();
-            inFlight.Dispose();
-            Assert.That(await FinishesWithin(arriving, s_shouldReturnBound), Is.True);
-        }
-
-        [Test]
-        public void ResourceIdsWithOpenWrites_NamesOnlyTheRunsUidsAUserIsStillWriting()
-        {
-            var inFlight = SyncRunResourceGuard.EnterResourceWrite(HeldUid.ToUpperInvariant());
-            using var unrelated = SyncRunResourceGuard.EnterResourceWrite("not-in-the-run");
-            using var run = SyncRunResourceGuard.RegisterRun([HeldUid, OtherUid]);
-
-            Assert.That(
-                run.ResourceIdsWithOpenWrites(),
-                Is.EquivalentTo(new[] { HeldUid }),
-                "the uid being written, in either case, and none the run does not hold"
-            );
-
-            inFlight.Dispose();
-
-            Assert.That(run.ResourceIdsWithOpenWrites(), Is.Empty);
-        }
-
-        [Test]
-        public async Task WaitForResourceWrites_ThrowsWhenCancelledAndTheRunCanStillBeDisposed()
-        {
-            var inFlight = SyncRunResourceGuard.EnterResourceWrite(HeldUid);
-            var run = SyncRunResourceGuard.RegisterRun([HeldUid]);
-            using var cancellation = new CancellationTokenSource();
-
-            var wait = Task.Run(() => run.WaitForResourceWrites(cancellation.Token));
-            Assert.That(
-                await FinishesWithin(wait, s_stillBlockedWindow),
-                Is.False,
-                "waits while the write is open"
-            );
-
-            cancellation.Cancel();
-
-            Assert.That(
-                await FinishesWithin(wait, s_shouldReturnBound),
-                Is.True,
-                "the cancel ends the wait although the write is still open"
-            );
-            Assert.That(async () => await wait, Throws.InstanceOf<OperationCanceledException>());
-            Assert.That(
-                SyncRunResourceGuard.CurrentResourceIds,
-                Is.EquivalentTo(new[] { HeldUid }),
-                "the run stays registered until its owner disposes it"
-            );
-
-            run.Dispose();
-            Assert.That(SyncRunResourceGuard.CurrentResourceIds, Is.Empty);
-            inFlight.Dispose();
-        }
-
-        [Test]
-        public async Task WaitForResourceWrites_ReturnsTrueOnceTheWritesFinish()
-        {
-            var inFlight = SyncRunResourceGuard.EnterResourceWrite(HeldUid);
-            using var run = SyncRunResourceGuard.RegisterRun([HeldUid]);
-
-            var wait = Task.Run(() => run.WaitForResourceWrites(CancellationToken.None));
-            Assert.That(await FinishesWithin(wait, s_stillBlockedWindow), Is.False);
-            inFlight.Dispose();
-
-            Assert.That(await FinishesWithin(wait, s_shouldReturnBound), Is.True);
-            Assert.That(await wait, Is.True);
-        }
-
-        [Test]
-        public void WaitForResourceWrites_ReturnsFalseWhenItTimesOut()
-        {
-            SyncRunResourceGuard.WaitTimeout = TimeSpan.FromMilliseconds(50);
-            var stuck = SyncRunResourceGuard.EnterResourceWrite(HeldUid);
-            using var run = SyncRunResourceGuard.RegisterRun([HeldUid]);
-            bool drained = true;
-
-            var log = CaptureConsole(
-                () => drained = run.WaitForResourceWrites(CancellationToken.None)
-            );
-
-            Assert.That(drained, Is.False);
-            Assert.That(log, Does.Contain("Warning").And.Contain(HeldUid).And.Contain("anyway"));
-            stuck.Dispose();
-        }
-
-        [Test]
-        public async Task WaitForResourceWrites_StopsWaitingWhenTheRunIsDisposed()
-        {
-            var inFlight = SyncRunResourceGuard.EnterResourceWrite(HeldUid);
-            var run = SyncRunResourceGuard.RegisterRun([HeldUid]);
-
-            var wait = Task.Run(() => run.WaitForResourceWrites(CancellationToken.None));
-            Assert.That(await FinishesWithin(wait, s_stillBlockedWindow), Is.False);
-            run.Dispose();
-
-            Assert.That(
-                await FinishesWithin(wait, s_shouldReturnBound),
-                Is.True,
-                "an ended run has nothing left to wait for"
-            );
-            inFlight.Dispose();
-        }
-
-        #endregion
-
         #region Run lifecycle
 
         [Test]
         public void RegisterRun_WhileARunIsActive_Throws()
         {
-            using var run = SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([HeldUid]);
+            using var run = SyncRunResourceGuardTestHelpers.StartRun([HeldUid]);
 
             Assert.That(
-                () => SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([OtherUid]),
+                () => SyncRunResourceGuardTestHelpers.StartRun([OtherUid]),
                 Throws.InstanceOf<InvalidOperationException>()
             );
             Assert.That(
@@ -502,7 +229,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
         [Test]
         public void Dispose_Twice_IsHarmless()
         {
-            var first = SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([HeldUid]);
+            var first = SyncRunResourceGuardTestHelpers.StartRun([HeldUid]);
             first.Dispose();
 
             Assert.That(() => first.Dispose(), Throws.Nothing);
@@ -511,9 +238,9 @@ namespace TestParanextDataProvider.Projects.SendReceive
         [Test]
         public async Task Dispose_OfAnEndedRun_DoesNotEndALaterRun()
         {
-            var first = SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([HeldUid]);
+            var first = SyncRunResourceGuardTestHelpers.StartRun([HeldUid]);
             first.Dispose();
-            var second = SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([OtherUid]);
+            var second = SyncRunResourceGuardTestHelpers.StartRun([OtherUid]);
 
             first.Dispose();
 
@@ -537,9 +264,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
         {
             Assert.That(SyncRunResourceGuard.CurrentResourceIds, Is.Empty, "before any run");
 
-            var run = SyncRunResourceGuardTestHelpers.RegisterRunAndDrain(
-                [HeldUid, OtherUid, HeldUid]
-            );
+            var run = SyncRunResourceGuardTestHelpers.StartRun([HeldUid, OtherUid, HeldUid]);
             Assert.That(
                 SyncRunResourceGuard.CurrentResourceIds,
                 Is.EquivalentTo(new[] { HeldUid, OtherUid }),
@@ -553,9 +278,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
         [Test]
         public void RegisterRun_IgnoresBlankIds()
         {
-            using var run = SyncRunResourceGuardTestHelpers.RegisterRunAndDrain(
-                [HeldUid, "", "  ", null!]
-            );
+            using var run = SyncRunResourceGuardTestHelpers.StartRun([HeldUid, "", "  ", null!]);
 
             Assert.That(
                 SyncRunResourceGuard.CurrentResourceIds,
@@ -566,7 +289,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
         [Test]
         public async Task RegisterRun_WithNoIds_HoldsNothing()
         {
-            using var run = SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([]);
+            using var run = SyncRunResourceGuardTestHelpers.StartRun([]);
 
             Assert.That(SyncRunResourceGuard.CurrentResourceIds, Is.Empty);
             var write = Task.Run(() => SyncRunResourceGuard.EnterResourceWrite(HeldUid).Dispose());
@@ -574,29 +297,26 @@ namespace TestParanextDataProvider.Projects.SendReceive
         }
 
         [Test]
-        public async Task ResetForTests_ReleasesWaitersOnBothSides()
+        public async Task ResetForTests_ReleasesAWaitingWriteAndForgetsOpenWrites()
         {
-            _ = SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([HeldUid]);
+            _ = SyncRunResourceGuardTestHelpers.StartRun([HeldUid]);
             var write = Task.Run(() => SyncRunResourceGuard.EnterResourceWrite(HeldUid));
             Assert.That(await FinishesWithin(write, s_stillBlockedWindow), Is.False);
 
             SyncRunResourceGuard.ResetForTests();
 
             Assert.That(await FinishesWithin(write, s_shouldReturnBound), Is.True);
-            var begin = Task.Run(
-                () => SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([HeldUid])
-            );
-            Assert.That(
-                await FinishesWithin(begin, s_stillBlockedWindow),
-                Is.False,
-                "the write opened after the reset is still open"
-            );
-
+            var openWrite = await write;
             SyncRunResourceGuard.ResetForTests();
 
-            Assert.That(await FinishesWithin(begin, s_shouldReturnBound), Is.True);
-            (await begin).Dispose();
-            (await write).Dispose();
+            var registration = SyncRunResourceGuard.RegisterRunSkippingOpenWrites([HeldUid]);
+            Assert.That(
+                registration.SkippedIds,
+                Is.Empty,
+                "a reset forgets the write scope that was open before it"
+            );
+            registration.Run.Dispose();
+            openWrite.Dispose();
         }
 
         #endregion

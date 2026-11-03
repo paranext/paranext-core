@@ -813,7 +813,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
             );
         }
 
-        #region Waiting for a sync that updates the same resource
+        #region Interaction with a sync that updates the same resource
 
         // The guard is process-wide; end any run a test left open so it cannot hold the next test.
         [TearDown]
@@ -837,7 +837,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
         {
             using DummyScrText existing = new();
             var provider = ProviderWithInstalledResource(existing);
-            var run = SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([WhitelistedUid]);
+            var run = SyncRunResourceGuardTestHelpers.StartRun([WhitelistedUid]);
 
             var install = provider.InstallDblResource(WhitelistedUid);
 
@@ -862,9 +862,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
         {
             using DummyScrText existing = new();
             var provider = ProviderWithInstalledResource(existing);
-            using var run = SyncRunResourceGuardTestHelpers.RegisterRunAndDrain(
-                ["6c21e835eb8ca3b2"]
-            );
+            using var run = SyncRunResourceGuardTestHelpers.StartRun(["6c21e835eb8ca3b2"]);
 
             var install = provider.InstallDblResource(WhitelistedUid);
 
@@ -877,7 +875,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
         {
             using DummyScrText existing = new();
             var provider = ProviderWithInstalledResource(existing);
-            var run = SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([WhitelistedUid]);
+            var run = SyncRunResourceGuardTestHelpers.StartRun([WhitelistedUid]);
             var install = provider.InstallDblResource(WhitelistedUid);
             Assert.That(await FinishesWithin(install, s_stillBlockedWindow), Is.False);
 
@@ -900,7 +898,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
             using DummyScrText existing = new();
             var provider = ProviderWithInstalledResource(existing);
             SyncRunResourceGuard.WaitTimeout = TimeSpan.FromMilliseconds(50);
-            using var run = SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([WhitelistedUid]);
+            using var run = SyncRunResourceGuardTestHelpers.StartRun([WhitelistedUid]);
 
             using var output = new StringWriter();
             TextWriter previousOut = Console.Out;
@@ -932,7 +930,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
                 ParatextProjects,
                 () => [new InstalledResource(null!) { DBLEntryUid = HexId.FromStr(WhitelistedUid) }]
             );
-            var run = SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([WhitelistedUid]);
+            var run = SyncRunResourceGuardTestHelpers.StartRun([WhitelistedUid]);
 
             var uninstall = provider.UninstallDblResource(WhitelistedUid);
 
@@ -954,7 +952,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
         }
 
         [Test]
-        public async Task InstallDblResource_ASyncRunWaitsForAnInstallOfOneOfItsResourcesToFinish()
+        public async Task InstallDblResource_ASyncRunSkipsAResourceWhoseInstallIsInFlight()
         {
             // The catalog fetch runs inside the install's write, so blocking it holds the install
             // mid-write for as long as the test needs.
@@ -974,26 +972,27 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
             var install = provider.InstallDblResource(WhitelistedUid);
             Assert.That(fetchEntered.Wait(s_shouldFinishBound), Is.True, "install never started");
 
-            var begin = Task.Run(
-                () => SyncRunResourceGuardTestHelpers.RegisterRunAndDrain([WhitelistedUid])
-            );
+            var registration = SyncRunResourceGuard.RegisterRunSkippingOpenWrites([WhitelistedUid]);
 
             Assert.That(
-                await FinishesWithin(begin, s_stillBlockedWindow),
-                Is.False,
-                "the sync run must wait while the install is writing its resource"
+                registration.SkippedIds,
+                Is.EquivalentTo(new[] { WhitelistedUid }),
+                "the sync run must skip a resource whose install is writing it, not wait for it"
             );
+            Assert.That(install.IsCompleted, Is.False, "the install is still in flight");
+            registration.Run.Dispose();
 
             releaseFetch.Set();
 
             Assert.That(await FinishesWithin(install, s_shouldFinishBound), Is.True);
             await install;
+            var afterInstall = SyncRunResourceGuard.RegisterRunSkippingOpenWrites([WhitelistedUid]);
             Assert.That(
-                await FinishesWithin(begin, s_shouldFinishBound),
-                Is.True,
-                "the sync run must start once the install has finished"
+                afterInstall.SkippedIds,
+                Is.Empty,
+                "a later sync run holds the resource once the install has finished"
             );
-            (await begin).Dispose();
+            afterInstall.Run.Dispose();
         }
 
         #endregion
