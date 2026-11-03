@@ -17,10 +17,12 @@
 // crashes an older Paratext 10 build on the missing value:
 //   * `SyncState.syncingProjectIds` — required in the upstream file above.
 //   * `SyncActivitySnapshot.projectIds` and `SyncActivitySnapshot.outcome` — no upstream declaration
-//     to diverge from yet; this whole type, `SyncOutcome`, `getSyncActivity` and
-//     `onSyncActivityChanged` are declared here ahead of the Paratext 10 patch that raises the
-//     signal, the same way the write-gate seam (`getAutoSyncBlocking` /
-//     `onSyncWriteLockChanged`) is.
+//     to diverge from yet; core registers `getSyncActivity` and `onSyncActivityChanged` in every
+//     build, but the shape may lag the Paratext 10 patch that reports real activity, and an older
+//     Paratext 10 build may omit these two fields, the same way as for the write-gate seam
+//     (`getAutoSyncBlocking` / `onSyncWriteLockChanged`).
+// Also declared here with no upstream counterpart yet, though not a divergence in optionality:
+//   * `isAvailable` — ahead of the Paratext 10 patch that overrides core's answer to it.
 //
 // Why this lives in `src/@types` and not under an extension's `src/types`:
 //
@@ -259,6 +261,18 @@ declare module 'paratext-bible-send-receive' {
     errors?: string[];
   };
 
+  /**
+   * Event payload emitted by the `paratextBibleSendReceive.onDidRequestProjectSelection` network
+   * event
+   */
+  export type ProjectSelectionRequestEvent = {
+    /**
+     * The projects `openSendReceive` ensured are ticked in the sync projects dialog's saved
+     * selection, whether newly ticked or already ticked
+     */
+    projectIds: string[];
+  };
+
   /** Event payload emitted by the `paratextBibleSendReceive.onSyncStateChanged` network event */
   export type SyncProgressEvent = {
     /**
@@ -314,6 +328,13 @@ declare module 'paratext-bible-send-receive' {
      */
     lastRequestedProjectIds: string[];
     /**
+     * The latest completed result for each project synced through this extension's wrappers this
+     * session. Syncs core runs directly (startup, project switch) are not included. Keyed by
+     * `normalizeProjectId(projectId)`; a fresh object is built on every `getSyncState` call. Absent
+     * from older Send/Receive extension builds.
+     */
+    lastResultByProjectId?: Record<string, ResultInfo>;
+    /**
      * Project ids of the sync(s) running RIGHT NOW. Empty exactly when `isSyncing` is `false`.
      * Overlapping syncs are unioned.
      *
@@ -364,9 +385,10 @@ declare module 'paratext-bible-send-receive' {
    * (`main/startup-tasks.ts` and `syncOnProjectSwitch`). That is what makes a Simple-mode startup
    * sync visible.
    *
-   * Only a Paratext 10 build emits this. Public Platform.Bible carries this declaration but no
-   * implementation behind it, so both surfaces are absent there and a consumer must fall back
-   * rather than assume idle.
+   * Every build registers both surfaces (`getSyncActivity` and `onSyncActivityChanged`), but only a
+   * Paratext 10 build carries the run bracket that reports real activity. A plain Platform.Bible
+   * build only ever reports the idle baseline, and an older Paratext 10 build may omit `projectIds`
+   * and `outcome`.
    *
    * @experimental This type is unstable and may change shape or disappear without notice
    */
@@ -501,6 +523,7 @@ declare module 'paratext-bible-send-receive' {
 
 declare module 'papi-shared-types' {
   import type {
+    ProjectSelectionRequestEvent,
     ResultsData,
     SyncActivitySnapshot,
     SyncProgressDetail,
@@ -568,12 +591,17 @@ declare module 'papi-shared-types' {
     'paratextBibleSendReceive.openSyncStatus': () => Promise<string | undefined>;
 
     /**
-     * Opens the Send/Receive web view and returns its WebView id
+     * Opens the Send/Receive web view (or brings the open one to the front) with the active project
+     * ticked in the sync projects dialog
      *
+     * @param projectIdsToSelect Projects to tick instead of the active project. Unsupported
+     *   projects are skipped
      * @returns WebView id for the Send/Receive WebView or `undefined` if not created
      * @experimental This command is unstable and may change or disappear without notice
      */
-    'paratextBibleSendReceive.openSendReceive': () => Promise<string | undefined>;
+    'paratextBibleSendReceive.openSendReceive': (
+      projectIdsToSelect?: string[],
+    ) => Promise<string | undefined>;
 
     /**
      * Returns the current {@link SyncState} so a consumer can seed its sync status on mount rather
@@ -621,6 +649,19 @@ declare module 'papi-shared-types' {
      * @experimental This command is unstable and may change or disappear without notice
      */
     'paratextBibleSendReceive.getSyncActivity': () => Promise<SyncActivitySnapshot>;
+
+    /**
+     * Whether this build can run Send/Receive. Core's own implementation answers `false`, and the
+     * Paratext 10 patch answers `true`. Like `getSyncActivity`, it is registered by core's own
+     * service, so plain Platform.Bible answers it too.
+     *
+     * A rejection means the answer is unknown (for example, the command is not registered yet on a
+     * cold start). Do not treat it as `false`; ask again or stay conservative.
+     *
+     * @returns `true` if this build can run Send/Receive
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.isAvailable': () => Promise<boolean>;
 
     /**
      * Commits changes in the specified project to the version history. Unless `forceCommit` is
@@ -723,13 +764,15 @@ declare module 'papi-shared-types' {
       boundary: 'startup' | 'shutdown',
     ) => Promise<'synced' | 'failed' | 'skipped'>;
     /**
-     * Gets all open webview project IDs and calls `paratextBibleSendReceive.syncProjects` with
-     * them.
+     * Gets all open webview project IDs (or exactly `projectIds` when given) and calls
+     * `paratextBibleSendReceive.syncProjects` with them.
      *
+     * @param projectIds Sync only these projects (deduplicated) instead of the open editors'
+     *   projects
      * @throws `PlatformUnimplementedException` if not running in an application that implements
      *   this command (e.g., Paratext 10)
      */
-    'paratextBibleSendReceive.syncOpenProjects': () => Promise<void>;
+    'paratextBibleSendReceive.syncOpenProjects': (projectIds?: string[]) => Promise<void>;
 
     /**
      * Cancels an in-progress sync operation if one is running. The process will finish dealing with
@@ -811,6 +854,11 @@ declare module 'papi-shared-types' {
   }
 
   export interface NetworkEvents {
+    /**
+     * Fired after `openSendReceive` ensures projects are ticked in the saved selection (newly or
+     * already), so an open dialog can sort them to the top
+     */
+    'paratextBibleSendReceive.onDidRequestProjectSelection': ProjectSelectionRequestEvent;
     /** Emitted whenever a sync starts or ends */
     'paratextBibleSendReceive.onSyncStateChanged': SyncProgressEvent;
     /** Emitted repeatedly during a sync with the current project name or reconnect status */

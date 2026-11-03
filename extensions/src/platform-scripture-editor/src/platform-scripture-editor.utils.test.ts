@@ -618,6 +618,12 @@ interface PickerMocks {
    * candidate ids only passes if the picker normalizes them.
    */
   setUnsupportedIds: (ids: string[]) => void;
+  /**
+   * Marks the given project ids as published resources: their `platform.base` PDP reads
+   * `platform.isPublished` as `true`. The batched metadata lookup does not report them, as when the
+   * resources' factory has not registered yet.
+   */
+  setPublishedIds: (ids: string[]) => void;
   /** Synthesize an `object:onDidCreateNetworkObject` event for an object of this type. */
   fireNetworkObjectCreated: (objectType: string) => void;
   /** `true` once the driver has unsubscribed from `object:onDidCreateNetworkObject`. */
@@ -700,8 +706,13 @@ function createPickerMocks(): PickerMocks {
   const setCanUserEditScripture = (projectId: string, canEdit: boolean) => {
     canUserEditScriptureByProjectId.set(projectId, canEdit);
   };
+  // Published resources answer `platform.isPublished` through the project's own PDP, and are absent
+  // from the batched metadata lookup below.
+  const publishedProjectIds = new Set<string>();
   const mockProjectDataProvidersGet = vi.fn(async (_interface: string, projectId: string) => ({
     canUserEditScripture: async () => canUserEditScriptureByProjectId.get(projectId) ?? true,
+    getSetting: async (key: string) =>
+      key === 'platform.isPublished' ? publishedProjectIds.has(projectId.toUpperCase()) : undefined,
   }));
 
   // Backs the picker's unsupported-project lookup. Answers for each id it is asked about, with the
@@ -769,6 +780,9 @@ function createPickerMocks(): PickerMocks {
     },
     setUnsupportedIds: (ids: string[]) => {
       ids.forEach((id) => unsupportedProjectIds.add(id.toUpperCase()));
+    },
+    setPublishedIds: (ids: string[]) => {
+      ids.forEach((id) => publishedProjectIds.add(id.toUpperCase()));
     },
     fireNetworkObjectCreated: (objectType: string) => {
       const listener = networkEventListeners.get('object:onDidCreateNetworkObject');
@@ -2118,6 +2132,151 @@ describe('openDefaultActiveProjectIfApplicable', () => {
     ).toEqual(['p1']);
   });
 
+  it('skips a published resource in the recent projects and opens the next one', async () => {
+    // Builds whose title-bar picker offered resources recorded them as recently opened, and the
+    // picker fills the Simple editor column, which shows projects.
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      setRecentProjects,
+      setPublishedIds,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    setRecentProjects(['res', 'p1']);
+    setPublishedIds(['res']);
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'platformScriptureEditor.openScriptureEditor') return undefined;
+      throw new Error(`Unexpected command in test: ${commandName}`);
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(
+      mockSendCommand.mock.calls
+        .filter(([cmd]) => cmd === 'platformScriptureEditor.openScriptureEditor')
+        .map(([, id]) => id),
+    ).toEqual(['p1']);
+  });
+
+  it('opens a recent project whose published setting cannot be read', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      mockProjectDataProvidersGet,
+      mockWarn,
+      setRecentProjects,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    setRecentProjects(['p1']);
+    mockProjectDataProvidersGet.mockRejectedValue(new Error('pdp unavailable'));
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'platformScriptureEditor.openScriptureEditor') return undefined;
+      throw new Error(`Unexpected command in test: ${commandName}`);
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(
+      mockSendCommand.mock.calls
+        .filter(([cmd]) => cmd === 'platformScriptureEditor.openScriptureEditor')
+        .map(([, id]) => id),
+    ).toEqual(['p1']);
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('pdp unavailable'));
+  });
+
+  it('checks each recent project on its own when one can be neither read nor opened', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      mockProjectDataProvidersGet,
+      setRecentProjects,
+      setPublishedIds,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    setRecentProjects(['bad', 'res', 'p1']);
+    setPublishedIds(['res']);
+    const defaultProjectDataProvidersGet = mockProjectDataProvidersGet.getMockImplementation();
+    mockProjectDataProvidersGet.mockImplementation(async (interfaceName, projectId) => {
+      if (projectId === 'bad' || !defaultProjectDataProvidersGet)
+        throw new Error('pdp unavailable');
+      return defaultProjectDataProvidersGet(interfaceName, projectId);
+    });
+    // An unreadable project counts as a project, so it must also fail to open for the walk to move on.
+    mockSendCommand.mockImplementation(async (commandName: string, projectId: string) => {
+      if (commandName !== 'platformScriptureEditor.openScriptureEditor')
+        throw new Error(`Unexpected command in test: ${commandName}`);
+      if (projectId === 'bad') throw new Error('cannot open');
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(
+      mockSendCommand.mock.calls
+        .filter(([cmd]) => cmd === 'platformScriptureEditor.openScriptureEditor')
+        .map(([, id]) => id),
+    ).toEqual(['bad', 'p1']);
+  });
+
+  it('falls through to the shared projects when every recent project is a published resource', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      setRecentProjects,
+      setPublishedIds,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    setRecentProjects(['res1', 'res2']);
+    setPublishedIds(['res1', 'res2']);
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          p1: {
+            id: 'p1',
+            name: 'P1',
+            fullName: 'P1',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-01-01T00:00:00Z',
+          },
+        };
+      }
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(
+      mockSendCommand.mock.calls
+        .filter(([cmd]) => cmd === 'platformScriptureEditor.openScriptureEditor')
+        .map(([, id]) => id),
+    ).toEqual(['p1']);
+  });
+
   it('opens the first recent project when none is unsupported (positive control)', async () => {
     const {
       papi,
@@ -3027,7 +3186,13 @@ type SyncGateStub = {
   /** `platform.interfaceMode` */
   mode?: 'simple' | 'power' | typeof READ_THROWS;
   /** The `platform.getAutomaticSyncConsent` command */
-  consent?: 'granted' | 'unconfirmed' | 'unreadable' | 'deferred' | typeof READ_THROWS;
+  consent?:
+    | 'granted'
+    | 'unconfirmed'
+    | 'unreadable'
+    | 'deferred'
+    | 'notYetSynced'
+    | typeof READ_THROWS;
 };
 
 /**
@@ -3255,6 +3420,7 @@ describe('syncOnProjectSwitch', () => {
     ['the first-run wizard has not been answered', 'unconfirmed'],
     ['the first-run flag cannot be read', 'unreadable'],
     ['the user chose "Don\'t sync yet" earlier this session', 'deferred'],
+    ['the first successful sync has not happened yet', 'notYetSynced'],
   ] as const)('syncs nothing while %s', async (_, consent) => {
     const { papi, mockSendCommand, mockInfo } = createSyncMockPapi({ consent });
 
@@ -3733,6 +3899,20 @@ describe('syncOnSwitchToPower', () => {
     ]);
     // Every other automatic sync would skip here, so the log has to say why this one ran
     expect(mockInfo).toHaveBeenCalledWith(expect.stringContaining('does not stop this sync'));
+  });
+
+  it('syncs when the first successful sync has not happened yet', async () => {
+    // Leaving Simple is the user's own act, and the unsent changes are what it exists to send
+    const { papi, mockSendCommand } = createSwitchToPowerMockPapi({
+      consent: 'notYetSynced',
+      seed: PROJ_1_UNSENT,
+    });
+
+    await syncOnSwitchToPower(papi, 'proj-1');
+
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
+      'proj-1',
+    ]);
   });
 
   it('syncs nothing when the consent check rejects (fails closed)', async () => {
@@ -5644,22 +5824,37 @@ describe('resolveResourceContentState', () => {
         resourceProjectId: undefined,
         usjPossiblyError: undefined,
         currentBookNum: GENESIS,
+        isUsjSettled: false,
       }),
     ).toBe('loading');
   });
 
-  it('returns "loading" for a caller whose hook is not seeded with a default', () => {
-    // The Bible texts panel passes `EMPTY_USJ` as its hook's default, so its value is an object from
-    // the first render and this pair does not occur there. Kept because the state is part of this
-    // function's contract for any caller reading a hook without a seeded default, and because the
-    // alternative — falling to `'ready'` — would mount an editor with nothing to put in it.
+  it('returns "loading" while nothing has arrived and the subscription is still working', () => {
+    // The state a caller reaches by seeding its hook with `undefined` (the Bible texts panel): no
+    // chapter in hand and none refused, so the honest answer is a spinner. Falling to `'ready'`
+    // here would mount an editor with nothing to put in it.
     expect(
       resolveResourceContentState({
         resourceProjectId: PROJECT_ID,
         usjPossiblyError: undefined,
         currentBookNum: GENESIS,
+        isUsjSettled: false,
       }),
     ).toBe('loading');
+  });
+
+  it('returns "failed" when the subscription settles having delivered nothing', () => {
+    // `ChapterUSJ`'s `getData` is `Usj | undefined` and the extender PDP returns `undefined` for a
+    // falsy USX, so this is a real delivery, not an absence of one. Reported rather than spun on:
+    // an unending spinner with no message is the "stuck loading" symptom itself.
+    expect(
+      resolveResourceContentState({
+        resourceProjectId: PROJECT_ID,
+        usjPossiblyError: undefined,
+        currentBookNum: GENESIS,
+        isUsjSettled: true,
+      }),
+    ).toBe('failed');
   });
 
   it('returns "ready" once chapter data has arrived', () => {
@@ -5668,6 +5863,7 @@ describe('resolveResourceContentState', () => {
         resourceProjectId: PROJECT_ID,
         usjPossiblyError: { type: 'USJ', version: '3.1', content: [] },
         currentBookNum: GENESIS,
+        isUsjSettled: true,
       }),
     ).toBe('ready');
   });
@@ -5678,6 +5874,7 @@ describe('resolveResourceContentState', () => {
         resourceProjectId: PROJECT_ID,
         usjPossiblyError: missingBook(GENESIS),
         currentBookNum: GENESIS,
+        isUsjSettled: true,
       }),
     ).toBe('bookNotAvailable');
   });
@@ -5697,6 +5894,7 @@ describe('resolveResourceContentState', () => {
         resourceProjectId: PROJECT_ID,
         usjPossiblyError: missingBook(MATTHEW),
         currentBookNum: GENESIS,
+        isUsjSettled: true,
       }),
     ).toBe('loading');
   });
@@ -5709,6 +5907,7 @@ describe('resolveResourceContentState', () => {
         resourceProjectId: PROJECT_ID,
         usjPossiblyError: missingBook(GENESIS, 'someOtherProject'),
         currentBookNum: GENESIS,
+        isUsjSettled: true,
       }),
     ).toBe('loading');
   });
@@ -5727,6 +5926,7 @@ describe('resolveResourceContentState', () => {
           content: [`Book number ${GENESIS} not found in project ${PROJECT_ID}.`],
         },
         currentBookNum: GENESIS,
+        isUsjSettled: true,
       }),
     ).toBe('ready');
   });
@@ -5741,6 +5941,7 @@ describe('resolveResourceContentState', () => {
         resourceProjectId: 'abc123',
         usjPossiblyError: missingBook(GENESIS, 'ABC123'),
         currentBookNum: GENESIS,
+        isUsjSettled: true,
       }),
     ).toBe('bookNotAvailable');
   });
@@ -5754,6 +5955,7 @@ describe('resolveResourceContentState', () => {
         resourceProjectId: PROJECT_ID,
         usjPossiblyError: missingBook(0),
         currentBookNum: 0,
+        isUsjSettled: true,
       }),
     ).toBe('loading');
   });
@@ -5770,8 +5972,25 @@ describe('resolveResourceContentState', () => {
         resourceProjectId: PROJECT_ID,
         usjPossiblyError: newPlatformError(new Error('Project abc123 is not available')),
         currentBookNum: GENESIS,
+        isUsjSettled: true,
       }),
     ).toBe('failed');
+  });
+
+  it('withholds a failure while a read for it is still in flight', () => {
+    // The data layer holds the last delivered value across a resubscription — it resets `isLoading`,
+    // never `data` — so an error stays in hand while the next attempt runs. Naming it then would
+    // report a failure for a read that has not finished, and it is what makes the retry affordance
+    // look inert: re-driving the read would otherwise leave the identical message on screen for the
+    // whole round trip.
+    expect(
+      resolveResourceContentState({
+        resourceProjectId: PROJECT_ID,
+        usjPossiblyError: newPlatformError(new Error('Project abc123 is not available')),
+        currentBookNum: GENESIS,
+        isUsjSettled: false,
+      }),
+    ).toBe('loading');
   });
 });
 

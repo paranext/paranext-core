@@ -535,6 +535,22 @@ declare module 'platform-scripture' {
      * locations
      */
     text: string;
+    /**
+     * The USFM between {@link FindResult.start} and {@link FindResult.end} at search time. Pass it
+     * back as the matching entry of `expectedUsfm` in `replace()` so a range whose USFM has since
+     * changed is skipped instead of overwritten.
+     */
+    matchedUsfm: string;
+    /**
+     * Markers (paragraph, verse, chapter, table, sidebar, and note markers) that lie inside this
+     * result's USFM span and would therefore be deleted by replacing it with plain text. Absent
+     * when the span contains none, which is the common case.
+     *
+     * A result that has any is one `replace()` refuses with the `MARKER_DELETION_ERROR` sentinel
+     * unless the replacement USFM puts the same markers back. Consumers should disable or skip
+     * replacement for such results rather than attempting a replacement that can only fail.
+     */
+    removedMarkers?: string[];
   };
 
   /**
@@ -755,7 +771,16 @@ declare module 'platform-scripture' {
        *   {@link UsfmVerseLocation}. Overlapping ranges will cause an error.
        * @param usfmToInsert - The USFM content to insert at each range. Can be a single string
        *   (used for all ranges) or an array of strings (one per range).
-       * @throws Error if `usfmToInsert` array length doesn't match `rangesToReplace` length
+       * @param expectedUsfm - Optional. The USFM each range is expected to currently contain, one
+       *   entry per range ({@link FindResult.matchedUsfm}). A range whose current USFM differs, or
+       *   whose location can no longer be found (including a chapter or book that no longer
+       *   exists), is never written and is reported in the returned
+       *   {@link ReplaceOutcome.changedIndexes}. When omitted, ranges are written as given and a
+       *   location that can no longer be found rejects.
+       * @returns A {@link ReplaceOutcome} whose `changedIndexes` lists, ascending, the ranges that
+       *   were not written.
+       * @throws Error if `usfmToInsert` or `expectedUsfm` array length doesn't match
+       *   `rangesToReplace` length
        * @throws Error if any range spans multiple books
        * @throws Error if any ranges overlap
        * @throws Error whose message is the `STRUCTURE_PROTECTED_ERROR` sentinel
@@ -763,12 +788,28 @@ declare module 'platform-scripture' {
        *   and a replacement would add, remove, change, or reorder a paragraph-level, verse, or
        *   chapter marker. The Find web view substring-matches this sentinel to surface a localized
        *   message.
+       * @throws Error whose message is the `MARKER_DELETION_ERROR` sentinel
+       *   (`'platformScripture.replace.markerDeletion'`) when a replacement would delete a
+       *   structural marker or a note that the replacement does not put back. Checked in every
+       *   interface mode, independently of structure protection. {@link FindResult.removedMarkers}
+       *   reports in advance which results this applies to. Substring-matched by the Find web view
+       *   in the same way.
        */
       replace(
         rangesToReplace: ScriptureRangeUsjChapterOrUsfmVerseLocation[],
         usfmToInsert: string | string[],
-      ): Promise<void>;
+        expectedUsfm?: string[],
+      ): Promise<ReplaceOutcome>;
     };
+
+  /** The result of a `replace()` call. */
+  export type ReplaceOutcome = {
+    /**
+     * Indexes into `rangesToReplace`, ascending, of ranges not written because their text changed
+     * after the search, or their location is gone.
+     */
+    changedIndexes: number[];
+  };
 
   // #endregion Replace Types
 
@@ -2731,9 +2772,11 @@ declare module 'platform-scripture' {
     warnings?: string[];
     /**
      * Localize key explaining why this project cannot be opened (see
-     * `ProjectMetadata.unsupportedReason`); omitted when it can be. Only opening is blocked:
-     * Send/Receive and download stay allowed, so mark the row with the reason rather than disabling
-     * its Send/Receive actions.
+     * `ProjectMetadata.unsupportedReason`); omitted when it can be. Until Study Bible Additions
+     * projects are supported, a list that offers a manual sync or download for such a project
+     * (Home, the sync projects dialog) shows its row disabled with this reason instead of offering
+     * the action. Scheduled and automatic syncs are not blocked by this. Rationale:
+     * `adr-sba-not-syncable-from-dialog-or-home` in `Architecture-Decisions.md`.
      *
      * Producers set it for local and server-only projects alike. When it is absent, callers fall
      * back to the local project's metadata.

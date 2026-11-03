@@ -67,8 +67,10 @@ function logProcessInfo(messageObj: unknown) {
   logger.info(formatLog(message, DOTNET_DATA_PROVIDER_NAME));
 }
 
-/** Hard kills the Dotnet Data Provider. */
-// TODO: add a more elegant shutdown to avoid this if we possibly can
+/**
+ * Hard kills the Dotnet Data Provider. On a normal quit this is only the fallback: the provider
+ * exits by itself once main closes its PAPI connection (see the `will-quit` handler in `main.ts`).
+ */
 function killDotnetDataProvider() {
   if (!dotnet) return;
 
@@ -82,6 +84,13 @@ function killDotnetDataProvider() {
   dotnet = undefined;
 }
 
+/**
+ * Waits for the Dotnet Data Provider to exit, and hard kills it if it has not within the time
+ * given. Waiting does not ask it to stop: it keeps running while its PAPI connection is open, so
+ * close that connection first to give it the chance to exit by itself.
+ *
+ * @param maxWaitTimeInMS How long to wait for it to exit before killing it
+ */
 async function waitForDotnetDataProvider(maxWaitTimeInMS: number) {
   const didClose = await waitForDuration(async () => {
     await closePromise;
@@ -152,6 +161,21 @@ function startDotnetDataProvider() {
       args = [];
     }
     options = { cwd: dotnetPath };
+  } else {
+    // Dev runs, which include the E2E tests, get the bundled sample project when no projects are
+    // found (`LocalParatextProjects.Initialize`). To try the no-projects experience, set the
+    // variable to `false` AND point PLATFORM_BIBLE_PROJECT_ROOT_FOLDER at an empty folder: the
+    // default folder already holds WEB from earlier runs. `npm run start:data` and VS Code's "Debug
+    // .NET Core" always set it to `true`. `||` so an empty value (which Windows cannot even store)
+    // means the default on every OS.
+    options = {
+      ...options,
+      env: {
+        ...process.env,
+        PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT:
+          process.env.PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT || 'true',
+      },
+    };
   }
 
   dotnet = spawn(command, args, options);

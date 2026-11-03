@@ -45,8 +45,8 @@ internal static class ScrTextExtensions
 
     /// <summary>
     /// Why Platform.Bible cannot open this project, as a localize key, or null when it can. The
-    /// project stays enumerated, so it can still be synced: pickers leave it out or show it disabled
-    /// with this reason (see <see cref="ProjectMetadata.UnsupportedReason"/>), and
+    /// project stays enumerated, and C# sync paths do not refuse it: pickers leave it out or show it
+    /// disabled with this reason (see <see cref="ProjectMetadata.UnsupportedReason"/>), and
     /// <see cref="ThrowIfOpenBlocked"/> refuses its text. Returning a
     /// <c>Paratext.Data.UnsupportedReason</c> from <c>MigrateProjectIfNeeded</c> would instead make
     /// ScrTextCollection drop the project everywhere.
@@ -71,9 +71,11 @@ internal static class ScrTextExtensions
     /// other extensions and direct PAPI requests.
     /// <para>
     /// It is deliberately not in <see cref="LocalParatextProjects.GetParatextProject"/>.
-    /// Send/Receive, project settings, titles and metadata share that lookup and must keep working,
-    /// because such a project can still be synced. ParatextData's own reads, such as a merged Study
-    /// Bible reading its additions, are unaffected.
+    /// Send/Receive, project settings, titles and metadata share that lookup and must keep working;
+    /// scheduled and automatic syncs of such a project are not blocked at this layer (the sync
+    /// projects dialog and Home disable manual sync in the UI; the editor tab's "Sync" menu item
+    /// does not, see adr-sba-not-syncable-from-dialog-or-home). ParatextData's own reads, such as a
+    /// merged Study Bible reading its additions, are unaffected.
     /// </para>
     /// </remarks>
     internal static void ThrowIfOpenBlocked(this ScrText scrText)

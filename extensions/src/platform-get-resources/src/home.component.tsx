@@ -19,6 +19,7 @@ import {
   CardHeader,
   cn,
   DisabledActionTooltip,
+  DisabledTooltipWrapper,
   DropdownMenuItem,
   Label,
   SearchBar,
@@ -44,10 +45,11 @@ import {
   hasDistinctFullName,
   isLocalizeKey,
   normalizeFullName,
+  normalizeProjectId,
   PROJECT_OPEN_BLOCKED_FALLBACK_KEY,
 } from 'platform-bible-utils';
 import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
-import { ReactNode, useMemo, useRef, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { HomeItemDropdownMenu } from './home-item-menu';
 import {
   isShownByProjectResourceFilter,
@@ -75,6 +77,7 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_get%',
   '%resources_getStarted%',
   '%resources_getStartedDescription%',
+  '%resources_getStartedNoItemsDescription%',
   '%resources_getResources%',
   '%resources_items%',
   '%resources_language%',
@@ -96,7 +99,11 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_serverUnreachable_description%',
   '%resources_serverUnreachable_title%',
   '%resources_syncFailed_title%',
+  '%resources_syncWaiting_reason%',
+  '%resources_syncWaiting_stopGet_format%',
+  '%resources_syncWaiting_stopSync_format%',
   '%resources_sync%',
+  '%resources_syncRunning_listLoads%',
 ] as const);
 
 type HomeLocalizedStringKey = (typeof HOME_STRING_KEYS)[number];
@@ -139,6 +146,12 @@ export type RemoteProjectsState =
 const NO_LOCAL_PROJECTS: LocalProjectInfo[] = [];
 const NO_SHARED_PROJECTS: SharedProjectsInfo = {};
 const NO_ACTIVE_SEND_RECEIVE_PROJECTS: string[] = [];
+
+/**
+ * How long the "a sync is running" line must stay before a screen reader is told. Longer than the
+ * moment the line can flash when a refetch starts just before the sync's closing event arrives.
+ */
+export const SYNC_RUNNING_ANNOUNCEMENT_DELAY_MS = 1000;
 const NO_LOCALIZED_UNSUPPORTED_REASONS: LanguageStrings = {};
 
 export type SortConfig = {
@@ -161,12 +174,24 @@ const TOOLTIP_TRIGGER_BUTTON_CLASS =
   'tw:cursor-default tw:rounded-sm tw:text-start tw:outline-hidden tw:focus-visible:ring-2 tw:focus-visible:ring-ring';
 
 /**
- * Short name of the sample project the app installs on first run, which the getting-started prompt
- * is about.
+ * Short name of the sample project the app installs into an empty projects folder, which the
+ * getting-started prompt is about when it is the only item. Only dev (unpackaged) runs install it
+ * by default; a new user of a packaged build sees the prompt on the empty Home instead.
  */
 const BUNDLED_SAMPLE_PROJECT_SHORT_NAME = 'WEB';
 
 const DEFAULT_SORT_CONFIG: SortConfig = { key: 'language', direction: 'ascending' };
+
+/**
+ * Removes the `JSON-RPC Request error (<code>): ` prefix the network layer puts on every backend
+ * error. The prefix is transport detail that tells the user nothing; the message after it is the
+ * backend's own, already localized. The format is produced by `getJsonRpcRequestErrorMessagePrefix`
+ * in `src/shared/data/rpc.model.ts`, which an extension cannot import, so this pattern must change
+ * with it.
+ */
+function withoutJsonRpcErrorPrefix(message: string): string {
+  return message.replace(/^JSON-RPC Request error \(-?\d+\): /, '');
+}
 
 /**
  * A last send/receive date as a timestamp, or `undefined` for a row with none. Compared as time,
@@ -303,6 +328,12 @@ export type HomeProps = {
    */
   remoteProjectsState?: RemoteProjectsState;
   /**
+   * Whether the server's list is known to be coming and is waiting for a running sync to end, as
+   * opposed to still waiting for Send/Receive to report whether it is available at all. Only then
+   * does the loading spinner say that a sync is the reason. Defaults to `false`.
+   */
+  isServerListExpectedAfterSync?: boolean;
+  /**
    * Which items the type filter starts on. The user can change it from there. The Home web view
    * passes the filter it last showed, which an opener's preset replaces — the title bar's project
    * picker footer asks for `paratextProject`. Unset starts on `all`. Read once, on mount: a later
@@ -345,6 +376,8 @@ export type HomeProps = {
  * @param {isSendReceiveInProgress} - Whether a send/receive operation is in progress.
  * @param {isLoadingLocalProjects} - Whether loading local projects is in progress.
  * @param {remoteProjectsState} - What is known about the send/receive server's half of the list.
+ * @param {isServerListExpectedAfterSync} - Whether the server's list is waiting for a running sync
+ *   to end.
  * @param {initialProjectResourceFilter} - Which items the type filter starts on.
  * @param {onProjectResourceFilterChange} - Called with the new filter each time the user changes
  *   it.
@@ -371,6 +404,7 @@ export function Home({
   unsyncedProjectIds,
   isLoadingLocalProjects = false,
   remoteProjectsState = 'absent',
+  isServerListExpectedAfterSync = false,
   initialProjectResourceFilter = 'all',
   onProjectResourceFilterChange = () => {},
   localProjectsInfo = NO_LOCAL_PROJECTS,
@@ -383,6 +417,14 @@ export function Home({
     return localizedStringsWithLoadingState[0][localizeKey] ?? localizeKey;
   };
   const isLocalizedStringsLoading = localizedStringsWithLoadingState[1];
+  // Ids reach Home from more than one source (the backend's sync activity, the project list), so
+  // they are compared in their normalized form.
+  const normalizedActiveProjectIds = useMemo(
+    () => new Set(activeSendReceiveProjects.map(normalizeProjectId)),
+    [activeSendReceiveProjects],
+  );
+  const isProjectSyncing = (projectId: string) =>
+    normalizedActiveProjectIds.has(normalizeProjectId(projectId));
   const actionText: string = getLocalizedString('%resources_action%');
   const activityText: string = getLocalizedString('%resources_activity%');
   const clearFiltersText: string = getLocalizedString('%resources_clearFilters%');
@@ -395,6 +437,9 @@ export function Home({
   const getText: string = getLocalizedString('%resources_get%');
   const getStartedText: string = getLocalizedString('%resources_getStarted%');
   const getStartedDescriptionText: string = getLocalizedString('%resources_getStartedDescription%');
+  const getStartedNoItemsDescriptionText: string = getLocalizedString(
+    '%resources_getStartedNoItemsDescription%',
+  );
   const getResourcesText: string = getLocalizedString('%resources_getResources%');
   const itemsText: string = isLocalizedStringsLoading
     ? ''
@@ -425,6 +470,14 @@ export function Home({
   // Specific title for failed sync/get attempts — the alert is only shown for that flow, so a
   // contextual title ("Sync failed") communicates what failed better than the generic "Error".
   const syncFailedTitleText: string = getLocalizedString('%resources_syncFailed_title%');
+  const syncWaitingReasonText: string = getLocalizedString('%resources_syncWaiting_reason%');
+  const syncWaitingStopSyncFormat: string = getLocalizedString(
+    '%resources_syncWaiting_stopSync_format%',
+  );
+  const syncWaitingStopGetFormat: string = getLocalizedString(
+    '%resources_syncWaiting_stopGet_format%',
+  );
+  const syncRunningListLoadsText: string = getLocalizedString('%resources_syncRunning_listLoads%');
   const serverUnreachableDescriptionText: string = getLocalizedString(
     '%resources_serverUnreachable_description%',
   );
@@ -455,7 +508,7 @@ export function Home({
     try {
       await onSendReceiveProject(projectId);
     } catch (e) {
-      setActionError(getErrorMessage(e));
+      setActionError(withoutJsonRpcErrorPrefix(getErrorMessage(e)));
     }
   };
 
@@ -688,6 +741,29 @@ export function Home({
       setFilteredToNothingAnnouncement(settledAnnouncement);
   }
 
+  const isSyncRunningLineShown =
+    isLoading &&
+    remoteProjectsState === 'loading' &&
+    isServerListExpectedAfterSync &&
+    isSendReceiveInProgress;
+  // The line is announced through its own always-mounted region, apart from the filter-results one:
+  // that one holds its last message through a reload, so sharing it would announce that message
+  // again when the list returned. Held back until the line has stayed, so a line that flashes for
+  // a moment while a refetch overlaps the end of a sync is never read out. Hidden case: a hidden
+  // tab announces nothing either way, so nothing is deferred for it.
+  const [syncRunningAnnouncement, setSyncRunningAnnouncement] = useState('');
+  useEffect(() => {
+    if (!isSyncRunningLineShown) {
+      setSyncRunningAnnouncement('');
+      return undefined;
+    }
+    const timer = setTimeout(
+      () => setSyncRunningAnnouncement(syncRunningListLoadsText),
+      SYNC_RUNNING_ANNOUNCEMENT_DELAY_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [isSyncRunningLineShown, syncRunningListLoadsText]);
+
   // React element refs start out as `null`.
   // eslint-disable-next-line no-null/no-null
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -833,95 +909,197 @@ export function Home({
     event.target instanceof Node && event.currentTarget.contains(event.target);
 
   const getSendReceiveButtonContent = (project: MergedProjectInfo) => {
-    if (isSendReceiveInProgress && activeSendReceiveProjects.includes(project.projectId)) {
+    if (isSendReceiveInProgress && isProjectSyncing(project.projectId)) {
       return <Spinner className="tw:h-5 tw:py-[1px]" />;
     }
 
     return project.isLocallyAvailable ? syncText : getText;
   };
 
-  const syncOrGetButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
-    if (isMenuItem)
-      return (
-        <DropdownMenuItem onClick={() => handleSendReceiveProject(project.projectId)}>
-          <span>{getSendReceiveButtonContent(project)}</span>
-        </DropdownMenuItem>
-      );
-    return (
-      <Button
-        disabled={isSendReceiveInProgress && activeSendReceiveProjects.includes(project.projectId)}
-        onClick={() => handleSendReceiveProject(project.projectId)}
-      >
-        {getSendReceiveButtonContent(project)}
-      </Button>
-    );
-  };
-
-  const openButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
-    const isOpening = openingProjectIds.includes(project.projectId);
-    const isOpenBlocked = !!project.unsupportedReason;
+  /**
+   * The text explaining why a project's Open, Sync, and Get are blocked, or `undefined` when the
+   * project is supported.
+   */
+  const getUnsupportedReasonText = (project: MergedProjectInfo): string | undefined => {
+    if (!project.unsupportedReason) return undefined;
     // A key with no translation can resolve to itself (the loading seed, and possibly the
     // fallback chain's last resort), so a value that is still a localize key is treated as
     // missing rather than shown verbatim as tooltip text. A reason that is missing that way, or
     // is not a key at all, falls back to the generic reason.
     const toShowableText = (text: string | undefined) =>
       text && !isLocalizeKey(text) ? text : undefined;
-    const unsupportedReasonText = isOpenBlocked
-      ? (toShowableText(
-          project.unsupportedReason && isLocalizeKey(project.unsupportedReason)
-            ? localizedUnsupportedReasons[project.unsupportedReason]
-            : undefined,
-        ) ?? toShowableText(localizedUnsupportedReasons[PROJECT_OPEN_BLOCKED_FALLBACK_KEY]))
-      : undefined;
-    // The reason is written inside the item, since a menu item cannot show a hover tooltip. The
-    // item is `aria-disabled` rather than Radix-`disabled` so keyboard navigation still reaches
-    // it and the reason is read as part of its accessible name; selecting it does nothing.
-    if (isMenuItem)
+    return (
+      toShowableText(
+        isLocalizeKey(project.unsupportedReason)
+          ? localizedUnsupportedReasons[project.unsupportedReason]
+          : undefined,
+      ) ?? toShowableText(localizedUnsupportedReasons[PROJECT_OPEN_BLOCKED_FALLBACK_KEY])
+    );
+  };
+
+  /**
+   * A menu item for an action a project's `unsupportedReason` can block. The reason is written
+   * inside the item, since a menu item cannot show a hover tooltip. The item is `aria-disabled`
+   * rather than Radix-`disabled` so keyboard navigation still reaches it and the reason is read as
+   * part of its accessible name; selecting it does nothing.
+   */
+  const blockableMenuItem = ({
+    label,
+    isBlocked,
+    reasonText,
+    isDisabled,
+    ariaLabel,
+    isBusy,
+    onActivate,
+  }: {
+    label: ReactNode;
+    isBlocked: boolean;
+    reasonText: string | undefined;
+    isDisabled?: boolean;
+    /** The item's name when its label has no text, such as a spinner. Otherwise omit it. */
+    ariaLabel?: string;
+    isBusy?: boolean;
+    onActivate: () => void;
+  }) => (
+    <DropdownMenuItem
+      disabled={isDisabled}
+      aria-disabled={isBlocked || undefined}
+      aria-label={ariaLabel}
+      aria-busy={isBusy || undefined}
+      className={cn({ 'tw:opacity-50': isBlocked })}
+      onSelect={(event) => {
+        if (isBlocked) {
+          event.preventDefault();
+          return;
+        }
+        onActivate();
+      }}
+    >
+      {/* Not muted: the blocked item is already drawn at half opacity, and muted text under that
+          is unreadable. `min-w-0` lets a long reason wrap instead of widening the menu. */}
+      <div className="tw:flex tw:min-w-0 tw:flex-col">
+        <span>{label}</span>
+        {reasonText && (
+          <span className="tw:text-xs tw:italic tw:whitespace-normal tw:text-foreground">
+            {reasonText}
+          </span>
+        )}
+      </div>
+    </DropdownMenuItem>
+  );
+
+  /**
+   * Wraps a button for an action a project's `unsupportedReason` can block in a tooltip that shows
+   * the reason. The button keeps its own props, including `disabled`.
+   */
+  const blockableTooltip = (
+    isBlocked: boolean,
+    reasonText: string | undefined,
+    button: ReactNode,
+    stopName?: string,
+  ) => {
+    // A stop whose name differs from the reason it shows: every row waits for the same sync, so
+    // the shared reason would give each stop the same name.
+    if (stopName && isBlocked && reasonText)
       return (
-        <DropdownMenuItem
-          disabled={isOpening}
-          aria-disabled={isOpenBlocked || undefined}
-          className={cn({ 'tw:opacity-50': isOpenBlocked })}
-          onSelect={(event) => {
-            if (isOpenBlocked) {
-              event.preventDefault();
-              return;
-            }
-            handleOpenProject(project);
-          }}
-        >
-          {/* Not muted: the blocked item is already drawn at half opacity, and muted text under
-              that is unreadable. `min-w-0` lets a long reason wrap instead of widening the menu. */}
-          <div className="tw:flex tw:min-w-0 tw:flex-col">
-            <span>{openText}</span>
-            {unsupportedReasonText && (
-              <span className="tw:text-xs tw:italic tw:whitespace-normal tw:text-foreground">
-                {unsupportedReasonText}
-              </span>
-            )}
-          </div>
-        </DropdownMenuItem>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DisabledTooltipWrapper isDisabled disabledExplanation={stopName}>
+                {button}
+              </DisabledTooltipWrapper>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p className="tw:max-w-xs tw:whitespace-pre-line">{reasonText}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       );
     // Without reason text the wrapper would be a nameless tab stop with an empty bubble; the button
     // stays disabled either way.
     return (
-      <DisabledActionTooltip
-        disabled={isOpenBlocked && !!unsupportedReasonText}
-        tooltipText={unsupportedReasonText ?? ''}
-      >
-        <Button
-          disabled={isOpenBlocked}
-          // Not `disabled` while opening, which would drop the focus of a keyboard user who pressed
-          // it; a repeat press is ignored by `handleOpenProject`.
-          aria-disabled={isOpening}
-          aria-busy={isOpening}
-          // The spinner has no text, so the button keeps its name while it shows.
-          aria-label={openText}
-          onClick={() => handleOpenProject(project)}
-        >
-          {isOpening ? <Spinner className="tw:h-5 tw:py-[1px]" /> : openText}
-        </Button>
+      <DisabledActionTooltip disabled={isBlocked && !!reasonText} tooltipText={reasonText ?? ''}>
+        {button}
       </DisabledActionTooltip>
+    );
+  };
+
+  const syncOrGetButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
+    // Home reuses `unsupportedReason` (the can't-open signal) to block Sync and Get too. Today that
+    // is only Study Bible Additions (see `adr-sba-not-syncable-from-dialog-or-home`). A project type
+    // that becomes openable (removed from `ScrTextExtensions.GetOpenBlockedReason`) stops being
+    // blocked here automatically; a type that stays unopenable but should be syncable needs its own
+    // check instead of `unsupportedReason`.
+    const isBlocked = !!project.unsupportedReason;
+    const unsupportedReasonText = getUnsupportedReasonText(project);
+    // The sync service runs one sync at a time and refuses a second one, so every row is gated while
+    // any sync runs, not just the active one. The active row shows the spinner and needs no reason.
+    const isThisProjectSyncing = isProjectSyncing(project.projectId);
+    const isWaitingForOtherSync = isSendReceiveInProgress && !isThisProjectSyncing;
+    const waitingReasonText = isWaitingForOtherSync ? syncWaitingReasonText : undefined;
+    const sendReceiveLabel = project.isLocallyAvailable ? syncText : getText;
+    // The unsupported reason, which already names why this project is blocked, wins.
+    const waitingStopName =
+      !unsupportedReasonText && waitingReasonText
+        ? formatReplacementString(
+            project.isLocallyAvailable ? syncWaitingStopSyncFormat : syncWaitingStopGetFormat,
+            { name: project.name },
+          )
+        : undefined;
+    if (isMenuItem)
+      return blockableMenuItem({
+        label: getSendReceiveButtonContent(project),
+        isBlocked: isBlocked || isSendReceiveInProgress,
+        reasonText: unsupportedReasonText ?? waitingReasonText,
+        // The spinner has no text, so the item keeps its name while it shows.
+        ariaLabel: isThisProjectSyncing ? sendReceiveLabel : undefined,
+        isBusy: isThisProjectSyncing,
+        onActivate: () => handleSendReceiveProject(project.projectId),
+      });
+    return blockableTooltip(
+      isBlocked || isWaitingForOtherSync,
+      unsupportedReasonText ?? waitingReasonText,
+      <Button
+        disabled={isBlocked || isSendReceiveInProgress}
+        aria-busy={isThisProjectSyncing}
+        // The spinner has no text, so the button keeps its name while it shows; otherwise its
+        // visible text is the name.
+        aria-label={isThisProjectSyncing ? sendReceiveLabel : undefined}
+        onClick={() => handleSendReceiveProject(project.projectId)}
+      >
+        {getSendReceiveButtonContent(project)}
+      </Button>,
+      waitingStopName,
+    );
+  };
+
+  const openButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
+    const isOpening = openingProjectIds.includes(project.projectId);
+    const isOpenBlocked = !!project.unsupportedReason;
+    const unsupportedReasonText = getUnsupportedReasonText(project);
+    if (isMenuItem)
+      return blockableMenuItem({
+        label: openText,
+        isBlocked: isOpenBlocked,
+        reasonText: unsupportedReasonText,
+        isDisabled: isOpening,
+        onActivate: () => handleOpenProject(project),
+      });
+    return blockableTooltip(
+      isOpenBlocked,
+      unsupportedReasonText,
+      <Button
+        disabled={isOpenBlocked}
+        // Not `disabled` while opening, which would drop the focus of a keyboard user who pressed
+        // it; a repeat press is ignored by `handleOpenProject`.
+        aria-disabled={isOpening}
+        aria-busy={isOpening}
+        // The spinner has no text, so the button keeps its name while it shows.
+        aria-label={openText}
+        onClick={() => handleOpenProject(project)}
+      >
+        {isOpening ? <Spinner className="tw:h-5 tw:py-[1px]" /> : openText}
+      </Button>,
     );
   };
 
@@ -1006,9 +1184,19 @@ export function Home({
       <div role="status" aria-live="polite" aria-atomic="true" className="tw:sr-only">
         {filteredToNothingAnnouncement}
       </div>
+      <div role="status" aria-live="polite" aria-atomic="true" className="tw:sr-only">
+        {syncRunningAnnouncement}
+      </div>
       {isLoading ? (
         <CardContent className="tw:flex tw:flex-grow tw:flex-col tw:items-center tw:justify-center tw:gap-2">
           <Spinner />
+          {/* The server list queues behind a running sync, so the web view asks for it only once no
+              sync runs, whichever path started it. Briefly, when a sync ends, the refetch can start
+              before the backend's closing activity event arrives, and the line can show for a
+              moment. */}
+          {isSyncRunningLineShown && (
+            <p className="tw:text-sm tw:text-muted-foreground">{syncRunningListLoadsText}</p>
+          )}
         </CardContent>
       ) : (
         <CardContent className="tw:flex-grow tw:overflow-auto tw:min-h-32 tw:px-0">
@@ -1089,9 +1277,13 @@ export function Home({
                             }}
                             onDoubleClick={(e) => {
                               if (!isEventInside(e)) return;
+                              // Open, Sync, and Get are all blocked for an unsupported project:
+                              // Home reuses the can't-open `unsupportedReason` to block sync too
+                              // (today only Study Bible Additions; see
+                              // `adr-sba-not-syncable-from-dialog-or-home`). A type that stays
+                              // unopenable but should be syncable needs its own check here.
+                              if (project.unsupportedReason) return;
                               if (project.isLocallyAvailable) {
-                                // Only Open is blocked for an unsupported project, not Get.
-                                if (project.unsupportedReason) return;
                                 handleOpenProject(project);
                               } else if (!isSendReceiveInProgress) {
                                 handleSendReceiveProject(project.projectId);
@@ -1165,11 +1357,16 @@ export function Home({
                 )}
               </div>
             )}
-            {/* About the one item the type filter lists, so only while that item is on screen. */}
-            {isOnlyWebSampleListed && onGetStarted && (
+            {/*
+             * For a user who has nothing yet, or whose only item is the sample (and only while the
+             * type filter shows it).
+             */}
+            {(mergedProjectInfo.length === 0 || isOnlyWebSampleListed) && onGetStarted && (
               <div className="tw:flex tw:flex-col tw:gap-4 tw:items-center tw:w-auto">
                 <p className="tw:text-muted-foreground tw:font-normal">
-                  {getStartedDescriptionText}
+                  {mergedProjectInfo.length === 0
+                    ? getStartedNoItemsDescriptionText
+                    : getStartedDescriptionText}
                 </p>
                 <Button onClick={onGetStarted}>{getStartedText}</Button>
               </div>

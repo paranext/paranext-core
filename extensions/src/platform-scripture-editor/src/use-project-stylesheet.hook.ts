@@ -1,20 +1,48 @@
 import { generateUsjCss, StyleInfo } from '@eten-tech-foundation/platform-editor';
+import type { ScriptureEditorViewType } from 'platform-scripture-editor';
 import { useStylesheet } from 'platform-bible-react';
 import { useMemo } from 'react';
+import { FOOTNOTE_ROWS_SELECTOR, generateProjectFontCss } from './project-font-css.util';
 
 /**
- * Injects project-stylesheet-derived CSS (PT9 CSSCreator port) layered after the static
- * usj-nodes.css base, so project styles win where defined. Standard view only for now; formatted
- * view keeps its current styling.
+ * Which project sheet a view gets from {@link useProjectStylesheet}: the whole sheet in the Standard
+ * view, fonts only in every other view.
+ */
+export function projectStylesheetMode(viewType: ScriptureEditorViewType): 'full' | 'fonts' {
+  return viewType === 'standard' ? 'full' : 'fonts';
+}
+
+/**
+ * Injects project-stylesheet-derived CSS layered after the static usj-nodes.css base, so project
+ * styles win where defined. The Standard view gets the whole project stylesheet (`'full'`, the PT9
+ * CSSCreator port). The formatted view gets fonts only (`'fonts'`: the default font family and
+ * size, plus per-marker font families), because it has its own marker layout rules that the full
+ * sheet would override.
  */
 export function useProjectStylesheet(
   styleInfo: StyleInfo | undefined,
   rtl: boolean,
-  enabled: boolean,
+  mode: 'full' | 'fonts',
 ): void {
+  // The fonts-only sheet has no direction-dependent rules, so `rtl` must not rebuild it.
+  const effectiveRtl = mode === 'full' && rtl;
+  const css = useMemo(() => {
+    if (!styleInfo) return '';
+    return mode === 'full'
+      ? generateUsjCss(styleInfo, { rtl: effectiveRtl })
+      : generateProjectFontCss(styleInfo);
+  }, [styleInfo, effectiveRtl, mode]);
+  useStylesheet(css);
+}
+
+/**
+ * Injects the project's fonts for the footnotes pane's read-only rows. The pane sits in the same
+ * document in every view, so unlike {@link useProjectStylesheet} this never varies with the view.
+ */
+export function useFootnotePaneFontStylesheet(styleInfo: StyleInfo | undefined): void {
   const css = useMemo(
-    () => (enabled && styleInfo ? generateUsjCss(styleInfo, { rtl }) : ''),
-    [styleInfo, rtl, enabled],
+    () => generateProjectFontCss(styleInfo, { containerSelector: FOOTNOTE_ROWS_SELECTOR }),
+    [styleInfo],
   );
   useStylesheet(css);
 }

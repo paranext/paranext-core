@@ -163,6 +163,14 @@ export const NoProjectsNoHeader: Story = {
   decorators: [],
 };
 
+/** What a new user of a packaged build sees: nothing to list, with the getting-started prompt. */
+export const NoProjects: Story = {
+  args: {
+    headerContent: <CardTitle>Home</CardTitle>,
+    onGetStarted: () => alertCommand('platform.openWindow', { url: GET_STARTED_URL }),
+  },
+};
+
 function OnlyWebProjectDecorator(Story: (update?: { args: HomeProps }) => ReactElement) {
   const onlyWebProjectList: LocalProjectInfo[] = [
     {
@@ -231,6 +239,67 @@ export const SendReceiveError: Story = {
 };
 
 /**
+ * A sync is running for the undownloaded shared project `HPUX-S/R`: its row shows a spinner, and
+ * every other row's Get and Sync is disabled with the reason "Wait for the current sync to
+ * finish".
+ */
+function SyncInProgressDecorator(Story: (update?: { args: HomeProps }) => ReactElement) {
+  return (
+    <Story
+      args={{
+        localizedStringsWithLoadingState: [localizedStrings, false],
+        localProjectsInfo: staticLocalProjectsAndResources,
+        sharedProjectsInfo: staticProjectsAndResources,
+        isSendReceiveInProgress: true,
+        activeSendReceiveProjects: ['17'],
+        headerContent: (
+          <>
+            <HomeIcon size="36" />
+            <CardTitle>Home</CardTitle>
+          </>
+        ),
+      }}
+    />
+  );
+}
+
+/**
+ * A sync is running. Also what Home shows for a sync started elsewhere: the Sync dialog, auto-sync,
+ * startup or a project switch.
+ */
+export const SyncInProgress: Story = {
+  decorators: [SyncInProgressDecorator],
+};
+
+/**
+ * Home opens while a sync that started elsewhere holds the server list: the spinner shows with a
+ * line saying a sync is running and the projects load when it finishes.
+ */
+function LoadingDuringSyncDecorator(Story: (update?: { args: HomeProps }) => ReactElement) {
+  return (
+    <Story
+      args={{
+        localizedStringsWithLoadingState: [localizedStrings, false],
+        localProjectsInfo: staticLocalProjectsAndResources,
+        remoteProjectsState: 'loading',
+        isServerListExpectedAfterSync: true,
+        isSendReceiveInProgress: true,
+        headerContent: (
+          <>
+            <HomeIcon size="36" />
+            <CardTitle>Home</CardTitle>
+          </>
+        ),
+      }}
+    />
+  );
+}
+
+export const LoadingDuringSync: Story = {
+  decorators: [LoadingDuringSyncDecorator],
+};
+
+/**
  * The send/receive server could not be reached, so the list holds only what is already on this
  * computer.
  */
@@ -291,7 +360,7 @@ const UNSUPPORTED_REASON_KEY = '%project_unsupported_studyBibleAdditions%';
 
 /**
  * A project that cannot be opened (e.g. a Study Bible Additions project): its row is muted and its
- * Open action is disabled, with the reason reachable through a tooltip. Sync and Get stay enabled.
+ * Open, Sync and Get actions are all disabled, with the reason reachable through a tooltip.
  */
 function UnsupportedProjectDecorator(Story: (update?: { args: HomeProps }) => ReactElement) {
   return (
@@ -329,8 +398,8 @@ export const UnsupportedProject: Story = {
 
 /**
  * An unsupported project that is downloaded and has local edits: Sync takes the action cell's
- * button and Open moves into its ⋯ menu, where it is disabled and carries the reason as text in the
- * item.
+ * button and Open moves into its ⋯ menu. Sync is disabled with the reason in a tooltip; Open is
+ * disabled and carries the reason as text in the menu item.
  */
 function UnsupportedProjectWithLocalEditsDecorator(
   Story: (update?: { args: HomeProps }) => ReactElement,

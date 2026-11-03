@@ -25,6 +25,7 @@ import { useResourcePickerResources } from './use-resource-picker-resources.hook
 import { getPickerDialogSelection, type PickerResource } from './downloaded-resources.utils';
 import {
   canPublishResourcePanelProjectIds,
+  canResolveResourceSelection,
   getResourcePanelReadiness,
   type ResourcePanelReadiness,
 } from './resource-panel-readiness.utils';
@@ -57,10 +58,22 @@ import {
 import { ResourceTextPanel } from './resource-text-panel.component';
 import { RESOURCE_PANEL_STRING_KEYS } from './resource-text-panel.const';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
+import {
+  notifySelectionNotStored,
+  useProjectResourceSelection,
+} from './use-project-resource-selection.hook';
 import { COPYRIGHT_NOTICE_STRING_KEYS } from './copyright-notice/copyright-notice.const';
 import { ProjectCopyrightNotice } from './copyright-notice/project-copyright-notice.component';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
+
+/** A resource the user chose that the stored selection may not name yet. */
+type PendingPick = {
+  /** The row id of the chosen resource */
+  rowId: string;
+  /** Whether the panel's own write of this pick has finished */
+  isWritten: boolean;
+};
 
 // Built once at module scope, not inline in the `useLocalizedStrings` call. The hook's key array
 // must keep a stable identity across renders — a fresh array every render re-runs its lookup — and
@@ -98,16 +111,19 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
 
   // resourceType is injected by the web view provider at open time
   const [resourceType] = useWebViewState<ResourceType>('resourceType', 'ScriptureResource');
-  const [selectedResourceId, setSelectedResourceId] = useWebViewState<string | undefined>(
-    'selectedResourceId',
-    undefined,
-  );
-  // The resource the user last chose themselves, so a selection the panel fell back to can be told
-  // apart from one the user picked. See `resolveResourceSelection` for why a fallback must not
-  // outlive a configured resource arriving. Written also by `buildResourceTextPanelState`.
-  const [userPickedResourceId, setUserPickedResourceId] = useWebViewState<string | undefined>(
-    'userPickedResourceId',
-    undefined,
+  // Kept per project, in a user setting, so a project switch or a restart shows the project's own.
+  // `userPickedResourceId` is the resource the user last chose themselves, so a selection the panel
+  // fell back to can be told apart from one the user picked. See `resolveResourceSelection` for why
+  // a fallback must not outlive a configured resource arriving. Written also by
+  // `buildResourceTextPanelState`.
+  const [
+    { selectedResourceId, userPickedResourceId },
+    updateSelection,
+    isSelectionLoading,
+    hasSelectionReadFailed,
+  ] = useProjectResourceSelection(
+    resourceType === 'CommentaryResource' ? 'CommentaryResource' : 'ScriptureResource',
+    projectId,
   );
 
   // #endregion
@@ -136,11 +152,16 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
 
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
   const { dblResources, isCatalogReady, hasCatalogError, refetchCatalog } = useDblResourceCatalog();
+  // "The catalog is done, however it turned out" — one name for a disjunction the panel needs in
+  // three places (picker rows, selection settlement, and the readiness input below). Distinct from
+  // `isCatalogReady`, which means "done AND delivered"; the difference is what the display/persist
+  // split turns on (see `adr-panel-readiness-splits-display-from-persistence`).
+  const isCatalogSettled = isCatalogReady || hasCatalogError;
   const [pickerResources, arePickerResourcesLoading] = useResourcePickerResources(
     projectId,
     RESOURCE_PICKER_OPTIONS,
     dblResources,
-    isCatalogReady || hasCatalogError,
+    isCatalogSettled,
   );
   const getUserResourceTexts = useCallback(
     async () => textConnectionsProvider?.getUserReferencedProjectsAndResources(),
@@ -202,21 +223,25 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
     else if (hasCatalogError && !hasRowForSavedSelection) readiness = 'catalogError';
     else if (filteredResources.length > 0) readiness = 'configured';
   }
+  // Until the stored selection has arrived, any row shown could be the wrong one.
+  if (isSelectionLoading) readiness = 'loading';
 
   // #endregion
 
   // #region Selection management
 
-  // Holds the row id of a resource just selected from the picker while it propagates through the
-  // reactive settings chain and into filteredResources. Written from the reference
-  // `selectTextConnection` actually stored, so it is comparable to the row ids of the list.
-  //
-  // TODO(PT-4509): The dropdown is interactive during that window — `isSelecting` goes false in its
-  // `finally`, removing the LoadingView that covered the selector, before the written reference
-  // reaches `filteredResources` — and `resolveResourceSelection`'s pending branch ignores
-  // `selectedResourceId`. So a user who changes their mind in that window watches the panel jump to
-  // the resource they abandoned, with nothing indicating their own earlier pick won.
-  const [pendingResourceId, setPendingResourceId] = useState<string | undefined>(undefined);
+  // The resource the user last chose, from the dropdown or the picker, held until its own write has
+  // finished and the stored selection names it. `rowId` of a picker pick comes from the reference
+  // `selectTextConnection` actually stored, so it is comparable to the row ids of the list. Each pick
+  // is a new object and replaces the one before, so a dropdown choice made while a picker pick is
+  // still arriving wins over it, and a write that finishes late is matched to its own pick by
+  // identity, never to a newer pick of the same row.
+  const [pendingPick, setPendingPick] = useState<PendingPick | undefined>(undefined);
+  const pickResource = useCallback(
+    (rowId: string) => setPendingPick({ rowId, isWritten: false }),
+    [],
+  );
+  const pendingResourceId = pendingPick?.rowId;
 
   // The downloaded fallback shown last. Kept in React state rather than web view state because a
   // fallback is never persisted; holding it keeps a newly installed resource from taking its place.
@@ -236,63 +261,114 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   // With no project open the panel shows only a resource it was asked for — one opened from Home —
   // and never picks one by itself: there is no list of the user's texts to pick from, so a fallback
   // would put an arbitrary download on screen instead of "open a project".
-  const selection: ResourceSelectionResolution = projectId
-    ? resolveResourceSelection(filteredResources, {
-        selectedResourceId,
-        userPickedResourceId,
-        pendingResourceId,
-        heldFallbackRowId,
-        isListComplete:
-          effectiveResourcesState.status === 'ready' && !effectiveResourcesState.isUserLayerMissing,
-      })
-    : {
-        nextSelectedResourceId: undefined,
-        nextUserPickedResourceId: undefined,
-        shouldClearPending: false,
-        selectedRow: findSelectedRow(filteredResources, selectedResourceId),
-        shownFallbackRowId: undefined,
-      };
+  const arePanelRowsReady = pickerResources !== undefined;
+  let selection: ResourceSelectionResolution;
+  // Nothing is shown, written or held until the stored selection has arrived: resolved without it,
+  // a stored pick would look absent and the panel would show a fallback in its place.
+  if (isSelectionLoading)
+    selection = {
+      nextSelectedResourceId: undefined,
+      nextUserPickedResourceId: undefined,
+      shouldClearPending: false,
+      selectedRow: undefined,
+      shownFallbackRowId: undefined,
+    };
+  else if (projectId)
+    selection = resolveResourceSelection(filteredResources, {
+      selectedResourceId,
+      userPickedResourceId,
+      pendingResourceId,
+      isPendingPickWritten: pendingPick?.isWritten ?? false,
+      heldFallbackRowId,
+      isListComplete:
+        effectiveResourcesState.status === 'ready' && !effectiveResourcesState.isUserLayerMissing,
+      areSourcesSettled: canResolveResourceSelection({
+        listState: effectiveResourcesState,
+        isCatalogReady,
+        hasCatalogError,
+        arePanelRowsReady,
+      }),
+      // Deliberately the stricter question. A failed catalog settles what the rows are well
+      // enough to display one, but its retry can still bring the selected row back, so a fallback
+      // derived from that absence must not be written over the stored pick. Committing a pick
+      // and migrating a legacy bare id still go through. A stored selection that could not be read
+      // looks absent too, so a fallback resolved while it cannot be read must not replace it.
+      mayPersistCorrection:
+        !hasSelectionReadFailed &&
+        canPublishResourcePanelProjectIds(
+          effectiveResourcesState,
+          isCatalogReady,
+          arePanelRowsReady,
+        ),
+    });
+  else
+    selection = {
+      nextSelectedResourceId: undefined,
+      nextUserPickedResourceId: undefined,
+      shouldClearPending: false,
+      selectedRow: findSelectedRow(filteredResources, selectedResourceId),
+      shownFallbackRowId: undefined,
+    };
   // Behind the catalog-error view nothing is on screen, so the first-row fallback must not keep a
   // chapter subscription open or become what Ctrl+F searches.
   const selectedRef = readiness === 'catalogError' ? undefined : selection.selectedRow;
 
-  // Falling back to another row while the catalog is down would overwrite a saved DBL selection
-  // that only lacks a row until the catalog returns. Committing a pick and migrating a legacy bare
-  // id still go through.
-  const isFallbackWhileCatalogFailed =
-    hasCatalogError && pendingResourceId === undefined && !hasRowForSavedSelection;
-  const nextSelectedResourceId = isFallbackWhileCatalogFailed
-    ? undefined
-    : selection.nextSelectedResourceId;
-  const { nextUserPickedResourceId, shownFallbackRowId } = selection;
+  const { nextSelectedResourceId, nextUserPickedResourceId, shownFallbackRowId } = selection;
+  // The user's pick this write commits, if it is not a correction the panel makes by itself. A
+  // rewrite of a stored pick also sets `nextUserPickedResourceId`, so that alone does not say the
+  // user just asked for it; only the pending branch writes the pending id.
+  const committingPick =
+    nextUserPickedResourceId !== undefined && nextUserPickedResourceId === pendingResourceId
+      ? pendingPick
+      : undefined;
 
-  // The user's pick is written before the selection, so no render sees the new selection without
-  // it and takes it for a fallback (see `handleSelectResourceFromList`).
+  // The user's pick and the selection are written together, so no render sees the new selection
+  // without the pick and takes it for a fallback. A pick whose write fails is let go, or it would
+  // hold the panel on a resource that was never stored, and the user is told, or the pick would
+  // look ignored. A failed correction is only logged: the user asked for nothing.
   useEffect(() => {
-    if (nextUserPickedResourceId !== undefined) setUserPickedResourceId(nextUserPickedResourceId);
-    if (nextSelectedResourceId !== undefined) setSelectedResourceId(nextSelectedResourceId);
-    if (selection.shouldClearPending) setPendingResourceId(undefined);
+    // Never rejects: `updateSelection` reports a failure by resolving to `false`.
+    const storeSelection = async () => {
+      const isStored = await updateSelection({
+        userPickedResourceId: nextUserPickedResourceId,
+        selectedResourceId: nextSelectedResourceId,
+      });
+      if (!committingPick) return;
+      // Only this pick: a newer one made meanwhile is still on its way.
+      setPendingPick((current) => {
+        if (current !== committingPick) return current;
+        return isStored ? { ...current, isWritten: true } : undefined;
+      });
+      if (!isStored) await notifySelectionNotStored();
+    };
+    if (nextUserPickedResourceId !== undefined || nextSelectedResourceId !== undefined)
+      storeSelection();
+    if (selection.shouldClearPending) setPendingPick(undefined);
   }, [
     nextSelectedResourceId,
     nextUserPickedResourceId,
+    committingPick,
     selection.shouldClearPending,
-    setSelectedResourceId,
-    setUserPickedResourceId,
+    updateSelection,
   ]);
 
   useEffect(() => {
     if (shownFallbackRowId !== undefined) setHeldFallbackRowId(shownFallbackRowId);
   }, [shownFallbackRowId]);
 
-  // The pick is written before the selection so no render sees the user's pick taken for a
-  // fallback. Each web view state key comes back as its own web view update, in the order it was
-  // written, so the two setters are not applied together; keep the pick first.
+  // With a project open, a dropdown pick is pending like a picker pick, so it is shown until it is
+  // stored and replaces a picker pick still arriving. With none, nothing resolves a pending pick, so
+  // it is stored at once, the pick and the selection together so no render takes it for a fallback.
   const handleSelectResourceFromList = useCallback(
-    (resourceId: string) => {
-      setUserPickedResourceId(resourceId);
-      setSelectedResourceId(resourceId);
+    async (rowId: string) => {
+      if (projectId) {
+        pickResource(rowId);
+        return;
+      }
+      if (!(await updateSelection({ userPickedResourceId: rowId, selectedResourceId: rowId })))
+        await notifySelectionNotStored();
     },
-    [setUserPickedResourceId, setSelectedResourceId],
+    [projectId, pickResource, updateSelection],
   );
 
   const [isSelecting, setIsSelecting] = useState(false);
@@ -373,7 +449,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
       // Rows resolved locally despite a failed catalog (the readiness override above) are an
       // answer; a failed catalog alone is not, and publishing then would wipe the saved list.
       isCatalogReady || readiness === 'configured',
-      pickerResources !== undefined,
+      arePanelRowsReady,
     ),
     // These panels are re-pointed by reloading them, which reuses the web view id, so the
     // published list must be scoped to the project it was built for.
@@ -430,9 +506,20 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   // matter (intros, Psalm superscriptions) this view exists to show. Single-verse surfaces resolve
   // verse 0 to verse 1; whole-chapter surfaces like this one must not (see
   // `adr-single-verse-surfaces-resolve-verse-zero-to-one`).
+
+  // Re-drives a failed chapter read when the reader presses retry (see
+  // `useChapterUsjWithCopyLimit`'s `retryNonce`).
+  const [chapterRetryNonce, setChapterRetryNonce] = useState(0);
+  const retryChapterRead = useCallback(() => setChapterRetryNonce((nonce) => nonce + 1), []);
+
   const { usjPossiblyError, isUsjLoading, copyLimit } = useChapterUsjWithCopyLimit(
     resourceProjectId,
     scrRef,
+    // Unseeded so that "no chapter has arrived yet" is representable. A blank USJ cannot reach the
+    // two branches that answer it — `resolveResourceContentState`'s `'loading'` and the panel's
+    // `!usjFromPdp` spinner — and `Editorial` mounts holding nothing, painting Lexical's "Enter
+    // some Scripture…" prompt: an invitation to type in a text the reader cannot edit.
+    { retryNonce: chapterRetryNonce, isSeededEmpty: false },
   );
 
   // #endregion
@@ -493,8 +580,18 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
     [getUserResourceTexts, setUserResourceTexts, localizedStrings],
   );
 
+  // Which pick is the current one. Two picks can overlap — each is an `await` chain over the
+  // settings write and an install, and nothing stops the user choosing again while one runs — and
+  // the `finally` below is unconditional, so without this the FIRST to settle clears `isSelecting`
+  // while the second is still working. That is not cosmetic: `isSelecting` is what suppresses
+  // `useDblResourceAutoInstall`, so clearing it early re-arms auto-install alongside the in-flight
+  // pick's own install of a different resource. Same guard as `use-dbl-resource-catalog.hook.ts`.
+  const selectGenerationRef = useRef(0);
+
   const handleResourceSelect = useCallback(
     async (resource: DblResourceData) => {
+      selectGenerationRef.current += 1;
+      const generation = selectGenerationRef.current;
       setIsSelecting(true);
       // A user-initiated pick is a fresh attempt: clear any prior auto-install failure.
       clearInstallFailure();
@@ -518,10 +615,12 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
               throw e;
             }
           },
-          (writtenReference) => setPendingResourceId(getResourceReferenceRowId(writtenReference)),
+          (writtenReference) => pickResource(getResourceReferenceRowId(writtenReference)),
         );
       } finally {
-        setIsSelecting(false);
+        // Only the newest pick owns the flag. A superseded one leaves it set so the panel keeps
+        // reporting "Selecting…" until the pick the user actually last made finishes.
+        if (generation === selectGenerationRef.current) setIsSelecting(false);
       }
     },
     [
@@ -530,6 +629,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
       installResource,
       clearInstallFailure,
       markInstallFailed,
+      pickResource,
     ],
   );
 
@@ -598,6 +698,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
       onSelectResource={handleSelectResourceFromList}
       usjPossiblyError={usjPossiblyError}
       isUsjLoading={isUsjLoading}
+      onRetryChapter={retryChapterRead}
       textDirection={textDirection}
       copyLimit={copyLimit}
       isSelecting={isSelecting}

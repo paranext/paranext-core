@@ -9,6 +9,9 @@
       "program": "${workspaceFolder}/c-sharp/bin/Debug/net8.0/ParanextDataProvider",
       "args": [],
       "cwd": "${workspaceFolder}",
+      "env": {
+        "PLATFORM_BIBLE_INSTALL_SAMPLE_PROJECT": "true"
+      },
       "stopAtEntry": false,
       "justMyCode": false,
       "windows": {

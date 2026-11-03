@@ -33,6 +33,8 @@ These belong to no subset; run them by path (see "How to run").
 - `comments-tab.spec.ts` (one Electron per worker)
 - `first-run-wizard.spec.ts` (one Electron per test)
 - `internet-settings.spec.ts` (one Electron per test)
+- `no-projects-without-sample.spec.ts` (one Electron per test) — an empty projects folder with the
+  sample project turned off resolves to the editor's no-projects guidance and Home's empty state
 
 ## Subdirectories
 

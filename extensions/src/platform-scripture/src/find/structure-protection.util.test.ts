@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
+  MARKER_DELETION_ERROR,
   STRUCTURE_PROTECTED_ERROR,
   extractStructuralMarkers,
   usfmChangesStructure,
+  usfmDeletesMarkers,
   replacementContainsStructuralMarker,
 } from './structure-protection.util';
 
@@ -90,6 +92,94 @@ describe('structure-protection.util', () => {
     });
     it('is true when the replacement adds a verse marker', () => {
       expect(replacementContainsStructuralMarker('\\v 6 new verse')).toBe(true);
+    });
+  });
+
+  describe('table markers', () => {
+    it('extracts row and cell markers, which isBlockMarker does not recognize', () => {
+      // `tr`/`tc#`/`th#` are absent from the shared marker map, so isBlockMarker reports false for
+      // them. A table row and cell each begin their own block, so losing one loses structure.
+      expect(extractStructuralMarkers('\\tr \\tc1 Abraham \\tc2 became')).toEqual([
+        'tr',
+        'tc1',
+        'tc2',
+      ]);
+    });
+
+    it('sees a replacement that swallows a cell marker as a structural change', () => {
+      expect(usfmChangesStructure('Abraham\\tc2 became', 'Abraham became')).toBe(true);
+    });
+
+    it('recognizes the centred and right-aligned cell spellings, including a column span', () => {
+      // Driven off the shared markers map rather than a hand-written pattern, so `thc#`/`tcc#`
+      // are covered alongside `tc#`/`th#`. The repo's own canonical 3.1 fixture contains `thc3`.
+      expect(extractStructuralMarkers('\\thc3 a \\tcc2 b \\thr4 c \\tcr1 d')).toEqual([
+        'thc3',
+        'tcc2',
+        'thr4',
+        'tcr1',
+      ]);
+      expect(extractStructuralMarkers('\\thc3-4 spans two columns')).toEqual(['thc3-4']);
+      expect(usfmDeletesMarkers('Header\\thc3 centred', 'Header centred')).toBe(true);
+    });
+
+    it('recognizes sidebar boundaries', () => {
+      // `esb`/`esbe` open and close a block; swallowing one half orphans the other.
+      expect(extractStructuralMarkers('\\esb side matter \\esbe')).toEqual(['esb', 'esbe']);
+      expect(usfmDeletesMarkers('text\\esbe after', 'text after')).toBe(true);
+    });
+  });
+
+  describe('usfmDeletesMarkers', () => {
+    it('is false when nothing structural is removed', () => {
+      expect(usfmDeletesMarkers('just words', 'other words')).toBe(false);
+    });
+
+    it('is false when the replacement puts the marker back', () => {
+      expect(usfmDeletesMarkers('\\p one', '\\p two')).toBe(false);
+    });
+
+    it('is true when a paragraph marker is dropped', () => {
+      expect(
+        usfmDeletesMarkers('of Abraham.\\p Abraham became', 'of Abraham. Abraham became'),
+      ).toBe(true);
+    });
+
+    it('is true when a table cell marker is dropped', () => {
+      expect(usfmDeletesMarkers('Abraham\\tc2 became', 'Abraham became')).toBe(true);
+    });
+
+    it('is true when a footnote is dropped, though a footnote is not structural', () => {
+      // A note does not begin a block, so extractStructuralMarkers ignores it — but a replacement
+      // that swallows one destroys authored text with nothing on screen to show for it.
+      expect(extractStructuralMarkers('\\f + \\ft note\\f*')).toEqual([]);
+      expect(usfmDeletesMarkers('earth.\\f + \\ft note\\f* Blessed', 'earth. Blessed')).toBe(true);
+    });
+
+    it('counts the extended study-Bible note markers, which the shared map omits', () => {
+      expect(usfmDeletesMarkers('text\\ef + \\ft note\\ef* after', 'text after')).toBe(true);
+      expect(usfmDeletesMarkers('text\\ex + \\xt ref\\ex* after', 'text after')).toBe(true);
+    });
+
+    it('is false when a marker is added rather than removed', () => {
+      // Narrower than usfmChangesStructure on purpose: additions stay a matter of editorial policy
+      // and are only refused by the opt-in Simple-mode protection.
+      expect(usfmDeletesMarkers('one', '\\p one')).toBe(false);
+      expect(usfmChangesStructure('one', '\\p one')).toBe(true);
+    });
+
+    it('counts duplicates, so dropping one of two identical markers is caught', () => {
+      expect(usfmDeletesMarkers('\\p a\\p b', '\\p ab')).toBe(true);
+    });
+  });
+
+  describe('MARKER_DELETION_ERROR', () => {
+    it('is a stable sentinel that does not collide with the structure-protection one', () => {
+      // Both are substring-matched out of an error message by the Find web view, so neither may
+      // contain the other — that, not mere inequality, is what would break the UI's branching.
+      expect(MARKER_DELETION_ERROR).toBe('platformScripture.replace.markerDeletion');
+      expect(MARKER_DELETION_ERROR.includes(STRUCTURE_PROTECTED_ERROR)).toBe(false);
+      expect(STRUCTURE_PROTECTED_ERROR.includes(MARKER_DELETION_ERROR)).toBe(false);
     });
   });
 

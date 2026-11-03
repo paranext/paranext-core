@@ -1,7 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import { beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import { persistDirection } from '@/utils/dir-helper.util';
 import {
   NavigationHistoryButtons,
@@ -221,5 +221,51 @@ describe('NavigationHistoryButtons', () => {
   test('applies groupClassName to the outer ButtonGroup', () => {
     render(<NavigationHistoryButtons {...defaultProps} groupClassName="tw:rounded-full" />);
     expect(screen.getByTestId('navigation-history-buttons')).toHaveClass('tw:rounded-full');
+  });
+});
+
+describe('NavigationHistoryButtons — focus after the history menu closes', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    // Remove the instance override so later tests read the prototype getter again
+    Reflect.deleteProperty(document, 'activeElement');
+    document.querySelectorAll('iframe').forEach((frame) => frame.remove());
+  });
+
+  async function openBackMenu() {
+    const user = userEvent.setup();
+    render(<NavigationHistoryButtons {...defaultProps} />);
+    const backButton = screen.getByTestId('navigation-history-back-button');
+    await user.pointer({ keys: '[MouseRight]', target: backButton });
+    await screen.findByRole('menu');
+    return { user, backButton };
+  }
+
+  test('closing the menu with Escape in a focused document focuses the button', async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    const { user, backButton } = await openBackMenu();
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    await waitFor(() => expect(backButton).toHaveFocus());
+  });
+
+  test('closing the menu while an iframe is the active element leaves focus on the iframe', async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    const { backButton } = await openBackMenu();
+    // The overridden `activeElement` below hides any real focus move, so watch the call itself
+    const focusSpy = vi.spyOn(backButton, 'focus');
+    const iframe = document.createElement('iframe');
+    document.body.appendChild(iframe);
+    // Report the frame as focused without moving real focus: a real focus move also drives
+    // Radix's focus-outside dismissal, which a cross-origin frame never triggers.
+    Object.defineProperty(document, 'activeElement', { configurable: true, get: () => iframe });
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    // Radix runs its close-auto-focus handler from a timer after the unmount
+    await new Promise((resolve) => {
+      setTimeout(resolve, 50);
+    });
+    expect(document.activeElement).toBe(iframe);
+    expect(focusSpy).not.toHaveBeenCalled();
   });
 });

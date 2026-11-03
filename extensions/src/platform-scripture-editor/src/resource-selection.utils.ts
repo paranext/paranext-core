@@ -18,6 +18,13 @@ export type ResourceSelectionInputs = {
   userPickedResourceId: string | undefined;
   /** The row id of a pick still propagating, if any */
   pendingResourceId: string | undefined;
+  /**
+   * Whether the pending pick's own write has finished. Until it has, the pick is written even if
+   * the stored selection already names it: that may be a value an earlier write is about to
+   * replace, which is what happens when the user picks back the stored resource while another pick
+   * is still landing.
+   */
+  isPendingPickWritten: boolean;
   /** The row id of the downloaded fallback the panel showed last, if any (never persisted) */
   heldFallbackRowId: string | undefined;
   /**
@@ -25,6 +32,28 @@ export type ResourceSelectionInputs = {
    * as `downloaded` only for now, so nothing is replaced on that evidence.
    */
   isListComplete: boolean;
+  /**
+   * Whether the sources the rows are filtered against have settled, so that a selection's ABSENCE
+   * from them can be read as genuine (see `canResolveResourceSelection`). Governs DISPLAY: until
+   * then nothing is shown in place of a missing selection. Required rather than defaulted: the
+   * safe-looking default is `false`, and a caller that silently got it would render no resource at
+   * all.
+   */
+  areSourcesSettled: boolean;
+  /**
+   * Whether an absence is settled in a way that will not be undone, so a fallback derived from it
+   * may be WRITTEN BACK over the stored selection. Strictly narrower than `areSourcesSettled`: a
+   * failed catalog settles what the rows are for now, but its retry can still restore the missing
+   * row, and the stored id does not come back once overwritten. See `canResolveResourceSelection`
+   * for why the two questions diverge.
+   *
+   * The flag is about protecting a stored pick, so it is deliberately blunt about the case where
+   * there is none: on a first-ever open with a failed catalog, the first row is displayed and not
+   * written back, even though no pick exists to be lost. The cost is one unpersisted default, and
+   * the next successful catalog settles it; gating on "is there something to protect?" would put a
+   * second condition in the way of the one guarantee this flag exists to make.
+   */
+  mayPersistCorrection: boolean;
 };
 
 /** What the panel should do with its persisted selection on this render. */
@@ -40,7 +69,11 @@ export type ResourceSelectionResolution = {
    * committed, and when the selection the user picked is rewritten to another form of its id.
    */
   nextUserPickedResourceId: string | undefined;
-  /** Whether the in-flight pick has arrived in the list and can stop suppressing auto-correct. */
+  /**
+   * Whether the in-flight pick has been stored and can stop suppressing auto-correct. Not as soon
+   * as its row arrives: the stored selection changes only once the write is reported back, so a
+   * pick let go any sooner would show the old selection again in between.
+   */
   shouldClearPending: boolean;
   /** The row to display, or `undefined` when there is nothing to show. */
   selectedRow: PickerResource | undefined;
@@ -108,10 +141,12 @@ export function findSelectedRow(
  * Three jobs, in priority order, so that they cannot fight each other across renders:
  *
  * 1. Commit a pick that has arrived. `pendingResourceId` holds the row id of a resource the user just
- *    chose, while the write propagates through the settings chain into the list. It is compared as
- *    a row id, so it must be derived from the reference that was actually stored — a bare DBL entry
- *    UID never matches, and for a locally-installed non-DBL resource the stored reference is a
- *    project reference whose id is the project id, not the UID.
+ *    chose, from the dropdown or the picker, while it propagates into the list and the setting. It
+ *    is compared as a row id, so a picker pick must be derived from the reference that was actually
+ *    stored — a bare DBL entry UID never matches, and for a locally-installed non-DBL resource the
+ *    stored reference is a project reference whose id is the project id, not the UID. The pick
+ *    stays pending, and on screen, until its write has finished and the stored selection names it.
+ *    The newest pick replaces any earlier one still pending, so the user's last choice wins.
  * 2. Hold still while a pick is in flight. Auto-correct must not overwrite the selection before the
  *    new resource shows up.
  * 3. Auto-correct otherwise — rewrite a legacy bare id to its namespaced form (and a selection found
@@ -132,7 +167,10 @@ export function findSelectedRow(
  *   replace a working text with a blank editor.
  *
  * Nothing is replaced while `isListComplete` is false, and a selection that has left the list is
- * then fallen back from on screen only, since it may be back once the missing layer loads.
+ * then fallen back from on screen only, since it may be back once the missing layer loads. The same
+ * holds while `mayPersistCorrection` is false. Before `areSourcesSettled`, a selection that has
+ * left the list is not fallen back from at all: its absence is evidence of nothing yet, and showing
+ * another row in its place would show a resource the user never chose.
  *
  * @param rows The panel's filtered rows
  * @param inputs See {@link ResourceSelectionInputs}
@@ -146,8 +184,11 @@ export function resolveResourceSelection(
     selectedResourceId,
     userPickedResourceId,
     pendingResourceId,
+    isPendingPickWritten,
     heldFallbackRowId,
     isListComplete,
+    areSourcesSettled,
+    mayPersistCorrection,
   } = inputs;
   const isConfigured = (row: PickerResource) => row.source !== 'downloaded';
   const firstUsable = rows.find((row) => row.projectId !== undefined);
@@ -165,6 +206,7 @@ export function resolveResourceSelection(
     matchedRow?.source === 'downloaded' &&
     !isUserPick &&
     isListComplete &&
+    areSourcesSettled &&
     replacement !== undefined;
   const selectedRow = isSuperseded ? undefined : matchedRow;
   // The configured row to fall back to. A superseded selection gives way to `replacement` itself,
@@ -189,14 +231,19 @@ export function resolveResourceSelection(
     const pendingRow = rows.find(
       (row) => getResourceReferenceRowId(row.reference) === pendingResourceId,
     );
-    if (pendingRow)
+    if (pendingRow) {
+      const isStored =
+        isPendingPickWritten &&
+        selectedResourceId === pendingResourceId &&
+        userPickedResourceId === pendingResourceId;
       return {
-        nextSelectedResourceId: pendingResourceId,
-        nextUserPickedResourceId: pendingResourceId,
-        shouldClearPending: true,
+        nextSelectedResourceId: isPendingPickWritten ? undefined : pendingResourceId,
+        nextUserPickedResourceId: isPendingPickWritten ? undefined : pendingResourceId,
+        shouldClearPending: isStored,
         selectedRow: pendingRow,
         shownFallbackRowId: undefined,
       };
+    }
     const heldRow = selectedRow ?? configuredFallback ?? pickUnsavedFallback();
     return {
       nextSelectedResourceId: undefined,
@@ -228,11 +275,28 @@ export function resolveResourceSelection(
     };
   }
 
+  // The selection is not among the rows. That is only evidence it is GONE once the sources the rows
+  // are filtered against have settled; while one is still arriving, both correcting the stored id
+  // and displaying a fallback in its place would be wrong.
+  if (!areSourcesSettled)
+    return {
+      nextSelectedResourceId: undefined,
+      nextUserPickedResourceId: undefined,
+      shouldClearPending: false,
+      selectedRow: undefined,
+      shownFallbackRowId: undefined,
+    };
+
+  // Displaying a fallback and PERSISTING one are separate decisions, because they carry different
+  // costs when the settlement turns out to be temporary. Showing another row while the catalog is
+  // down is recoverable — the right row reappears on a successful retry. Writing that row over the
+  // stored id is not.
   if (configuredFallback)
     return {
-      nextSelectedResourceId: isListComplete
-        ? getResourceReferenceRowId(configuredFallback.reference)
-        : undefined,
+      nextSelectedResourceId:
+        isListComplete && mayPersistCorrection
+          ? getResourceReferenceRowId(configuredFallback.reference)
+          : undefined,
       nextUserPickedResourceId: undefined,
       shouldClearPending: false,
       selectedRow: configuredFallback,

@@ -8,8 +8,12 @@
    invariant usj-nodes-scss-coverage.test.ts enforces on this file and the demo copy.
    The empty-verse caret rules (`.psc-empty-text-active`, `[data-caret-host]`) come from
    scripture-editors#34, unmerged when copied. Deliberately different from it: the ellipsis box
-   (`--psc-empty-verse-ellipsis-width`) is 13px rather than 18px, closer to this copy's
-   previous ellipsis, which had no padding around the glyph.
+   (`--psc-empty-verse-ellipsis-width`) is the verse number size (`--psc-verse-number-size`, 13/16
+   of the base size, so 13px at the default) rather than 18px, closer to this copy's previous
+   ellipsis, which had no padding around the glyph.
+   The Simple-mode verse, heading and ellipsis sizes are base-relative here
+   (`--psc-base-font-size`, in the gutter section) and intentionally not in the demo copy, where
+   no project stylesheet is injected.
    The source's four `local()`-only Charis SIL @font-face rules are dropped. */
 
 /* stylelint-disable */
@@ -37,10 +41,12 @@
    onto a system font. */
 /* Fallback chain for the editor's generated project stylesheet, which emits
    `font-family: "<project font>", var(--usj-font-fallback, serif)`. On `.usfm` so the unformatted
-   view gets it too. Diverges from the editor library's copy, which hard-codes the chain: this
+   view gets it too, and on the footnotes pane, whose read-only rows get project font rules but sit
+   outside `.usfm`. Diverges from the editor library's copy, which hard-codes the chain: this
    points at Platform.Bible's own stack in src/renderer/styles/fonts.css, inlined into every web
    view. The literal chain is the library's, and applies where fonts.css is not loaded. */
-.usfm {
+.usfm,
+[data-footnotes-pane] {
   --usj-font-fallback: var(
     --scripture-font-stack,
     'Charis SIL',
@@ -2751,21 +2757,36 @@ span.read img {
    chapter numbers, and sets --para-indent / --verse-text-start for each paragraph
    type (the latter is also consumed by the active focus box for alignment). */
 
+/* The editor's own font size, as an absolute length computed once on `.psc-gutter-markers`
+   (registered, so `1em` resolves there rather than in each descendant's font size). The verse
+   number, section heading and empty-verse ellipsis sizes below are multiples of it, so a project
+   font size scales them together and none can compound with an ancestor's size. 16px is the size
+   at the 12pt default. The chapter numeral is decorative and stays a fixed size. */
+@property --psc-base-font-size {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 16px;
+}
+
 .psc-gutter-markers {
+  --psc-base-font-size: 1em;
   --scripture-accent: #c4956a;
   --scripture-accent-chapter: rgba(196, 149, 106, 0.55);
   --scripture-accent-marker: rgba(196, 149, 106, 0.45);
   /* Gutter width. The marker left offset uses calc(-(--psc-gutter-width) + 0.5em),
      so both values must be updated together if the gutter size changes. */
   --psc-gutter-width: 4em;
-  /* An empty verse's ellipsis placeholder is a box of this fixed width, so a hidden one can be
-     cancelled out exactly (see the caret host rule below). */
-  --psc-empty-verse-ellipsis-width: 13px;
+  /* Verse numbers are 13/16 of the base size. Not registered: the base is already an absolute
+     length here, so every rule reading this gets the same value. */
+  --psc-verse-number-size: calc(var(--psc-base-font-size) * 13 / 16);
+  /* An empty verse's ellipsis placeholder is a box as wide as the verse number is tall, so a
+     hidden one can be cancelled out exactly (see the caret host rule below). */
+  --psc-empty-verse-ellipsis-width: var(--psc-verse-number-size);
 }
 
 .psc-gutter-markers .usfm_v,
 .psc-gutter-markers span.verse {
-  font-size: 13px;
+  font-size: var(--psc-verse-number-size);
   font-weight: 700;
   color: var(--scripture-accent);
   vertical-align: unset;
@@ -2801,9 +2822,9 @@ span.read img {
   color: var(--muted-foreground, #6b7280);
   font-style: italic;
 }
-/* A fixed-width box with the glyph centered in it, rather than the glyph's own width: the caret
-   host's margin below cancels a hidden ellipsis by exactly this width. Not for a `.marker` verse
-   (markerMode "visible"), whose ::after is the verse number itself. */
+/* A box of the ellipsis width with the glyph centered in it, rather than the glyph's own width: the
+   caret host's margin below cancels a hidden ellipsis by exactly this width. Not for a `.marker`
+   verse (markerMode "visible"), whose ::after is the verse number itself. */
 .psc-gutter-markers .verse:not(.marker).psc-empty-text::after,
 .psc-gutter-markers .verse:not(.marker).psc-empty-text-active::after {
   display: inline-block;
@@ -2846,7 +2867,7 @@ span.read img {
   text-align: center;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  font-size: 0.8rem;
+  font-size: calc(var(--psc-base-font-size) * 0.8);
   font-weight: 400;
   color: var(--muted-foreground, #6b7280);
   border-top: none;
@@ -2918,7 +2939,7 @@ span.read img {
 }
 .psc-gutter-markers .verse.marker::after {
   content: attr(data-number);
-  font-size: 13px;
+  font-size: var(--psc-verse-number-size);
   font-weight: 700;
   color: var(--scripture-accent);
   vertical-align: unset;

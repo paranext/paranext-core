@@ -15,6 +15,7 @@
  * graph from `main.ts` and enforces this.
  */
 
+import type { FocusSubject } from '@papi/core';
 import { logger } from '@papi/frontend';
 import {
   isBlockMarker,
@@ -46,7 +47,7 @@ import {
   showsReadOnlyPreview,
   type NoteSessionUpdateDecision,
 } from './platform-scripture-editor.utils';
-import { EDITOR_OWNERSHIP_WINDOW_MS } from './use-editor-pdp-sync.hook';
+import { EDITOR_OWNERSHIP_WINDOW_MS, type EditorFocusLocation } from './use-editor-pdp-sync.hook';
 import { WRITE_GUARD_RELEASE_AFTER_MS } from './write-in-flight-guard.util';
 
 /**
@@ -281,16 +282,46 @@ export interface EditingSessionActivityInput {
   /**
    * Set when the open note session is the footnotes pane's row editor; `undefined` for the popover.
    * The row editor applies each edit to the text as it is made, as the Scripture editor itself
-   * does, so it holds incoming updates back on the Scripture editor's terms: only while focus is in
-   * the pane and a note was edited there within {@link EDITOR_OWNERSHIP_WINDOW_MS}. The popover
-   * applies nothing until Save, so its session holds them back until it closes or goes stale.
+   * does, so it holds incoming updates back on the Scripture editor's terms (see
+   * {@link doesPaneSessionOwnContent}). The popover applies nothing until Save, so its session holds
+   * them back until it closes or goes stale.
    */
-  paneSession?: {
-    /** Whether DOM focus is inside the footnotes pane. */
-    hasFocus: boolean;
-    /** `Date.now()` of the last edit made in the pane's row editor, or `undefined` if none was. */
-    lastEditAtMs: number | undefined;
-  };
+  paneSession?: PaneEditingSession;
+}
+
+/** An open note session in the footnotes pane's row editor. */
+export interface PaneEditingSession {
+  /** Whether DOM focus is inside the footnotes pane. */
+  hasFocus: boolean;
+  /**
+   * Where the window's focus is. DOM focus in the pane survives a click into another web view, so
+   * only `'thisEditor'` lets the pane claim the text. While focus is `'settling'`,
+   * `useEditorPdpSync` holds the delivery instead, as it does for the Scripture text.
+   */
+  focusLocation: EditorFocusLocation;
+  /** `Date.now()` of the last edit made in the pane's row editor, or `undefined` if none was. */
+  lastEditAtMs: number | undefined;
+}
+
+/**
+ * Whether the footnotes pane owns the chapter's content, as the focused Scripture editor does: a
+ * note session is open in the pane, focus is in the pane, and a note was edited there within
+ * {@link EDITOR_OWNERSHIP_WINDOW_MS}. Says nothing about where the window's focus is;
+ * {@link resolveEditingSessionActivity} and `useEditorPdpSync` each decide what that means for an
+ * incoming update.
+ */
+export function doesPaneSessionOwnContent(
+  editingNoteKey: string | undefined,
+  paneSession: PaneEditingSession | undefined,
+  nowMs: number,
+): boolean {
+  return (
+    editingNoteKey !== undefined &&
+    paneSession !== undefined &&
+    paneSession.hasFocus &&
+    paneSession.lastEditAtMs !== undefined &&
+    nowMs - paneSession.lastEditAtMs < EDITOR_OWNERSHIP_WINDOW_MS
+  );
 }
 
 /**
@@ -344,11 +375,11 @@ export function resolveEditingSessionActivity({
 }: EditingSessionActivityInput): { isActive: boolean; isNoteSessionStale: boolean } {
   const isNoteSessionOpen = editingNoteKey !== undefined;
   if (isNoteSessionOpen && paneSession) {
-    const ownsContent =
-      paneSession.lastEditAtMs !== undefined &&
-      nowMs - paneSession.lastEditAtMs < EDITOR_OWNERSHIP_WINDOW_MS;
     return {
-      isActive: hasPaletteSession || (paneSession.hasFocus && ownsContent),
+      isActive:
+        hasPaletteSession ||
+        (paneSession.focusLocation === 'thisEditor' &&
+          doesPaneSessionOwnContent(editingNoteKey, paneSession, nowMs)),
       isNoteSessionStale: false,
     };
   }
@@ -750,4 +781,34 @@ export function createInsertContextMenuItems(
  */
 export function isEditorContextMenuOpen(editorContainer: Element | null | undefined): boolean {
   return isEditorContextMenuOpenFor(editorContainer);
+}
+
+/**
+ * Where keyboard focus is, from this editor's point of view (see {@link EditorFocusLocation}).
+ * Projects the subject to a web view id as core's `getWebViewIdFromFocusSubject` does (extensions
+ * cannot import it at runtime).
+ *
+ * - Another web view, by its iframe or its tab: `'anotherWebView'`.
+ * - This editor's iframe while its document lacks focus: `'settling'` (the subject is stale).
+ * - Anything else is `'thisEditor'`, including `'other'` (menus outside the dock), dialog tabs and
+ *   unknown focus, so the editor's own menus and confirm dialogs never release its hold.
+ *
+ * @param focusSubject The window's current focus subject, `undefined` if unknown
+ * @param ownWebViewId This editor's web view id
+ * @param doesEditorDocumentHaveFocus Whether this editor's document currently has focus
+ */
+export function getEditorFocusLocation(
+  focusSubject: FocusSubject | undefined,
+  ownWebViewId: string,
+  doesEditorDocumentHaveFocus: boolean,
+): EditorFocusLocation {
+  let subjectWebViewId: string | undefined;
+  if (focusSubject?.focusType === 'webView') subjectWebViewId = focusSubject.id;
+  else if (focusSubject?.focusType === 'tab' && focusSubject.tabType === 'webView')
+    subjectWebViewId = focusSubject.id;
+
+  if (subjectWebViewId === undefined) return 'thisEditor';
+  if (subjectWebViewId !== ownWebViewId) return 'anotherWebView';
+  if (focusSubject?.focusType === 'webView' && !doesEditorDocumentHaveFocus) return 'settling';
+  return 'thisEditor';
 }

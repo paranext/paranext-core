@@ -32,8 +32,8 @@ const ANCHOR_WEB_VIEW_TYPE = 'platformScriptureEditor.bibleTexts';
 const SUPPLEMENT_TAB_ID = 'supplement-tab';
 /**
  * The setting the mocked supplement entry is gated on. A supplement entry without one is enabled
- * unconditionally, which would leave the flag-off branch of the load — the one a vanilla build
- * takes — unreachable from this file, and the flag read itself unobservable.
+ * unconditionally, which would leave the flag-off branch of the load unreachable from this file,
+ * and the flag read itself unobservable.
  */
 const SUPPLEMENT_FLAG_SETTING = 'test.isSupplementEnabled';
 
@@ -1119,8 +1119,8 @@ describe('handleSwitchToSimpleMode', () => {
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout();
     host.registerDockLayout(fakeDockLayout);
-    // Eight resources ahead of the one usable project. Read-only projects reach the recents list
-    // now that the titlebar picker offers them, so a head like this is reachable in practice.
+    // Eight resources ahead of the one usable project. A build whose titlebar picker offered
+    // resources recorded each one opened in the recents list, so a head like this can still occur.
     const resourceIds = Array.from({ length: 8 }, (_unused, index) => `proj-resource-${index}`);
     const getRecentProjects = vi.fn(async () => [...resourceIds, 'proj-editable']);
     dataProviderGetMock.mockImplementation(async (dataProviderId: string) =>

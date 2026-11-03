@@ -2456,6 +2456,24 @@ declare module 'shared/models/rpc.interface' {
      */
     acceptLocalClient(socket: ServerSocketLike, name: string): void;
   }
+  /**
+   * An RPC handler that can close the connections of the clients its websocket server accepted. Only
+   * the process that owns the server (main) implements this.
+   *
+   * @experimental
+   */
+  export interface IRpcWebSocketClientCloser {
+    /**
+     * Close every client connection accepted from the websocket server, telling each why. Clients
+     * served through {@link IRpcLocalClientAcceptor.acceptLocalClient} are left open: whoever handed
+     * their sockets over owns closing them.
+     *
+     * @param code WebSocket close code to send to each client
+     * @param reason Human-readable reason to send to each client
+     * @experimental
+     */
+    closeWebSocketClients(code: number, reason: string): void;
+  }
 }
 declare module 'shared/data/papi-port.model' {
   /**
@@ -3249,6 +3267,7 @@ declare module 'main/services/rpc-websocket-listener' {
   import {
     IRpcLocalClientAcceptor,
     IRpcMethodRegistrar,
+    IRpcWebSocketClientCloser,
     RpcClientDisconnectEvent,
   } from 'shared/models/rpc.interface';
   import {
@@ -3272,7 +3291,9 @@ declare module 'main/services/rpc-websocket-listener' {
    *
    * Created by the main process on start up when the network service initializes
    */
-  export class RpcWebSocketListener implements IRpcMethodRegistrar, IRpcLocalClientAcceptor {
+  export class RpcWebSocketListener
+    implements IRpcMethodRegistrar, IRpcLocalClientAcceptor, IRpcWebSocketClientCloser
+  {
     private readonly port;
     connectionStatus: ConnectionStatus;
     /**
@@ -3344,6 +3365,13 @@ declare module 'main/services/rpc-websocket-listener' {
      * @experimental
      */
     acceptLocalClient(socket: ServerSocketLike, name: string): void;
+    /**
+     * Close every client the websocket server accepted. See
+     * {@link IRpcWebSocketClientCloser.closeWebSocketClients}.
+     *
+     * @experimental
+     */
+    closeWebSocketClients(code: number, reason: string): void;
     generateOpenRpcSchema(): OpenRpc;
     emitEventOnNetwork<T>(eventType: string, event: T): void;
     private propagateEvent;
@@ -3468,6 +3496,20 @@ declare module 'shared/services/network.service' {
    * @experimental
    */
   export function acceptLocalClient(socket: ServerSocketLike, name: string): void;
+  /**
+   * Close every client connected to this process's PAPI websocket server on port 8876, telling each
+   * why. Main-process only. A client such as the .NET data provider runs until its connection drops,
+   * so this is how main asks it to finish up and exit. Renderers' local connections are left open;
+   * see {@link IRpcWebSocketClientCloser.closeWebSocketClients}.
+   *
+   * Does nothing when the network service is not initialized, since then no client is connected.
+   *
+   * @param code WebSocket close code to send to each client
+   * @param reason Human-readable reason to send to each client
+   * @throws If this is not the main process, or its handler cannot close websocket clients
+   * @experimental
+   */
+  export function closeWebSocketClients(code: number, reason: string): void;
   /** Set the number of seconds that network requests in this process should wait before timing out */
   export function setRequestTimeout(timeoutSeconds: number): void;
   /**
@@ -5407,7 +5449,9 @@ declare module 'shared/services/window.service-model' {
    *
    * Shared so every consumer that projects a focus subject to a web view id (e.g. the window
    * service's last-selected tracking and `platform.openBookChapterControl`) stays in lockstep when
-   * focus subject shapes change.
+   * focus subject shapes change. Extensions cannot import this at runtime, so the Scripture editor
+   * keeps its own copy (`getEditorFocusLocation` in `platform-scripture-editor.web-view.utils.ts`):
+   * update it too.
    */
   export function getWebViewIdFromFocusSubject(focusSubject: FocusSubject): string | undefined;
   /**
@@ -6404,14 +6448,16 @@ declare module 'papi-shared-types' {
     /**
      * Whether the first-run sync consent gate allows an automatic Simple-mode Send/Receive to start
      * now: `granted`; `unconfirmed` when the first-run wizard has not been answered; `unreadable`
-     * when its completion flag could not be read; or `deferred` when the user chose "Don't sync
-     * yet" earlier in this app session. Only meaningful in Simple mode: the completion flag is
-     * never written in Power mode, so a Power-mode sync must not consult this.
+     * when its completion flag or the first-sync state could not be read; `deferred` when the user
+     * chose "Don't sync yet" earlier in this app session; or `notYetSynced` when the first
+     * Send/Receive (`platform.firstSyncState` is `pending`) has not succeeded yet. Only meaningful
+     * in Simple mode: the completion flag is never written in Power mode, so a Power-mode sync must
+     * not consult this.
      *
      * @experimental This command is unstable and may change or disappear without notice
      */
     'platform.getAutomaticSyncConsent': () => Promise<
-      'granted' | 'unconfirmed' | 'unreadable' | 'deferred'
+      'granted' | 'unconfirmed' | 'unreadable' | 'deferred' | 'notYetSynced'
     >;
     /**
      * Withhold automatic Simple-mode Send/Receive for the rest of this app session. Called when the
@@ -6633,9 +6679,14 @@ declare module 'papi-shared-types' {
      * Forget first-run progress and restart into the first-run wizard, in Simple mode, as a new
      * user — or a Paratext 9 user launching Platform.Bible for the first time — would see it. Also
      * clears the orientation tour's completion and whether the user was asked for an internet-use
-     * choice (`platform.internetUseChoiceAsked`), and turns `platform.syncOnStartup` and
-     * `platform.showRegistrationReminderOnStartup` back on. Works in installed builds: press F12
-     * and run `await papi.commands.sendCommand('platform.resetFirstRun')` in the console.
+     * choice (`platform.internetUseChoiceAsked`), sets `platform.firstSyncState` to `pending` so
+     * the wizard's Sync step returns and automatic syncs wait until a sync succeeds again (a later
+     * successful Send/Receive sets it back to `synced`), and turns `platform.syncOnStartup` and
+     * `platform.showRegistrationReminderOnStartup` back on. It writes `pending` even in a build
+     * without Send/Receive, where no sync can clear it, so afterwards
+     * `platform.getAutomaticSyncConsent` answers `notYetSynced` there from then on; such a build
+     * runs no automatic syncs, so nothing is held back. Works in installed builds: press F12 and
+     * run `await papi.commands.sendCommand('platform.resetFirstRun')` in the console.
      *
      * @param options What to do with the Paratext registration; see {@link ResetFirstRunOptions}
      * @experimental This command is unstable and may change or disappear without notice
@@ -6729,6 +6780,8 @@ declare module 'papi-shared-types' {
    * @example 'platform.quit';
    */
   type CommandNames = keyof CommandHandlers;
+  /** Whether the user's first Send/Receive has succeeded. See `platform.firstSyncState`. */
+  type FirstSyncState = 'unknown' | 'pending' | 'synced';
   /**
    * Types corresponding to each user setting available in Platform.Bible. Keys are setting names,
    * and values are setting data types. Extensions can add more user setting types with
@@ -6833,6 +6886,18 @@ declare module 'papi-shared-types' {
      * finished and the wizard should gate the app on the next simple-mode startup.
      */
     'platform.firstRunComplete': boolean;
+    /**
+     * Whether the user's first Send/Receive has succeeded, so the first-run wizard knows whether to
+     * keep reopening its Sync step. Hidden; managed by the first-run flow and the Send/Receive
+     * backend, not user-configurable.
+     *
+     * - `'unknown'` (default): never written. This setup predates the state or no wizard has run.
+     * - `'pending'`: a first run started and no sync has succeeded yet.
+     * - `'synced'`: a sync has succeeded at least once.
+     *
+     * Treat anything other than `'pending'` as "has synced".
+     */
+    'platform.firstSyncState': FirstSyncState;
     /**
      * Whether to perform automatic startup sync. Hidden; not exposed in the settings UI. Read on
      * each launch by the Simple-mode startup sync only — Power mode never reads it. Absent or
@@ -11281,7 +11346,7 @@ declare module 'shared/data/platform.data' {
    * waits on its final sync. It also conceptually matches the C# write gate's stall watchdog, which
    * bounds the same "one automatic Send/Receive" window. The renderer does not time blocking locally
    * — it reads the backend write gate's snapshot (`auto-sync-blocking-store.ts`), so blocking clears
-   * when the backend says so rather than on a renderer-side timer.
+   * only once the backend says so rather than on a renderer-side timeout.
    *
    * @experimental
    */
@@ -12334,6 +12399,22 @@ declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useWebViewController } from 'renderer/hooks/papi-hooks/use-web-view-controller.hook';
   export { default as useRecentScriptureRefs } from 'renderer/hooks/papi-hooks/use-recent-scripture-refs.hook';
 }
+declare module 'renderer/services/overlays/window-blur-press.util' {
+  /**
+   * Property key under which the library's `useDismissOnWindowBlur` marks the `pointerdown` it
+   * dispatches for a window blur. It must equal the library's key; `window-blur-press.util.test.tsx`
+   * fails if the two differ.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const WINDOW_BLUR_PRESS_MARKER: unique symbol;
+  /**
+   * Whether this event is the press `useDismissOnWindowBlur` dispatches for a window blur.
+   *
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function isWindowBlurPress(event: Event): boolean;
+}
 declare module 'renderer/services/overlays/overlay-store' {
   /**
    * Simple overlay store using a Map and listeners pattern. Manages active overlay entries (context
@@ -12446,6 +12527,31 @@ declare module 'renderer/services/overlays/overlay-store' {
     },
   ): boolean;
 }
+declare module 'renderer/services/overlays/overlay-focus-return.util' {
+  /**
+   * Marks an overlay's coming close as one that returns focus to the opener, provided focus is inside
+   * the overlay's own content when the overlay settles. Call it right before resolving the overlay.
+   *
+   * @param overlayId Id of the overlay about to close
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function markOverlayFocusReturnIfFocusInside(overlayId: string): void;
+  /**
+   * Clears every mark. For tests, so one test's mark cannot reach the next.
+   *
+   * @experimental This function is unstable and may change or disappear without notice
+   * @internal
+   */
+  export function resetOverlayFocusReturnMarks(): void;
+  /**
+   * Reads and clears an overlay's mark set by {@link markOverlayFocusReturnIfFocusInside}.
+   *
+   * @param overlayId Id of the overlay that is settling
+   * @returns Whether the overlay was marked
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function takeOverlayFocusReturnMark(overlayId: string): boolean;
+}
 declare module 'renderer/components/overlays/overlay-context-menu-localization.util' {
   import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
   import type { OverlayContextMenuItem } from 'renderer/components/overlays/overlay-context-menu.component';
@@ -12533,6 +12639,20 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
     onSelect: (result: OverlayContextMenuResult) => void;
     /** Called when the menu is dismissed without a selection */
     onDismiss: () => void;
+    /**
+     * Called when the user presses Escape in the menu or one of its submenus, just before
+     * {@link onDismiss}. Lets the owner tell an Escape close apart from a click away.
+     *
+     * @experimental This property is unstable and may change or disappear without notice
+     */
+    onEscape?: () => void;
+    /**
+     * Id of the overlay this renders, written to the content as `data-overlay-id` so the overlay
+     * service can tell whether focus is inside this overlay's own content rather than another's.
+     *
+     * @experimental This property is unstable and may change or disappear without notice
+     */
+    overlayId?: string;
   };
   /**
    * Pure presentational context menu component. Renders a context menu at a fixed position using
@@ -12547,6 +12667,8 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
     position,
     onSelect,
     onDismiss,
+    onEscape,
+    overlayId,
   }: OverlayContextMenuPresentationalProps): import('react/jsx-runtime').JSX.Element;
   type OverlayContextMenuProps = {
     overlay: Extract<
@@ -15456,8 +15578,11 @@ declare module 'renderer/services/overlays/overlay.service-host' {
   /** The overlay service instance exposed on papi */
   export const overlayService: IOverlayService;
   /**
-   * Resets the parent-document pointerdown record. Exported for use in tests only, so one test's
-   * recorded click cannot correlate with the next test's input signal. @internal
+   * Resets the parent-document pointerdown record and the focus-return state (open overlays' focus
+   * records and the last focused tab). Exported for use in tests only, so one test's recorded click
+   * cannot correlate with the next test's input signal and no test inherits another's focus state.
+   *
+   * @internal
    */
   export function resetAppWindowInputState(): void;
   /** Initialize the overlay service. Called during renderer startup. */
