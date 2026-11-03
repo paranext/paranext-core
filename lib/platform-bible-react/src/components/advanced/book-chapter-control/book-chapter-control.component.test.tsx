@@ -11,6 +11,19 @@ import {
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
 import { PopoverPortalContainerProvider } from '@/components/shadcn-ui/popover';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/shadcn-ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
 import { ShrinkStepOverride } from '@/context/shrink-step-override.component';
 import { BookChapterControl } from './book-chapter-control.component';
 import { BookChapterControlHandle } from './book-chapter-control.types';
@@ -2083,6 +2096,242 @@ describe('BookChapterControl compact mode stays open', () => {
     const { user } = await openFull();
     await user.click(getOutside());
     await waitFor(() => expect(isOpen()).toBe(false));
+  });
+
+  describe('another dropdown in the same document', () => {
+    function renderWithOtherDropdowns() {
+      return render(
+        <TooltipProvider>
+          <BookChapterControl scrRef={scrRef} handleSubmit={vi.fn()} />
+          <DropdownMenu>
+            <DropdownMenuTrigger>other menu</DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem>other menu item</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Select>
+            <SelectTrigger aria-label="other select">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="one">other select option</SelectItem>
+            </SelectContent>
+          </Select>
+          <Tooltip>
+            <TooltipTrigger>tooltip anchor</TooltipTrigger>
+            <TooltipContent>tooltip text</TooltipContent>
+          </Tooltip>
+          <input
+            role="combobox"
+            aria-label="other search"
+            aria-expanded={false}
+            aria-controls="other-search-suggestions"
+          />
+          <button type="button" aria-haspopup="dialog">
+            other dialog
+          </button>
+          {/* The older combobox pattern: the role sits on a wrapper around the text field */}
+          <div
+            role="combobox"
+            aria-expanded={false}
+            aria-controls="wrapped-search-suggestions"
+            aria-haspopup="listbox"
+          >
+            <input aria-label="wrapped search" />
+          </div>
+          <button type="button" aria-haspopup="menu" aria-disabled="true">
+            unavailable menu
+          </button>
+          <button type="button" aria-haspopup="false">
+            no popup
+          </button>
+          {/* A menu trigger inside an editable region is still a menu trigger */}
+          <div contentEditable suppressContentEditableWarning>
+            <button type="button" aria-haspopup="menu">
+              menu inside editable
+            </button>
+          </div>
+        </TooltipProvider>,
+      );
+    }
+
+    // A modal menu or select hides the rest of the page from the accessibility tree while it is
+    // open, so the picker's trigger is looked up with hidden elements included
+    const isPickerOpen = () =>
+      screen
+        .getByRole('combobox', { name: 'book-chapter-trigger', hidden: true })
+        .getAttribute('aria-expanded') === 'true';
+
+    async function openCompactBesideOtherDropdowns() {
+      const user = userEvent.setup({ pointerEventsCheck: 0 });
+      renderWithOtherDropdowns();
+      await user.click(getTrigger());
+      await waitFor(() => expect(document.querySelector('[cmdk-input]')).not.toBeNull());
+      await user.click(screen.getByRole('button', { name: 'Next chapter' }));
+      await waitFor(() => expect(screen.queryByRole('option')).toBeNull());
+      expect(isPickerOpen()).toBe(true);
+      return user;
+    }
+
+    test('a press on another menu trigger closes it, and the other menu opens', async () => {
+      const user = await openCompactBesideOtherDropdowns();
+      await user.click(screen.getByRole('button', { name: 'other menu' }));
+      await waitFor(() => expect(isPickerOpen()).toBe(false));
+      expect(await screen.findByRole('menuitem', { name: 'other menu item' })).toBeInTheDocument();
+    });
+
+    test('a press on a select box closes it', async () => {
+      const user = await openCompactBesideOtherDropdowns();
+      await user.click(screen.getByRole('combobox', { name: 'other select' }));
+      await waitFor(() => expect(isPickerOpen()).toBe(false));
+    });
+
+    test('opening another menu from the keyboard closes it', async () => {
+      const user = await openCompactBesideOtherDropdowns();
+      act(() => {
+        screen.getByRole('button', { name: 'other menu' }).focus();
+      });
+      await settle();
+      // Focus moving onto the other trigger is not yet an opening, so the picker stays open
+      expect(isPickerOpen()).toBe(true);
+      await user.keyboard('{Enter}');
+      await waitFor(() => expect(isPickerOpen()).toBe(false));
+      const otherMenuItem = await screen.findByRole('menuitem', { name: 'other menu item' });
+      await settle();
+      // Closing the picker must not pull focus back to its own trigger, away from the new menu
+      expect(otherMenuItem.closest('[role="menu"]')?.contains(document.activeElement)).toBe(true);
+    });
+
+    test('a press on something that only shows a tooltip leaves it open', async () => {
+      const user = await openCompactBesideOtherDropdowns();
+      await user.click(screen.getByRole('button', { name: 'tooltip anchor' }));
+      await settle();
+      expect(isPickerOpen()).toBe(true);
+    });
+
+    test('typing in another search box elsewhere in the document leaves it open', async () => {
+      const user = await openCompactBesideOtherDropdowns();
+      const otherSearch = screen.getByRole('combobox', { name: 'other search' });
+      act(() => {
+        otherSearch.focus();
+      });
+      expect(document.activeElement).toBe(otherSearch);
+      await user.keyboard(' {Enter}{ArrowDown}');
+      await settle();
+      expect(isPickerOpen()).toBe(true);
+      // The keys went to the search box, not anywhere focus was pulled back to
+      expect(document.activeElement).toBe(otherSearch);
+    });
+
+    test('typing in a search box inside a combobox wrapper leaves it open', async () => {
+      const user = await openCompactBesideOtherDropdowns();
+      const wrappedSearch = screen.getByRole('textbox', { name: 'wrapped search', hidden: true });
+      act(() => {
+        wrappedSearch.focus();
+      });
+      expect(document.activeElement).toBe(wrappedSearch);
+      await user.keyboard(' {Enter}{ArrowDown}');
+      await settle();
+      expect(isPickerOpen()).toBe(true);
+      expect(document.activeElement).toBe(wrappedSearch);
+    });
+
+    test.each([
+      ['Space', 'other menu', ' '],
+      ['Down arrow', 'other menu', '{ArrowDown}'],
+      ['Up arrow on a select box', 'other select', '{ArrowUp}'],
+    ])('%s with focus on another opener closes it', async (_label, name, keys) => {
+      const user = await openCompactBesideOtherDropdowns();
+      const opener =
+        name === 'other select'
+          ? screen.getByRole('combobox', { name })
+          : screen.getByRole('button', { name });
+      act(() => {
+        opener.focus();
+      });
+      await user.keyboard(keys);
+      await waitFor(() => expect(isPickerOpen()).toBe(false));
+    });
+
+    test('Up arrow on a menu trigger leaves it open', async () => {
+      const user = await openCompactBesideOtherDropdowns();
+      act(() => {
+        screen.getByRole('button', { name: 'other menu' }).focus();
+      });
+      await user.keyboard('{ArrowUp}');
+      await settle();
+      expect(isPickerOpen()).toBe(true);
+    });
+
+    test('a right-click or Ctrl+click on another menu trigger leaves it open', async () => {
+      const user = await openCompactBesideOtherDropdowns();
+      const otherMenuTrigger = screen.getByRole('button', { name: 'other menu' });
+      await user.pointer({ keys: '[MouseRight]', target: otherMenuTrigger });
+      await settle();
+      expect(isPickerOpen()).toBe(true);
+      await user.keyboard('{Control>}');
+      await user.click(otherMenuTrigger);
+      await user.keyboard('{/Control}');
+      await settle();
+      expect(isPickerOpen()).toBe(true);
+    });
+
+    test.each([['unavailable menu'], ['no popup']])(
+      'a press or Enter on "%s" leaves it open',
+      async (name) => {
+        const user = await openCompactBesideOtherDropdowns();
+        const control = screen.getByRole('button', { name });
+        await user.click(control);
+        act(() => {
+          control.focus();
+        });
+        await user.keyboard('{Enter}');
+        await settle();
+        expect(isPickerOpen()).toBe(true);
+      },
+    );
+
+    test('a press on a menu trigger inside an editable region closes it', async () => {
+      const user = await openCompactBesideOtherDropdowns();
+      await user.click(screen.getByRole('button', { name: 'menu inside editable' }));
+      await waitFor(() => expect(isPickerOpen()).toBe(false));
+    });
+
+    test('closing it from the keyboard leaves focus on the other trigger', async () => {
+      const user = await openCompactBesideOtherDropdowns();
+      // A trigger whose own Enter handling does not move focus, so only the picker could move it
+      const dialogTrigger = screen.getByRole('button', { name: 'other dialog' });
+      act(() => {
+        dialogTrigger.focus();
+      });
+      await user.keyboard('{Enter}');
+      await waitFor(() => expect(isPickerOpen()).toBe(false));
+      await settle();
+      expect(document.activeElement).toBe(dialogTrigger);
+    });
+
+    test('Enter held down or with a modifier on another menu trigger leaves it open', async () => {
+      await openCompactBesideOtherDropdowns();
+      const otherTrigger = screen.getByRole('button', { name: 'other menu' });
+      act(() => {
+        otherTrigger.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Enter', repeat: true, bubbles: true }),
+        );
+        otherTrigger.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }),
+        );
+      });
+      await settle();
+      expect(isPickerOpen()).toBe(true);
+    });
+
+    test('keys typed in its own search box do not close it', async () => {
+      const user = await openCompactBesideOtherDropdowns();
+      await user.click(getSearchInputElement());
+      await user.keyboard('{ArrowDown}');
+      await settle();
+      expect(isPickerOpen()).toBe(true);
+    });
   });
 
   test('controls: with the list showing, Escape with focus on the page body closes it', async () => {

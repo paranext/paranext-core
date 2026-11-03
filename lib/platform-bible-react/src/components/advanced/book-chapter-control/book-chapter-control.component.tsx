@@ -83,6 +83,38 @@ import { VerseGrid } from './verse-grid.component';
 const TAB_STOP_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]';
 
+/**
+ * Controls that open a menu, popover or list. Radix marks its menu, menubar and popover triggers
+ * with `aria-haspopup` and its select trigger with `role="combobox"`; a tooltip trigger carries
+ * neither, so hovering or clicking one is an ordinary outside press. A text field can also be a
+ * combobox (a search box with suggestions), so {@link isPopupTrigger} excludes editable elements.
+ */
+const POPUP_TRIGGER_SELECTOR = '[aria-haspopup]:not([aria-haspopup="false"]), [role="combobox"]';
+
+/**
+ * Whether `target` is, or sits inside, an enabled control that opens a menu, popover or list (see
+ * {@link POPUP_TRIGGER_SELECTOR}), rather than a text field the user types into
+ */
+function isPopupTrigger(target: Element): boolean {
+  const trigger = target.closest(POPUP_TRIGGER_SELECTOR);
+  if (!(trigger instanceof HTMLElement)) return false;
+  // A text field that is the combobox, or sits inside its wrapper (the older ARIA combobox
+  // pattern), is something the user types into. A trigger that itself sits inside an editable
+  // region still counts.
+  const textField = target.closest(
+    'input, textarea, select, [contenteditable]:not([contenteditable="false"])',
+  );
+  if (textField && trigger.contains(textField)) return false;
+  if (trigger.getAttribute('aria-disabled') === 'true') return false;
+  return !(trigger instanceof HTMLButtonElement && trigger.disabled);
+}
+
+/** Keys that open a menu, popover or list from its focused trigger */
+const POPUP_OPENING_KEYS = new Set(['Enter', ' ', 'ArrowDown']);
+
+/** A select box (a `role="combobox"` trigger) also opens on Up arrow; a menu trigger does not */
+const SELECT_OPENING_KEYS = new Set([...POPUP_OPENING_KEYS, 'ArrowUp']);
+
 /** The tab stops inside `container`, in document order. */
 function getTabStops(container: HTMLElement): HTMLElement[] {
   return Array.from(container.querySelectorAll<HTMLElement>(TAB_STOP_SELECTOR)).filter(
@@ -174,6 +206,14 @@ export function BookChapterControl({
   // Reference to the popover content, so Escape handling can tell whether focus is inside it
   // eslint-disable-next-line no-null/no-null
   const contentRef = useRef<HTMLDivElement | null>(null);
+  /**
+   * Set while the picker closes because another control was opened from the keyboard, so the close
+   * does not move focus back to this picker's trigger, away from the control the user is on. A
+   * press needs no such guard: Radix skips that focus return after a press outside. Cleared on
+   * every open, so a flag left over from a close whose focus handling never ran cannot swallow a
+   * later close's focus return.
+   */
+  const isClosingForOtherPopupRef = useRef(false);
   // Reference to the Command component
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const commandRef = useRef<HTMLDivElement>(undefined!);
@@ -457,6 +497,7 @@ export function BookChapterControl({
     (shouldCommandBeOpen: boolean) => {
       setIsCommandOpen(shouldCommandBeOpen);
       if (shouldCommandBeOpen) {
+        isClosingForOtherPopupRef.current = false;
         setViewMode('books');
         setSelectedBookForChaptersView(undefined);
         setSelectedBookForVersesView(undefined);
@@ -482,6 +523,37 @@ export function BookChapterControl({
   useEffect(() => {
     if (disabled) handleOpenChange(false);
   }, [disabled, handleOpenChange]);
+
+  /**
+   * Whether `target` is, or sits inside, another control in this document that opens a menu,
+   * popover or list. This picker's own trigger and content are not "another" control.
+   */
+  const isOtherPopupTrigger = useCallback((target: EventTarget | null) => {
+    if (!(target instanceof Element)) return false;
+    if (contentRef.current?.contains(target) || triggerRef.current?.contains(target)) return false;
+    return isPopupTrigger(target);
+  }, []);
+
+  // Compact mode stays open while the user works elsewhere, but opening another menu, popover or
+  // list in this document closes it, as it would close the full picker. A press on such a trigger
+  // is let through in `onInteractOutside`; opening one from the keyboard is caught here, in the
+  // capture phase so the trigger's own key handling cannot hide it. Controls in other frames are
+  // out of reach: their presses and keys never reach this document.
+  const isCompactAndOpen = !modal && isCommandOpen && isCommandListHidden;
+  useEffect(() => {
+    if (!isCompactAndOpen) return undefined;
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.repeat || event.ctrlKey || event.altKey || event.metaKey) return;
+      if (!isOtherPopupTrigger(event.target)) return;
+      const isOnSelect =
+        event.target instanceof Element && !!event.target.closest('[role="combobox"]');
+      if (!(isOnSelect ? SELECT_OPENING_KEYS : POPUP_OPENING_KEYS).has(event.key)) return;
+      isClosingForOtherPopupRef.current = true;
+      handleOpenChange(false);
+    };
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => document.removeEventListener('keydown', handleKeyDown, true);
+  }, [isCompactAndOpen, isOtherPopupTrigger, handleOpenChange]);
 
   // Imperative `open()` goes through handleOpenChange (not setIsCommandOpen directly) so the
   // deferred view-state reset runs: the control deliberately leaves stale chapters/verses view
@@ -1409,12 +1481,24 @@ export function BookChapterControl({
         // working elsewhere, so only a deliberate close dismisses it: a click on the trigger
         // (closed above, before this runs) or Escape with focus in the picker or on the trigger.
         // Everything Radix would treat as an outside interaction — a press elsewhere in the
-        // document, focus leaving, a window blur's synthetic press — is prevented here. Only the
-        // dismissal is prevented: the press itself still reaches whatever the user clicked.
+        // document, focus leaving, a window blur's synthetic press — is prevented here, except a
+        // press on another control that opens a menu, popover or list. Only the dismissal is
+        // prevented: the press itself still reaches whatever the user clicked.
         // A modal picker makes everything outside inert, its trigger included, so "stays open"
         // would leave no way out: compact mode applies only when the picker is non-modal.
         onInteractOutside={(event) => {
-          if (!modal && isCommandOpen && isCommandListHidden) event.preventDefault();
+          if (!isCompactAndOpen) return;
+          // Only a plain primary-button press opens a menu or popover trigger; a right-click,
+          // Ctrl+click or middle-click would close this picker with nothing opening in its place
+          const { originalEvent } = event.detail;
+          const isPlainPress =
+            originalEvent instanceof MouseEvent &&
+            originalEvent.type === 'pointerdown' &&
+            originalEvent.button === 0 &&
+            !originalEvent.ctrlKey &&
+            !originalEvent.metaKey;
+          const isPressOnOtherPopupTrigger = isPlainPress && isOtherPopupTrigger(event.target);
+          if (!isPressOnOtherPopupTrigger) event.preventDefault();
         }}
         // Radix listens for Escape on the whole document, so compact mode keeps it from closing the
         // picker unless focus is in the picker or on the trigger. Escape pressed while focus is in
@@ -1427,7 +1511,14 @@ export function BookChapterControl({
             (!!contentRef.current?.contains(target) || !!triggerRef.current?.contains(target));
           if (!isFocusInPicker) event.preventDefault();
         }}
-        onCloseAutoFocus={onCloseAutoFocus}
+        onCloseAutoFocus={(event) => {
+          if (isClosingForOtherPopupRef.current) {
+            isClosingForOtherPopupRef.current = false;
+            event.preventDefault();
+            return;
+          }
+          onCloseAutoFocus?.(event);
+        }}
       >
         <TooltipProvider>
           <Command

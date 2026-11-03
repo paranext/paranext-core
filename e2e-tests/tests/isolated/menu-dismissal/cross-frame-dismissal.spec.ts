@@ -184,6 +184,35 @@ test.describe('menus dismiss when the click lands in another frame', () => {
     await expect(mainPage.locator(BCV_SEARCH_INPUT)).toBeHidden();
   });
 
+  test('top toolbar BCV after a quick-nav arrow closes when a toolbar menu opens, not when an editor menu does', async ({
+    mainPage,
+  }) => {
+    const editorFrame = await openEditor(mainPage);
+
+    await mainPage.locator(BCV_TRIGGER).first().click();
+    await expect(mainPage.locator(BCV_SEARCH_INPUT)).toBeVisible();
+    await mainPage
+      .locator('[data-radix-popper-content-wrapper]')
+      .getByRole('button', { name: 'Next chapter' })
+      .click();
+
+    // A menu opened in another frame leaves the picker open
+    await editorFrame.locator("button[aria-label='Project']").first().click();
+    await expect(editorFrame.locator(OPEN_MENU)).toHaveCount(1);
+    await mainPage.waitForTimeout(SETTLE_MS);
+    await expect(mainPage.locator(BCV_SEARCH_INPUT)).toBeVisible();
+
+    // A menu opened in the same document closes it, and that menu stays open
+    await mainPage.getByRole('menuitem', { name: 'Platform' }).first().click();
+    await expect(mainPage.locator(BCV_SEARCH_INPUT)).toBeHidden();
+    await mainPage.waitForTimeout(SETTLE_MS);
+    await expect(mainPage.locator(OPEN_MENU)).toHaveCount(1);
+
+    // The app is shared by the tests in this file, so leave no menu open behind
+    await mainPage.keyboard.press('Escape');
+    await expect(mainPage.locator(OPEN_MENU)).toHaveCount(0);
+  });
+
   test('Platform menu closes on a click inside the editor', async ({ mainPage }) => {
     const editorFrame = await openEditor(mainPage);
 

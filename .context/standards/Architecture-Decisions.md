@@ -11624,6 +11624,22 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   as before. A compact picker whose tab becomes hidden stays open on purpose (a UX decision); it
   closes through its trigger once the tab is visible again, or on Escape with focus in it. The rule
   lives in the component, so every non-modal instance gets it.
+- **Amended 2026-11-03 (UX ruling, Sebastian for UX):** opening another menu, popover or list in
+  the **same document** now closes a compact `BookChapterControl`, as it closes the full picker; this
+  replaces "other menus opening" in the list of things the 2026-10-30 amendment said it survives.
+  The picker recognises another opener by the attributes Radix puts on its triggers
+  (`[aria-haspopup]` other than `"false"`, or `role="combobox"`; a tooltip trigger has neither),
+  skipping text fields (a search box can be a combobox too) and disabled controls, and closes on a
+  plain primary-button press on one (let through in `onInteractOutside`; a right-click or
+  Ctrl+click opens nothing, so it does not count) or on an unmodified, non-repeating Enter, Space
+  or Down arrow with focus on one, or Up arrow on a select box (a capture-phase `keydown` listener
+  on the document, attached only while compact). A close from the keyboard leaves focus on the
+  control the user is on rather than returning it to the picker's trigger. Menus opened in
+  **another frame** do not close it: the UX ruling was that cross-frame detection is not wanted,
+  since a click in another frame reaches this document only as a window blur and telling "a menu
+  opened there" apart would need a new cross-frame signal. Everything else
+  the 2026-10-30 amendment lists (window blur, a plain press elsewhere, focus leaving, Escape with
+  focus elsewhere) still leaves it open.
 - **Overlay focus restore:** the renderer's overlay service decides whether focus returns to the
   opener from how the overlay closed, synchronously when it settles, without reading where focus
   currently is (apart from the one containment check below). For the command palette (passive
