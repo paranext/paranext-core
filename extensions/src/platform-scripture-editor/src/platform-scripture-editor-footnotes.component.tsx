@@ -544,8 +544,12 @@ function FootnotesPane({
   // editor's display the way the row editor's own copy would, and writes a no-break space a
   // read-only row stores as the project spells it (see `getFootnotesPaneCopyText`). A
   // copy that needs none of these is left to the browser, with all its usual clipboard formats;
-  // only one that needs any is written, as plain text. A copy inside a row editor has already been
-  // handled by that editor's own copy guard, so it is left as the editor wrote it.
+  // only one that needs any is written, as plain text. Such a copy carries no `text/html`, so a
+  // rich-text target receives it unformatted. That matches a copy from an editor view that shows
+  // markers, whose `text/html` holds the selection's USFM text rather than formatting; a copy
+  // from a view that hides markers does carry formatted `text/html`. A copy inside a row editor
+  // has already been handled by that editor's own copy guard, so it is left as the editor wrote
+  // it.
   const handleFootnotesCopy = useCallback(
     (event: ClipboardEvent<HTMLDivElement>) => {
       if (event.defaultPrevented) return;
