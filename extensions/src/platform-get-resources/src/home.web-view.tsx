@@ -33,8 +33,8 @@ const SEND_RECEIVE_ATTEMPTS = 4;
 const SEND_RECEIVE_RETRY_MS = 2000;
 
 /**
- * The reports that name projects in a sync: the backend's activity, and the queue's waiting and
- * running sets.
+ * The reports that name projects in a sync: the backend's activity, and the queue's waiting,
+ * sending and running sets.
  */
 type SyncReportSource = 'activity' | 'waiting' | 'sending' | 'running';
 
@@ -364,7 +364,7 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
   // Every click is handed to the sync queue, which starts it right away or keeps it waiting for the
   // next run. A sync that is already running does not refuse a click: it queues the project's next
   // run. Only a repeat click on a project whose own request the queue has not yet reported as
-  // running or waiting is ignored, so a double-click asks once.
+  // waiting, sending or running is ignored, so a double-click asks once.
   const sendReceiveProject = async (projectId: string) => {
     if (!isSendReceiveAvailable) {
       // Say so rather than doing nothing. Availability can still be unknown when a row's Sync
