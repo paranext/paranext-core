@@ -427,6 +427,18 @@ export declare function shouldRecheckSyncActivity(value: SyncActivityValue | und
  * the extension host and web views can all use it.
  */
 /**
+ * Id of the command that asks the sync queue for a sync
+ *
+ * @experimental This is unstable and may change or disappear without notice
+ */
+export declare const REQUEST_SYNC_COMMAND = "paratextBibleSendReceive.requestSync";
+/**
+ * Id of the command that asks the user whether to cancel the sync that is running
+ *
+ * @experimental This is unstable and may change or disappear without notice
+ */
+export declare const CANCEL_SYNC_PROMPT_COMMAND = "paratextBibleSendReceive.cancelSyncPrompt";
+/**
  * Ends the message of a `paratextBibleSendReceive.requestSync` rejection for a request that never
  * ran because it was removed from the sync queue, or dropped when the queue was disposed at quit.
  * An error that crosses papi arrives as a plain error carrying only its message, so this stable

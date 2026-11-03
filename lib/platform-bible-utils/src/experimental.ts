@@ -47,10 +47,12 @@ export {
   type SyncActivityValue,
 } from './sync-activity.util';
 export {
+  CANCEL_SYNC_PROMPT_COMMAND,
   IDLE_SYNC_QUEUE,
   isSyncBusyError,
   isSyncQueueSnapshot,
   isSyncRequestRemovedError,
+  REQUEST_SYNC_COMMAND,
   SYNC_BUSY_MARKER,
   SYNC_REQUEST_REMOVED_MARKER,
   toSyncQueue,

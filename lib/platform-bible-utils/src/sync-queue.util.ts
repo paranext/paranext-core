@@ -1,4 +1,5 @@
 import { endsWith, includes, slice, stringLength } from './string-util';
+import isOptionalStringList from './optional-string-list.util';
 import { getErrorMessage } from './util';
 
 /**
@@ -7,6 +8,20 @@ import { getErrorMessage } from './util';
  * of the payload and the mapping to what a consumer reads. Free of React and PAPI, so the renderer,
  * the extension host and web views can all use it.
  */
+
+/**
+ * Id of the command that asks the sync queue for a sync
+ *
+ * @experimental This is unstable and may change or disappear without notice
+ */
+export const REQUEST_SYNC_COMMAND = 'paratextBibleSendReceive.requestSync';
+
+/**
+ * Id of the command that asks the user whether to cancel the sync that is running
+ *
+ * @experimental This is unstable and may change or disappear without notice
+ */
+export const CANCEL_SYNC_PROMPT_COMMAND = 'paratextBibleSendReceive.cancelSyncPrompt';
 
 /**
  * Ends the message of a `paratextBibleSendReceive.requestSync` rejection for a request that never
@@ -128,14 +143,6 @@ export function isSyncQueueSnapshot(value: unknown): value is SyncQueueValue {
     isOptionalStringList('waitingProjectIds' in value ? value.waitingProjectIds : undefined) &&
     isOptionalStringList('runningProjectIds' in value ? value.runningProjectIds : undefined)
   );
-}
-
-/** Whether a wire value is an absent (`undefined` or `null`) list or a list of strings */
-function isOptionalStringList(list: unknown): boolean {
-  // The wire may send null for an absent list, so null has to be compared against
-  // eslint-disable-next-line no-null/no-null
-  if (list === undefined || list === null) return true;
-  return Array.isArray(list) && list.every((id) => typeof id === 'string');
 }
 
 /**

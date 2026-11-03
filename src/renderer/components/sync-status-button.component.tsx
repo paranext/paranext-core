@@ -32,6 +32,7 @@ import {
   isolateBidi,
   LocalizeKey,
 } from 'platform-bible-utils';
+import { CANCEL_SYNC_PROMPT_COMMAND } from 'platform-bible-utils/experimental';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 /**
@@ -99,8 +100,6 @@ export const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   SYNC_CANCEL_UNAVAILABLE_MESSAGE_KEY,
   SYNC_VIEW_DETAILS_UNAVAILABLE_MESSAGE_KEY,
 ];
-
-const CANCEL_SYNC_PROMPT_COMMAND = 'paratextBibleSendReceive.cancelSyncPrompt';
 
 /**
  * The popover's list of project names, shared by the syncing and unsynced states so both render the

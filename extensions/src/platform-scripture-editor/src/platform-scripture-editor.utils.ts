@@ -44,7 +44,7 @@ import {
   UsjReaderWriter,
   UsjTextContentLocation,
 } from 'platform-bible-utils';
-import { isSyncRequestRemovedError } from 'platform-bible-utils/experimental';
+import { isSyncRequestRemovedError, REQUEST_SYNC_COMMAND } from 'platform-bible-utils/experimental';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import type { ScriptureEditorViewType, ScriptureRange } from 'platform-scripture-editor';
 import type { SharedProjectsInfo } from 'platform-scripture';
@@ -2023,8 +2023,6 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
 // #endregion Default Active Project Picker
 
 // #region Project-Switch Sync
-
-const REQUEST_SYNC_COMMAND = 'paratextBibleSendReceive.requestSync';
 
 /**
  * Asks the Send/Receive extension's sync queue to sync `projectIds` as an automatic sync. A request

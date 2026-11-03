@@ -1,9 +1,8 @@
 import papi, { logger } from '@papi/frontend';
 import { Button, Progress, useEvent } from 'platform-bible-react';
 import { getErrorMessage, LanguageStrings, LocalizeKey } from 'platform-bible-utils';
+import { CANCEL_SYNC_PROMPT_COMMAND } from 'platform-bible-utils/experimental';
 import { useCallback, useState } from 'react';
-
-const CANCEL_SYNC_PROMPT_COMMAND = 'paratextBibleSendReceive.cancelSyncPrompt';
 
 const BANNER_TEXT_KEY: LocalizeKey = '%webView_platformScriptureEditor_syncEditBlocked_banner_2%';
 const CANCEL_KEY: LocalizeKey = '%general_cancel%';

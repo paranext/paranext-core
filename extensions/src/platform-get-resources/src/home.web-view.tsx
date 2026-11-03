@@ -12,7 +12,7 @@ import {
   normalizeProjectId,
   retryUntil,
 } from 'platform-bible-utils';
-import { isSyncRequestRemovedError } from 'platform-bible-utils/experimental';
+import { isSyncRequestRemovedError, REQUEST_SYNC_COMMAND } from 'platform-bible-utils/experimental';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Home, HOME_STRING_KEYS, type RemoteProjectsState } from './home.component';
@@ -377,7 +377,7 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
     if (isQueueIdle) setOptimisticRunningProjectIds((ids) => [...ids, normalizedProjectId]);
     try {
       // Get of a project not on this computer yet downloads it through the same request.
-      await papi.commands.sendCommand('paratextBibleSendReceive.requestSync', [projectId], 'home', {
+      await papi.commands.sendCommand(REQUEST_SYNC_COMMAND, [projectId], 'home', {
         includeConnected: false,
       });
     } catch (e) {

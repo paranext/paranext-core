@@ -1,3 +1,5 @@
+import isOptionalStringList from './optional-string-list.util';
+
 /**
  * What a consumer knows about the backend's sync activity, and the pieces every reader of the
  * `paratextBibleSendReceive.getSyncActivity` command and `onSyncActivityChanged` event shares: the
@@ -78,14 +80,6 @@ export function isSyncActivitySnapshot(value: unknown): value is SyncActivityVal
     isOptionalStringList('projectIds' in value ? value.projectIds : undefined) &&
     isOptionalStringList('resourceIds' in value ? value.resourceIds : undefined)
   );
-}
-
-/** Whether a wire value is absent, `undefined`, `null` or a list of strings */
-function isOptionalStringList(list: unknown): boolean {
-  // The wire may send null for an absent list, so null has to be compared against
-  // eslint-disable-next-line no-null/no-null
-  if (list === undefined || list === null) return true;
-  return Array.isArray(list) && list.every((id) => typeof id === 'string');
 }
 
 /**
