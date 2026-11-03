@@ -2031,8 +2031,18 @@ const REQUEST_SYNC_COMMAND = 'paratextBibleSendReceive.requestSync';
  * that was taken out of the queue before it ran (the user removed it, or it was dropped at quit) is
  * not a failure and only logs at info. Any other rejection is rethrown for the caller to report.
  *
- * The queue skips an automatic request for a project whose sync is already running or waiting, so
- * edits made during that run go out with the project's next sync.
+ * The queue skips an automatic request for a project whose sync is already running or waiting with
+ * at least the same scope (a request that includes connected resources is not covered by a waiting
+ * one that does not), so edits made during that run go out with the project's next sync.
+ *
+ * The mode, the first-run consent and `suppressNotification` are decided by the caller when it
+ * requests, and a queued request runs later under that decision. If a sync is already running, the
+ * request can wait behind it, and the user can switch interface mode before it starts: a queued
+ * switch-to-Power sync then still runs after the switch back to Simple, and a queued Simple
+ * project-switch sync still runs, without notifications, after a switch to Power. The window needs
+ * a running sync plus a mode change before the queued run starts, and the sync only sends or
+ * receives what the project had pending, so it is accepted. The queue itself re-checks only the
+ * scheduled-sync engine's own "still wanted" condition at run start.
  */
 async function requestAutoSync(
   papi: typeof PapiBackend,
@@ -2308,8 +2318,9 @@ const projectIdsDecidingSyncOnSwitchToPower = new Set<string>();
  *   user who started in Power mode never sees the wizard that records consent. Nor does
  *   `notYetSynced`: the switch is the user's own act, and the unsent changes are what it sends. See
  *   `adr-switch-to-power-sends-unsent-changes`.
- * - The mode no longer reads `'power'` when the sync would start: the switch back to Simple makes its
- *   own (consent-gated) sync decision, and anything still unsent goes on the next switch to Power.
+ * - The mode no longer reads `'power'` when the sync is requested: the switch back to Simple makes
+ *   its own (consent-gated) sync decision, and anything still unsent goes on the next switch to
+ *   Power.
  * - The saved internet setting turns Send/Receive off (`VpnRequired` or `Disabled`). Whether the
  *   machine is actually online cannot be known without trying, so offline is left to the sync's own
  *   failure notification.
