@@ -502,17 +502,26 @@ declare module 'paratext-bible-send-receive' {
    */
   export type SyncQueueSnapshot = {
     /**
-     * Ids of the projects waiting for a later run, in the order they will run. Projects that are
-     * running are not included. A project whose run the backend has not yet accepted is still
-     * waiting.
+     * Ids of the projects waiting for a later run, in the order they will run. The projects of the
+     * run being sent or running are not included, unless they were also asked for again for a later
+     * run.
      *
      * @experimental This field is unstable and may change or disappear without notice
      */
     waitingProjectIds: string[];
     /**
+     * Ids of the projects of the run the queue has sent to the backend that the backend has not yet
+     * accepted, empty when none. Each project of a run is in exactly one of three states: waiting,
+     * then sending, then running. A busy refusal puts the run's projects back among the waiting
+     * (and the snapshot changes); acceptance makes them running.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    sendingProjectIds: string[];
+    /**
      * Ids of the projects in the run in progress that was requested through the queue, empty when
      * none. A project counts as running once its run is accepted by the backend, not while it is
-     * still waiting.
+     * still sending.
      *
      * @experimental This field is unstable and may change or disappear without notice
      */
@@ -770,10 +779,11 @@ declare module 'papi-shared-types' {
 
     /**
      * Removes projects that are waiting in the sync queue. A project that is already running is not
-     * affected; use `paratextBibleSendReceive.cancelSyncPrompt` to stop the running sync. A request
-     * whose ids were all removed rejects with a message containing ` (SR_REMOVED)`; one with ids
-     * still queued resolves with the results of the rest (see
-     * `paratextBibleSendReceive.requestSync`).
+     * affected; use `paratextBibleSendReceive.cancelSyncPrompt` to stop the running sync. A project
+     * of the run being sent (`sendingProjectIds`) is removed only if the backend refuses that run
+     * as busy; if the backend accepts it, the project runs. A request whose ids were all removed
+     * rejects with a message containing ` (SR_REMOVED)`; one with ids still queued resolves with
+     * the results of the rest (see `paratextBibleSendReceive.requestSync`).
      *
      * @param projectIds Ids of the waiting projects to remove
      * @experimental This command is unstable and may change or disappear without notice
@@ -814,8 +824,8 @@ declare module 'papi-shared-types' {
      * queue on mount rather than waiting for the next `paratextBibleSendReceive.onSyncQueueChanged`
      * event. An in-memory read; a caller keeps its existing state when it rejects.
      *
-     * @returns The projects currently waiting for a run and the projects in the run in progress. A
-     *   project whose run the backend has not yet accepted is waiting; once accepted it is running
+     * @returns The projects currently waiting for a run, those of the run sent to the backend and
+     *   not yet accepted (`sendingProjectIds`), and those of the run in progress
      *   (`runningProjectIds`).
      * @experimental This command is unstable and may change or disappear without notice
      */
@@ -1071,11 +1081,12 @@ declare module 'papi-shared-types' {
      */
     'paratextBibleSendReceive.onSyncActivityChanged': SyncActivitySnapshot;
     /**
-     * Emitted whenever the set of projects waiting or running in the sync queue changes, carrying
-     * the full current {@link SyncQueueSnapshot}. Projects that are running are not waiting, so a
-     * project leaves the waiting list when the backend accepts its run (a project whose run is not
-     * yet accepted is still waiting) and appears in `runningProjectIds`. No replay: a subscriber
-     * that starts later seeds from `paratextBibleSendReceive.getSyncQueue`.
+     * Emitted whenever the set of projects waiting, sending or running in the sync queue changes,
+     * carrying the full current {@link SyncQueueSnapshot}. A project of a run moves from
+     * `waitingProjectIds` to `sendingProjectIds` when the queue sends the run, and on to
+     * `runningProjectIds` when the backend accepts it, or back to `waitingProjectIds` when the
+     * backend refuses it as busy. No replay: a subscriber that starts later seeds from
+     * `paratextBibleSendReceive.getSyncQueue`.
      *
      * @experimental This event is unstable and may change or disappear without notice
      */
