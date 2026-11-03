@@ -238,8 +238,8 @@ export function SyncStatusButton() {
     // other's click. See `adr-toolbar-sync-status-is-local` in
     // `.context/standards/Architecture-Decisions.md`.
     // Single-shot: one cancel request per click-through. Disabled immediately so a second click
-    // can't queue another request, and re-enabled only if this one is rejected while a sync is
-    // still running, so the user can retry.
+    // can't queue another request, and re-enabled only if this one is rejected or the user answers
+    // that the sync should go on (nothing was cancelled), so the user can retry.
     setIsCancelEnabled(false);
     isCancelPromptOpenRef.current = true;
     cancelGenerationRef.current += 1;

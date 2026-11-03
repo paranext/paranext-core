@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SyncBlockedBanner } from './sync-blocked-banner.component';
 
@@ -64,11 +64,11 @@ describe('SyncBlockedBanner — Cancel', () => {
     const cancel = renderBanner();
 
     fireEvent.click(cancel);
-    resolveCancel?.(true);
     await waitFor(() => expect(sendCommand).toHaveBeenCalledTimes(1));
-    // Let the resolution reach the handler before checking it did not re-enable the button
-    await Promise.resolve();
-    await Promise.resolve();
+    // Resolving inside act lets the handler's state updates land before the button is checked
+    await act(async () => {
+      resolveCancel?.(true);
+    });
 
     expect(cancel).toBeDisabled();
   });

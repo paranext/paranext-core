@@ -1937,6 +1937,64 @@ describe('SyncStatusButton — popover and cancel', () => {
     });
   });
 
+  // The user can leave the prompt unanswered while the sync ends and the next one begins. Whatever
+  // they answer later is about the first sync, so it must not change the second one's button.
+  it.each([
+    { answer: false, label: 'keep syncing' },
+    { answer: true, label: 'cancel' },
+  ])(
+    'ignores a late "$label" answer once the sync it was asked for is over and the next one began',
+    async ({ answer }) => {
+      const fireSyncStateChanged = captureSyncStateEvent();
+      let resolvePrompt: ((value: boolean) => void) | undefined;
+      let getSyncStateCalls = 0;
+      mockCommands({
+        'paratextBibleSendReceive.getSyncState': () => {
+          getSyncStateCalls += 1;
+          if (getSyncStateCalls === 1)
+            return { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a'] };
+          if (getSyncStateCalls === 2) return completedState({ a: 'succeeded' });
+          return { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['b'] };
+        },
+        'paratextBibleSendReceive.cancelSyncPrompt': () =>
+          new Promise<boolean>((resolve) => {
+            resolvePrompt = resolve;
+          }),
+      });
+      mockProjectNames({ a: 'AAA', b: 'BBB' });
+      render(<SyncStatusButton />);
+
+      fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
+      fireEvent.click(await screen.findByTestId('toolbar-sync-cancel-button'));
+      await waitFor(() => expect(cancelPromptCallCount()).toBe(1));
+
+      fireSyncStateChanged(false);
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Test Synced/ })).toBeInTheDocument();
+      });
+      fireSyncStateChanged(true);
+      await waitFor(() => {
+        expect(screen.getByTestId('toolbar-sync-button')).toHaveTextContent('BBB');
+      });
+      const cancel = screen.getByTestId('toolbar-sync-cancel-button');
+      expect(cancel).toHaveTextContent('Test Cancel sync');
+      expect(cancel).toHaveAttribute('aria-disabled', 'false');
+
+      if (!resolvePrompt) throw new Error('cancelSyncPrompt was never called');
+      await act(async () => {
+        resolvePrompt?.(answer);
+      });
+
+      expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent(
+        'Test Cancel sync',
+      );
+      expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveAttribute(
+        'aria-disabled',
+        'false',
+      );
+    },
+  );
+
   it('sends no second prompt when the popover is reopened while the first is open', async () => {
     mockCommands({
       'paratextBibleSendReceive.getSyncState': () => ({
