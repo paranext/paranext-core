@@ -60,10 +60,10 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// </para>
 /// <para>
 /// <b>One run at a time.</b> Send/Receive already admits one sync at a time, so a second
-/// <see cref="RegisterRunSkippingOpenWrites"/> while a run is open is a programming error and throws. Write scopes are
-/// counted per uid: writes of different resources hold scopes at once, and two writes of the same
-/// resource are already serialized by the DBL provider's own lock. Every handle's <c>Dispose</c> is
-/// idempotent, and disposing a stale run handle never ends a newer run.
+/// <see cref="RegisterRunSkippingOpenWrites"/> while a run is open is a programming error and
+/// throws. Write scopes are counted per uid: writes of different resources hold scopes at once, and
+/// two writes of the same resource are already serialized by the DBL provider's own lock. Every
+/// handle's <c>Dispose</c> is idempotent, and disposing a stale run handle never ends a newer run.
 /// </para>
 /// <para>
 /// <b>Not a project-write gate.</b> This is distinct from <see cref="SendReceiveWriteLock"/>, which
@@ -200,7 +200,7 @@ internal static class SyncRunResourceGuard
         IDisposable scope;
         lock (s_lock)
         {
-            if (!WaitWhileLocked(HoldingRun, budget, CancellationToken.None))
+            if (!WaitWhileLocked(HoldingRun, budget))
                 warning =
                     $"Warning: gave up after {budget} waiting for the running sync to finish updating DBL resource {dblEntryUid}; writing it anyway.";
             // Under the same lock hold as the last check, so no run can begin in between.
@@ -266,22 +266,13 @@ internal static class SyncRunResourceGuard
     /// </summary>
     /// <param name="blocker">What the caller is waiting for, or null when it may proceed.</param>
     /// <param name="budget">How long one blocker may hold the caller up.</param>
-    /// <param name="cancellationToken">Ends the wait with <see cref="OperationCanceledException"/>.
-    /// Only checked when the monitor wakes, so the caller must arrange for a cancel to pulse it.</param>
     /// <returns>True when the blocker cleared; false when one blocker outlived the budget.</returns>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was
-    /// cancelled while the blocker still named something.</exception>
-    private static bool WaitWhileLocked(
-        Func<object?> blocker,
-        TimeSpan budget,
-        CancellationToken cancellationToken
-    )
+    private static bool WaitWhileLocked(Func<object?> blocker, TimeSpan budget)
     {
         var seen = blocker();
         var elapsed = Stopwatch.StartNew();
         while (seen != null)
         {
-            cancellationToken.ThrowIfCancellationRequested();
             var remaining = budget - elapsed.Elapsed;
             if (remaining <= TimeSpan.Zero)
                 return false;

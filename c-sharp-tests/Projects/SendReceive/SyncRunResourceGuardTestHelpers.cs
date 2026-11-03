@@ -15,7 +15,15 @@ namespace TestParanextDataProvider.Projects.SendReceive
         /// </summary>
         /// <param name="dblEntryUids">The DBL entry uids the run holds.</param>
         /// <returns>The run; dispose it to end the run.</returns>
-        public static IDisposable StartRun(IEnumerable<string> dblEntryUids) =>
-            SyncRunResourceGuard.RegisterRunSkippingOpenWrites(dblEntryUids).Run;
+        public static IDisposable StartRun(IEnumerable<string> dblEntryUids)
+        {
+            var registration = SyncRunResourceGuard.RegisterRunSkippingOpenWrites(dblEntryUids);
+            Assert.That(
+                registration.SkippedIds,
+                Is.Empty,
+                "StartRun is for tests with no open write to skip"
+            );
+            return registration.Run;
+        }
     }
 }
