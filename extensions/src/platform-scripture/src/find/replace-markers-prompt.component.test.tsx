@@ -3,7 +3,7 @@ import '@testing-library/jest-dom';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MarkerPromptAction, ReplaceMarkersPrompt } from './replace-markers-prompt.component';
 
 const STRINGS = {
@@ -187,6 +187,10 @@ function Harness({ action: openWith }: { action: MarkerPromptAction }) {
       <button type="button" onClick={() => setIsCardShown(false)}>
         Remove card
       </button>
+      {/* Closes the prompt without the user answering it, as a read-only project does. */}
+      <button type="button" onClick={() => setAction(undefined)}>
+        Close prompt
+      </button>
       <ReplaceMarkersPrompt
         action={action}
         matchedUsfm={'the \\nd Lord\\nd* God'}
@@ -250,5 +254,46 @@ describe('ReplaceMarkersPrompt closed by Escape', () => {
     await settle();
 
     expect(document.activeElement).toBe(screen.getByTestId('results'));
+  });
+});
+
+// Focus moved back from another frame would close the menu the user just opened there.
+describe.each([
+  [
+    'another frame holds focus',
+    () => {
+      const iframe = document.createElement('iframe');
+      document.body.appendChild(iframe);
+      vi.spyOn(document, 'activeElement', 'get').mockReturnValue(iframe);
+    },
+  ],
+  [
+    'the web view has lost focus',
+    () => {
+      vi.stubGlobal('top', {});
+      vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    },
+  ],
+])('ReplaceMarkersPrompt closing while %s', (_case, moveFocusAway) => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    document.querySelectorAll('iframe').forEach((iframe) => iframe.remove());
+  });
+
+  it('leaves focus where the user put it', async () => {
+    const user = userEvent.setup();
+    render(<Harness action="confirm" />);
+    const opener = screen.getByRole('button', { name: 'Replace' });
+    await user.click(opener);
+    await screen.findByRole('alertdialog');
+    const focus = vi.spyOn(HTMLElement.prototype, 'focus');
+
+    moveFocusAway();
+    fireEvent.click(screen.getByRole('button', { name: 'Close prompt', hidden: true }));
+    await settle();
+
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(focus).not.toHaveBeenCalled();
   });
 });

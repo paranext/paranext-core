@@ -5,6 +5,8 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  isRunningInWebView,
+  shouldSuppressFocusReturn,
 } from 'platform-bible-react';
 import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import { MouseEvent, useRef } from 'react';
@@ -120,9 +122,12 @@ export function ReplaceMarkersPrompt({
         onPointerDownOutside={(event) => event.preventDefault()}
         onInteractOutside={(event) => event.preventDefault()}
         // The dialog has no trigger, so Radix would hand focus back to nothing, leaving the arrow
-        // keys of the results list dead and Tab starting over at the search box.
+        // keys of the results list dead and Tab starting over at the search box. Focus stays put
+        // when the user has moved it to another frame, as `.claude/rules/focus-return-on-close.md`
+        // requires.
         onCloseAutoFocus={(event) => {
           event.preventDefault();
+          if (shouldSuppressFocusReturn(document, isRunningInWebView())) return;
           focusReturnCandidatesRef.current.some((candidate) => {
             if (!candidate.isConnected) return false;
             candidate.focus();
