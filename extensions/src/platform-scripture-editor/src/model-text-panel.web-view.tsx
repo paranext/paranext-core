@@ -21,6 +21,7 @@ import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
 import { getModelResourceProjectId, isDblResourceReference } from './resource-reference.utils';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
+import { useAllowInvisibleCharacters } from './use-allow-invisible-characters.hook';
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
 import { canPublishResourcePanelProjectIds } from './resource-panel-readiness.utils';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
@@ -218,11 +219,11 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
 
   // `ModelTextPanel` reads its text from the project `getModelResourceProjectId` resolves.
   // `ModelTextPanel` blocks copying while its chapter text loads.
-  const resourceCopyLimit = useChapterCopyLimit(
-    getModelResourceProjectId(effectiveModelText, dblResources),
-    scrRef,
-    'applied-by-caller',
-  );
+  const resourceProjectId = getModelResourceProjectId(effectiveModelText, dblResources);
+  const resourceCopyLimit = useChapterCopyLimit(resourceProjectId, scrRef, 'applied-by-caller');
+  // The panel is read-only, so a pending or failed read of the setting is treated as off rather
+  // than withholding the text.
+  const allowInvisibleCharacters = useAllowInvisibleCharacters(resourceProjectId).value === true;
 
   return (
     <ModelTextPanel
@@ -241,6 +242,7 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
       showResourcePicker={showResourcePicker}
       getResourceChapter={getResourceChapter}
       resourceCopyLimit={resourceCopyLimit}
+      allowInvisibleCharacters={allowInvisibleCharacters}
       logger={logger}
       copyrightNotice={
         <ProjectCopyrightNotice

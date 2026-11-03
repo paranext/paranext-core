@@ -386,4 +386,24 @@ describe('isCaretPlacedAt', () => {
       ),
     ).toBe(false);
   });
+
+  // A no-break space is text the caret has to pass, not part of the line break.
+  it('does not take a caret past a no-break space ending the line', () => {
+    const endsInNbsp: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        { type: 'para', marker: 'p', content: ['before\u00A0'] },
+        { type: 'para', marker: 'p', content: ['after'] },
+      ],
+    };
+    expect(
+      isCaretPlacedAt(
+        endsInNbsp,
+        { jsonPath: '$.content[1]' },
+        { jsonPath: '$.content[0].content[0]', offset: 6 },
+        'GEN',
+      ),
+    ).toBe(false);
+  });
 });

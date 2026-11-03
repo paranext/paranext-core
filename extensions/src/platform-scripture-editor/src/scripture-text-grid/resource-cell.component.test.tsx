@@ -2,7 +2,15 @@
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as React from 'react';
-import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon } from '@sillsdev/scripture';
@@ -114,6 +122,7 @@ vi.mock('@eten-tech-foundation/platform-editor', () => {
     // Stands in for the real view-options builder: records which mode the cell asked for without
     // pinning this test to the option fields upstream happens to set for it.
     getViewOptions: (viewMode: string) => ({ viewOptionsFor: viewMode }),
+    getDefaultViewOptions: () => ({ viewOptionsFor: 'default' }),
     Editorial: React.forwardRef((props: EditorialMockProps, ref: React.Ref<unknown>) => {
       capturedEditorOptions(props.options);
       capturedEditorScrRef(props.scrRef);
@@ -564,7 +573,9 @@ describe('ResourceCell viewMode', () => {
     });
     await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
 
-    expect(capturedEditorOptions.mock.lastCall?.[0]).not.toHaveProperty('view');
+    expect(capturedEditorOptions.mock.lastCall?.[0]).toMatchObject({
+      view: { viewOptionsFor: 'default' },
+    });
   });
 
   it('verse mode with no text for the verse shows the empty state, not the editor or "loading…"', async () => {
@@ -1273,6 +1284,40 @@ describe('ResourceCell reference scroll wiring', () => {
 
     expect(port.scrollTop).toBe(0);
   });
+});
+
+describe('ResourceCell copy spelling', () => {
+  function mockAllowInvisibleCharacters(allowInvisibleCharacters: boolean) {
+    mockUseProjectSetting.mockImplementation((_projectId: unknown, key: unknown) => {
+      if (key === 'platformScripture.allowInvisibleCharacters')
+        return [allowInvisibleCharacters, vi.fn(), vi.fn(), false];
+      return ['ltr', vi.fn(), vi.fn(), false];
+    });
+  }
+
+  it.each([
+    { viewMode: 'inline' as const, viewOptionsFor: 'default' },
+    { viewMode: 'aligned' as const, viewOptionsFor: 'block-verse' },
+  ])(
+    "gives the editor the project's allowInvisibleCharacters in $viewMode mode",
+    async ({ viewMode, viewOptionsFor }) => {
+      mockAllowInvisibleCharacters(true);
+      renderResourceCell({ viewMode, chapterUsj: chapter });
+      await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
+      expect(capturedEditorOptions.mock.lastCall?.[0]).toMatchObject({
+        view: { viewOptionsFor, allowInvisibleCharacters: true },
+      });
+
+      capturedEditorOptions.mockClear();
+      mockAllowInvisibleCharacters(false);
+      cleanup();
+      renderResourceCell({ viewMode, chapterUsj: chapter });
+      await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
+      expect(capturedEditorOptions.mock.lastCall?.[0]).toMatchObject({
+        view: { viewOptionsFor, allowInvisibleCharacters: false },
+      });
+    },
+  );
 });
 
 describe('ResourceCell copyright notice', () => {

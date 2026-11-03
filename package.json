@@ -110,6 +110,7 @@
     "storybook:platform-bible-react": "cd lib/platform-bible-react && npm run storybook",
     "test": "npm run test:core -- --run && npm run test --workspaces --if-present -- --run",
     "test:core": "vitest",
+    "test:editor-usx-round-trip:capture": "cross-env EDITOR_USX_CAPTURE=1 npm run test --workspace platform-scripture-editor -- --run src/editor-usx-round-trip.test.tsx && cross-env PDP_USX_CAPTURE=1 dotnet test c-sharp-tests --filter FullyQualifiedName~UsfmUsxRoundTripCorpusSweepTests && npm run test --workspace platform-scripture-editor -- --run src/editor-usx-round-trip.test.tsx",
     "test:e2e-cdp": "playwright test --config e2e-tests/playwright-cdp.config.ts",
     "test:e2e:all": "playwright test --config e2e-tests/playwright.config.ts",
     "test:e2e:attached": "playwright test --config e2e-tests/playwright-cdp.config.ts tests/attached/",

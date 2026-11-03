@@ -29,7 +29,7 @@ import {
 } from '@eten-tech-foundation/scripture-utilities';
 import type { SelectionRange } from '@eten-tech-foundation/platform-editor';
 import { areUsjContentsEqualExceptWhitespace } from 'platform-bible-utils';
-import { resolveUsjToSaveToPdp } from './debounced-pdp-save.util';
+import { resolveUsjToSaveToPdp, withoutZeroWidthNoBreakSpaces } from './debounced-pdp-save.util';
 import { deepEqualAcrossIframes } from './platform-scripture-editor.utils';
 
 /** USJ `type` of a `\c` chapter marker node. */
@@ -640,8 +640,8 @@ function isStoredChapterWithoutItsMarker(usjFromEditor: Usj, usjFromPdp: Usj | u
   const storedContentWithoutMarkers = usjFromPdp.content.filter((item) => !isChapterObject(item));
   if (storedContentWithoutMarkers.length === usjFromPdp.content.length) return false;
   return areUsjContentsEqualExceptWhitespace(
-    { ...usjFromPdp, content: storedContentWithoutMarkers },
-    usjFromEditor,
+    withoutZeroWidthNoBreakSpaces({ ...usjFromPdp, content: storedContentWithoutMarkers }),
+    withoutZeroWidthNoBreakSpaces(usjFromEditor),
   );
 }
 

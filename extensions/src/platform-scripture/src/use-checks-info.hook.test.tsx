@@ -7,6 +7,27 @@ import { describe, expect, it, vi } from 'vitest';
 import { defaultCheckRunnerCheckDetails } from './checks-side-panel.utils';
 import { useChecksInfo } from './use-checks-info.hook';
 
+const { snapshotHandlers } = vi.hoisted(() => ({
+  snapshotHandlers: new Set<(snapshot: unknown) => void>(),
+}));
+
+vi.mock('@papi/frontend', () => ({
+  default: {},
+  logger: { warn: vi.fn() },
+  network: {
+    getNetworkEvent: vi.fn(() => (handler: (snapshot: unknown) => void) => {
+      snapshotHandlers.add(handler);
+      return () => snapshotHandlers.delete(handler);
+    }),
+  },
+}));
+
+function emitSnapshot(snapshot: unknown) {
+  act(() => {
+    snapshotHandlers.forEach((handler) => handler(snapshot));
+  });
+}
+
 type LookUp = (checkId: string, projectId: string) => Promise<CheckSetupState>;
 
 const CHECKS: CheckRunnerCheckDetails[] = [
@@ -177,6 +198,59 @@ describe('useChecksInfo', () => {
       await Promise.resolve();
       expect(result.current).toEqual([]);
       expect(lookUp).not.toHaveBeenCalled();
+    });
+  });
+  describe('while an automatic sync refuses the lookups', () => {
+    const REFUSAL = new Error('Cannot look up the check setup during a sync (SR_EDIT_BLOCKED)');
+
+    function renderRefusedOnce() {
+      let isRefusing = true;
+      const lookUp = vi.fn<LookUp>(async (checkId) => {
+        if (isRefusing) throw REFUSAL;
+        return checkId === 'Quotation' ? { status: 'setupRequired' } : { status: 'ready' };
+      });
+      const aggregator = aggregatorWith(lookUp);
+      const rendered = renderHook(() => useChecksInfo(aggregator, 'P1', CHECKS, getName, 0));
+      return {
+        ...rendered,
+        lookUp,
+        endRefusal: () => {
+          isRefusing = false;
+        },
+      };
+    }
+
+    it('looks the checks up again once a snapshot no longer blocks the project', async () => {
+      const { result, lookUp, endRefusal } = renderRefusedOnce();
+      await waitFor(() => expect(result.current).toHaveLength(2));
+      expect(result.current[0].setupStatus).toBe('ready');
+      endRefusal();
+
+      emitSnapshot({ isBlocking: false, projectIds: [] });
+
+      await waitFor(() => expect(result.current[0].setupStatus).toBe('setupRequired'));
+      expect(lookUp).toHaveBeenCalledTimes(4);
+    });
+
+    it('waits while a snapshot still blocks the project', async () => {
+      const { result, lookUp } = renderRefusedOnce();
+      await waitFor(() => expect(result.current).toHaveLength(2));
+
+      emitSnapshot({ isBlocking: true, projectIds: ['P1'] });
+      emitSnapshot('not a snapshot');
+
+      expect(lookUp).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not look up again for a snapshot when no lookup was refused', async () => {
+      const lookUp = vi.fn<LookUp>(async () => ({ status: 'ready' }));
+      const aggregator = aggregatorWith(lookUp);
+      const { result } = renderHook(() => useChecksInfo(aggregator, 'P1', CHECKS, getName, 0));
+      await waitFor(() => expect(result.current).toHaveLength(2));
+
+      emitSnapshot({ isBlocking: false, projectIds: [] });
+
+      expect(lookUp).toHaveBeenCalledTimes(2);
     });
   });
 });

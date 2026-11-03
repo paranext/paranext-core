@@ -567,8 +567,8 @@ export type ReadOnlyInputs = {
  *   (which decides whether the formatted view is Preview), rather than relying on the fail-open
  *   default values during that window: a briefly-writable editor is worse than a briefly-read-only
  *   one.
- * - `isDurablyReadOnly`: the same reasons minus the loading states and minus `isSyncBlocked`, a
- *   transient freeze during an automatic Send/Receive rather than a real read-only state. Used for
+ * - `isDurablyReadOnly`: the same reasons minus the loading states, minus `isSyncBlocked` (a
+ *   transient freeze during an automatic Send/Receive rather than a real read-only state). Used for
  *   the tab title so it does not relabel "(Read-only)" and back on every scheduled sync; the
  *   sync-blocked banner already communicates that transient state.
  * - `isReadOnlyForTitle`: `isDurablyReadOnly`, or `undefined` while editability, permission or the
