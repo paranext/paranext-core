@@ -2233,8 +2233,8 @@ describe('Home while a sync runs', () => {
     });
     const synButton = within(rowOf('SYN')).getByRole('button', { name: waitingName('SYN') });
     const waiButton = within(rowOf('WAI')).getByRole('button', { name: waitingName('WAI') });
-    expect(synButton).toHaveAccessibleName('Waiting… — remove SYN from the queue');
-    expect(waiButton).toHaveAccessibleName('Waiting… — remove WAI from the queue');
+    expect(synButton).toHaveAccessibleName('Waiting. Remove SYN from the sync queue');
+    expect(waiButton).toHaveAccessibleName('Waiting. Remove WAI from the sync queue');
     // The visible text stays the short label, and the name starts with it.
     expect(waiButton).toHaveTextContent(WAITING_LABEL);
     expect(waiButton.getAttribute('aria-label')?.startsWith(WAITING_LABEL)).toBe(true);

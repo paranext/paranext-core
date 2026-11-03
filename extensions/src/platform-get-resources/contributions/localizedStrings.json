@@ -17,6 +17,24 @@
     },
     "%mainMenu_open_2%": {
       "fallbackKey": "%mainMenu_open%"
+    },
+    "%resources_syncWaiting_reason%": {
+      "deprecationInfo": {
+        "date": "2026-11-03",
+        "message": "No longer used."
+      }
+    },
+    "%resources_syncWaiting_stopGet_format%": {
+      "deprecationInfo": {
+        "date": "2026-11-03",
+        "message": "Superseded by %resources_syncWaiting_remove_format%."
+      }
+    },
+    "%resources_syncWaiting_stopSync_format%": {
+      "deprecationInfo": {
+        "date": "2026-11-03",
+        "message": "Superseded by %resources_syncWaiting_remove_format%."
+      }
     }
   },
   "localizedStrings": {
@@ -80,12 +98,15 @@
       "%resources_sync%": "Sync",
       "%resources_syncFailedProject_format%": "{name}: {message}",
       "%resources_syncFailed_title%": "Sync failed",
-      "%resources_syncQueueRemoveFailed%": "Couldn't take the project out of the sync queue. Please try again.",
+      "%resources_syncQueueRemoveFailed%": "Couldn't remove the project from the sync queue. Please try again.",
       "%resources_syncRunning_listLoads%": "A sync is running. Projects load when it finishes.",
       "%resources_syncUnavailable%": "Sync isn't available right now. Please try again in a moment.",
-      "%resources_syncWaiting_clickToRemove%": "Click to remove this project from the queue.",
+      "%resources_syncWaiting_clickToRemove%": "Click to remove this project from the sync queue.",
       "%resources_syncWaiting_label%": "Waiting…",
-      "%resources_syncWaiting_remove_format%": "Waiting… — remove {name} from the queue",
+      "%resources_syncWaiting_reason%": "Wait for the current sync to finish",
+      "%resources_syncWaiting_remove_format%": "Waiting. Remove {name} from the sync queue",
+      "%resources_syncWaiting_stopGet_format%": "Get {name}: waiting",
+      "%resources_syncWaiting_stopSync_format%": "Sync {name}: waiting",
       "%resources_type%": "Type",
       "%resources_types%": "Types",
       "%resources_types_noResults%": "No types found",
@@ -167,9 +188,12 @@
       "%resources_syncQueueRemoveFailed%": "No se pudo quitar el proyecto de la cola de sincronización. Inténtelo de nuevo.",
       "%resources_syncRunning_listLoads%": "Hay una sincronización en curso. Los proyectos se cargarán cuando termine.",
       "%resources_syncUnavailable%": "La sincronización no está disponible en este momento. Vuelva a intentarlo en unos instantes.",
-      "%resources_syncWaiting_clickToRemove%": "Haga clic para quitar este proyecto de la cola.",
+      "%resources_syncWaiting_clickToRemove%": "Haga clic para quitar este proyecto de la cola de sincronización.",
       "%resources_syncWaiting_label%": "En espera…",
-      "%resources_syncWaiting_remove_format%": "En espera… — quitar {name} de la cola",
+      "%resources_syncWaiting_reason%": "Esperar a que termine la sincronización actual",
+      "%resources_syncWaiting_remove_format%": "En espera. Quitar {name} de la cola de sincronización",
+      "%resources_syncWaiting_stopGet_format%": "Obtener {name}: en espera",
+      "%resources_syncWaiting_stopSync_format%": "Sincronizar {name}: en espera",
       "%resources_type%": "Tipo",
       "%resources_types%": "Tipos",
       "%resources_types_noResults%": "No se encontraron tipos",
