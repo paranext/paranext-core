@@ -100,6 +100,7 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_serverUnreachable_description%',
   '%resources_serverUnreachable_title%',
   '%resources_syncFailed_title%',
+  '%resources_syncFailedProject_format%',
   '%resources_syncWaiting_clickToRemove%',
   '%resources_syncWaiting_label%',
   '%resources_syncWaiting_remove_format%',
@@ -535,6 +536,9 @@ export function Home({
   // Specific title for failed sync/get attempts — the alert is only shown for that flow, so a
   // contextual title ("Sync failed") communicates what failed better than the generic "Error".
   const syncFailedTitleText: string = getLocalizedString('%resources_syncFailed_title%');
+  const syncFailedProjectFormat: string = getLocalizedString(
+    '%resources_syncFailedProject_format%',
+  );
   const syncWaitingLabelText: string = getLocalizedString('%resources_syncWaiting_label%');
   const syncWaitingClickToRemoveText: string = getLocalizedString(
     '%resources_syncWaiting_clickToRemove%',
@@ -566,15 +570,27 @@ export function Home({
 
   // Surfaces a business error (e.g. a project locked by another user) when an async action
   // callback rejects, so failures are visible in the UI rather than only logged by the webview.
-  const [actionError, setActionError] = useState<string | undefined>(undefined);
+  // One entry per project, the latest failure of that project, so a failure on one project neither
+  // hides nor is hidden by another's.
+  const [actionErrors, setActionErrors] = useState<
+    { projectId: string; projectName: string; message: string }[]
+  >([]);
 
-  const handleSendReceiveProject = async (projectId: string) => {
+  const handleSendReceiveProject = async (project: MergedProjectInfo) => {
+    const { projectId } = project;
     if (!isRowSettled(projectId)) return;
-    setActionError(undefined);
+    const normalizedProjectId = normalizeProjectId(projectId);
+    const isOtherProject = (error: { projectId: string }) =>
+      normalizeProjectId(error.projectId) !== normalizedProjectId;
+    setActionErrors((errors) => errors.filter(isOtherProject));
     try {
       await onSendReceiveProject(projectId);
     } catch (e) {
-      setActionError(withoutSyncBusyMarker(withoutJsonRpcErrorPrefix(getErrorMessage(e))));
+      const message = withoutSyncBusyMarker(withoutJsonRpcErrorPrefix(getErrorMessage(e)));
+      setActionErrors((errors) => [
+        ...errors.filter(isOtherProject),
+        { projectId, projectName: project.name, message },
+      ]);
     }
   };
 
@@ -1131,7 +1147,7 @@ export function Home({
         // The spinner has no text, so the item keeps its name while it shows.
         ariaLabel: isRunning ? sendReceiveLabel : undefined,
         isBusy: isRunning,
-        onActivate: () => handleSendReceiveProject(project.projectId),
+        onActivate: () => handleSendReceiveProject(project),
       });
     const isWaiting = syncState === 'waiting';
     let ariaLabel: string | undefined;
@@ -1158,7 +1174,7 @@ export function Home({
             onClick={() =>
               isWaiting
                 ? handleRemoveFromQueue(project.projectId)
-                : handleSendReceiveProject(project.projectId)
+                : handleSendReceiveProject(project)
             }
           >
             {isWaiting ? syncWaitingLabelText : getSendReceiveButtonContent(project)}
@@ -1248,15 +1264,17 @@ export function Home({
           )}
         </div>
       </CardHeader>
-      {actionError && (
-        <div className="tw:mx-4 tw:mb-2">
+      {actionErrors.map(({ projectId, projectName, message }) => (
+        <div key={projectId} className="tw:mx-4 tw:mb-2">
           <Alert variant="destructive">
             <AlertCircle className="tw:h-4 tw:w-4" />
             <AlertTitle>{syncFailedTitleText}</AlertTitle>
-            <AlertDescription>{actionError}</AlertDescription>
+            <AlertDescription>
+              {formatReplacementString(syncFailedProjectFormat, { name: projectName, message })}
+            </AlertDescription>
           </Alert>
         </div>
-      )}
+      ))}
       {/*
        * Sits above the list rather than inside its empty state: the server half can be missing
        * while local projects still fill the table, and that is the case where nothing else on
@@ -1391,7 +1409,7 @@ export function Home({
                               } else if (getProjectSyncState(project.projectId) === 'idle') {
                                 // Only an idle row: a double-click must not queue a project for
                                 // another run, nor take one out of the queue.
-                                handleSendReceiveProject(project.projectId);
+                                handleSendReceiveProject(project);
                               }
                             }}
                             key={project.projectId}

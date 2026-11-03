@@ -61,7 +61,11 @@ function renderHome(onSendReceiveProject: (projectId: string) => Promise<void>) 
       sharedProjectsInfo={SHARED_PROJECTS}
       onSendReceiveProject={onSendReceiveProject}
       localizedStringsWithLoadingState={[
-        { '%resources_get%': 'Get', '%resources_syncFailed_title%': 'Sync failed' },
+        {
+          '%resources_get%': 'Get',
+          '%resources_syncFailed_title%': 'Sync failed',
+          '%resources_syncFailedProject_format%': '{name}: {message}',
+        },
         false,
       ]}
     />,
@@ -207,7 +211,7 @@ describe('Home send/receive failures', () => {
     clickSendReceive();
 
     await waitFor(() => {
-      expect(screen.queryByText('Project is locked by another user')).not.toBeNull();
+      expect(screen.queryByText('SHR: Project is locked by another user')).not.toBeNull();
     });
     expect(screen.queryByText('Sync failed')).not.toBeNull();
   });
@@ -225,7 +229,7 @@ describe('Home send/receive failures', () => {
     await waitFor(() => {
       expect(
         screen.queryByText(
-          'A sync is already in progress. Please wait for it to finish and try again.',
+          'SHR: A sync is already in progress. Please wait for it to finish and try again.',
         ),
       ).not.toBeNull();
     });
@@ -245,7 +249,7 @@ describe('Home send/receive failures', () => {
     clickSendReceive();
 
     await waitFor(() => {
-      expect(screen.queryByText('Locked')).not.toBeNull();
+      expect(screen.queryByText('SHR: Locked')).not.toBeNull();
     });
   });
 
@@ -261,7 +265,104 @@ describe('Home send/receive failures', () => {
     clickSendReceive();
 
     await waitFor(() => {
-      expect(screen.queryByText('A sync is already running. Try again later.')).not.toBeNull();
+      expect(screen.queryByText('SHR: A sync is already running. Try again later.')).not.toBeNull();
+    });
+  });
+
+  describe('with several projects', () => {
+    const rejections = new Map<string, Error>();
+    const onSendReceiveProject = vi.fn(async (projectId: string) => {
+      const rejection = rejections.get(projectId);
+      if (rejection) throw rejection;
+    });
+    const project = (name: string): SharedProjectsInfo[string] => ({
+      id: name,
+      name,
+      fullName: `${name} full name`,
+      language: 'en',
+      editedStatus: 'notEdited',
+      lastSendReceiveDate: '2026-08-16T00:00:00.000Z',
+    });
+    const renderThree = () =>
+      render(
+        <Home
+          headerContent={undefined}
+          sharedProjectsInfo={{
+            projectOne: project('ONE'),
+            projectTwo: project('TWO'),
+            projectThree: project('THREE'),
+          }}
+          remoteProjectsState="loaded"
+          onSendReceiveProject={onSendReceiveProject}
+          localizedStringsWithLoadingState={[EN_STRINGS, false]}
+        />,
+      );
+    const clickGetOf = (name: string) => {
+      const row = screen.getByText(name).closest('tr');
+      if (!row) throw new Error(`no row for ${name}`);
+      fireEvent.click(within(row).getByRole('button', { name: 'Get' }));
+    };
+
+    beforeEach(() => {
+      rejections.clear();
+      onSendReceiveProject.mockClear();
+    });
+
+    it('shows each project failure separately, named', async () => {
+      rejections.set('projectOne', new Error('Locked'));
+      rejections.set('projectTwo', new Error('Disk full'));
+      renderThree();
+
+      clickGetOf('ONE');
+      clickGetOf('TWO');
+
+      await waitFor(() => expect(screen.getAllByRole('alert')).toHaveLength(2));
+      expect(screen.getByText('ONE: Locked')).toBeInTheDocument();
+      expect(screen.getByText('TWO: Disk full')).toBeInTheDocument();
+    });
+
+    it('keeps the earlier failures when another project is clicked', async () => {
+      rejections.set('projectOne', new Error('Locked'));
+      rejections.set('projectTwo', new Error('Disk full'));
+      renderThree();
+      clickGetOf('ONE');
+      clickGetOf('TWO');
+      await waitFor(() => expect(screen.getAllByRole('alert')).toHaveLength(2));
+
+      clickGetOf('THREE');
+      await waitFor(() => expect(onSendReceiveProject).toHaveBeenCalledWith('projectThree'));
+
+      expect(screen.getAllByRole('alert')).toHaveLength(2);
+      expect(screen.getByText('ONE: Locked')).toBeInTheDocument();
+      expect(screen.getByText('TWO: Disk full')).toBeInTheDocument();
+    });
+
+    it("clears only a project's own failure when that project is clicked again", async () => {
+      rejections.set('projectOne', new Error('Locked'));
+      rejections.set('projectTwo', new Error('Disk full'));
+      renderThree();
+      clickGetOf('ONE');
+      clickGetOf('TWO');
+      await waitFor(() => expect(screen.getAllByRole('alert')).toHaveLength(2));
+
+      rejections.delete('projectOne');
+      clickGetOf('ONE');
+
+      await waitFor(() => expect(screen.queryByText('ONE: Locked')).toBeNull());
+      expect(screen.getByText('TWO: Disk full')).toBeInTheDocument();
+    });
+
+    it('shows only the latest failure of a project', async () => {
+      rejections.set('projectOne', new Error('Locked'));
+      renderThree();
+      clickGetOf('ONE');
+      await waitFor(() => expect(screen.getByText('ONE: Locked')).toBeInTheDocument());
+
+      rejections.set('projectOne', new Error('Disk full'));
+      clickGetOf('ONE');
+
+      await waitFor(() => expect(screen.getByText('ONE: Disk full')).toBeInTheDocument());
+      expect(screen.getAllByRole('alert')).toHaveLength(1);
     });
   });
 

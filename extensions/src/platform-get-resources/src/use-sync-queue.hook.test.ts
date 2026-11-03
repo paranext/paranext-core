@@ -109,12 +109,12 @@ describe('useSyncQueue', () => {
 
   it('reads once availability becomes true', async () => {
     mockSendCommand.mockResolvedValue({ waitingProjectIds: ['RH3'] });
-    const { result, rerender } = renderHook(({ available }) => useSyncQueue(available), {
-      initialProps: { available: undefined as boolean | undefined },
-    });
+    let available: boolean | undefined;
+    const { result, rerender } = renderHook(() => useSyncQueue(available));
     await act(async () => {});
     expect(mockSendCommand).not.toHaveBeenCalled();
-    rerender({ available: true });
+    available = true;
+    rerender();
     await waitFor(() => expect(result.current.waitingProjectIds).toEqual(['RH3']));
     expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.getSyncQueue');
   });
