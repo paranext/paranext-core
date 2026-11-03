@@ -11854,12 +11854,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   The picker recognises another opener by the attributes Radix puts on its triggers
   (`[aria-haspopup]` other than `"false"`, or `role="combobox"`; a tooltip trigger has neither),
   skipping text fields (a search box can be a combobox too) and disabled controls, and closes on a
-  press on one (let through in `onInteractOutside`) or on an unmodified, non-repeating Enter, Space
-  or Down arrow with focus on one (a capture-phase `keydown` listener on the document, attached
-  only while compact). A close from the keyboard leaves focus on the control the user is on rather
-  than returning it to the picker's trigger. Menus opened in **another frame** do not close it: the UX ruling was that cross-frame
-  detection is not wanted, since a click in another frame reaches this document only as a window
-  blur and telling "a menu opened there" apart would need a new cross-frame signal. Everything else
+  plain primary-button press on one (let through in `onInteractOutside`; a right-click or
+  Ctrl+click opens nothing, so it does not count) or on an unmodified, non-repeating Enter, Space
+  or Down arrow with focus on one, or Up arrow on a select box (a capture-phase `keydown` listener
+  on the document, attached only while compact). A close from the keyboard leaves focus on the
+  control the user is on rather than returning it to the picker's trigger. Menus opened in
+  **another frame** do not close it: the UX ruling was that cross-frame detection is not wanted,
+  since a click in another frame reaches this document only as a window blur and telling "a menu
+  opened there" apart would need a new cross-frame signal. Everything else
   the 2026-10-30 amendment lists (window blur, a plain press elsewhere, focus leaving, Escape with
   focus elsewhere) still leaves it open.
 - **Overlay focus restore:** the renderer's overlay service decides whether focus returns to the

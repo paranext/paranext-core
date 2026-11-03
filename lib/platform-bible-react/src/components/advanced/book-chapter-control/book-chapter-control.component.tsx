@@ -112,6 +112,9 @@ function isPopupTrigger(target: Element): boolean {
 /** Keys that open a menu, popover or list from its focused trigger */
 const POPUP_OPENING_KEYS = new Set(['Enter', ' ', 'ArrowDown']);
 
+/** A select box (a `role="combobox"` trigger) also opens on Up arrow; a menu trigger does not */
+const SELECT_OPENING_KEYS = new Set([...POPUP_OPENING_KEYS, 'ArrowUp']);
+
 /** The tab stops inside `container`, in document order. */
 function getTabStops(container: HTMLElement): HTMLElement[] {
   return Array.from(container.querySelectorAll<HTMLElement>(TAB_STOP_SELECTOR)).filter(
@@ -540,9 +543,11 @@ export function BookChapterControl({
   useEffect(() => {
     if (!isCompactAndOpen) return undefined;
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (!POPUP_OPENING_KEYS.has(event.key) || event.repeat) return;
-      if (event.ctrlKey || event.altKey || event.metaKey) return;
+      if (event.repeat || event.ctrlKey || event.altKey || event.metaKey) return;
       if (!isOtherPopupTrigger(event.target)) return;
+      const isOnSelect =
+        event.target instanceof Element && !!event.target.closest('[role="combobox"]');
+      if (!(isOnSelect ? SELECT_OPENING_KEYS : POPUP_OPENING_KEYS).has(event.key)) return;
       isClosingForOtherPopupRef.current = true;
       handleOpenChange(false);
     };
@@ -1483,8 +1488,16 @@ export function BookChapterControl({
         // would leave no way out: compact mode applies only when the picker is non-modal.
         onInteractOutside={(event) => {
           if (!isCompactAndOpen) return;
-          const isPressOnOtherPopupTrigger =
-            event.detail.originalEvent.type === 'pointerdown' && isOtherPopupTrigger(event.target);
+          // Only a plain primary-button press opens a menu or popover trigger; a right-click,
+          // Ctrl+click or middle-click would close this picker with nothing opening in its place
+          const { originalEvent } = event.detail;
+          const isPlainPress =
+            originalEvent instanceof MouseEvent &&
+            originalEvent.type === 'pointerdown' &&
+            originalEvent.button === 0 &&
+            !originalEvent.ctrlKey &&
+            !originalEvent.metaKey;
+          const isPressOnOtherPopupTrigger = isPlainPress && isOtherPopupTrigger(event.target);
           if (!isPressOnOtherPopupTrigger) event.preventDefault();
         }}
         // Radix listens for Escape on the whole document, so compact mode keeps it from closing the
