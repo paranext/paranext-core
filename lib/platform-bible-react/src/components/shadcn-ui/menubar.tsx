@@ -10,6 +10,8 @@ import {
   menuVariants,
   useMenuContext,
 } from '@/context/menu.context';
+// CUSTOM: Dismiss the menu when the window blurs (a click into another iframe)
+import { useDismissOnWindowBlur } from '@/hooks/use-dismiss-on-window-blur.hook';
 // CUSTOM: Import the shared z-index constant so the menubar joins the same overlay tier as popover,
 // select, dropdown-menu and context-menu instead of falling back to Tailwind's tw:z-50. The tooltip
 // tier is documented as sitting above "the menubar", which is only true once the menubar is
@@ -106,12 +108,27 @@ function MenubarContent({
   sideOffset = 8,
   // CUSTOM: Pull `style` out so the shared z-index can be applied under any caller-supplied style
   style,
+  // CUSTOM: Destructure ref (a regular prop in React 19) and onCloseAutoFocus so
+  // useDismissOnWindowBlur can compose them with its own
+  ref,
+  onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof MenubarPrimitive.Content>) {
+  // CUSTOM: Added useDismissOnWindowBlur so the menu closes when the window loses focus. A click
+  // into another iframe never reaches this document, so the window's blur stands in for the outside
+  // press; see the hook's TSDoc. MenubarSubContent is not wired: a sub-menu closes with its root
+  // menu. The returned ref callback also forwards the caller's ref, and the returned
+  // onCloseAutoFocus also keeps focus out of another frame on close and, after the OS window was
+  // deactivated, returns focus to the trigger itself, while still calling the caller's handler.
+  const blurDismissProps = useDismissOnWindowBlur({ ref, onCloseAutoFocus });
   return (
     <MenubarPortal>
       <MenubarPrimitive.Content
         data-slot="menubar-content"
+        // CUSTOM: ref and onCloseAutoFocus from useDismissOnWindowBlur (it finds the content's
+        // parent, keeps focus out of another frame on close and restores the trigger after the OS
+        // window was deactivated)
+        {...blurDismissProps}
         align={align}
         alignOffset={alignOffset}
         sideOffset={sideOffset}
