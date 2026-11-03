@@ -261,14 +261,18 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
       optimisticRunningProjectIds,
     ],
   );
-  const isRunReported = syncActivity.isSyncing || syncQueue.runningProjectIds.length > 0;
+  // A run the backend has opened but whose projects nobody names yet could be Home's own, so it
+  // does not count as reported until the activity or the queue names them.
+  const isRunNamed =
+    syncQueue.runningProjectIds.length > 0 ||
+    (syncActivity.isSyncing && syncActivity.projectIds.length > 0);
   const isOwnRequestRunning = useMemo(() => {
-    // Before the backend reports a run, any open request of Home's own pauses the local list.
-    if (!isRunReported) return isOwnSendReceiveInProgress;
+    // Until a reported run names its projects, any open request of Home's own pauses the local list.
+    if (!isRunNamed) return isOwnSendReceiveInProgress;
     const runningIds = new Set(activeSendReceiveProjects);
     return ownActiveSendReceiveProjects.some((id) => runningIds.has(normalizeProjectId(id)));
   }, [
-    isRunReported,
+    isRunNamed,
     activeSendReceiveProjects,
     ownActiveSendReceiveProjects,
     isOwnSendReceiveInProgress,

@@ -652,6 +652,32 @@ describe('HomeWebView requests through the sync queue', () => {
     );
   });
 
+  // The queue names a request as waiting until the backend accepts its run, and as running only
+  // once it has. The backend's activity can open first, before it has resolved the run's projects,
+  // and Home's own run is already writing then.
+  it('keeps the local list paused while its own run opens with no projects named yet', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    await renderSubscribed();
+    const enabledStates: boolean[] = [];
+    const recordEnabled = () => {
+      const options = vi.mocked(useLocalProjects).mock.calls.at(-1)?.[0];
+      if (options) enabledStates.push(options.enabled !== false);
+    };
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+    await emit(syncQueueEvents, { waitingProjectIds: ['RH2'], runningProjectIds: [] });
+    recordEnabled();
+    // The backend accepts the run: its activity opens before it names the projects, and before
+    // the queue reports the run as running.
+    await emit(syncActivityEvents, { isSyncing: true, projectIds: [] });
+    recordEnabled();
+    await emit(syncQueueEvents, { waitingProjectIds: [], runningProjectIds: ['RH2'] });
+    recordEnabled();
+
+    expect(enabledStates).toEqual([false, false, false]);
+  });
+
   it('says so when taking a project out of the queue fails', async () => {
     mockAvailableQueue(async () => ({}), {
       waitingProjectIds: ['RH2'],
