@@ -145,8 +145,10 @@ function DefaultHomeDecorator(Story: (update?: { args: HomeProps }) => ReactElem
             { projectId },
           ),
         onSendReceiveProject: (projectId) =>
-          alertCommand('paratextBibleSendReceive.sendReceiveProjects', {
+          alertCommand('paratextBibleSendReceive.requestSync', {
             projectIds: [projectId],
+            source: 'home',
+            options: { includeConnected: false },
           }),
         onOpenGetResources: () => alertCommand('platformGetResources.openGetResources'),
         onGetStarted: () => alertCommand('platform.openWindow', { url: GET_STARTED_URL }),
@@ -441,8 +443,10 @@ function UnsupportedProjectWithLocalEditsDecorator(
         onOpenProject: (projectId) =>
           alertCommand('platformScriptureEditor.openScriptureEditor', { projectId }),
         onSendReceiveProject: (projectId) =>
-          alertCommand('paratextBibleSendReceive.sendReceiveProjects', {
+          alertCommand('paratextBibleSendReceive.requestSync', {
             projectIds: [projectId],
+            source: 'home',
+            options: { includeConnected: false },
           }),
       }}
     />
