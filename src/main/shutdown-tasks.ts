@@ -148,6 +148,32 @@ async function performShutdownTasksInternal(): Promise<void> {
   await performSimpleModeShutdownSync();
 }
 
+/** Resolution value of {@link settleWithinOrTimeOut} meaning the time ran out first */
+const TIMED_OUT = Symbol('timed out');
+
+/**
+ * Awaits `promise` for at most `timeoutMs`, resolving to {@link TIMED_OUT} when it has not settled
+ * by then. A rejection before the bound rejects the result. The timer is always cleared.
+ *
+ * Giving up only stops the wait: the abandoned request keeps running, so a no-op rejection handler
+ * is attached to it first and a late failure can never surface as an unhandled rejection.
+ */
+async function settleWithinOrTimeOut<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<T | typeof TIMED_OUT> {
+  promise.catch(() => {});
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<typeof TIMED_OUT>((resolve) => {
+    timeout = setTimeout(() => resolve(TIMED_OUT), timeoutMs);
+  });
+  try {
+    return await Promise.race([promise, timedOut]);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 /**
  * How long a quit waits for the Send/Receive extension to drop its sync queue. The drop is an
  * in-memory change in the extension, so this only bounds an extension host that stopped answering.
@@ -162,27 +188,19 @@ export const DROP_SYNC_QUEUE_TIMEOUT_MS = 5_000;
  * there is no queue to drop.
  */
 async function dropSyncQueue(): Promise<void> {
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-  const timedOut = new Promise<'timedOut'>((resolve) => {
-    timeout = setTimeout(() => resolve('timedOut'), DROP_SYNC_QUEUE_TIMEOUT_MS);
-  });
   try {
-    const outcome = await Promise.race([
-      networkService
-        .requestNoRetry(
-          serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.dropSyncQueue'),
-        )
-        .then(() => 'dropped' as const),
-      timedOut,
-    ]);
-    if (outcome === 'timedOut')
+    const outcome = await settleWithinOrTimeOut(
+      networkService.requestNoRetry(
+        serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.dropSyncQueue'),
+      ),
+      DROP_SYNC_QUEUE_TIMEOUT_MS,
+    );
+    if (outcome === TIMED_OUT)
       logger.warn(
         `Dropping the sync queue did not answer within ${DROP_SYNC_QUEUE_TIMEOUT_MS} ms; continuing shutdown`,
       );
   } catch (e) {
     logger.debug(`Could not drop the sync queue at quit: ${getErrorMessage(e)}`);
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
@@ -480,25 +498,17 @@ export const CANCELLED_SYNC_POLL_INTERVAL_MS = 250;
  * for.
  */
 async function isSyncInProgress(timeoutMs: number): Promise<boolean> {
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-  const timedOut = new Promise<false>((resolve) => {
-    timeout = setTimeout(() => resolve(false), timeoutMs);
-  });
   try {
-    return await Promise.race([
-      networkService
-        .requestNoRetry<
-          [],
-          { isSyncing: boolean } | undefined
-        >(serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.getSyncActivity'))
-        .then((activity) => activity?.isSyncing === true),
-      timedOut,
-    ]);
+    const activity = await settleWithinOrTimeOut(
+      networkService.requestNoRetry<[], { isSyncing: boolean } | undefined>(
+        serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.getSyncActivity'),
+      ),
+      timeoutMs,
+    );
+    return activity !== TIMED_OUT && activity?.isSyncing === true;
   } catch (e) {
     logger.debug(`Could not read the sync activity at quit: ${getErrorMessage(e)}`);
     return false;
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
@@ -515,10 +525,6 @@ async function isSyncInProgress(timeoutMs: number): Promise<boolean> {
  */
 async function waitForCancelledSyncToStop(): Promise<void> {
   let isWaitOver = false;
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-  const budgetSpent = new Promise<'budgetSpent'>((resolve) => {
-    timeout = setTimeout(() => resolve('budgetSpent'), CANCELLED_SYNC_STOP_WAIT_MS);
-  });
   const pollUntilStopped = async (): Promise<'stopped' | 'budgetSpent'> => {
     if (isWaitOver) return 'budgetSpent';
     if (!(await isSyncInProgress(CANCELLED_SYNC_STOP_WAIT_MS))) return 'stopped';
@@ -526,13 +532,14 @@ async function waitForCancelledSyncToStop(): Promise<void> {
     return pollUntilStopped();
   };
   try {
-    if ((await Promise.race([pollUntilStopped(), budgetSpent])) === 'budgetSpent')
+    if (
+      (await settleWithinOrTimeOut(pollUntilStopped(), CANCELLED_SYNC_STOP_WAIT_MS)) === TIMED_OUT
+    )
       logger.warn(
         `The cancelled sync did not stop within ${CANCELLED_SYNC_STOP_WAIT_MS} ms; sending the shutdown sync anyway, which may be refused as already in progress`,
       );
   } finally {
     isWaitOver = true;
-    clearTimeout(timeout);
   }
 }
 

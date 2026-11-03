@@ -260,6 +260,37 @@ describe('performShutdownTasks', () => {
         expect.stringContaining('Dropping the sync queue did not answer'),
       );
     });
+
+    it('a drop that rejects after quit stopped waiting for it is not an unhandled rejection', async () => {
+      stubSettings({ mode: 'simple' });
+      mockGetOpenWebViews.mockResolvedValue(openWebViews([]));
+      let rejectDrop: (reason: Error) => void = () => {};
+      mockRequestNoRetry.mockImplementation(async (command: string) => {
+        if (command.endsWith('.dropSyncQueue'))
+          return new Promise((_resolve, reject) => {
+            rejectDrop = reject;
+          });
+        return undefined;
+      });
+      const unhandled = vi.fn();
+      process.on('unhandledRejection', unhandled);
+      vi.useFakeTimers();
+      try {
+        const shutdownPromise = performShutdownTasks();
+        await vi.advanceTimersByTimeAsync(DROP_SYNC_QUEUE_TIMEOUT_MS);
+        await expect(shutdownPromise).resolves.toBeUndefined();
+        rejectDrop(new Error('late failure'));
+        await vi.advanceTimersByTimeAsync(0);
+      } finally {
+        vi.useRealTimers();
+        // Unhandled rejections are reported on a later turn of the real event loop
+        await new Promise((resolve) => {
+          setTimeout(resolve, 0);
+        });
+        process.off('unhandledRejection', unhandled);
+      }
+      expect(unhandled).not.toHaveBeenCalled();
+    });
   });
 
   describe('a sync running at quit', () => {
