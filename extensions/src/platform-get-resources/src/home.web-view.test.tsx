@@ -683,6 +683,26 @@ describe('HomeWebView requests through the sync queue', () => {
     await waitFor(() => expect(requestSyncCalls()).toHaveLength(2));
   });
 
+  it('hands Home the waiting state between the two clicks of a double-click, leaving the pair to its settle window', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    const home = await renderSubscribed();
+    const button = screen.getByRole('button', { name: 'send/receive' });
+
+    fireEvent.click(button);
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+    // The queue answers the first click before the second arrives.
+    await emit(syncQueueEvents, { waitingProjectIds: ['RH2'], runningProjectIds: [] });
+    expect(home).toHaveAttribute('data-waiting-projects', '["RH2"]');
+    expect(home).toHaveAttribute('data-active-projects', '[]');
+
+    // Home's row (stubbed here) decides what the second click does; the web view neither removes
+    // the project from the queue nor asks again on its own.
+    expect(
+      mockSendCommand.mock.calls.filter(([name]) => name === REMOVE_FROM_SYNC_QUEUE),
+    ).toHaveLength(0);
+    expect(requestSyncCalls()).toHaveLength(1);
+  });
+
   it('reports a missing sync queue command as a failed request, with no second command', async () => {
     const message = `JSON-RPC Request error (-32601): Method not found: ${REQUEST_SYNC}`;
     mockSendCommand.mockImplementation(async (commandName: string) => {

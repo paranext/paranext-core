@@ -51,7 +51,7 @@ import { withoutSyncBusyMarker } from 'platform-bible-utils/experimental';
 import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { HomeItemDropdownMenu } from './home-item-menu';
-import { getRowSyncState } from './home-sync-queue.util';
+import { getRowSyncState, type RowSyncState } from './home-sync-queue.util';
 import {
   isShownByProjectResourceFilter,
   ProjectResourceFilter,
@@ -155,6 +155,14 @@ const NO_PROJECT_IDS: ReadonlySet<string> = new Set();
  * moment the line can flash when a refetch starts just before the sync's closing event arrives.
  */
 export const SYNC_RUNNING_ANNOUNCEMENT_DELAY_MS = 1000;
+
+/**
+ * How long a row ignores clicks after its own sync state changes. The second click of a
+ * double-click lands after the queue has answered the first, on a different button (Get becomes
+ * Waiting, Waiting becomes Get); without the window that click would undo the first. A row that is
+ * already in a state when Home mounts is settled.
+ */
+export const ROW_CLICK_SETTLE_MS = 500;
 const NO_LOCALIZED_UNSUPPORTED_REASONS: LanguageStrings = {};
 
 export type SortConfig = {
@@ -454,6 +462,34 @@ export function Home({
   );
   const getProjectSyncState = (projectId: string) =>
     getRowSyncState(projectId, normalizedRunningProjectIds, normalizedWaitingProjectIds);
+
+  // When each row last changed state, by normalized id. A row with no entry has not changed since
+  // Home mounted. Rows that are idle and have not changed are not tracked, so the map stays as
+  // small as the set of rows that ever left idle.
+  const rowStateSinceRef = useRef(new Map<string, { state: RowSyncState; at: number }>());
+  const isFirstRowStateRunRef = useRef(true);
+  useEffect(() => {
+    const now = performance.now();
+    const rowStateSince = rowStateSinceRef.current;
+    const trackedIds = new Set([
+      ...rowStateSince.keys(),
+      ...normalizedRunningProjectIds,
+      ...normalizedWaitingProjectIds,
+    ]);
+    trackedIds.forEach((id) => {
+      const state = getRowSyncState(id, normalizedRunningProjectIds, normalizedWaitingProjectIds);
+      if (state === (rowStateSince.get(id)?.state ?? 'idle')) return;
+      // The first run sees the states Home mounted with, which count as settled.
+      rowStateSince.set(id, { state, at: isFirstRowStateRunRef.current ? -Infinity : now });
+    });
+    isFirstRowStateRunRef.current = false;
+  }, [normalizedRunningProjectIds, normalizedWaitingProjectIds]);
+
+  /** Whether the row's last state change is far enough back for a click on it to count. */
+  const isRowSettled = (projectId: string) => {
+    const lastChange = rowStateSinceRef.current.get(normalizeProjectId(projectId));
+    return !lastChange || performance.now() - lastChange.at >= ROW_CLICK_SETTLE_MS;
+  };
   const actionText: string = getLocalizedString('%resources_action%');
   const activityText: string = getLocalizedString('%resources_activity%');
   const clearFiltersText: string = getLocalizedString('%resources_clearFilters%');
@@ -533,6 +569,7 @@ export function Home({
   const [actionError, setActionError] = useState<string | undefined>(undefined);
 
   const handleSendReceiveProject = async (projectId: string) => {
+    if (!isRowSettled(projectId)) return;
     setActionError(undefined);
     try {
       await onSendReceiveProject(projectId);
@@ -542,6 +579,7 @@ export function Home({
   };
 
   const handleRemoveFromQueue = async (projectId: string) => {
+    if (!isRowSettled(projectId)) return;
     try {
       await onRemoveFromQueue(projectId);
     } catch {
@@ -1339,6 +1377,9 @@ export function Home({
                             }}
                             onDoubleClick={(e) => {
                               if (!isEventInside(e)) return;
+                              // The second click of a double-click on the row's action already
+                              // had its say; this one must not repeat or undo it.
+                              if (!isRowSettled(project.projectId)) return;
                               // Open, Sync, and Get are all blocked for an unsupported project:
                               // Home reuses the can't-open `unsupportedReason` to block sync too
                               // (today only Study Bible Additions; see

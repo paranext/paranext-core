@@ -2379,3 +2379,168 @@ describe('Home while a sync holds the project list', () => {
     screen.getAllByRole('button', { name: 'Get' }).forEach((b) => expect(b).toBeEnabled());
   });
 });
+
+/*
+ * A double-click on a row's action sends two clicks a few milliseconds apart, and the queue reports
+ * the first one's outcome in between: the second click lands on a different button (Get becomes
+ * Waiting, Waiting becomes Get). Each row ignores clicks for a short while after its own state
+ * changes, so the pair does one thing, not a request followed by its undoing.
+ */
+describe('Home click settle window after a row changes state', () => {
+  const sharedProject = (name: string): SharedProjectsInfo[string] => ({
+    id: name,
+    name,
+    fullName: `${name} full name`,
+    language: 'en',
+    editedStatus: '',
+    lastSendReceiveDate: '2026-08-16T00:00:00.000Z',
+  });
+  const WAITING_LABEL = enString('%resources_syncWaiting_label%');
+  const waitingName = (name: string) =>
+    formatReplacementString(enString('%resources_syncWaiting_remove_format%'), { name });
+
+  const onSendReceiveProject = vi.fn();
+  const onRemoveFromQueue = vi.fn();
+  const onOpenProject = vi.fn();
+
+  const homeWith = ({
+    waitingProjectIds = [],
+    activeSendReceiveProjects = [],
+  }: {
+    waitingProjectIds?: string[];
+    activeSendReceiveProjects?: string[];
+  } = {}) => (
+    <Home
+      headerContent={undefined}
+      sharedProjectsInfo={{ projectOne: sharedProject('ONE'), projectTwo: sharedProject('TWO') }}
+      remoteProjectsState="loaded"
+      isSendReceiveInProgress={activeSendReceiveProjects.length > 0}
+      activeSendReceiveProjects={activeSendReceiveProjects}
+      waitingProjectIds={waitingProjectIds}
+      onSendReceiveProject={onSendReceiveProject}
+      onRemoveFromQueue={onRemoveFromQueue}
+      onOpenProject={onOpenProject}
+      localizedStringsWithLoadingState={[EN_STRINGS, false]}
+    />
+  );
+
+  const rowOf = (name: string): HTMLElement => {
+    const row = screen.getByText(name).closest('tr');
+    if (!row) throw new Error(`Home rendered no row for ${name}`);
+    return row;
+  };
+  const getButton = (name: string) => within(rowOf(name)).getByRole('button', { name: 'Get' });
+  const waitingButton = (name: string) =>
+    within(rowOf(name)).getByRole('button', { name: waitingName(name) });
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    onSendReceiveProject.mockReset();
+    onRemoveFromQueue.mockReset();
+    onOpenProject.mockReset();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const advance = (ms: number) =>
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+
+  it('ignores a click on Waiting that follows a click on Get within the window, then accepts one after it', () => {
+    const { rerender } = render(homeWith());
+    fireEvent.click(getButton('ONE'));
+    expect(onSendReceiveProject).toHaveBeenCalledTimes(1);
+
+    // The queue reports the first click's outcome.
+    rerender(homeWith({ waitingProjectIds: ['projectOne'] }));
+    advance(100);
+    fireEvent.click(waitingButton('ONE'));
+    expect(onRemoveFromQueue).not.toHaveBeenCalled();
+
+    advance(500);
+    fireEvent.click(waitingButton('ONE'));
+    expect(onRemoveFromQueue).toHaveBeenCalledWith('projectOne');
+  });
+
+  it('ignores a click on Get that follows a removal within the window, then accepts one after it', () => {
+    const { rerender } = render(homeWith({ waitingProjectIds: ['projectOne'] }));
+    fireEvent.click(waitingButton('ONE'));
+    expect(onRemoveFromQueue).toHaveBeenCalledTimes(1);
+
+    rerender(homeWith());
+    advance(100);
+    fireEvent.click(getButton('ONE'));
+    expect(onSendReceiveProject).not.toHaveBeenCalled();
+
+    advance(500);
+    fireEvent.click(getButton('ONE'));
+    expect(onSendReceiveProject).toHaveBeenCalledWith('projectOne');
+  });
+
+  it('accepts the first click on a row that was already waiting when Home mounted', () => {
+    render(homeWith({ waitingProjectIds: ['projectOne'] }));
+
+    fireEvent.click(waitingButton('ONE'));
+
+    expect(onRemoveFromQueue).toHaveBeenCalledWith('projectOne');
+  });
+
+  it('settles each row on its own: a change on one row leaves the others clickable', () => {
+    const { rerender } = render(homeWith());
+    rerender(homeWith({ waitingProjectIds: ['projectOne'] }));
+
+    fireEvent.click(getButton('TWO'));
+
+    expect(onSendReceiveProject).toHaveBeenCalledWith('projectTwo');
+  });
+
+  it('ignores a click on a row whose sync just started running', () => {
+    const { rerender } = render(homeWith());
+    rerender(homeWith({ activeSendReceiveProjects: ['projectOne'] }));
+    advance(100);
+
+    fireEvent.click(getButton('ONE'));
+    expect(onSendReceiveProject).not.toHaveBeenCalled();
+
+    advance(500);
+    fireEvent.click(getButton('ONE'));
+    expect(onSendReceiveProject).toHaveBeenCalledWith('projectOne');
+  });
+
+  it('ignores a double-click on a row that just changed state', () => {
+    const { rerender } = render(homeWith());
+    rerender(homeWith({ waitingProjectIds: ['projectOne'] }));
+    advance(100);
+
+    fireEvent.doubleClick(rowOf('ONE'));
+    expect(onSendReceiveProject).not.toHaveBeenCalled();
+    expect(onRemoveFromQueue).not.toHaveBeenCalled();
+
+    // The row then leaves the queue; a double-click right after that must not queue it again.
+    rerender(homeWith());
+    advance(100);
+    fireEvent.doubleClick(rowOf('ONE'));
+    expect(onSendReceiveProject).not.toHaveBeenCalled();
+
+    // Positive control: the same row accepts a double-click once idle and settled.
+    advance(600);
+    fireEvent.doubleClick(rowOf('ONE'));
+    expect(onSendReceiveProject).toHaveBeenCalledWith('projectOne');
+  });
+
+  it('does not swallow a deliberate Enter press made after the window', async () => {
+    const user = userEvent.setup({ advanceTimers: (ms) => vi.advanceTimersByTime(ms) });
+    const { rerender } = render(homeWith());
+    rerender(homeWith({ waitingProjectIds: ['projectOne'] }));
+    const button = waitingButton('ONE');
+    button.focus();
+    expect(button).toHaveTextContent(WAITING_LABEL);
+    advance(600);
+
+    await user.keyboard('{Enter}');
+
+    expect(onRemoveFromQueue).toHaveBeenCalledWith('projectOne');
+  });
+});
