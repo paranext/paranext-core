@@ -14,6 +14,10 @@ type Props = {
  * Banner shown in place of the Scripture editor while a project setting the editor needs to save
  * safely (`platformScripture.allowInvisibleCharacters`) could not be read. The chapter is held back
  * until the setting is read, and nothing else on screen says why no text shows.
+ *
+ * The banner offers no retry. The setting hook subscribes to the project's data provider once, so a
+ * failed first read is read again only when the provider reports a change to the setting, or when
+ * the subscription is rebuilt: the tab is reopened or the web view switches to another project.
  */
 export function SettingUnreadableBanner({ localizedStrings }: Props) {
   return (
