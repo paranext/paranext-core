@@ -258,7 +258,8 @@ const KNOWN_DIVERGENCES: {
     // The editor splits `of |the` into `of ` and `the`; USFM has no trailing space before a
     // paragraph marker, so ParatextData writes `of\r\n\q1 the`. The editor goes on holding the
     // space until the chapter reloads; the web view compares the echo whitespace-insensitively, so
-    // the file is not rewritten. Data-fidelity catalog row ER-1.
+    // the file is not rewritten. Kept on purpose: a Backspace that rejoins the lines right away
+    // keeps the words apart. Data-fidelity catalog row ER-1.
     reason: "the first half's trailing space is not written",
     count: 1,
     isExpected: (saved, reread) => saved.replace(/ "$/, '"') === reread,

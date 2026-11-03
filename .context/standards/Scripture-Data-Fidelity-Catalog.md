@@ -24,8 +24,8 @@ issue, but **this file is the authoritative copy**.
 
 ## Verdicts not yet ruled on by TJ
 
-As of 2026-10-30 every `accept` in this catalog carries TJ's ruling and date. Waiting on TJ:
-ER-1 (2026-11-03).
+As of 2026-11-03 every `accept` in this catalog carries TJ's ruling and date, and nothing is
+waiting on TJ.
 
 ## The pipeline
 
@@ -95,7 +95,7 @@ ParatextData writes the same USFM either way). One reread difference, ER-1.
 
 | ID | Layer | Finding | Verdict | Rationale / evidence |
 | --- | --- | --- | --- | --- |
-| ER-1 | L1/L3 | Splitting a paragraph between two words (`of \|the`) leaves the first half ending in a space in the editor (`The book of `). USFM has no trailing space before a paragraph marker, so ParatextData writes `of\r\n\q1 the` and serves `The book of` back. The editor goes on showing the space until the chapter reloads. Nothing churns: the web view compares the echo whitespace-insensitively, so it neither reloads the editor nor rewrites the file. Same in Standard (the Enter menu's `splitParagraphWithMarker`), formatted and paragraph-structure. | **needs-ruling** | Whitespace only; no text is lost, and the bytes on disk are what any save of that paragraph would write (S-2). Options: accept, or have the editor drop the trailing space when it splits, as the disk does. Pinned by `KNOWN_DIVERGENCES['split-paragraph-q1']` in `editor-usx-round-trip.test.tsx` |
+| ER-1 | L1/L3 | Splitting a paragraph between two words (`of \|the`) leaves the first half ending in a space in the editor (`The book of `). USFM has no trailing space before a paragraph marker, so ParatextData writes `of\r\n\q1 the` and serves `The book of` back. The editor goes on showing the space until the chapter reloads. Nothing churns: the web view compares the echo whitespace-insensitively, so it neither reloads the editor nor rewrites the file. Same in Standard (the Enter menu's `splitParagraphWithMarker`), formatted and paragraph-structure. | **accept** (TJ, 2026-11-03): the space stays in the editor on purpose — a Backspace that joins the two lines again right after the split keeps the words apart. The editor sends whitespace as it holds it and ParatextData normalizes it on save (S-2), as it does elsewhere. | Whitespace only; no text is lost, and the bytes on disk are what any save of that paragraph would write. Pinned by `KNOWN_DIVERGENCES['split-paragraph-q1']` in `editor-usx-round-trip.test.tsx` |
 
 ## Corpus-extension findings (testUSFM-2SA-4/-2SA-5/-1SA-1, 2026-10-20)
 
