@@ -438,10 +438,9 @@ describe('HomeWebView requests through the sync queue', () => {
     const button = screen.getByRole('button', { name: 'send/receive' });
 
     fireEvent.click(button);
-    await waitFor(() => {
-      expect(JSON.parse(home.getAttribute('data-active-projects') ?? '[]')).toEqual(['RH2']);
-    });
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
     await emit(syncActivityEvents, { isSyncing: true, projectIds: ['RH2'] });
+    expect(JSON.parse(home.getAttribute('data-active-projects') ?? '[]')).toEqual(['RH2']);
 
     fireEvent.click(button);
 
@@ -506,6 +505,54 @@ describe('HomeWebView requests through the sync queue', () => {
     await act(async () => {});
 
     expect(mockSendCommand).not.toHaveBeenCalledWith(GET_SYNC_QUEUE);
+  });
+
+  it('shows a project the queue reports as running even when the activity is idle', async () => {
+    mockAvailableQueue(async () => ({}));
+    const home = await renderSubscribed();
+    expect(home).toHaveAttribute('data-active-projects', '[]');
+
+    await emit(syncQueueEvents, { waitingProjectIds: [], runningProjectIds: ['rh7'] });
+
+    expect(home).toHaveAttribute('data-active-projects', '["RH7"]');
+  });
+
+  it('shows Waiting, not a spinner, for a request the queue only reports as waiting', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    const home = await renderSubscribed();
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+    await emit(syncQueueEvents, { waitingProjectIds: ['RH2'], runningProjectIds: ['RH3'] });
+
+    expect(home).toHaveAttribute('data-waiting-projects', '["RH2"]');
+    expect(home).toHaveAttribute('data-active-projects', '["RH3"]');
+  });
+
+  it('shows a project as running only once the queue accepts its run', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    const home = await renderSubscribed();
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+    await act(async () => {});
+    expect(home).toHaveAttribute('data-active-projects', '[]');
+
+    await emit(syncQueueEvents, { waitingProjectIds: [], runningProjectIds: ['RH2'] });
+    expect(home).toHaveAttribute('data-active-projects', '["RH2"]');
+  });
+
+  it('merges the queue and the activity running sets once each', async () => {
+    mockAvailableQueue(async () => ({}));
+    const home = await renderSubscribed();
+
+    await emit(syncQueueEvents, { waitingProjectIds: [], runningProjectIds: ['RH2'] });
+    await emit(syncActivityEvents, { isSyncing: true, projectIds: ['rh2', 'RH3'] });
+
+    expect(JSON.parse(home.getAttribute('data-active-projects') ?? '[]').sort()).toEqual([
+      'RH2',
+      'RH3',
+    ]);
   });
 
   it('shows no spinner for a request that only waits behind an outside run', async () => {
@@ -845,7 +892,7 @@ describe('HomeWebView sync started elsewhere', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
     await waitFor(() => {
-      expect(activeProjects(home)).toEqual(['RH2']);
+      expect(home).toHaveAttribute('data-send-receive-in-progress', 'true');
     });
     await emitSyncActivity({ isSyncing: true, projectIds: ['RH3', 'RH2'] });
 

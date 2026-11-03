@@ -224,29 +224,34 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
   // the queue pauses the server-list fetch as well: its run starts as soon as the current one ends,
   // and the fetch would queue behind that run too.
   const isAnySendReceiveInProgress =
-    isOwnSendReceiveInProgress || syncActivity.isSyncing || syncQueue.waitingProjectIds.length > 0;
-  // While the backend reports a run, it alone says which projects are running: Home's own request
-  // may only be waiting behind that run, and must not show a spinner. With no run reported, Home's
-  // own ids cover the moment between its click and the backend's first activity event.
+    isOwnSendReceiveInProgress ||
+    syncActivity.isSyncing ||
+    syncQueue.waitingProjectIds.length > 0 ||
+    syncQueue.runningProjectIds.length > 0;
+  // The backend alone says which projects are running: the sync queue names the ones in the run it
+  // accepted, and the sync activity names every run, including those started elsewhere. Home's own
+  // request may only be waiting, so it shows a spinner only once one of these names its project.
   const activeSendReceiveProjects = useMemo(
     () =>
       Array.from(
         new Set(
           [
-            ...(syncActivity.isSyncing ? [] : ownActiveSendReceiveProjects),
-            ...syncActivity.projectIds,
+            ...syncQueue.runningProjectIds,
+            ...(syncActivity.isSyncing ? syncActivity.projectIds : []),
           ].map(normalizeProjectId),
         ),
       ),
-    [ownActiveSendReceiveProjects, syncActivity.isSyncing, syncActivity.projectIds],
+    [syncQueue.runningProjectIds, syncActivity.isSyncing, syncActivity.projectIds],
   );
+  const isRunReported = syncActivity.isSyncing || syncQueue.runningProjectIds.length > 0;
   const isOwnRequestRunning = useMemo(() => {
-    if (!syncActivity.isSyncing) return isOwnSendReceiveInProgress;
-    const runningIds = new Set(syncActivity.projectIds.map(normalizeProjectId));
+    // Before the backend reports a run, any open request of Home's own pauses the local list.
+    if (!isRunReported) return isOwnSendReceiveInProgress;
+    const runningIds = new Set(activeSendReceiveProjects);
     return ownActiveSendReceiveProjects.some((id) => runningIds.has(normalizeProjectId(id)));
   }, [
-    syncActivity.isSyncing,
-    syncActivity.projectIds,
+    isRunReported,
+    activeSendReceiveProjects,
     ownActiveSendReceiveProjects,
     isOwnSendReceiveInProgress,
   ]);
@@ -281,10 +286,12 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
    */
   const unreportedRequestsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    [...syncActivity.projectIds, ...syncQueue.waitingProjectIds].forEach((id) =>
-      unreportedRequestsRef.current.delete(normalizeProjectId(id)),
-    );
-  }, [syncActivity.projectIds, syncQueue.waitingProjectIds]);
+    [
+      ...syncActivity.projectIds,
+      ...syncQueue.waitingProjectIds,
+      ...syncQueue.runningProjectIds,
+    ].forEach((id) => unreportedRequestsRef.current.delete(normalizeProjectId(id)));
+  }, [syncActivity.projectIds, syncQueue.waitingProjectIds, syncQueue.runningProjectIds]);
 
   // Every click is handed to the sync queue, which starts it right away or keeps it waiting for the
   // next run. A sync that is already running does not refuse a click: it queues the project's next
