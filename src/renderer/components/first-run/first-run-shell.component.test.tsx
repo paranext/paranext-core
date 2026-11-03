@@ -667,6 +667,22 @@ describe('FirstRunShell', () => {
     expect(received).toBe(true);
   });
 
+  it('tells the steps whether a first sync is required', () => {
+    let received: boolean | undefined;
+    const Spy = ({ firstSyncRequired }: FirstRunStepProps) => {
+      received = firstSyncRequired;
+      return undefined;
+    };
+    render(
+      <FirstRunShell
+        entryStep="syncConsent"
+        firstSyncRequired
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, syncConsent: Spy }}
+      />,
+    );
+    expect(received).toBe(true);
+  });
+
   it('forwards allowContinueWithoutRegistration to the entry step component', () => {
     let received: boolean | undefined = false;
     const Spy = ({ allowContinueWithoutRegistration }: FirstRunStepProps) => {
