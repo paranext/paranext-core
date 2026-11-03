@@ -19,6 +19,7 @@ example after a ParatextData upgrade or a fixture change), run from `c-sharp-tes
 PDP_USX_CAPTURE=1 dotnet test --filter FullyQualifiedName~UsfmUsxRoundTripCorpusSweepTests
 ```
 
-The editor -> file -> editor direction has its own captures beside this folder: `../editor-usx/`
-(what the editor writes) and `../editor-usx-returned/` (what the provider serves back after
-writing it). See `../editor-usx/README.md`.
+The editor -> file -> editor direction has its own captures in paranext-core, beside this folder
+in `lib/platform-bible-utils/src/scripture/usj-reader-writer-test-data/`: `editor-usx/` (what the
+editor writes) and `editor-usx-returned/` (what the provider serves back after writing it). They
+are not vendored; see `editor-usx/README.md` there.
