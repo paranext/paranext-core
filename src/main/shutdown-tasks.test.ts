@@ -9,10 +9,13 @@ import {
 import { logger } from '@shared/services/logger.service';
 import { RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE } from '@main/scheduled-session-sync.util';
 import type { SettingTypes } from 'papi-shared-types';
+import { FAILED_PRECONDITION, INTERNAL, newPlatformError } from 'platform-bible-utils';
 import {
   CANCELLED_SYNC_POLL_INTERVAL_MS,
   CANCELLED_SYNC_STOP_WAIT_MS,
   DROP_SYNC_QUEUE_TIMEOUT_MS,
+  SHUTDOWN_SYNC_BUSY_RETRY_BUDGET_MS,
+  SHUTDOWN_SYNC_BUSY_RETRY_INTERVAL_MS,
   performShutdownTasks,
   performWindowCloseTasks,
   startWindowCloseTasksWithoutWaiting,
@@ -352,6 +355,99 @@ describe('performShutdownTasks', () => {
       expect(indexOfCommand('getSyncActivity')).toBeLessThan(indexOfCommand('cancelSync'));
       expect(indexOfCommand('sendReceiveProjects')).toBeGreaterThan(indexOfCommand('cancelSync'));
       expect(mockLoggerWarn).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('the quit sync while the backend reports busy', () => {
+    const commandsSent = () => mockRequestNoRetry.mock.calls.map(([command]) => String(command));
+    const sendCount = () =>
+      commandsSent().filter((command) => command.endsWith('.sendReceiveProjects')).length;
+
+    /**
+     * A writable editor is open; `getSyncActivity` reads `isSyncing`; each `sendReceiveProjects`
+     * call runs the next outcome (the last one repeats). An outcome is an error to reject with, or
+     * `undefined` to resolve.
+     */
+    function stubSendOutcomes(outcomes: unknown[], isSyncing = false) {
+      stubSettings({ mode: 'simple' });
+      mockGetOpenWebViews.mockResolvedValue(
+        openWebViews([
+          {
+            webViewType: 'platformScriptureEditor.react',
+            state: { isReadOnly: false },
+            projectId: 'p1',
+          },
+        ]),
+      );
+      let sends = 0;
+      mockRequestNoRetry.mockImplementation(async (command: string) => {
+        if (command.endsWith('.getSyncActivity')) return { isSyncing, projectIds: [] };
+        if (!command.endsWith('.sendReceiveProjects')) return undefined;
+        const outcome = outcomes[Math.min(sends, outcomes.length - 1)];
+        sends += 1;
+        if (outcome) throw outcome;
+        return undefined;
+      });
+    }
+
+    async function runQuit(advanceMs: number) {
+      vi.useFakeTimers();
+      try {
+        const shutdownPromise = performShutdownTasks();
+        await vi.advanceTimersByTimeAsync(advanceMs);
+        await expect(shutdownPromise).resolves.toBeUndefined();
+      } finally {
+        vi.useRealTimers();
+      }
+    }
+
+    it('retries while the backend reports busy and ends synced', async () => {
+      stubSendOutcomes([new Error('Sync is busy (SYNC_BUSY)'), undefined]);
+      await runQuit(SHUTDOWN_SYNC_BUSY_RETRY_INTERVAL_MS);
+      expect(sendCount()).toBe(2);
+      expect(mockLoggerInfo).toHaveBeenCalledWith('Sync on shutdown complete');
+      expect(mockLoggerWarn).not.toHaveBeenCalled();
+      expect(mockLoggerDebug).toHaveBeenCalledWith(expect.stringContaining('busy'));
+    });
+
+    it('retries after a cancelled sync that read idle again but still holds the lock', async () => {
+      stubSendOutcomes([new Error('Sync is busy (SYNC_BUSY)'), undefined], true);
+      // The first read says syncing, then the stub keeps saying so: the stop wait runs out first
+      await runQuit(CANCELLED_SYNC_STOP_WAIT_MS + SHUTDOWN_SYNC_BUSY_RETRY_INTERVAL_MS);
+      expect(sendCount()).toBe(2);
+    });
+
+    it('stops retrying at the busy budget and ends unreachable', async () => {
+      stubSendOutcomes([new Error('Sync is busy (SYNC_BUSY)')]);
+      await runQuit(SHUTDOWN_SYNC_BUSY_RETRY_BUDGET_MS * 2);
+      const sentAtBudget = sendCount();
+      expect(sentAtBudget).toBeGreaterThan(1);
+      expect(sentAtBudget).toBeLessThanOrEqual(
+        SHUTDOWN_SYNC_BUSY_RETRY_BUDGET_MS / SHUTDOWN_SYNC_BUSY_RETRY_INTERVAL_MS + 1,
+      );
+      expect(mockLoggerWarn).toHaveBeenCalledWith(
+        expect.stringContaining('quit sync could not run: backend busy; unsent changes stay local'),
+      );
+      expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('p1'));
+      expect(mockLoggerInfo).not.toHaveBeenCalledWith('Sync on shutdown complete');
+    });
+
+    it('does not retry an INTERNAL "not responding" failure', async () => {
+      stubSendOutcomes([newPlatformError('Sync is not responding', INTERNAL)]);
+      await runQuit(SHUTDOWN_SYNC_BUSY_RETRY_BUDGET_MS);
+      expect(sendCount()).toBe(1);
+    });
+
+    it('does not retry a plain failure', async () => {
+      stubSendOutcomes([new Error('x')]);
+      await runQuit(SHUTDOWN_SYNC_BUSY_RETRY_BUDGET_MS);
+      expect(sendCount()).toBe(1);
+    });
+
+    it('does not retry a FAILED_PRECONDITION failure without the marker', async () => {
+      stubSendOutcomes([newPlatformError('Project is locked', FAILED_PRECONDITION)]);
+      await runQuit(SHUTDOWN_SYNC_BUSY_RETRY_BUDGET_MS);
+      expect(sendCount()).toBe(1);
     });
   });
 

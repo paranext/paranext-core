@@ -23,6 +23,7 @@ import {
 } from '@main/scheduled-session-sync.util';
 import type { SettingTypes } from 'papi-shared-types';
 import { AsyncVariable, getErrorMessage, wait } from 'platform-bible-utils';
+import { isSyncBusyError } from 'platform-bible-utils/experimental';
 
 /**
  * Behaviour-driving outcome of a bounded shutdown sync. The extension reports its own result, so
@@ -457,6 +458,15 @@ async function drainInFlightWindowCloseSyncs(): Promise<void> {
  */
 export const CANCELLED_SYNC_STOP_WAIT_MS = 5_000;
 
+/** How long the quit sync waits between attempts while the backend refuses it as busy */
+export const SHUTDOWN_SYNC_BUSY_RETRY_INTERVAL_MS = 250;
+
+/**
+ * How long the quit sync keeps retrying a busy refusal before giving up. Its own budget, inside the
+ * {@link AUTO_SYNC_MAX_DURATION_MS} that bounds the whole quit sync.
+ */
+export const SHUTDOWN_SYNC_BUSY_RETRY_BUDGET_MS = 30_000;
+
 /** How often a quit asks whether the sync it cancelled has stopped yet */
 export const CANCELLED_SYNC_POLL_INTERVAL_MS = 250;
 
@@ -491,10 +501,14 @@ async function isSyncInProgress(timeoutMs: number): Promise<boolean> {
 
 /**
  * Waits until the sync just cancelled has stopped, or {@link CANCELLED_SYNC_STOP_WAIT_MS} has passed
- * — then the quit sync goes ahead anyway, as it would without this wait, and may be refused.
+ * — then the quit sync goes ahead anyway, as it would without this wait.
+ *
+ * The backend can keep its lock for a moment after the activity reads idle, so even a stopped sync
+ * does not guarantee the quit sync is accepted; {@link sendQuitSyncWhileBusy} retries on the busy
+ * marker.
  *
  * Nothing can start a new run during this wait: the sync queue was dropped before the cancel (see
- * {@link dropSyncQueue}), so once the cancelled run stops, the lock is free for the quit sync.
+ * {@link dropSyncQueue}), so no other run competes for the lock with the quit sync.
  */
 async function waitForCancelledSyncToStop(): Promise<void> {
   let isWaitOver = false;
@@ -517,6 +531,42 @@ async function waitForCancelledSyncToStop(): Promise<void> {
     isWaitOver = true;
     clearTimeout(timeout);
   }
+}
+
+/**
+ * Sends the quit sync, retrying every {@link SHUTDOWN_SYNC_BUSY_RETRY_INTERVAL_MS} while the backend
+ * refuses it with the busy marker, for at most {@link SHUTDOWN_SYNC_BUSY_RETRY_BUDGET_MS}. Any other
+ * failure rejects at once. Stops without sending again once `isAbandoned` reports that the quit
+ * stopped waiting for this sync.
+ */
+async function sendQuitSyncWhileBusy(
+  projectIds: string[],
+  isAbandoned: () => boolean,
+): Promise<unknown> {
+  const deadline = Date.now() + SHUTDOWN_SYNC_BUSY_RETRY_BUDGET_MS;
+  const attempt = async (): Promise<unknown> => {
+    try {
+      return await networkService.requestNoRetry(
+        serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.sendReceiveProjects'),
+        projectIds,
+      );
+    } catch (e) {
+      if (!isSyncBusyError(e)) throw e;
+      if (Date.now() + SHUTDOWN_SYNC_BUSY_RETRY_INTERVAL_MS > deadline) {
+        logger.warn(
+          `quit sync could not run: backend busy; unsent changes stay local (projects ${projectIds.join(', ')})`,
+        );
+        throw e;
+      }
+      logger.debug(
+        `The backend is busy; retrying the quit sync in ${SHUTDOWN_SYNC_BUSY_RETRY_INTERVAL_MS} ms`,
+      );
+      await wait(SHUTDOWN_SYNC_BUSY_RETRY_INTERVAL_MS);
+      if (isAbandoned()) throw e;
+      return attempt();
+    }
+  };
+  return attempt();
 }
 
 async function performSimpleModeShutdownSync(): Promise<void> {
@@ -605,12 +655,12 @@ async function performSimpleModeShutdownSync(): Promise<void> {
   logger.info(`Syncing projects on shutdown: ${projectIds.join(', ')}`);
   // `sendReceiveProjects` takes the whole list in one call, so every open editor's project goes out
   // as a single S/R under one bounded wait rather than N serial syncs racing the shutdown timeout.
+  /** Set once the bounded wait has settled, so a retry still pending never sends a late sync */
+  let isQuitSyncAbandoned = false;
   const settlement = await runBoundedShutdownSync('shutdown sync', () =>
-    networkService.requestNoRetry(
-      serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.sendReceiveProjects'),
-      projectIds,
-    ),
+    sendQuitSyncWhileBusy(projectIds, () => isQuitSyncAbandoned),
   );
+  isQuitSyncAbandoned = true;
   // The nothing-to-do states already returned above, so reaching here means at least one writable
   // project was selected and a resolution is a completed S/R — of the projects that were found. A
   // window that never answered keeps this from being reported as a clean, complete sync.
