@@ -89,7 +89,7 @@ describe('shouldOpenInlineMarkersMenu', () => {
 });
 
 describe('shouldClaimInlineMarkersMenuTrigger', () => {
-  const claimBase = {
+  const claimBase: Parameters<typeof shouldClaimInlineMarkersMenuTrigger>[0] = {
     key: INLINE_MARKERS_MENU_TRIGGER,
     isMenuShown: false,
     isEditorFocused: true,
