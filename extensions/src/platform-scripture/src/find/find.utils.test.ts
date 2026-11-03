@@ -10,6 +10,8 @@ import {
   armBoundedWait,
   buildReplacedAllMessage,
   buildSearchRegex,
+  buildSkippedMatchMessage,
+  buildWordEdgeTests,
   callControllerSafely,
   classifyPollAttempt,
   gateStartSearch,
@@ -83,6 +85,48 @@ describe('applyPreserveCase', () => {
 
   it('upper-cases a multi-word replacement when match is all-caps', () => {
     expect(applyPreserveCase('FOO BAR', 'hello world')).toBe('HELLO WORLD');
+  });
+
+  it('upper-cases only the text of a replacement holding markers', () => {
+    expect(applyPreserveCase('ABRAHAM. ABRAHAM', 'Abram. \\p \\v 2 Abram')).toBe(
+      'ABRAM. \\p \\v 2 ABRAM',
+    );
+  });
+
+  it('leaves a verse letter, a closer, and an attribute as typed', () => {
+    expect(applyPreserveCase('LORD', '\\v 2a \\w lord|lemma="adon"\\w* x')).toBe(
+      '\\v 2a \\w LORD|lemma="adon"\\w* X',
+    );
+  });
+
+  it('title-cases the first text of a replacement that starts with a marker', () => {
+    expect(applyPreserveCase('Lord', '\\nd lord\\nd* god')).toBe('\\nd Lord\\nd* god');
+  });
+
+  // Adlam's letters are outside the Basic Multilingual Plane, so each is two UTF-16 code units
+  describe('in a cased script outside the Basic Multilingual Plane', () => {
+    const CAPITAL_ALIF = '\u{1E900}';
+    const CAPITAL_DAALI = '\u{1E901}';
+    const SMALL_ALIF = '\u{1E922}';
+    const SMALL_DAALI = '\u{1E923}';
+
+    it('title-cases the replacement when the match starts with a capital', () => {
+      expect(applyPreserveCase(`${CAPITAL_ALIF}${SMALL_ALIF}`, `${SMALL_DAALI}${SMALL_ALIF}`)).toBe(
+        `${CAPITAL_DAALI}${SMALL_ALIF}`,
+      );
+    });
+
+    it('upper-cases the replacement when the match is all capitals', () => {
+      expect(
+        applyPreserveCase(`${CAPITAL_ALIF}${CAPITAL_DAALI}`, `${SMALL_DAALI}${SMALL_ALIF}`),
+      ).toBe(`${CAPITAL_DAALI}${CAPITAL_ALIF}`);
+    });
+
+    it('leaves the replacement as typed when the match starts with a small letter', () => {
+      expect(applyPreserveCase(`${SMALL_ALIF}${CAPITAL_ALIF}`, `${SMALL_DAALI}${SMALL_ALIF}`)).toBe(
+        `${SMALL_DAALI}${SMALL_ALIF}`,
+      );
+    });
   });
 });
 
@@ -335,6 +379,95 @@ describe('buildSearchRegex – word restrictions', () => {
     );
     // 'pre' is at the start of 'preview', not the end
     expect(matchAll(regex, 'preview')).toEqual([]);
+  });
+});
+
+describe('buildSkippedMatchMessage', () => {
+  const STRINGS = {
+    '%webView_find_replace_skippedOneEndedMarker%': 'one-ended {reference} ("{text}")',
+    '%webView_find_replace_skippedChapterMarker%': 'chapter {reference} ("{text}")',
+    '%webView_find_replace_skippedStructureProtected%': 'structure {reference} ("{text}")',
+  };
+  const verseRef = { book: 'GEN', chapterNum: 1, verseNum: 3 };
+  const result = { text: 'Lord God', start: { verseRef } };
+  const BOOKS = new Map([['GEN', { localizedId: 'GÉN', localizedName: 'Génesis' }]]);
+
+  it.each([
+    ['oneEndedMarker', 'one-ended Génesis 1:3 ("Lord God")'],
+    ['chapterMarker', 'chapter Génesis 1:3 ("Lord God")'],
+    ['structureProtected', 'structure Génesis 1:3 ("Lord God")'],
+  ] as const)('says where and what for %s', (action, expected) => {
+    expect(buildSkippedMatchMessage(action, result, STRINGS, BOOKS)).toBe(expected);
+  });
+
+  it('uses the verse as written when the reference has one', () => {
+    const start = { verseRef: { ...verseRef, verse: '3-4' } };
+    expect(buildSkippedMatchMessage('chapterMarker', { ...result, start }, STRINGS, BOOKS)).toBe(
+      'chapter Génesis 1:3-4 ("Lord God")',
+    );
+  });
+
+  it('falls back to the book ID for a book with no localized data', () => {
+    expect(buildSkippedMatchMessage('chapterMarker', result, STRINGS, new Map())).toBe(
+      'chapter GEN 1:3 ("Lord God")',
+    );
+  });
+});
+
+describe('buildWordEdgeTests', () => {
+  const options = (searchString: string, wordRestriction: FindOptions['wordRestriction']) => ({
+    searchString,
+    wordRestriction,
+  });
+
+  it('tests both ends of a whole word', () => {
+    const { start, end } = buildWordEdgeTests(options('Isaac', 'wholeWord'), DEFAULT_CATEGORIZER);
+    expect(start).toBeDefined();
+    expect(end).toBeDefined();
+  });
+
+  it('tests only the start for startOfWord, and only the end for endOfWord', () => {
+    expect(
+      buildWordEdgeTests(options('a', 'startOfWord'), DEFAULT_CATEGORIZER).end,
+    ).toBeUndefined();
+    expect(
+      buildWordEdgeTests(options('a', 'endOfWord'), DEFAULT_CATEGORIZER).start,
+    ).toBeUndefined();
+  });
+
+  it('tests nothing with no word restriction', () => {
+    expect(buildWordEdgeTests(options('a', 'none'), DEFAULT_CATEGORIZER)).toEqual({});
+    expect(buildWordEdgeTests(options('a', undefined), DEFAULT_CATEGORIZER)).toEqual({});
+  });
+
+  it('tests nothing for a script that does not delimit words with spaces', () => {
+    expect(buildWordEdgeTests(options('神', 'wholeWord'), DEFAULT_CATEGORIZER)).toEqual({});
+  });
+
+  it('builds tests that agree with the lookarounds the regex would carry', () => {
+    const { end } = buildWordEdgeTests(options('Isaac', 'wholeWord'), DEFAULT_CATEGORIZER);
+    if (!end) throw new Error('Expected an end test');
+    const inWord = new RegExp(end.source, 'uy');
+    inWord.lastIndex = 5;
+    expect(inWord.test('IsaacAnd')).toBe(false);
+    const atWordEnd = new RegExp(end.source, 'uy');
+    atWordEnd.lastIndex = 5;
+    expect(atWordEnd.test('Isaac And')).toBe(true);
+  });
+
+  it('leaves the assertions out of a regex told not to carry them, and keeps its flags', () => {
+    const findOptions: FindOptions = {
+      searchString: 'Isaac',
+      scope: [{ bookId: 'GEN' }],
+      caseInsensitive: false,
+      wordRestriction: 'wholeWord',
+    };
+    const asserted = buildSearchRegex(findOptions, DEFAULT_CATEGORIZER);
+    const unasserted = buildSearchRegex(findOptions, DEFAULT_CATEGORIZER, false);
+
+    expect('xIsaacx'.match(asserted)).toBeNull();
+    expect('xIsaacx'.match(unasserted)).not.toBeNull();
+    expect(unasserted.flags).toBe(asserted.flags);
   });
 });
 
