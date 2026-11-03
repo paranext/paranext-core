@@ -1,8 +1,8 @@
 /**
  * Overlays whose close may hand focus back to the opener only when focus sits inside the overlay's
- * own content at that moment. A close that qualifies (Escape, the opener's own dismiss, app
- * deactivation) is marked here before the overlay is resolved; the overlay service consumes the
- * mark when it settles the overlay.
+ * own content at that moment. A close that qualifies (Escape, a click on a centered command
+ * palette's backdrop, the opener's own dismiss, app deactivation) is marked here before the overlay
+ * is resolved; the overlay service consumes the mark when it settles the overlay.
  */
 
 import { getOverlayById } from './overlay-store';

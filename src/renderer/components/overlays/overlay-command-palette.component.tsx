@@ -116,6 +116,14 @@ export type OverlayCommandPalettePresentationalProps = {
    */
   onEscape?: () => void;
   /**
+   * Called when the user clicks the backdrop of a centered palette, just before {@link onDismiss}.
+   * The backdrop covers the whole window, so the click never reaches what the user aimed at; this
+   * lets the owner treat it like an Escape close rather than a click elsewhere.
+   *
+   * @experimental This property is unstable and may change or disappear without notice
+   */
+  onBackdropClick?: () => void;
+  /**
    * Id of the overlay this renders, written to the content as `data-overlay-id` so the overlay
    * service can tell whether focus is inside this overlay's own content rather than another's.
    *
@@ -378,6 +386,7 @@ export function OverlayCommandPalettePresentational({
   onSelect,
   onDismiss,
   onEscape,
+  onBackdropClick,
   overlayId,
   onFilterTextChange,
   onSelectedIndexChange,
@@ -736,9 +745,18 @@ export function OverlayCommandPalettePresentational({
         data-overlay-command-palette-backdrop
         className="tw:fixed tw:inset-0 tw:flex tw:items-start tw:justify-center"
         style={{ zIndex: Z_INDEX_OVERLAY, paddingTop: '20vh' }}
+        // A press on the backdrop must not move focus: it would leave the palette's input (or, for
+        // a passive palette, the requesting web view) for the document body, and the overlay
+        // service's focus tracking would then close the palette before the click below could ask
+        // for focus to go back
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget) e.preventDefault();
+        }}
         onClick={(e) => {
           // Dismiss only when clicking the backdrop itself, not the palette content
-          if (e.target === e.currentTarget) onDismiss();
+          if (e.target !== e.currentTarget) return;
+          onBackdropClick?.();
+          onDismiss();
         }}
       >
         <div style={{ width: resolvedMaxWidth, maxWidth: resolvedMaxWidth }}>{paletteContent}</div>
@@ -940,7 +958,11 @@ export function OverlayCommandPalette({ overlay }: OverlayCommandPaletteProps) {
     resolveAndRemoveOverlay(overlay.id, overlay.type, undefined);
   }, [overlay]);
 
-  const handleEscape = useCallback(() => {
+  /**
+   * Marks the coming dismissal as one that returns focus to the requester: an Escape, or a click on
+   * the centered palette's backdrop, which swallows the click so the user put focus nowhere else
+   */
+  const handleFocusReturningDismissal = useCallback(() => {
     // Radix reports Escape first and the dismissal settles the overlay; a later report from the
     // key handler must not leave a mark behind
     if (hasResolved.current) return;
@@ -1012,7 +1034,8 @@ export function OverlayCommandPalette({ overlay }: OverlayCommandPaletteProps) {
       selectedIndex={overlay.selectedIndex}
       onSelect={handleSelect}
       onDismiss={handleDismiss}
-      onEscape={handleEscape}
+      onEscape={handleFocusReturningDismissal}
+      onBackdropClick={handleFocusReturningDismissal}
       overlayId={overlay.id}
       onFilterTextChange={handleFilterTextChange}
       onSelectedIndexChange={handleSelectedIndexChange}

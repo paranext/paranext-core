@@ -123,6 +123,49 @@ describe('OverlayCommandPalettePresentational', () => {
       expect(calls).toEqual(['dismiss']);
     });
 
+    it('reports a backdrop click before it dismisses, and does not report Escape as one', () => {
+      const calls: string[] = [];
+
+      const { container } = render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={vi.fn()}
+          onDismiss={() => calls.push('dismiss')}
+          onBackdropClick={() => calls.push('backdrop')}
+        />,
+      );
+
+      fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
+      expect(calls).toEqual(['dismiss']);
+
+      calls.length = 0;
+      const backdrop = container.querySelector('[data-overlay-command-palette-backdrop]');
+      expect(backdrop).toBeInTheDocument();
+      // querySelector returns Element | null; the expect above guards null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      fireEvent.click(backdrop as Element);
+      expect(calls).toEqual(['backdrop', 'dismiss']);
+    });
+
+    it('keeps focus where it is when the backdrop is pressed, but not when the palette is', () => {
+      const { container } = render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+      const backdrop = container.querySelector('[data-overlay-command-palette-backdrop]');
+      expect(backdrop).toBeInTheDocument();
+
+      // fireEvent returns false when a handler called preventDefault, which stops the press from
+      // moving focus off the palette or the requesting web view.
+      // querySelector returns Element | null; the expect above guards null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      expect(fireEvent.mouseDown(backdrop as Element)).toBe(false);
+      expect(fireEvent.mouseDown(screen.getByRole('combobox'))).toBe(true);
+    });
+
     it('writes the overlay id to its content', () => {
       const { container } = render(
         <OverlayCommandPalettePresentational
@@ -1681,6 +1724,24 @@ describe('OverlayCommandPalette (store-connected)', () => {
     render(<OverlayCommandPalette overlay={picked} />);
     fireEvent.click(screen.getByText('Save File'));
     expect(takeOverlayFocusReturnMark(picked.id)).toBe(false);
+  });
+
+  it('marks the overlay for a focus return on a backdrop click and resolves it with undefined', () => {
+    const entry = createPaletteEntry();
+    addOverlay(entry);
+    const { container } = render(<OverlayCommandPalette overlay={entry} />);
+    const backdrop = container.ownerDocument.querySelector(
+      '[data-overlay-command-palette-backdrop]',
+    );
+    expect(backdrop).toBeInTheDocument();
+
+    // querySelector returns Element | null; the expect above guards null, but TS can't narrow it
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    fireEvent.click(backdrop as Element);
+
+    expect(entry.resolve).toHaveBeenCalledWith(undefined);
+    expect(getOverlayById(entry.id)).toBeUndefined();
+    expect(takeOverlayFocusReturnMark(entry.id)).toBe(true);
   });
 
   it('never settles the store again after the first resolve (later select/dismiss are no-ops)', () => {
