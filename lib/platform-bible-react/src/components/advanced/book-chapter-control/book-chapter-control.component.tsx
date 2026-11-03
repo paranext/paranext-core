@@ -96,10 +96,11 @@ const POPUP_TRIGGER_SELECTOR = '[aria-haspopup]:not([aria-haspopup="false"]), [r
  * {@link POPUP_TRIGGER_SELECTOR}), rather than a text field the user types into
  */
 function isPopupTrigger(target: Element): boolean {
+  // A text field inside a combobox wrapper (the older ARIA combobox pattern) is still a text field
+  if (target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])'))
+    return false;
   const trigger = target.closest(POPUP_TRIGGER_SELECTOR);
   if (!(trigger instanceof HTMLElement)) return false;
-  if (trigger.isContentEditable || trigger instanceof HTMLInputElement) return false;
-  if (trigger instanceof HTMLTextAreaElement) return false;
   if (trigger.getAttribute('aria-disabled') === 'true') return false;
   return !(trigger instanceof HTMLButtonElement && trigger.disabled);
 }
@@ -532,6 +533,8 @@ export function BookChapterControl({
   const isCompactAndOpen = !modal && isCommandOpen && isCommandListHidden;
   useEffect(() => {
     if (!isCompactAndOpen) return undefined;
+    // A flag left over from a close whose focus handling never ran must not swallow a later one
+    isClosingForOtherPopupRef.current = false;
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (!POPUP_OPENING_KEYS.has(event.key) || event.repeat) return;
       if (event.ctrlKey || event.altKey || event.metaKey) return;
