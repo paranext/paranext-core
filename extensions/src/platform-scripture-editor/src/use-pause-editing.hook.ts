@@ -24,19 +24,10 @@ const CARET_KEYS = new Set([
  * The paste chords count because the editor takes them itself and reads the clipboard, which raises
  * no `paste` event to hold off, and whose result could land in the new chapter. The cut chord
  * counts because the editor takes it itself and dispatches its cut command, with no `cut` event. As
- * in the editor, Alt with either makes it some other chord, and so does Shift with the cut chord.
- * Every other chord is let through so the application's shortcuts keep working. A paste the browser
- * runs itself is held off as the `paste` event it raises, and the Edit flyout's Paste is refused by
- * the web view's read-only check while a chapter loads. Nothing holds off the right-click menu's
- * Paste or Cut; what they do is not saved, and cut text returns when the new chapter loads.
- *
- * The hold-off starts after the chapter's last save. The chapter-switch flush runs in the commit
- * that changes the chapter selector, the loading flag is set in an effect after it, and
- * {@link usePauseEditing} attaches its listeners a commit later. So a paste or keystroke in that
- * gap, or a clipboard read that lands after the flush, is not held off and is not saved
- * (`isEditorContentForChapter` refuses it): it shows in the chapter being left until the new one
- * replaces it. A clipboard read started in that gap can also outlast a short load, and then lands
- * in the new chapter and is saved there.
+ * in the editor, Alt with either makes it some other chord, and so does Shift with the cut chord;
+ * unlike the editor, which takes only its platform's modifier, either Ctrl or Cmd counts here, as
+ * for the other chords, so a little more is held off than the editor would act on. Every other
+ * chord is let through so the application's shortcuts keep working.
  */
 function isHeldOffKey(event: KeyboardEvent): boolean {
   if (event.isComposing || CARET_KEYS.has(event.key)) return true;
@@ -73,6 +64,18 @@ function isHeldOffKey(event: KeyboardEvent): boolean {
  * stays editable and focused, and the edits themselves are stopped: caught on the way down to the
  * editor root, above the listeners the editor registers there, and cancelled so the browser does
  * not make them either. Copying and the application's shortcuts go on working.
+ *
+ * A paste the browser runs itself is held off as the `paste` event it raises, and the Edit flyout's
+ * Paste is refused by the web view's read-only check while a chapter loads. Nothing holds off the
+ * right-click menu's Paste or Cut; what they do is not saved, and cut text returns when the new
+ * chapter loads.
+ *
+ * The hold-off starts after the chapter's last save. The chapter-switch flush runs in the commit
+ * that changes the chapter selector, the loading flag is set in an effect after it, and this hook
+ * attaches its listeners a commit later. So a paste or keystroke in that gap, or a clipboard read
+ * that lands after the flush, is not held off and is not saved (`isEditorContentForChapter` refuses
+ * it): it shows in the chapter being left until the new one replaces it. A clipboard read started
+ * in that gap can also outlast a short load, and then lands in the new chapter and is saved there.
  *
  * @param getEditorRoot Returns the editor's root element, or `undefined` while there is none.
  * @param isPaused Whether edits are held off now.
