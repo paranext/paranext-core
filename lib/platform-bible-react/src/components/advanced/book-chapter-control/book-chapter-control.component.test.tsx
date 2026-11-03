@@ -2130,6 +2130,15 @@ describe('BookChapterControl compact mode stays open', () => {
           <button type="button" aria-haspopup="dialog">
             other dialog
           </button>
+          {/* The older combobox pattern: the role sits on a wrapper around the text field */}
+          <div
+            role="combobox"
+            aria-expanded={false}
+            aria-controls="wrapped-search-suggestions"
+            aria-haspopup="listbox"
+          >
+            <input aria-label="wrapped search" />
+          </div>
         </TooltipProvider>,
       );
     }
@@ -2200,6 +2209,19 @@ describe('BookChapterControl compact mode stays open', () => {
       expect(isPickerOpen()).toBe(true);
       // The keys went to the search box, not anywhere focus was pulled back to
       expect(document.activeElement).toBe(otherSearch);
+    });
+
+    test('typing in a search box inside a combobox wrapper leaves it open', async () => {
+      const user = await openCompactBesideOtherDropdowns();
+      const wrappedSearch = screen.getByRole('textbox', { name: 'wrapped search', hidden: true });
+      act(() => {
+        wrappedSearch.focus();
+      });
+      expect(document.activeElement).toBe(wrappedSearch);
+      await user.keyboard(' {Enter}{ArrowDown}');
+      await settle();
+      expect(isPickerOpen()).toBe(true);
+      expect(document.activeElement).toBe(wrappedSearch);
     });
 
     test('closing it from the keyboard leaves focus on the other trigger', async () => {
