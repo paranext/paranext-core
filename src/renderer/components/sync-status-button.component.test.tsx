@@ -1946,7 +1946,7 @@ describe('SyncStatusButton — popover and cancel', () => {
     'ignores a late "$label" answer once the sync it was asked for is over and the next one began',
     async ({ answer }) => {
       const fireSyncStateChanged = captureSyncStateEvent();
-      let resolvePrompt: ((value: boolean) => void) | undefined;
+      const promptResolvers: ((value: boolean) => void)[] = [];
       let getSyncStateCalls = 0;
       mockCommands({
         'paratextBibleSendReceive.getSyncState': () => {
@@ -1958,7 +1958,7 @@ describe('SyncStatusButton — popover and cancel', () => {
         },
         'paratextBibleSendReceive.cancelSyncPrompt': () =>
           new Promise<boolean>((resolve) => {
-            resolvePrompt = resolve;
+            promptResolvers.push(resolve);
           }),
       });
       mockProjectNames({ a: 'AAA', b: 'BBB' });
@@ -1976,22 +1976,23 @@ describe('SyncStatusButton — popover and cancel', () => {
       await waitFor(() => {
         expect(screen.getByTestId('toolbar-sync-button')).toHaveTextContent('BBB');
       });
-      const cancel = screen.getByTestId('toolbar-sync-cancel-button');
-      expect(cancel).toHaveTextContent('Test Cancel sync');
-      expect(cancel).toHaveAttribute('aria-disabled', 'false');
-
-      if (!resolvePrompt) throw new Error('cancelSyncPrompt was never called');
-      await act(async () => {
-        resolvePrompt?.(answer);
-      });
-
-      expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent(
-        'Test Cancel sync',
-      );
+      // The second sync's own prompt is open, so its Cancel is disarmed and still says "Cancel sync".
+      fireEvent.click(screen.getByTestId('toolbar-sync-cancel-button'));
+      await waitFor(() => expect(cancelPromptCallCount()).toBe(2));
       expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveAttribute(
         'aria-disabled',
-        'false',
+        'true',
       );
+
+      // The first sync's prompt answers late. Its answer says nothing about the second sync, so it
+      // must neither re-arm the button (keep syncing) nor mark it as cancelling (cancel).
+      await act(async () => {
+        promptResolvers[0]?.(answer);
+      });
+
+      const cancel = screen.getByTestId('toolbar-sync-cancel-button');
+      expect(cancel).toHaveTextContent('Test Cancel sync');
+      expect(cancel).toHaveAttribute('aria-disabled', 'true');
     },
   );
 
