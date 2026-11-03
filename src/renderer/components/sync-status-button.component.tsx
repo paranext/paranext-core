@@ -367,9 +367,9 @@ export function SyncStatusButton() {
   // not cover" is not evidence of a different sync. A pending cancel is therefore settled only by
   // the status leaving `syncing`, by the popover being reopened, and by a new run's epoch (below),
   // at the cost of a genuinely new overlapping sync keeping a dim "Cancelling…" until the whole
-  // union goes idle or the backend opens a new run. That is the safe
-  // half of the trade: the alternative offers a live Cancel while a cancel is still in flight.
-  // Settling it positively needs a monotonic sync-episode id in `SyncState` (`adr-toolbar-sync-status-is-local` follow-up 4).
+  // union goes idle or the backend opens a new run. That is the safe half of the trade: the
+  // alternative offers a live Cancel while a cancel is still in flight. Settling it positively needs
+  // a monotonic sync-episode id in `SyncState` (`adr-toolbar-sync-status-is-local` follow-up 4).
   //
   // The one positive signal available is `runEpoch`: the backend's run ended and another opened.
   // When the queue starts the next run as soon as a cancelled one ends, `status` never leaves
