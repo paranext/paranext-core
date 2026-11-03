@@ -10808,9 +10808,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     is running is queued for the next run; clicking a waiting row removes it.
   - **A run never mixes the two sync kinds** — plain (`sendReceiveProjects`: only the projects
     asked for) and with-connected (`syncProjects`: also each project's connected projects and
-    resources). A run takes the kind of the oldest waiting request and only the projects requested
-    with that kind; the other kind runs next. A project requested both ways runs once, in the oldest
-    request's kind.
+    resources). A project is of the with-connected kind while any waiting request that includes
+    connected projects names it; that run also satisfies the project's plain requests, while a plain
+    run never satisfies a request that includes connected projects. The oldest request with a
+    project still unplanned picks the next run's kind, and that run takes every waiting project of
+    that kind; the other kind runs next.
   - **Results are per project.** `requestSync` resolves with the results for the ids it asked about
     when the run containing them ends, and rejects if the user removed them or they were dropped at
     quit.
