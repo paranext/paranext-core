@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import * as React from 'react';
 import { render } from '@testing-library/react';
 import type { WebViewProps } from '@papi/core';
@@ -21,7 +21,20 @@ const {
   capturedGetResourceChapter,
   capturedResourceCopyLimit,
   capturedSetUserModelTexts,
+  capturedAllowInvisibleCharacters,
+  allowInvisibleCharactersSetting,
 } = vi.hoisted(() => ({
+  /** Collects the `allowInvisibleCharacters` prop the web view passes on each render. */
+  capturedAllowInvisibleCharacters: vi.fn(),
+  /** The project's `allowInvisibleCharacters` setting, as each test wants it read. */
+  allowInvisibleCharactersSetting: (() => {
+    const current: { value: boolean | undefined; isLoading: boolean; isUnreadable: boolean } = {
+      value: false,
+      isLoading: false,
+      isUnreadable: false,
+    };
+    return { current };
+  })(),
   mockUseEffectiveResourceReferenceList: vi.fn(),
   mockGetProjectDataProvider: vi.fn(),
   mockLoggerWarn: vi.fn(),
@@ -92,6 +105,10 @@ vi.mock('./copy-limit/use-chapter-copy-limit.hook', () => ({
   useChapterCopyLimit: (...args: unknown[]) => mockUseChapterCopyLimit(...args),
 }));
 
+vi.mock('./use-allow-invisible-characters.hook', () => ({
+  useAllowInvisibleCharacters: () => allowInvisibleCharactersSetting.current,
+}));
+
 vi.mock('./use-open-find-shortcut.hook', () => ({
   useOpenFindShortcut: vi.fn(),
   default: vi.fn(),
@@ -104,14 +121,17 @@ vi.mock('./model-text-panel.component', () => ({
   ModelTextPanel: ({
     getResourceChapter,
     resourceCopyLimit,
+    allowInvisibleCharacters,
     setUserModelTexts,
   }: {
     getResourceChapter: unknown;
     resourceCopyLimit: unknown;
+    allowInvisibleCharacters: unknown;
     setUserModelTexts: unknown;
   }) => {
     capturedGetResourceChapter(getResourceChapter);
     capturedResourceCopyLimit(resourceCopyLimit);
+    capturedAllowInvisibleCharacters(allowInvisibleCharacters);
     capturedSetUserModelTexts(setUserModelTexts);
     return React.createElement('div', { 'data-testid': 'model-text-panel-stub' });
   },
@@ -290,6 +310,46 @@ describe('ModelTextPanelWebView — copy limit', () => {
       'applied-by-caller',
     );
     expect(capturedResourceCopyLimit).toHaveBeenLastCalledWith(8);
+  });
+});
+
+describe('ModelTextPanelWebView — allowInvisibleCharacters', () => {
+  afterEach(() => {
+    allowInvisibleCharactersSetting.current = {
+      value: false,
+      isLoading: false,
+      isUnreadable: false,
+    };
+  });
+
+  it.each([
+    { name: 'on', setting: { value: true, isLoading: false, isUnreadable: false }, expected: true },
+    {
+      name: 'off',
+      setting: { value: false, isLoading: false, isUnreadable: false },
+      expected: false,
+    },
+    {
+      name: 'still loading',
+      setting: { value: undefined, isLoading: true, isUnreadable: false },
+      expected: false,
+    },
+    {
+      name: 'unreadable',
+      setting: { value: undefined, isLoading: false, isUnreadable: true },
+      expected: false,
+    },
+  ])('hands the panel $expected while the project setting is $name', ({ setting, expected }) => {
+    allowInvisibleCharactersSetting.current = setting;
+    renderWithModelText(
+      {
+        dataVersion: '1.0.0',
+        items: [{ type: 'dblResource', id: 'uid-web', name: 'WEB', source: 'admin' }],
+      },
+      [INSTALLED_RESOURCE],
+    );
+
+    expect(capturedAllowInvisibleCharacters).toHaveBeenLastCalledWith(expected);
   });
 });
 

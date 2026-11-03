@@ -263,6 +263,7 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
         showResourcePicker={showResourcePicker}
         getResourceChapter={getResourceChapter}
         resourceCopyLimit={undefined}
+        allowInvisibleCharacters={false}
         copyrightNotice={config.copyrightNotice}
       />
       <Dialog

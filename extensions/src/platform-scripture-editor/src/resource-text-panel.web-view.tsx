@@ -19,6 +19,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ResourceReferenceList } from 'platform-scripture';
 import { useChapterUsjWithCopyLimit } from './copy-limit/use-chapter-usj-with-copy-limit.hook';
+import { useAllowInvisibleCharacters } from './use-allow-invisible-characters.hook';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { useResourcePickerResources } from './use-resource-picker-resources.hook';
@@ -460,6 +461,10 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
     { retryNonce: chapterRetryNonce, isSeededEmpty: false },
   );
 
+  // The panel is read-only, so a pending or failed read of the setting is treated as off rather
+  // than withholding the text.
+  const allowInvisibleCharacters = useAllowInvisibleCharacters(resourceProjectId).value === true;
+
   // #endregion
 
   // #region Text direction
@@ -638,6 +643,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
       onRetryChapter={retryChapterRead}
       textDirection={textDirection}
       copyLimit={copyLimit}
+      allowInvisibleCharacters={allowInvisibleCharacters}
       isSelecting={isSelecting}
       isInstalling={isInstalling}
       installFailed={installFailed}

@@ -3,6 +3,7 @@ import {
   Editorial,
   EditorOptions,
   EditorRef,
+  getDefaultViewOptions,
   getViewOptions,
 } from '@eten-tech-foundation/platform-editor';
 import { logger } from '@papi/frontend';
@@ -17,6 +18,7 @@ import {
 } from 'platform-bible-utils';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef, type DragEvent, type KeyboardEvent } from 'react';
+import { useAllowInvisibleCharacters } from '../use-allow-invisible-characters.hook';
 import { useChapterUsjWithCopyLimit } from '../copy-limit/use-chapter-usj-with-copy-limit.hook';
 import type { GridResource } from './grid-resources.utils';
 import { deriveCellState, isUsjForChapter, type ResourceCellState } from './resource-cell.utils';
@@ -259,6 +261,10 @@ export function ResourceCell({
       );
   }, [usjPossiblyError, resourceRef.resourceId]);
   const extraValidMarkers = useExtraValidMarkers(usj);
+  // The cell is read-only, so a pending or failed read of the setting is treated as off rather than
+  // withholding the text.
+  const allowInvisibleCharacters =
+    useAllowInvisibleCharacters(resourceRef.projectId).value === true;
   // The block-verse layout is read-only by construction, which costs this grid nothing: every cell
   // is already read-only and none of them export USJ or address selection by USJ location.
   // `getViewOptions` returns undefined for an unknown mode, leaving the editor on its default
@@ -272,10 +278,14 @@ export function ResourceCell({
       hasSpellCheck: false,
       textDirection,
       copyLimit,
-      ...(viewMode === 'aligned' ? { view: getViewOptions(BLOCK_VERSE_VIEW_MODE) } : {}),
+      view: {
+        ...((viewMode === 'aligned' ? getViewOptions(BLOCK_VERSE_VIEW_MODE) : undefined) ??
+          getDefaultViewOptions()),
+        allowInvisibleCharacters,
+      },
       ...(extraValidMarkers.length > 0 ? { nodes: { extraValidMarkers } } : {}),
     }),
-    [textDirection, copyLimit, viewMode, extraValidMarkers],
+    [textDirection, copyLimit, viewMode, allowInvisibleCharacters, extraValidMarkers],
   );
   // Only the USJ fed to the editor is resolved — `scrRef` passes through untouched. Keying the memo
   // on the resolved verse (not scrRef.verseNum) also keeps 1:0 -> 1:1 from re-feeding identical
