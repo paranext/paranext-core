@@ -24,8 +24,8 @@ issue, but **this file is the authoritative copy**.
 
 ## Verdicts not yet ruled on by TJ
 
-As of 2026-10-30 every `accept` in this catalog carries TJ's ruling and date, and nothing is
-waiting on TJ.
+As of 2026-10-30 every `accept` in this catalog carries TJ's ruling and date. Waiting on TJ:
+ER-1 (2026-11-03).
 
 ## The pipeline
 
@@ -76,6 +76,26 @@ is a fixed point everywhere (no save-loop churn); neighboring chapters are untou
 | S-5 | L3 | The first save of a book Unicode-normalizes the WHOLE book (`ScrText.PutText` → `Normalize`), every chapter, including never-opened ones. | **accept** (TJ, 2026-10-26) (PT9 parity) | ParatextData does this on every write; same family as E-1 (whole-book effect of the first save). No dedicated pin yet; recorded from the 2026-10-23 parity review. |
 | S-6 | L3 | `RegularizeSpaces` drops a ZWSP that sits before a space, and drops a repeated identical invisible character. | **accept** (TJ, 2026-10-26) (PT9 parity) | ParatextData behavior on the save path (S-2's trip). No dedicated pin yet; recorded from the 2026-10-23 parity review. |
 | S-7 | L3 | With `AllowInvisibleChars` on, an NBSP right after a marker is lost at load. | **accept** (TJ, 2026-10-26, on verification) — measured with ParatextData across 24 NBSP positions: PT9 and PT10 lose exactly the same ones (the tokenizer skips whitespace after a marker and counts U+00A0 as whitespace); the one difference favours PT10 (`\nd*⍽b` keeps the NBSP where PT9 makes it a space); only PT9's Unformatted view keeps them | ParatextData behavior; only projects with the setting on are affected. No dedicated pin yet; recorded from the 2026-10-23 parity review. |
+
+## Editor-first round-trip rows (editor → USX → ParatextData → USX, 2026-11-03)
+
+The sweep above starts from the file; these start from what the EDITOR writes. The editor makes an
+edit (insert a footnote, wrap a word in `\nd`, split a paragraph as `\q1`) in Standard, formatted
+and paragraph-structure, or resaves a chapter it did not change, and the web view's save
+preparation produces the USX (`editor-usx-round-trip.test.tsx`, captures in
+`usj-reader-writer-test-data/editor-usx/`). `UsfmUsxRoundTripCorpusSweepTests.EditorUsx.cs` writes
+each one through `SetChapterUsx`, pins every byte that changes on disk
+(`EditorUsxRoundTrip.expected-diffs.json`), checks that a further trip changes nothing and that
+neighboring chapters are untouched, and captures what the provider serves back; the TypeScript test
+then checks that it reads back as the document the editor saved. `npm run
+test:editor-usx-round-trip:capture` regenerates every capture. Headline: on disk every edit changes
+exactly its own bytes in every view, and a resave of every corpus chapter writes the same bytes as
+the provider's own USX (the editor's regenerated verse closers land elsewhere in the USX, F-8, and
+ParatextData writes the same USFM either way). One reread difference, ER-1.
+
+| ID | Layer | Finding | Verdict | Rationale / evidence |
+| --- | --- | --- | --- | --- |
+| ER-1 | L1/L3 | Splitting a paragraph between two words (`of \|the`) leaves the first half ending in a space in the editor (`The book of `). USFM has no trailing space before a paragraph marker, so ParatextData writes `of\r\n\q1 the` and serves `The book of` back. The editor goes on showing the space until the chapter reloads. Nothing churns: the web view compares the echo whitespace-insensitively, so it neither reloads the editor nor rewrites the file. Same in Standard (the Enter menu's `splitParagraphWithMarker`), formatted and paragraph-structure. | **needs-ruling** | Whitespace only; no text is lost, and the bytes on disk are what any save of that paragraph would write (S-2). Options: accept, or have the editor drop the trailing space when it splits, as the disk does. Pinned by `KNOWN_DIVERGENCES['split-paragraph-q1']` in `editor-usx-round-trip.test.tsx` |
 
 ## Corpus-extension findings (testUSFM-2SA-4/-2SA-5/-1SA-1, 2026-10-20)
 

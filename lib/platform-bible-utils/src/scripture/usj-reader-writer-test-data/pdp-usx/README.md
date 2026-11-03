@@ -18,3 +18,7 @@ example after a ParatextData upgrade or a fixture change), run from `c-sharp-tes
 ```bash
 PDP_USX_CAPTURE=1 dotnet test --filter FullyQualifiedName~UsfmUsxRoundTripCorpusSweepTests
 ```
+
+The editor -> file -> editor direction has its own captures beside this folder: `../editor-usx/`
+(what the editor writes) and `../editor-usx-returned/` (what the provider serves back after
+writing it). See `../editor-usx/README.md`.

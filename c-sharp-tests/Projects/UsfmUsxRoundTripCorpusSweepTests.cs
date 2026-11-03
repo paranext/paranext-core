@@ -69,7 +69,7 @@ namespace TestParanextDataProvider.Projects
     /// </para>
     /// </summary>
     [ExcludeFromCodeCoverage]
-    internal class UsfmUsxRoundTripCorpusSweepTests : PapiTestBase
+    internal partial class UsfmUsxRoundTripCorpusSweepTests : PapiTestBase
     {
         private const string PdpName = "usfm-usx-corpus-sweep";
         private const string CaptureEnvironmentVariable = "PDP_USX_CAPTURE";
@@ -366,18 +366,22 @@ namespace TestParanextDataProvider.Projects
 
         private sealed record ExpectedDiffFile(string About, List<ExpectedDiff> Entries);
 
-        private static List<ExpectedDiff> LoadExpectedDiffs() =>
+        private static List<ExpectedDiff> LoadExpectedDiffs(string? path = null) =>
             JsonSerializer
-                .Deserialize<ExpectedDiffFile>(File.ReadAllText(s_expectedDiffsPath), s_jsonOptions)
+                .Deserialize<ExpectedDiffFile>(
+                    File.ReadAllText(path ?? s_expectedDiffsPath),
+                    s_jsonOptions
+                )
                 ?.Entries ?? [];
 
         private static List<string> CompareWithExpectedDiffs(
             string fixture,
             int chapter,
-            List<DiffHunk> actual
+            List<DiffHunk> actual,
+            string? expectedDiffsPath = null
         )
         {
-            List<ExpectedDiff> listed = LoadExpectedDiffs()
+            List<ExpectedDiff> listed = LoadExpectedDiffs(expectedDiffsPath)
                 .Where(entry => entry.Fixture == fixture && entry.Chapter == chapter)
                 .ToList();
 
