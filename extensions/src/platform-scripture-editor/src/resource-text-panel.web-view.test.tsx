@@ -4,7 +4,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import * as React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
-import { newPlatformError, type DblResourceData } from 'platform-bible-utils';
+import { newPlatformError, type DblResourceData, type PlatformError } from 'platform-bible-utils';
 import type { DialogTypes, WebViewProps } from '@papi/core';
 import papi from '@papi/frontend';
 import { useDialogCallback } from '@papi/frontend/react';
@@ -15,6 +15,20 @@ import type { PickerResource } from './downloaded-resources.utils';
 import { selectTextConnection } from './select-dbl-resource';
 import { resetCopyLimitLookupsBeforeEach } from './copy-limit/copy-limit.test-utils';
 import { RESOURCE_TEXT_WAITING_TEST_ID } from './resource-text-panel.component';
+import {
+  getResourceSelection,
+  getResourceSelectionKey,
+  NO_PROJECT_SELECTION_KEY,
+  RESOURCE_SELECTION_SETTING_KEY,
+  updateResourceSelectionsByPanel,
+  type ResourcePanelType,
+  type ResourceSelectionsByPanel,
+  type StoredResourceSelection,
+} from './resource-selection-state.utils';
+import {
+  SELECTION_NOT_STORED_KEY,
+  SELECTION_NOT_STORED_NOTIFICATION_ID,
+} from './use-project-resource-selection.hook';
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks — must be before any import that touches the component
@@ -57,7 +71,7 @@ const {
 vi.mock('@papi/frontend', () => ({
   default: {
     commands: {
-      sendCommand: vi.fn(() => Promise.resolve([])),
+      sendCommand: (...args: Parameters<typeof fakeSendCommand>) => fakeSendCommand(...args),
     },
     projectLookup: {
       getMetadataForProject: vi.fn(async () => ({
@@ -66,7 +80,7 @@ vi.mock('@papi/frontend', () => ({
     },
     notifications: { send: vi.fn() },
   },
-  logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
+  logger: { debug: vi.fn(), warn: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
 
 // @papi/frontend/react — all PAPI hooks used by the component
@@ -115,7 +129,7 @@ vi.mock('@papi/frontend/react', () => ({
       ];
     return ['ltr', false];
   }),
-  useSetting: vi.fn(() => [interfaceMode.current, vi.fn(), vi.fn(), interfaceMode.isLoading]),
+  useSetting: (key: string, defaultValue: unknown) => fakeUseSetting(key, defaultValue),
   useDialogCallback: vi.fn(() => vi.fn()),
   usePromise: vi.fn(() => [undefined, false]),
   useScrollGroupScrRef: (...args: unknown[]) => mockUseScrollGroupScrRef(...args),
@@ -249,10 +263,174 @@ import './resource-text-panel.web-view';
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** The project `makeProps` gives the panel unless a test names another. */
+const DEFAULT_PROJECT_ID = 'test-project-id';
+
+/**
+ * The resource selection setting, as the settings service holds it. The panel reads it through
+ * `useSetting` and changes it through `platformScriptureEditor.updateResourceSelection`; the mocks
+ * above route both here, so a selection stored while one panel is mounted is what the next one
+ * reads, as across a project switch or a restart.
+ */
+/** One change the panel asked to store, with the arguments it sent the command. */
+type SelectionWrite = {
+  resourceType: ResourcePanelType;
+  projectId: string | undefined;
+  update: StoredResourceSelection;
+};
+
+const selectionSetting: {
+  value: ResourceSelectionsByPanel;
+  /** Whether the setting's first read is still in flight */
+  isLoading: boolean;
+  /** What reading the setting fails with, if it does */
+  readError: PlatformError | undefined;
+  /** Whether a stored change is reported back only by {@link reportStoredSelections} */
+  isReportingLater: boolean;
+  /** Stored changes not reported back yet */
+  unreportedValue: ResourceSelectionsByPanel | undefined;
+  /** Whether storing a change fails */
+  doWritesFail: boolean;
+  /** A resource whose selection fails to store, while others store */
+  failingResourceId: string | undefined;
+  /** While set, changes wait for it before they are stored or fail */
+  writeGate: Promise<void> | undefined;
+  /** Every change the panel asked to store, in order */
+  writes: SelectionWrite[];
+  listeners: Set<() => void>;
+} = {
+  value: {},
+  isLoading: false,
+  readError: undefined,
+  isReportingLater: false,
+  unreportedValue: undefined,
+  doWritesFail: false,
+  failingResourceId: undefined,
+  writeGate: undefined,
+  writes: [],
+  listeners: new Set(),
+};
+
+function setSelectionSetting(value: ResourceSelectionsByPanel) {
+  selectionSetting.value = value;
+  selectionSetting.listeners.forEach((listener) => listener());
+}
+
+function subscribeToSelectionSetting(listener: () => void) {
+  selectionSetting.listeners.add(listener);
+  return () => {
+    selectionSetting.listeners.delete(listener);
+  };
+}
+
+/** Reports back the changes stored while {@link selectionSetting}`.isReportingLater` was set. */
+function reportStoredSelections() {
+  const { unreportedValue } = selectionSetting;
+  selectionSetting.unreportedValue = undefined;
+  if (unreportedValue) act(() => setSelectionSetting(unreportedValue));
+}
+
+/**
+ * Stands in for `useSetting`: the selection setting reads as its default until it has loaded, and
+ * re-renders the panel when it changes; any other setting reads as the interface mode.
+ */
+function fakeUseSetting(key: string, defaultValue: unknown) {
+  // Called as a hook by the panel, once per key in the same order on every render.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const selections = React.useSyncExternalStore(
+    subscribeToSelectionSetting,
+    () => selectionSetting.value,
+  );
+  if (key === RESOURCE_SELECTION_SETTING_KEY) {
+    if (selectionSetting.isLoading) return [defaultValue, vi.fn(), vi.fn(), true];
+    return [selectionSetting.readError ?? selections, vi.fn(), vi.fn(), false];
+  }
+  return [interfaceMode.current, vi.fn(), vi.fn(), interfaceMode.isLoading];
+}
+
+/**
+ * Stands in for `sendCommand`: stores a selection change, and answers any other command with `[]`.
+ * Typed as `updateResourceSelection`'s arguments, the only command whose arguments it reads.
+ */
+async function fakeSendCommand(
+  command: string,
+  resourceType: ResourcePanelType,
+  projectId: string | undefined,
+  update: StoredResourceSelection,
+) {
+  if (command !== 'platformScriptureEditor.updateResourceSelection') return [];
+  const write: SelectionWrite = { resourceType, projectId, update };
+  selectionSetting.writes.push(write);
+  await selectionSetting.writeGate;
+  if (
+    selectionSetting.doWritesFail ||
+    (selectionSetting.failingResourceId !== undefined &&
+      update.selectedResourceId === selectionSetting.failingResourceId)
+  )
+    throw new Error('could not store the selection');
+  const next = updateResourceSelectionsByPanel(
+    selectionSetting.unreportedValue ?? selectionSetting.value,
+    write.resourceType,
+    write.projectId,
+    write.update,
+  );
+  if (selectionSetting.isReportingLater) selectionSetting.unreportedValue = next;
+  else setSelectionSetting(next);
+  return undefined;
+}
+
+/**
+ * Stores a project's selection before the panel renders, as an earlier session would have.
+ *
+ * @param selection The project's selection
+ * @param projectId The project; {@link NO_PROJECT_SELECTION_KEY} for no project open
+ * @param resourceType The panel the selection belongs to
+ */
+function seedSelection(
+  selection: StoredResourceSelection,
+  projectId: string | undefined = DEFAULT_PROJECT_ID,
+  resourceType: ResourcePanelType = 'ScriptureResource',
+) {
+  selectionSetting.value = updateResourceSelectionsByPanel(
+    selectionSetting.value,
+    resourceType,
+    projectId,
+    selection,
+  );
+}
+
+/**
+ * A project's selection as stored now.
+ *
+ * @param projectId The project; {@link NO_PROJECT_SELECTION_KEY} for no project open
+ * @param resourceType The panel the selection belongs to
+ */
+function storedSelection(
+  projectId: string | undefined = DEFAULT_PROJECT_ID,
+  resourceType: ResourcePanelType = 'ScriptureResource',
+): StoredResourceSelection {
+  return getResourceSelection(selectionSetting.value, resourceType, projectId);
+}
+
+/**
+ * Each change the panel asked to store for a project, in order.
+ *
+ * @param projectId The project; {@link NO_PROJECT_SELECTION_KEY} for no project open
+ */
+function writtenSelections(
+  projectId: string | undefined = DEFAULT_PROJECT_ID,
+): StoredResourceSelection[] {
+  return selectionSetting.writes
+    .filter(
+      (write) => getResourceSelectionKey(write.projectId) === getResourceSelectionKey(projectId),
+    )
+    .map((write) => write.update);
+}
+
 /** Minimal WebViewProps for zero-state renders (no resources, with projectId). */
 function makeProps(
   overrides: Partial<WebViewProps> = {},
-  resourceType: 'ScriptureResource' | 'Commentary' = 'ScriptureResource',
+  resourceType: 'ScriptureResource' | 'Commentary' | 'CommentaryResource' = 'ScriptureResource',
   /** Web view state the panel reads, by key, and the setter it gets for each */
   state: Record<string, unknown> = {},
   setState: (key: string, value: unknown) => void = () => {},
@@ -261,7 +439,7 @@ function makeProps(
   // avoids satisfying every optional field of WebViewProps in each helper.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   return {
-    projectId: 'test-project-id',
+    projectId: DEFAULT_PROJECT_ID,
     updateWebViewDefinition: vi.fn(),
     useWebViewState: vi.fn(
       // useWebViewState is generic (key → TState) but mocks can't express that genericity.
@@ -404,6 +582,16 @@ beforeEach(() => {
   copyrightNoticesByProject.clear();
   interfaceMode.current = 'simple';
   interfaceMode.isLoading = false;
+  selectionSetting.value = {};
+  selectionSetting.isLoading = false;
+  selectionSetting.readError = undefined;
+  selectionSetting.isReportingLater = false;
+  selectionSetting.unreportedValue = undefined;
+  selectionSetting.doWritesFail = false;
+  selectionSetting.failingResourceId = undefined;
+  selectionSetting.writeGate = undefined;
+  selectionSetting.writes = [];
+  selectionSetting.listeners.clear();
 });
 
 afterEach(() => {
@@ -607,10 +795,21 @@ describe('ResourceTextPanel — install against a stale catalog', () => {
  * persists is read back on its next render. Returns every value persisted so far, by state key.
  *
  * @param savedState Web view state the panel starts with, by state key
+ * @param options The panel's project, and the kind of resource it lists
  */
-function renderWithWebViewState(savedState: Record<string, unknown> = {}) {
+function renderWithWebViewState(
+  savedState: Record<string, unknown> = {},
+  options: {
+    /** The panel's project; `undefined` for none open. Defaults to {@link DEFAULT_PROJECT_ID}. */
+    projectId?: string;
+    resourceType?: 'ScriptureResource' | 'CommentaryResource';
+  } = {},
+) {
+  const projectId = 'projectId' in options ? options.projectId : DEFAULT_PROJECT_ID;
+  const { resourceType = 'ScriptureResource' } = options;
   const persisted: Record<string, unknown> = {};
   const props = makeProps({
+    projectId,
     useWebViewState: vi.fn(
       // useWebViewState is generic (key → TState) but mocks can't express that genericity.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -618,7 +817,7 @@ function renderWithWebViewState(savedState: Record<string, unknown> = {}) {
         // Called as a hook by the panel, in the same order on every render.
         // eslint-disable-next-line react-hooks/rules-of-hooks
         const [value, setValue] = React.useState(
-          key === 'resourceType' ? 'ScriptureResource' : (savedState[key] ?? defaultValue),
+          key === 'resourceType' ? resourceType : (savedState[key] ?? defaultValue),
         );
         return [
           value,
@@ -631,10 +830,13 @@ function renderWithWebViewState(savedState: Record<string, unknown> = {}) {
     ),
   });
   const ResourceTextPanel = getResourceTextPanel();
-  const { rerender } = render(<ResourceTextPanel {...props} />);
+  const { rerender, unmount } = render(<ResourceTextPanel {...props} />);
   return {
     persisted,
     rerender: () => rerender(<ResourceTextPanel {...props} />),
+    unmount,
+    /** The selection stored for the panel's project so far */
+    persistedSelection: () => storedSelection(projectId, resourceType),
   };
 }
 
@@ -669,18 +871,18 @@ describe('ResourceTextPanel — selection when a configured resource arrives', (
   });
 
   it('moves from the downloaded fallback to the configured resource once it is listed', async () => {
-    const { persisted, rerender } = renderWithWebViewState();
+    const { persistedSelection, rerender } = renderWithWebViewState();
     await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('web-project-id'));
 
     mockUseResourcePickerResources.mockReturnValue([[CONFIGURED, DOWNLOADED_WEB], false]);
     rerender();
 
     await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('configured-project-id'));
-    expect(persisted.selectedResourceId).toBe('project:configured-project-id');
+    expect(persistedSelection().selectedResourceId).toBe('project:configured-project-id');
   });
 
   it('keeps a downloaded resource the user picked once a configured resource is listed', async () => {
-    const { persisted, rerender } = renderWithWebViewState();
+    const { persistedSelection, rerender } = renderWithWebViewState();
     await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('web-project-id'));
     React.act(() => {
       capturedResourceTextPanelProps.mock.lastCall?.[0].onSelectResource('project:web-project-id');
@@ -689,7 +891,9 @@ describe('ResourceTextPanel — selection when a configured resource arrives', (
     mockUseResourcePickerResources.mockReturnValue([[CONFIGURED, DOWNLOADED_WEB], false]);
     rerender();
 
-    await waitFor(() => expect(persisted.selectedResourceId).toBe('project:web-project-id'));
+    await waitFor(() =>
+      expect(persistedSelection().selectedResourceId).toBe('project:web-project-id'),
+    );
     expect(lastSelectedRef()?.projectId).toBe('web-project-id');
   });
 
@@ -698,7 +902,7 @@ describe('ResourceTextPanel — selection when a configured resource arrives', (
       const onWritten = args[4];
       onWritten?.({ type: 'project', name: 'WEB', id: 'web-project-id' });
     });
-    const { persisted, rerender } = renderWithWebViewState();
+    const { persistedSelection, rerender } = renderWithWebViewState();
     await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('web-project-id'));
     const onPickerClosed = vi.mocked(useDialogCallback).mock.lastCall?.[2];
     await React.act(async () => {
@@ -711,13 +915,15 @@ describe('ResourceTextPanel — selection when a configured resource arrives', (
         isModal: true,
       });
     });
-    await waitFor(() => expect(persisted.userPickedResourceId).toBe('project:web-project-id'));
+    await waitFor(() =>
+      expect(persistedSelection().userPickedResourceId).toBe('project:web-project-id'),
+    );
 
     mockUseResourcePickerResources.mockReturnValue([[CONFIGURED, DOWNLOADED_WEB], false]);
     rerender();
 
     await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('web-project-id'));
-    expect(persisted.selectedResourceId).toBe('project:web-project-id');
+    expect(persistedSelection().selectedResourceId).toBe('project:web-project-id');
   });
 
   describe('what the panel offers to global navigation', () => {
@@ -750,14 +956,14 @@ describe('ResourceTextPanel — selection when a configured resource arrives', (
       reference: { type: 'project', name: 'ASV', id: 'asv-project-id' },
       projectId: 'asv-project-id',
     };
-    const { persisted, rerender } = renderWithWebViewState();
+    const { persistedSelection, rerender } = renderWithWebViewState();
     await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('web-project-id'));
 
     mockUseResourcePickerResources.mockReturnValue([[DOWNLOADED_ASV, DOWNLOADED_WEB], false]);
     rerender();
 
     expect(lastSelectedRef()?.projectId).toBe('web-project-id');
-    expect(persisted.selectedResourceId).toBeUndefined();
+    expect(persistedSelection().selectedResourceId).toBeUndefined();
   });
 
   describe('a saved downloaded selection that is not the user’s pick', () => {
@@ -772,11 +978,10 @@ describe('ResourceTextPanel — selection when a configured resource arrives', (
 
     it('gives way to an installed configured DBL resource', async () => {
       mockUseResourcePickerResources.mockReturnValue([[CONFIGURED_DBL, DOWNLOADED_WEB], false]);
-      const { persisted } = renderWithWebViewState({
-        selectedResourceId: 'project:web-project-id',
-      });
+      seedSelection({ selectedResourceId: 'project:web-project-id' });
+      const { persistedSelection } = renderWithWebViewState();
 
-      await waitFor(() => expect(persisted.selectedResourceId).toBe('dbl:uid-esv'));
+      await waitFor(() => expect(persistedSelection().selectedResourceId).toBe('dbl:uid-esv'));
       expect(lastSelectedRef()?.projectId).toBe('esv-project-id');
     });
 
@@ -788,25 +993,409 @@ describe('ResourceTextPanel — selection when a configured resource arrives', (
         isUserLayerMissing: true,
       });
       mockUseResourcePickerResources.mockReturnValue([[CONFIGURED_DBL, DOWNLOADED_WEB], false]);
-      const { persisted } = renderWithWebViewState({
-        selectedResourceId: 'project:web-project-id',
-      });
+      seedSelection({ selectedResourceId: 'project:web-project-id' });
+      renderWithWebViewState();
 
       await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('web-project-id'));
-      expect(persisted.selectedResourceId).toBeUndefined();
+      expect(writtenSelections()).toEqual([]);
     });
 
     it('is kept when it was opened from Home', async () => {
       // `buildResourceTextPanelState` records a resource opened from Home as the user's pick.
       mockUseResourcePickerResources.mockReturnValue([[CONFIGURED_DBL, DOWNLOADED_WEB], false]);
-      const { persisted } = renderWithWebViewState({
+      seedSelection({
         selectedResourceId: 'project:web-project-id',
         userPickedResourceId: 'project:web-project-id',
       });
+      renderWithWebViewState();
 
       await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('web-project-id'));
-      expect(persisted.selectedResourceId).toBeUndefined();
+      expect(writtenSelections()).toEqual([]);
     });
+  });
+});
+
+/*
+ * A Simple-mode project switch reloads the panel into a new document, and Simple mode builds the
+ * panel afresh at every launch. A remount reading the same stored setting stands in for both here.
+ */
+describe.each(['ScriptureResource', 'CommentaryResource'] as const)(
+  'ResourceTextPanel (%s) — the selection belongs to the project it was made in',
+  (resourceType) => {
+    const makeRow = (id: string, source: PickerResource['source']): PickerResource => ({
+      reference: { type: 'project', name: id, id },
+      source,
+      isAdminLocked: false,
+      type: resourceType,
+      installed: true,
+      projectId: id,
+    });
+    const A_TEAM_TEXT = makeRow('a-team-text', 'admin');
+    const B_TEAM_TEXT = makeRow('b-team-text', 'admin');
+    // Listed only in B, after B's default
+    const B_OWN_TEXT = makeRow('b-own-text', 'user');
+    // Downloaded, so it is listed in every project
+    const SHARED_TEXT = makeRow('shared-text', 'downloaded');
+
+    const pick = (rowId: string) =>
+      React.act(() => {
+        capturedResourceTextPanelProps.mock.lastCall?.[0].onSelectResource(rowId);
+      });
+
+    beforeEach(() => {
+      capturedResourceTextPanelProps.mockClear();
+      mockUseEffectiveResourceReferenceList.mockReturnValue({
+        status: 'ready',
+        list: { dataVersion: '1.0.0', items: [] },
+      });
+      const rowsByProject = new Map<string | undefined, PickerResource[]>([
+        ['project-a', [A_TEAM_TEXT, SHARED_TEXT]],
+        ['project-b', [B_TEAM_TEXT, B_OWN_TEXT, SHARED_TEXT]],
+        // With no project, only the downloaded resources are listed
+        [undefined, [SHARED_TEXT]],
+      ]);
+      mockUseResourcePickerResources.mockImplementation((projectId: string | undefined) => [
+        rowsByProject.get(projectId),
+        false,
+      ]);
+    });
+
+    it('shows each project’s own pick when switching back to it', async () => {
+      // Neither project picks its own default, so a pick that followed the user into the other
+      // project would show there, and a pick that was dropped would show the project's default.
+      const inA = renderWithWebViewState({}, { projectId: 'project-a', resourceType });
+      await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('a-team-text'));
+      pick('project:shared-text');
+      await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('shared-text'));
+      inA.unmount();
+
+      const inB = renderWithWebViewState({}, { projectId: 'project-b', resourceType });
+      await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('b-team-text'));
+      pick('project:b-own-text');
+      await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('b-own-text'));
+      inB.unmount();
+
+      const backInA = renderWithWebViewState({}, { projectId: 'project-a', resourceType });
+      await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('shared-text'));
+      backInA.unmount();
+
+      renderWithWebViewState({}, { projectId: 'project-b', resourceType });
+      await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('b-own-text'));
+      expect(storedSelection('project-a', resourceType).userPickedResourceId).toBe(
+        'project:shared-text',
+      );
+    });
+
+    it('carries no project’s pick over to the panel with no project open', async () => {
+      const inA = renderWithWebViewState({}, { projectId: 'project-a', resourceType });
+      await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('a-team-text'));
+      pick('project:shared-text');
+      await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('shared-text'));
+      inA.unmount();
+
+      renderWithWebViewState({}, { projectId: undefined, resourceType });
+
+      expect(await screen.findByText('No project.')).toBeInTheDocument();
+      expect(lastSelectedRef()).toBeUndefined();
+    });
+
+    it('stores nothing for the next project while it still lists the previous project’s resources', async () => {
+      // During a switch the outgoing document can render once more with the incoming project's id
+      // before it is replaced, while its resources are still the outgoing project's.
+      seedSelection({ selectedResourceId: 'project:b-team-text' }, 'project-b', resourceType);
+      mockUseResourcePickerResources.mockReturnValue([[A_TEAM_TEXT, SHARED_TEXT], false]);
+      const props = makeProps({ projectId: 'project-a' }, resourceType);
+      const ResourceTextPanel = getResourceTextPanel();
+      const { rerender } = render(<ResourceTextPanel {...props} />);
+      await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('a-team-text'));
+
+      capturedResourceTextPanelProps.mockClear();
+      rerender(<ResourceTextPanel {...props} projectId="project-b" />);
+      await waitFor(() => expect(capturedResourceTextPanelProps).toHaveBeenCalled());
+
+      expect(writtenSelections('project-b')).toEqual([]);
+      expect(storedSelection('project-b', resourceType)).toEqual({
+        selectedResourceId: 'project:b-team-text',
+        userPickedResourceId: undefined,
+      });
+    });
+
+    it('shows nothing, and stores nothing, until the stored selection has been read', async () => {
+      seedSelection(
+        { selectedResourceId: 'project:shared-text', userPickedResourceId: 'project:shared-text' },
+        'project-a',
+        resourceType,
+      );
+      selectionSetting.isLoading = true;
+      const props = makeProps({ projectId: 'project-a' }, resourceType);
+      const ResourceTextPanel = getResourceTextPanel();
+      const { rerender } = render(<ResourceTextPanel {...props} />);
+
+      expect(capturedResourceTextPanelProps.mock.lastCall?.[0]).toEqual(
+        expect.objectContaining({ readiness: 'loading', selectedRef: undefined }),
+      );
+      expect(selectionSetting.writes).toEqual([]);
+
+      selectionSetting.isLoading = false;
+      rerender(<ResourceTextPanel {...props} />);
+      await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('shared-text'));
+    });
+  },
+);
+
+describe('ResourceTextPanel — storing the selection', () => {
+  const STORED_TEXT: PickerResource = {
+    reference: { type: 'project', name: 'STORED', id: 'stored-project-id' },
+    source: 'user',
+    isAdminLocked: false,
+    type: 'ScriptureResource',
+    installed: true,
+    projectId: 'stored-project-id',
+  };
+  const PICKED_TEXT: PickerResource = {
+    ...STORED_TEXT,
+    reference: { type: 'project', name: 'PICKED', id: 'picked-project-id' },
+    projectId: 'picked-project-id',
+  };
+
+  const OTHER_TEXT: PickerResource = {
+    ...STORED_TEXT,
+    reference: { type: 'project', name: 'OTHER', id: 'other-project-id' },
+    projectId: 'other-project-id',
+  };
+
+  /** Picks the row with `rowId` from the panel's dropdown. */
+  const pickInDropdown = (rowId: string) =>
+    React.act(async () => {
+      await capturedResourceTextPanelProps.mock.lastCall?.[0].onSelectResource(rowId);
+    });
+
+  /** Holds every change the panel asks to store until the returned function is called. */
+  const holdWrites = () => {
+    let release = () => {};
+    selectionSetting.writeGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return () =>
+      React.act(async () => {
+        selectionSetting.writeGate = undefined;
+        release();
+      });
+  };
+
+  /** Picks `PICKED_TEXT` in the resource picker, which stores it in the user's list first. */
+  const pickInPicker = () =>
+    React.act(async () => {
+      vi.mocked(selectTextConnection).mockImplementation(async (...args) => {
+        const onWritten = args[4];
+        onWritten?.({ type: 'project', name: 'PICKED', id: 'picked-project-id' });
+      });
+      const onPickerClosed = vi.mocked(useDialogCallback).mock.lastCall?.[2];
+      await onPickerClosed?.(
+        // Only the resource's identity matters here: `selectTextConnection` is mocked to report the
+        // reference it wrote, which is what the panel waits for.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        { dblEntryUid: 'picked' } as DblResourceData,
+        'platform.resourcePicker',
+        {
+          resourceType: 'ScriptureResource',
+          selectedResourceIds: [],
+          isModal: true,
+        },
+      );
+    });
+
+  beforeEach(() => {
+    capturedResourceTextPanelProps.mockClear();
+    mockUseEffectiveResourceReferenceList.mockReturnValue({
+      status: 'ready',
+      list: { dataVersion: '1.0.0', items: [] },
+    });
+    mockUseResourcePickerResources.mockReturnValue([[STORED_TEXT, PICKED_TEXT], false]);
+    seedSelection({
+      selectedResourceId: 'project:stored-project-id',
+      userPickedResourceId: 'project:stored-project-id',
+    });
+  });
+
+  it('stores no fallback over the pick while the stored selection cannot be read', async () => {
+    selectionSetting.value = {};
+    seedSelection({
+      selectedResourceId: 'project:picked-project-id',
+      userPickedResourceId: 'project:picked-project-id',
+    });
+    selectionSetting.readError = newPlatformError('settings unavailable');
+    renderWithWebViewState();
+    await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('stored-project-id'));
+
+    expect(selectionSetting.writes).toEqual([]);
+    // A pick is the user's own, so it is still stored.
+    React.act(() => {
+      capturedResourceTextPanelProps.mock.lastCall?.[0].onSelectResource(
+        'project:picked-project-id',
+      );
+    });
+    await waitFor(() =>
+      expect(writtenSelections()).toEqual([
+        {
+          selectedResourceId: 'project:picked-project-id',
+          userPickedResourceId: 'project:picked-project-id',
+        },
+      ]),
+    );
+  });
+
+  it('keeps showing a resource picked in the picker until the stored selection reports it', async () => {
+    selectionSetting.isReportingLater = true;
+    renderWithWebViewState();
+    await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('stored-project-id'));
+    const rendersBeforePick = capturedResourceTextPanelProps.mock.calls.length;
+
+    await pickInPicker();
+    await waitFor(() => expect(writtenSelections()).toHaveLength(1));
+    reportStoredSelections();
+    await waitFor(() =>
+      expect(storedSelection().selectedResourceId).toBe('project:picked-project-id'),
+    );
+
+    const shownSincePick = capturedResourceTextPanelProps.mock.calls
+      .slice(rendersBeforePick)
+      .map(([props]) => props.selectedRef?.projectId);
+    const firstShown = shownSincePick.indexOf('picked-project-id');
+    expect(firstShown).not.toBe(-1);
+    expect(new Set(shownSincePick.slice(firstShown))).toEqual(new Set(['picked-project-id']));
+  });
+
+  it('tells the user, and goes back to the stored resource, when a pick cannot be stored', async () => {
+    selectionSetting.doWritesFail = true;
+    renderWithWebViewState();
+    await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('stored-project-id'));
+
+    await pickInPicker();
+
+    await waitFor(() =>
+      expect(papi.notifications.send).toHaveBeenCalledWith({
+        message: SELECTION_NOT_STORED_KEY,
+        severity: 'error',
+        notificationId: SELECTION_NOT_STORED_NOTIFICATION_ID,
+      }),
+    );
+    await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('stored-project-id'));
+  });
+
+  it('does not tell the user when a fallback it stores by itself cannot be stored', async () => {
+    // The user asked for nothing, so a message about a switch would make no sense to them.
+    selectionSetting.value = {};
+    seedSelection({
+      selectedResourceId: 'project:gone-project-id',
+      userPickedResourceId: 'project:gone-project-id',
+    });
+    selectionSetting.doWritesFail = true;
+    renderWithWebViewState();
+
+    await waitFor(() =>
+      expect(writtenSelections()).toContainEqual(
+        expect.objectContaining({ selectedResourceId: 'project:stored-project-id' }),
+      ),
+    );
+    await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('stored-project-id'));
+    expect(papi.notifications.send).not.toHaveBeenCalled();
+  });
+
+  it('follows a selection stored from elsewhere once its own pick has been stored', async () => {
+    // A pick held after it is stored would keep the panel on it, and write it back over the change.
+    renderWithWebViewState();
+    await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('stored-project-id'));
+    await pickInPicker();
+    await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('picked-project-id'));
+    const writesBefore = selectionSetting.writes.length;
+
+    React.act(() =>
+      setSelectionSetting(
+        updateResourceSelectionsByPanel(
+          selectionSetting.value,
+          'ScriptureResource',
+          DEFAULT_PROJECT_ID,
+          {
+            selectedResourceId: 'project:stored-project-id',
+            userPickedResourceId: 'project:stored-project-id',
+          },
+        ),
+      ),
+    );
+
+    await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('stored-project-id'));
+    expect(selectionSetting.writes.slice(writesBefore)).toEqual([]);
+  });
+
+  it('keeps a dropdown choice made while a picker pick is still being stored', async () => {
+    // The stored value still names the resource chosen, so it reads as stored already; only a
+    // write of its own puts it after the picker pick's write.
+    selectionSetting.isReportingLater = true;
+    renderWithWebViewState();
+    await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('stored-project-id'));
+
+    await pickInPicker();
+    await waitFor(() => expect(writtenSelections()).toHaveLength(1));
+    await pickInDropdown('project:stored-project-id');
+    await waitFor(() => expect(writtenSelections()).toHaveLength(2));
+    // Both changes report back at once, so the panel never sees the picker pick stored.
+    reportStoredSelections();
+
+    await waitFor(() =>
+      expect(storedSelection()).toEqual({
+        selectedResourceId: 'project:stored-project-id',
+        userPickedResourceId: 'project:stored-project-id',
+      }),
+    );
+    await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('stored-project-id'));
+    expect(writtenSelections()).toHaveLength(2);
+    // The dropdown still works: nothing is left holding the panel on an earlier pick.
+    await pickInDropdown('project:picked-project-id');
+    reportStoredSelections();
+    await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('picked-project-id'));
+  });
+
+  it('keeps a newer pick when an earlier one cannot be stored', async () => {
+    mockUseResourcePickerResources.mockReturnValue([[STORED_TEXT, PICKED_TEXT, OTHER_TEXT], false]);
+    selectionSetting.isReportingLater = true;
+    selectionSetting.failingResourceId = 'project:picked-project-id';
+    renderWithWebViewState();
+    await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('stored-project-id'));
+    const releaseWrites = holdWrites();
+
+    await pickInPicker();
+    await waitFor(() => expect(writtenSelections()).toHaveLength(1));
+    await pickInDropdown('project:other-project-id');
+    await waitFor(() => expect(writtenSelections()).toHaveLength(2));
+    // The earlier pick fails while the newer one is stored but not yet reported back.
+    await releaseWrites();
+
+    await waitFor(() => expect(selectionSetting.unreportedValue).toBeDefined());
+    expect(lastSelectedRef()?.projectId).toBe('other-project-id');
+    reportStoredSelections();
+    await waitFor(() =>
+      expect(storedSelection().selectedResourceId).toBe('project:other-project-id'),
+    );
+    expect(lastSelectedRef()?.projectId).toBe('other-project-id');
+  });
+
+  it('stores a picker pick while the stored selection cannot be read', async () => {
+    selectionSetting.readError = newPlatformError('settings unavailable');
+    renderWithWebViewState();
+    await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('stored-project-id'));
+
+    await pickInPicker();
+
+    await waitFor(() =>
+      expect(writtenSelections()).toEqual([
+        {
+          selectedResourceId: 'project:picked-project-id',
+          userPickedResourceId: 'project:picked-project-id',
+        },
+      ]),
+    );
+    expect(lastSelectedRef()?.projectId).toBe('picked-project-id');
   });
 });
 
@@ -1068,21 +1657,14 @@ describe('ResourceTextPanel — versification conversion frame', () => {
  */
 describe('ResourceTextPanel — no project open', () => {
   function renderWithoutProject(selectedResourceId: string | undefined) {
-    const setSelectedResourceId = vi.fn();
     mockUseResourcePickerResources.mockReturnValue([[SELECTED_RESOURCE], false]);
     // There is no project, so its referenced list never arrives.
     mockUseEffectiveResourceReferenceList.mockReturnValue({ status: 'loading' });
-    const props = makeProps(
-      { projectId: undefined },
-      'ScriptureResource',
-      { selectedResourceId },
-      (key, value) => {
-        if (key === 'selectedResourceId') setSelectedResourceId(value);
-      },
-    );
+    seedSelection({ selectedResourceId }, NO_PROJECT_SELECTION_KEY);
+    const props = makeProps({ projectId: undefined });
     const ResourceTextPanel = getResourceTextPanel();
     render(<ResourceTextPanel {...props} />);
-    return { setSelectedResourceId, panelProps: capturedResourceTextPanelProps.mock.lastCall?.[0] };
+    return { panelProps: capturedResourceTextPanelProps.mock.lastCall?.[0] };
   }
 
   it('shows the resource it was asked to show', () => {
@@ -1098,10 +1680,10 @@ describe('ResourceTextPanel — no project open', () => {
   });
 
   it('picks nothing by itself when it was asked for nothing', () => {
-    const { panelProps, setSelectedResourceId } = renderWithoutProject(undefined);
+    const { panelProps } = renderWithoutProject(undefined);
 
     expect(panelProps).toEqual(expect.objectContaining({ selectedRef: undefined }));
-    expect(setSelectedResourceId).not.toHaveBeenCalled();
+    expect(writtenSelections(NO_PROJECT_SELECTION_KEY)).toEqual([]);
   });
 
   describe('while the catalog is down', () => {
@@ -1211,9 +1793,8 @@ describe('ResourceTextPanel — catalog failure keeps resolved rows visible', ()
     mockUseDblResourceCatalog.mockReturnValue(FAILED_CATALOG);
     mockUseResourcePickerResources.mockReturnValue([[DOWNLOADED_ROW], false]);
 
-    const { useWebViewState, setters } = makeTrackedWebViewState('ScriptureResource', {
-      selectedResourceId: `project:${DOWNLOADED_ROW.projectId}`,
-    });
+    seedSelection({ selectedResourceId: `project:${DOWNLOADED_ROW.projectId}` });
+    const { useWebViewState, setters } = makeTrackedWebViewState('ScriptureResource');
     const ResourceTextPanel = getResourceTextPanel();
     render(<ResourceTextPanel {...makeProps({ useWebViewState })} />);
 
@@ -1283,17 +1864,14 @@ describe('ResourceTextPanel — catalog failure keeps resolved rows visible', ()
     mockUseDblResourceCatalog.mockReturnValue(FAILED_CATALOG);
     mockUseResourcePickerResources.mockReturnValue([[DOWNLOADED_ROW], false]);
 
-    const { useWebViewState, setters } = makeTrackedWebViewState('ScriptureResource', {
-      selectedResourceId: `dbl:${CONFIGURED_DBL_REFERENCE.id}`,
-    });
+    seedSelection({ selectedResourceId: `dbl:${CONFIGURED_DBL_REFERENCE.id}` });
+    const { useWebViewState } = makeTrackedWebViewState('ScriptureResource');
     const ResourceTextPanel = getResourceTextPanel();
     render(<ResourceTextPanel {...makeProps({ useWebViewState })} />);
 
     expect(screen.getByText('%webView_resourcePanel_catalogUnavailable%')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Local Project/ })).not.toBeInTheDocument();
-    const setSelectedResourceId = setters.get('selectedResourceId');
-    expect(setSelectedResourceId).toBeDefined();
-    expect(setSelectedResourceId).not.toHaveBeenCalled();
+    expect(writtenSelections()).toEqual([]);
   });
 
   it('reads no text for the first downloaded row while the catalog-error view covers it', () => {
@@ -1304,9 +1882,8 @@ describe('ResourceTextPanel — catalog failure keeps resolved rows visible', ()
     mockUseDblResourceCatalog.mockReturnValue(FAILED_CATALOG);
     mockUseResourcePickerResources.mockReturnValue([[DOWNLOADED_ROW], false]);
 
-    const { useWebViewState } = makeTrackedWebViewState('ScriptureResource', {
-      selectedResourceId: `dbl:${CONFIGURED_DBL_REFERENCE.id}`,
-    });
+    seedSelection({ selectedResourceId: `dbl:${CONFIGURED_DBL_REFERENCE.id}` });
+    const { useWebViewState } = makeTrackedWebViewState('ScriptureResource');
     const ResourceTextPanel = getResourceTextPanel();
     render(<ResourceTextPanel {...makeProps({ useWebViewState })} />);
 
@@ -1330,14 +1907,13 @@ describe('ResourceTextPanel — catalog failure keeps resolved rows visible', ()
     mockUseDblResourceCatalog.mockReturnValue(FAILED_CATALOG);
     mockUseResourcePickerResources.mockReturnValue([[DOWNLOADED_ROW], false]);
 
-    const { useWebViewState, setters } = makeTrackedWebViewState('ScriptureResource', {
-      selectedResourceId: DOWNLOADED_ROW.projectId,
-    });
+    seedSelection({ selectedResourceId: DOWNLOADED_ROW.projectId });
+    const { useWebViewState } = makeTrackedWebViewState('ScriptureResource');
     const ResourceTextPanel = getResourceTextPanel();
     render(<ResourceTextPanel {...makeProps({ useWebViewState })} />);
 
-    expect(setters.get('selectedResourceId')).toHaveBeenCalledWith(
-      `project:${DOWNLOADED_ROW.projectId}`,
+    expect(writtenSelections()).toContainEqual(
+      expect.objectContaining({ selectedResourceId: `project:${DOWNLOADED_ROW.projectId}` }),
     );
   });
 
@@ -1350,14 +1926,13 @@ describe('ResourceTextPanel — catalog failure keeps resolved rows visible', ()
     mockUseDblResourceCatalog.mockReturnValue(FAILED_CATALOG);
     mockUseResourcePickerResources.mockReturnValue([[DOWNLOADED_ROW], false]);
 
-    const { useWebViewState, setters } = makeTrackedWebViewState('ScriptureResource', {
-      selectedResourceId: 'dbl:downloaded-dbl-uid',
-    });
+    seedSelection({ selectedResourceId: 'dbl:downloaded-dbl-uid' });
+    const { useWebViewState } = makeTrackedWebViewState('ScriptureResource');
     const ResourceTextPanel = getResourceTextPanel();
     render(<ResourceTextPanel {...makeProps({ useWebViewState })} />);
 
     expect(screen.getByText('%webView_resourcePanel_catalogUnavailable%')).toBeInTheDocument();
-    expect(setters.get('selectedResourceId')).not.toHaveBeenCalled();
+    expect(writtenSelections()).toEqual([]);
   });
 
   it('renders a saved selection that resolved locally when the catalog failed', () => {
@@ -1368,9 +1943,8 @@ describe('ResourceTextPanel — catalog failure keeps resolved rows visible', ()
     mockUseDblResourceCatalog.mockReturnValue(FAILED_CATALOG);
     mockUseResourcePickerResources.mockReturnValue([[DOWNLOADED_ROW], false]);
 
-    const { useWebViewState, setters } = makeTrackedWebViewState('ScriptureResource', {
-      selectedResourceId: `project:${DOWNLOADED_ROW.projectId}`,
-    });
+    seedSelection({ selectedResourceId: `project:${DOWNLOADED_ROW.projectId}` });
+    const { useWebViewState } = makeTrackedWebViewState('ScriptureResource');
     const ResourceTextPanel = getResourceTextPanel();
     render(<ResourceTextPanel {...makeProps({ useWebViewState })} />);
 
@@ -1378,7 +1952,7 @@ describe('ResourceTextPanel — catalog failure keeps resolved rows visible', ()
       screen.queryByText('%webView_resourcePanel_catalogUnavailable%'),
     ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Local Project/ })).toBeInTheDocument();
-    expect(setters.get('selectedResourceId')).not.toHaveBeenCalled();
+    expect(writtenSelections()).toEqual([]);
   });
 });
 

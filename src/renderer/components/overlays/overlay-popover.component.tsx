@@ -9,11 +9,13 @@
 
 import { Popover as PopoverPrimitive } from 'radix-ui';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { markOverlayFocusReturnIfFocusInside } from '@renderer/services/overlays/overlay-focus-return.util';
 import { resolveAndRemoveOverlay } from '@renderer/services/overlays/overlay-store';
 import {
   OverlayEntry,
   PopoverContent as PopoverContentModel,
 } from '@renderer/services/overlays/overlay.service-model';
+import { isWindowBlurPress } from '@renderer/services/overlays/window-blur-press.util';
 import {
   Button,
   MarkdownRenderer,
@@ -51,6 +53,20 @@ export type OverlayPopoverPresentationalProps = {
   onAction?: (actionId: string) => void;
   /** Called when the popover is dismissed */
   onDismiss: () => void;
+  /**
+   * Called when the user presses Escape in the popover, just before {@link onDismiss}. Lets the
+   * owner tell an Escape close apart from a click away.
+   *
+   * @experimental This property is unstable and may change or disappear without notice
+   */
+  onEscape?: () => void;
+  /**
+   * Id of the overlay this renders, written to the content as `data-overlay-id` so the overlay
+   * service can tell whether focus is inside this overlay's own content rather than another's.
+   *
+   * @experimental This property is unstable and may change or disappear without notice
+   */
+  overlayId?: string;
 };
 
 // ── Constants ──
@@ -161,6 +177,8 @@ export function OverlayPopoverPresentational({
   showArrow = true,
   onAction,
   onDismiss,
+  onEscape,
+  overlayId,
 }: OverlayPopoverPresentationalProps) {
   // The caller's own maxWidth/maxHeight fall back to this component's own defaults when unsupplied.
   const resolvedMaxWidth = maxWidth ?? DEFAULT_MAX_WIDTH;
@@ -177,10 +195,11 @@ export function OverlayPopoverPresentational({
     (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
+        onEscape?.();
         onDismiss();
       }
     },
-    [onDismiss],
+    [onDismiss, onEscape],
   );
 
   const handleAction = useCallback(
@@ -207,6 +226,7 @@ export function OverlayPopoverPresentational({
       </PopoverAnchor>
       <PopoverContent
         data-overlay-popover
+        data-overlay-id={overlayId}
         // PopoverContent must not carry a fixed width or padding, so the inner wrapper below owns
         // width, padding and layout instead. `tw:p-0` strips the shared class's `tw:p-2.5` padding
         // only; the shared `tw:w-72` survives the class merge and is overridden by the inline
@@ -223,6 +243,13 @@ export function OverlayPopoverPresentational({
           width: 'auto',
         }}
         onKeyDown={handleKeyDown}
+        onEscapeKeyDown={() => onEscape?.()}
+        // The shared wrappers turn a window blur into an outside press. The overlay
+        // service owns blur dismissal for this surface (creation grace period,
+        // `dismissOnClickOutside`), so that press is ignored here.
+        onPointerDownOutside={(event) => {
+          if (isWindowBlurPress(event.detail.originalEvent)) event.preventDefault();
+        }}
         onOpenAutoFocus={(e) => e.preventDefault()}
         onCloseAutoFocus={(e) => e.preventDefault()}
       >
@@ -358,6 +385,13 @@ export function OverlayPopover({ overlay }: OverlayPopoverProps) {
     resolveAndRemoveOverlay(overlay.id, overlay.type, undefined);
   }, [overlay]);
 
+  const handleEscape = useCallback(() => {
+    // Radix reports Escape first and the dismissal settles the overlay; a later report from the
+    // key handler must not leave a mark behind
+    if (hasResolved.current) return;
+    markOverlayFocusReturnIfFocusInside(overlay.id);
+  }, [overlay]);
+
   return (
     <OverlayPopoverPresentational
       content={localizedContent}
@@ -372,6 +406,8 @@ export function OverlayPopover({ overlay }: OverlayPopoverProps) {
       showArrow={overlay.request.showArrow}
       onAction={handleAction}
       onDismiss={handleDismiss}
+      onEscape={handleEscape}
+      overlayId={overlay.id}
     />
   );
 }
