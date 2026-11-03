@@ -28,6 +28,8 @@ vi.mock('@papi/frontend', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+const IDLE = { waitingProjectIds: [], runningProjectIds: [] };
+
 describe('useSyncQueue', () => {
   beforeEach(() => {
     mockSendCommand.mockReset();
@@ -38,57 +40,88 @@ describe('useSyncQueue', () => {
 
   it('reports an empty queue until the first answer', () => {
     mockSendCommand.mockReturnValue(new Promise(() => {}));
-    const { result } = renderHook(() => useSyncQueue());
-    expect(result.current).toEqual({ waitingProjectIds: [] });
+    const { result } = renderHook(() => useSyncQueue(true));
+    expect(result.current).toEqual(IDLE);
   });
 
   it('reports the seeded snapshot', async () => {
     mockSendCommand.mockResolvedValue({ waitingProjectIds: ['RH3', 'ABC'] });
-    const { result } = renderHook(() => useSyncQueue());
-    await waitFor(() => expect(result.current).toEqual({ waitingProjectIds: ['RH3', 'ABC'] }));
+    const { result } = renderHook(() => useSyncQueue(true));
+    await waitFor(() =>
+      expect(result.current).toEqual({ waitingProjectIds: ['RH3', 'ABC'], runningProjectIds: [] }),
+    );
     expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.getSyncQueue');
   });
 
   it('accepts null waitingProjectIds as an empty queue', async () => {
     mockSendCommand.mockResolvedValue({ waitingProjectIds: null });
-    const { result } = renderHook(() => useSyncQueue());
+    const { result } = renderHook(() => useSyncQueue(true));
     await waitFor(() => expect(mockSendCommand).toHaveBeenCalled());
     await act(async () => {});
-    expect(result.current).toEqual({ waitingProjectIds: [] });
+    expect(result.current).toEqual(IDLE);
   });
 
   it('treats a rejecting command as an empty queue', async () => {
     mockSendCommand.mockRejectedValue(new Error('not registered'));
-    const { result } = renderHook(() => useSyncQueue());
+    const { result } = renderHook(() => useSyncQueue(true));
     await waitFor(() => expect(mockSendCommand).toHaveBeenCalled());
     await act(async () => {});
-    expect(result.current).toEqual({ waitingProjectIds: [] });
+    expect(result.current).toEqual(IDLE);
   });
 
   it('follows the change event', async () => {
     mockSendCommand.mockResolvedValue({ waitingProjectIds: ['RH3'] });
-    const { result } = renderHook(() => useSyncQueue());
+    const { result } = renderHook(() => useSyncQueue(true));
     await waitFor(() => expect(result.current.waitingProjectIds).toEqual(['RH3']));
     expect(mockGetNetworkEvent).toHaveBeenCalledWith('paratextBibleSendReceive.onSyncQueueChanged');
     act(() => emitter.emit({ waitingProjectIds: ['XYZ'] }));
-    expect(result.current).toEqual({ waitingProjectIds: ['XYZ'] });
+    expect(result.current).toEqual({ waitingProjectIds: ['XYZ'], runningProjectIds: [] });
     act(() => emitter.emit({ waitingProjectIds: [] }));
-    expect(result.current).toEqual({ waitingProjectIds: [] });
+    expect(result.current).toEqual(IDLE);
   });
 
   it('ignores a malformed event and keeps the last known queue', async () => {
     mockSendCommand.mockResolvedValue({ waitingProjectIds: ['RH3'] });
-    const { result } = renderHook(() => useSyncQueue());
+    const { result } = renderHook(() => useSyncQueue(true));
     await waitFor(() => expect(result.current.waitingProjectIds).toEqual(['RH3']));
     act(() => emitter.emit({ waitingProjectIds: 'RH3' }));
-    expect(result.current).toEqual({ waitingProjectIds: ['RH3'] });
+    expect(result.current).toEqual({ waitingProjectIds: ['RH3'], runningProjectIds: [] });
   });
 
   it('reports an empty queue when the only answer is malformed', async () => {
     mockSendCommand.mockResolvedValue({ waitingProjectIds: [42] });
-    const { result } = renderHook(() => useSyncQueue());
+    const { result } = renderHook(() => useSyncQueue(true));
     await waitFor(() => expect(mockSendCommand).toHaveBeenCalled());
     await act(async () => {});
-    expect(result.current).toEqual({ waitingProjectIds: [] });
+    expect(result.current).toEqual(IDLE);
+  });
+
+  it.each([false, undefined])(
+    'issues no read and reports idle when availability is %s',
+    async (availability) => {
+      mockSendCommand.mockResolvedValue({ waitingProjectIds: ['RH3'] });
+      const { result } = renderHook(() => useSyncQueue(availability));
+      await act(async () => {});
+      expect(mockSendCommand).not.toHaveBeenCalled();
+      expect(result.current).toEqual(IDLE);
+    },
+  );
+
+  it('reads once availability becomes true', async () => {
+    mockSendCommand.mockResolvedValue({ waitingProjectIds: ['RH3'] });
+    const { result, rerender } = renderHook(({ available }) => useSyncQueue(available), {
+      initialProps: { available: undefined as boolean | undefined },
+    });
+    await act(async () => {});
+    expect(mockSendCommand).not.toHaveBeenCalled();
+    rerender({ available: true });
+    await waitFor(() => expect(result.current.waitingProjectIds).toEqual(['RH3']));
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.getSyncQueue');
+  });
+
+  it('exposes the running ids', async () => {
+    mockSendCommand.mockResolvedValue({ waitingProjectIds: [], runningProjectIds: ['RH9'] });
+    const { result } = renderHook(() => useSyncQueue(true));
+    await waitFor(() => expect(result.current.runningProjectIds).toEqual(['RH9']));
   });
 });

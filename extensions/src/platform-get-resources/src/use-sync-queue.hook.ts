@@ -16,14 +16,20 @@ const readSyncQueue = () =>
   });
 
 /**
- * Follows the Send/Receive extension's sync queue: the projects waiting for a later sync run. Falls
- * back to an empty queue whenever the answer is unknown, rejected or malformed, so a missing answer
- * never shows a project as waiting.
+ * Follows the Send/Receive extension's sync queue: the projects waiting for a later sync run and
+ * the ones running. Falls back to an empty queue whenever the answer is unknown, rejected or
+ * malformed, so a missing answer never shows a project as waiting or running.
  *
- * Hidden case: nothing to defer — the waiting list is data, so a hidden Home shows the current list
- * when it is next shown.
+ * Nothing is read while Send/Receive is not known to be available: its commands are not registered
+ * then, so a read could only fail.
+ *
+ * Hidden case: nothing to defer — the lists are data, so a hidden Home shows the current lists when
+ * it is next shown.
+ *
+ * @param isSendReceiveAvailable Whether Send/Receive is available; the queue is read only when
+ *   `true`
  */
-export function useSyncQueue(): SyncQueue {
+export function useSyncQueue(isSendReceiveAvailable: boolean | undefined): SyncQueue {
   const event = useMemo(
     () => papi.network.getNetworkEvent('paratextBibleSendReceive.onSyncQueueChanged'),
     [],
@@ -32,6 +38,7 @@ export function useSyncQueue(): SyncQueue {
     read: readSyncQueue,
     event,
     isValid: isSyncQueueSnapshot,
+    enabled: isSendReceiveAvailable === true,
   });
 
   return useMemo(() => toSyncQueue(value), [value]);

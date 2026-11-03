@@ -216,12 +216,15 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
   // Hidden case: keeps following while the tab is inactive; data-only and cheap, so the rows are
   // current when shown.
   const syncActivity = useSyncActivity();
-  const syncQueue = useSyncQueue();
+  const syncQueue = useSyncQueue(isSendReceiveAvailable);
 
   // Two flags because any sync pauses the server-list fetch, which queues behind it, while only a
   // run that includes one of Home's own requests pauses the local list: a request that only waits
-  // in the queue behind another surface's run leaves the local list loading.
-  const isAnySendReceiveInProgress = isOwnSendReceiveInProgress || syncActivity.isSyncing;
+  // in the queue behind another surface's run leaves the local list loading. A project waiting in
+  // the queue pauses the server-list fetch as well: its run starts as soon as the current one ends,
+  // and the fetch would queue behind that run too.
+  const isAnySendReceiveInProgress =
+    isOwnSendReceiveInProgress || syncActivity.isSyncing || syncQueue.waitingProjectIds.length > 0;
   // While the backend reports a run, it alone says which projects are running: Home's own request
   // may only be waiting behind that run, and must not show a spinner. With no run reported, Home's
   // own ids cover the moment between its click and the backend's first activity event.

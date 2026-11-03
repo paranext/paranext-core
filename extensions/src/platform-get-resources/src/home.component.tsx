@@ -47,6 +47,7 @@ import {
   normalizeProjectId,
   PROJECT_OPEN_BLOCKED_FALLBACK_KEY,
 } from 'platform-bible-utils';
+import { withoutSyncBusyMarker } from 'platform-bible-utils/experimental';
 import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { HomeItemDropdownMenu } from './home-item-menu';
@@ -189,10 +190,11 @@ const DEFAULT_SORT_CONFIG: SortConfig = { key: 'language', direction: 'ascending
  * error. The prefix is transport detail that tells the user nothing; the message after it is the
  * backend's own, already localized. The format is produced by `getJsonRpcRequestErrorMessagePrefix`
  * in `src/shared/data/rpc.model.ts`, which an extension cannot import, so this pattern must change
- * with it.
+ * with it. A message that crossed more than one hop carries the prefix once per hop, so every
+ * leading copy is removed.
  */
 function withoutJsonRpcErrorPrefix(message: string): string {
-  return message.replace(/^JSON-RPC Request error \(-?\d+\): /, '');
+  return message.replace(/^(?:JSON-RPC Request error \(-?\d+\): )+/, '');
 }
 
 /**
@@ -535,7 +537,7 @@ export function Home({
     try {
       await onSendReceiveProject(projectId);
     } catch (e) {
-      setActionError(withoutJsonRpcErrorPrefix(getErrorMessage(e)));
+      setActionError(withoutSyncBusyMarker(withoutJsonRpcErrorPrefix(getErrorMessage(e))));
     }
   };
 

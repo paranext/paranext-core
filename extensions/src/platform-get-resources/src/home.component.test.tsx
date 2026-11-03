@@ -231,6 +231,40 @@ describe('Home send/receive failures', () => {
     });
   });
 
+  it.each([
+    ['doubly prefixed', 'JSON-RPC Request error (-32000): JSON-RPC Request error (-32000): Locked'],
+    ['singly prefixed', 'JSON-RPC Request error (-32000): Locked'],
+    ['unprefixed', 'Locked'],
+  ])('shows the same message when it is %s', async (_label, thrown) => {
+    renderHome(
+      vi.fn(async () => {
+        throw new Error(thrown);
+      }),
+    );
+
+    clickSendReceive();
+
+    await waitFor(() => {
+      expect(screen.queryByText('Locked')).not.toBeNull();
+    });
+  });
+
+  it('shows a busy refusal without its marker', async () => {
+    renderHome(
+      vi.fn(async () => {
+        throw new Error(
+          'JSON-RPC Request error (-32000): A sync is already running. Try again later. (SYNC_BUSY)',
+        );
+      }),
+    );
+
+    clickSendReceive();
+
+    await waitFor(() => {
+      expect(screen.queryByText('A sync is already running. Try again later.')).not.toBeNull();
+    });
+  });
+
   it('shows no failure alert when the send/receive callback resolves', async () => {
     const onSendReceiveProject = vi.fn(async () => {});
     renderHome(onSendReceiveProject);

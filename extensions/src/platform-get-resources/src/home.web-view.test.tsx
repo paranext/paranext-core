@@ -477,6 +477,37 @@ describe('HomeWebView requests through the sync queue', () => {
     });
   });
 
+  it('holds the server list fetch while a project waits in the queue, and refetches once when it clears', async () => {
+    mockAvailableQueue(async () => ({}), { waitingProjectIds: ['RH4'] });
+    const home = await renderAndWaitForRemoteState();
+    await waitFor(() => expect(home).toHaveAttribute('data-waiting-projects', '["RH4"]'));
+    await waitFor(() => expect(syncQueueEvents.handlers.length).toBeGreaterThan(0));
+    const sharedProjectsCalls = () =>
+      mockSendCommand.mock.calls.filter(([name]) => name === GET_SHARED_PROJECTS).length;
+    // Activity is idle, so only the waiting project can be what holds the list fetch.
+    expect(home).toHaveAttribute('data-send-receive-in-progress', 'true');
+    const callsWhileWaiting = sharedProjectsCalls();
+
+    await act(async () => {});
+    expect(sharedProjectsCalls()).toBe(callsWhileWaiting);
+
+    await emit(syncQueueEvents, { waitingProjectIds: [] });
+    await waitFor(() => expect(sharedProjectsCalls()).toBe(callsWhileWaiting + 1));
+    expect(home).toHaveAttribute('data-send-receive-in-progress', 'false');
+  });
+
+  it('reads the sync queue only once Send/Receive is known to be available', async () => {
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === IS_AVAILABLE) return false;
+      return undefined;
+    });
+
+    await renderAndWaitForRemoteState();
+    await act(async () => {});
+
+    expect(mockSendCommand).not.toHaveBeenCalledWith(GET_SYNC_QUEUE);
+  });
+
   it('shows no spinner for a request that only waits behind an outside run', async () => {
     mockAvailableQueue(() => new Promise(() => {}));
     const home = await renderSubscribed();
