@@ -15,10 +15,10 @@ import userEvent from '@testing-library/user-event';
 import {
   CARET_IN_NOTE_TEXT,
   caretAncestry,
+  hiddenView,
   installPopoverJsdomStubs,
   REAL_EDITOR_TEST_TIMEOUT_MS,
   renderPopoverAndWaitForInit,
-  hiddenView,
   settle,
   visibleView,
 } from './footnote-editor.test-harness';
