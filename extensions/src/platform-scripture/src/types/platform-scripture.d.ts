@@ -542,13 +542,17 @@ declare module 'platform-scripture' {
      */
     matchedUsfm: string;
     /**
-     * Markers (paragraph, verse, chapter, table, sidebar, and note markers) that lie inside this
-     * result's USFM span and would therefore be deleted by replacing it with plain text. Absent
-     * when the span contains none, which is the common case.
+     * Every marker that lies inside this result's USFM span, and would therefore be deleted by
+     * replacing it with plain text. Absent when the span contains none, which is the common case.
      *
-     * A result that has any is one `replace()` refuses with the `MARKER_DELETION_ERROR` sentinel
-     * unless the replacement USFM puts the same markers back. Consumers should disable or skip
-     * replacement for such results rather than attempting a replacement that can only fail.
+     * Markers with a backslash are listed in order. A closing marker keeps its `*` (`nd*`), and a
+     * verse or chapter marker keeps its number (`v:3`, `c:2`). A nested marker loses its `+`. A
+     * self-closed milestone keeps its empty closer (`zms\*`). Each optional line break (`//`) is
+     * listed after all of them, wherever it falls in the span.
+     *
+     * Unless the replacement USFM puts the same markers back, `replace()` refuses such a result;
+     * its `@throws` lists the refusals. Consumers should show the markers and get the user's
+     * agreement before passing {@link ReplaceOptions.allowMarkerDeletion}, or skip the result.
      */
     removedMarkers?: string[];
   };
@@ -777,10 +781,14 @@ declare module 'platform-scripture' {
        *   exists), is never written and is reported in the returned
        *   {@link ReplaceOutcome.changedIndexes}. When omitted, ranges are written as given and a
        *   location that can no longer be found rejects.
+       * @param options - Optional. See {@link ReplaceOptions}.
        * @returns A {@link ReplaceOutcome} whose `changedIndexes` lists, ascending, the ranges that
        *   were not written.
        * @throws Error if `usfmToInsert` or `expectedUsfm` array length doesn't match
        *   `rangesToReplace` length
+       * @throws Error if {@link ReplaceOptions.allowMarkerDeletion} is set without `expectedUsfm`
+       * @throws Error if any range's start or end offset is negative, whether or not `expectedUsfm`
+       *   is given
        * @throws Error if any range spans multiple books
        * @throws Error if any ranges overlap
        * @throws Error whose message is the `STRUCTURE_PROTECTED_ERROR` sentinel
@@ -788,19 +796,36 @@ declare module 'platform-scripture' {
        *   and a replacement would add, remove, change, or reorder a paragraph-level, verse, or
        *   chapter marker. The Find web view substring-matches this sentinel to surface a localized
        *   message.
+       * @throws Error whose message is the `ONE_ENDED_MARKER_ERROR` sentinel
+       *   (`'platformScripture.replace.oneEndedMarker'`) when a replacement would delete only one
+       *   end of a marker pair. Checked in every interface mode, and
+       *   {@link ReplaceOptions.allowMarkerDeletion} does not lift it. Substring-matched by the Find
+       *   web view in the same way.
        * @throws Error whose message is the `MARKER_DELETION_ERROR` sentinel
-       *   (`'platformScripture.replace.markerDeletion'`) when a replacement would delete a
-       *   structural marker or a note that the replacement does not put back. Checked in every
-       *   interface mode, independently of structure protection. {@link FindResult.removedMarkers}
-       *   reports in advance which results this applies to. Substring-matched by the Find web view
-       *   in the same way.
+       *   (`'platformScripture.replace.markerDeletion'`) when a replacement would delete a marker
+       *   that it does not put back, unless {@link ReplaceOptions.allowMarkerDeletion} is set.
+       *   Checked in every interface mode, independently of structure protection.
+       *   `allowMarkerDeletion` does not lift it for a chapter marker.
+       *   {@link FindResult.removedMarkers} reports in advance which results this applies to.
+       *   Substring-matched by the Find web view in the same way.
        */
       replace(
         rangesToReplace: ScriptureRangeUsjChapterOrUsfmVerseLocation[],
         usfmToInsert: string | string[],
         expectedUsfm?: string[],
+        options?: ReplaceOptions,
       ): Promise<ReplaceOutcome>;
     };
+
+  /** Options for a `replace()` call. */
+  export type ReplaceOptions = {
+    /**
+     * Set when the user has seen the markers in each range and agreed to delete them. Requires
+     * `expectedUsfm`, so that the agreement holds only for the text they saw. Does not lift the
+     * structure protection, one-ended marker, or chapter marker refusals.
+     */
+    allowMarkerDeletion?: boolean;
+  };
 
   /** The result of a `replace()` call. */
   export type ReplaceOutcome = {

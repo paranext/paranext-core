@@ -3,9 +3,100 @@ import {
   collapseUsfmMarkersForDisplay,
   isNoteMarker,
   isStructuralMarker,
+  splitUsfmForMarkerDisplay,
 } from './usfm-tokens.util';
 
 describe('usfm-tokens.util', () => {
+  describe('splitUsfmForMarkerDisplay', () => {
+    const text = (value: string) => ({ text: value, isMarker: false });
+    const marker = (value: string) => ({ text: value, isMarker: true });
+
+    it('returns text with no marker as one text segment', () => {
+      expect(splitUsfmForMarkerDisplay('plain words')).toEqual([text('plain words')]);
+    });
+
+    it('keeps a verse number with its marker', () => {
+      expect(splitUsfmForMarkerDisplay('c\n\\v 3 Dverse')).toEqual([
+        text('c '),
+        marker('\\v 3'),
+        text(' Dverse'),
+      ]);
+    });
+
+    it('turns the line break around a paragraph marker into a space', () => {
+      expect(splitUsfmForMarkerDisplay('b\r\n\\p\r\nAnd')).toEqual([
+        text('b '),
+        marker('\\p'),
+        text(' And'),
+      ]);
+    });
+
+    it('shows a closing marker as it is spelled', () => {
+      expect(splitUsfmForMarkerDisplay('Lord\\nd* God')).toEqual([
+        text('Lord'),
+        marker('\\nd*'),
+        text(' God'),
+      ]);
+    });
+
+    it('leaves out a marker’s attributes', () => {
+      expect(splitUsfmForMarkerDisplay(' \\w bread|pan\\w* and')).toEqual([
+        text(' '),
+        marker('\\w'),
+        text(' bread'),
+        marker('\\w*'),
+        text(' and'),
+      ]);
+    });
+
+    it('shows the text after a literal bar, which is not an attribute', () => {
+      expect(splitUsfmForMarkerDisplay('Lord | God \\nd said\\nd*')).toEqual([
+        text('Lord | God '),
+        marker('\\nd'),
+        text(' said'),
+        marker('\\nd*'),
+      ]);
+    });
+
+    it('shows a milestone’s empty closer as part of it', () => {
+      expect(splitUsfmForMarkerDisplay('a \\qt-s |Pilate\\*q\\qt-e\\* b')).toEqual([
+        text('a '),
+        marker('\\qt-s\\*'),
+        text('q'),
+        marker('\\qt-e\\*'),
+        text(' b'),
+      ]);
+    });
+
+    it('keeps a footnote’s text, so the user can see what would go with it', () => {
+      expect(splitUsfmForMarkerDisplay('a\\f + \\ft note\\f* b')).toEqual([
+        text('a'),
+        marker('\\f'),
+        text(' + '),
+        marker('\\ft'),
+        text(' note'),
+        marker('\\f*'),
+        text(' b'),
+      ]);
+    });
+
+    it('shows an optional line break, which has no backslash', () => {
+      expect(splitUsfmForMarkerDisplay('Lord //said')).toEqual([
+        text('Lord '),
+        marker('//'),
+        text('said'),
+      ]);
+    });
+
+    it('does not collapse a non-breaking space, which is authored text', () => {
+      expect(splitUsfmForMarkerDisplay('a\u00a0\\nd b')).toEqual([
+        text('a\u00a0'),
+        marker('\\nd'),
+        text(' b'),
+      ]);
+    });
+  });
+
   describe('isStructuralMarker', () => {
     it('recognizes paragraph, verse, and chapter markers', () => {
       expect(isStructuralMarker('p')).toBe(true);
@@ -62,24 +153,12 @@ describe('usfm-tokens.util', () => {
   });
 
   describe('isNoteMarker', () => {
-    it('recognizes the note markers the shared map types as notes', () => {
-      expect(isNoteMarker('f')).toBe(true);
-      expect(isNoteMarker('fe')).toBe(true);
-      expect(isNoteMarker('x')).toBe(true);
+    it.each(['f', 'fe', 'x', 'ef', 'ex', 'efe'])('recognizes \\%s as a note', (marker) => {
+      expect(isNoteMarker(marker)).toBe(true);
     });
 
-    it('recognizes every extended study-Bible variant the map types as a note', () => {
-      expect(isNoteMarker('ef')).toBe(true);
-      expect(isNoteMarker('ex')).toBe(true);
-      // `efe` is the one a hand-written `/^e[fx]$/` exception missed.
-      expect(isNoteMarker('efe')).toBe(true);
-    });
-
-    it('is false for note content markers and for block markers', () => {
-      // `ft`/`xt` are genuine character markers inside a note, not the note itself.
-      expect(isNoteMarker('ft')).toBe(false);
-      expect(isNoteMarker('xt')).toBe(false);
-      expect(isNoteMarker('p')).toBe(false);
+    it.each(['ft', 'fq', 'xt', 'xo', 'nd', 'p', 'zx'])('is false for \\%s', (marker) => {
+      expect(isNoteMarker(marker)).toBe(false);
     });
   });
 

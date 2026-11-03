@@ -13,6 +13,7 @@ import {
 } from './platform-scripture-finder-pdpe.model';
 import {
   MARKER_DELETION_ERROR,
+  ONE_ENDED_MARKER_ERROR,
   STRUCTURE_PROTECTED_ERROR,
 } from '../find/structure-protection.util';
 
@@ -1509,6 +1510,81 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       expect(writtenUsfm).toContain(String.raw`\v 1 XXX REPLACED`);
     });
 
+    it('keeps a change whose notification has not arrived when the chapter was cached', async () => {
+      const verse1Range = (startOffset: number, endOffset: number) => ({
+        start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: startOffset },
+        end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: endOffset },
+      });
+      // An empty range with an empty replacement writes nothing, but reads chapter 1 into the cache
+      await engine.replace([verse1Range(5, 5)], '');
+      // Another writer, such as the editor saving, changes verse 2; its notification never comes
+      const setChapterUsfm = vi.mocked(mockPdps['platformScripture.USFM_Chapter'].setChapterUSFM);
+      await setChapterUsfm(
+        { book: 'MAT', chapterNum: 1, verseNum: 0 },
+        TEST_CHAPTER_1_USFM.replace('Abraham was', 'Abram was'),
+      );
+      setChapterUsfm.mockClear();
+
+      await engine.replace([verse1Range(5, 8)], 'FIRST');
+
+      expect(getWrittenUsfm()).toContain(String.raw`\v 1 FIRST book`);
+      expect(getWrittenUsfm()).toContain(String.raw`\v 2 Abram was`);
+    });
+
+    it('keeps a change whose notification arrives while a cached chapter is read again', async () => {
+      const notifyChange = getCapturedChapterSubscribeCallback();
+      const verse1Range = (book: string, startOffset: number, endOffset: number) => ({
+        start: { verseRef: { book, chapterNum: 1, verseNum: 1 }, offset: startOffset },
+        end: { verseRef: { book, chapterNum: 1, verseNum: 1 }, offset: endOffset },
+      });
+      // An empty range with an empty replacement writes nothing, but reads MAT 1 into the cache
+      await engine.replace([verse1Range('MAT', 5, 5)], '');
+
+      // Hold the next read of MAT 1, which is the re-read of its cached copy before writing
+      const getChapterUsx = vi.mocked(mockPdps['platformScripture.USX_Chapter'].getChapterUSX);
+      const readFromStore = getChapterUsx.getMockImplementation();
+      if (!readFromStore) throw new Error('getChapterUSX has no implementation to wrap');
+      const heldReads: Array<() => void> = [];
+      getChapterUsx.mockImplementation(async (verseRef) => {
+        const usx = await readFromStore(verseRef);
+        if (verseRef.book !== 'MAT' || heldReads.length > 0) return usx;
+        return new Promise((resolve) => {
+          heldReads.push(() => resolve(usx));
+        });
+      });
+
+      // MRK 1 is not cached, so this call fetches it fresh and does not read it again
+      const replacePromise = engine.replace(
+        [verse1Range('MAT', 5, 8), verse1Range('MRK', 5, 8)],
+        ['MATX', 'MRKX'],
+        ['The', 'The'],
+      );
+      await flushPromises();
+      expect(heldReads).toHaveLength(1);
+
+      // The editor saves MRK 1, and its notification arrives while MAT 1 is being read again
+      const setChapterUsfm = vi.mocked(mockPdps['platformScripture.USFM_Chapter'].setChapterUSFM);
+      await setChapterUsfm(
+        { book: 'MRK', chapterNum: 1, verseNum: 0 },
+        String.raw`\id MRK
+\c 1
+\p
+\v 1 The beginning of the GOSPEL of Jesus Christ.`,
+      );
+      setChapterUsfm.mockClear();
+      notifyChange();
+      // MAT 1 has not changed
+      heldReads[0]();
+      await replacePromise;
+
+      const mrkWrites = setChapterUsfm.mock.calls
+        .filter(([verseRef]) => verseRef.book === 'MRK')
+        .map(([, usfm]) => String(usfm));
+      expect(mrkWrites).toEqual([
+        expect.stringContaining(String.raw`\v 1 MRKX beginning of the GOSPEL`),
+      ]);
+    });
+
     it('should throw if disposed before writing (Phase 2)', async () => {
       // This test verifies that replace operations fail gracefully if the PDPE is disposed
       // after Phase 1 (computation) but before Phase 2 (writing)
@@ -2312,14 +2388,16 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
         buildChapterUsx(['the <char style="nd">Lord</char> said']),
       );
       const [result] = await pollFindJob(finder, {
-        searchString: 'the Lord',
+        searchString: 'the Lord said',
         scope: [{ bookId: 'MAT' }],
         caseInsensitive: false,
       });
 
-      await expect(finder.replace([toRange(result)], 'God', [result.matchedUsfm])).resolves.toEqual(
-        { changedIndexes: [] },
-      );
+      await expect(
+        finder.replace([toRange(result)], 'God', [result.matchedUsfm], {
+          allowMarkerDeletion: true,
+        }),
+      ).resolves.toEqual({ changedIndexes: [] });
       expect(written(pdps)[0]).toContain('\\v 1 God');
     });
 
@@ -2595,7 +2673,7 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       expect(results).toHaveLength(1);
       // `\p` opens the second paragraph and `\v 2` opens the verse inside it; both sit in the gap
       // the match runs across, so both would be deleted by a plain-text replacement.
-      expect(results[0].removedMarkers).toEqual(['p', 'v']);
+      expect(results[0].removedMarkers).toEqual(['p', 'v:2']);
     });
 
     it('leaves removedMarkers off a match that spans no marker at all', async () => {
@@ -2648,9 +2726,9 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
 
       // Putting the note back is accepted, which shows the refusal is the deletion guard counting
       // markers rather than structure protection refusing the range outright.
-      await expect(noteEngine.replace(ranges, 'replaced\\f + \\ft a note\\f*')).resolves.toEqual({
-        changedIndexes: [],
-      });
+      await expect(
+        noteEngine.replace(ranges, 'replaced\\f + \\ft a note\\ft*\\f*'),
+      ).resolves.toEqual({ changedIndexes: [] });
     });
 
     it('refuses a boundary-spanning replacement in simple mode too, via structure protection', async () => {
@@ -2672,6 +2750,264 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
         STRUCTURE_PROTECTED_ERROR,
       );
     });
+  });
+});
+
+/**
+ * The search runs over every text node of the chapter joined with nothing between them, so a match
+ * can start in one paragraph, verse, note or character span and end in the next, and Replace
+ * deletes all the USFM between its two ends. These pin what Replace may do about that: ask first,
+ * or refuse.
+ */
+describe('ScriptureFinderProjectDataProviderEngine replaces a match that crosses markers', () => {
+  const CROSS_MARKER_USX = `<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.0">
+  <book code="MAT" style="id">Matthew</book>
+  <chapter number="1" style="c" sid="MAT 1"/>
+  <para style="p"><verse number="1" style="v" sid="MAT 1:1"/>The first paragraph ends with b</para>
+  <para style="p">And the second paragraph goes on.<verse eid="MAT 1:1"/><verse number="2" style="v" sid="MAT 1:2"/>Verse two ends in c<verse eid="MAT 1:2"/><verse number="3" style="v" sid="MAT 1:3"/>Dverse three has a word<note caller="+" style="f"><char style="fr" closed="false">1:3 </char><char style="ft" closed="false">Note text</char></note> in it.<verse eid="MAT 1:3"/><verse number="4" style="v" sid="MAT 1:4"/>Say the <char style="nd">Lord</char> God.<verse eid="MAT 1:4"/></para>
+  <chapter eid="MAT 1"/>
+</usx>`;
+
+  /** Matches that cross a marker with both ends of every pair inside them. */
+  const WHOLE_MARKER_CROSSINGS = [
+    ['a paragraph break', 'bAnd', ['p']],
+    ['a verse boundary inside a paragraph', 'cDverse', ['v:3']],
+    ['a whole character span', 'the Lord God', ['nd', 'nd*']],
+    ['a whole footnote', 'word1:3 Note text in', ['f', 'fr', 'ft', 'f*']],
+  ] as const;
+  /** Matches that hold only one end of a marker pair. */
+  const ONE_ENDED_CROSSINGS = [
+    ['into a footnote', 'word1:3', ['f', 'fr']],
+    ['out of a character span', 'Lord God', ['nd*']],
+    ['out of a footnote', 'Note text in', ['f*']],
+  ] as const;
+
+  let pdps: ScriptureFinderOverlayPDPs;
+  let engine: ScriptureFinderProjectDataProviderEngine;
+
+  function setUp(interfaceMode: 'power' | 'simple') {
+    vi.mocked(papi.settings.get).mockResolvedValue(interfaceMode);
+    pdps = createSingleUsxMockPdps(CROSS_MARKER_USX);
+    engine = new ScriptureFinderProjectDataProviderEngine(pdps);
+  }
+
+  function writtenChapterUsfm(): string | undefined {
+    const { calls } = vi.mocked(pdps['platformScripture.USFM_Chapter'].setChapterUSFM).mock;
+    return calls.length > 0 ? String(calls[calls.length - 1][1]) : undefined;
+  }
+
+  async function findOne(searchString: string): Promise<FindResult> {
+    const results = await pollFindJob(engine, {
+      searchString,
+      scope: [{ bookId: 'MAT', chapter: 1 }],
+      caseInsensitive: false,
+    });
+    expect(results).toHaveLength(1);
+    return results[0];
+  }
+
+  async function replaceFound(result: FindResult, allowMarkerDeletion?: boolean) {
+    return engine.replace(
+      [{ start: result.start, end: result.end }],
+      'X',
+      [result.matchedUsfm],
+      allowMarkerDeletion === undefined ? undefined : { allowMarkerDeletion },
+    );
+  }
+
+  describe('in Power mode, where structure protection is off', () => {
+    beforeEach(() => setUp('power'));
+
+    it.each(WHOLE_MARKER_CROSSINGS)(
+      'reports the markers in %s, and refuses to delete them unconfirmed',
+      async (_crossing, searchString, expectedMarkers) => {
+        const result = await findOne(searchString);
+
+        expect(result.removedMarkers).toEqual(expectedMarkers);
+        await expect(replaceFound(result)).rejects.toThrow(MARKER_DELETION_ERROR);
+        expect(writtenChapterUsfm()).toBeUndefined();
+      },
+    );
+
+    it('writes the replacement over a confirmed paragraph break', async () => {
+      await replaceFound(await findOne('bAnd'), true);
+
+      const written = writtenChapterUsfm();
+      expect(written).toContain('paragraph ends with X the second paragraph');
+      expect(written?.match(/\\p/g)).toHaveLength(1);
+    });
+
+    it('writes the replacement over a confirmed verse boundary', async () => {
+      await replaceFound(await findOne('cDverse'), true);
+
+      const written = writtenChapterUsfm();
+      expect(written).toContain('Verse two ends in X three has a word');
+      expect(written).not.toContain('\\v 3');
+      expect(written).toContain('\\v 4');
+    });
+
+    it('writes the replacement over a confirmed whole character span', async () => {
+      await replaceFound(await findOne('the Lord God'), true);
+
+      const written = writtenChapterUsfm();
+      expect(written).toContain('Say X.');
+      expect(written).not.toContain('\\nd');
+    });
+
+    it('writes the replacement over a confirmed whole footnote', async () => {
+      await replaceFound(await findOne('word1:3 Note text in'), true);
+
+      const written = writtenChapterUsfm();
+      expect(written).toContain('has a X it.');
+      expect(written).not.toContain('\\f');
+    });
+
+    it('leaves every marker after a replacement that deletes none, without confirmation', async () => {
+      await replaceFound(await findOne('second'));
+
+      const written = writtenChapterUsfm();
+      expect(written).toContain('the X paragraph');
+      ['\\p', '\\v 3', '\\f + ', '\\f*', '\\nd ', '\\nd*'].forEach((marker) =>
+        expect(written).toContain(marker),
+      );
+    });
+  });
+
+  describe.each(['power', 'simple'] as const)('in %s mode', (interfaceMode) => {
+    beforeEach(() => setUp(interfaceMode));
+
+    describe.each([false, true])('with allowMarkerDeletion %s', (allowMarkerDeletion) => {
+      it.each(ONE_ENDED_CROSSINGS)(
+        'refuses a match %s, which holds only one end of a pair',
+        async (_crossing, searchString, expectedMarkers) => {
+          const result = await findOne(searchString);
+
+          expect(result.removedMarkers).toEqual(expectedMarkers);
+          await expect(replaceFound(result, allowMarkerDeletion)).rejects.toThrow(
+            ONE_ENDED_MARKER_ERROR,
+          );
+          expect(writtenChapterUsfm()).toBeUndefined();
+        },
+      );
+    });
+
+    it.each(['Lord', 'word', 'Note text', 'ends with b', 'And the'])(
+      'reports no marker in %s, which touches markers without crossing them',
+      async (searchString) => {
+        const result = await findOne(searchString);
+
+        expect(result.removedMarkers).toBeUndefined();
+        await expect(replaceFound(result)).resolves.toEqual({ changedIndexes: [] });
+        expect(writtenChapterUsfm()).toContain('X');
+      },
+    );
+  });
+
+  describe('in Simple mode, where structure protection is on', () => {
+    beforeEach(() => setUp('simple'));
+
+    it.each([
+      ['a paragraph break', 'bAnd'],
+      ['a verse boundary', 'cDverse'],
+    ])('refuses %s even when confirmed', async (_crossing, searchString) => {
+      await expect(replaceFound(await findOne(searchString), true)).rejects.toThrow(
+        STRUCTURE_PROTECTED_ERROR,
+      );
+      expect(writtenChapterUsfm()).toBeUndefined();
+    });
+
+    it('lets a confirmed whole character span through, which is not structure', async () => {
+      await replaceFound(await findOne('the Lord God'), true);
+
+      const written = writtenChapterUsfm();
+      expect(written).toContain('Say X.');
+      expect(written).not.toContain('\\nd');
+    });
+
+    it('lets a confirmed whole footnote through, which is not structure', async () => {
+      await replaceFound(await findOne('word1:3 Note text in'), true);
+
+      const written = writtenChapterUsfm();
+      expect(written).toContain('has a X it.');
+      expect(written).not.toContain('\\f');
+    });
+
+    it.each([
+      ['a whole character span', 'the Lord God'],
+      ['a whole footnote', 'word1:3 Note text in'],
+    ])('refuses %s unconfirmed', async (_crossing, searchString) => {
+      await expect(replaceFound(await findOne(searchString))).rejects.toThrow(
+        MARKER_DELETION_ERROR,
+      );
+      expect(writtenChapterUsfm()).toBeUndefined();
+    });
+  });
+
+  it('counts an optional line break as a marker, though it has no backslash', async () => {
+    vi.mocked(papi.settings.get).mockResolvedValue('power');
+    pdps = createSingleUsxMockPdps(`<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.0">
+  <book code="MAT" style="id">Matthew</book>
+  <chapter number="1" style="c" sid="MAT 1"/>
+  <para style="p"><verse number="1" style="v" sid="MAT 1:1"/>the Lord <optbreak/>said to him<verse eid="MAT 1:1"/></para>
+  <chapter eid="MAT 1"/>
+</usx>`);
+    engine = new ScriptureFinderProjectDataProviderEngine(pdps);
+
+    const result = await findOne('Lord said');
+
+    expect(result.removedMarkers).toEqual(['//']);
+    await expect(replaceFound(result)).rejects.toThrow(MARKER_DELETION_ERROR);
+    expect(writtenChapterUsfm()).toBeUndefined();
+
+    await replaceFound(result, true);
+    expect(writtenChapterUsfm()).not.toContain('//');
+  });
+
+  it('does not let confirmation stand without what the user was shown', async () => {
+    setUp('power');
+    const result = await findOne('bAnd');
+
+    // `expectedUsfm` is what ties the confirmation to the text in the prompt.
+    await expect(
+      engine.replace([{ start: result.start, end: result.end }], 'X', undefined, {
+        allowMarkerDeletion: true,
+      }),
+    ).rejects.toThrow('expectedUsfm');
+    expect(writtenChapterUsfm()).toBeUndefined();
+  });
+
+  it('refuses to delete a chapter marker even when confirmed', async () => {
+    vi.mocked(papi.settings.get).mockResolvedValue('power');
+    const twoChapterPdps = createSingleUsxMockPdps(`<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.0">
+  <book code="MAT" style="id">Matthew</book>
+  <chapter number="1" style="c" sid="MAT 1"/>
+  <para style="p"><verse number="1" style="v" sid="MAT 1:1"/>Chapter one ends here<verse eid="MAT 1:1"/></para>
+  <chapter eid="MAT 1"/>
+  <chapter number="2" style="c" sid="MAT 2"/>
+  <para style="p"><verse number="1" style="v" sid="MAT 2:1"/>Next chapter<verse eid="MAT 2:1"/></para>
+  <chapter eid="MAT 2"/>
+</usx>`);
+    const twoChapterEngine = new ScriptureFinderProjectDataProviderEngine(twoChapterPdps);
+
+    const results = await pollFindJob(twoChapterEngine, {
+      searchString: 'hereNext',
+      scope: [{ bookId: 'MAT' }],
+      caseInsensitive: false,
+    });
+
+    expect(results).toHaveLength(1);
+    await expect(
+      twoChapterEngine.replace(
+        [{ start: results[0].start, end: results[0].end }],
+        'X',
+        [results[0].matchedUsfm],
+        { allowMarkerDeletion: true },
+      ),
+    ).rejects.toThrow(MARKER_DELETION_ERROR);
+    expect(twoChapterPdps['platformScripture.USFM_Book'].setBookUSFM).not.toHaveBeenCalled();
   });
 });
 
@@ -2807,6 +3143,127 @@ describe('ScriptureFinderProjectDataProviderEngine word restriction', () => {
       // Case-sensitive finds fewer (misses "The" at start of ch1:v1)
       expect(sensitive.length).toBeLessThan(insensitive.length);
     });
+  });
+});
+
+describe('ScriptureFinderProjectDataProviderEngine word restriction at a block edge', () => {
+  // The text of neighboring blocks is searched with nothing between it, so `Isaac` and `And` read as
+  // `IsaacAnd`. `Then` starts the third paragraph and `Next` the second chapter.
+  const BLOCKS_USX = `<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.0">
+  <book code="MAT" style="id">Matthew</book>
+  <chapter number="1" style="c" sid="MAT 1"/>
+  <para style="p"><verse number="1" style="v" sid="MAT 1:1"/>the son of Isaac</para>
+  <para style="p">And Jacob</para>
+  <para style="p">Then the café</para>
+  <para style="q1">école comes last<verse eid="MAT 1:1"/></para>
+  <chapter eid="MAT 1"/>
+  <chapter number="2" style="c" sid="MAT 2"/>
+  <para style="p"><verse number="1" style="v" sid="MAT 2:1"/>Next the end<verse eid="MAT 2:1"/></para>
+  <chapter eid="MAT 2"/>
+</usx>`;
+
+  type FindOptionOverrides = Partial<
+    Omit<
+      Parameters<ScriptureFinderProjectDataProviderEngine['beginFindJob']>[0],
+      'searchString' | 'scope'
+    >
+  >;
+
+  function find(searchString: string, options: FindOptionOverrides = {}): Promise<string[]> {
+    const engine = new ScriptureFinderProjectDataProviderEngine(
+      createSingleUsxMockPdps(BLOCKS_USX),
+    );
+    return pollFindJobTexts(engine, {
+      searchString,
+      scope: [{ bookId: 'MAT' }],
+      caseInsensitive: false,
+      wordRestriction: 'wholeWord',
+      ...options,
+    });
+  }
+
+  it.each([
+    ['at the end of a paragraph', 'Isaac'],
+    ['at the start of a paragraph', 'And'],
+    ['at the end of a chapter', 'last'],
+    ['at the start of a chapter', 'Next'],
+  ])('finds a whole word %s', async (_where, word) => {
+    expect(await find(word)).toEqual([word]);
+  });
+
+  it('finds a word that starts a block with startOfWord', async () => {
+    expect(await find('And', { wordRestriction: 'startOfWord' })).toEqual(['And']);
+  });
+
+  it('finds a word that ends a block with endOfWord', async () => {
+    expect(await find('Isaac', { wordRestriction: 'endOfWord' })).toEqual(['Isaac']);
+  });
+
+  it('still finds a word with ignoreDiacritics, where offsets are NFD', async () => {
+    expect(await find('cafe', { ignoreDiacritics: true })).toEqual(['café']);
+    expect(await find('ecole', { ignoreDiacritics: true })).toEqual(['école']);
+  });
+
+  it('still does not find part of a word inside a block', async () => {
+    expect(await find('saac')).toEqual([]);
+    expect(await find('Isa')).toEqual([]);
+    expect(await find('on')).toEqual([]);
+  });
+
+  it('still does not count a word that only starts at a block edge', async () => {
+    expect(await find('Isa', { wordRestriction: 'startOfWord' })).toEqual(['Isa']);
+    expect(await find('Isa', { wordRestriction: 'endOfWord' })).toEqual([]);
+  });
+
+  it('finds a phrase running across blocks, whose ends are at block edges', async () => {
+    expect(await find('Isaac And Jacob')).toHaveLength(1);
+  });
+
+  it('finds a query ending in whitespace that ends a block, with ignoreWhitespaceDifferences', async () => {
+    // `and ` at the end of the first paragraph runs into `Moses` in the joined text
+    const engine = new ScriptureFinderProjectDataProviderEngine(
+      createSingleUsxMockPdps(`<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.0">
+  <book code="MAT" style="id">Matthew</book>
+  <chapter number="1" style="c" sid="MAT 1"/>
+  <para style="p"><verse number="1" style="v" sid="MAT 1:1"/>Aaron and </para>
+  <para style="p">Moses came<verse eid="MAT 1:1"/></para>
+  <chapter eid="MAT 1"/>
+</usx>`),
+    );
+    const results = await pollFindJobTexts(engine, {
+      searchString: 'and ',
+      scope: [{ bookId: 'MAT' }],
+      caseInsensitive: false,
+      ignoreWhitespaceDifferences: true,
+      wordRestriction: 'wholeWord',
+    });
+    expect(results).toEqual(['and ']);
+  });
+
+  it('reports every occurrence once, in document order', async () => {
+    expect(await find('the')).toEqual(['the', 'the', 'the']);
+    const engine = new ScriptureFinderProjectDataProviderEngine(
+      createSingleUsxMockPdps(BLOCKS_USX),
+    );
+    const results = await pollFindJob(engine, {
+      searchString: 'the',
+      scope: [{ bookId: 'MAT' }],
+      caseInsensitive: false,
+      wordRestriction: 'wholeWord',
+    });
+    expect(results.map((result) => result.start.verseRef.chapterNum)).toEqual([1, 1, 2]);
+  });
+
+  it('matches inside a word when there is no word restriction', async () => {
+    expect(await find('saac', { wordRestriction: 'none' })).toEqual(['saac']);
+  });
+
+  it('leaves a regex-mode pattern to mean what the user wrote', async () => {
+    // A lazy pattern relies on the engine backtracking to satisfy the word boundary, and `^`/`$`
+    // would change meaning, so regex mode keeps its lookarounds and with them this gap.
+    expect(await find('Isaac', { useRegex: true })).toEqual([]);
   });
 });
 
@@ -3131,6 +3588,69 @@ describe('ScriptureFinderProjectDataProviderEngine whitespace matching', () => {
         expect(results).toEqual(['the Word']);
       },
     );
+
+    describe('with a query ending in whitespace and a word restriction on its end', () => {
+      /**
+       * Finds in one paragraph of `text`, with the project's default character classes, which count
+       * the zero-width joiner and non-joiner as word-forming
+       */
+      function findInParagraph(
+        text: string,
+        searchString: string,
+        wordRestriction: 'wholeWord' | 'endOfWord',
+      ): Promise<string[]> {
+        const pdps = createSingleUsxMockPdps(`<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.0">
+  <book code="MAT" style="id">Matthew</book>
+  <chapter number="1" style="c" sid="MAT 1"/>
+  <para style="p"><verse number="1" style="v" sid="MAT 1:1"/>${text}<verse eid="MAT 1:1"/></para>
+  <chapter eid="MAT 1"/>
+</usx>`);
+        const getSetting = vi.mocked(pdps['platform.base'].getSetting);
+        const readTestSetting = getSetting.getMockImplementation();
+        if (!readTestSetting) throw new Error('getSetting has no implementation to wrap');
+        getSetting.mockImplementation((key, ...rest) =>
+          key === 'platformScripture.baseCharacterClassRegex'
+            ? Promise.resolve('\\p{Lu}\\p{Ll}\\p{Lt}\\p{Lo}\\p{Cn}\\u200C\\u200D')
+            : readTestSetting(key, ...rest),
+        );
+        const engine = new ScriptureFinderProjectDataProviderEngine(pdps);
+        return pollFindJobTexts(engine, {
+          searchString,
+          scope: SCOPE,
+          caseInsensitive: false,
+          ignoreWhitespaceDifferences: true,
+          wordRestriction,
+        });
+      }
+
+      // The run must take in the invisible character too, or the match would end inside a word
+      it.each(['wholeWord', 'endOfWord'] as const)(
+        'extends the run over a zero-width non-joiner under the %s restriction',
+        async (wordRestriction) => {
+          expect(await findInParagraph('Go and ‌. more', 'and ', wordRestriction)).toEqual([
+            'and ‌',
+          ]);
+        },
+      );
+
+      it.each(['wholeWord', 'endOfWord'] as const)(
+        'extends the run over a zero-width joiner under the %s restriction',
+        async (wordRestriction) => {
+          expect(await findInParagraph('Then Jesus. ‍“Then', 'Jesus. ', wordRestriction)).toEqual([
+            'Jesus. ‍',
+          ]);
+        },
+      );
+
+      it('still takes the shortest run when that already ends the word', async () => {
+        expect(await findInParagraph('Go and  “more', 'and ', 'wholeWord')).toEqual(['and ']);
+      });
+
+      it('still does not end a match inside a word', async () => {
+        expect(await findInParagraph('Go and more', 'and ', 'wholeWord')).toEqual([]);
+      });
+    });
 
     it('is not applied in regex mode, where the pattern must mean exactly what the user wrote', async () => {
       const results = await findIn(SINGLE_SPACED_CHAPTER_USX, 'the {3}Word', {

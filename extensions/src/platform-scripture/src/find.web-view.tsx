@@ -42,6 +42,7 @@ import {
   FindJobStatusReport,
   FindOptions,
   FindScope,
+  ReplaceOptions,
   WordRestriction,
 } from 'platform-scripture';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -53,14 +54,15 @@ import { FIND_FOCUS_SEARCH_EVENT } from './find.model';
 import { useFocusSearchOnInvoke } from './find/use-focus-search-on-invoke.hook';
 import { buildFindOptions } from './find/find-options.utils';
 import {
-  applyPreserveCase,
   armBoundedWait,
   buildReplacedAllMessage,
+  buildSkippedMatchMessage,
   callControllerSafely,
   classifyPollAttempt,
   GIVE_UP_AFTER_MS,
   gateStartSearch,
   getChangedResults,
+  getUsfmToInsert,
   isDifferentProjectSelection,
   isFindQueryValid,
   isSimpleInterfaceMode,
@@ -76,10 +78,11 @@ import {
 import { deriveFindBookLists, UNKNOWN_FIND_BOOK_LISTS } from './find/find-book-lists.utils';
 import { isExtraMaterialBookId } from './find/extra-material.utils';
 import {
+  getMarkerReplaceAction,
   MARKER_DELETION_ERROR,
-  STRUCTURE_PROTECTED_ERROR,
-  markersDeletedBy,
+  ONE_ENDED_MARKER_ERROR,
   replacementContainsStructuralMarker,
+  STRUCTURE_PROTECTED_ERROR,
 } from './find/structure-protection.util';
 import { LocalizedBookData, SearchTextType } from './find/find-types';
 import {
@@ -87,7 +90,13 @@ import {
   SEARCH_RESULT_LOCALIZED_STRING_KEYS,
 } from './find/search-result.component';
 import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './find/replace-preview-types';
+import {
+  REPLACE_MARKERS_PROMPT_STRING_KEYS,
+  ReplaceMarkersPrompt,
+} from './find/replace-markers-prompt.component';
+import { useMarkerReplacePrompt } from './find/use-marker-replace-prompt.hook';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
+import { IS_REPLACE_ALL_ENABLED } from './replace-all-enabled.const';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import { useProjectRecencyMap } from './hooks/use-project-recency-map';
 import {
@@ -116,6 +125,7 @@ const WEB_VIEW_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_replacedNOfMResultsTextChanged%',
   '%webView_find_replacedNOfMResultsTextChangedOrMarker%',
   '%webView_find_replacementReverted%',
+  '%webView_find_replace_oneEndedMarkerError%',
   '%webView_find_replace_textChangedAllResults%',
   '%webView_find_replace_textChangedError%',
   '%webView_find_replace_textChangedOrMarkerAllResults%',
@@ -124,6 +134,7 @@ const WEB_VIEW_LOCALIZED_STRINGS: LocalizeKey[] = [
 
 const LOCALIZED_STRINGS: LocalizeKey[] = [
   ...FIND_LOCALIZED_STRING_KEYS,
+  ...REPLACE_MARKERS_PROMPT_STRING_KEYS,
   ...WEB_VIEW_LOCALIZED_STRINGS,
 ];
 
@@ -133,13 +144,6 @@ const SEARCH_DEBOUNCE_DELAY_MS = 500;
 const HISTORY_DEBOUNCE_DELAY_MS = 5000;
 /** Stable empty-array reference so the History data subscription's default doesn't change identity. */
 const DEFAULT_RECENT_SEARCHES: string[] = [];
-/**
- * Whether Find offers Replace All. Off because it rewrites every match in the scope at once and
- * can't be undone in the app after its 1-second Cancel window (only by reverting to the history
- * point it saves first). Turn it back on once it has an undo or a confirmation, and un-skip the
- * Replace All e2e test in replace.spec.ts.
- */
-const IS_REPLACE_ALL_ENABLED = false;
 
 /** Display names and language for every scripture project/resource, keyed by canonical project id. */
 type ProjectNamesById = {
@@ -318,6 +322,7 @@ global.webViewComponent = function FindWebView({
     () => isSimpleInterfaceMode(interfaceModePossiblyError),
     [interfaceModePossiblyError],
   );
+  const isReplaceOffered = !isSimpleMode;
   // If the user was left in replace mode (persisted from power mode) and the interface switches to
   // simple, coerce back to find so the internal replace-gating effects below also see find mode.
   useEffect(() => {
@@ -1772,20 +1777,6 @@ global.webViewComponent = function FindWebView({
     if (searchStatus !== 'running') setIsPostReplaceSearch(false);
   }, [searchStatus]);
 
-  // When scripture changes externally in Replace mode, auto-re-run find so positions stay fresh.
-  useEffect(() => {
-    if (activeMode !== 'replace') return;
-    if (scriptureDataBaselineRef.current === undefined) return; // No baseline yet
-    if (isReplacing || searchStatus === 'running' || searchStatus === undefined) return;
-    if (!monitoredScope) return; // No previous search to re-run
-    if (scriptureDataForChangeDetection === undefined) return;
-    if (scriptureDataForChangeDetection === scriptureDataBaselineRef.current) return;
-
-    // External change detected — update baseline and re-run find to refresh positions
-    scriptureDataBaselineRef.current = scriptureDataForChangeDetection;
-    handleStartSearchRef.current();
-  }, [scriptureDataForChangeDetection, activeMode, isReplacing, searchStatus, monitoredScope]);
-
   // #endregion
 
   // Auto-select first result when switching to Replace mode, or advance to the next result
@@ -1971,18 +1962,20 @@ global.webViewComponent = function FindWebView({
     setFocusedResultIndex(undefined);
   }, []);
 
-  const handleReplace = useCallback(
-    async (resultIndex?: number) => {
-      if (isReplacing || !projectId || boundProjectUnsupportedReason) return;
-      const indexToReplace = resultIndex ?? focusedResultIndex;
-      if (indexToReplace === undefined || !replacePdp) return;
-
-      const result = results[indexToReplace];
-      if (!result || result.isHidden) return;
-
-      const usfmToInsert = preserveCase
-        ? applyPreserveCase(result.text ?? '', replaceTerm)
-        : replaceTerm;
+  /**
+   * Writes a single replacement, with everything around it. Assumes the user may replace it.
+   *
+   * @param usfmToInsert What to write, after any preserve-case change: the same text the marker
+   *   check was asked about, so what is written is what was decided on
+   */
+  const runReplace = useCallback(
+    async (
+      indexToReplace: number,
+      result: HidableFindResult,
+      usfmToInsert: string,
+      options?: ReplaceOptions,
+    ) => {
+      if (!replacePdp) return;
 
       const bookVerseRef = { book: result.start.verseRef.book, chapterNum: 1, verseNum: 0 };
       setIsReplacing(true);
@@ -2031,6 +2024,7 @@ global.webViewComponent = function FindWebView({
           [{ start: result.start, end: result.end }],
           usfmToInsert,
           [result.matchedUsfm],
+          options,
         );
 
         // The text changed after the search, so nothing was written: there is nothing to commit,
@@ -2112,8 +2106,12 @@ global.webViewComponent = function FindWebView({
         const message = getErrorMessage(error);
         if (message.includes(STRUCTURE_PROTECTED_ERROR)) {
           sonner(localizedStrings['%webView_find_replace_structureProtectedError%']);
+        } else if (message.includes(ONE_ENDED_MARKER_ERROR)) {
+          sonner(
+            buildSkippedMatchMessage('oneEndedMarker', result, localizedStrings, localizedBookData),
+          );
         } else if (message.includes(MARKER_DELETION_ERROR)) {
-          sonner(localizedStrings['%webView_find_replace_markerDeletionError%']);
+          sonner(localizedStrings['%webView_find_replace_markerDeletionError_2%']);
         } else {
           logger.error(`Error replacing result: ${message}`);
         }
@@ -2122,18 +2120,90 @@ global.webViewComponent = function FindWebView({
       }
     },
     [
-      boundProjectUnsupportedReason,
-      focusedResultIndex,
-      isReplacing,
+      localizedBookData,
       localizedStrings,
-      preserveCase,
       reSearchAfterReplace,
       replacePdp,
       replaceTerm,
-      results,
       usfmBookPdp,
       searchTerm,
       projectId,
+    ],
+  );
+
+  const markerReplacePrompt = useMarkerReplacePrompt({
+    results,
+    resultsRef,
+    isStructureProtected,
+    canReplace: isEditable && activeMode === 'replace',
+    runReplace,
+    localizedStrings,
+    localizedBookData,
+  });
+  const { replaceOrAsk } = markerReplacePrompt;
+
+  // When scripture changes externally in Replace mode, auto-re-run find so positions stay fresh.
+  //
+  // An open marker prompt holds the re-search off, as a replace in progress does, and the re-search
+  // runs once the prompt closes. Re-searching would empty the list and close the prompt under the
+  // user, and a toolbar Replace pressed next would act on whatever result was selected after it.
+  // The editor saving a typed change as the Replace click takes its focus is enough to cause that.
+  // Holding off is safe: a confirm writes only if the match still reads as the user saw it, since
+  // `replace()` checks it against `expectedUsfm`.
+  //
+  // Hidden case: the re-search does not wait for the tab to be shown, while an open prompt holds it
+  // off whether the tab is shown or not, so a prompt left open on a hidden tab is still there, about
+  // the same match, when the tab is shown again.
+  const { isPromptOpen: isMarkerPromptOpen } = markerReplacePrompt;
+  useEffect(() => {
+    if (activeMode !== 'replace') return;
+    if (scriptureDataBaselineRef.current === undefined) return; // No baseline yet
+    if (isReplacing || isMarkerPromptOpen) return;
+    if (searchStatus === 'running' || searchStatus === undefined) return;
+    if (!monitoredScope) return; // No previous search to re-run
+    if (scriptureDataForChangeDetection === undefined) return;
+    if (scriptureDataForChangeDetection === scriptureDataBaselineRef.current) return;
+
+    // External change detected — update baseline and re-run find to refresh positions
+    scriptureDataBaselineRef.current = scriptureDataForChangeDetection;
+    handleStartSearchRef.current();
+  }, [
+    scriptureDataForChangeDetection,
+    activeMode,
+    isReplacing,
+    isMarkerPromptOpen,
+    searchStatus,
+    monitoredScope,
+  ]);
+
+  const handleReplace = useCallback(
+    async (resultIndex?: number) => {
+      if (isReplacing || !projectId || boundProjectUnsupportedReason) return;
+      const indexToReplace = resultIndex ?? focusedResultIndex;
+      if (indexToReplace === undefined || !replacePdp) return;
+
+      const result = results[indexToReplace];
+      if (!result || result.isHidden) return;
+
+      // Decided on what will be written, and before the version-history commit, so that backing
+      // out of the prompt leaves no trace. Kept with the prompt, so a confirm writes this text even
+      // if the replace term or preserve case changes while the prompt is open.
+      await replaceOrAsk(
+        indexToReplace,
+        result,
+        getUsfmToInsert(result, replaceTerm, preserveCase),
+      );
+    },
+    [
+      boundProjectUnsupportedReason,
+      focusedResultIndex,
+      isReplacing,
+      preserveCase,
+      projectId,
+      replaceOrAsk,
+      replacePdp,
+      replaceTerm,
+      results,
     ],
   );
 
@@ -2171,20 +2241,27 @@ global.webViewComponent = function FindWebView({
       const candidateResultsList = allResults.filter((r) => !r.isHidden);
       if (candidateResultsList.length === 0) return;
 
-      // A result whose USFM span holds markers can only be replaced by a replacement that puts them
-      // back, which a plain-text replacement never does — `replace()` refuses the whole book's
-      // batch over one such range. Skip them so the rest of the batch still goes through, and say
-      // how many were skipped rather than reporting a count that silently excludes them.
+      // Replace All never asks, so it takes only the results a single Replace would write without
+      // asking: those deleting no marker, leaving no pair with one end, and changing no locked
+      // structure. `replace()` makes the same decision and refuses the whole book's batch over one
+      // range it rejects, so skip the rest here so the others still go through, and say how many
+      // were skipped rather than reporting a count that silently excludes them. Each is judged
+      // against what would be written for it, after any preserve-case change.
       const visibleResultsList = candidateResultsList.filter(
-        (r) => !markersDeletedBy(r.removedMarkers ?? [], replaceTerm),
+        (r) =>
+          getMarkerReplaceAction(
+            r,
+            getUsfmToInsert(r, replaceTerm, preserveCase),
+            isStructureProtected,
+          ) === 'replace',
       );
       const skippedCount = candidateResultsList.length - visibleResultsList.length;
       if (visibleResultsList.length === 0) {
         sonner(
           skippedCount === 1
-            ? localizedStrings['%webView_find_replace_skippedAllOneResult%']
+            ? localizedStrings['%webView_find_replace_skippedAllOneResult_2%']
             : formatReplacementString(
-                localizedStrings['%webView_find_replace_skippedAllNResults%'],
+                localizedStrings['%webView_find_replace_skippedAllNResults_2%'],
                 { skippedCount: skippedCount.toString() },
               ),
         );
@@ -2230,7 +2307,7 @@ global.webViewComponent = function FindWebView({
       }
 
       const usfmToInsert = preserveCase
-        ? visibleResultsList.map((r) => applyPreserveCase(r.text ?? '', replaceTerm))
+        ? visibleResultsList.map((r) => getUsfmToInsert(r, replaceTerm, preserveCase))
         : replaceTerm;
 
       // Snapshot all affected books' USFM before replacing so cancel/revert can restore them
@@ -2407,12 +2484,14 @@ global.webViewComponent = function FindWebView({
       const message = getErrorMessage(error);
       if (message.includes(STRUCTURE_PROTECTED_ERROR)) {
         sonner(localizedStrings['%webView_find_replace_structureProtectedError%']);
+      } else if (message.includes(ONE_ENDED_MARKER_ERROR)) {
+        sonner(localizedStrings['%webView_find_replace_oneEndedMarkerError%']);
       } else if (message.includes(MARKER_DELETION_ERROR)) {
-        sonner(localizedStrings['%webView_find_replace_markerDeletionError%']);
+        sonner(localizedStrings['%webView_find_replace_markerDeletionError_2%']);
       } else {
-        // The two sentinels are refusals: the project is untouched and the wording says why. Any
-        // other failure is a genuine error, and logging alone leaves the user watching a Replace
-        // All that stopped with no explanation.
+        // The sentinels are refusals: the project is untouched and the wording says why. Any other
+        // failure is a genuine error, and logging alone leaves the user watching a Replace All that
+        // stopped with no explanation.
         logger.error(`Error replacing all results: ${message}`);
         if (!didLeaveBooksModified)
           papi.notifications.send({
@@ -2435,6 +2514,7 @@ global.webViewComponent = function FindWebView({
   }, [
     boundProjectUnsupportedReason,
     isReplacing,
+    isStructureProtected,
     localizedStrings,
     preserveCase,
     reSearchAfterReplace,
@@ -2474,82 +2554,88 @@ global.webViewComponent = function FindWebView({
   );
 
   return (
-    <Find
-      searchInputRef={searchInputRef}
-      onFocusSearchInput={focusSearchInput}
-      localizedStrings={localizedStrings}
-      scopeSelectorLocalizedStrings={scopeSelectorLocalizedStrings}
-      searchResultLocalizedStrings={searchResultLocalizedStrings}
-      projects={projects}
-      selectedProjectId={projectId}
-      selectedScrollGroupId={selectedScrollGroupId}
-      openTabs={projectSelectorOpenTabs}
-      isLoadingProjects={isLoadingProjects}
-      noOpenProjects={noOpenProjects}
-      onSelectProjectScrollGroup={handleSelectProjectScrollGroup}
-      onSelectProject={handleSelectProject}
-      onOpenProjectInGroup={handleOpenProjectInGroup}
-      searchTerm={searchTerm}
-      recentSearches={recentSearches}
-      scope={scope}
-      verseRef={verseRefSetting}
-      booksPresent={booksPresent}
-      hasExcludedExtraMaterial={hasExcludedExtraMaterial}
-      allowInvisibleCharacters={allowInvisibleCharacters}
-      selectedBookIds={searchableBookIds}
-      localizedBookData={localizedBookData}
-      shouldMatchCase={shouldMatchCase}
-      ignoreWhitespaceDifferences={ignoreWhitespaceDifferences}
-      ignoreDiacritics={ignoreDiacritics}
-      searchTextType={searchTextType}
-      wordRestriction={wordRestriction}
-      isRegexAllowed={isRegexAllowed}
-      activeMode={isSimpleMode ? 'find' : activeMode}
-      hideModeToggle={isSimpleMode}
-      hideScrollGroups={isSimpleMode}
-      replaceTerm={replaceTerm}
-      preserveCase={preserveCase}
-      previewOptions={previewOptions}
-      onPreviewOptionsChange={setStoredPreviewOptions}
-      isReplacing={isReplacing}
-      isStructureProtected={isStructureProtected}
-      isReplacementStructureChanging={isReplacementStructureChanging}
-      isEditable={isEditable}
-      results={results}
-      resultsByBook={resultsByBook}
-      focusedResultIndex={focusedResultIndex}
-      searchStatus={searchStatus}
-      searchError={openBlockedReasonKey ? undefined : searchError}
-      openBlockedMessage={openBlockedMessage}
-      searchProgress={searchProgress}
-      totalNumberOfResults={totalNumberOfResults}
-      numberOfHiddenResults={numberOfHiddenResults}
-      isPostReplaceSearch={isPostReplaceSearch}
-      onSearchTermChange={setSearchTerm}
-      onStartSearch={handleStartSearch}
-      onStopSearch={handleStopSearch}
-      setScope={setScope}
-      onSelectedBookIdsChange={selectBookIds}
-      setSearchTextType={setSearchTextType}
-      setWordRestriction={setWordRestriction}
-      setShouldMatchCase={setShouldMatchCase}
-      setIgnoreWhitespaceDifferences={setIgnoreWhitespaceDifferences}
-      setIgnoreDiacritics={setIgnoreDiacritics}
-      setIsRegexAllowed={setIsRegexAllowed}
-      onToggleMode={setActiveMode}
-      onReplaceTermChange={setReplaceTerm}
-      onPreserveCaseChange={setPreserveCase}
-      onFocusedResultChange={handleFocusedResultChange}
-      onResultFocus={handleFocusedResultChange}
-      onResultDoubleClick={handleOpenAtResult}
-      onResultReferenceClick={handleOpenAtResult}
-      onHideResult={handleHideResult}
-      onReplace={handleReplace}
-      onReplaceAll={IS_REPLACE_ALL_ENABLED ? handleReplaceAll : undefined}
-      onCancelReplace={handleCancelReplace}
-      onResultsScroll={handleResultsScroll}
-      getBookUsj={getBookUsj}
-      logger={logger}
-    />
+    <>
+      <Find
+        searchInputRef={searchInputRef}
+        onFocusSearchInput={focusSearchInput}
+        localizedStrings={localizedStrings}
+        scopeSelectorLocalizedStrings={scopeSelectorLocalizedStrings}
+        searchResultLocalizedStrings={searchResultLocalizedStrings}
+        projects={projects}
+        selectedProjectId={projectId}
+        selectedScrollGroupId={selectedScrollGroupId}
+        openTabs={projectSelectorOpenTabs}
+        isLoadingProjects={isLoadingProjects}
+        noOpenProjects={noOpenProjects}
+        onSelectProjectScrollGroup={handleSelectProjectScrollGroup}
+        onSelectProject={handleSelectProject}
+        onOpenProjectInGroup={handleOpenProjectInGroup}
+        searchTerm={searchTerm}
+        recentSearches={recentSearches}
+        scope={scope}
+        verseRef={verseRefSetting}
+        booksPresent={booksPresent}
+        hasExcludedExtraMaterial={hasExcludedExtraMaterial}
+        allowInvisibleCharacters={allowInvisibleCharacters}
+        selectedBookIds={searchableBookIds}
+        localizedBookData={localizedBookData}
+        shouldMatchCase={shouldMatchCase}
+        ignoreWhitespaceDifferences={ignoreWhitespaceDifferences}
+        ignoreDiacritics={ignoreDiacritics}
+        searchTextType={searchTextType}
+        wordRestriction={wordRestriction}
+        isRegexAllowed={isRegexAllowed}
+        activeMode={isReplaceOffered ? activeMode : 'find'}
+        hideModeToggle={!isReplaceOffered}
+        // Markers are shown so the user can see what Replace would delete, so they go wherever
+        // Replace does. Nothing else in Simple mode exposes USFM markers.
+        shouldShowMarkers={isReplaceOffered}
+        hideScrollGroups={isSimpleMode}
+        replaceTerm={replaceTerm}
+        preserveCase={preserveCase}
+        previewOptions={previewOptions}
+        onPreviewOptionsChange={setStoredPreviewOptions}
+        isReplacing={isReplacing}
+        isStructureProtected={isStructureProtected}
+        isReplacementStructureChanging={isReplacementStructureChanging}
+        isEditable={isEditable}
+        results={results}
+        resultsByBook={resultsByBook}
+        focusedResultIndex={focusedResultIndex}
+        searchStatus={searchStatus}
+        searchError={openBlockedReasonKey ? undefined : searchError}
+        openBlockedMessage={openBlockedMessage}
+        searchProgress={searchProgress}
+        totalNumberOfResults={totalNumberOfResults}
+        numberOfHiddenResults={numberOfHiddenResults}
+        isPostReplaceSearch={isPostReplaceSearch}
+        onSearchTermChange={setSearchTerm}
+        onStartSearch={handleStartSearch}
+        onStopSearch={handleStopSearch}
+        setScope={setScope}
+        onSelectedBookIdsChange={selectBookIds}
+        setSearchTextType={setSearchTextType}
+        setWordRestriction={setWordRestriction}
+        setShouldMatchCase={setShouldMatchCase}
+        setIgnoreWhitespaceDifferences={setIgnoreWhitespaceDifferences}
+        setIgnoreDiacritics={setIgnoreDiacritics}
+        setIsRegexAllowed={setIsRegexAllowed}
+        onToggleMode={setActiveMode}
+        onReplaceTermChange={setReplaceTerm}
+        onPreserveCaseChange={setPreserveCase}
+        onFocusedResultChange={handleFocusedResultChange}
+        onResultFocus={handleFocusedResultChange}
+        onResultDoubleClick={handleOpenAtResult}
+        onResultReferenceClick={handleOpenAtResult}
+        onHideResult={handleHideResult}
+        onReplace={handleReplace}
+        onReplaceAll={IS_REPLACE_ALL_ENABLED ? handleReplaceAll : undefined}
+        onCancelReplace={handleCancelReplace}
+        onResultsScroll={handleResultsScroll}
+        getBookUsj={getBookUsj}
+        logger={logger}
+      />
+      <ReplaceMarkersPrompt {...markerReplacePrompt.promptProps} />
+    </>
   );
 };
