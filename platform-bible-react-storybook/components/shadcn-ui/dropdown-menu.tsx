@@ -8,6 +8,8 @@ import {
   menuVariants,
   useMenuContext,
 } from '@/context/menu.context';
+// CUSTOM: Dismiss the menu when the window blurs (a click into another iframe)
+import { useDismissOnWindowBlur } from '@/hooks/use-dismiss-on-window-blur.hook';
 // CUSTOM: Import readDirection for RTL support
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { cn } from '@/utils/shadcn-ui/utils';
@@ -117,14 +119,29 @@ function DropdownMenuContent({
   // CUSTOM: Destructure style so we can merge the shared z-index constant into it
   style,
   children,
+  // CUSTOM: Destructure ref (a regular prop in React 19) and onCloseAutoFocus so
+  // useDismissOnWindowBlur can compose them with its own
+  ref,
+  onCloseAutoFocus,
   ...props
 }: DropdownMenuContentProps) {
   // CUSTOM: Use readDirection for RTL support — wraps children in dir div to mirror layout
   const dir: Direction = readDirection();
+  // CUSTOM: Added useDismissOnWindowBlur so the menu closes when the window loses focus. A click
+  // into another iframe never reaches this document, so the window's blur stands in for the outside
+  // press; see the hook's TSDoc. DropdownMenuSubContent is not wired: a sub-menu closes with its
+  // root menu. The returned ref callback also forwards the caller's ref, and the returned
+  // onCloseAutoFocus also keeps focus out of another frame on close and, after the OS window was
+  // deactivated, returns focus to the trigger itself, while still calling the caller's handler.
+  const blurDismissProps = useDismissOnWindowBlur({ ref, onCloseAutoFocus });
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
         data-slot="dropdown-menu-content"
+        // CUSTOM: ref and onCloseAutoFocus from useDismissOnWindowBlur (it finds the content's
+        // parent, keeps focus out of another frame on close and restores the trigger after the OS
+        // window was deactivated)
+        {...blurDismissProps}
         sideOffset={sideOffset}
         align={align}
         className={cn(
