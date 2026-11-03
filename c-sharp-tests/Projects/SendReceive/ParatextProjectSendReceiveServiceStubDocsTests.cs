@@ -102,27 +102,26 @@ namespace TestParanextDataProvider.Projects.SendReceive
             Assert.That(docs.Method.Params, Is.Empty, "takes no parameters");
         }
 
+        // Pins the seam, not the stub's body: the Paratext 10 patch replaces ReshowSyncNotification,
+        // so asserting the core no-op would fail in the patched suite. What both builds rely on is
+        // that the command runs whatever that method does, once per call.
         [Test]
-        public async Task ReshowSyncNotificationCommand_IsANoOpInThisBuild()
+        public async Task ReshowSyncNotificationCommand_RunsReshowSyncNotificationOnce()
         {
-            var service = new ParatextProjectSendReceiveService(
+            var service = new RecordingReshowService(
                 Client,
                 new ParatextProjectDataProviderFactory(Client, ParatextProjects),
                 new AppInfo("test", "1.0.0", "test"),
                 ParatextProjects
             );
             await service.InitializeAsync();
-            var eventsBefore = Client.SentEventCount;
-            var requestsBefore = Client.SentRequestCount;
 
-            Assert.DoesNotThrow(
-                () =>
-                    Client.InvokeRequestHandler(
-                        "command:paratextBibleSendReceive.reshowSyncNotification"
-                    )
+            var result = Client.InvokeRequestHandler(
+                "command:paratextBibleSendReceive.reshowSyncNotification"
             );
-            Assert.That(Client.SentEventCount, Is.EqualTo(eventsBefore), "sends no event");
-            Assert.That(Client.SentRequestCount, Is.EqualTo(requestsBefore), "sends no request");
+            await (Task)result!;
+
+            Assert.That(service.ReshowCount, Is.EqualTo(1));
         }
 
         // Pins the seam, not the stub's own answer: the Paratext 10 patch replaces
@@ -148,6 +147,24 @@ namespace TestParanextDataProvider.Projects.SendReceive
                 Client.InvokeRequestHandler("command:paratextBibleSendReceive.isAvailable"),
                 Is.EqualTo(available)
             );
+        }
+
+        private sealed class RecordingReshowService(
+            PapiClient client,
+            ParatextProjectDataProviderFactory factory,
+            AppInfo appInfo,
+            LocalParatextProjects projects
+        ) : ParatextProjectSendReceiveService(client, factory, appInfo, projects)
+        {
+            private int _reshowCount;
+
+            public int ReshowCount => _reshowCount;
+
+            protected internal override Task ReshowSyncNotification()
+            {
+                Interlocked.Increment(ref _reshowCount);
+                return Task.CompletedTask;
+            }
         }
 
         private sealed class FixedAvailabilityService(
