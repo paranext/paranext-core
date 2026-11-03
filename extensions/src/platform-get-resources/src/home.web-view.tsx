@@ -36,7 +36,7 @@ const SEND_RECEIVE_RETRY_MS = 2000;
  * The reports that name projects in a sync: the backend's activity, and the queue's waiting and
  * running sets.
  */
-type SyncReportSource = 'activity' | 'waiting' | 'running';
+type SyncReportSource = 'activity' | 'waiting' | 'sending' | 'running';
 
 globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewProps) {
   // Set by the web view provider from an opener's preset, and otherwise kept as the user left it.
@@ -233,20 +233,24 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
     isOwnSendReceiveInProgress ||
     syncActivity.isSyncing ||
     syncQueue.waitingProjectIds.length > 0 ||
+    syncQueue.sendingProjectIds.length > 0 ||
     syncQueue.runningProjectIds.length > 0;
   // Normalized ids of Home's own requests that were sent to an idle queue, which is expected to
   // start them right away: they show the spinner at once instead of waiting for the queue's
-  // report. An id leaves as soon as the queue or the sync activity names it (running or waiting),
-  // or its request ends. A request sent while the queue already has a run or a waiting project
-  // gets no optimistic spinner, since it will probably wait.
+  // report. An id leaves as soon as the queue or the sync activity names it (waiting, sending or
+  // running), or its request ends. A request sent while the queue already has a run, a run being
+  // sent or a waiting project gets no optimistic spinner, since it will probably wait.
   const [optimisticRunningProjectIds, setOptimisticRunningProjectIds] = useState<string[]>([]);
   // The backend says which projects are running: the sync queue names the ones in the run it
-  // accepted, and the sync activity names every run, including those started elsewhere.
+  // accepted, and the sync activity names every run, including those started elsewhere. A run the
+  // queue is sending shows as running too: to the user it is starting, and if the backend refuses
+  // it as busy the queue reports its projects waiting again, which the row then shows.
   const activeSendReceiveProjects = useMemo(
     () =>
       Array.from(
         new Set(
           [
+            ...syncQueue.sendingProjectIds,
             ...syncQueue.runningProjectIds,
             ...(syncActivity.isSyncing ? syncActivity.projectIds : []),
           ]
@@ -255,6 +259,7 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
         ),
       ),
     [
+      syncQueue.sendingProjectIds,
       syncQueue.runningProjectIds,
       syncActivity.isSyncing,
       syncActivity.projectIds,
@@ -264,6 +269,7 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
   // A run the backend has opened but whose projects nobody names yet could be Home's own, so it
   // does not count as reported until the activity or the queue names them.
   const isRunNamed =
+    syncQueue.sendingProjectIds.length > 0 ||
     syncQueue.runningProjectIds.length > 0 ||
     (syncActivity.isSyncing && syncActivity.projectIds.length > 0);
   const isOwnRequestRunning = useMemo(() => {
@@ -302,11 +308,11 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
   };
 
   /**
-   * The projects Home has asked the queue to sync that the queue has not yet reported as running or
-   * waiting, by normalized id. Each maps to the reports that already named the project when it was
-   * requested, or have named it without a break since: those describe something else (a run started
-   * elsewhere, an earlier run), so only a report naming the project afresh counts as the answer to
-   * this request. Kept in a ref so a second click in the same tick sees the first.
+   * The projects Home has asked the queue to sync that the queue has not yet reported as waiting,
+   * sending or running, by normalized id. Each maps to the reports that already named the project
+   * when it was requested, or have named it without a break since: those describe something else (a
+   * run started elsewhere, an earlier run), so only a report naming the project afresh counts as
+   * the answer to this request. Kept in a ref so a second click in the same tick sees the first.
    */
   const unreportedRequestsRef = useRef<Map<string, Set<SyncReportSource>>>(new Map());
   const reportedIdsBySource = useMemo(
@@ -314,9 +320,15 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
       new Map<SyncReportSource, Set<string>>([
         ['activity', new Set(syncActivity.projectIds.map(normalizeProjectId))],
         ['waiting', new Set(syncQueue.waitingProjectIds.map(normalizeProjectId))],
+        ['sending', new Set(syncQueue.sendingProjectIds.map(normalizeProjectId))],
         ['running', new Set(syncQueue.runningProjectIds.map(normalizeProjectId))],
       ]),
-    [syncActivity.projectIds, syncQueue.waitingProjectIds, syncQueue.runningProjectIds],
+    [
+      syncActivity.projectIds,
+      syncQueue.waitingProjectIds,
+      syncQueue.sendingProjectIds,
+      syncQueue.runningProjectIds,
+    ],
   );
   useEffect(() => {
     unreportedRequestsRef.current.forEach((namedAtRequest, projectId) => {
@@ -327,19 +339,27 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
     });
   }, [reportedIdsBySource]);
 
-  // Once the backend names a project, the optimistic spinner has done its job.
+  // Once the backend names a project, the optimistic spinner has done its job: a project the queue
+  // is sending or running keeps the spinner through `activeSendReceiveProjects`, and one it reports
+  // waiting (refused as busy, or behind another run) shows as waiting.
   useEffect(() => {
     const reportedIds = new Set(
       [
         ...syncActivity.projectIds,
         ...syncQueue.waitingProjectIds,
+        ...syncQueue.sendingProjectIds,
         ...syncQueue.runningProjectIds,
       ].map(normalizeProjectId),
     );
     setOptimisticRunningProjectIds((ids) =>
       ids.some((id) => reportedIds.has(id)) ? ids.filter((id) => !reportedIds.has(id)) : ids,
     );
-  }, [syncActivity.projectIds, syncQueue.waitingProjectIds, syncQueue.runningProjectIds]);
+  }, [
+    syncActivity.projectIds,
+    syncQueue.waitingProjectIds,
+    syncQueue.sendingProjectIds,
+    syncQueue.runningProjectIds,
+  ]);
 
   // Every click is handed to the sync queue, which starts it right away or keeps it waiting for the
   // next run. A sync that is already running does not refuse a click: it queues the project's next
@@ -373,6 +393,7 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
     const isQueueIdle =
       !syncActivity.isSyncing &&
       syncQueue.waitingProjectIds.length === 0 &&
+      syncQueue.sendingProjectIds.length === 0 &&
       syncQueue.runningProjectIds.length === 0;
     if (isQueueIdle) setOptimisticRunningProjectIds((ids) => [...ids, normalizedProjectId]);
     try {

@@ -542,18 +542,113 @@ describe('HomeWebView requests through the sync queue', () => {
     expect(home).toHaveAttribute('data-active-projects', '["RH2"]');
   });
 
-  it('shows Waiting instead of the optimistic spinner when the queue reports the project waiting', async () => {
+  it('shows Waiting instead of the optimistic spinner when the queue reports the project waiting behind another run', async () => {
     mockAvailableQueue(() => new Promise(() => {}));
     const home = await renderSubscribed();
 
     fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
     expect(home).toHaveAttribute('data-active-projects', '["RH2"]');
 
-    // The backend refused the run as busy and the queue holds the project for the next one.
-    await emit(syncQueueEvents, { waitingProjectIds: ['RH2'], runningProjectIds: ['RH3'] });
+    // Another surface's run got to the backend first; the queue holds the project for the next one.
+    await emit(syncQueueEvents, {
+      waitingProjectIds: ['RH2'],
+      sendingProjectIds: [],
+      runningProjectIds: ['RH3'],
+    });
 
     expect(home).toHaveAttribute('data-waiting-projects', '["RH2"]');
     expect(home).toHaveAttribute('data-active-projects', '["RH3"]');
+  });
+
+  it('keeps the spinner for its own click on an idle queue while the queue sends the run, until it runs', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    const home = await renderSubscribed();
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    expect(home).toHaveAttribute('data-active-projects', '["RH2"]');
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+
+    await emit(syncQueueEvents, {
+      waitingProjectIds: [],
+      sendingProjectIds: ['RH2'],
+      runningProjectIds: [],
+    });
+    expect(home).toHaveAttribute('data-active-projects', '["RH2"]');
+    expect(home).toHaveAttribute('data-waiting-projects', '[]');
+
+    await emit(syncQueueEvents, {
+      waitingProjectIds: [],
+      sendingProjectIds: [],
+      runningProjectIds: ['RH2'],
+    });
+    expect(home).toHaveAttribute('data-active-projects', '["RH2"]');
+    expect(home).toHaveAttribute('data-waiting-projects', '[]');
+  });
+
+  it('shows Waiting at once when the backend refuses the run being sent as busy', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    const home = await renderSubscribed();
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+    await emit(syncQueueEvents, {
+      waitingProjectIds: [],
+      sendingProjectIds: ['RH2'],
+      runningProjectIds: [],
+    });
+
+    // Refused: the queue puts the project back among the waiting until it retries
+    await emit(syncQueueEvents, {
+      waitingProjectIds: ['RH2'],
+      sendingProjectIds: [],
+      runningProjectIds: [],
+    });
+
+    expect(home).toHaveAttribute('data-waiting-projects', '["RH2"]');
+    expect(home).toHaveAttribute('data-active-projects', '[]');
+  });
+
+  it('shows the spinner for a project the queue reports sending, without a click of its own', async () => {
+    mockAvailableQueue(async () => ({}));
+    const home = await renderSubscribed();
+
+    await emit(syncQueueEvents, {
+      waitingProjectIds: [],
+      sendingProjectIds: ['rh7'],
+      runningProjectIds: [],
+    });
+
+    expect(home).toHaveAttribute('data-active-projects', '["RH7"]');
+    expect(home).toHaveAttribute('data-send-receive-in-progress', 'true');
+  });
+
+  it('shows no spinner for a click while the queue is sending another run', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    const home = await renderSubscribed();
+    await emit(syncQueueEvents, {
+      waitingProjectIds: [],
+      sendingProjectIds: ['RH3'],
+      runningProjectIds: [],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+
+    expect(home).toHaveAttribute('data-active-projects', '["RH3"]');
+  });
+
+  it('a project both sending and asked for again shows Waiting for its follow-up', async () => {
+    mockAvailableQueue(async () => ({}));
+    const home = await renderSubscribed();
+
+    await emit(syncQueueEvents, {
+      waitingProjectIds: ['RH2'],
+      sendingProjectIds: ['RH2'],
+      runningProjectIds: [],
+    });
+
+    // Home's row puts waiting before running, as it does for a running project with a follow-up
+    expect(home).toHaveAttribute('data-waiting-projects', '["RH2"]');
+    expect(home).toHaveAttribute('data-active-projects', '["RH2"]');
   });
 
   it('shows no spinner for a click while the queue already has a run', async () => {
