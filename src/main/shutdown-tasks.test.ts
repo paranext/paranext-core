@@ -225,7 +225,8 @@ describe('performShutdownTasks', () => {
         ]),
       );
       mockRequestNoRetry.mockImplementation(async (command: string) => {
-        if (command.endsWith('.dropSyncQueue')) throw new Error('Method not found');
+        if (command.endsWith('.dropSyncQueue'))
+          throw new Error(`${getJsonRpcRequestErrorMessagePrefix(-32601)}: Method not found`);
         return undefined;
       });
 
@@ -236,6 +237,41 @@ describe('performShutdownTasks', () => {
         expect.stringContaining('Could not drop the sync queue'),
       );
       expect(mockLoggerWarn).not.toHaveBeenCalled();
+    });
+
+    it('a method-not-found drop is logged at debug, not warn', async () => {
+      stubSettings({ mode: 'simple' });
+      mockGetOpenWebViews.mockResolvedValue(openWebViews([]));
+      mockRequestNoRetry.mockImplementation(async (command: string) => {
+        if (command.endsWith('.dropSyncQueue'))
+          throw new Error(
+            `${getJsonRpcRequestErrorMessagePrefix(-32601)}: Method not found command:paratextBibleSendReceive.dropSyncQueue`,
+          );
+        return undefined;
+      });
+
+      await performShutdownTasks();
+
+      expect(mockLoggerDebug).toHaveBeenCalledWith(
+        expect.stringContaining('Could not drop the sync queue'),
+      );
+      expect(mockLoggerWarn).not.toHaveBeenCalled();
+    });
+
+    it('a drop that throws is logged at warn', async () => {
+      stubSettings({ mode: 'simple' });
+      mockGetOpenWebViews.mockResolvedValue(openWebViews([]));
+      mockRequestNoRetry.mockImplementation(async (command: string) => {
+        if (command.endsWith('.dropSyncQueue')) throw new Error('drop exploded');
+        return undefined;
+      });
+
+      await expect(performShutdownTasks()).resolves.toBeUndefined();
+
+      expect(mockLoggerWarn).toHaveBeenCalledWith(
+        expect.stringContaining('Could not drop the sync queue'),
+      );
+      expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('drop exploded'));
     });
 
     it('an extension host that does not answer the drop does not hold quit open', async () => {

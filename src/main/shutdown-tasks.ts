@@ -200,7 +200,11 @@ async function dropSyncQueue(): Promise<void> {
         `Dropping the sync queue did not answer within ${DROP_SYNC_QUEUE_TIMEOUT_MS} ms; continuing shutdown`,
       );
   } catch (e) {
-    logger.debug(`Could not drop the sync queue at quit: ${getErrorMessage(e)}`);
+    // A missing command only means the extension is absent, so there is no queue to drop; any other
+    // failure may leave queued runs alive, which a support log should show.
+    if (isJsonRpcMethodNotFoundError(e))
+      logger.debug(`Could not drop the sync queue at quit: ${getErrorMessage(e)}`);
+    else logger.warn(`Could not drop the sync queue at quit: ${getErrorMessage(e)}`);
   }
 }
 
