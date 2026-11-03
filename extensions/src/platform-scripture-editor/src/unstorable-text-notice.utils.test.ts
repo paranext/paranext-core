@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { UnstorableTextRemoved } from '@eten-tech-foundation/platform-editor';
 
 vi.mock('@papi/frontend', () => ({
   logger: { warn: vi.fn() },
@@ -64,6 +65,25 @@ describe('createUnstorableTextNotifier', () => {
       severity: 'info',
       notificationId: UNSTORABLE_TEXT_NOTIFICATION_ID,
       webViewId: 'web-view-3',
+    });
+  });
+
+  it('sends the pasted-text notice for a source it does not know', () => {
+    const send = vi.fn().mockResolvedValue(1);
+    const source: string = 'insertion';
+    // A newer editor may report a source this host was not written for, which the editor's type
+    // asks hosts to handle; the assertion stands in for that editor.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const event = { source, removed: ['\\'] } as UnstorableTextRemoved;
+
+    createUnstorableTextNotifier(send, 'web-view-4')(event);
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith({
+      message: UNSTORABLE_TEXT_REMOVED_FROM_PASTE_KEY,
+      severity: 'info',
+      notificationId: UNSTORABLE_TEXT_NOTIFICATION_ID,
+      webViewId: 'web-view-4',
     });
   });
 
