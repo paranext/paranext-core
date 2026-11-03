@@ -96,11 +96,15 @@ const POPUP_TRIGGER_SELECTOR = '[aria-haspopup]:not([aria-haspopup="false"]), [r
  * {@link POPUP_TRIGGER_SELECTOR}), rather than a text field the user types into
  */
 function isPopupTrigger(target: Element): boolean {
-  // A text field inside a combobox wrapper (the older ARIA combobox pattern) is still a text field
-  if (target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])'))
-    return false;
   const trigger = target.closest(POPUP_TRIGGER_SELECTOR);
   if (!(trigger instanceof HTMLElement)) return false;
+  // A text field that is the combobox, or sits inside its wrapper (the older ARIA combobox
+  // pattern), is something the user types into. A trigger that itself sits inside an editable
+  // region still counts.
+  const textField = target.closest(
+    'input, textarea, select, [contenteditable]:not([contenteditable="false"])',
+  );
+  if (textField && trigger.contains(textField)) return false;
   if (trigger.getAttribute('aria-disabled') === 'true') return false;
   return !(trigger instanceof HTMLButtonElement && trigger.disabled);
 }
@@ -199,6 +203,14 @@ export function BookChapterControl({
   // Reference to the popover content, so Escape handling can tell whether focus is inside it
   // eslint-disable-next-line no-null/no-null
   const contentRef = useRef<HTMLDivElement | null>(null);
+  /**
+   * Set while the picker closes because another control was opened from the keyboard, so the close
+   * does not move focus back to this picker's trigger, away from the control the user is on. A
+   * press needs no such guard: Radix skips that focus return after a press outside. Cleared on
+   * every open, so a flag left over from a close whose focus handling never ran cannot swallow a
+   * later close's focus return.
+   */
+  const isClosingForOtherPopupRef = useRef(false);
   // Reference to the Command component
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const commandRef = useRef<HTMLDivElement>(undefined!);
@@ -482,6 +494,7 @@ export function BookChapterControl({
     (shouldCommandBeOpen: boolean) => {
       setIsCommandOpen(shouldCommandBeOpen);
       if (shouldCommandBeOpen) {
+        isClosingForOtherPopupRef.current = false;
         setViewMode('books');
         setSelectedBookForChaptersView(undefined);
         setSelectedBookForVersesView(undefined);
@@ -518,13 +531,6 @@ export function BookChapterControl({
     return isPopupTrigger(target);
   }, []);
 
-  /**
-   * Set while the picker closes because another control was opened from the keyboard, so the close
-   * does not move focus back to this picker's trigger, away from the control the user is on. A
-   * press needs no such guard: Radix skips that focus return after a press outside.
-   */
-  const isClosingForOtherPopupRef = useRef(false);
-
   // Compact mode stays open while the user works elsewhere, but opening another menu, popover or
   // list in this document closes it, as it would close the full picker. A press on such a trigger
   // is let through in `onInteractOutside`; opening one from the keyboard is caught here, in the
@@ -533,8 +539,6 @@ export function BookChapterControl({
   const isCompactAndOpen = !modal && isCommandOpen && isCommandListHidden;
   useEffect(() => {
     if (!isCompactAndOpen) return undefined;
-    // A flag left over from a close whose focus handling never ran must not swallow a later one
-    isClosingForOtherPopupRef.current = false;
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (!POPUP_OPENING_KEYS.has(event.key) || event.repeat) return;
       if (event.ctrlKey || event.altKey || event.metaKey) return;
