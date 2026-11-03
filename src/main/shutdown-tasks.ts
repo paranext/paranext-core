@@ -1,5 +1,5 @@
 import { AUTO_SYNC_MAX_DURATION_MS } from '@shared/data/platform.data';
-import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
+import { CATEGORY_COMMAND, isJsonRpcMethodNotFoundError } from '@shared/data/rpc.model';
 import { logger } from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
 import { settingsService } from '@shared/services/settings.service';
@@ -108,9 +108,11 @@ export async function performShutdownTasks(): Promise<void> {
 }
 
 async function performShutdownTasksInternal(): Promise<void> {
-  // First, so nothing waiting in the queue starts a run while the app quits: the extension host is
-  // killed after these tasks without deactivating, and a run started now would make the shutdown
-  // sync below fail as busy.
+  // First, so nothing waiting in the queue starts a run while the app quits, and a run started now
+  // would make the shutdown sync below fail as busy. On quit the extension host is killed without
+  // deactivating. On macOS a last-window close also runs these tasks but the app stays resident:
+  // the queue is paused here and resumed when the next session's first window opens (see
+  // resumeSyncQueue).
   await dropSyncQueue();
 
   // Drained before the mode is even read, not just before either branch: a closing window's sync
@@ -153,10 +155,10 @@ export const DROP_SYNC_QUEUE_TIMEOUT_MS = 5_000;
 
 /**
  * Drops everything waiting in the Send/Receive extension's sync queue, so no queued run starts
- * while the app quits (the queue is in memory only and is not carried to the next session). A run
- * already in progress is left to the shutdown sync's own cancel. Never throws and never waits
- * longer than {@link DROP_SYNC_QUEUE_TIMEOUT_MS}: without the extension the command is missing,
- * which only means there is no queue to drop.
+ * while the app quits (the queue is in memory only). A run already in progress is left to the
+ * shutdown sync's own cancel. Never throws and never waits longer than
+ * {@link DROP_SYNC_QUEUE_TIMEOUT_MS}: without the extension the command is missing, which only means
+ * there is no queue to drop.
  */
 async function dropSyncQueue(): Promise<void> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -808,5 +810,57 @@ async function runBoundedShutdownSync<T>(
     }
     logger.warn(`${variableName} did not complete: ${getErrorMessage(e)}`);
     return { status: 'failed' };
+  }
+}
+
+/** Attempts `resumeSyncQueue` makes before giving up on a failure other than method-not-found. */
+const RESUME_SYNC_QUEUE_ATTEMPTS = 3;
+/** Delay between `resumeSyncQueue` attempts. */
+const RESUME_SYNC_QUEUE_RETRY_DELAY_MS = 1_000;
+
+/**
+ * Whether a window being created starts a new session in a process that already ran one: the first
+ * window of a new session (no windows tracked) after an earlier window existed in this process. On
+ * macOS the app stays resident after its last window closes, so that is the dock-reopen case.
+ */
+export function shouldResumeSyncQueue(
+  isFirstWindow: boolean,
+  hasCreatedWindowThisProcess: boolean,
+): boolean {
+  return isFirstWindow && hasCreatedWindowThisProcess;
+}
+
+/**
+ * Tells the Send/Receive extension to resume the sync queue that shutdown tasks paused. A missing
+ * command (no extension) means there is nothing to resume. Any other failure is retried
+ * {@link RESUME_SYNC_QUEUE_ATTEMPTS} times in total, then warned about. Never throws; callers do not
+ * await it.
+ */
+export async function resumeSyncQueue(): Promise<void> {
+  const requestType = serializeRequestType(
+    CATEGORY_COMMAND,
+    'paratextBibleSendReceive.resumeSyncQueue',
+  );
+  for (let attempt = 1; attempt <= RESUME_SYNC_QUEUE_ATTEMPTS; attempt++) {
+    try {
+      // Attempts are serial by design: each one only happens if the previous failed
+      // eslint-disable-next-line no-await-in-loop
+      await networkService.requestNoRetry(requestType);
+      return;
+    } catch (e) {
+      if (isJsonRpcMethodNotFoundError(e)) {
+        logger.debug('No sync queue to resume: the Send/Receive extension is not available');
+        return;
+      }
+      if (attempt === RESUME_SYNC_QUEUE_ATTEMPTS) {
+        logger.warn(
+          `Could not resume the sync queue after ${attempt} attempts: ${getErrorMessage(e)}`,
+        );
+        return;
+      }
+      // Attempts are serial by design: each one only happens if the previous failed
+      // eslint-disable-next-line no-await-in-loop
+      await wait(RESUME_SYNC_QUEUE_RETRY_DELAY_MS);
+    }
   }
 }

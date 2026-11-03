@@ -9,6 +9,7 @@ import {
 import { logger } from '@shared/services/logger.service';
 import { RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE } from '@main/scheduled-session-sync.util';
 import type { SettingTypes } from 'papi-shared-types';
+import { getJsonRpcRequestErrorMessagePrefix } from '@shared/data/rpc.model';
 import { FAILED_PRECONDITION, INTERNAL, newPlatformError } from 'platform-bible-utils';
 import {
   CANCELLED_SYNC_POLL_INTERVAL_MS,
@@ -18,6 +19,8 @@ import {
   SHUTDOWN_SYNC_BUSY_RETRY_INTERVAL_MS,
   performShutdownTasks,
   performWindowCloseTasks,
+  resumeSyncQueue,
+  shouldResumeSyncQueue,
   startWindowCloseTasksWithoutWaiting,
 } from './shutdown-tasks';
 import { createSettingsStub, READ_THROWS } from './settings-stub.test-util';
@@ -1618,5 +1621,84 @@ describe('startWindowCloseTasksWithoutWaiting with several windows', () => {
     expect(mockLoggerInfo).not.toHaveBeenCalledWith(
       expect.stringContaining('closing window sync(s) before the shutdown'),
     );
+  });
+});
+
+describe('shouldResumeSyncQueue', () => {
+  it('does not resume for the first window of the process', () => {
+    expect(shouldResumeSyncQueue(true, false)).toBe(false);
+  });
+
+  it('resumes for the first window after an earlier window closed in the same process', () => {
+    expect(shouldResumeSyncQueue(true, true)).toBe(true);
+  });
+
+  it('does not resume for an additional window', () => {
+    expect(shouldResumeSyncQueue(false, true)).toBe(false);
+    expect(shouldResumeSyncQueue(false, false)).toBe(false);
+  });
+});
+
+describe('resumeSyncQueue', () => {
+  const RESUME_REQUEST = 'command:paratextBibleSendReceive.resumeSyncQueue';
+  const methodNotFound = () =>
+    new Error(`${getJsonRpcRequestErrorMessagePrefix(-32601)}: Method not found ${RESUME_REQUEST}`);
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('sends the resume command once on success', async () => {
+    await resumeSyncQueue();
+
+    expect(mockRequestNoRetry).toHaveBeenCalledTimes(1);
+    expect(mockRequestNoRetry).toHaveBeenCalledWith(RESUME_REQUEST);
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
+  });
+
+  it('treats method-not-found as nothing to resume: one call, debug log, no retry', async () => {
+    mockRequestNoRetry.mockRejectedValue(methodNotFound());
+
+    await resumeSyncQueue();
+
+    expect(mockRequestNoRetry).toHaveBeenCalledTimes(1);
+    expect(mockLoggerDebug).toHaveBeenCalled();
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
+  });
+
+  it('retries a transient failure one second later without warning', async () => {
+    mockRequestNoRetry.mockRejectedValueOnce(new Error('socket hiccup'));
+
+    const done = resumeSyncQueue();
+    await vi.advanceTimersByTimeAsync(1_000);
+    await done;
+
+    expect(mockRequestNoRetry).toHaveBeenCalledTimes(2);
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
+  });
+
+  it('warns once and resolves after three failed attempts', async () => {
+    mockRequestNoRetry.mockRejectedValue(new Error('socket hiccup'));
+
+    const done = resumeSyncQueue();
+    await vi.advanceTimersByTimeAsync(2_000);
+    await done;
+
+    expect(mockRequestNoRetry).toHaveBeenCalledTimes(3);
+    expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not block its caller when the request never settles', () => {
+    mockRequestNoRetry.mockReturnValue(new Promise(() => {}));
+
+    // The caller (createWindow) does not await it; the call must return a promise, not throw
+    expect(() => {
+      resumeSyncQueue().catch(() => {});
+    }).not.toThrow();
+    expect(mockRequestNoRetry).toHaveBeenCalledTimes(1);
   });
 });

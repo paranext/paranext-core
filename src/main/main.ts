@@ -71,6 +71,8 @@ import {
 import {
   performShutdownTasks,
   performWindowCloseTasks,
+  resumeSyncQueue,
+  shouldResumeSyncQueue,
   startWindowCloseTasksWithoutWaiting,
 } from '@main/shutdown-tasks';
 import type { WindowCloseDecision } from '@main/services/window-close-decision.service';
@@ -874,6 +876,11 @@ async function main() {
     // settle only the new one, the question would never resolve, and the app would sit half-quit
     // with its latch set.
     if (isFirstWindow) resetShutdownLatchesForNewSession();
+
+    // Shutdown tasks paused the sync queue when the previous session's last window closed; the
+    // process outlived it (macOS), so the new session's first window resumes it. Not awaited.
+    if (shouldResumeSyncQueue(isFirstWindow, hasCreatedWindowThisProcess))
+      resumeSyncQueue().catch(() => {});
 
     // The flags the process was launched with describe how to show the window that launch is
     // producing, and nothing after it. "No windows tracked" is not that window: on macOS the app
