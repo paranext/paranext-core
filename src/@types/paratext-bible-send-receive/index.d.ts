@@ -731,9 +731,9 @@ declare module 'papi-shared-types' {
     'paratextBibleSendReceive.isAvailable': () => Promise<boolean>;
 
     /**
-     * Asks for the given projects to be synced through the sync queue. If no run is in progress the
-     * projects start a run right away; requests that arrive while a run is in progress wait for the
-     * following run or runs.
+     * Asks for the given projects to be synced through the sync queue. A run starts when the queue
+     * is idle and the backend accepts it; requests that arrive while a run is in progress wait for
+     * the following run or runs.
      *
      * An `autoSync` request never re-queues a project that is running or already waiting in the
      * same or a fuller kind; the other sources do not carry that rule. Set
