@@ -204,13 +204,11 @@
     {
       "type": "para",
       "marker": "p",
-      "vid": "",
       "content": [" "]
     },
     {
       "type": "para",
       "marker": "p",
-      "vid": "",
       "content": [
         "The paragraph above has a lone NBSP as its only content. This paragraph ends with a space before an unknown marker "
       ]
@@ -218,13 +216,11 @@
     {
       "type": "para",
       "marker": "zunk",
-      "vid": "",
       "content": ["Unknown marker content."]
     },
     {
       "type": "para",
       "marker": "p",
-      "vid": "",
       "content": ["Authored references: a closed "]
     },
     {

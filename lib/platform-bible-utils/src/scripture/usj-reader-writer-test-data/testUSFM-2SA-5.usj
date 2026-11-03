@@ -63,13 +63,11 @@
     },
     {
       "type": "para",
-      "marker": "",
-      "vid": ""
+      "marker": ""
     },
     {
       "type": "para",
       "marker": "b",
-      "vid": "",
       "content": ["Stray text after a blank-line marker."]
     }
   ]
