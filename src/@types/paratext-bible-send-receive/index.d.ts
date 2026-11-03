@@ -752,14 +752,14 @@ declare module 'papi-shared-types' {
      *   no entries for projects that are already running or waiting in the same or a fuller kind.
      *   If only some of the requested ids were removed from the queue before they ran, the request
      *   resolves with the results of the rest. It rejects with a message containing ` (SR_REMOVED)`
-     *   only when every requested id was removed before it ran, when the queue was dropped because
-     *   the app is quitting, or when the queue is paused (the error crosses the network as its
-     *   message only, so the marker is the contract, not the error's type). It rejects with the
-     *   run's own error when a run containing a requested id fails. The call can take minutes:
-     *   requests wait while another sync is running. A refusal whose message ends with `
-     *   (SYNC_BUSY)` is retried by the queue itself; the caller sees it only after the queue gave
-     *   up (about two minutes). If the running sync stops responding the request rejects with the
-     *   not-responding error.
+     *   only when every requested id was removed before it ran, when the queue was dropped (the app
+     *   is quitting or its last window closed), or when the queue is paused (the error crosses the
+     *   network as its message only, so the marker is the contract, not the error's type). It
+     *   rejects with the run's own error when a run containing a requested id fails. The call can
+     *   take minutes: requests wait while another sync is running. A refusal whose message ends
+     *   with ` (SYNC_BUSY)` is retried by the queue itself; the caller sees it only after the queue
+     *   gave up. If the running sync stops responding the request rejects with the not-responding
+     *   error.
      * @experimental This command is unstable and may change or disappear without notice
      */
     'paratextBibleSendReceive.requestSync': (
