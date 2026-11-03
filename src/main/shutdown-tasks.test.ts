@@ -29,6 +29,19 @@ import {
   resetAutomaticSyncDeferralForTesting,
 } from './first-run-consent.util';
 
+// A test can shorten the overall quit bound below the busy retry budget to reach the case where the
+// quit gives up on the sync while a busy retry is still pending; every other test keeps the real one
+const quitBound = vi.hoisted((): { overrideMs: number | undefined } => ({ overrideMs: undefined }));
+vi.mock('@shared/data/platform.data', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@shared/data/platform.data')>();
+  return {
+    ...original,
+    get AUTO_SYNC_MAX_DURATION_MS() {
+      return quitBound.overrideMs ?? original.AUTO_SYNC_MAX_DURATION_MS;
+    },
+  };
+});
+
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: { get: vi.fn() },
 }));
@@ -413,9 +426,9 @@ describe('performShutdownTasks', () => {
       expect(mockLoggerDebug).toHaveBeenCalledWith(expect.stringContaining('busy'));
     });
 
-    it('retries after a cancelled sync that read idle again but still holds the lock', async () => {
+    it('retries a busy refusal after the stop wait for a never-stopping sync runs out', async () => {
       stubSendOutcomes([new Error('Sync is busy (SYNC_BUSY)'), undefined], true);
-      // The first read says syncing, then the stub keeps saying so: the stop wait runs out first
+      // The activity keeps reading as syncing, so the stop wait runs out before the quit sync is sent
       await runQuit(CANCELLED_SYNC_STOP_WAIT_MS + SHUTDOWN_SYNC_BUSY_RETRY_INTERVAL_MS);
       expect(sendCount()).toBe(2);
     });
@@ -433,6 +446,28 @@ describe('performShutdownTasks', () => {
       );
       expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('p1'));
       expect(mockLoggerInfo).not.toHaveBeenCalledWith('Sync on shutdown complete');
+    });
+
+    it('sends nothing more once the quit has stopped waiting for the sync', async () => {
+      stubSendOutcomes([new Error('Sync is busy (SYNC_BUSY)')]);
+      const shortQuitBoundMs = SHUTDOWN_SYNC_BUSY_RETRY_BUDGET_MS / 3;
+      quitBound.overrideMs = shortQuitBoundMs;
+      vi.useFakeTimers();
+      try {
+        const shutdownPromise = performShutdownTasks();
+        await vi.advanceTimersByTimeAsync(shortQuitBoundMs);
+        await expect(shutdownPromise).resolves.toBeUndefined();
+        expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('timed out'));
+        const sentAtSettlement = sendCount();
+        expect(sentAtSettlement).toBeGreaterThan(1);
+
+        // The retry pending at settlement wakes up inside this window and must not send
+        await vi.advanceTimersByTimeAsync(SHUTDOWN_SYNC_BUSY_RETRY_INTERVAL_MS * 4);
+        expect(sendCount()).toBe(sentAtSettlement);
+      } finally {
+        quitBound.overrideMs = undefined;
+        vi.useRealTimers();
+      }
     });
 
     it('does not retry an INTERNAL "not responding" failure', async () => {
