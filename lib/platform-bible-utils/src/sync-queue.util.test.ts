@@ -32,6 +32,21 @@ describe('isSyncQueueSnapshot', () => {
     ['waitingProjectIds a string', { waitingProjectIds: 'a' }, false],
     ['waitingProjectIds with a number', { waitingProjectIds: [1] }, false],
     ['waitingProjectIds with a null entry', { waitingProjectIds: [null] }, false],
+    ['sending ids', { sendingProjectIds: ['a'] }, true],
+    ['sendingProjectIds undefined', { sendingProjectIds: undefined }, true],
+    ['sendingProjectIds null', { sendingProjectIds: null }, true],
+    [
+      'all three lists',
+      { waitingProjectIds: ['a'], sendingProjectIds: ['b'], runningProjectIds: ['c'] },
+      true,
+    ],
+    ['sendingProjectIds a string', { sendingProjectIds: 'a' }, false],
+    ['sendingProjectIds with a number', { sendingProjectIds: [1] }, false],
+    [
+      'valid waiting and running but bad sending',
+      { waitingProjectIds: ['a'], sendingProjectIds: [1], runningProjectIds: ['c'] },
+      false,
+    ],
     ['a null payload', null, false],
     ['undefined', undefined, false],
     ['a string', 'text', false],
@@ -48,23 +63,30 @@ describe('toSyncQueue', () => {
   test('keeps the waiting ids', () => {
     expect(toSyncQueue({ waitingProjectIds: ['a', 'b'] })).toEqual({
       waitingProjectIds: ['a', 'b'],
+      sendingProjectIds: [],
       runningProjectIds: [],
     });
   });
 
   test('reads an absent or null list as empty', () => {
-    expect(toSyncQueue({})).toEqual({ waitingProjectIds: [], runningProjectIds: [] });
-    expect(toSyncQueue({ waitingProjectIds: null })).toEqual({
-      waitingProjectIds: [],
-      runningProjectIds: [],
-    });
+    const empty = { waitingProjectIds: [], sendingProjectIds: [], runningProjectIds: [] };
+    expect(toSyncQueue({})).toEqual(empty);
+    expect(toSyncQueue({ waitingProjectIds: null })).toEqual(empty);
+    expect(toSyncQueue({ sendingProjectIds: null })).toEqual(empty);
   });
 
   test('keeps the running ids', () => {
     expect(toSyncQueue({ runningProjectIds: ['r'] })).toEqual({
       waitingProjectIds: [],
+      sendingProjectIds: [],
       runningProjectIds: ['r'],
     });
+  });
+
+  test('keeps the sending ids apart from the waiting and running ones', () => {
+    expect(
+      toSyncQueue({ waitingProjectIds: ['w'], sendingProjectIds: ['s'], runningProjectIds: ['r'] }),
+    ).toEqual({ waitingProjectIds: ['w'], sendingProjectIds: ['s'], runningProjectIds: ['r'] });
   });
 
   test('reads a snapshot from an older extension without running ids as none running', () => {
@@ -80,8 +102,12 @@ describe('SYNC_REQUEST_REMOVED_MARKER', () => {
 });
 
 describe('IDLE_SYNC_QUEUE', () => {
-  test('has nothing waiting or running', () => {
-    expect(IDLE_SYNC_QUEUE).toEqual({ waitingProjectIds: [], runningProjectIds: [] });
+  test('has nothing waiting, sending or running', () => {
+    expect(IDLE_SYNC_QUEUE).toEqual({
+      waitingProjectIds: [],
+      sendingProjectIds: [],
+      runningProjectIds: [],
+    });
   });
 });
 

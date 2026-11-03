@@ -98,6 +98,13 @@ export type SyncQueueValue = {
    */
   waitingProjectIds?: readonly string[] | null;
   /**
+   * IDs of the projects of the run the queue has sent to the backend that the backend has not yet
+   * accepted. Absent and `null` both mean "none is being sent".
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
+  sendingProjectIds?: readonly string[] | null;
+  /**
    * IDs of the projects in the sync run under way. Absent from a build that predates the field;
    * absent and `null` both mean "none is known to be running".
    *
@@ -114,11 +121,20 @@ export type SyncQueueValue = {
 export type SyncQueue = {
   /**
    * IDs of the projects waiting for a later sync run. Empty when nothing waits or the answer is not
-   * known: unknown never disables anything.
+   * known: unknown never disables anything. The projects of the run being sent are in
+   * `sendingProjectIds` instead, unless they were also asked for again for a later run.
    *
    * @experimental This field is unstable and may change or disappear without notice
    */
   waitingProjectIds: readonly string[];
+  /**
+   * IDs of the projects of the run the queue has sent to the backend that the backend has not yet
+   * accepted: about to run, unless the backend refuses the run as busy, which puts them back among
+   * the waiting. Empty when none is being sent or the answer is not known.
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
+  sendingProjectIds: readonly string[];
   /**
    * IDs of the projects in the sync run under way. Empty when none runs or the answer is not known.
    *
@@ -129,9 +145,10 @@ export type SyncQueue = {
 
 /**
  * Whether a value read from the wire is a usable sync-queue snapshot. Checked rather than trusted:
- * the payload comes from another process, and a build may send another shape. `waitingProjectIds`
- * and `runningProjectIds` are each checked on their own: either may be absent, `undefined`, `null`
- * or a list of strings, and anything else makes the whole snapshot unusable.
+ * the payload comes from another process, and a build may send another shape. `waitingProjectIds`,
+ * `sendingProjectIds` and `runningProjectIds` are each checked on their own: any of them may be
+ * absent, `undefined`, `null` or a list of strings, and anything else makes the whole snapshot
+ * unusable.
  *
  * @param value The raw payload of the command or event
  * @returns `true` if the value is a {@link SyncQueueValue}
@@ -141,6 +158,7 @@ export function isSyncQueueSnapshot(value: unknown): value is SyncQueueValue {
   if (typeof value !== 'object' || !value) return false;
   return (
     isOptionalStringList('waitingProjectIds' in value ? value.waitingProjectIds : undefined) &&
+    isOptionalStringList('sendingProjectIds' in value ? value.sendingProjectIds : undefined) &&
     isOptionalStringList('runningProjectIds' in value ? value.runningProjectIds : undefined)
   );
 }
@@ -153,6 +171,7 @@ export function isSyncQueueSnapshot(value: unknown): value is SyncQueueValue {
  */
 export const IDLE_SYNC_QUEUE: SyncQueue = Object.freeze({
   waitingProjectIds: Object.freeze([]),
+  sendingProjectIds: Object.freeze([]),
   runningProjectIds: Object.freeze([]),
 });
 
@@ -168,6 +187,7 @@ export function toSyncQueue(value: SyncQueueValue | undefined): SyncQueue {
   if (value === undefined) return IDLE_SYNC_QUEUE;
   return {
     waitingProjectIds: value.waitingProjectIds ?? [],
+    sendingProjectIds: value.sendingProjectIds ?? [],
     runningProjectIds: value.runningProjectIds ?? [],
   };
 }
