@@ -10853,9 +10853,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     core drops the waiting requests and pauses the queue, and when a window opens again in the same
     process core sends `resumeSyncQueue`.
   - **No fallbacks for a missing command.** Callers do not fall back when a sync command is
-    absent. The three pull requests (core, Studio, internal extensions) merge on the same working
-    day in the order core, then Studio, then internal-extensions, and not across the Tuesday 01:30
-    UTC Studio package build.
+    absent, so the three pull requests (core, Studio, internal extensions) must ship together. As of
+    2026-11-03, planned: merge them on the same day, in the order core, Studio,
+    internal-extensions.
 - **Alternatives:**
   - *Queue in C#.* Would make it authoritative for every path, but puts UI-shaped policy (source
     kinds, per-project result routing, the Cancel question) in the backend and needs a Studio build
@@ -10885,10 +10885,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   only on it (backoff; while the activity signal reports no sync, after about 2 minutes of
   retrying the waiting requests reject with the last error; `INTERNAL` is never retried); a sync
   skips a resource with an open user install or removal instead of waiting, so only a user write
-  waits, and that wait is bounded and cannot be cancelled; quit drops the waiting requests first, the extension host is killed in
-  `will-quit`, and on macOS closing the last window pauses the queue until a window opens again
-  (`resumeSyncQueue`); the fallbacks for a missing command are gone, with the three pull requests
-  merging on one working day in the order core, Studio, internal-extensions; the snapshot carries
+  waits, and that wait is bounded and cannot be cancelled; quit drops the waiting requests first,
+  the extension host is killed in `will-quit`, and on macOS closing the last window pauses the
+  queue until a window opens again (`resumeSyncQueue`); the fallbacks for a missing command are
+  gone, so the three pull requests must ship together; the snapshot carries
   `runningProjectIds` and a run is announced only once the backend accepted it; consent applies to
   automatic callers except the Simple to Power switch.
 
