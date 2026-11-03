@@ -752,10 +752,12 @@ export class ScriptureFinderProjectDataProviderEngine
         // overwrite any external changes that occurred during Phase 1. Retry Phase 1 to get
         // fresh data and re-compute the modifications. A cached copy is also read again, because
         // a change whose notification has not arrived yet leaves no other sign: the save the
-        // editor sends when a click on Replace takes its focus is the usual one.
+        // editor sends when a click on Replace takes its focus is the usual one. The version is
+        // compared again afterwards, since a notification can also arrive during that read.
         if (
           this.#cacheVersion !== versionBeforePhase1 ||
-          (await this.#invalidateOutdatedCopies(pendingWrites))
+          (await this.#invalidateOutdatedCopies(pendingWrites)) ||
+          this.#cacheVersion !== versionBeforePhase1
         ) {
           if (attempt === MAX_CACHE_INVALIDATION_RETRIES) {
             throw new Error(
@@ -1079,8 +1081,11 @@ export class ScriptureFinderProjectDataProviderEngine
     const characterCategorizer = await this.#getOrCreateCachedCharacterCategorizer();
 
     // A word at a block's edge is a whole word, which only `search` can tell: the regex sees its
-    // neighboring blocks joined. A regex-mode pattern keeps its lookarounds, since a lazy pattern
-    // relies on the engine backtracking to satisfy them.
+    // neighboring blocks joined, so a lookaround in it would reject the word. `search` tests a
+    // match's ends only after the regex has chosen its length, so a plain pattern builds in the one
+    // choice of length it has (its trailing whitespace run, see `buildSearchRegex`). A regex-mode
+    // pattern keeps its lookarounds, since the user's pattern can vary in length anywhere and only
+    // the engine backtracking can find the length that satisfies them.
     const { useRegex, wordRestriction } = job.options;
     const shouldTestWordEdges = !useRegex && !!wordRestriction && wordRestriction !== 'none';
 

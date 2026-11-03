@@ -1,3 +1,5 @@
+import { usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
+import { USFM_MARKERS_MAP_PARATEXT_3_0, UsjReaderWriter } from 'platform-bible-utils';
 import { describe, it, expect } from 'vitest';
 import {
   MARKER_DELETION_ERROR,
@@ -5,7 +7,6 @@ import {
   STRUCTURE_PROTECTED_ERROR,
   extractGuardedMarkers,
   extractStructuralMarkers,
-  findOneEndedMarkers,
   getMarkerReplaceAction,
   markersDeletedBy,
   usfmChangesStructure,
@@ -215,6 +216,14 @@ describe('structure-protection.util', () => {
       ['verse and chapter markers, with their numbers', '\\c 2\\p\\v 1 a', ['c:2', 'p', 'v:1']],
       ['a mixed-case custom marker', '\\zAbc word\\zAbc*', ['zAbc', 'zAbc*']],
       ['an optional line break', 'Lord //said', ['//']],
+      // USFM separates a marker from its number with ordinary whitespace only. A no-break space is
+      // authored text, so what follows it is not the verse number.
+      ['a verse marker followed by a no-break space', '\\v\u00a03 text', ['v:']],
+      [
+        'an optional line break after a literal bar',
+        'Lord | God //said \\nd x\\nd*',
+        ['nd', 'nd*', '//'],
+      ],
       [
         'a slash pair in an attribute as nothing',
         '\\jmp a|href="https://b"\\jmp*',
@@ -230,42 +239,6 @@ describe('structure-protection.util', () => {
     it('counts a verse put back under another number as deleted', () => {
       expect(markersDeletedBy(['v:3'], 'X\\v 9 Y')).toBe(true);
       expect(markersDeletedBy(['v:3'], 'X\\v 3 Y')).toBe(false);
-    });
-  });
-
-  describe('findOneEndedMarkers', () => {
-    it.each([
-      ['a closing marker alone', ['nd*'], ['nd*']],
-      ['an opening marker alone', ['nd'], ['nd']],
-      ['a closer before its opener', ['nd*', 'nd'], ['nd*', 'nd']],
-      ['the start of a note', ['f', 'fr'], ['f', 'fr']],
-      ['the end of a note', ['ft', 'f*'], ['f*', 'ft']],
-      ['note content still in effect', ['fr', 'ft'], ['fr', 'ft']],
-      ['an opener whose closer is optional', ['xt'], ['xt']],
-      ['a closer that is optional, with no opener', ['ft*'], ['ft*']],
-      ['the start of a sidebar', ['esb'], ['esb']],
-      ['the end of a sidebar', ['esbe'], ['esbe']],
-      ['the start of a milestone pair', ['qt-s'], ['qt-s']],
-      ['the end of a milestone pair', ['zaln-e'], ['zaln-e']],
-      ['an opened custom marker', ['zx'], ['zx']],
-    ])('reports %s', (_description, markers, expected) => {
-      expect(findOneEndedMarkers(markers)).toEqual(expected);
-    });
-
-    it.each([
-      ['a whole character span', ['nd', 'nd*']],
-      ['a whole note', ['f', 'fr', 'ft', 'f*']],
-      ['an explicitly closed marker whose closer is optional', ['ft', 'ft*']],
-      ['an optional line break', ['//']],
-      ['paragraph and verse markers', ['p', 'v:2']],
-      ['a chapter marker', ['c:2']],
-      ['a whole sidebar', ['esb', 'esbe']],
-      ['a whole milestone pair', ['qt-s', 'qt-e']],
-      ['a whole custom character span', ['zx', 'zx*']],
-      ['a milestone that closes itself', ['zms\\*']],
-      ['a marker the map does not know', ['unknownmarker']],
-    ])('does not report %s', (_description, markers) => {
-      expect(findOneEndedMarkers(markers)).toEqual([]);
     });
   });
 
@@ -288,16 +261,127 @@ describe('structure-protection.util', () => {
       ['the end of a character style', 'Lord\\nd* God', 'X', 'oneEndedMarker'],
       ['the start of a footnote', 'word\\f + \\fr 1:3', 'X', 'oneEndedMarker'],
       ['the end of a footnote', 'text\\f* in', 'X', 'oneEndedMarker'],
-      ['the start of a custom span', 'before \\zx word', 'X', 'oneEndedMarker'],
+      ['the end of a custom span', 'word\\zx* after', 'X', 'oneEndedMarker'],
+      [
+        'the start of a custom span its replacement closes',
+        'before \\zx word',
+        'X\\zx*',
+        'oneEndedMarker',
+      ],
       ['the start of a cross reference target', '1:1 \\xt Gen', 'X', 'oneEndedMarker'],
+      ['the start of a sidebar', 'text\\esb side', 'X', 'oneEndedMarker'],
+      ['the end of a sidebar', 'text\\esbe after', 'X', 'oneEndedMarker'],
+      ['a whole sidebar', 'a\\esb side\\esbe b', 'X', 'confirm'],
       ['an optional line break', 'Lord //said', 'X', 'confirm'],
       ['the end kept of a whole pair', '\\nd Lord\\nd* God', 'X\\nd*', 'oneEndedMarker'],
       ['the start kept of a whole pair', '\\nd Lord\\nd* God', '\\nd X', 'oneEndedMarker'],
       ['a chapter', 'first\n\\c 2\n\\p\n\\v 1 Next', 'X', 'chapterMarker'],
       ['every marker put back', 'b\n\\p And', 'X\n\\p Y', 'replace'],
       ['the missing end put back', 'Lord\\nd* God', 'X\\nd* Y', 'replace'],
+      ['a milestone that closes itself', 'a\\zms |x\\*b', 'X', 'confirm'],
+      ['a whole milestone pair', 'a \\qt-s |sid="q1"\\*b\\qt-e |eid="q1"\\* c', 'X', 'confirm'],
+      ['the start of a milestone pair', 'a \\qt-s |sid="q1"\\*b', 'X', 'oneEndedMarker'],
+      ['the end of a custom milestone pair', 'b\\zaln-e\\* c', 'X', 'oneEndedMarker'],
+      ['a marker it does not know', 'a \\unknownmarker b', 'X', 'confirm'],
+      ['a whole cross reference', 'a\\x - \\xo 1:1 \\xt Gen\\x* b', 'X', 'confirm'],
+      ['a whole extended footnote', 'a\\efe + \\ft x\\efe* b', 'X', 'confirm'],
+      [
+        'the end of one span and the start of another of the same style',
+        'LORD\\nd* said to my \\nd Lord',
+        'X',
+        'oneEndedMarker',
+      ],
+      [
+        'the end of one word and the start of another',
+        'bread|pan\\w* and \\w peace',
+        'X',
+        'oneEndedMarker',
+      ],
+      [
+        'the end of one footnote and the start of another',
+        'one\\f* body \\f + two',
+        'X',
+        'oneEndedMarker',
+      ],
+      [
+        'a whole pair replaced by a closer and an opener',
+        'the \\nd Lord\\nd* God',
+        '\\nd* X \\nd',
+        'oneEndedMarker',
+      ],
+      [
+        'the end of one span and the start of another, both put back',
+        'LORD\\nd* said to my \\nd Lord',
+        'X\\nd* Y \\nd Z',
+        'replace',
+      ],
+      [
+        'a whole milestone pair whose end has its id as the default attribute',
+        'a \\qt-s |sid="q1" who="Pilate"\\*b\\qt-e |q1\\* c',
+        'X',
+        'confirm',
+      ],
+      [
+        'the end of one chunk and the start of the next',
+        '\\ts-e |t1\\*\\ts-s |t2\\*',
+        'X',
+        'oneEndedMarker',
+      ],
+      [
+        'a whole milestone pair whose start names the speaker as its default attribute',
+        'a \\qt-s |Pilate\\*b\\qt-e\\* c',
+        'X',
+        'confirm',
+      ],
     ])('classifies %s', (_description, matchedUsfm, replacement, expected) => {
       expect(classify(matchedUsfm, replacement)).toBe(expected);
+    });
+
+    it('pairs a milestone end with its start as the USFM writer spells them', () => {
+      const usx = `<usx version="3.1"><book code="MAT" style="id"/><chapter number="1" style="c" sid="MAT 1"/><para style="p"><verse number="1" style="v" sid="MAT 1:1"/>He said <ms style="qt-s" sid="q1" who="Pilate"/>What is truth<ms style="qt-e" eid="q1"/> and left.<verse eid="MAT 1:1"/></para><chapter eid="MAT 1"/></usx>`;
+      const usfm = new UsjReaderWriter(usxStringToUsj(usx), {
+        markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
+      }).toUsfm();
+      const matchedUsfm = usfm.slice(usfm.indexOf('said'), usfm.indexOf(' left'));
+      // The end's id is written bare, as its default attribute.
+      expect(matchedUsfm).toContain('\\qt-e |q1\\*');
+      expect(classify(matchedUsfm, 'X')).toBe('confirm');
+    });
+
+    it('classifies a character span crossing the end of a milestone as one-ended', () => {
+      // The `\nd*` is after the match. Ending the quotation does not end the `\nd` opened inside
+      // it, so replacing the match would leave that `\nd*` with no opener.
+      expect(classify('\\qt-s |sid="q1"\\*Lord \\nd God\\qt-e |eid="q1"\\*', 'X')).toBe(
+        'oneEndedMarker',
+      );
+    });
+
+    it('pairs milestones by id, not just by name', () => {
+      // The start of one quotation and the end of another, overlapping it.
+      expect(classify('a \\qt-s |sid="q2"\\*b\\qt-e |eid="q1"\\* c', 'X')).toBe('oneEndedMarker');
+    });
+
+    it('classifies a replacement that keeps an inner closer of a deleted note as one-ended', () => {
+      // Deleting the note and writing `X\fq*` would leave an `\fq*` with no opener.
+      expect(classify('a\\f + \\fq quote\\fq* b\\f* c', 'X\\fq*')).toBe('oneEndedMarker');
+      expect(classify('a\\f + \\fq quote\\fq* b\\f* c', 'X')).toBe('confirm');
+    });
+
+    it.each(['fs', 'wr', 'xtSee', 'xtSeeAlso'])(
+      'knows \\%s is paired, though the markers map does not',
+      (marker) => {
+        expect(classify(`before \\${marker} word`, 'X')).toBe('oneEndedMarker');
+        expect(classify(`before \\${marker} word\\${marker}* after`, 'X')).toBe('confirm');
+      },
+    );
+
+    it('treats a custom marker with no closer in sight as having no other end', () => {
+      // Deliberate: see the fallback in `mustMarkerBeClosed`.
+      expect(classify('before \\zx word', 'X')).toBe('confirm');
+    });
+
+    it('does not refuse a replacement for adding a marker the match did not hold', () => {
+      expect(classify('plain words', 'X\\nd*')).toBe('replace');
     });
 
     it('classifies a structural marker under structure protection as blocked', () => {

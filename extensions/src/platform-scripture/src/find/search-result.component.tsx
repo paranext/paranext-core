@@ -13,6 +13,7 @@ import { LocalizedBookData } from './find-types';
 import {
   applyPreserveCase,
   formatResultReference,
+  getResultBookName,
   preserveTrailingSpaces,
   renderWithInvisibleChars,
 } from './find.utils';
@@ -520,7 +521,6 @@ export default function SearchResult({
     );
   };
 
-  const bookData = localizedBookData.get(searchResult.start.verseRef.book);
   const cardContent = (
     <div className="tw:text-sm tw:font-medium tw:flex tw:items-center tw:gap-2 tw:min-h-8">
       <button
@@ -532,7 +532,7 @@ export default function SearchResult({
         }}
         onDoubleClick={(e) => e.stopPropagation()}
       >
-        {bookData?.localizedName ?? bookData?.localizedId ?? searchResult.start.verseRef.book}{' '}
+        {getResultBookName(searchResult, localizedBookData)}{' '}
         {searchResult.start.verseRef.chapterNum}:
         {searchResult.start.verseRef.verse || searchResult.start.verseRef.verseNum}
       </button>

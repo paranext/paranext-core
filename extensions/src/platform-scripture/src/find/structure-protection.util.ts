@@ -1,11 +1,15 @@
 import type { FindResult } from 'platform-scripture';
 import {
   forEachMarkerToken,
-  getMarkerClosedBy,
+  getIndependentlyClosedMarker,
+  getMarkerDefaultAttribute,
+  isNoteMarker,
   isStructuralMarker,
   MARKER_ATTRIBUTES_REGEX,
+  MILESTONE_CLOSER_REGEX,
   mustMarkerBeClosed,
   OPTIONAL_BREAK_MARKER,
+  VERSE_OR_CHAPTER_OPERAND_REGEX,
 } from './usfm-tokens.util';
 
 /**
@@ -46,7 +50,7 @@ function spellVerseOrChapter(
 ): string | undefined {
   if (marker !== 'v' && marker !== 'c') return undefined;
   // Verse/chapter IDs start with a digit per USFM (e.g. "4", "4a", "4-5"); avoid capturing a following marker.
-  const numMatch = usfm.slice(matchEndIndex).match(/^\s*(\d[\d\w-]*)/);
+  const numMatch = usfm.slice(matchEndIndex).match(VERSE_OR_CHAPTER_OPERAND_REGEX);
   return `${marker}:${numMatch ? numMatch[1] : ''}`;
 }
 
@@ -75,13 +79,6 @@ export const MARKER_DELETION_ERROR = 'platformScripture.replace.markerDeletion';
  * this: see {@link getMarkerReplaceAction}.
  */
 export const ONE_ENDED_MARKER_ERROR = 'platformScripture.replace.oneEndedMarker';
-
-/**
- * How a milestone with no `-s`/`-e` suffix reads when a bare `\*` closes it on the spot: optional
- * whitespace, an optional `|attribute` payload, then the `\*`. Telling it apart from a custom `\z`
- * character marker takes this look ahead, since the map types both as milestones.
- */
-const SELF_CLOSED_MILESTONE_REGEX = /^[ \t]*(?:\|[^\\]*)?\\\*/;
 
 /** Spells a self-closed milestone in {@link extractGuardedMarkers}: `zms\*`. */
 const SELF_CLOSED_MILESTONE_SUFFIX = '\\*';
@@ -113,7 +110,7 @@ export function extractGuardedMarkers(usfm: string): string[] {
       return;
     }
     const isSelfClosedMilestone =
-      !/-[se]$/.test(marker) && SELF_CLOSED_MILESTONE_REGEX.test(usfm.slice(matchEndIndex));
+      !/-[se]$/.test(marker) && MILESTONE_CLOSER_REGEX.test(usfm.slice(matchEndIndex));
     result.push(isSelfClosedMilestone ? `${marker}${SELF_CLOSED_MILESTONE_SUFFIX}` : marker);
   });
   // An attribute can hold a URL, whose slashes are not a line break.
@@ -152,39 +149,155 @@ export function markersDeletedBy(removedMarkers: string[], inserted: string): bo
   return findLostMarkers(removedMarkers, inserted).length > 0;
 }
 
+/** A milestone's `sid` or `eid` attribute, which says which start a given end belongs to. */
+const MILESTONE_ID_REGEX = /\b[se]id\s*=\s*"([^"]*)"/;
+
+/** The attributes that identify a milestone pair: see {@link readMilestoneId}. */
+const MILESTONE_ID_ATTRIBUTES = new Set(['sid', 'eid']);
+
 /**
- * The tokens in `markers` (as returned by {@link extractGuardedMarkers}) whose other end is not in
- * the list: a closer with no opener before it, or an opener still in effect where the list ends.
- * Markers that are not half of a pair, such as `\p` and `\v`, are never reported.
+ * Reads the id that pairs a milestone end with its other end, from the `|…` payload before its
+ * `\*`.
  *
- * A closer also ends whatever opened inside it, so a whole note counts as whole even though its
- * `\ft` has no closer of its own.
+ * The id is written out as `sid="t1"` or `eid="t1"`, or bare (`\ts-s |t1\*`) when it is the only
+ * attribute and the markers map makes it the marker's default attribute — which is how the USFM
+ * writer spells it. A bare value on a marker whose default attribute is something else, such as
+ * `\qt-s |Pilate\*` (`who`), is not an id.
+ *
+ * @param attributes The payload, with its leading `|`, or `''` when there is none
  */
-export function findOneEndedMarkers(markers: string[]): string[] {
-  const opened: string[] = [];
-  const closersWithNoOpener: string[] = [];
-  markers.forEach((token) => {
-    if (token.endsWith(SELF_CLOSED_MILESTONE_SUFFIX)) return;
-    const closedMarker = getMarkerClosedBy(token);
-    if (closedMarker === undefined) {
-      opened.push(token);
-      return;
-    }
-    const openerIndex = opened.lastIndexOf(closedMarker);
-    if (openerIndex >= 0) opened.length = openerIndex;
-    else closersWithNoOpener.push(token);
-  });
-  return [...closersWithNoOpener, ...opened.filter(mustMarkerBeClosed)];
+function readMilestoneId(marker: string, attributes: string): string | undefined {
+  const explicitId = MILESTONE_ID_REGEX.exec(attributes)?.[1];
+  if (explicitId !== undefined) return explicitId;
+  if (attributes.includes('=')) return undefined;
+  const defaultAttribute = getMarkerDefaultAttribute(marker);
+  if (defaultAttribute === undefined || !MILESTONE_ID_ATTRIBUTES.has(defaultAttribute))
+    return undefined;
+  const bareValue = attributes.slice(1).trim();
+  return bareValue === '' ? undefined : bareValue;
 }
 
 /**
- * True when `inserted` puts back so few of `removedMarkers` that one end of a pair is lost.
+ * Identifies a milestone end by its spelling: `qt-s` opens and `qt-e` closes, and the two pair by
+ * name plus their `sid`/`eid` when one is given, so two overlapping quotations do not pair with
+ * each other.
  *
- * Asked of the markers lost rather than the markers in the span: a span can hold a balanced pair
- * and still have a replacement keep only one end of it.
+ * @returns The pair it belongs to and whether it is the start, or `undefined` when `marker` is not
+ *   a milestone end
  */
-function markersLoseOneEnd(removedMarkers: string[], inserted: string): boolean {
-  return findOneEndedMarkers(findLostMarkers(removedMarkers, inserted)).length > 0;
+function readMilestoneEnd(
+  usfm: string,
+  marker: string,
+  matchEndIndex: number,
+): { pair: string; isStart: boolean } | undefined {
+  const side = /-([se])$/.exec(marker)?.[1];
+  if (!side) return undefined;
+  const attributes = MILESTONE_CLOSER_REGEX.exec(usfm.slice(matchEndIndex))?.[1] ?? '';
+  const id = readMilestoneId(marker, attributes);
+  const name = marker.slice(0, -2);
+  return { pair: id === undefined ? name : `${name}|${id}`, isStart: side === 's' };
+}
+
+/** The ends of one pair of markers that a span holds without the other. */
+type UnpairedEnds = {
+  /** Closers with no opener before them in the span: each ends something opened before it. */
+  closers: number;
+  /** Openers with no closer after them in the span: each runs on past it. */
+  openers: number;
+};
+
+/**
+ * For each pair of markers in `usfm`, the ends it holds without the other: see {@link UnpairedEnds}.
+ * A pair whose ends are all matched up within `usfm` is reported with zero of each. Markers with no
+ * other end, such as `\p` and `\v`, are not reported.
+ *
+ * The two are kept apart, not netted, because a closer only ends an opener before it: in `LORD\nd*
+ * said to my \nd Lord`, the `\nd*` ends a span that started before, and the `\nd` starts one that
+ * ends after, so the span holds one end each of two different pairs.
+ *
+ * A note's closer also ends whatever is still open inside it, so a whole note balances even though
+ * its `\ft` has no closer of its own. Other closers end only their own opener: a milestone or a
+ * character style that overlaps another does not close it.
+ *
+ * @param closedNames The markers known to be paired because a closer for them is in sight
+ */
+function countUnpairedEnds(
+  usfm: string,
+  closedNames: ReadonlySet<string>,
+): Map<string, UnpairedEnds> {
+  const unpaired = new Map<string, UnpairedEnds>();
+  const entryFor = (pair: string) => {
+    let entry = unpaired.get(pair);
+    if (!entry) {
+      entry = { closers: 0, openers: 0 };
+      unpaired.set(pair, entry);
+    }
+    return entry;
+  };
+  const opened: string[] = [];
+  // Milestones are tracked apart from `opened`: they do not nest, and a note's closer does not end
+  // one.
+  const openedMilestones: string[] = [];
+  const close = (pair: string, openers: string[], endsWhatIsInside: boolean) => {
+    const entry = entryFor(pair);
+    const openerIndex = openers.lastIndexOf(pair);
+    if (openerIndex < 0) entry.closers += 1;
+    else if (endsWhatIsInside) openers.splice(openerIndex);
+    else openers.splice(openerIndex, 1);
+  };
+  forEachMarkerToken(usfm, (marker, matchEndIndex) => {
+    const milestoneEnd = readMilestoneEnd(usfm, marker, matchEndIndex);
+    if (milestoneEnd) {
+      if (milestoneEnd.isStart) {
+        entryFor(milestoneEnd.pair);
+        openedMilestones.push(milestoneEnd.pair);
+      } else close(milestoneEnd.pair, openedMilestones, false);
+      return;
+    }
+    if (MILESTONE_CLOSER_REGEX.test(usfm.slice(matchEndIndex))) return;
+    const closedMarker =
+      usfm[matchEndIndex - 1] === '*' ? marker : getIndependentlyClosedMarker(marker);
+    if (closedMarker !== undefined) {
+      close(closedMarker, opened, isNoteMarker(closedMarker));
+      return;
+    }
+    if (!closedNames.has(marker) && !mustMarkerBeClosed(marker)) return;
+    entryFor(marker);
+    opened.push(marker);
+  });
+  [...opened, ...openedMilestones].forEach((pair) => {
+    entryFor(pair).openers += 1;
+  });
+  return unpaired;
+}
+
+/** The names of the markers that `usfm` closes with a `*`. */
+function getClosedNames(usfm: string): string[] {
+  const names: string[] = [];
+  forEachMarkerToken(usfm, (marker, matchEndIndex) => {
+    if (usfm[matchEndIndex - 1] === '*') names.push(marker);
+  });
+  return names;
+}
+
+/**
+ * True when replacing `removed` with `inserted` leaves one end of a pair in the span without the
+ * other: for some pair of markers in `removed`, the replacement does not hold exactly as many
+ * closers and openers without their other end as the span does (see {@link countUnpairedEnds}). A
+ * pair that only the replacement holds is not checked, since adding markers is a matter of
+ * editorial policy, not something the match lost.
+ *
+ * The rest of the chapter is the same before and after, so comparing the span with its replacement
+ * gives the same answer as checking the whole chapter.
+ */
+function markersLoseOneEnd(removed: string, inserted: string): boolean {
+  const closedNames = new Set([...getClosedNames(removed), ...getClosedNames(inserted)]);
+  const before = countUnpairedEnds(removed, closedNames);
+  const after = countUnpairedEnds(inserted, closedNames);
+  return [...before].some(([pair, { closers, openers }]) => {
+    const replaced = after.get(pair);
+    return (replaced?.closers ?? 0) !== closers || (replaced?.openers ?? 0) !== openers;
+  });
 }
 
 /**
@@ -231,7 +344,7 @@ export function getMarkerReplaceAction(
     return 'structureProtected';
   // Skipped for now, to avoid leaving broken text. Replacing one end can be intended, so Find with
   // markers (PT-3199) may allow it behind a clearly labeled Replace button.
-  if (markersLoseOneEnd(removedMarkers, replacement)) return 'oneEndedMarker';
+  if (markersLoseOneEnd(result.matchedUsfm, replacement)) return 'oneEndedMarker';
   if (markersDeleteChapter(removedMarkers, replacement)) return 'chapterMarker';
   return markersDeletedBy(removedMarkers, replacement) ? 'confirm' : 'replace';
 }

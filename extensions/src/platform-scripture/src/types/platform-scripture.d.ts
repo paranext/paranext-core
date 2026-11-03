@@ -546,13 +546,13 @@ declare module 'platform-scripture' {
      * replacing it with plain text. Absent when the span contains none, which is the common case.
      *
      * Markers with a backslash are listed in order. A closing marker keeps its `*` (`nd*`), and a
-     * verse or chapter marker keeps its number (`v:3`, `c:2`). A nested marker loses its `+`. Each
-     * optional line break (`//`) is listed after all of them, wherever it falls in the span.
+     * verse or chapter marker keeps its number (`v:3`, `c:2`). A nested marker loses its `+`. A
+     * self-closed milestone keeps its empty closer (`zms\*`). Each optional line break (`//`) is
+     * listed after all of them, wherever it falls in the span.
      *
-     * Unless the replacement USFM puts the same markers back, `replace()` refuses such a result
-     * with the `MARKER_DELETION_ERROR` or `ONE_ENDED_MARKER_ERROR` sentinel. Consumers should show
-     * the markers and get the user's agreement before passing
-     * {@link ReplaceOptions.allowMarkerDeletion}, or skip the result.
+     * Unless the replacement USFM puts the same markers back, `replace()` refuses such a result;
+     * its `@throws` lists the refusals. Consumers should show the markers and get the user's
+     * agreement before passing {@link ReplaceOptions.allowMarkerDeletion}, or skip the result.
      */
     removedMarkers?: string[];
   };

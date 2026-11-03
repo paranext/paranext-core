@@ -9,7 +9,7 @@ import papi from '@papi/frontend';
 import { useProjectData, useProjectDataProvider } from '@papi/frontend/react';
 import { sonner } from 'platform-bible-react';
 import { booksPresentFor } from './find/find-book-lists.test-utils';
-import { extractGuardedMarkers } from './find/structure-protection.util';
+import { extractGuardedMarkers, ONE_ENDED_MARKER_ERROR } from './find/structure-protection.util';
 
 // jsdom implements none of ResizeObserver, IntersectionObserver or matchMedia, and the Find render
 // path touches all three (Radix popovers, `useViewVisibility`, shared components' media queries).
@@ -44,11 +44,42 @@ beforeAll(() => {
 
 const PROJECT_ID = 'PROJ';
 
-const { mockBooksPresent, mockSettingValues } = vi.hoisted(() => {
+const { mockReplaceAll } = vi.hoisted(() => ({
+  /** Whether Find offers Replace All, which the app turns off. A test turns it on to reach it. */
+  mockReplaceAll: { isEnabled: false },
+}));
+
+vi.mock('./replace-all-enabled.const', () => ({
+  get IS_REPLACE_ALL_ENABLED() {
+    return mockReplaceAll.isEnabled;
+  },
+}));
+
+const { mockBooksPresent, mockIsEditable, mockSettingValues } = vi.hoisted(() => {
   const booksPresent: { value: string } = { value: '' };
+  /**
+   * The project's `platform.isEditable`. A test changes it with `set`, which re-renders the web
+   * view the way a changed project setting does.
+   */
+  const isEditable = {
+    value: true,
+    listeners: new Set<() => void>(),
+    set(value: boolean) {
+      isEditable.value = value;
+      isEditable.listeners.forEach((listener) => listener());
+    },
+    subscribe(listener: () => void) {
+      isEditable.listeners.add(listener);
+      return () => isEditable.listeners.delete(listener);
+    },
+  };
   /** Settings a test overrides; any setting not named here resolves to its default. */
   const settingValues: Record<string, unknown> = {};
-  return { mockBooksPresent: booksPresent, mockSettingValues: settingValues };
+  return {
+    mockBooksPresent: booksPresent,
+    mockIsEditable: isEditable,
+    mockSettingValues: settingValues,
+  };
 });
 
 // Real components, with `sonner` replaced by a spy the Replace tests read the toasts from.
@@ -78,7 +109,8 @@ vi.mock('@papi/frontend', () => ({
   network: { getNetworkEvent: vi.fn(() => () => () => true) },
 }));
 
-vi.mock('@papi/frontend/react', () => {
+vi.mock('@papi/frontend/react', async () => {
+  const { useSyncExternalStore } = await import('react');
   /** Every data type any `useData(...)` call reads resolves to the default it was given. */
   const dataTypes = new Proxy(
     {},
@@ -98,12 +130,14 @@ vi.mock('@papi/frontend/react', () => {
     useDataProvider: vi.fn(() => undefined),
     useProjectData: vi.fn(() => dataTypes),
     useProjectDataProvider: vi.fn(() => undefined),
-    useProjectSetting: (_projectId: unknown, key: string, defaultValue: unknown) => [
-      key === 'platformScripture.booksPresent' ? mockBooksPresent.value : defaultValue,
-      vi.fn(),
-      vi.fn(),
-      false,
-    ],
+    useProjectSetting: (_projectId: unknown, key: string, defaultValue: unknown) => {
+      // Called on every read, whatever the key, so each call site keeps the same hooks.
+      const isEditable = useSyncExternalStore(mockIsEditable.subscribe, () => mockIsEditable.value);
+      let value = defaultValue;
+      if (key === 'platformScripture.booksPresent') value = mockBooksPresent.value;
+      else if (key === 'platform.isEditable') value = isEditable;
+      return [value, vi.fn(), vi.fn(), false];
+    },
     useSetting: (key: string, defaultValue: unknown) => [
       key in mockSettingValues ? mockSettingValues[key] : defaultValue,
       vi.fn(),
@@ -349,6 +383,7 @@ describe('Find web view — Replace on a match that includes markers', () => {
   const CANCEL = '%general_cancel%';
   const CONFIRM = '%webView_find_replace_markersPrompt_confirm%';
   const OK = '%general_ok%';
+  const DELETED_MARKER = '%webView_find_replace_markersPrompt_deletedMarker%';
   const verseRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
 
   /** A result the way the finder reports it, with `removedMarkers` derived as it derives them. */
@@ -427,6 +462,7 @@ describe('Find web view — Replace on a match that includes markers', () => {
     vi.mocked(useProjectData).mockImplementation(() => ORIGINAL_PROJECT_DATA);
     findPdp.beginFindJob.mockClear();
     replacePdp.replace.mockClear();
+    mockIsEditable.set(true);
   });
 
   /** Renders Find in Replace mode on `result`, and waits for its Replace buttons. */
@@ -576,30 +612,121 @@ describe('Find web view — Replace on a match that includes markers', () => {
     expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 
-  it('decides from the text preserve-case will write, not the term as typed', async () => {
-    // Typed as it is, this puts `\nd*` back. Upper-cased to follow the match it does not.
+  it('upper-cases only the text when preserve case follows an all-caps match', async () => {
+    // Upper-casing the `\nd*` too would write a marker that does not exist and lose the closer.
+    const result = resultFor('LORD GOD', 'LORD\\nd* GOD');
     const user = userEvent.setup({ pointerEventsCheck: 0 });
-    const replaceButtons = await renderReplacing(resultFor('LORD GOD', 'LORD\\nd* GOD'), {
+    const replaceButtons = await renderReplacing(result, {
       findReplaceTerm: 'x\\nd* y',
       findPreserveCase: true,
     });
     await user.click(replaceButtons[replaceButtons.length - 1]);
 
-    expect(await dismissSkipMessage(user, ONE_ENDED_MESSAGE)).toEqual(SKIPPED);
+    await waitFor(() => expect(replacePdp.replace).toHaveBeenCalledTimes(1));
+    expect(replacePdp.replace).toHaveBeenCalledWith(
+      [{ start: result.start, end: result.end }],
+      'X\\nd* Y',
+      [result.matchedUsfm],
+      undefined,
+    );
+    expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 
-  it('closes the prompt without writing when the results change under it', async () => {
+  it('marks only the markers the replacement does not put back', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const replaceButtons = await renderReplacing(
+      resultFor('ZzFirstZzSecond', 'ZzFirst\n\\p\n\\v 2 ZzSecond'),
+      { findReplaceTerm: 'X\n\\p Y' },
+    );
+    await user.click(replaceButtons[replaceButtons.length - 1]);
+
+    const prompt = await screen.findByRole('alertdialog');
+    expect(
+      within(prompt)
+        .getAllByRole('deletion')
+        .map((marker) => marker.textContent),
+    ).toEqual([`\\v 2 ${DELETED_MARKER}`]);
+    expect(prompt).toHaveAccessibleDescription(expect.stringContaining(`\\v 2 ${DELETED_MARKER}`));
+  });
+
+  it('keeps the prompt open through an edit made elsewhere, and searches again once it closes', async () => {
+    const user = await clickCardReplace(WHOLE_MARKER_RESULT);
+    const prompt = await screen.findByRole('alertdialog');
+
+    // An edit made elsewhere, such as the editor saving as the Replace click takes its focus.
+    await act(async () => notifyBookChanged());
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 50);
+      });
+    });
+
+    expect(screen.getByRole('alertdialog')).toBe(prompt);
+    expect(findPdp.beginFindJob).toHaveBeenCalledTimes(1);
+
+    await user.click(within(prompt).getByRole('button', { name: CANCEL }));
+
+    await waitFor(() => expect(findPdp.beginFindJob).toHaveBeenCalledTimes(2));
+    expect(replacePdp.replace).not.toHaveBeenCalled();
+  });
+
+  it('confirms the match the user saw after an edit made elsewhere, checked against its text', async () => {
+    const user = await clickCardReplace(WHOLE_MARKER_RESULT);
+    const prompt = await screen.findByRole('alertdialog');
+
+    await act(async () => notifyBookChanged());
+    await user.click(within(prompt).getByRole('button', { name: CONFIRM }));
+
+    await waitFor(() => expect(replacePdp.replace).toHaveBeenCalledTimes(1));
+    expect(replacePdp.replace).toHaveBeenCalledWith(
+      [{ start: WHOLE_MARKER_RESULT.start, end: WHOLE_MARKER_RESULT.end }],
+      'X',
+      [WHOLE_MARKER_RESULT.matchedUsfm],
+      { allowMarkerDeletion: true },
+    );
+  });
+
+  it('closes the prompt without writing when a new search replaces the results', async () => {
     const user = await clickCardReplace(WHOLE_MARKER_RESULT);
     const prompt = await screen.findByRole('alertdialog');
     const confirm = within(prompt).getByRole('button', { name: CONFIRM });
 
-    // An edit made elsewhere re-runs the search, which empties the list before filling it again.
-    await act(async () => notifyBookChanged());
+    // A new search, such as the one the scope starts when it moves with the editor, empties the
+    // list before filling it again. The prompt keeps the user from the search box, so the search
+    // is started from under it.
+    fireEvent.keyDown(screen.getByPlaceholderText('%webView_find_searchPlaceholder%'), {
+      key: 'Enter',
+    });
 
     await waitFor(() => expect(findPdp.beginFindJob).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
     await user.click(confirm);
     expect(replacePdp.replace).not.toHaveBeenCalled();
+  });
+
+  it('says the match is skipped when replace() refuses one end of a pair the web view did not predict', async () => {
+    // Text that changed after the search can reach replace() looking different from the result.
+    replacePdp.replace.mockRejectedValueOnce(new Error(ONE_ENDED_MARKER_ERROR));
+    vi.mocked(sonner).mockClear();
+    await clickCardReplace(PLAIN_RESULT);
+
+    await waitFor(() => expect(sonner).toHaveBeenCalledWith(ONE_ENDED_MESSAGE));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  it('closes the prompt without writing when the project becomes read-only', async () => {
+    const user = await clickCardReplace(WHOLE_MARKER_RESULT);
+    const prompt = await screen.findByRole('alertdialog');
+    const confirm = within(prompt).getByRole('button', { name: CONFIRM });
+
+    // A sync, for example, can make the project read-only while the prompt is open.
+    act(() => mockIsEditable.set(false));
+
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    await user.click(confirm);
+    expect(replacePdp.replace).not.toHaveBeenCalled();
+    // Closing is all it does: the results stay as they were.
+    expect(findPdp.beginFindJob).toHaveBeenCalledTimes(1);
   });
 
   it('reaches the prompt from the toolbar Replace, which acts on the focused result', async () => {
@@ -611,6 +738,97 @@ describe('Find web view — Replace on a match that includes markers', () => {
 
     expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
     expect(replacePdp.replace).not.toHaveBeenCalled();
+  });
+
+  describe('Replace All', () => {
+    const REPLACE_ALL = '%webView_find_replaceAll%';
+    // Puts back the `\nd` the one-ended match holds, and adds its closer: no marker is lost, but the
+    // replacement closes a style the match only opened.
+    const PAIRED_TERM = 'the \\nd LORD\\nd*';
+    const ONE_ENDED_RESULT = resultFor('Zzthe Lord', 'Zzthe \\nd Lord');
+    const PLAIN_RANGE = {
+      ...PLAIN_RESULT,
+      start: { verseRef, offset: 40 },
+      end: { verseRef, offset: 47 },
+    };
+
+    beforeEach(() => {
+      mockReplaceAll.isEnabled = true;
+      vi.mocked(sonner).mockClear();
+      vi.mocked(papi.notifications.send).mockClear();
+    });
+
+    afterEach(() => {
+      mockReplaceAll.isEnabled = false;
+      findPdp.retrieveFindJobUpdate.mockReset();
+      findPdp.retrieveFindJobUpdate.mockImplementation(async () => ({
+        jobId: 'job-1',
+        status: 'completed',
+        percentComplete: 100,
+        totalResultsCount: 1,
+        nextResults: [resultToFind],
+        totalExecutionTimeMs: 1,
+      }));
+    });
+
+    /** Renders Find in Replace mode on `results` with `replaceTerm`, and clicks Replace All. */
+    async function replaceAll(results: Array<ReturnType<typeof resultFor>>, replaceTerm: string) {
+      findPdp.retrieveFindJobUpdate.mockImplementation(async () => ({
+        jobId: 'job-1',
+        status: 'completed',
+        percentComplete: 100,
+        totalResultsCount: results.length,
+        nextResults: results,
+        totalExecutionTimeMs: 1,
+      }));
+      const user = userEvent.setup({ pointerEventsCheck: 0 });
+      await renderReplacing(results[0], { findReplaceTerm: replaceTerm });
+      const replaceAllButton = await screen.findByRole('button', { name: REPLACE_ALL });
+      await waitFor(() => expect(replaceAllButton).toBeEnabled());
+      await user.click(replaceAllButton);
+    }
+
+    it('skips a result whose replacement would leave one end of a pair, and writes the rest', async () => {
+      await replaceAll([ONE_ENDED_RESULT, PLAIN_RANGE], PAIRED_TERM);
+
+      await waitFor(() => expect(replacePdp.replace).toHaveBeenCalledTimes(1));
+      expect(replacePdp.replace).toHaveBeenCalledWith(
+        [{ start: PLAIN_RANGE.start, end: PLAIN_RANGE.end }],
+        PAIRED_TERM,
+        [PLAIN_RANGE.matchedUsfm],
+      );
+    });
+
+    it('skips a result a single Replace would ask about, since Replace All never asks', async () => {
+      await replaceAll([WHOLE_MARKER_RESULT, PLAIN_RANGE], 'X');
+
+      await waitFor(() => expect(replacePdp.replace).toHaveBeenCalledTimes(1));
+      expect(replacePdp.replace).toHaveBeenCalledWith(
+        [{ start: PLAIN_RANGE.start, end: PLAIN_RANGE.end }],
+        'X',
+        [PLAIN_RANGE.matchedUsfm],
+      );
+    });
+
+    it('writes nothing when its only result would leave one end of a pair', async () => {
+      await replaceAll([ONE_ENDED_RESULT], PAIRED_TERM);
+
+      await waitFor(() =>
+        expect(sonner).toHaveBeenCalledWith('%webView_find_replace_skippedAllOneResult_2%'),
+      );
+      expect(replacePdp.replace).not.toHaveBeenCalled();
+    });
+
+    it('says why when replace() refuses one end of a pair, rather than reporting a failure', async () => {
+      // Text that changed after the search can reach replace() looking different from the result.
+      replacePdp.replace.mockRejectedValueOnce(new Error(ONE_ENDED_MARKER_ERROR));
+      await replaceAll([PLAIN_RESULT], 'X');
+
+      await waitFor(() =>
+        expect(sonner).toHaveBeenCalledWith('%webView_find_replace_oneEndedMarkerError%'),
+      );
+      expect(papi.notifications.send).not.toHaveBeenCalled();
+    });
   });
 
   it('reaches the prompt from Enter on the selected card', async () => {

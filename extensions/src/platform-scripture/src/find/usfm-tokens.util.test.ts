@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   collapseUsfmMarkersForDisplay,
+  isNoteMarker,
   isStructuralMarker,
   splitUsfmForMarkerDisplay,
 } from './usfm-tokens.util';
@@ -45,6 +46,15 @@ describe('usfm-tokens.util', () => {
         text(' bread'),
         marker('\\w*'),
         text(' and'),
+      ]);
+    });
+
+    it('shows the text after a literal bar, which is not an attribute', () => {
+      expect(splitUsfmForMarkerDisplay('Lord | God \\nd said\\nd*')).toEqual([
+        text('Lord | God '),
+        marker('\\nd'),
+        text(' said'),
+        marker('\\nd*'),
       ]);
     });
 
@@ -139,6 +149,16 @@ describe('usfm-tokens.util', () => {
       expect(isStructuralMarker('ft')).toBe(false);
       expect(isStructuralMarker('notamarker')).toBe(false);
       expect(isStructuralMarker('')).toBe(false);
+    });
+  });
+
+  describe('isNoteMarker', () => {
+    it.each(['f', 'fe', 'x', 'ef', 'ex', 'efe'])('recognizes \\%s as a note', (marker) => {
+      expect(isNoteMarker(marker)).toBe(true);
+    });
+
+    it.each(['ft', 'fq', 'xt', 'xo', 'nd', 'p', 'zx'])('is false for \\%s', (marker) => {
+      expect(isNoteMarker(marker)).toBe(false);
     });
   });
 

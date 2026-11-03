@@ -86,6 +86,48 @@ describe('applyPreserveCase', () => {
   it('upper-cases a multi-word replacement when match is all-caps', () => {
     expect(applyPreserveCase('FOO BAR', 'hello world')).toBe('HELLO WORLD');
   });
+
+  it('upper-cases only the text of a replacement holding markers', () => {
+    expect(applyPreserveCase('ABRAHAM. ABRAHAM', 'Abram. \\p \\v 2 Abram')).toBe(
+      'ABRAM. \\p \\v 2 ABRAM',
+    );
+  });
+
+  it('leaves a verse letter, a closer, and an attribute as typed', () => {
+    expect(applyPreserveCase('LORD', '\\v 2a \\w lord|lemma="adon"\\w* x')).toBe(
+      '\\v 2a \\w LORD|lemma="adon"\\w* X',
+    );
+  });
+
+  it('title-cases the first text of a replacement that starts with a marker', () => {
+    expect(applyPreserveCase('Lord', '\\nd lord\\nd* god')).toBe('\\nd Lord\\nd* god');
+  });
+
+  // Adlam's letters are outside the Basic Multilingual Plane, so each is two UTF-16 code units
+  describe('in a cased script outside the Basic Multilingual Plane', () => {
+    const CAPITAL_ALIF = '\u{1E900}';
+    const CAPITAL_DAALI = '\u{1E901}';
+    const SMALL_ALIF = '\u{1E922}';
+    const SMALL_DAALI = '\u{1E923}';
+
+    it('title-cases the replacement when the match starts with a capital', () => {
+      expect(applyPreserveCase(`${CAPITAL_ALIF}${SMALL_ALIF}`, `${SMALL_DAALI}${SMALL_ALIF}`)).toBe(
+        `${CAPITAL_DAALI}${SMALL_ALIF}`,
+      );
+    });
+
+    it('upper-cases the replacement when the match is all capitals', () => {
+      expect(
+        applyPreserveCase(`${CAPITAL_ALIF}${CAPITAL_DAALI}`, `${SMALL_DAALI}${SMALL_ALIF}`),
+      ).toBe(`${CAPITAL_DAALI}${CAPITAL_ALIF}`);
+    });
+
+    it('leaves the replacement as typed when the match starts with a small letter', () => {
+      expect(applyPreserveCase(`${SMALL_ALIF}${CAPITAL_ALIF}`, `${SMALL_DAALI}${SMALL_ALIF}`)).toBe(
+        `${SMALL_DAALI}${SMALL_ALIF}`,
+      );
+    });
+  });
 });
 
 describe('isSimpleInterfaceMode', () => {
@@ -348,19 +390,26 @@ describe('buildSkippedMatchMessage', () => {
   };
   const verseRef = { book: 'GEN', chapterNum: 1, verseNum: 3 };
   const result = { text: 'Lord God', start: { verseRef } };
+  const BOOKS = new Map([['GEN', { localizedId: 'GÉN', localizedName: 'Génesis' }]]);
 
   it.each([
-    ['oneEndedMarker', 'one-ended GEN 1:3 ("Lord God")'],
-    ['chapterMarker', 'chapter GEN 1:3 ("Lord God")'],
-    ['structureProtected', 'structure GEN 1:3 ("Lord God")'],
+    ['oneEndedMarker', 'one-ended Génesis 1:3 ("Lord God")'],
+    ['chapterMarker', 'chapter Génesis 1:3 ("Lord God")'],
+    ['structureProtected', 'structure Génesis 1:3 ("Lord God")'],
   ] as const)('says where and what for %s', (action, expected) => {
-    expect(buildSkippedMatchMessage(action, result, STRINGS)).toBe(expected);
+    expect(buildSkippedMatchMessage(action, result, STRINGS, BOOKS)).toBe(expected);
   });
 
   it('uses the verse as written when the reference has one', () => {
     const start = { verseRef: { ...verseRef, verse: '3-4' } };
-    expect(buildSkippedMatchMessage('chapterMarker', { ...result, start }, STRINGS)).toBe(
-      'chapter GEN 1:3-4 ("Lord God")',
+    expect(buildSkippedMatchMessage('chapterMarker', { ...result, start }, STRINGS, BOOKS)).toBe(
+      'chapter Génesis 1:3-4 ("Lord God")',
+    );
+  });
+
+  it('falls back to the book ID for a book with no localized data', () => {
+    expect(buildSkippedMatchMessage('chapterMarker', result, STRINGS, new Map())).toBe(
+      'chapter GEN 1:3 ("Lord God")',
     );
   });
 });

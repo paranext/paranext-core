@@ -1478,6 +1478,60 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       expect(getWrittenUsfm()).toContain(String.raw`\v 2 Abram was`);
     });
 
+    it('keeps a change whose notification arrives while a cached chapter is read again', async () => {
+      const notifyChange = getCapturedChapterSubscribeCallback();
+      const verse1Range = (book: string, startOffset: number, endOffset: number) => ({
+        start: { verseRef: { book, chapterNum: 1, verseNum: 1 }, offset: startOffset },
+        end: { verseRef: { book, chapterNum: 1, verseNum: 1 }, offset: endOffset },
+      });
+      // An empty range with an empty replacement writes nothing, but reads MAT 1 into the cache
+      await engine.replace([verse1Range('MAT', 5, 5)], '');
+
+      // Hold the next read of MAT 1, which is the re-read of its cached copy before writing
+      const getChapterUsx = vi.mocked(mockPdps['platformScripture.USX_Chapter'].getChapterUSX);
+      const readFromStore = getChapterUsx.getMockImplementation();
+      if (!readFromStore) throw new Error('getChapterUSX has no implementation to wrap');
+      const heldReads: Array<() => void> = [];
+      getChapterUsx.mockImplementation(async (verseRef) => {
+        const usx = await readFromStore(verseRef);
+        if (verseRef.book !== 'MAT' || heldReads.length > 0) return usx;
+        return new Promise((resolve) => {
+          heldReads.push(() => resolve(usx));
+        });
+      });
+
+      // MRK 1 is not cached, so this call fetches it fresh and does not read it again
+      const replacePromise = engine.replace(
+        [verse1Range('MAT', 5, 8), verse1Range('MRK', 5, 8)],
+        ['MATX', 'MRKX'],
+        ['The', 'The'],
+      );
+      await flushPromises();
+      expect(heldReads).toHaveLength(1);
+
+      // The editor saves MRK 1, and its notification arrives while MAT 1 is being read again
+      const setChapterUsfm = vi.mocked(mockPdps['platformScripture.USFM_Chapter'].setChapterUSFM);
+      await setChapterUsfm(
+        { book: 'MRK', chapterNum: 1, verseNum: 0 },
+        String.raw`\id MRK
+\c 1
+\p
+\v 1 The beginning of the GOSPEL of Jesus Christ.`,
+      );
+      setChapterUsfm.mockClear();
+      notifyChange();
+      // MAT 1 has not changed
+      heldReads[0]();
+      await replacePromise;
+
+      const mrkWrites = setChapterUsfm.mock.calls
+        .filter(([verseRef]) => verseRef.book === 'MRK')
+        .map(([, usfm]) => String(usfm));
+      expect(mrkWrites).toEqual([
+        expect.stringContaining(String.raw`\v 1 MRKX beginning of the GOSPEL`),
+      ]);
+    });
+
     it('should throw if disposed before writing (Phase 2)', async () => {
       // This test verifies that replace operations fail gracefully if the PDPE is disposed
       // after Phase 1 (computation) but before Phase 2 (writing)
@@ -3092,6 +3146,28 @@ describe('ScriptureFinderProjectDataProviderEngine word restriction at a block e
     expect(await find('Isaac And Jacob')).toHaveLength(1);
   });
 
+  it('finds a query ending in whitespace that ends a block, with ignoreWhitespaceDifferences', async () => {
+    // `and ` at the end of the first paragraph runs into `Moses` in the joined text
+    const engine = new ScriptureFinderProjectDataProviderEngine(
+      createSingleUsxMockPdps(`<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.0">
+  <book code="MAT" style="id">Matthew</book>
+  <chapter number="1" style="c" sid="MAT 1"/>
+  <para style="p"><verse number="1" style="v" sid="MAT 1:1"/>Aaron and </para>
+  <para style="p">Moses came<verse eid="MAT 1:1"/></para>
+  <chapter eid="MAT 1"/>
+</usx>`),
+    );
+    const results = await pollFindJobTexts(engine, {
+      searchString: 'and ',
+      scope: [{ bookId: 'MAT' }],
+      caseInsensitive: false,
+      ignoreWhitespaceDifferences: true,
+      wordRestriction: 'wholeWord',
+    });
+    expect(results).toEqual(['and ']);
+  });
+
   it('reports every occurrence once, in document order', async () => {
     expect(await find('the')).toEqual(['the', 'the', 'the']);
     const engine = new ScriptureFinderProjectDataProviderEngine(
@@ -3438,6 +3514,69 @@ describe('ScriptureFinderProjectDataProviderEngine whitespace matching', () => {
         expect(results).toEqual(['the Word']);
       },
     );
+
+    describe('with a query ending in whitespace and a word restriction on its end', () => {
+      /**
+       * Finds in one paragraph of `text`, with the project's default character classes, which count
+       * the zero-width joiner and non-joiner as word-forming
+       */
+      function findInParagraph(
+        text: string,
+        searchString: string,
+        wordRestriction: 'wholeWord' | 'endOfWord',
+      ): Promise<string[]> {
+        const pdps = createSingleUsxMockPdps(`<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.0">
+  <book code="MAT" style="id">Matthew</book>
+  <chapter number="1" style="c" sid="MAT 1"/>
+  <para style="p"><verse number="1" style="v" sid="MAT 1:1"/>${text}<verse eid="MAT 1:1"/></para>
+  <chapter eid="MAT 1"/>
+</usx>`);
+        const getSetting = vi.mocked(pdps['platform.base'].getSetting);
+        const readTestSetting = getSetting.getMockImplementation();
+        if (!readTestSetting) throw new Error('getSetting has no implementation to wrap');
+        getSetting.mockImplementation((key, ...rest) =>
+          key === 'platformScripture.baseCharacterClassRegex'
+            ? Promise.resolve('\\p{Lu}\\p{Ll}\\p{Lt}\\p{Lo}\\p{Cn}\\u200C\\u200D')
+            : readTestSetting(key, ...rest),
+        );
+        const engine = new ScriptureFinderProjectDataProviderEngine(pdps);
+        return pollFindJobTexts(engine, {
+          searchString,
+          scope: SCOPE,
+          caseInsensitive: false,
+          ignoreWhitespaceDifferences: true,
+          wordRestriction,
+        });
+      }
+
+      // The run must take in the invisible character too, or the match would end inside a word
+      it.each(['wholeWord', 'endOfWord'] as const)(
+        'extends the run over a zero-width non-joiner under the %s restriction',
+        async (wordRestriction) => {
+          expect(await findInParagraph('Go and ‌. more', 'and ', wordRestriction)).toEqual([
+            'and ‌',
+          ]);
+        },
+      );
+
+      it.each(['wholeWord', 'endOfWord'] as const)(
+        'extends the run over a zero-width joiner under the %s restriction',
+        async (wordRestriction) => {
+          expect(await findInParagraph('Then Jesus. ‍“Then', 'Jesus. ', wordRestriction)).toEqual([
+            'Jesus. ‍',
+          ]);
+        },
+      );
+
+      it('still takes the shortest run when that already ends the word', async () => {
+        expect(await findInParagraph('Go and  “more', 'and ', 'wholeWord')).toEqual(['and ']);
+      });
+
+      it('still does not end a match inside a word', async () => {
+        expect(await findInParagraph('Go and more', 'and ', 'wholeWord')).toEqual([]);
+      });
+    });
 
     it('is not applied in regex mode, where the pattern must mean exactly what the user wrote', async () => {
       const results = await findIn(SINGLE_SPACED_CHAPTER_USX, 'the {3}Word', {

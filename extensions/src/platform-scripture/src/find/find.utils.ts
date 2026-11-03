@@ -1,5 +1,6 @@
 import type { Scope } from 'platform-bible-react';
 import {
+  charAt,
   escapeStringRegexp,
   formatReplacementString,
   isPlatformError,
@@ -11,6 +12,7 @@ import {
   ScrollGroupId,
   SEARCH_WHITESPACE_GROUP_PREFIX,
   SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS,
+  substring,
 } from 'platform-bible-utils';
 import {
   FindJobStatus,
@@ -21,7 +23,9 @@ import {
 } from 'platform-scripture';
 import type { OpenProjectTabWithWebView } from '../hooks/use-open-project-tabs';
 import { isExtraMaterialBookId } from './extra-material.utils';
+import type { LocalizedBookData } from './find-types';
 import type { MarkerReplaceAction } from './structure-protection.util';
+import { transformUsfmText } from './usfm-tokens.util';
 
 /** Maps invisible/whitespace code points to visible stand-in symbols */
 const INVISIBLE_CHAR_SYMBOLS: Record<string, string> = {
@@ -102,15 +106,25 @@ export function preserveTrailingSpaces(text: string): string {
  * - ALL CAPS match → ALL CAPS replacement
  * - Title Case match (first letter capital) → Title Case replacement
  * - Otherwise → replacement as-is
+ *
+ * Only the replacement's text changes case. Its markers, verse and chapter numbers, and attributes
+ * are left as typed, since upper-casing `\v` would write a marker that does not exist.
  */
 export function applyPreserveCase(matchedText: string, replacementText: string): string {
   if (!replacementText || !matchedText) return replacementText;
   if (matchedText === matchedText.toUpperCase() && matchedText !== matchedText.toLowerCase()) {
-    return replacementText.toUpperCase();
+    return transformUsfmText(replacementText, (text) => text.toUpperCase());
   }
-  const firstChar = matchedText[0];
+  // By character, not UTF-16 code unit: a cased letter outside the Basic Multilingual Plane, such
+  // as Adlam's, is two code units, and neither half has a case of its own.
+  const firstChar = charAt(matchedText, 0);
   if (firstChar === firstChar.toUpperCase() && firstChar !== firstChar.toLowerCase()) {
-    return replacementText[0].toUpperCase() + replacementText.slice(1);
+    let isFirstText = true;
+    return transformUsfmText(replacementText, (text) => {
+      if (!isFirstText) return text;
+      isFirstText = false;
+      return charAt(text, 0).toUpperCase() + substring(text, 1);
+    });
   }
   return replacementText;
 }
@@ -177,12 +191,29 @@ export function buildReplacedAllMessage(
 }
 
 /** The reference of a result as Find writes it for the user: `GEN 1:3`. */
-export function formatResultReference(result: Pick<FindResult, 'start'>): string {
-  const { book, chapterNum, verse, verseNum } = result.start.verseRef;
-  return `${book} ${chapterNum}:${verse || verseNum}`;
+export function formatResultReference(
+  result: Pick<FindResult, 'start'>,
+  bookName = result.start.verseRef.book,
+): string {
+  const { chapterNum, verse, verseNum } = result.start.verseRef;
+  return `${bookName} ${chapterNum}:${verse || verseNum}`;
 }
 
-const SKIPPED_MATCH_MESSAGE_KEYS: Record<
+/**
+ * The book of a result as a result card names it: the localized name, else the localized ID, else
+ * the book ID.
+ */
+export function getResultBookName(
+  result: Pick<FindResult, 'start'>,
+  localizedBookData: Map<string, Pick<LocalizedBookData, 'localizedId' | 'localizedName'>>,
+): string {
+  const { book } = result.start.verseRef;
+  const bookData = localizedBookData.get(book);
+  return bookData?.localizedName ?? bookData?.localizedId ?? book;
+}
+
+/** The message for each reason a single Replace skips a match. */
+export const SKIPPED_MATCH_MESSAGE_KEYS: Record<
   Exclude<MarkerReplaceAction, 'replace' | 'confirm'>,
   LocalizeKey
 > = {
@@ -191,14 +222,18 @@ const SKIPPED_MATCH_MESSAGE_KEYS: Record<
   structureProtected: '%webView_find_replace_skippedStructureProtected%',
 };
 
-/** Builds the message telling the user that a match Replace may not touch is being skipped. */
+/**
+ * Builds the message telling the user that a match Replace may not touch is being skipped. The
+ * reference names the book as the result card does.
+ */
 export function buildSkippedMatchMessage(
   action: keyof typeof SKIPPED_MATCH_MESSAGE_KEYS,
   result: Pick<FindResult, 'start' | 'text'>,
   localizedStrings: LanguageStrings,
+  localizedBookData: Map<string, Pick<LocalizedBookData, 'localizedId' | 'localizedName'>>,
 ): string {
   return formatReplacementString(localizedStrings[SKIPPED_MATCH_MESSAGE_KEYS[action]], {
-    reference: formatResultReference(result),
+    reference: formatResultReference(result, getResultBookName(result, localizedBookData)),
     text: result.text,
   });
 }
@@ -968,7 +1003,8 @@ export function buildWordEdgeTests(
  * @param characterCategorizer The character categorizer settings for the project, used to build
  *   character classes in the regex
  * @param shouldAssertWordBoundaries Whether the regex itself enforces `options.wordRestriction`.
- *   Pass `false` when {@link buildWordEdgeTests} will enforce it through `UsjReaderWriter.search`.
+ *   Pass `false` when {@link buildWordEdgeTests} will enforce it through `UsjReaderWriter.search`;
+ *   the regex then still prefers, for a trailing whitespace run, a length that ends the word.
  * @returns A compiled RegExp for use in `UsjReaderWriter.search`, paired with
  *   `flexibleWhitespaceAtBlockBoundaries` when the query is not a regex
  */
@@ -990,6 +1026,12 @@ export function buildSearchRegex(
     characterCategorizer;
 
   const wordBoundaries = buildWordBoundaryAssertions(searchString, characterCategorizer);
+  // The end-of-word lookahead a trailing whitespace run must satisfy when it can, for a regex whose
+  // word edges `UsjReaderWriter.search` tests instead. See where the run is built.
+  const trailingRunEndAssertion =
+    !shouldAssertWordBoundaries && restrictsWordEnd(wordRestriction)
+      ? wordBoundaries?.end
+      : undefined;
 
   // Build a RegExp to test individual code points for diacritics (used in ignoreDiacritics loop).
   const isDiacritic = new RegExp(`^[${diacriticClass}]$`, 'u');
@@ -1086,7 +1128,20 @@ export function buildSearchRegex(
           // collapsing whitespace would match strictly *less* than matching it exactly, which
           // inverts what the option means.
           const runUnit = `${whitespaceClass}${diacriticSuffix}`;
-          runPattern = isInteriorRun ? `(?:${runUnit})*?` : `(?:${runUnit})+?`;
+          if (isInteriorRun) {
+            runPattern = `(?:${runUnit})*?`;
+          } else if (trailingRunEndAssertion && index >= chars.length) {
+            // `search` tests a match's end only after the regex has chosen it, and cannot make it
+            // try another length, so a lazy run that stops inside a word (a space followed by a
+            // zero-width joiner, which is word-forming and also in the whitespace class) would
+            // lose the match. The first branch tries each longer run against the lookahead, as an
+            // in-regex word boundary would. The second keeps the shortest run for `search` to
+            // judge, which is how a run ending a block, where this regex sees the next block's
+            // word, is still found.
+            runPattern = `(?:(?:${runUnit})+?${trailingRunEndAssertion}|${runUnit})`;
+          } else {
+            runPattern = `(?:${runUnit})+?`;
+          }
         } else {
           runPattern = run
             .map((runChar) => `${escapeStringRegexp(runChar)}${diacriticSuffix}`)

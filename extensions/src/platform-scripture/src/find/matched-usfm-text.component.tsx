@@ -1,4 +1,5 @@
 import { memo, ReactNode, useMemo } from 'react';
+import { extractGuardedMarkers } from './structure-protection.util';
 import { splitUsfmForMarkerDisplay, UsfmDisplaySegment } from './usfm-tokens.util';
 
 type MatchedUsfmTextProps = {
@@ -15,7 +16,49 @@ type MatchedUsfmTextProps = {
    * as one truncated line, so that a long match does not render thousands of hidden markers.
    */
   maxCharacters?: number;
-};
+} & (
+  | { replacementUsfm?: undefined; deletedMarkerLabel?: undefined }
+  | {
+      /**
+       * What Replace would write in place of the match. Each marker it does not put back is marked
+       * as deleted; the others are shown as kept.
+       */
+      replacementUsfm: string;
+      /** Read after each deleted marker, so a screen reader hears what the marking shows */
+      deletedMarkerLabel: string;
+    }
+);
+
+/** Marker chips as kept markers and plain results show them. */
+const MARKER_CLASS_NAME =
+  'tw:rounded tw:bg-muted tw:px-0.5 tw:font-mono tw:text-xs tw:text-muted-foreground';
+/** Marker chips for markers the replacement deletes, struck through so color is not the only cue. */
+const DELETED_MARKER_CLASS_NAME =
+  'tw:rounded tw:bg-destructive/10 tw:px-0.5 tw:font-mono tw:text-xs tw:text-destructive tw:line-through tw:dark:bg-destructive/20';
+
+/**
+ * For each segment, whether it is a marker that `replacementUsfm` does not put back. Markers are
+ * compared as `extractGuardedMarkers` spells them, the spelling a result's `removedMarkers` and the
+ * marker check use, and counted, so a replacement holding one `\p` keeps only one of two.
+ */
+function findDeletedMarkerSegments(
+  segments: UsfmDisplaySegment[],
+  replacementUsfm: string,
+): boolean[] {
+  const putBack = new Map<string, number>();
+  extractGuardedMarkers(replacementUsfm).forEach((marker) =>
+    putBack.set(marker, (putBack.get(marker) ?? 0) + 1),
+  );
+  return segments.map((segment) => {
+    if (!segment.isMarker) return false;
+    // A marker segment holds exactly one marker, with its verse number or milestone closer.
+    const [marker] = extractGuardedMarkers(segment.text);
+    const count = putBack.get(marker) ?? 0;
+    if (count === 0) return true;
+    putBack.set(marker, count - 1);
+    return false;
+  });
+}
 
 /**
  * The segments to show: all of them, or those that fit in `maxCharacters`, with whether any were
@@ -39,7 +82,8 @@ function selectShownSegments(
 
 /**
  * Shows a match with the markers it includes, so the user can see what Replace would delete. Each
- * marker is a small chip in the flow of the text.
+ * marker is a small chip in the flow of the text. Given the replacement, it marks the chips of the
+ * markers the replacement deletes.
  *
  * Markers are always left-to-right, whatever direction the Scripture text around them runs.
  *
@@ -49,27 +93,45 @@ export const MatchedUsfmText = memo(function MatchedUsfmText({
   matchedUsfm,
   renderText,
   maxCharacters,
+  replacementUsfm,
+  deletedMarkerLabel,
 }: MatchedUsfmTextProps) {
   const { shownSegments, isCut } = useMemo(
     () => selectShownSegments(splitUsfmForMarkerDisplay(matchedUsfm), maxCharacters),
     [matchedUsfm, maxCharacters],
   );
+  const deletedSegments = useMemo(
+    () =>
+      replacementUsfm === undefined
+        ? undefined
+        : findDeletedMarkerSegments(shownSegments, replacementUsfm),
+    [replacementUsfm, shownSegments],
+  );
   return (
     <>
       {shownSegments.map((segment, index) => {
-        // The segments of a given span never change order, so the index is a stable key
-        const key = index;
-        return segment.isMarker ? (
-          <span
-            key={key}
-            dir="ltr"
-            data-usfm-marker
-            className="tw:rounded tw:bg-muted tw:px-0.5 tw:font-mono tw:text-xs tw:text-muted-foreground"
-          >
+        if (!segment.isMarker)
+          return (
+            // The segments of a given span never change order, so the index is a stable key, and
+            // a key built from offsets would add work for no benefit
+            // eslint-disable-next-line react/no-array-index-key
+            <span key={index}>{renderText ? renderText(segment.text) : segment.text}</span>
+          );
+        if (deletedSegments?.[index])
+          return (
+            // Index key for the same reason as above
+            // eslint-disable-next-line react/no-array-index-key
+            <del key={index} dir="ltr" data-usfm-marker className={DELETED_MARKER_CLASS_NAME}>
+              {segment.text}
+              <span className="tw:sr-only"> {deletedMarkerLabel}</span>
+            </del>
+          );
+        return (
+          // Index key for the same reason as above
+          // eslint-disable-next-line react/no-array-index-key
+          <span key={index} dir="ltr" data-usfm-marker className={MARKER_CLASS_NAME}>
             {segment.text}
           </span>
-        ) : (
-          <span key={key}>{renderText ? renderText(segment.text) : segment.text}</span>
         );
       })}
       {isCut && '…'}
