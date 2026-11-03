@@ -47,12 +47,6 @@ started in Power mode reads `unconfirmed` for the whole session — see
 user's own act, and it only sends unsent changes. It still skips on `deferred`, on `unreadable`, on
 a rejected request, and on any answer it does not know.
 
-## The sync queue is not a consent chokepoint
-
-Automatic callers that request through `paratextBibleSendReceive.requestSync` (the sync queue; see
-`adr-sync-queue-one-run-at-a-time`) still ask the consent gate first and skip on any answer but
-`granted`; the queue runs whatever it is given. A user's click is still the consent.
-
 ## What is NOT gated
 
 User-initiated syncs — the wizard's own Sync button, the Send/Receive dialog, a toolbar action. The
@@ -63,10 +57,14 @@ click *is* the consent.
 There is no chokepoint: `commandService.sendCommand` is generic, and gating there would suppress the
 user-initiated paths too. The gate is applied per trigger, so **a new automatic trigger that forgets
 it reintroduces the bug silently**. Reviewers should treat any new `syncProjects` /
-`sendReceiveProjects` call site as needing this gate or an explicit reason why not.
+`sendReceiveProjects` / `requestSync` call site (the sync queue runs whatever it is given; see
+`adr-sync-queue-one-run-at-a-time`) as needing this gate or an explicit reason why not. An
+automatic caller takes its mode and consent decisions when it requests; the queue re-checks only the
+interval engine's "still wanted" condition at run start.
 
 TODO(PT-4774): replace reviewer vigilance with a source-scan test that fails on an ungated
-automatic sync call site, as `SendReceiveWriteLockCoverageTests` does for the C# write gate.
+automatic sync call site (`syncProjects`, `sendReceiveProjects`, `requestSync(…, 'autoSync')`), as
+`SendReceiveWriteLockCoverageTests` does for the C# write gate.
 
 Rationale and rejected alternatives: `adr-first-run-sync-consent` in
 [`Architecture-Decisions.md`](../../.context/standards/Architecture-Decisions.md).

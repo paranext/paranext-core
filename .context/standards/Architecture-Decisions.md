@@ -7800,8 +7800,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   these codes was checked when this landed. A code thrown by a TypeScript handler still does not
   cross a process boundary: the layers that answer a throwing TypeScript handler (the `json-rpc-2.0`
   server inside `RpcClient`, `RpcWebSocketListener.request` in main) send its message, not its
-  `code`. Message matching stays as a fallback where a caller may run
-  against a core build without this change.
+  `code`. Message matching stays as a fallback where a caller may run against a core build without
+  this change. The Send/Receive busy refusal is recognised by a message sentinel (` (SYNC_BUSY)`),
+  because a code alone does not identify it and does not survive a TypeScript handler hop.
+- **Amended 2026-11-03:** the busy-refusal discriminator is the message marker, not the code; see
+  `adr-sync-queue-one-run-at-a-time`.
 
 ## adr-platform-minted-window-ids: Window ids are minted by main, never reused, and numeric on every surface
 
@@ -10815,28 +10818,43 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     cannot become a continuous re-sync loop; it raises no same-user lock prompt.
   - **Two snapshots.** C# serves the activity snapshot (`getSyncActivity` / `onSyncActivityChanged`,
     including the resource ids the running run will update); the extension serves the queue snapshot
-    (`getSyncQueue` / `onSyncQueueChanged`, the waiting project ids). Home reads both.
-  - **Cancel asks.** Every Cancel (toast, toolbar, Sync dialog and the editor's sync-blocked banner) goes
-    through `cancelSyncPrompt`, which asks whether to stop the running sync and then, if projects are
-    waiting, whether to drop them too. A run counter keeps a late
-    answer from cancelling or clearing for a run that started while the question was open.
+    (`getSyncQueue` / `onSyncQueueChanged`, the waiting project ids and `runningProjectIds`). Home
+    reads both. The queue claims a run (announces "syncing") only once the backend has accepted it.
+  - **Cancel asks.** Every Cancel (toast, toolbar, Sync dialog and the editor's sync-blocked banner)
+    goes through `cancelSyncPrompt`, which asks whether to stop the running sync and then, if
+    projects are waiting, whether to drop them too. A run counter keeps a late answer from
+    cancelling or clearing for a run that started while the question was open.
   - **Startup and shutdown boundary syncs stay direct** — core's startup/shutdown tasks and the
     extension's session-boundary syncs call the C# commands without the queue. The queue waits for
     them through the activity signal and also re-reads `getSyncActivity` every 30 s while anything is
-    waiting, so a missed idle edge delays the next run by at most 30 s and cannot hang it. The C#
-    semaphore is also held briefly with the activity already idle (the shared-project list fetch, a
-    run's closing project-list refresh), so a run refused because the semaphore was held — by a sync
-    or by such an operation — goes back to waiting and is retried after 1, 2 and 4 s before the queue
-    falls back to the activity signal; a refusal is never reported as a failure or stamped.
-  - **A C# `SyncRunResourceGuard` in core** makes a DBL resource install/uninstall and a sync run's
-    connected-resource window wait for each other, bounded by a timeout that restarts for each run
-    that holds the resource. The sync side's wait is cancellable (Cancel); the install side's is not.
-    An install waits only for the running run, never a waiting one.
-  - **The queue is in memory** and is dropped silently at quit; rows are plain again on restart.
-    The extension host is killed after core's shutdown tasks without deactivating, so core's
-    shutdown tasks drop the queue first (`paratextBibleSendReceive.dropSyncQueue`, bounded), before
+    waiting, so a missed idle edge delays the next run by at most 30 s and cannot hang it.
+  - **Busy refusals are retried on a marker.** The C# semaphore is also held briefly with the
+    activity already idle (the shared-project list fetch, a run's closing project-list refresh).
+    The backend's two busy refusals keep their codes (`FAILED_PRECONDITION` / `UNAVAILABLE`) and end
+    their message with ` (SYNC_BUSY)`. The queue retries only on that marker, with backoff, and
+    after a 2-minute cap rejects the waiting requests with the last error. A busy refusal is never
+    reported as a failure or stamped while the queue is still retrying; an `INTERNAL` "not
+    responding" error is never retried. A code alone does not identify the refusal, and the marker
+    survives a TypeScript handler hop that keeps only the message. Core's quit sync retries on the
+    marker within its own 30 s budget.
+  - **A C# `SyncRunResourceGuard` in core** orders a DBL resource install/uninstall against a sync
+    run's connected-resource update. A sync registers only the connected resources it will
+    install or update, and skips any resource with an open user install or removal: it does not
+    wait, logs the skip, and does not count it as a failure. A user write on a registered resource
+    still waits for the sync's update, bounded by a timeout that restarts for each run that holds
+    the resource; the wait is cancellable on the sync side and not on the install side. An install
+    waits only for the running run, never a waiting one.
+  - **The queue is in memory** and is dropped at quit; rows are plain again on restart. The
+    extension host is killed in `will-quit` without deactivating, so core's shutdown tasks drop the
+    queue's waiting requests first (`paratextBibleSendReceive.dropSyncQueue`, bounded), before
     cancelling the running sync — a queued run must not start and make the shutdown sync fail as
-    busy.
+    busy. Closing the last window on macOS runs the shutdown tasks while the app stays resident:
+    core drops the waiting requests and pauses the queue, and when a window opens again in the same
+    process core sends `resumeSyncQueue`.
+  - **No fallbacks for a missing command.** Callers do not fall back when a sync command is
+    absent. The three pull requests (core, Studio, internal extensions) merge on the same working
+    day in the order core, then Studio, then internal-extensions, and not across the Tuesday 01:30
+    UTC Studio package build.
 - **Alternatives:**
   - *Queue in C#.* Would make it authoritative for every path, but puts UI-shaped policy (source
     kinds, per-project result routing, the Cancel question) in the backend and needs a Studio build
@@ -10853,13 +10871,24 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Consequences:**
   - Home is the main surface with waiting UI (waiting rows, per-row results); Get Resources also
     shows a waiting row for a resource the running sync will update, only for a row the user
-    clicked. The Sync dialog and the editor menu are thin callers, which keeps the way open to merge sync into Home later.
+    clicked. The Sync dialog and the editor menu are thin callers, which keeps the way open to
+    merge sync into Home later.
   - Every new automatic trigger must request through the queue AND still ask the first-run consent
-    gate (`.claude/rules/first-run-sync-consent.md`); the queue is not a consent chokepoint.
+    gate (`.claude/rules/first-run-sync-consent.md`), except the Simple to Power switch, see the
+    rule; the queue is not a consent chokepoint.
   - When both kinds are waiting at once, two progress toasts appear back to back.
   - A waiting queue is lost at quit; a missed run is picked up at the next opportunity.
   - Revisit if a core-authoritative "a sync is running" signal (PT-4214) lands — the 30 s recheck
     could then be dropped.
+- **Amended 2026-11-03:** busy refusals carry a ` (SYNC_BUSY)` message marker and the queue retries
+  only on it (backoff, 2-minute cap, then the waiting requests reject with the last error;
+  `INTERNAL` is never retried); a sync skips a resource with an open user install or removal
+  instead of waiting; quit drops the waiting requests first, the extension host is killed in
+  `will-quit`, and on macOS closing the last window pauses the queue until a window opens again
+  (`resumeSyncQueue`); the fallbacks for a missing command are gone, with the three pull requests
+  merging on one working day in the order core, Studio, internal-extensions; the snapshot carries
+  `runningProjectIds` and a run is announced only once the backend accepted it; consent applies to
+  automatic callers except the Simple to Power switch.
 
 ## adr-sync-surface-per-interface-mode: Each sync gets one persistent progress surface per interface mode, chosen by its caller
 
