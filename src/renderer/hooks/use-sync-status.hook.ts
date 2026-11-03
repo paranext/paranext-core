@@ -138,8 +138,10 @@ export type SyncStatusInfo = {
   /**
    * Counts the times a new backend run opened right after another run ended, which is a change of
    * run that `status` cannot show: when the queue starts the next run as soon as the previous one
-   * ends, `status` is `syncing` before and after. A consumer holding state that belongs to one run
-   * (a pending cancel) settles it when this changes. Starts at 0 and only ever increases.
+   * ends, `status` is `syncing` before and after. Not counted when the claim had already stopped
+   * reporting the ended run and then announced the new one: the status showed that change itself,
+   * and the backend opening the run only confirms it. A consumer holding state that belongs to one
+   * run (a pending cancel) settles it when this changes. Starts at 0 and only ever increases.
    */
   runEpoch: number;
 };
@@ -839,15 +841,34 @@ export function useSyncStatus(): SyncStatusInfo {
     projectIds: readonly string[];
   }>({ isSyncing: false, didClaimSee: false, projectIds: NO_PROJECT_IDS });
   /**
-   * Whether the activity signal has reported a run end. A run that opens afterwards is a different
-   * run, whereas the first run opening may merely be the backend catching up with a claim that
-   * announced the same run earlier, so only the former advances {@link SyncStatusInfo.runEpoch}.
+   * Where the activity signal stands relative to the last run end it reported, which decides
+   * whether a run opening advances {@link SyncStatusInfo.runEpoch}:
+   *
+   * - `none` — no run end is pending: nothing has ended yet, or the run after it has already been
+   *   accounted for. A run opening now is the backend catching up with a run the claim announced
+   *   first, not a change of run.
+   * - `ended` — a run ended, and the claim may still be reporting that same run (its end-of-sync read
+   *   can lag the backend). A run opening now is a different run.
+   * - `claimReleased` — a run ended and the claim has since stopped reporting a sync. A run opening
+   *   now is a different run too; but if the claim announces a sync first, that claimed run is the
+   *   next one, already shown as such, and the backend reporting it afterwards only confirms it.
+   *
+   * Without that last distinction, a cancel prompt opened for a run the claim announced first would
+   * be settled out from under the user when the backend caught up.
    */
-  const [hasActivityRunEnded, setHasActivityRunEnded] = useState(false);
+  const [activityRunBoundary, setActivityRunBoundary] = useState<
+    'none' | 'ended' | 'claimReleased'
+  >('none');
   const [runEpoch, setRunEpoch] = useState(0);
+  if (!activitySyncing && !activityRun.isSyncing) {
+    if (activityRunBoundary === 'ended' && claimStatus !== 'syncing')
+      setActivityRunBoundary('claimReleased');
+    else if (activityRunBoundary === 'claimReleased' && claimStatus === 'syncing')
+      setActivityRunBoundary('none');
+  }
   if (activitySyncing) {
-    if (!activityRun.isSyncing && hasActivityRunEnded) {
-      setHasActivityRunEnded(false);
+    if (!activityRun.isSyncing && activityRunBoundary !== 'none') {
+      setActivityRunBoundary('none');
       setRunEpoch(runEpoch + 1);
     }
     // A run that has just opened starts this over, so the claim is only ever recorded as having
@@ -864,7 +885,7 @@ export function useSyncStatus(): SyncStatusInfo {
     )
       setActivityRun({ isSyncing: true, didClaimSee, projectIds });
   } else if (activityRun.isSyncing) {
-    setHasActivityRunEnded(true);
+    setActivityRunBoundary('ended');
     // `undefined` (the signal cannot tell) lands here too, and deliberately: a run it reported and
     // can no longer account for has an unknowable outcome, which is what `unknown` says. Only the
     // never-was-syncing case falls through, because there is no run to have lost track of.

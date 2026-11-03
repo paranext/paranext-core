@@ -2495,6 +2495,80 @@ describe('SyncStatusButton — popover and cancel', () => {
     });
     expect(screen.queryByRole('button', { name: 'Test Sync cancelled' })).not.toBeInTheDocument();
   });
+
+  // The queue announces the next run as soon as the backend accepts it, which can reach this
+  // control before the backend's own activity signal reports that run. The activity opening then
+  // confirms the run already showing; it is not a change of run, so the cancel prompt the user
+  // opened for it must survive it.
+  it('keeps the cancel prompt of a claimed run when the backend then reports that run', async () => {
+    const fireSyncStateChanged = captureSyncStateEvent();
+    const syncingOfA: SyncState = {
+      isSyncing: true,
+      lastRequestedProjectIds: [],
+      syncingProjectIds: ['a'],
+    };
+    const syncingOfB: SyncState = {
+      isSyncing: true,
+      lastRequestedProjectIds: [],
+      syncingProjectIds: ['b'],
+    };
+    const reads: SyncState[] = [syncingOfA, completedState({ a: 'succeeded' }), syncingOfB];
+    let readCount = 0;
+    let answerPrompt: (isCancelSent: boolean) => void = () => {};
+    mockCommands({
+      'paratextBibleSendReceive.getSyncState': () => {
+        const read = reads[Math.min(readCount, reads.length - 1)];
+        readCount += 1;
+        return read;
+      },
+      'paratextBibleSendReceive.cancelSyncPrompt': () =>
+        new Promise<boolean>((resolve) => {
+          answerPrompt = resolve;
+        }),
+    });
+    mockProjectNames({ a: 'AAA', b: 'BBB' });
+    act(() => {
+      setSyncActivity({ isSyncing: true, projectIds: ['a'] });
+    });
+    render(<SyncStatusButton />);
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-button')).toHaveTextContent('AAA');
+    });
+
+    // Run A ends, and both signals say so.
+    act(() => {
+      setSyncActivity({ isSyncing: false, projectIds: [], outcome: 'succeeded' });
+    });
+    fireSyncStateChanged(false);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Test Synced' })).toBeInTheDocument();
+    });
+
+    // The queue claims run B before the backend's activity signal reports it.
+    fireSyncStateChanged(true);
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-button')).toHaveTextContent('BBB');
+    });
+    fireEvent.click(screen.getByTestId('toolbar-sync-button'));
+    fireEvent.click(await screen.findByTestId('toolbar-sync-cancel-button'));
+    expect(cancelPromptCallCount()).toBe(1);
+
+    // The backend now reports run B, while its cancel prompt is still open.
+    act(() => {
+      setSyncActivity({ isSyncing: true, projectIds: ['b'] });
+    });
+
+    const cancel = screen.getByTestId('toolbar-sync-cancel-button');
+    expect(cancel).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(cancel);
+    expect(cancelPromptCallCount()).toBe(1);
+
+    // The user's answer to that prompt still applies to run B.
+    await act(async () => {
+      answerPrompt(true);
+    });
+    expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent('Test Cancelling');
+  });
 });
 
 // A cross-origin sandboxed WebView swallows the pointerdown, so Radix's outside-press detection
