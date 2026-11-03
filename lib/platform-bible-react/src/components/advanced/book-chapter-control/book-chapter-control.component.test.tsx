@@ -2139,6 +2139,12 @@ describe('BookChapterControl compact mode stays open', () => {
           >
             <input aria-label="wrapped search" />
           </div>
+          {/* A menu trigger inside an editable region is still a menu trigger */}
+          <div contentEditable suppressContentEditableWarning>
+            <button type="button" aria-haspopup="menu">
+              menu inside editable
+            </button>
+          </div>
         </TooltipProvider>,
       );
     }
@@ -2222,6 +2228,12 @@ describe('BookChapterControl compact mode stays open', () => {
       await settle();
       expect(isPickerOpen()).toBe(true);
       expect(document.activeElement).toBe(wrappedSearch);
+    });
+
+    test('a press on a menu trigger inside an editable region closes it', async () => {
+      const user = await openCompactBesideOtherDropdowns();
+      await user.click(screen.getByRole('button', { name: 'menu inside editable' }));
+      await waitFor(() => expect(isPickerOpen()).toBe(false));
     });
 
     test('closing it from the keyboard leaves focus on the other trigger', async () => {
