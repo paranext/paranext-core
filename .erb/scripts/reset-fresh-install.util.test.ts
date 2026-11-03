@@ -4,6 +4,7 @@ import path from 'path';
 import {
   FreshInstallEnvironment,
   formatSize,
+  getConfirmationOutcome,
   getFreshInstallFolders,
   isConfirmation,
   isDataProviderRunning,
@@ -194,6 +195,21 @@ describe('isConfirmation', () => {
     expect(isConfirmation('')).toBe(false);
     expect(isConfirmation('n')).toBe(false);
     expect(isConfirmation('yep')).toBe(false);
+  });
+});
+
+describe('getConfirmationOutcome', () => {
+  it('deletes on a yes answer', () => {
+    expect(getConfirmationOutcome('y')).toBe('delete');
+  });
+
+  it('keeps everything on any other answer, including an empty one', () => {
+    expect(getConfirmationOutcome('n')).toBe('keep');
+    expect(getConfirmationOutcome('')).toBe('keep');
+  });
+
+  it('reports no answer when the input closed before one arrived', () => {
+    expect(getConfirmationOutcome(undefined)).toBe('no-answer');
   });
 });
 

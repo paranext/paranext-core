@@ -1,5 +1,6 @@
 import { execFileSync } from 'child_process';
 import detectPort from 'detect-port';
+import { once } from 'events';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -8,8 +9,8 @@ import webpackPaths from '../configs/webpack.paths';
 import {
   FreshInstallFolder,
   formatSize,
+  getConfirmationOutcome,
   getFreshInstallFolders,
-  isConfirmation,
   isDataProviderRunning,
   parseTarget,
 } from './reset-fresh-install.util';
@@ -115,9 +116,19 @@ async function main(): Promise<number> {
   });
 
   const readline = createInterface({ input: process.stdin, output: process.stdout });
-  const answer = await readline.question('\nDelete these? (y/N) ');
+  // `question` never settles if the input ends without an answer, and Node would then exit 0 with
+  // nothing deleted, so also wait for the input to close. A piped `echo y |` still answers first.
+  const answer = await Promise.race([
+    readline.question('\nDelete these? (y/N) '),
+    once(readline, 'close').then(() => undefined),
+  ]);
   readline.close();
-  if (!isConfirmation(answer)) {
+  const outcome = getConfirmationOutcome(answer);
+  if (outcome === 'no-answer') {
+    console.error('\nNo answer received (the input ended), so nothing was deleted.');
+    return 1;
+  }
+  if (outcome === 'keep') {
     console.log('Nothing deleted.');
     return 0;
   }

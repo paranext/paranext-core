@@ -148,6 +148,18 @@ export function isConfirmation(answer: string): boolean {
   return ['y', 'yes'].includes(answer.trim().toLowerCase());
 }
 
+/**
+ * What to do with the tester's answer to the confirm prompt. `undefined` means the input closed
+ * before an answer arrived (redirected from an empty file, or run unattended), which must not look
+ * like a successful run.
+ */
+export function getConfirmationOutcome(
+  answer: string | undefined,
+): 'delete' | 'keep' | 'no-answer' {
+  if (answer === undefined) return 'no-answer';
+  return isConfirmation(answer) ? 'delete' : 'keep';
+}
+
 export function formatSize(bytes: number): string {
   const units = ['KB', 'MB', 'GB'];
   if (bytes < 1024) return `${bytes} B`;
