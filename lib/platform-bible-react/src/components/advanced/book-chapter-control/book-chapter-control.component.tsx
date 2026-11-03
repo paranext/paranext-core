@@ -86,9 +86,23 @@ const TAB_STOP_SELECTOR =
 /**
  * Controls that open a menu, popover or list. Radix marks its menu, menubar and popover triggers
  * with `aria-haspopup` and its select trigger with `role="combobox"`; a tooltip trigger carries
- * neither, so hovering or clicking one is an ordinary outside press.
+ * neither, so hovering or clicking one is an ordinary outside press. A text field can also be a
+ * combobox (a search box with suggestions), so {@link isPopupTrigger} excludes editable elements.
  */
 const POPUP_TRIGGER_SELECTOR = '[aria-haspopup]:not([aria-haspopup="false"]), [role="combobox"]';
+
+/**
+ * Whether `target` is, or sits inside, an enabled control that opens a menu, popover or list (see
+ * {@link POPUP_TRIGGER_SELECTOR}), rather than a text field the user types into
+ */
+function isPopupTrigger(target: Element): boolean {
+  const trigger = target.closest(POPUP_TRIGGER_SELECTOR);
+  if (!(trigger instanceof HTMLElement)) return false;
+  if (trigger.isContentEditable || trigger instanceof HTMLInputElement) return false;
+  if (trigger instanceof HTMLTextAreaElement) return false;
+  if (trigger.getAttribute('aria-disabled') === 'true') return false;
+  return !(trigger instanceof HTMLButtonElement && trigger.disabled);
+}
 
 /** Keys that open a menu, popover or list from its focused trigger */
 const POPUP_OPENING_KEYS = new Set(['Enter', ' ', 'ArrowDown']);
@@ -500,8 +514,15 @@ export function BookChapterControl({
   const isOtherPopupTrigger = useCallback((target: EventTarget | null) => {
     if (!(target instanceof Element)) return false;
     if (contentRef.current?.contains(target) || triggerRef.current?.contains(target)) return false;
-    return !!target.closest(POPUP_TRIGGER_SELECTOR);
+    return isPopupTrigger(target);
   }, []);
+
+  /**
+   * Set while the picker closes because another control was opened from the keyboard, so the close
+   * does not move focus back to this picker's trigger, away from the control the user is on. A
+   * press needs no such guard: Radix skips that focus return after a press outside.
+   */
+  const isClosingForOtherPopupRef = useRef(false);
 
   // Compact mode stays open while the user works elsewhere, but opening another menu, popover or
   // list in this document closes it, as it would close the full picker. A press on such a trigger
@@ -512,8 +533,11 @@ export function BookChapterControl({
   useEffect(() => {
     if (!isCompactAndOpen) return undefined;
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (POPUP_OPENING_KEYS.has(event.key) && isOtherPopupTrigger(event.target))
-        handleOpenChange(false);
+      if (!POPUP_OPENING_KEYS.has(event.key) || event.repeat) return;
+      if (event.ctrlKey || event.altKey || event.metaKey) return;
+      if (!isOtherPopupTrigger(event.target)) return;
+      isClosingForOtherPopupRef.current = true;
+      handleOpenChange(false);
     };
     document.addEventListener('keydown', handleKeyDown, true);
     return () => document.removeEventListener('keydown', handleKeyDown, true);
@@ -1467,7 +1491,14 @@ export function BookChapterControl({
             (!!contentRef.current?.contains(target) || !!triggerRef.current?.contains(target));
           if (!isFocusInPicker) event.preventDefault();
         }}
-        onCloseAutoFocus={onCloseAutoFocus}
+        onCloseAutoFocus={(event) => {
+          if (isClosingForOtherPopupRef.current) {
+            isClosingForOtherPopupRef.current = false;
+            event.preventDefault();
+            return;
+          }
+          onCloseAutoFocus?.(event);
+        }}
       >
         <TooltipProvider>
           <Command
