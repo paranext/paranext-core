@@ -12,14 +12,14 @@ import { getErrorMessage } from './util';
 /**
  * Id of the command that asks the sync queue for a sync
  *
- * @experimental This is unstable and may change or disappear without notice
+ * @experimental This export is unstable and may change shape or disappear without notice
  */
 export const REQUEST_SYNC_COMMAND = 'paratextBibleSendReceive.requestSync';
 
 /**
  * Id of the command that asks the user whether to cancel the sync that is running
  *
- * @experimental This is unstable and may change or disappear without notice
+ * @experimental This export is unstable and may change shape or disappear without notice
  */
 export const CANCEL_SYNC_PROMPT_COMMAND = 'paratextBibleSendReceive.cancelSyncPrompt';
 
