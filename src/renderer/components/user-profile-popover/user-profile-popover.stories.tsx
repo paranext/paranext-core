@@ -7,6 +7,10 @@ import {
   resetCommandServiceMock,
   setCommandServiceMock,
 } from '../../../../.storybook/mocks/command-service-mock-channel';
+import {
+  DEFAULT_INTERNET_SETTINGS,
+  withInternetSettings,
+} from '../../../../.storybook/mocks/internet-settings-mock-channel';
 import { UserProfilePopover } from './user-profile-popover.component';
 
 const REGISTERED_PROFILE = {
@@ -168,5 +172,46 @@ export const ValidityUnknown: Story = {
       resetCommandServiceMock();
       resetRegistrationValidityStore();
     };
+  },
+};
+
+/**
+ * The selected server is not Production — the only other state the toolbar-trigger dot exists for,
+ * visible before the popover is ever opened. Decorative, so `aria-hidden` and carries no accessible
+ * name of its own; the equivalent text is on the "Internet connectivity" row's badge and tooltip
+ * once the popover is open.
+ */
+export const NonProductionServer: Story = {
+  beforeEach: withRegistration(true),
+  decorators: [
+    withInternetSettings({
+      value: { ...DEFAULT_INTERNET_SETTINGS, selectedServer: 'Development' },
+    }),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const dot = await canvas.findByTestId('user-profile-non-production-dot');
+    await expect(dot).toBeInTheDocument();
+    await expect(dot).toHaveAttribute('aria-hidden', 'true');
+  },
+};
+
+/**
+ * Both conditions at once: registration missing or invalid, and the selected server is not
+ * Production. The registration reminder dot wins — the server dot stays hidden rather than showing
+ * alongside it (see `NonProductionServerDot`'s doc comment) — since the registration reminder needs
+ * the user's attention and the server indicator is merely informational.
+ */
+export const NonProductionServerWithRegistrationNeeded: Story = {
+  beforeEach: withRegistration(false),
+  decorators: [
+    withInternetSettings({
+      value: { ...DEFAULT_INTERNET_SETTINGS, selectedServer: 'Development' },
+    }),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByTestId('user-profile-registration-dot')).toBeInTheDocument();
+    await expect(canvas.queryByTestId('user-profile-non-production-dot')).not.toBeInTheDocument();
   },
 };
