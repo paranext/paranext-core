@@ -805,7 +805,7 @@
       "%webView_find_replace_markerDeletionTooltip%": "This result spans a paragraph, verse, chapter, table, sidebar, footnote, endnote, or cross-reference marker, so replacing it would delete that marker. Edit this text in the Scripture editor instead.",
       "%webView_find_replace_markersPrompt_confirm%": "Replace (including markers)",
       "%webView_find_replace_markersPrompt_deletedMarker%": "(will be deleted)",
-      "%webView_find_replace_markersPrompt_message%": "This match includes the markers shown here. Replacing it deletes the crossed-out markers.",
+      "%webView_find_replace_markersPrompt_message%": "This match includes the markers shown here. Replacing it will delete the crossed-out markers.",
       "%webView_find_replace_markersPrompt_title%": "Replace text and markers?",
       "%webView_find_replace_oneEndedMarkerError%": "Couldn't replace: a result includes only part of a marker.",
       "%webView_find_replace_readOnlyNote%": "This project is read-only. Replacements will be rejected.",

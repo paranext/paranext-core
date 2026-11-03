@@ -3678,7 +3678,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     `platform.confirm` takes only a string. That display is what the user agrees to, and what
     `allowMarkerDeletion` ("the user has seen the markers in each range") rests on; a bare list such
     as `\nd, \nd*, //` would weaken that consent. A marker the replacement puts back is shown but not
-    marked, decided by `markLostMarkers`, which `getMarkerReplaceAction` also decides on, and each
+    marked, decided by `getIsMarkerLost`, which `getMarkerReplaceAction` also decides on, and each
     deleted one is struck through and followed by text only a screen reader reads. The button labels and the selection staying on the
     result would work with `platform.confirm` too. It is also not modal for the whole app, and sits
     beside the result it is about. It is an alert dialog named by its title and described by its

@@ -257,7 +257,7 @@ describe('marker prompt message', () => {
   const key = '%webView_find_replace_markersPrompt_message%';
 
   it('says only the crossed-out markers are deleted', () => {
-    expect(localizedStrings.en[key]).toContain('deletes the crossed-out markers');
+    expect(localizedStrings.en[key]).toContain('will delete the crossed-out markers');
   });
 
   it('is what the deprecated tooltip points readers to, and is not deprecated itself', () => {

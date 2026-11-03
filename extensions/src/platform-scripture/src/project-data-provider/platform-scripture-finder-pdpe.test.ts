@@ -2866,7 +2866,9 @@ describe('ScriptureFinderProjectDataProviderEngine replaces a match that crosses
     it('lets a confirmed whole character span through, which is not structure', async () => {
       await replaceFound(await findOne('the Lord God'), true);
 
-      expect(writtenChapterUsfm()).toContain('Say X.');
+      const written = writtenChapterUsfm();
+      expect(written).toContain('Say X.');
+      expect(written).not.toContain('\\nd');
     });
 
     it('lets a confirmed whole footnote through, which is not structure', async () => {

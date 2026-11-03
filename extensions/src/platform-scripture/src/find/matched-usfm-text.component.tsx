@@ -1,5 +1,5 @@
 import { memo, ReactNode, useMemo } from 'react';
-import { extractGuardedMarkers, markLostMarkers } from './structure-protection.util';
+import { extractGuardedMarkers, getIsMarkerLost } from './structure-protection.util';
 import { splitUsfmForMarkerDisplay, UsfmDisplaySegment } from './usfm-tokens.util';
 
 type MatchedUsfmTextProps = {
@@ -38,7 +38,7 @@ const DELETED_MARKER_CLASS_NAME =
 
 /**
  * For each segment, whether it is a marker that `replacementUsfm` does not put back, decided by
- * {@link markLostMarkers}, the rule the marker check uses.
+ * {@link getIsMarkerLost}, the rule the marker check uses.
  */
 function findDeletedMarkerSegments(
   segments: UsfmDisplaySegment[],
@@ -49,7 +49,7 @@ function findDeletedMarkerSegments(
   const markers = segments
     .filter((segment) => segment.isMarker)
     .map((segment) => extractGuardedMarkers(segment.text)[0] ?? segment.text);
-  const isLost = markLostMarkers(markers, replacementUsfm);
+  const isLost = getIsMarkerLost(markers, replacementUsfm);
   let markerIndex = 0;
   return segments.map((segment) => {
     if (!segment.isMarker) return false;

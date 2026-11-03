@@ -127,7 +127,7 @@ export function extractGuardedMarkers(usfm: string): string[] {
  * and {@link getMarkerReplaceAction} decides on them, so what the user agrees to is what is
  * checked.
  */
-export function markLostMarkers(removedMarkers: string[], inserted: string): boolean[] {
+export function getIsMarkerLost(removedMarkers: string[], inserted: string): boolean[] {
   if (removedMarkers.length === 0) return [];
   const putBack = new Map<string, number>();
   extractGuardedMarkers(inserted).forEach((marker) =>
@@ -141,9 +141,9 @@ export function markLostMarkers(removedMarkers: string[], inserted: string): boo
   });
 }
 
-/** The markers in `removedMarkers` that `inserted` does not put back; see {@link markLostMarkers}. */
+/** The markers in `removedMarkers` that `inserted` does not put back; see {@link getIsMarkerLost}. */
 function findLostMarkers(removedMarkers: string[], inserted: string): string[] {
-  const isLost = markLostMarkers(removedMarkers, inserted);
+  const isLost = getIsMarkerLost(removedMarkers, inserted);
   return removedMarkers.filter((_marker, index) => isLost[index]);
 }
 

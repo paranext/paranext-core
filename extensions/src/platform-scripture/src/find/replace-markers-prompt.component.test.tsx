@@ -16,7 +16,7 @@ const STRINGS = {
   '%webView_find_replace_markersPrompt_confirm%': 'Replace (including markers)',
   '%webView_find_replace_markersPrompt_deletedMarker%': '(will be deleted)',
   '%webView_find_replace_markersPrompt_message%':
-    'This match includes the markers shown here. Replacing it deletes the crossed-out markers.',
+    'This match includes the markers shown here. Replacing it will delete the crossed-out markers.',
   '%webView_find_replace_markersPrompt_title%': 'Replace text and markers?',
   '%webView_find_replace_skipped_title%': 'Match will be skipped',
 };
