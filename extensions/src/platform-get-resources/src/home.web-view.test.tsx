@@ -732,6 +732,27 @@ describe('HomeWebView requests through the sync queue', () => {
     await waitFor(() => expect(requestSyncCalls()).toHaveLength(2));
   });
 
+  it('a repeat click on a project an outside run already names requests once, across a progress report', async () => {
+    mockAvailableQueue(() => new Promise(() => {}));
+    await renderSubscribed();
+    await emit(syncActivityEvents, { isSyncing: true, projectIds: ['RH2'] });
+    const button = screen.getByRole('button', { name: 'send/receive' });
+
+    fireEvent.click(button);
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(1));
+    // The outside run reports again (a progress tick), naming the same project. That says nothing
+    // about Home's own request, which the queue has not reported yet.
+    await emit(syncActivityEvents, { isSyncing: true, projectIds: ['RH2'] });
+    fireEvent.click(button);
+    await act(async () => {});
+    expect(requestSyncCalls()).toHaveLength(1);
+
+    // Positive control: once the queue reports the request waiting, a later click is Home's again.
+    await emit(syncQueueEvents, { waitingProjectIds: ['RH2'], runningProjectIds: [] });
+    fireEvent.click(button);
+    await waitFor(() => expect(requestSyncCalls()).toHaveLength(2));
+  });
+
   // The double-click itself is exercised against the real Home in
   // `home.web-view.double-click.test.tsx`; Home is a stub here.
   it('reports the waiting state to Home and issues no removal or second request by itself', async () => {

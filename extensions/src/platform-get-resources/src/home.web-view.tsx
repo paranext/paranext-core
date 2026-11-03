@@ -32,6 +32,12 @@ const defaultInterfaceLanguages: string[] = ['en'];
 const SEND_RECEIVE_ATTEMPTS = 4;
 const SEND_RECEIVE_RETRY_MS = 2000;
 
+/**
+ * The reports that name projects in a sync: the backend's activity, and the queue's waiting and
+ * running sets.
+ */
+type SyncReportSource = 'activity' | 'waiting' | 'running';
+
 globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewProps) {
   // Set by the web view provider from an opener's preset, and otherwise kept as the user left it.
   // The user's changes are written back so it survives window moves and reloads, and so `openHome`
@@ -292,18 +298,30 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
   };
 
   /**
-   * Normalized ids of the projects Home has asked the queue to sync that the queue has not yet
-   * reported as running or waiting. Kept in a ref so a second click in the same tick sees the
-   * first.
+   * The projects Home has asked the queue to sync that the queue has not yet reported as running or
+   * waiting, by normalized id. Each maps to the reports that already named the project when it was
+   * requested, or have named it without a break since: those describe something else (a run started
+   * elsewhere, an earlier run), so only a report naming the project afresh counts as the answer to
+   * this request. Kept in a ref so a second click in the same tick sees the first.
    */
-  const unreportedRequestsRef = useRef<Set<string>>(new Set());
+  const unreportedRequestsRef = useRef<Map<string, Set<SyncReportSource>>>(new Map());
+  const reportedIdsBySource = useMemo(
+    () =>
+      new Map<SyncReportSource, Set<string>>([
+        ['activity', new Set(syncActivity.projectIds.map(normalizeProjectId))],
+        ['waiting', new Set(syncQueue.waitingProjectIds.map(normalizeProjectId))],
+        ['running', new Set(syncQueue.runningProjectIds.map(normalizeProjectId))],
+      ]),
+    [syncActivity.projectIds, syncQueue.waitingProjectIds, syncQueue.runningProjectIds],
+  );
   useEffect(() => {
-    [
-      ...syncActivity.projectIds,
-      ...syncQueue.waitingProjectIds,
-      ...syncQueue.runningProjectIds,
-    ].forEach((id) => unreportedRequestsRef.current.delete(normalizeProjectId(id)));
-  }, [syncActivity.projectIds, syncQueue.waitingProjectIds, syncQueue.runningProjectIds]);
+    unreportedRequestsRef.current.forEach((namedAtRequest, projectId) => {
+      reportedIdsBySource.forEach((reportedIds, source) => {
+        if (!reportedIds.has(projectId)) namedAtRequest.delete(source);
+        else if (!namedAtRequest.has(source)) unreportedRequestsRef.current.delete(projectId);
+      });
+    });
+  }, [reportedIdsBySource]);
 
   // Once the backend names a project, the optimistic spinner has done its job.
   useEffect(() => {
@@ -341,7 +359,11 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
       logger.info(`Home web view ignored a repeat sync click for project ${projectId}`);
       return;
     }
-    unreportedRequestsRef.current.add(normalizedProjectId);
+    const namedAtRequest = new Set<SyncReportSource>();
+    reportedIdsBySource.forEach((reportedIds, source) => {
+      if (reportedIds.has(normalizedProjectId)) namedAtRequest.add(source);
+    });
+    unreportedRequestsRef.current.set(normalizedProjectId, namedAtRequest);
 
     setOwnActiveSendReceiveProjects((prev) => [...prev, projectId]);
     const isQueueIdle =
