@@ -2235,9 +2235,12 @@ describe('Home while a sync runs', () => {
     const waiButton = within(rowOf('WAI')).getByRole('button', { name: waitingName('WAI') });
     expect(synButton).toHaveAccessibleName('Waiting. Remove SYN from the sync queue');
     expect(waiButton).toHaveAccessibleName('Waiting. Remove WAI from the sync queue');
-    // The visible text stays the short label, and the name starts with it.
+    // The visible text stays the short label, and the name starts with its words (the ellipsis is
+    // left out of the name because screen readers read it aloud).
     expect(waiButton).toHaveTextContent(WAITING_LABEL);
-    expect(waiButton.getAttribute('aria-label')?.startsWith(WAITING_LABEL)).toBe(true);
+    expect(waiButton.getAttribute('aria-label')?.startsWith(WAITING_LABEL.replace('…', ''))).toBe(
+      true,
+    );
   });
 
   it('requests a Get from another row while one project syncs', async () => {
