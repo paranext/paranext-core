@@ -71,6 +71,31 @@ test('overlay command palette rendering and interaction', async ({ mainPage }) =
     await expect(palette).not.toBeVisible({ timeout: 3_000 });
   });
 
+  await test.step('a click away dismisses the palette and returns focus to its web view', async () => {
+    const palette = await openCommandPalette(mainPage, frame);
+    // This palette opens without an anchor, so it is centred on a backdrop covering the window
+    const backdrop = mainPage.locator('[data-overlay-command-palette-backdrop]');
+    await expect(backdrop).toBeVisible();
+    const box = await backdrop.boundingBox();
+    expect(box).not.toBeNull();
+    if (!box) return;
+
+    // Press well away from the palette and hold briefly, like a real click
+    await mainPage.mouse.move(box.x + 40, box.y + box.height - 40);
+    await mainPage.mouse.down();
+    await mainPage.waitForTimeout(120);
+    await mainPage.mouse.up();
+
+    await expect(palette).not.toBeVisible({ timeout: 3_000 });
+    // Focus goes back to the web view that opened the palette, not to the document body
+    await expect
+      .poll(async () => mainPage.evaluate(() => document.activeElement?.tagName), {
+        timeout: 3_000,
+      })
+      .toBe('IFRAME');
+    await expect.poll(async () => frame.evaluate(() => document.hasFocus())).toBe(true);
+  });
+
   await test.step('keyboard navigation works', async () => {
     const palette = await openCommandPalette(mainPage, frame);
 
