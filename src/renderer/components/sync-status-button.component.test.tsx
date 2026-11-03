@@ -1753,9 +1753,9 @@ describe('SyncStatusButton — popover and cancel', () => {
     expect(second.notificationId).toBe(first.notificationId);
   });
 
-  // The backend reports the running sync, so it can run while the Send/Receive extension that serves
-  // the prompt is not running
-  it('cancels the sync directly when the cancel prompt is not registered', async () => {
+  // A missing cancel prompt is an ordinary rejection: Cancel is offered again and the user is told,
+  // and no other cancel is sent in its place.
+  it('shows the error path, and sends no direct cancel, when the cancel prompt is not registered', async () => {
     mockCommands({
       'paratextBibleSendReceive.getSyncState': () => ({
         isSyncing: true,
@@ -1777,32 +1777,9 @@ describe('SyncStatusButton — popover and cancel', () => {
     fireEvent.click(cancel);
 
     await waitFor(() => {
-      expect(vi.mocked(sendCommand)).toHaveBeenCalledWith('paratextBibleSendReceive.cancelSync');
-    });
-    expect(cancel).toHaveAttribute('aria-disabled', 'true');
-    expect(vi.mocked(notificationService.send)).not.toHaveBeenCalled();
-  });
-
-  it('does not fall back to a direct cancel when the cancel prompt fails otherwise', async () => {
-    mockCommands({
-      'paratextBibleSendReceive.getSyncState': () => ({
-        isSyncing: true,
-        lastRequestedProjectIds: [],
-        syncingProjectIds: ['a'],
-      }),
-      'paratextBibleSendReceive.cancelSyncPrompt': () => {
-        throw new Error('send/receive is not answering');
-      },
-    });
-    mockProjectNames({ a: 'AAA' });
-    render(<SyncStatusButton />);
-
-    fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
-    fireEvent.click(await screen.findByTestId('toolbar-sync-cancel-button'));
-
-    await waitFor(() => {
       expect(vi.mocked(notificationService.send)).toHaveBeenCalledTimes(1);
     });
+    expect(cancel).toHaveAttribute('aria-disabled', 'false');
     expect(vi.mocked(sendCommand)).not.toHaveBeenCalledWith('paratextBibleSendReceive.cancelSync');
   });
 

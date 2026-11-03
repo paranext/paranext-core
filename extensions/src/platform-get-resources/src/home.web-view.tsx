@@ -12,10 +12,10 @@ import {
   normalizeProjectId,
   retryUntil,
 } from 'platform-bible-utils';
+import { isSyncRequestRemovedError } from 'platform-bible-utils/experimental';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Home, HOME_STRING_KEYS, type RemoteProjectsState } from './home.component';
-import { isCommandNotRegisteredError, isSyncRequestRemovedError } from './home-sync-queue.util';
 import { parseUnsyncedProjectIds } from './home-unsynced.util';
 import { getInternetBlockedNotification } from './internet-block-notification.utils';
 import { isProjectResourceFilterValue } from './project-resource-filter.component';
@@ -310,22 +310,9 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
     setOwnActiveSendReceiveProjects((prev) => [...prev, projectId]);
     try {
       // Get of a project not on this computer yet downloads it through the same request.
-      try {
-        await papi.commands.sendCommand(
-          'paratextBibleSendReceive.requestSync',
-          [projectId],
-          'home',
-          { includeConnected: false },
-        );
-      } catch (e) {
-        if (!isCommandNotRegisteredError(e, 'paratextBibleSendReceive.requestSync')) throw e;
-        logger.info(
-          `The sync queue is not available (${getErrorMessage(e)}); syncing project ${projectId} directly`,
-        );
-        await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [
-          projectId,
-        ]);
-      }
+      await papi.commands.sendCommand('paratextBibleSendReceive.requestSync', [projectId], 'home', {
+        includeConnected: false,
+      });
     } catch (e) {
       const errorMessage = getErrorMessage(e);
       // Taken out of the queue before it ran, by the user or at quit: nothing failed.

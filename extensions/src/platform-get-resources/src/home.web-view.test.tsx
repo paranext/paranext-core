@@ -605,14 +605,14 @@ describe('HomeWebView requests through the sync queue', () => {
     await waitFor(() => expect(requestSyncCalls()).toHaveLength(2));
   });
 
-  it('falls back to a direct sync when the sync queue command is not registered', async () => {
+  it('reports a missing sync queue command as a failed request, with no second command', async () => {
+    const message = `JSON-RPC Request error (-32601): Method not found: ${REQUEST_SYNC}`;
     mockSendCommand.mockImplementation(async (commandName: string) => {
       if (commandName === IS_AVAILABLE) return true;
       if (commandName === GET_SHARED_PROJECTS) return {};
       if (commandName === GET_SYNC_ACTIVITY) return { isSyncing: false, projectIds: [] };
       if (commandName === GET_SYNC_QUEUE) return { waitingProjectIds: [] };
-      if (commandName === REQUEST_SYNC)
-        throw new Error(`JSON-RPC Request error (-32601): Method not found: ${REQUEST_SYNC}`);
+      if (commandName === REQUEST_SYNC) throw new Error(message);
       return undefined;
     });
     const home = await renderSubscribed();
@@ -620,11 +620,12 @@ describe('HomeWebView requests through the sync queue', () => {
     fireEvent.click(screen.getByRole('button', { name: 'send/receive' }));
 
     await waitFor(() => {
-      expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
-        'RH2',
-      ]);
+      expect(home).toHaveAttribute('data-send-receive-error', message);
     });
-    expect(home).toHaveAttribute('data-send-receive-error', '');
+    expect(mockSendCommand).not.toHaveBeenCalledWith(
+      'paratextBibleSendReceive.sendReceiveProjects',
+      expect.anything(),
+    );
   });
 
   it('a failed request shows the Home-wide error as before', async () => {

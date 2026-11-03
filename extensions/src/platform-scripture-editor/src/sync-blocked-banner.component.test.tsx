@@ -83,9 +83,7 @@ describe('SyncBlockedBanner — Cancel', () => {
     expect(sendCommand).not.toHaveBeenCalledWith('paratextBibleSendReceive.cancelSync');
   });
 
-  // The backend reports the running sync, so the banner can show while the Send/Receive extension
-  // that serves the prompt is not running
-  it('cancels the sync directly when the cancel prompt is not registered', async () => {
+  it('offers Cancel again, and sends no direct cancel, when the cancel prompt is not registered', async () => {
     sendCommand.mockImplementation(async (command: string) => {
       if (command === 'paratextBibleSendReceive.cancelSyncPrompt')
         throw new Error(
@@ -97,10 +95,7 @@ describe('SyncBlockedBanner — Cancel', () => {
 
     fireEvent.click(cancel);
 
-    await waitFor(() =>
-      expect(sendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.cancelSync'),
-    );
-    await Promise.resolve();
-    expect(cancel).toBeDisabled();
+    await waitFor(() => expect(cancel).toBeEnabled());
+    expect(sendCommand).not.toHaveBeenCalledWith('paratextBibleSendReceive.cancelSync');
   });
 });

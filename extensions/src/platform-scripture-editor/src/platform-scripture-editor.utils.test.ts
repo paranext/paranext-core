@@ -3251,8 +3251,6 @@ const PROJECT_SWITCH_SYNC_COMMANDS = [
 ];
 
 const REQUEST_SYNC = 'paratextBibleSendReceive.requestSync';
-const DIRECT_SEND_RECEIVE = 'paratextBibleSendReceive.sendReceiveProjects';
-const DIRECT_SYNC = 'paratextBibleSendReceive.syncProjects';
 
 /** What the network service throws when no handler is registered for `command`. */
 function notRegisteredError(command: string) {
@@ -3286,26 +3284,18 @@ describe('syncOnProjectSwitch', () => {
     ]);
   });
 
-  it('falls back to the direct commands when requestSync is not registered', async () => {
-    const { papi, mockSendCommand } = createSyncMockPapi();
+  it('reports a missing requestSync as a failed sync, with no direct commands', async () => {
+    const { papi, mockSendCommand, mockWarn } = createSyncMockPapi();
     rejectRequestSync(mockSendCommand, notRegisteredError(REQUEST_SYNC));
 
     await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
-    expect(mockSendCommand.mock.calls).toEqual([
-      [REQUEST_SYNC, ['proj-outgoing'], 'autoSync', { includeConnected: false }],
-      [DIRECT_SEND_RECEIVE, ['proj-outgoing']],
-      [
-        REQUEST_SYNC,
-        ['proj-incoming'],
-        'autoSync',
-        { includeConnected: true, suppressNotification: true },
-      ],
-      [DIRECT_SYNC, ['proj-incoming'], true],
-    ]);
+    expect(mockSendCommand.mock.calls.map(([cmd]) => cmd)).toEqual(PROJECT_SWITCH_SYNC_COMMANDS);
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-outgoing'));
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-incoming'));
   });
 
-  it('does not fall back for a rejection that is not a missing registration', async () => {
+  it('warns and does not retry for any other rejection', async () => {
     const { papi, mockSendCommand, mockWarn } = createSyncMockPapi();
     rejectRequestSync(mockSendCommand, new Error('Project is locked by another user'));
 
@@ -3316,7 +3306,7 @@ describe('syncOnProjectSwitch', () => {
     expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-incoming'));
   });
 
-  it('treats a removed request as quiet: info log, no warning, no fallback', async () => {
+  it('treats a removed request as quiet: info log, no warning', async () => {
     const { papi, mockSendCommand, mockWarn, mockInfo } = createSyncMockPapi();
     rejectRequestSync(
       mockSendCommand,
@@ -3350,7 +3340,7 @@ describe('syncOnProjectSwitch', () => {
     });
   });
 
-  it('calls sendReceiveProjects with only the outgoing project ID when provided, even in Simple mode', async () => {
+  it('requests the outgoing project without connected resources, even in Simple mode', async () => {
     const { papi, mockSendCommand } = createSyncMockPapi();
 
     await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
@@ -3883,19 +3873,21 @@ describe('syncOnSwitchToPower', () => {
     ]);
   });
 
-  it('falls back to the direct command when requestSync is not registered', async () => {
-    const { papi, mockSendCommand } = createSwitchToPowerMockPapi({ seed: PROJ_1_UNSENT });
+  it('reports a missing requestSync as a failed sync, with no direct command', async () => {
+    const { papi, mockSendCommand, mockWarn } = createSwitchToPowerMockPapi({
+      seed: PROJ_1_UNSENT,
+    });
     rejectRequestSync(mockSendCommand, notRegisteredError(REQUEST_SYNC));
 
     await syncOnSwitchToPower(papi, 'proj-1');
 
     expect(mockSendCommand.mock.calls).toEqual([
       [REQUEST_SYNC, ['proj-1'], 'autoSync', { includeConnected: false }],
-      [DIRECT_SEND_RECEIVE, ['proj-1']],
     ]);
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-1'));
   });
 
-  it('does not fall back for a rejection that is not a missing registration', async () => {
+  it('warns and does not retry for any other rejection', async () => {
     const { papi, mockSendCommand, mockWarn } = createSwitchToPowerMockPapi({
       seed: PROJ_1_UNSENT,
     });
