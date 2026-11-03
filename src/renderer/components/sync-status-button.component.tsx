@@ -162,6 +162,7 @@ export function SyncStatusButton() {
     unsyncedDirection,
     syncProgress,
     isVerdictFromBackendOnly,
+    runEpoch,
   } = useSyncStatus();
   const [isOpen, setIsOpen] = useState(false);
   const noDetailsHintId = useId();
@@ -350,6 +351,8 @@ export function SyncStatusButton() {
    * immediately overwrite the answer it just recorded.
    */
   const isCancellingRef = useRef(isCancelling);
+  /** The `runEpoch` the settle effect last saw, to tell a change of run from a re-render. */
+  const lastRunEpochRef = useRef(runEpoch);
   useEffect(() => {
     isCancellingRef.current = isCancelling;
   }, [isCancelling]);
@@ -367,12 +370,25 @@ export function SyncStatusButton() {
   // overlapping sync keeping a dim "Cancelling…" until the whole union goes idle. That is the safe
   // half of the trade: the alternative offers a live Cancel while a cancel is still in flight.
   // Settling it positively needs a monotonic sync-episode id in `SyncState` (`adr-toolbar-sync-status-is-local` follow-up 4).
+  //
+  // The one positive signal available is `runEpoch`: the backend's run ended and another opened.
+  // When the queue starts the next run as soon as a cancelled one ends, `status` never leaves
+  // `syncing`, so the epoch is what hands the new run a live Cancel.
   useEffect(() => {
     if (status === 'syncing') {
       // A running sync has no settled outcome to attribute to a cancel yet.
       setWasCancelRequested(false);
+      // Only a change of run settles a cancel while `status` stays `syncing`.
+      if (lastRunEpochRef.current !== runEpoch) {
+        lastRunEpochRef.current = runEpoch;
+        setIsCancelling(false);
+        setIsCancelEnabled(true);
+        cancelGenerationRef.current += 1;
+        isCancelPromptOpenRef.current = false;
+      }
       return;
     }
+    lastRunEpochRef.current = runEpoch;
     // Recorded before `isCancelling` is cleared, because it is the only evidence that the non-success
     // outcome now being reported is one the user asked for.
     setWasCancelRequested(isCancellingRef.current);
@@ -381,7 +397,7 @@ export function SyncStatusButton() {
     // This episode is over, so a cancel request still in flight from it must not reach the next one.
     cancelGenerationRef.current += 1;
     isCancelPromptOpenRef.current = false;
-  }, [status]);
+  }, [status, runEpoch]);
 
   // Re-arm Cancel each time the popover is reopened, so a rejected-then-abandoned attempt doesn't
   // leave the button dead for the rest of the session. Not while a cancel is still pending or its

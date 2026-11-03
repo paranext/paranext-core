@@ -2417,6 +2417,84 @@ describe('SyncStatusButton — popover and cancel', () => {
     expect(cancel).toHaveTextContent('Test Cancelling');
     expect(cancel).toHaveAttribute('aria-disabled', 'true');
   });
+
+  // "Stop the running sync, keep the waiting ones": the queue starts the next run the moment the
+  // cancelled one ends, so the run's end-of-sync claim re-read is still in flight when the next
+  // run's start arrives and the status never leaves `syncing`. That next run is a different sync, so
+  // it must offer a live Cancel, and its own failure is not one the user asked for.
+  it('offers a live Cancel for the next run that starts before the cancelled run settles', async () => {
+    const fireSyncStateChanged = captureSyncStateEvent();
+    const heldEndOfRunRead = deferredSyncState();
+    const syncingOfA: SyncState = {
+      isSyncing: true,
+      lastRequestedProjectIds: [],
+      syncingProjectIds: ['a'],
+    };
+    const syncingOfB: SyncState = {
+      isSyncing: true,
+      lastRequestedProjectIds: [],
+      syncingProjectIds: ['b'],
+    };
+    const reads: (SyncState | Promise<SyncState>)[] = [
+      syncingOfA,
+      heldEndOfRunRead.promise,
+      syncingOfB,
+      completedState({ b: 'failed' }),
+    ];
+    let readCount = 0;
+    mockCommands({
+      'paratextBibleSendReceive.getSyncState': () => {
+        const read = reads[Math.min(readCount, reads.length - 1)];
+        readCount += 1;
+        return read;
+      },
+      // The user chooses to stop the running sync and keep the waiting ones.
+      'paratextBibleSendReceive.cancelSyncPrompt': () => true,
+    });
+    mockProjectNames({ a: 'AAA', b: 'BBB' });
+    act(() => {
+      setSyncActivity({ isSyncing: true, projectIds: ['a'] });
+    });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
+    fireEvent.click(await screen.findByTestId('toolbar-sync-cancel-button'));
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent('Test Cancelling');
+    });
+
+    // Run A ends; its claim re-read is held open, so the claim still says `syncing`.
+    act(() => {
+      setSyncActivity({ isSyncing: false, projectIds: [], outcome: 'failed' });
+    });
+    fireSyncStateChanged(false);
+    // Run B starts before that re-read answers. The activity signal never reports idle to the
+    // status, which stays `syncing` throughout.
+    act(() => {
+      setSyncActivity({ isSyncing: true, projectIds: ['b'] });
+    });
+    fireSyncStateChanged(true);
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-button')).toHaveTextContent('BBB');
+    });
+    await act(async () => {
+      heldEndOfRunRead.resolve(completedState({ a: 'failed' }));
+    });
+
+    const cancel = screen.getByTestId('toolbar-sync-cancel-button');
+    expect(cancel).toHaveTextContent('Test Cancel sync');
+    expect(cancel).toHaveAttribute('aria-disabled', 'false');
+
+    // B then fails on its own: that is not a cancel the user asked for.
+    act(() => {
+      setSyncActivity({ isSyncing: false, projectIds: [], outcome: 'failed' });
+    });
+    fireSyncStateChanged(false);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Test Sync failed' })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('button', { name: 'Test Sync cancelled' })).not.toBeInTheDocument();
+  });
 });
 
 // A cross-origin sandboxed WebView swallows the pointerdown, so Radix's outside-press detection
@@ -2818,6 +2896,7 @@ describe('SyncStatusButton — unsynced changes', () => {
       unsyncedProjects: [],
       unsyncedDirection: undefined,
       isVerdictFromBackendOnly: false,
+      runEpoch: 0,
     });
     render(<SyncStatusButton />);
 
@@ -2922,6 +3001,7 @@ describe('SyncStatusButton — unsynced changes', () => {
       unsyncedProjects: [],
       unsyncedDirection: undefined,
       isVerdictFromBackendOnly: false,
+      runEpoch: 0,
     });
     render(<SyncStatusButton />);
 

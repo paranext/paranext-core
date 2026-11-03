@@ -135,6 +135,13 @@ export type SyncStatusInfo = {
    * read.
    */
   isVerdictFromBackendOnly: boolean;
+  /**
+   * Counts the times a new backend run opened right after another run ended, which is a change of
+   * run that `status` cannot show: when the queue starts the next run as soon as the previous one
+   * ends, `status` is `syncing` before and after. A consumer holding state that belongs to one run
+   * (a pending cancel) settles it when this changes. Starts at 0 and only ever increases.
+   */
+  runEpoch: number;
 };
 
 /**
@@ -831,7 +838,18 @@ export function useSyncStatus(): SyncStatusInfo {
     didClaimSee: boolean;
     projectIds: readonly string[];
   }>({ isSyncing: false, didClaimSee: false, projectIds: NO_PROJECT_IDS });
+  /**
+   * Whether the activity signal has reported a run end. A run that opens afterwards is a different
+   * run, whereas the first run opening may merely be the backend catching up with a claim that
+   * announced the same run earlier, so only the former advances {@link SyncStatusInfo.runEpoch}.
+   */
+  const [hasActivityRunEnded, setHasActivityRunEnded] = useState(false);
+  const [runEpoch, setRunEpoch] = useState(0);
   if (activitySyncing) {
+    if (!activityRun.isSyncing && hasActivityRunEnded) {
+      setHasActivityRunEnded(false);
+      setRunEpoch(runEpoch + 1);
+    }
     // A run that has just opened starts this over, so the claim is only ever recorded as having
     // seen THIS run — and its projects only ever gathered from it — rather than inheriting either
     // from the one before it.
@@ -846,6 +864,7 @@ export function useSyncStatus(): SyncStatusInfo {
     )
       setActivityRun({ isSyncing: true, didClaimSee, projectIds });
   } else if (activityRun.isSyncing) {
+    setHasActivityRunEnded(true);
     // `undefined` (the signal cannot tell) lands here too, and deliberately: a run it reported and
     // can no longer account for has an unknowable outcome, which is what `unknown` says. Only the
     // never-was-syncing case falls through, because there is no run to have lost track of.
@@ -1034,6 +1053,7 @@ export function useSyncStatus(): SyncStatusInfo {
       unsyncedDirection,
       syncProgress,
       isVerdictFromBackendOnly,
+      runEpoch,
     }),
     [
       status,
@@ -1042,6 +1062,7 @@ export function useSyncStatus(): SyncStatusInfo {
       unsyncedDirection,
       syncProgress,
       isVerdictFromBackendOnly,
+      runEpoch,
     ],
   );
 }

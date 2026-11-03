@@ -37,6 +37,7 @@ const IDLE: SyncStatusInfo = Object.freeze({
   status: 'idle',
   syncingProjects: Object.freeze([]),
   isVerdictFromBackendOnly: false,
+  runEpoch: 0,
   unsyncedProjects: Object.freeze([]),
 });
 

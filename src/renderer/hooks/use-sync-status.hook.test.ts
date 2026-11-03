@@ -268,6 +268,24 @@ describe('useSyncStatus', () => {
     expect(result.current.syncingProjects).toEqual([]);
   });
 
+  it('advances runEpoch only when a run opens after another ended, with status syncing throughout', async () => {
+    commands.mockGetSyncState({ isSyncing: true, lastRequestedProjectIds: [] });
+    seedActivity({ isSyncing: true, projectIds: [] });
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    // The first run opening is not a change of run.
+    expect(result.current.runEpoch).toBe(0);
+
+    pushActivity({ isSyncing: false, projectIds: [], outcome: 'failed' });
+    pushActivity({ isSyncing: true, projectIds: ['b'] });
+
+    // The claim still says `syncing`, so the status cannot show the change of run.
+    expect(result.current.status).toBe('syncing');
+    expect(result.current.runEpoch).toBe(1);
+  });
+
   it('names projects once the backend resolves its merge set', async () => {
     commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
     seedActivity({ isSyncing: true, projectIds: [] });

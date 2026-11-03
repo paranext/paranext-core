@@ -49,13 +49,14 @@ const LONG_NAME_PROJECT = [
  * Send/Receive extension reported the verdict itself and the detail behind it exists — so only a
  * story about a verdict the backend reported has to say otherwise.
  */
-type StoryStatus = Omit<SyncStatusMock, 'isVerdictFromBackendOnly'> & {
+type StoryStatus = Omit<SyncStatusMock, 'isVerdictFromBackendOnly' | 'runEpoch'> & {
   isVerdictFromBackendOnly?: boolean;
+  runEpoch?: number;
 };
 
 /** Fills in what a story left unsaid, so a new `SyncStatusInfo` field is defaulted in one place. */
 function resolveStatus(status: StoryStatus): SyncStatusMock {
-  return { isVerdictFromBackendOnly: false, ...status };
+  return { isVerdictFromBackendOnly: false, runEpoch: 0, ...status };
 }
 
 /**
