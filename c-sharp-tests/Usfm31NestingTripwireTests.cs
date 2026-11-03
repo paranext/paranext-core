@@ -90,7 +90,12 @@ namespace TestParanextDataProvider
     ///    <c>para</c> type; closed -&gt; <c>para</c> opener + <c>unmatched</c> closer). If the
     ///    upgraded ParatextData distinguishes generated refs (USFM 3.1 defines <c>\ref</c>),
     ///    revisit emitting real <c>ref</c>-type USX (see the decision comment in
-    ///    ConvertUsfmToUsx).
+    ///    ConvertUsfmToUsx). Real <c>ref</c> nodes would then also reach the editor's clipboard,
+    ///    where Standard view's copy writes a <c>ref</c> as its text alone and every paste in the
+    ///    views that show markers takes that text, so a copied <c>ref</c> would lose its marker and
+    ///    <c>loc</c> (catalog row CB-18): the copy would need to write <c>\ref text|loc\ref*</c>.
+    ///    Authored <c>\ref</c>s loaded the unknown-marker way copy and paste unchanged
+    ///    (scripture-editors <c>authoredRefClipboard.test.tsx</c>).
     /// 11. USX/USJ version (catalog rows UV-2 and UV-3 in
     ///    .context/standards/Scripture-Data-Fidelity-Catalog.md): preserved end to end, never
     ///    derived from the document. This ParatextData stamps every USX <c>version="3.0"</c>
