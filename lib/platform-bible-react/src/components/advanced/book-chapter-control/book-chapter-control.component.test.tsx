@@ -2139,6 +2139,12 @@ describe('BookChapterControl compact mode stays open', () => {
           >
             <input aria-label="wrapped search" />
           </div>
+          <button type="button" aria-haspopup="menu" aria-disabled="true">
+            unavailable menu
+          </button>
+          <button type="button" aria-haspopup="false">
+            no popup
+          </button>
           {/* A menu trigger inside an editable region is still a menu trigger */}
           <div contentEditable suppressContentEditableWarning>
             <button type="button" aria-haspopup="menu">
@@ -2229,6 +2235,61 @@ describe('BookChapterControl compact mode stays open', () => {
       expect(isPickerOpen()).toBe(true);
       expect(document.activeElement).toBe(wrappedSearch);
     });
+
+    test.each([
+      ['Space', 'other menu', ' '],
+      ['Down arrow', 'other menu', '{ArrowDown}'],
+      ['Up arrow on a select box', 'other select', '{ArrowUp}'],
+    ])('%s with focus on another opener closes it', async (_label, name, keys) => {
+      const user = await openCompactBesideOtherDropdowns();
+      const opener =
+        name === 'other select'
+          ? screen.getByRole('combobox', { name })
+          : screen.getByRole('button', { name });
+      act(() => {
+        opener.focus();
+      });
+      await user.keyboard(keys);
+      await waitFor(() => expect(isPickerOpen()).toBe(false));
+    });
+
+    test('Up arrow on a menu trigger leaves it open', async () => {
+      const user = await openCompactBesideOtherDropdowns();
+      act(() => {
+        screen.getByRole('button', { name: 'other menu' }).focus();
+      });
+      await user.keyboard('{ArrowUp}');
+      await settle();
+      expect(isPickerOpen()).toBe(true);
+    });
+
+    test('a right-click or Ctrl+click on another menu trigger leaves it open', async () => {
+      const user = await openCompactBesideOtherDropdowns();
+      const otherMenuTrigger = screen.getByRole('button', { name: 'other menu' });
+      await user.pointer({ keys: '[MouseRight]', target: otherMenuTrigger });
+      await settle();
+      expect(isPickerOpen()).toBe(true);
+      await user.keyboard('{Control>}');
+      await user.click(otherMenuTrigger);
+      await user.keyboard('{/Control}');
+      await settle();
+      expect(isPickerOpen()).toBe(true);
+    });
+
+    test.each([['unavailable menu'], ['no popup']])(
+      'a press or Enter on "%s" leaves it open',
+      async (name) => {
+        const user = await openCompactBesideOtherDropdowns();
+        const control = screen.getByRole('button', { name });
+        await user.click(control);
+        act(() => {
+          control.focus();
+        });
+        await user.keyboard('{Enter}');
+        await settle();
+        expect(isPickerOpen()).toBe(true);
+      },
+    );
 
     test('a press on a menu trigger inside an editable region closes it', async () => {
       const user = await openCompactBesideOtherDropdowns();

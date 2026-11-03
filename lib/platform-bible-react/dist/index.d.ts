@@ -189,7 +189,9 @@ export type BookChapterControlProps = {
 	 * closes and decides where focus should land next — by default Radix returns focus to the trigger
 	 * button. Call `event.preventDefault()` and focus a different element when the trigger isn't the
 	 * right landing spot (e.g. the picker is nested inside a DropdownMenuItem and focus should return
-	 * to the menu item so arrow-key navigation continues to work).
+	 * to the menu item so arrow-key navigation continues to work). It is not called when a compact
+	 * picker closes because the user opened another menu, popover or select box from the keyboard:
+	 * focus then stays on that control.
 	 */
 	onCloseAutoFocus?: React$1.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>["onCloseAutoFocus"];
 	/**
