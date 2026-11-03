@@ -215,6 +215,7 @@ internal static class SyncRunResourceGuard
                 );
             var registered = distinct.Where(id => !s_writeCounts.ContainsKey(id)).ToArray();
             var skipped = distinct.Where(id => s_writeCounts.ContainsKey(id)).ToArray();
+            AfterPartitionForTests?.Invoke();
             var run = new Run(registered.ToImmutableHashSet(StringComparer.OrdinalIgnoreCase));
             s_activeRun = run;
             return new RunRegistration(run, registered, skipped);
@@ -274,10 +275,18 @@ internal static class SyncRunResourceGuard
             s_activeRun = null;
             s_writeCounts.Clear();
             s_generation++;
+            AfterPartitionForTests = null;
             WaitTimeout = s_defaultWaitTimeout;
             Monitor.PulseAll(s_lock);
         }
     }
+
+    /// <summary>
+    /// Test seam: invoked by <see cref="RegisterRunSkippingOpenWrites"/> after it has split the ids
+    /// and before it installs the run, inside the same lock hold, so a test can start a competing
+    /// write at that exact point. Cleared by <see cref="ResetForTests"/>.
+    /// </summary>
+    internal static Action? AfterPartitionForTests { get; set; }
 
     /// <summary>
     /// Runs <paramref name="action"/> while holding the guard's lock, so a test can make several

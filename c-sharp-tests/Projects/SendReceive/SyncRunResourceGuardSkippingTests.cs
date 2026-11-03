@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.Projects.SendReceive;
 
@@ -178,80 +179,57 @@ namespace TestParanextDataProvider.Projects.SendReceive
         }
 
         /// <summary>
-        /// A write racing the registration is either skipped by it or waits on the registered run,
-        /// never both unregistered and unwaited. The race is forced into both orders by holding the
-        /// guard's lock so the two operations queue up behind it, then releasing them together.
+        /// A write that arrives between the partition and the run's installation cannot slip in
+        /// unnoticed: the test starts it from the guard's after-partition hook, which runs inside
+        /// the registration's lock hold. The write thread must block on that lock, then see the
+        /// registered run and wait for it — never open a scope while the run holds its id.
         /// </summary>
-        [TestCase(true)]
-        [TestCase(false)]
-        public async Task PartitionIsAtomic(bool writeQueuesFirst)
+        [Test]
+        public async Task PartitionIsAtomic()
         {
-            Task<IDisposable>? writeTask = null;
-            Task<RunRegistration>? registerTask = null;
-            using var writeStarted = new ManualResetEventSlim(false);
-            using var registerStarted = new ManualResetEventSlim(false);
-
-            Task<IDisposable> StartWrite() =>
-                Task.Run(() =>
-                {
-                    writeStarted.Set();
-                    return SyncRunResourceGuard.EnterResourceWrite(UidA);
-                });
-            Task<RunRegistration> StartRegister() =>
-                Task.Run(() =>
-                {
-                    registerStarted.Set();
-                    return SyncRunResourceGuard.RegisterRunSkippingOpenWrites([UidA]);
-                });
-
-            // Both operations are started while the lock is held, in the chosen order, so each
-            // blocks on the lock and runs after it is released.
-            SyncRunResourceGuard.InsideGuardLockForTests(() =>
+            Thread? writeThread = null;
+            var scopeReady = new TaskCompletionSource<IDisposable>();
+            SyncRunResourceGuard.AfterPartitionForTests = () =>
             {
-                if (writeQueuesFirst)
+                writeThread = new Thread(() =>
                 {
-                    writeTask = StartWrite();
-                    writeStarted.Wait(s_shouldReturnBound);
-                    Thread.Sleep(50);
-                    registerTask = StartRegister();
-                    registerStarted.Wait(s_shouldReturnBound);
-                }
-                else
+                    try
+                    {
+                        scopeReady.SetResult(SyncRunResourceGuard.EnterResourceWrite(UidA));
+                    }
+                    catch (Exception ex)
+                    {
+                        scopeReady.SetException(ex);
+                    }
+                })
                 {
-                    registerTask = StartRegister();
-                    registerStarted.Wait(s_shouldReturnBound);
-                    Thread.Sleep(50);
-                    writeTask = StartWrite();
-                    writeStarted.Wait(s_shouldReturnBound);
-                }
-                Thread.Sleep(50);
-            });
+                    IsBackground = true,
+                };
+                writeThread.Start();
+                // Atomic registration: the write thread blocks on the lock this hook runs inside.
+                // A split registration lets it finish (or sit waiting) before the hook returns.
+                var elapsed = Stopwatch.StartNew();
+                while (
+                    !scopeReady.Task.IsCompleted
+                    && !writeThread.ThreadState.HasFlag(System.Threading.ThreadState.WaitSleepJoin)
+                    && elapsed.Elapsed < s_shouldReturnBound
+                )
+                    Thread.Yield();
+            };
 
-            var registration = await registerTask!;
-            var registered = registration.RegisteredIds.Contains(UidA);
-            var skipped = registration.SkippedIds.Contains(UidA);
-            Assert.That(registered ^ skipped, Is.True, "an id is exactly one of registered or skipped");
+            var registration = SyncRunResourceGuard.RegisterRunSkippingOpenWrites([UidA]);
+            SyncRunResourceGuard.AfterPartitionForTests = null;
 
-            if (skipped)
-            {
-                // The write got in first: it holds a scope, and the run must not hold the id.
-                Assert.That(await FinishesWithin(writeTask!, s_shouldReturnBound), Is.True);
-                Assert.That(registration.Run.ResourceIds, Does.Not.Contain(UidA));
-                (await writeTask!).Dispose();
-            }
-            else
-            {
-                // The run got in first: the write must be waiting on it, not unwaited.
-                Assert.That(
-                    await FinishesWithin(writeTask!, s_stillBlockedWindow),
-                    Is.False,
-                    "a write of a registered id waits for the run"
-                );
-                registration.Run.Dispose();
-                Assert.That(await FinishesWithin(writeTask!, s_shouldReturnBound), Is.True);
-                (await writeTask!).Dispose();
-            }
+            Assert.That(registration.RegisteredIds, Is.EquivalentTo(new[] { UidA }));
+            Assert.That(
+                await FinishesWithin(scopeReady.Task, s_stillBlockedWindow),
+                Is.False,
+                "a write that arrived during registration must wait for the registered run"
+            );
+
             registration.Run.Dispose();
+            Assert.That(await FinishesWithin(scopeReady.Task, s_shouldReturnBound), Is.True);
+            (await scopeReady.Task).Dispose();
         }
     }
 }
