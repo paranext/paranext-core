@@ -531,7 +531,8 @@ export type SyncQueue = {
 	/**
 	 * IDs of the projects of the run the queue has sent to the backend that the backend has not yet
 	 * accepted: about to run, unless the backend refuses the run as busy, which puts them back among
-	 * the waiting. Empty when none is being sent or the answer is not known.
+	 * the waiting. A run sent again after a busy refusal is not listed: its projects stay waiting
+	 * until the backend accepts it. Empty when none is being sent or the answer is not known.
 	 *
 	 * @experimental This field is unstable and may change or disappear without notice
 	 */

@@ -511,9 +511,12 @@ declare module 'paratext-bible-send-receive' {
     waitingProjectIds: string[];
     /**
      * Ids of the projects of the run the queue has sent to the backend that the backend has not yet
-     * accepted, empty when none. Each project of a run is in exactly one of three states: waiting,
-     * then sending, then running. A busy refusal puts the run's projects back among the waiting
-     * (and the snapshot changes); acceptance makes them running.
+     * accepted, empty when none. A project of a run moves from waiting to sending to running; a
+     * project asked for again while its run is being sent is also listed as waiting, for the later
+     * run. A busy refusal puts the run's projects back among the waiting (and the snapshot
+     * changes); acceptance makes them running. A run the queue sends again after a busy refusal is
+     * not listed here: its projects stay waiting until the backend accepts it, so a streak of
+     * retries does not flip them between waiting and sending.
      *
      * @experimental This field is unstable and may change or disappear without notice
      */
@@ -1085,8 +1088,9 @@ declare module 'papi-shared-types' {
      * carrying the full current {@link SyncQueueSnapshot}. A project of a run moves from
      * `waitingProjectIds` to `sendingProjectIds` when the queue sends the run, and on to
      * `runningProjectIds` when the backend accepts it, or back to `waitingProjectIds` when the
-     * backend refuses it as busy. No replay: a subscriber that starts later seeds from
-     * `paratextBibleSendReceive.getSyncQueue`.
+     * backend refuses it as busy. A run retried after a busy refusal goes from `waitingProjectIds`
+     * straight to `runningProjectIds` once accepted. No replay: a subscriber that starts later
+     * seeds from `paratextBibleSendReceive.getSyncQueue`.
      *
      * @experimental This event is unstable and may change or disappear without notice
      */
