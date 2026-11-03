@@ -251,8 +251,10 @@ test.describe('the clipboard in Simple mode’s paragraph-structure view', () =>
           timeout: 20_000,
         })
         .toEqual(expect.arrayContaining([expect.stringContaining(REFUSED_DELETION_MESSAGE)]));
+      // The editor is where the refusal shows. The file cannot show it yet: an accepted delete
+      // would not have saved by now. The next step's saves write this chapter, so it checks the
+      // file.
       await expect(editorInput).toContainText(SLASHES_SITE);
-      expect(countOf(readNormalizedBook(), SLASHES_SITE), 'the file should keep the `x`').toBe(1);
     });
 
     await test.step('unlocked: a cut across a paragraph break pasted straight back restores the file byte for byte', async () => {
@@ -289,6 +291,10 @@ test.describe('the clipboard in Simple mode’s paragraph-structure view', () =>
       expect(afterPaste, 'the paste never saved to disk').toBeDefined();
       if (!afterPaste) return;
       expect(afterPaste.toString('utf8')).toBe(before.toString('utf8'));
+      expect(
+        countOf(readNormalizedBook(), SLASHES_SITE),
+        'the delete refused in the step before should not have reached the file',
+      ).toBe(1);
       expect(afterPaste.equals(before), 'the file should be byte-identical to before the cut').toBe(
         true,
       );

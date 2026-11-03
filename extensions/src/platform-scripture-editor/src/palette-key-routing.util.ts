@@ -1,3 +1,5 @@
+import type { MarkerMode } from '@eten-tech-foundation/platform-editor';
+
 /**
  * Decides whether a Standard-view keydown should be routed into the marker-palette session's key
  * table (`handleMarkerPaletteSessionKeyDown`) rather than left to the editor.
@@ -81,7 +83,7 @@ export function shouldOpenInlineMarkersMenu(options: {
 export function shouldClaimInlineMarkersMenuTrigger(
   options: Parameters<typeof shouldOpenInlineMarkersMenu>[0] & {
     /** The editor's `markerMode` view option; only `'hidden'` refuses the typed trigger. */
-    markerMode: string | undefined;
+    markerMode: MarkerMode | undefined;
   },
 ): boolean {
   return options.markerMode === 'hidden' && shouldOpenInlineMarkersMenu(options);

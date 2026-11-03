@@ -53,8 +53,10 @@ function messageFor(source: UnstorableTextRemoved['source']): LocalizeKey {
  *
  * The handler sends an `info` notification under {@link UNSTORABLE_TEXT_NOTIFICATION_ID}, with the
  * typing message for typed text, the refused-deletion message for a refused delete, and the
- * pasted-text message for paste and drop. A failed send is logged, never thrown: the editor calls
- * the handler from an edit, which a notification failure must not break.
+ * pasted-text message for paste and drop. Each message names both `\` and `//` whichever of them
+ * was removed (`event.removed` is not read), so one fixed text per source serves every case. A
+ * failed send is logged, never thrown: the editor calls the handler from an edit, which a
+ * notification failure must not break.
  *
  * @param send Sends a notification, normally `papi.notifications.send`.
  * @param webViewId The web view the notification belongs to.
