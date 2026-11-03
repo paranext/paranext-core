@@ -2868,6 +2868,24 @@ describe('ScriptureFinderProjectDataProviderEngine replaces a match that crosses
 
       expect(writtenChapterUsfm()).toContain('Say X.');
     });
+
+    it('lets a confirmed whole footnote through, which is not structure', async () => {
+      await replaceFound(await findOne('word1:3 Note text in'), true);
+
+      const written = writtenChapterUsfm();
+      expect(written).toContain('has a X it.');
+      expect(written).not.toContain('\\f');
+    });
+
+    it.each([
+      ['a whole character span', 'the Lord God'],
+      ['a whole footnote', 'word1:3 Note text in'],
+    ])('refuses %s unconfirmed', async (_crossing, searchString) => {
+      await expect(replaceFound(await findOne(searchString))).rejects.toThrow(
+        MARKER_DELETION_ERROR,
+      );
+      expect(writtenChapterUsfm()).toBeUndefined();
+    });
   });
 
   it('counts an optional line break as a marker, though it has no backslash', async () => {

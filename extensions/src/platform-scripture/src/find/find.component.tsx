@@ -353,6 +353,11 @@ export type FindProps = {
    * `'find'` while this is set so no replace UI is rendered.
    */
   hideModeToggle?: boolean;
+  /**
+   * Whether each result shows the markers its match includes, so the user can see what Replace
+   * would delete. Set it wherever Replace is offered.
+   */
+  shouldShowMarkers?: boolean;
   /** The replacement term entered in replace mode. */
   replaceTerm: string;
   /** Whether to preserve the case of the matched text when replacing. */
@@ -595,6 +600,7 @@ export function Find({
   isRegexAllowed,
   activeMode,
   hideModeToggle = false,
+  shouldShowMarkers = false,
   replaceTerm,
   preserveCase,
   isReplacing,
@@ -1558,9 +1564,7 @@ export function Find({
                 onCancelReplace={cancelReplace}
                 localizedStrings={searchResultLocalizedStrings}
                 isReplaceMode={activeMode === 'replace'}
-                // Markers are shown so the user can see what Replace would delete. Simple mode has
-                // no Replace, and nothing else there exposes USFM markers.
-                shouldShowMarkers={!hideModeToggle}
+                shouldShowMarkers={shouldShowMarkers}
                 isReplacing={isReplacing}
                 isReplaceBlocked={isReplaceActionBlocked}
                 replaceBlockedTooltipText={replaceBlockedTooltipText}

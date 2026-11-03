@@ -130,6 +130,19 @@ export function applyPreserveCase(matchedText: string, replacementText: string):
 }
 
 /**
+ * The USFM that replacing `result` writes: the replace term, after any preserve-case change. The
+ * marker decision and the write must both use this, or the user could agree to one text and get
+ * another.
+ */
+export function getUsfmToInsert(
+  result: Pick<FindResult, 'text'>,
+  replaceTerm: string,
+  preserveCase: boolean,
+): string {
+  return preserveCase ? applyPreserveCase(result.text ?? '', replaceTerm) : replaceTerm;
+}
+
+/**
  * Builds the toast Replace All shows when it finishes, given how many results it replaced and how
  * many it skipped because replacing them would have deleted a marker.
  *

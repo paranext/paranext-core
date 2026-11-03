@@ -1,18 +1,23 @@
 import { isBlockMarker, MarkerInfo, USFM_MARKERS_MAP_3_0 } from 'platform-bible-utils';
 
 /**
- * Matches a USFM backslash marker token: optional `+` nesting, a marker name, and an optional
- * suffix that is either a `-N` column span (`thc3-4`) or a milestone's `-s`/`-e` start/end marker
- * (`qt-s`), followed by an optional closing `*`.
+ * A USFM marker's name, with an optional suffix that is either a `-N` column span (`thc3-4`) or a
+ * milestone's `-s`/`-e` start/end marker (`qt-s`).
  *
  * The name allows uppercase letters and interior digits because a project's custom `\z` marker can
  * use them, and a marker this cannot read is a marker Replace would delete without noticing.
+ */
+const MARKER_NAME_PATTERN = String.raw`[A-Za-z][A-Za-z0-9]*(?:-(?:\d+|[se]))?`;
+
+/**
+ * Matches a USFM backslash marker token: optional `+` nesting, a marker name (see
+ * {@link MARKER_NAME_PATTERN}), and an optional closing `*`.
  *
  * Exported so that every consumer in the Find folder tokenizes USFM the same way. Use
  * {@link forEachMarkerToken} rather than this constant directly unless you need the raw pattern — a
  * `g`-flagged regex carries `lastIndex` state and must not be shared between loops.
  */
-export const MARKER_TOKEN_PATTERN = String.raw`\\\+?([A-Za-z][A-Za-z0-9]*(?:-(?:\d+|[se]))?)\*?`;
+export const MARKER_TOKEN_PATTERN = String.raw`\\\+?(${MARKER_NAME_PATTERN})\*?`;
 
 /** Calls `callback` for each USFM marker token in `usfm`, in order. */
 export function forEachMarkerToken(
@@ -129,7 +134,11 @@ export function getIndependentlyClosedMarker(marker: string): string | undefined
   return USFM_MARKERS_MAP_3_0.markers[marker]?.isIndependentClosingMarkerFor?.[0];
 }
 
-/** Stock character markers that close with `*` but that the markers map does not know. */
+/**
+ * Stock character markers that close with `*` but that the markers map does not know.
+ *
+ * TODO(PT-4993): Remove once the generated markers map includes them.
+ */
 const PAIRED_MARKERS_THE_MAP_OMITS = new Set(['fs', 'wr', 'xtSee', 'xtSeeAlso']);
 
 /**
@@ -198,8 +207,15 @@ const ORPHAN_NOTE_HEAD_REGEX = new RegExp(
  * A marker's `|attribute` payload, which ends right before a closer: the marker's own (`\w*`) or a
  * milestone's bare `\*`. A `|` anywhere else is Scripture text, and so is what follows it.
  */
-const MARKER_ATTRIBUTES_PATTERN = String.raw`\|[^\\|]*(?=\\(?:\+?[A-Za-z][A-Za-z0-9]*(?:-(?:\d+|[se]))?)?\*)`;
-export const MARKER_ATTRIBUTES_REGEX = new RegExp(MARKER_ATTRIBUTES_PATTERN, 'g');
+const MARKER_ATTRIBUTES_PATTERN = String.raw`\|[^\\|]*(?=\\(?:\+?${MARKER_NAME_PATTERN})?\*)`;
+/** Read only through {@link stripMarkerAttributes}: `replace` resets the `lastIndex` it carries. */
+const MARKER_ATTRIBUTES_REGEX = new RegExp(MARKER_ATTRIBUTES_PATTERN, 'g');
+
+/** Removes every marker's `|attribute` payload from `usfm`, and leaves the markers themselves. */
+export function stripMarkerAttributes(usfm: string): string {
+  return usfm.replace(MARKER_ATTRIBUTES_REGEX, '');
+}
+
 /**
  * A marker token, capturing its name, or a bare `\*` closer — the form a milestone closes with.
  *
@@ -263,7 +279,7 @@ export const OPTIONAL_BREAK_MARKER = '//';
  * This is display only, like {@link collapseUsfmMarkersForDisplay}.
  */
 export function splitUsfmForMarkerDisplay(usfm: string): UsfmDisplaySegment[] {
-  const withoutAttributes = usfm.replace(MARKER_ATTRIBUTES_REGEX, '');
+  const withoutAttributes = stripMarkerAttributes(usfm);
   const segments: UsfmDisplaySegment[] = [];
   const pushText = (text: string) => {
     if (text) segments.push({ text: text.replace(LINE_BREAK_RUN_REGEX, ' '), isMarker: false });
@@ -366,7 +382,7 @@ export function collapseUsfmMarkersForDisplay(text: string): string {
     .replace(NOTE_SPAN_REGEX, '')
     .replace(ORPHAN_NOTE_HEAD_REGEX, '')
     .replace(UNCLOSED_NOTE_TAIL_REGEX, '');
-  const remaining = withoutNotes.replace(MARKER_ATTRIBUTES_REGEX, '');
+  const remaining = stripMarkerAttributes(withoutNotes);
 
   // Built as pieces and joined once. A result card collapses a whole book's prefix and suffix, so
   // re-scanning one accumulated string at every structural marker would be quadratic in the book.

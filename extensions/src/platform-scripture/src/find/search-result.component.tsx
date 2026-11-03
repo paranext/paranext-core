@@ -11,9 +11,9 @@ import { FindResult } from 'platform-scripture';
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LocalizedBookData } from './find-types';
 import {
-  applyPreserveCase,
   formatResultReference,
   getResultBookName,
+  getUsfmToInsert,
   preserveTrailingSpaces,
   renderWithInvisibleChars,
 } from './find.utils';
@@ -396,9 +396,11 @@ export default function SearchResult({
 
   let previewReplacement: string | undefined;
   if (isReplaceMode && !searchResult.isReplaced && replaceConfig) {
-    previewReplacement = replaceConfig.preserveCase
-      ? applyPreserveCase(searchResult.text ?? '', replaceConfig.term)
-      : replaceConfig.term;
+    previewReplacement = getUsfmToInsert(
+      searchResult,
+      replaceConfig.term,
+      replaceConfig.preserveCase,
+    );
   }
 
   /**
@@ -532,9 +534,7 @@ export default function SearchResult({
         }}
         onDoubleClick={(e) => e.stopPropagation()}
       >
-        {getResultBookName(searchResult, localizedBookData)}{' '}
-        {searchResult.start.verseRef.chapterNum}:
-        {searchResult.start.verseRef.verse || searchResult.start.verseRef.verseNum}
+        {formatResultReference(searchResult, getResultBookName(searchResult, localizedBookData))}
       </button>
       {!searchResult.isReplaced && (
         <ContentZoomRoot

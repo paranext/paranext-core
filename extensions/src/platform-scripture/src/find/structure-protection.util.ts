@@ -5,10 +5,10 @@ import {
   getMarkerDefaultAttribute,
   isNoteMarker,
   isStructuralMarker,
-  MARKER_ATTRIBUTES_REGEX,
   MILESTONE_CLOSER_REGEX,
   mustMarkerBeClosed,
   OPTIONAL_BREAK_MARKER,
+  stripMarkerAttributes,
   VERSE_OR_CHAPTER_OPERAND_REGEX,
 } from './usfm-tokens.util';
 
@@ -114,23 +114,37 @@ export function extractGuardedMarkers(usfm: string): string[] {
     result.push(isSelfClosedMilestone ? `${marker}${SELF_CLOSED_MILESTONE_SUFFIX}` : marker);
   });
   // An attribute can hold a URL, whose slashes are not a line break.
-  const optionalBreaks = usfm.replace(MARKER_ATTRIBUTES_REGEX, '').split(OPTIONAL_BREAK_MARKER);
+  const optionalBreaks = stripMarkerAttributes(usfm).split(OPTIONAL_BREAK_MARKER);
   return [...result, ...Array<string>(optionalBreaks.length - 1).fill(OPTIONAL_BREAK_MARKER)];
 }
 
-/** The markers in `removedMarkers` that `inserted` does not put back. */
-function findLostMarkers(removedMarkers: string[], inserted: string): string[] {
+/**
+ * For each marker in `removedMarkers` (as {@link extractGuardedMarkers} spells them), whether
+ * `inserted` fails to put it back. Markers are counted, so a replacement holding one `\p` puts back
+ * only the first of two.
+ *
+ * The one rule for which markers a replacement deletes: the prompt marks the markers this reports,
+ * and {@link getMarkerReplaceAction} decides on them, so what the user agrees to is what is
+ * checked.
+ */
+export function markLostMarkers(removedMarkers: string[], inserted: string): boolean[] {
   if (removedMarkers.length === 0) return [];
   const putBack = new Map<string, number>();
   extractGuardedMarkers(inserted).forEach((marker) =>
     putBack.set(marker, (putBack.get(marker) ?? 0) + 1),
   );
-  return removedMarkers.filter((marker) => {
+  return removedMarkers.map((marker) => {
     const count = putBack.get(marker) ?? 0;
     if (count === 0) return true;
     putBack.set(marker, count - 1);
     return false;
   });
+}
+
+/** The markers in `removedMarkers` that `inserted` does not put back; see {@link markLostMarkers}. */
+function findLostMarkers(removedMarkers: string[], inserted: string): string[] {
+  const isLost = markLostMarkers(removedMarkers, inserted);
+  return removedMarkers.filter((_marker, index) => isLost[index]);
 }
 
 /**

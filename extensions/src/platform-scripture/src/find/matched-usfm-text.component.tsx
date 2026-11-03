@@ -1,5 +1,5 @@
 import { memo, ReactNode, useMemo } from 'react';
-import { extractGuardedMarkers } from './structure-protection.util';
+import { extractGuardedMarkers, markLostMarkers } from './structure-protection.util';
 import { splitUsfmForMarkerDisplay, UsfmDisplaySegment } from './usfm-tokens.util';
 
 type MatchedUsfmTextProps = {
@@ -37,26 +37,25 @@ const DELETED_MARKER_CLASS_NAME =
   'tw:rounded tw:bg-destructive/10 tw:px-0.5 tw:font-mono tw:text-xs tw:text-destructive tw:line-through tw:dark:bg-destructive/20';
 
 /**
- * For each segment, whether it is a marker that `replacementUsfm` does not put back. Markers are
- * compared as `extractGuardedMarkers` spells them, the spelling a result's `removedMarkers` and the
- * marker check use, and counted, so a replacement holding one `\p` keeps only one of two.
+ * For each segment, whether it is a marker that `replacementUsfm` does not put back, decided by
+ * {@link markLostMarkers}, the rule the marker check uses.
  */
 function findDeletedMarkerSegments(
   segments: UsfmDisplaySegment[],
   replacementUsfm: string,
 ): boolean[] {
-  const putBack = new Map<string, number>();
-  extractGuardedMarkers(replacementUsfm).forEach((marker) =>
-    putBack.set(marker, (putBack.get(marker) ?? 0) + 1),
-  );
+  // A marker segment holds exactly one marker, with its verse number or milestone closer. Exactly
+  // one entry per marker segment keeps `isLost` lined up with the segments below.
+  const markers = segments
+    .filter((segment) => segment.isMarker)
+    .map((segment) => extractGuardedMarkers(segment.text)[0] ?? segment.text);
+  const isLost = markLostMarkers(markers, replacementUsfm);
+  let markerIndex = 0;
   return segments.map((segment) => {
     if (!segment.isMarker) return false;
-    // A marker segment holds exactly one marker, with its verse number or milestone closer.
-    const [marker] = extractGuardedMarkers(segment.text);
-    const count = putBack.get(marker) ?? 0;
-    if (count === 0) return true;
-    putBack.set(marker, count - 1);
-    return false;
+    const isDeleted = isLost[markerIndex];
+    markerIndex += 1;
+    return isDeleted;
   });
 }
 

@@ -1676,7 +1676,7 @@ describe('Find — Replace on a result whose span holds markers', () => {
     expect(onReplace).toHaveBeenCalledWith();
   });
 
-  it('shows the result’s markers where Replace exists, and not in Simple mode', () => {
+  it('shows the result’s markers only when asked to', () => {
     // A span that holds a marker; `matchedUsfm` is what the chips are built from.
     const withMarker = { ...BOUNDARY_RESULT, matchedUsfm: 'b\n\\p And' };
     const props = {
@@ -1685,11 +1685,13 @@ describe('Find — Replace on a result whose span holds markers', () => {
         ['GEN', [{ result: withMarker, originalIndex: 0 }]],
       ]),
     };
-    const { unmount } = render(<Find {...buildReplaceProps(props)} />);
+    const { unmount } = render(
+      <Find {...buildReplaceProps({ ...props, shouldShowMarkers: true })} />,
+    );
     expect(screen.getAllByText('\\p').length).toBeGreaterThan(0);
     unmount();
 
-    render(<Find {...buildReplaceProps({ ...props, activeMode: 'find', hideModeToggle: true })} />);
+    render(<Find {...buildReplaceProps(props)} />);
     expect(screen.queryByText('\\p')).toBeNull();
   });
 

@@ -198,7 +198,6 @@ const MARKER_PROMPT_STRING_KEYS = [
   '%webView_find_replace_markersPrompt_confirm%',
   '%webView_find_replace_markersPrompt_deletedMarker%',
   '%webView_find_replace_markersPrompt_message%',
-  '%webView_find_replace_markersPrompt_message_2%',
   '%webView_find_replace_markersPrompt_title%',
   '%webView_find_replace_oneEndedMarkerError%',
   '%webView_find_replace_skippedChapterMarker%',
@@ -253,21 +252,19 @@ describe.each(Object.entries(MARKER_DELETION_KEYS))(
   },
 );
 
-/**
- * The marker prompt's message. It replaces one saying that every marker shown is deleted, from
- * before the prompt showed which markers the replacement puts back, and falls back to it.
- */
+/** The marker prompt's message, which points at the cue that is not color alone. */
 describe('marker prompt message', () => {
-  const key = '%webView_find_replace_markersPrompt_message_2%';
-  const replaces = '%webView_find_replace_markersPrompt_message%';
+  const key = '%webView_find_replace_markersPrompt_message%';
 
-  it('says only the highlighted markers are deleted', () => {
-    expect(localizedStrings.en[key]).toContain('deletes the highlighted markers');
+  it('says only the crossed-out markers are deleted', () => {
+    expect(localizedStrings.en[key]).toContain('deletes the crossed-out markers');
   });
 
-  it('falls back to the key it replaces, which is marked deprecated', () => {
-    expect(metadata[key]?.fallbackKey).toBe(replaces);
-    expect(metadata[replaces]?.deprecationInfo?.message).toContain(key);
+  it('is what the deprecated tooltip points readers to, and is not deprecated itself', () => {
+    expect(
+      metadata['%webView_find_replace_markerDeletionTooltip%']?.deprecationInfo?.message,
+    ).toContain(key);
+    expect(metadata[key]?.deprecationInfo).toBeUndefined();
   });
 
   it('has translator notes, as the label read after each deleted marker does', () => {

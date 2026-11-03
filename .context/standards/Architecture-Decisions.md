@@ -3678,20 +3678,21 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     `platform.confirm` takes only a string. That display is what the user agrees to, and what
     `allowMarkerDeletion` ("the user has seen the markers in each range") rests on; a bare list such
     as `\nd, \nd*, //` would weaken that consent. A marker the replacement puts back is shown but not
-    marked, counted as `getMarkerReplaceAction` counts it, and each deleted one is struck through and
-    followed by text only a screen reader reads. The button labels and the selection staying on the
+    marked, decided by `markLostMarkers`, which `getMarkerReplaceAction` also decides on, and each
+    deleted one is struck through and followed by text only a screen reader reads. The button labels and the selection staying on the
     result would work with `platform.confirm` too. It is also not modal for the whole app, and sits
     beside the result it is about. It is an alert dialog named by its title and described by its
     message and the marked match, keeps focus inside, and closes on Escape, as `platform.alert` does.
     A press outside it does not close it, as with Radix's `AlertDialog`, so the second press of a
     double-click on Replace cannot dismiss it, and the second click of a double-click is ignored on
-    **Replace (including markers)** and **OK**, so it cannot answer a prompt nobody has read. It has no trigger, so it hands focus back itself: to the element that had
-    focus when it opened, or the nearest focusable element around it that is still there. While it
-    is open, an edit made elsewhere does not re-run the search, which would close it under the user;
+    **Replace (including markers)** and **OK**, so it cannot answer a prompt nobody has read. It has no trigger, so it
+    hands focus back itself: to the element that had focus when Replace opened it, or the nearest
+    focusable element around it that is still there. While it is open, an edit made elsewhere does not re-run the search, which would close it under the user;
     the re-search runs once it closes, and a confirm still writes only if the match reads as the
     user saw it. A `platform.confirm` that accepts rich content would let it go; that is separate
     work.
-  - Results show the markers only where Replace exists. Simple mode has no Replace, and nothing else
+  - Results show the markers only where Replace exists (Find's `shouldShowMarkers`, which the web
+    view sets from the same flag that offers Replace). Simple mode has no Replace, and nothing else
     there exposes USFM markers.
   - Which markers pair comes from the markers map (`isCloseable`, `independentClosingMarkers`), plus
     `\fs`, `\wr`, `\xtSee` and `\xtSeeAlso`, which it omits, and any marker whose `*` closer is in the

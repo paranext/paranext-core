@@ -4,21 +4,25 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MarkerPromptAction, ReplaceMarkersPrompt } from './replace-markers-prompt.component';
+import {
+  getFocusReturnCandidates,
+  MarkerPromptAction,
+  ReplaceMarkersPrompt,
+} from './replace-markers-prompt.component';
 
 const STRINGS = {
   '%general_cancel%': 'Cancel',
   '%general_ok%': 'OK',
   '%webView_find_replace_markersPrompt_confirm%': 'Replace (including markers)',
-  '%webView_find_replace_markersPrompt_deletedMarker%': '(deleted)',
-  '%webView_find_replace_markersPrompt_message_2%':
-    'This match includes the markers shown here. Replacing it deletes the highlighted markers.',
+  '%webView_find_replace_markersPrompt_deletedMarker%': '(will be deleted)',
+  '%webView_find_replace_markersPrompt_message%':
+    'This match includes the markers shown here. Replacing it deletes the crossed-out markers.',
   '%webView_find_replace_markersPrompt_title%': 'Replace text and markers?',
-  '%webView_find_replace_skipped_title%': 'Match skipped',
+  '%webView_find_replace_skipped_title%': 'Match will be skipped',
 };
 
 const CONFIRM_KEY = '%webView_find_replace_markersPrompt_confirm%';
-const MESSAGE = STRINGS['%webView_find_replace_markersPrompt_message_2%'];
+const MESSAGE = STRINGS['%webView_find_replace_markersPrompt_message%'];
 const SKIPPED_MESSAGE = 'The text includes only part of a marker, so it will be skipped.';
 
 function renderPrompt(
@@ -34,6 +38,7 @@ function renderPrompt(
       matchedUsfm={matchedUsfm}
       replacementUsfm={replacementUsfm}
       skippedMessage={SKIPPED_MESSAGE}
+      focusReturnCandidates={[]}
       localizedStrings={STRINGS}
       onDismiss={onDismiss}
       onConfirm={onConfirm}
@@ -58,7 +63,7 @@ const settle = () =>
 // title and described by its message, focus kept inside it, and Escape dismissing it.
 describe.each([
   ['asking', 'confirm', 'Replace text and markers?', MESSAGE],
-  ['skipping', 'oneEndedMarker', 'Match skipped', SKIPPED_MESSAGE],
+  ['skipping', 'oneEndedMarker', 'Match will be skipped', SKIPPED_MESSAGE],
 ] as const)('ReplaceMarkersPrompt when %s', (_mode, action, title, message) => {
   it('is an alert dialog named by its title and described by its message', () => {
     renderPrompt(action);
@@ -143,11 +148,11 @@ describe('ReplaceMarkersPrompt when asking', () => {
     const dialog = screen.getByRole('alertdialog');
 
     const deleted = within(dialog).getAllByRole('deletion');
-    expect(deleted.map((marker) => marker.textContent)).toEqual(['\\v 2 (deleted)']);
+    expect(deleted.map((marker) => marker.textContent)).toEqual(['\\v 2 (will be deleted)']);
     expect(within(dialog).getByText('\\p')).not.toHaveAttribute('role', 'deletion');
     expect(within(dialog).getByText('\\p').closest('del')).toBeNull();
     expect(dialog).toHaveAccessibleDescription(
-      `${MESSAGE} Abraham. \\p \\v 2 (deleted) Abraham`.replace(/\s+/g, ' '),
+      `${MESSAGE} Abraham. \\p \\v 2 (will be deleted) Abraham`.replace(/\s+/g, ' '),
     );
   });
 
@@ -158,7 +163,7 @@ describe('ReplaceMarkersPrompt when asking', () => {
       within(screen.getByRole('alertdialog'))
         .getAllByRole('deletion')
         .map((marker) => marker.textContent),
-    ).toEqual(['\\nd (deleted)', '\\nd* (deleted)']);
+    ).toEqual(['\\nd (will be deleted)', '\\nd* (will be deleted)']);
   });
 
   it('marks only the extra copy deleted when the replacement keeps one of two identical markers', () => {
@@ -168,9 +173,13 @@ describe('ReplaceMarkersPrompt when asking', () => {
   });
 });
 
-/** A results list with a card whose Replace button opens the prompt, as the Find panel has. */
+/**
+ * A results list with a card whose Replace button opens the prompt, as the Find panel has. Takes
+ * where focus goes back to when Replace opens the prompt, as `useMarkerReplacePrompt` does.
+ */
 function Harness({ action: openWith }: { action: MarkerPromptAction }) {
   const [action, setAction] = useState<MarkerPromptAction | undefined>(undefined);
+  const [focusReturnCandidates, setFocusReturnCandidates] = useState<HTMLElement[]>([]);
   const [isCardShown, setIsCardShown] = useState(true);
   return (
     <>
@@ -179,7 +188,13 @@ function Harness({ action: openWith }: { action: MarkerPromptAction }) {
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
       <div data-testid="results" tabIndex={0}>
         {isCardShown && (
-          <button type="button" onClick={() => setAction(openWith)}>
+          <button
+            type="button"
+            onClick={() => {
+              setFocusReturnCandidates(getFocusReturnCandidates(document.activeElement));
+              setAction(openWith);
+            }}
+          >
             Replace
           </button>
         )}
@@ -196,6 +211,7 @@ function Harness({ action: openWith }: { action: MarkerPromptAction }) {
         matchedUsfm={'the \\nd Lord\\nd* God'}
         replacementUsfm="X"
         skippedMessage={SKIPPED_MESSAGE}
+        focusReturnCandidates={focusReturnCandidates}
         localizedStrings={STRINGS}
         onDismiss={() => setAction(undefined)}
         onConfirm={() => setAction(undefined)}

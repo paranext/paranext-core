@@ -3,6 +3,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   isRunningInWebView,
@@ -19,7 +20,7 @@ export const REPLACE_MARKERS_PROMPT_STRING_KEYS: LocalizeKey[] = [
   '%general_ok%',
   '%webView_find_replace_markersPrompt_confirm%',
   '%webView_find_replace_markersPrompt_deletedMarker%',
-  '%webView_find_replace_markersPrompt_message_2%',
+  '%webView_find_replace_markersPrompt_message%',
   '%webView_find_replace_markersPrompt_title%',
   // Taken from the list the messages are built from, so a new reason to skip cannot leave its
   // message unloaded.
@@ -42,6 +43,11 @@ export type ReplaceMarkersPromptProps = {
   replacementUsfm: string;
   /** What to tell the user when `action` skips the match, from `buildSkippedMatchMessage`. */
   skippedMessage: string;
+  /**
+   * Where focus goes back to when the prompt closes, from {@link getFocusReturnCandidates}. Take it
+   * when Replace opens the prompt, before anything inside the prompt has taken focus.
+   */
+  focusReturnCandidates: HTMLElement[];
   localizedStrings: LanguageStrings;
   /** Called when the user dismisses the prompt. Nothing has been written. */
   onDismiss: () => void;
@@ -55,7 +61,7 @@ export type ReplaceMarkersPromptProps = {
  * prompt was opened from while it is open, and the results list around it is what keeps the arrow
  * keys working.
  */
-function getFocusReturnCandidates(focusedElement: Element | null): HTMLElement[] {
+export function getFocusReturnCandidates(focusedElement: Element | null): HTMLElement[] {
   const candidates: HTMLElement[] = [];
   let element = focusedElement instanceof HTMLElement ? focusedElement : undefined;
   while (element && element !== element.ownerDocument.body) {
@@ -83,24 +89,31 @@ export function ReplaceMarkersPrompt({
   matchedUsfm,
   replacementUsfm,
   skippedMessage,
+  focusReturnCandidates,
   localizedStrings,
   onDismiss,
   onConfirm,
 }: ReplaceMarkersPromptProps) {
   // Dialogs animate out, so the content has to outlast the `action` that opened it. Without this
-  // the prompt shows the wrong title and no match for its last moments on screen.
-  const shownRef = useRef({ action, matchedUsfm, replacementUsfm, skippedMessage });
-  if (action) shownRef.current = { action, matchedUsfm, replacementUsfm, skippedMessage };
+  // the prompt shows the wrong title and no match for its last moments on screen, and has nowhere
+  // to hand focus back to once it has closed.
+  const shownRef = useRef({
+    action,
+    matchedUsfm,
+    replacementUsfm,
+    skippedMessage,
+    focusReturnCandidates,
+  });
+  if (action)
+    shownRef.current = {
+      action,
+      matchedUsfm,
+      replacementUsfm,
+      skippedMessage,
+      focusReturnCandidates,
+    };
   const shown = shownRef.current;
   const isAsking = shown.action === 'confirm';
-
-  // Read while rendering the prompt open, before anything inside it has taken focus: the buttons'
-  // `autoFocus` takes it as soon as they mount, before the dialog's own open handlers run.
-  const wasOpenRef = useRef(false);
-  const focusReturnCandidatesRef = useRef<HTMLElement[]>([]);
-  if (action && !wasOpenRef.current)
-    focusReturnCandidatesRef.current = getFocusReturnCandidates(document.activeElement);
-  wasOpenRef.current = !!action;
 
   return (
     <Dialog
@@ -128,7 +141,7 @@ export function ReplaceMarkersPrompt({
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           if (shouldSuppressFocusReturn(document, isRunningInWebView())) return;
-          focusReturnCandidatesRef.current.some((candidate) => {
+          shownRef.current.focusReturnCandidates.some((candidate) => {
             if (!candidate.isConnected) return false;
             candidate.focus();
             // A disabled control, such as the toolbar's Replace while a replace runs, refuses focus.
@@ -153,7 +166,7 @@ export function ReplaceMarkersPrompt({
           <div className="tw:flex tw:min-h-0 tw:flex-col tw:gap-4 tw:overflow-y-auto">
             <p>
               {isAsking
-                ? localizedStrings['%webView_find_replace_markersPrompt_message_2%']
+                ? localizedStrings['%webView_find_replace_markersPrompt_message%']
                 : shown.skippedMessage}
             </p>
             {isAsking && (
@@ -169,10 +182,10 @@ export function ReplaceMarkersPrompt({
             )}
           </div>
         </DialogDescription>
-        <div className="tw:flex tw:shrink-0 tw:flex-col tw:gap-2 tw:sm:flex-row tw:sm:justify-end">
+        <DialogFooter className="tw:shrink-0">
           {isAsking ? (
             <>
-              <Button variant="outline" autoFocus onClick={onDismiss}>
+              <Button variant="secondary" autoFocus onClick={onDismiss}>
                 {localizedStrings['%general_cancel%']}
               </Button>
               <Button
@@ -197,7 +210,7 @@ export function ReplaceMarkersPrompt({
               {localizedStrings['%general_ok%']}
             </Button>
           )}
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

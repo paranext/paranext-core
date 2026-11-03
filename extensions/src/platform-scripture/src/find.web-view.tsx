@@ -54,7 +54,6 @@ import { FIND_FOCUS_SEARCH_EVENT } from './find.model';
 import { useFocusSearchOnInvoke } from './find/use-focus-search-on-invoke.hook';
 import { buildFindOptions } from './find/find-options.utils';
 import {
-  applyPreserveCase,
   armBoundedWait,
   buildReplacedAllMessage,
   buildSkippedMatchMessage,
@@ -63,6 +62,7 @@ import {
   GIVE_UP_AFTER_MS,
   gateStartSearch,
   getChangedResults,
+  getUsfmToInsert,
   isDifferentProjectSelection,
   isFindQueryValid,
   isSimpleInterfaceMode,
@@ -91,10 +91,10 @@ import {
 } from './find/search-result.component';
 import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './find/replace-preview-types';
 import {
-  MarkerPromptAction,
   REPLACE_MARKERS_PROMPT_STRING_KEYS,
   ReplaceMarkersPrompt,
 } from './find/replace-markers-prompt.component';
+import { useMarkerReplacePrompt } from './find/use-marker-replace-prompt.hook';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 import { IS_REPLACE_ALL_ENABLED } from './replace-all-enabled.const';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
@@ -322,6 +322,7 @@ global.webViewComponent = function FindWebView({
     () => isSimpleInterfaceMode(interfaceModePossiblyError),
     [interfaceModePossiblyError],
   );
+  const isReplaceOffered = !isSimpleMode;
   // If the user was left in replace mode (persisted from power mode) and the interface switches to
   // simple, coerce back to find so the internal replace-gating effects below also see find mode.
   useEffect(() => {
@@ -345,20 +346,6 @@ global.webViewComponent = function FindWebView({
    * 'running', preventing the user from replacing with already-stale positions.
    */
   const [isReplacing, setIsReplacing] = useState(false);
-  /**
-   * The single Replace waiting on the prompt because its match includes markers. Holds the result
-   * itself as well as its index, so a list that changed under the prompt can be noticed.
-   */
-  const [pendingMarkerReplace, setPendingMarkerReplace] = useState<
-    | {
-        action: MarkerPromptAction;
-        resultIndex: number;
-        result: HidableFindResult;
-        /** What a confirm writes: the text `action` was decided on */
-        usfmToInsert: string;
-      }
-    | undefined
-  >(undefined);
   /**
    * True when the current search was automatically triggered after a replace operation. Used to
    * suppress the progress bar in replace mode — after replacing, a re-search is mandatory to
@@ -1790,40 +1777,6 @@ global.webViewComponent = function FindWebView({
     if (searchStatus !== 'running') setIsPostReplaceSearch(false);
   }, [searchStatus]);
 
-  // When scripture changes externally in Replace mode, auto-re-run find so positions stay fresh.
-  //
-  // An open marker prompt holds the re-search off, as a replace in progress does, and the re-search
-  // runs once the prompt closes. Re-searching would empty the list and close the prompt under the
-  // user, and a toolbar Replace pressed next would act on whatever result was selected after it.
-  // The editor saving a typed change as the Replace click takes its focus is enough to cause that.
-  // Holding off is safe: a confirm writes only if the match still reads as the user saw it, since
-  // `replace()` checks it against `expectedUsfm`.
-  //
-  // Hidden case: the re-search does not wait for the tab to be shown, while an open prompt holds it
-  // off whether the tab is shown or not, so a prompt left open on a hidden tab is still there, about
-  // the same match, when the tab is shown again.
-  const isMarkerPromptOpen = pendingMarkerReplace !== undefined;
-  useEffect(() => {
-    if (activeMode !== 'replace') return;
-    if (scriptureDataBaselineRef.current === undefined) return; // No baseline yet
-    if (isReplacing || isMarkerPromptOpen) return;
-    if (searchStatus === 'running' || searchStatus === undefined) return;
-    if (!monitoredScope) return; // No previous search to re-run
-    if (scriptureDataForChangeDetection === undefined) return;
-    if (scriptureDataForChangeDetection === scriptureDataBaselineRef.current) return;
-
-    // External change detected — update baseline and re-run find to refresh positions
-    scriptureDataBaselineRef.current = scriptureDataForChangeDetection;
-    handleStartSearchRef.current();
-  }, [
-    scriptureDataForChangeDetection,
-    activeMode,
-    isReplacing,
-    isMarkerPromptOpen,
-    searchStatus,
-    monitoredScope,
-  ]);
-
   // #endregion
 
   // Auto-select first result when switching to Replace mode, or advance to the next result
@@ -2178,6 +2131,51 @@ global.webViewComponent = function FindWebView({
     ],
   );
 
+  const markerReplacePrompt = useMarkerReplacePrompt({
+    results,
+    resultsRef,
+    isStructureProtected,
+    canReplace: isEditable && activeMode === 'replace',
+    runReplace,
+    localizedStrings,
+    localizedBookData,
+  });
+  const { replaceOrAsk } = markerReplacePrompt;
+
+  // When scripture changes externally in Replace mode, auto-re-run find so positions stay fresh.
+  //
+  // An open marker prompt holds the re-search off, as a replace in progress does, and the re-search
+  // runs once the prompt closes. Re-searching would empty the list and close the prompt under the
+  // user, and a toolbar Replace pressed next would act on whatever result was selected after it.
+  // The editor saving a typed change as the Replace click takes its focus is enough to cause that.
+  // Holding off is safe: a confirm writes only if the match still reads as the user saw it, since
+  // `replace()` checks it against `expectedUsfm`.
+  //
+  // Hidden case: the re-search does not wait for the tab to be shown, while an open prompt holds it
+  // off whether the tab is shown or not, so a prompt left open on a hidden tab is still there, about
+  // the same match, when the tab is shown again.
+  const { isPromptOpen: isMarkerPromptOpen } = markerReplacePrompt;
+  useEffect(() => {
+    if (activeMode !== 'replace') return;
+    if (scriptureDataBaselineRef.current === undefined) return; // No baseline yet
+    if (isReplacing || isMarkerPromptOpen) return;
+    if (searchStatus === 'running' || searchStatus === undefined) return;
+    if (!monitoredScope) return; // No previous search to re-run
+    if (scriptureDataForChangeDetection === undefined) return;
+    if (scriptureDataForChangeDetection === scriptureDataBaselineRef.current) return;
+
+    // External change detected — update baseline and re-run find to refresh positions
+    scriptureDataBaselineRef.current = scriptureDataForChangeDetection;
+    handleStartSearchRef.current();
+  }, [
+    scriptureDataForChangeDetection,
+    activeMode,
+    isReplacing,
+    isMarkerPromptOpen,
+    searchStatus,
+    monitoredScope,
+  ]);
+
   const handleReplace = useCallback(
     async (resultIndex?: number) => {
       if (isReplacing || !projectId || boundProjectUnsupportedReason) return;
@@ -2190,57 +2188,24 @@ global.webViewComponent = function FindWebView({
       // Decided on what will be written, and before the version-history commit, so that backing
       // out of the prompt leaves no trace. Kept with the prompt, so a confirm writes this text even
       // if the replace term or preserve case changes while the prompt is open.
-      const usfmToInsert = preserveCase
-        ? applyPreserveCase(result.text ?? '', replaceTerm)
-        : replaceTerm;
-      const action = getMarkerReplaceAction(result, usfmToInsert, isStructureProtected);
-      if (action !== 'replace') {
-        setPendingMarkerReplace({ action, resultIndex: indexToReplace, result, usfmToInsert });
-        return;
-      }
-
-      await runReplace(indexToReplace, result, usfmToInsert);
+      await replaceOrAsk(
+        indexToReplace,
+        result,
+        getUsfmToInsert(result, replaceTerm, preserveCase),
+      );
     },
     [
       boundProjectUnsupportedReason,
       focusedResultIndex,
       isReplacing,
-      isStructureProtected,
       preserveCase,
       projectId,
+      replaceOrAsk,
       replacePdp,
       replaceTerm,
       results,
-      runReplace,
     ],
   );
-
-  const handleDismissMarkerReplace = useCallback(() => setPendingMarkerReplace(undefined), []);
-
-  const handleConfirmMarkerReplace = useCallback(async () => {
-    setPendingMarkerReplace(undefined);
-    if (!pendingMarkerReplace) return;
-    const { resultIndex, result, usfmToInsert } = pendingMarkerReplace;
-    if (resultsRef.current[resultIndex] !== result) return;
-    await runReplace(resultIndex, result, usfmToInsert, { allowMarkerDeletion: true });
-  }, [pendingMarkerReplace, runReplace]);
-
-  // What the prompt shows has to still be what Replace would act on, so it closes once that result
-  // is gone from the list or Replace is no longer on offer, including when the project becomes
-  // read-only. A new search empties the list, so one started while the prompt is open (by the scope
-  // moving with the editor, for example) closes it. An edit to the text does not: the re-search it
-  // calls for waits until the prompt closes (see the change-detection effect).
-  //
-  // Hidden case: runs while the tab is inactive, deliberately. The project can become read-only
-  // while the tab is hidden, and answering a prompt about a list that no longer holds the match, or
-  // a Replace that is no longer on offer, means nothing. Nothing is written, so the user finds the
-  // prompt gone and the result, if it still matches, ready to Replace again.
-  useEffect(() => {
-    if (!pendingMarkerReplace) return;
-    const { resultIndex, result } = pendingMarkerReplace;
-    if (!isEditable || activeMode !== 'replace' || results[resultIndex] !== result)
-      setPendingMarkerReplace(undefined);
-  }, [activeMode, isEditable, pendingMarkerReplace, results]);
 
   const handleReplaceAll = useCallback(async () => {
     if (isReplacing || !replacePdp || !projectId || boundProjectUnsupportedReason) return;
@@ -2286,7 +2251,7 @@ global.webViewComponent = function FindWebView({
         (r) =>
           getMarkerReplaceAction(
             r,
-            preserveCase ? applyPreserveCase(r.text ?? '', replaceTerm) : replaceTerm,
+            getUsfmToInsert(r, replaceTerm, preserveCase),
             isStructureProtected,
           ) === 'replace',
       );
@@ -2342,7 +2307,7 @@ global.webViewComponent = function FindWebView({
       }
 
       const usfmToInsert = preserveCase
-        ? visibleResultsList.map((r) => applyPreserveCase(r.text ?? '', replaceTerm))
+        ? visibleResultsList.map((r) => getUsfmToInsert(r, replaceTerm, preserveCase))
         : replaceTerm;
 
       // Snapshot all affected books' USFM before replacing so cancel/revert can restore them
@@ -2620,8 +2585,11 @@ global.webViewComponent = function FindWebView({
         searchTextType={searchTextType}
         wordRestriction={wordRestriction}
         isRegexAllowed={isRegexAllowed}
-        activeMode={isSimpleMode ? 'find' : activeMode}
-        hideModeToggle={isSimpleMode}
+        activeMode={isReplaceOffered ? activeMode : 'find'}
+        hideModeToggle={!isReplaceOffered}
+        // Markers are shown so the user can see what Replace would delete, so they go wherever
+        // Replace does. Nothing else in Simple mode exposes USFM markers.
+        shouldShowMarkers={isReplaceOffered}
         hideScrollGroups={isSimpleMode}
         replaceTerm={replaceTerm}
         preserveCase={preserveCase}
@@ -2667,24 +2635,7 @@ global.webViewComponent = function FindWebView({
         getBookUsj={getBookUsj}
         logger={logger}
       />
-      <ReplaceMarkersPrompt
-        action={pendingMarkerReplace?.action}
-        matchedUsfm={pendingMarkerReplace?.result.matchedUsfm ?? ''}
-        replacementUsfm={pendingMarkerReplace?.usfmToInsert ?? ''}
-        skippedMessage={
-          pendingMarkerReplace && pendingMarkerReplace.action !== 'confirm'
-            ? buildSkippedMatchMessage(
-                pendingMarkerReplace.action,
-                pendingMarkerReplace.result,
-                localizedStrings,
-                localizedBookData,
-              )
-            : ''
-        }
-        localizedStrings={localizedStrings}
-        onDismiss={handleDismissMarkerReplace}
-        onConfirm={handleConfirmMarkerReplace}
-      />
+      <ReplaceMarkersPrompt {...markerReplacePrompt.promptProps} />
     </>
   );
 };

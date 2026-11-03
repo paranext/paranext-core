@@ -31,9 +31,9 @@ function skippedMessageFor(
 /**
  * `ReplaceMarkersPrompt` stands between a single Replace and a match that includes USFM markers. A
  * match of whole markers offers **Cancel** and **Replace (including markers)**, with the markers
- * the replacement deletes highlighted and struck through, and any it puts back shown plain. A match
- * Replace may not touch is skipped, with a message and only **OK**. How the markers look is
- * provisional until UX designs it, and the skipped messages are drafts.
+ * the replacement deletes tinted and crossed out, and any it puts back shown plain. A match Replace
+ * may not touch is skipped, with a message and only **OK**. How the markers look is provisional
+ * until UX designs it, and the skipped messages are drafts.
  */
 const meta: Meta<typeof ReplaceMarkersPrompt> = {
   title: 'Bundled Extensions/platform-scripture/Find/Replace Markers Prompt',
@@ -43,6 +43,7 @@ const meta: Meta<typeof ReplaceMarkersPrompt> = {
     localizedStrings,
     replacementUsfm: '',
     skippedMessage: '',
+    focusReturnCandidates: [],
     onDismiss: () => {},
     onConfirm: () => {},
   },

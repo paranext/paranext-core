@@ -601,6 +601,8 @@ function FindHarness({ config }: { config: HarnessConfig }) {
       isRegexAllowed={isRegexAllowed}
       activeMode={activeMode}
       hideModeToggle={config.hideModeToggle}
+      // As the web view does: the markers go wherever Replace is offered.
+      shouldShowMarkers={!config.hideModeToggle}
       hideScrollGroups={config.hideScrollGroups}
       previewOptions={previewOptions}
       onPreviewOptionsChange={setPreviewOptions}
