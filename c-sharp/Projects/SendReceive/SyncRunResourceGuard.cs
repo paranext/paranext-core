@@ -39,6 +39,14 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// was never signalled.
 /// </para>
 /// <para>
+/// <b>A starting run can skip instead of waiting.</b> <see cref="RegisterRunSkippingOpenWrites"/>
+/// registers only the uids no user write is touching and reports the rest as skipped: a skipped
+/// resource is the user's newer intent, so the run leaves it alone and a later sync checks it
+/// again. A write scope counts from the moment <see cref="EnterResourceWrite"/> returns, which is
+/// before the DBL provider takes its own gate, so a sync also skips a resource whose install is
+/// still queued behind other DBL work; that is intended.
+/// </para>
+/// <para>
 /// <b>Each waiting write blocks a thread-pool thread</b> for up to <see cref="WaitTimeout"/>, so
 /// only user-started, one-at-a-time writes belong on this path; a bulk or automatic install loop
 /// must not route through <see cref="EnterResourceWrite"/>.
@@ -172,6 +180,44 @@ internal static class SyncRunResourceGuard
             var run = new Run(ids);
             s_activeRun = run;
             return run;
+        }
+    }
+
+    /// <summary>
+    /// Opens a run that holds those of <paramref name="dblEntryUids"/> no user write is touching
+    /// right now, and reports the rest as skipped. Never waits. The split happens under one hold of
+    /// the guard's lock, so a write that races the registration is either counted before it (its
+    /// uid is skipped) or waits for the registered run (its uid is held) — never both unprotected and
+    /// unwaited. A skipped uid is not held, so later writes of it return at once; the run must not
+    /// update it, and a later sync checks it again. Blank ids are ignored and duplicates (ignoring
+    /// case) collapse to the first spelling. When every uid is skipped, or none is given, the run is
+    /// empty: dispose it as usual and register nothing further.
+    /// </summary>
+    /// <param name="dblEntryUids">The DBL entry uids of the resources the run would update.</param>
+    /// <returns>The run and the registered/skipped split.</returns>
+    /// <exception cref="InvalidOperationException">A run is already open.</exception>
+    public static RunRegistration RegisterRunSkippingOpenWrites(IEnumerable<string> dblEntryUids)
+    {
+        ArgumentNullException.ThrowIfNull(dblEntryUids);
+        var distinct = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var id in dblEntryUids)
+        {
+            if (!string.IsNullOrWhiteSpace(id) && seen.Add(id))
+                distinct.Add(id);
+        }
+
+        lock (s_lock)
+        {
+            if (s_activeRun != null)
+                throw new InvalidOperationException(
+                    "A sync run already holds DBL resources; end it before beginning another."
+                );
+            var registered = distinct.Where(id => !s_writeCounts.ContainsKey(id)).ToArray();
+            var skipped = distinct.Where(id => s_writeCounts.ContainsKey(id)).ToArray();
+            var run = new Run(registered.ToImmutableHashSet(StringComparer.OrdinalIgnoreCase));
+            s_activeRun = run;
+            return new RunRegistration(run, registered, skipped);
         }
     }
 
