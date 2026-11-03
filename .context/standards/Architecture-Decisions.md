@@ -10820,8 +10820,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     cannot become a continuous re-sync loop; it raises no same-user lock prompt.
   - **Two snapshots.** C# serves the activity snapshot (`getSyncActivity` / `onSyncActivityChanged`,
     including the resource ids the running run will update); the extension serves the queue snapshot
-    (`getSyncQueue` / `onSyncQueueChanged`, the waiting project ids and `runningProjectIds`). Home
-    reads both. The queue claims a run (announces "syncing") only once the backend has accepted it.
+    (`getSyncQueue` / `onSyncQueueChanged`: `waitingProjectIds`, `sendingProjectIds` and
+    `runningProjectIds`). Home reads both. The queue claims a run (announces "syncing") only once the
+    backend has accepted it. Until then the run's projects are sending: sent to the backend, not yet
+    accepted. A busy refusal moves them back to waiting and the snapshot fires, so a surface can
+    show "starting" (Home and the sync-status view show the spinner) and still flip to "waiting" at
+    once on a refusal. A run sent again during a streak of busy refusals is not reported as sending:
+    its projects stay waiting until the backend accepts it, so the retries do not make a row blink
+    between the two. A project asked for again while its run is being sent is also waiting, for the
+    later run.
   - **Cancel asks.** Every Cancel (toast, toolbar, Sync dialog and the editor's sync-blocked banner)
     goes through `cancelSyncPrompt`, which asks whether to stop the running sync and then, if
     projects are waiting, whether to drop them too. A run counter keeps a late answer from
@@ -10890,9 +10897,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   waits, and that wait is bounded and cannot be cancelled; quit drops the waiting requests first,
   the extension host is killed in `will-quit`, and on macOS closing the last window pauses the
   queue until a window opens again (`resumeSyncQueue`); the fallbacks for a missing command are
-  gone, so the three pull requests must ship together; the snapshot carries
-  `runningProjectIds` and a run is announced only once the backend accepted it; consent applies to
-  automatic callers except the Simple to Power switch.
+  gone, so the three pull requests must ship together; the snapshot carries `sendingProjectIds`
+  (sent, not yet accepted; a busy refusal moves them back to waiting and fires; a run retried during
+  a busy streak stays waiting until accepted) and `runningProjectIds`, and a run is announced only
+  once the backend accepted it; consent applies to automatic callers except the Simple to Power
+  switch.
 
 ## adr-sync-surface-per-interface-mode: Each sync gets one persistent progress surface per interface mode, chosen by its caller
 
