@@ -9,6 +9,10 @@ import {
 import { logger } from '@shared/services/logger.service';
 import { RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE } from '@main/scheduled-session-sync.util';
 import type { SettingTypes } from 'papi-shared-types';
+import {
+  markQuitRequested,
+  resetShutdownLatchesForNewSession,
+} from '@main/services/shutdown-latch.service';
 import { getJsonRpcRequestErrorMessagePrefix } from '@shared/data/rpc.model';
 import { FAILED_PRECONDITION, INTERNAL, newPlatformError } from 'platform-bible-utils';
 import {
@@ -1681,10 +1685,12 @@ describe('resumeSyncQueue', () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
+    resetShutdownLatchesForNewSession();
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    resetShutdownLatchesForNewSession();
   });
 
   it('sends the resume command once on success', async () => {
@@ -1727,13 +1733,30 @@ describe('resumeSyncQueue', () => {
     expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
   });
 
-  it('does not block its caller when the request never settles', () => {
-    mockRequestNoRetry.mockReturnValue(new Promise(() => {}));
+  it('does not retry once a quit has begun', async () => {
+    mockRequestNoRetry.mockRejectedValue(new Error('socket hiccup'));
 
-    // The caller (createWindow) does not await it; the call must return a promise, not throw
-    expect(() => {
-      resumeSyncQueue().catch(() => {});
-    }).not.toThrow();
+    const done = resumeSyncQueue();
+    await vi.advanceTimersByTimeAsync(0);
+    markQuitRequested();
+    await vi.advanceTimersByTimeAsync(5_000);
+    await done;
+
     expect(mockRequestNoRetry).toHaveBeenCalledTimes(1);
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
+  });
+
+  it('leaves its caller unblocked: a request that never settles keeps only the returned promise pending', async () => {
+    mockRequestNoRetry.mockReturnValue(new Promise(() => {}));
+    let settled = false;
+
+    const pending = resumeSyncQueue().finally(() => {
+      settled = true;
+    });
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(settled).toBe(false);
+    expect(mockRequestNoRetry).toHaveBeenCalledTimes(1);
+    expect(pending).toBeInstanceOf(Promise);
   });
 });

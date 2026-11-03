@@ -1,4 +1,5 @@
 import { AUTO_SYNC_MAX_DURATION_MS } from '@shared/data/platform.data';
+import { isAppShuttingDown } from '@main/services/shutdown-latch.service';
 import { CATEGORY_COMMAND, isJsonRpcMethodNotFoundError } from '@shared/data/rpc.model';
 import { logger } from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
@@ -843,6 +844,11 @@ export async function resumeSyncQueue(): Promise<void> {
   );
   for (let attempt = 1; attempt <= RESUME_SYNC_QUEUE_ATTEMPTS; attempt++) {
     try {
+      // A retry after a quit began would un-pause the queue the quit just dropped
+      if (isAppShuttingDown()) {
+        logger.debug('Not retrying the sync queue resume: the app is shutting down');
+        return;
+      }
       // Attempts are serial by design: each one only happens if the previous failed
       // eslint-disable-next-line no-await-in-loop
       await networkService.requestNoRetry(requestType);

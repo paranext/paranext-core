@@ -879,6 +879,7 @@ async function main() {
 
     // Shutdown tasks paused the sync queue when the previous session's last window closed; the
     // process outlived it (macOS), so the new session's first window resumes it. Not awaited.
+    // resumeSyncQueue logs its own failures and never rejects; the catch only guards the floating promise
     if (shouldResumeSyncQueue(isFirstWindow, hasCreatedWindowThisProcess))
       resumeSyncQueue().catch(() => {});
 
