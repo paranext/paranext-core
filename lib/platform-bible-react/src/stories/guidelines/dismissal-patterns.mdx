@@ -101,7 +101,9 @@ Radix (shadcn) primitives expose the triggers as props on the content element:
   its quick-nav arrows (previous or next chapter or verse) the book list is hidden and the popover
   becomes a small stepper. A non-modal picker in that state stays open through outside clicks,
   window blur and focus leaving, because the user steps through chapters while working elsewhere.
-  Only a click on its trigger, or Escape while focus is in the popover or on the trigger, closes it.
+  A click on its trigger, or Escape while focus is in the popover or on the trigger, closes it, and
+  so does opening another menu, popover or list in the same document (by a click on its trigger, or
+  Enter, Space or Down arrow with focus on it). Menus opened in another pane leave it open.
   A modal picker makes everything outside inert, its trigger included, so it keeps the normal rules
   and closes on an outside press and on Escape. A compact picker whose tab becomes hidden stays open
   on purpose; it closes through its trigger once the tab is visible again, or on Escape with focus
