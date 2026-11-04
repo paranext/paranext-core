@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * A deferred promise whose resolution/rejection is controlled externally, so each test can decide
- * exactly when `loadSpace` settles relative to the AsyncVariable timeout.
+ * exactly when a space load settles relative to the timeouts.
  */
 type Deferred = {
   promise: Promise<unknown>;
@@ -10,9 +10,24 @@ type Deferred = {
   reject: (reason?: unknown) => void;
 };
 
-// `loadSpace` mock; reassigned per test to a fresh deferred.
-let loadSpaceDeferred: Deferred;
-const mockLoadSpace = vi.fn(() => loadSpaceDeferred.promise);
+function createDeferred(): Deferred {
+  // Starts empty; the Promise executor below fills in resolve/reject synchronously.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const deferred = {} as Deferred;
+  deferred.promise = new Promise<unknown>((resolve, reject) => {
+    deferred.resolve = resolve;
+    deferred.reject = reject;
+  });
+  return deferred;
+}
+
+/** One deferred per call to the space loader, in call order */
+const loads: Deferred[] = [];
+const mockLoadSpace = vi.fn(() => {
+  const load = createDeferred();
+  loads.push(load);
+  return load.promise;
+});
 
 vi.mock('@shared/services/app.service', () => ({
   appService: { getAppInfo: vi.fn().mockResolvedValue({ name: 'test' }) },
@@ -30,8 +45,8 @@ vi.mock('@shared/services/notification.service', () => ({
   notificationService: { send: vi.fn() },
 }));
 
-vi.mock('@usersnap/browser', () => ({
-  loadSpace: () => mockLoadSpace(),
+vi.mock('@renderer/services/usersnap-space-loader.util', () => ({
+  loadUsersnapSpace: () => mockLoadSpace(),
 }));
 
 /** Builds a mock SpaceApi with spy-able methods. */
@@ -62,21 +77,20 @@ async function importService() {
   return import('@renderer/services/usersnap.service');
 }
 
-function resetLoadSpaceDeferred(): void {
-  // Starts empty; the Promise executor below fills in resolve/reject synchronously.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  loadSpaceDeferred = {} as Deferred;
-  loadSpaceDeferred.promise = new Promise<unknown>((resolve, reject) => {
-    loadSpaceDeferred.resolve = resolve;
-    loadSpaceDeferred.reject = reject;
-  });
+function resetLoads(): void {
+  loads.length = 0;
+}
+
+/** Lets pending promise callbacks run */
+async function flushPromises(): Promise<void> {
+  await vi.advanceTimersByTimeAsync(0);
 }
 
 describe('initializeUsersnapApi load/init timeout/race logic', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
-    resetLoadSpaceDeferred();
+    resetLoads();
     mockSpaceApiKey('test-space-key');
   });
 
@@ -105,7 +119,7 @@ describe('initializeUsersnapApi load/init timeout/race logic', () => {
 
     const initPromise = initializeUsersnapApi();
 
-    loadSpaceDeferred.resolve(spaceApi);
+    loads[0].resolve(spaceApi);
     await initPromise;
 
     expect(spaceApi.init).toHaveBeenCalledTimes(1);
@@ -115,80 +129,80 @@ describe('initializeUsersnapApi load/init timeout/race logic', () => {
     expect(spaceApi.destroy).not.toHaveBeenCalled();
   });
 
-  it('resolves after the timeout: startup unblocked, late space destroyed', async () => {
-    const { initializeUsersnapApi, USERSNAP_INIT_TIMEOUT_MS } = await importService();
+  it('resolves after the timeout: startup unblocked, and the late space is kept for the forms', async () => {
+    const { initializeUsersnapApi, openUsersnapForm, USERSNAP_INIT_TIMEOUT_MS } =
+      await importService();
+    const { logger } = await import('@shared/services/logger.service');
     const spaceApi = createMockSpaceApi();
+    const widgetApi = { open: vi.fn(), close: vi.fn() };
+    spaceApi.show.mockResolvedValue(widgetApi);
 
     const initPromise = initializeUsersnapApi();
-
-    // Fire the timeout first; this rejects initVar.promise so startup settles via the outer catch
-    // rather than waiting on the load.
     await vi.advanceTimersByTimeAsync(USERSNAP_INIT_TIMEOUT_MS);
     await expect(initPromise).resolves.toBeUndefined();
+    expect(logger.info).toHaveBeenCalledWith(
+      `Usersnap is still loading after ${USERSNAP_INIT_TIMEOUT_MS}ms; startup carries on, and the feedback forms work once it finishes`,
+    );
 
-    // load + init completes late: the orphan is destroyed in the fire-and-forget IIFE, so wait for
-    // that side effect. `vi.waitFor` polls on a timer, hence real timers.
-    loadSpaceDeferred.resolve(spaceApi);
-    vi.useRealTimers();
-    await vi.waitFor(() => expect(spaceApi.destroy).toHaveBeenCalledTimes(1));
+    loads[0].resolve(spaceApi);
+    await flushPromises();
+    await openUsersnapForm('test-report-issue-key');
+
+    expect(spaceApi.destroy).not.toHaveBeenCalled();
+    expect(mockLoadSpace).toHaveBeenCalledTimes(1);
+    expect(spaceApi.show).toHaveBeenCalledWith('test-report-issue-key');
+    expect(widgetApi.open).toHaveBeenCalledTimes(1);
   });
 
-  it('rejects before the timeout: initialization resolves without throwing', async () => {
+  it('rejects before the timeout: initialization resolves without throwing and logs why', async () => {
     const { initializeUsersnapApi } = await importService();
-
-    const initPromise = initializeUsersnapApi();
-
-    loadSpaceDeferred.reject(new Error('network down'));
-
-    // The rejection flows into the outer catch, so startup settles gracefully rather than throwing.
-    await expect(initPromise).resolves.toBeUndefined();
-  });
-
-  it('rejects after the timeout: late rejection is swallowed, startup still resolves', async () => {
-    const { initializeUsersnapApi, USERSNAP_INIT_TIMEOUT_MS } = await importService();
     const { logger } = await import('@shared/services/logger.service');
+    const loadError = new Error('network down');
 
     const initPromise = initializeUsersnapApi();
+    loads[0].reject(loadError);
 
-    // Timeout fires first, so startup has already settled via the outer catch.
-    await vi.advanceTimersByTimeAsync(USERSNAP_INIT_TIMEOUT_MS);
     await expect(initPromise).resolves.toBeUndefined();
-
-    // loadSpace rejects late: the IIFE catch logs it at debug rather than letting it surface as an
-    // unhandled rejection that could crash startup.
-    loadSpaceDeferred.reject(new Error('network down'));
-    vi.useRealTimers();
-    await vi.waitFor(() =>
-      expect(logger.debug).toHaveBeenCalledWith(
-        'Usersnap load/init failed (or cleanup failed) after timeout:',
-        expect.any(Error),
-      ),
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Usersnap load/init failed; opening a feedback form will try again. The main process logs the network error, if there was one:',
+      loadError,
     );
   });
 
-  it('destroy rejecting after the timeout is swallowed, startup still resolves', async () => {
+  it('rejects after the timeout: the late rejection is logged, not left unhandled', async () => {
     const { initializeUsersnapApi, USERSNAP_INIT_TIMEOUT_MS } = await importService();
     const { logger } = await import('@shared/services/logger.service');
-    const spaceApi = createMockSpaceApi();
-    // Cleanup of the late orphan itself fails.
-    spaceApi.destroy = vi.fn().mockRejectedValue(new Error('destroy failed'));
+    const loadError = new Error('network down');
 
     const initPromise = initializeUsersnapApi();
-
     await vi.advanceTimersByTimeAsync(USERSNAP_INIT_TIMEOUT_MS);
     await expect(initPromise).resolves.toBeUndefined();
 
-    // load + init completes late; destroying the orphan throws, but the same IIFE catch keeps it
-    // from becoming an unhandled rejection.
-    loadSpaceDeferred.resolve(spaceApi);
-    vi.useRealTimers();
-    await vi.waitFor(() =>
-      expect(logger.debug).toHaveBeenCalledWith(
-        'Usersnap load/init failed (or cleanup failed) after timeout:',
-        expect.any(Error),
-      ),
+    loads[0].reject(loadError);
+    await flushPromises();
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Usersnap load/init failed; opening a feedback form will try again. The main process logs the network error, if there was one:',
+      loadError,
     );
-    expect(spaceApi.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it('init failing: the space that did not initialize is destroyed and not used', async () => {
+    const { initializeUsersnapApi, openUsersnapForm } = await importService();
+    const failedSpace = createMockSpaceApi();
+    failedSpace.init = vi.fn().mockRejectedValue(new Error('init failed'));
+
+    const initPromise = initializeUsersnapApi();
+    loads[0].resolve(failedSpace);
+    await initPromise;
+    expect(failedSpace.destroy).toHaveBeenCalledTimes(1);
+
+    const formPromise = openUsersnapForm('test-report-issue-key');
+    await flushPromises();
+    expect(mockLoadSpace).toHaveBeenCalledTimes(2);
+    loads[1].resolve(createMockSpaceApi());
+    await formPromise;
+    expect(failedSpace.show).not.toHaveBeenCalled();
   });
 });
 
@@ -203,7 +217,7 @@ describe('close-button styling of the open form', () => {
     const { initializeUsersnapApi } = await importService();
     const spaceApi = createMockSpaceApi();
     const initPromise = initializeUsersnapApi();
-    loadSpaceDeferred.resolve(spaceApi);
+    loads[0].resolve(spaceApi);
     await initPromise;
 
     const getHandler = (eventName: string): FormEventHandler => {
@@ -247,7 +261,7 @@ describe('close-button styling of the open form', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
-    resetLoadSpaceDeferred();
+    resetLoads();
     vi.doMock('@shared/data/platform.data', async (importOriginal) => ({
       ...(await importOriginal<typeof import('@shared/data/platform.data')>()),
       USERSNAP_SPACE_API_KEY: 'test-space-key',
@@ -427,7 +441,7 @@ describe('close-button styling of the open form', () => {
 describe('openUsersnapForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    resetLoadSpaceDeferred();
+    resetLoads();
     mockSpaceApiKey('test-space-key');
   });
 
@@ -440,7 +454,7 @@ describe('openUsersnapForm', () => {
     const { notificationService } = await import('@shared/services/notification.service');
     const spaceApi = createMockSpaceApi();
     const initPromise = initializeUsersnapApi();
-    loadSpaceDeferred.resolve(spaceApi);
+    loads[0].resolve(spaceApi);
     await initPromise;
 
     await openUsersnapForm('');
@@ -465,5 +479,125 @@ describe('openUsersnapForm', () => {
       message: '%mainMenu_feedback_notConfigured%',
       severity: 'warning',
     });
+  });
+
+  describe('after startup could not load the space', () => {
+    const REPORT_ISSUE_KEY = 'test-report-issue-key';
+    const UNAVAILABLE_NOTIFICATION = {
+      message: '%mainMenu_feedback_unavailable%',
+      severity: 'warning',
+    };
+
+    /** Imports the service and runs a startup whose space load fails */
+    async function importServiceAfterFailedStartup() {
+      const service = await importService();
+      const initPromise = service.initializeUsersnapApi();
+      loads[0].reject(new Error('network down'));
+      await initPromise;
+      return service;
+    }
+
+    function createOpenableSpaceApi() {
+      const spaceApi = createMockSpaceApi();
+      const widgetApi = { open: vi.fn(), close: vi.fn() };
+      spaceApi.show.mockResolvedValue(widgetApi);
+      return { spaceApi, widgetApi };
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('loads the space again and opens the form', async () => {
+      const { openUsersnapForm } = await importServiceAfterFailedStartup();
+      const { notificationService } = await import('@shared/services/notification.service');
+      const { spaceApi, widgetApi } = createOpenableSpaceApi();
+
+      const formPromise = openUsersnapForm(REPORT_ISSUE_KEY);
+      await flushPromises();
+      expect(mockLoadSpace).toHaveBeenCalledTimes(2);
+      loads[1].resolve(spaceApi);
+      await formPromise;
+
+      expect(spaceApi.init).toHaveBeenCalledTimes(1);
+      expect(spaceApi.show).toHaveBeenCalledWith(REPORT_ISSUE_KEY);
+      expect(widgetApi.open).toHaveBeenCalledTimes(1);
+      expect(notificationService.send).not.toHaveBeenCalled();
+    });
+
+    it('tells the user the form is unavailable when loading fails again', async () => {
+      const { openUsersnapForm } = await importServiceAfterFailedStartup();
+      const { notificationService } = await import('@shared/services/notification.service');
+
+      const formPromise = openUsersnapForm(REPORT_ISSUE_KEY);
+      await flushPromises();
+      loads[1].reject(new Error('network still down'));
+      await formPromise;
+
+      expect(notificationService.send).toHaveBeenCalledWith(UNAVAILABLE_NOTIFICATION);
+    });
+
+    it('tells the user the form is unavailable when loading takes too long, and uses the space once it arrives', async () => {
+      const { openUsersnapForm, USERSNAP_OPEN_TIMEOUT_MS } =
+        await importServiceAfterFailedStartup();
+      const { notificationService } = await import('@shared/services/notification.service');
+      const { spaceApi, widgetApi } = createOpenableSpaceApi();
+
+      const formPromise = openUsersnapForm(REPORT_ISSUE_KEY);
+      await vi.advanceTimersByTimeAsync(USERSNAP_OPEN_TIMEOUT_MS);
+      await formPromise;
+      expect(notificationService.send).toHaveBeenCalledWith(UNAVAILABLE_NOTIFICATION);
+      expect(spaceApi.show).not.toHaveBeenCalled();
+
+      loads[1].resolve(spaceApi);
+      await flushPromises();
+      await openUsersnapForm(REPORT_ISSUE_KEY);
+
+      expect(mockLoadSpace).toHaveBeenCalledTimes(2);
+      expect(widgetApi.open).toHaveBeenCalledTimes(1);
+    });
+
+    it('shares one load between requests made while it runs', async () => {
+      const { openUsersnapForm } = await importServiceAfterFailedStartup();
+      const { spaceApi, widgetApi } = createOpenableSpaceApi();
+
+      const firstRequest = openUsersnapForm(REPORT_ISSUE_KEY);
+      const secondRequest = openUsersnapForm('test-submit-idea-key');
+      await flushPromises();
+      expect(mockLoadSpace).toHaveBeenCalledTimes(2);
+      loads[1].resolve(spaceApi);
+      await Promise.all([firstRequest, secondRequest]);
+
+      expect(spaceApi.init).toHaveBeenCalledTimes(1);
+      expect(widgetApi.open).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it('while startup is still loading the space: waits for that load instead of starting another', async () => {
+    vi.useFakeTimers();
+    try {
+      const { initializeUsersnapApi, openUsersnapForm, USERSNAP_INIT_TIMEOUT_MS } =
+        await importService();
+      const spaceApi = createMockSpaceApi();
+      const widgetApi = { open: vi.fn(), close: vi.fn() };
+      spaceApi.show.mockResolvedValue(widgetApi);
+      const initPromise = initializeUsersnapApi();
+      await vi.advanceTimersByTimeAsync(USERSNAP_INIT_TIMEOUT_MS);
+      await initPromise;
+
+      const formPromise = openUsersnapForm('test-report-issue-key');
+      await flushPromises();
+      loads[0].resolve(spaceApi);
+      await formPromise;
+
+      expect(mockLoadSpace).toHaveBeenCalledTimes(1);
+      expect(widgetApi.open).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

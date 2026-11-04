@@ -7,15 +7,35 @@ import { appService } from '@shared/services/app.service';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { notificationService } from '@shared/services/notification.service';
-import { loadSpace, type InitOptions, type SpaceApi } from '@usersnap/browser';
-import { AsyncVariable, getErrorMessage, type LocalizeKey } from 'platform-bible-utils';
+import { loadUsersnapSpace } from '@renderer/services/usersnap-space-loader.util';
+import type { InitOptions, SpaceApi } from '@usersnap/browser';
+import type { LocalizeKey } from 'platform-bible-utils';
 
 /**
- * Milliseconds to wait for Usersnap's `loadSpace` + `init` to finish before giving up.
+ * Milliseconds startup waits for the Usersnap space to load and initialize. Startup then carries on
+ * without it, but the load keeps going, and the feedback forms work as soon as it finishes.
  *
  * Exported so the test can advance fake timers by exactly this amount.
  */
 export const USERSNAP_INIT_TIMEOUT_MS = 5 * 1000;
+/**
+ * Milliseconds a request to open a feedback form waits for the Usersnap space to load and
+ * initialize, when it has not yet, before telling the user the form is unavailable.
+ *
+ * Exported so the test can advance fake timers by exactly this amount.
+ */
+export const USERSNAP_OPEN_TIMEOUT_MS = 10 * 1000;
+
+const USERSNAP_INIT_OPTIONS: InitOptions = {
+  enableScreenshot: true,
+  // The DOM-capture screenshot serializes every web view iframe together with its bundle and
+  // exceeds Usersnap's 20 MB payload limit, so the widget takes a real screenshot instead, served by
+  // the display-media request handler in the main process.
+  nativeScreenshot: true,
+  collectGeoLocation: 'none',
+  useSystemFonts: true,
+  useLocalStorage: true,
+};
 
 /** Shown when a configured feedback form cannot be reached, e.g. because Usersnap failed to load */
 const FEEDBACK_UNAVAILABLE_MESSAGE_KEY = '%mainMenu_feedback_unavailable%' satisfies LocalizeKey;
@@ -29,6 +49,11 @@ const FEEDBACK_FAILED_TO_OPEN_MESSAGE_KEY =
 /** Global UserSnap API instance service */
 
 let globalUsersnapApi: SpaceApi | undefined;
+/**
+ * The load of the Usersnap space that is still in progress, if any. Everything that needs the space
+ * while it loads waits for this one load rather than starting another.
+ */
+let pendingSpaceApiLoad: Promise<SpaceApi> | undefined;
 let isUsersnapFormOpen = false;
 let apiKeyOfOpenForm: string | undefined;
 let shadowRootWaitInterval: ReturnType<typeof setInterval> | undefined;
@@ -151,105 +176,145 @@ function startShadowRootStyling(): void {
   }, SHADOW_ROOT_WAIT_INTERVAL_MS);
 }
 
-/** Initializes the global UserSnap API instance */
+/** Adds the data each submitted form carries, and tracks which form is open */
+function registerFormEventHandlers(api: SpaceApi): void {
+  let customData = {};
+
+  const setCustomData = async (shouldIncludeLog: boolean) => {
+    try {
+      const appName = (await appService.getAppInfo()).name;
+      let logContent: string = '';
+      if (shouldIncludeLog) {
+        try {
+          logContent = await sendCommand('platform.getLogFileContent');
+        } catch (logError) {
+          logger.warn('Failed to retrieve log content for Usersnap form:', logError);
+        }
+      }
+      customData = {
+        App: appName,
+        Environment: globalThis.isPackaged ? 'Production' : 'Development',
+      };
+      if (logContent) customData = { Log: logContent, ...customData };
+    } catch (error) {
+      logger.warn('Failed to set custom data for Usersnap form:', error);
+      // Provide fallback data
+      customData = {
+        App: 'Unknown',
+        Environment: globalThis.isPackaged ? 'Production' : 'Development',
+      };
+    }
+  };
+
+  api.on('open', (event) => {
+    const shouldIncludeLog = event.apiKey === USERSNAP_PROJECT_REPORT_ISSUE_API_KEY;
+    setCustomData(shouldIncludeLog);
+
+    isUsersnapFormOpen = true;
+    apiKeyOfOpenForm = event.apiKey;
+
+    startShadowRootStyling();
+  });
+  api.on('beforeSubmit', async (event) => {
+    event.api.setValue('custom', customData);
+  });
+  api.on('close', () => {
+    isUsersnapFormOpen = false;
+    apiKeyOfOpenForm = undefined;
+
+    stopShadowRootStyling();
+  });
+}
+
+/** Loads and initializes the Usersnap space, and makes it the one the feedback forms open in */
+async function loadAndInitializeSpaceApi(): Promise<SpaceApi> {
+  const startTime = performance.now();
+  try {
+    const api = await loadUsersnapSpace(USERSNAP_SPACE_API_KEY);
+    try {
+      await api.init(USERSNAP_INIT_OPTIONS);
+    } catch (initError) {
+      try {
+        await api.destroy();
+      } catch (destroyError) {
+        logger.debug('Failed to destroy the Usersnap space that did not initialize:', destroyError);
+      }
+      throw initError;
+    }
+    registerFormEventHandlers(api);
+    globalUsersnapApi = api;
+    logger.info(`UserSnap initialized successfully in ${performance.now() - startTime}ms`);
+    return api;
+  } catch (error) {
+    logger.warn(
+      'Usersnap load/init failed; opening a feedback form will try again. The main process logs the network error, if there was one:',
+      error,
+    );
+    throw error;
+  }
+}
+
+/**
+ * Gets the Usersnap space, starting a load if there is none and no load in progress
+ *
+ * @returns The space, or a rejection if it could not be loaded and initialized
+ */
+function getSpaceApi(): Promise<SpaceApi> {
+  if (globalUsersnapApi) return Promise.resolve(globalUsersnapApi);
+  if (!pendingSpaceApiLoad) {
+    pendingSpaceApiLoad = loadAndInitializeSpaceApi().finally(() => {
+      pendingSpaceApiLoad = undefined;
+    });
+  }
+  return pendingSpaceApiLoad;
+}
+
+/**
+ * Waits a bounded time for the Usersnap space. A load still running when the time is up keeps
+ * going, and the space it produces is used from then on.
+ *
+ * @param timeoutMs How long to wait
+ * @returns The space, or `undefined` if it could not be loaded or is still loading after
+ *   `timeoutMs`
+ */
+async function waitForSpaceApi(timeoutMs: number): Promise<SpaceApi | undefined> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<undefined>((resolve) => {
+    timeoutId = setTimeout(() => resolve(undefined), timeoutMs);
+  });
+  try {
+    // A failure was logged where it happened; here it only means there is no space to use
+    return await Promise.race([getSpaceApi().catch(() => undefined), timeout]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * Starts loading the Usersnap space and waits for it at most {@link USERSNAP_INIT_TIMEOUT_MS}, so a
+ * slow or unreachable Usersnap cannot hold up startup. A load that finishes later is still used.
+ * Never rejects.
+ */
 export async function initializeUsersnapApi() {
   if (!USERSNAP_SPACE_API_KEY) {
     logger.info('Usersnap is not configured (no space API key); feedback forms are unavailable');
     return;
   }
 
-  try {
-    const defaultInitParams: InitOptions = {
-      enableScreenshot: true,
-      // The DOM-capture screenshot serializes every web view iframe together with its bundle and
-      // exceeds Usersnap's 20 MB payload limit, so the widget takes a real screenshot instead,
-      // served by the display-media request handler in the main process.
-      nativeScreenshot: true,
-      collectGeoLocation: 'none',
-      useSystemFonts: true,
-      useLocalStorage: true,
-    };
-
-    const startTime = performance.now();
-    // Bound the whole load + init: both reach an external server that can hang indefinitely, and
-    // both run on the awaited renderer startup path.
-    const initVar = new AsyncVariable<SpaceApi>('usersnapInit', USERSNAP_INIT_TIMEOUT_MS);
-    // Fire-and-forget: startup awaits `initVar.promise`, so the timeout can win even if this hangs.
-    (async () => {
-      try {
-        const spaceApi = await loadSpace(USERSNAP_SPACE_API_KEY);
-        await spaceApi.init(defaultInitParams);
-        // If load + init finish after the timeout fired, destroy the space to avoid an orphan.
-        if (initVar.hasTimedOut) await spaceApi.destroy();
-        else initVar.resolveToValue(spaceApi);
-      } catch (error) {
-        if (initVar.hasTimedOut)
-          logger.debug('Usersnap load/init failed (or cleanup failed) after timeout:', error);
-        else {
-          // `rejectWithReason` only takes a string, so log the real error here to keep its stack.
-          logger.warn('Usersnap load/init failed:', error);
-          initVar.rejectWithReason(getErrorMessage(error));
-        }
-      }
-    })();
-    const api = await initVar.promise;
-    const endTime = performance.now();
-    logger.info(`UserSnap initialized successfully in ${endTime - startTime}ms`);
-
-    let customData = {};
-
-    const setCustomData = async (shouldIncludeLog: boolean) => {
-      try {
-        const appName = (await appService.getAppInfo()).name;
-        let logContent: string = '';
-        if (shouldIncludeLog) {
-          try {
-            logContent = await sendCommand('platform.getLogFileContent');
-          } catch (logError) {
-            logger.warn('Failed to retrieve log content for Usersnap form:', logError);
-          }
-        }
-        customData = {
-          App: appName,
-          Environment: globalThis.isPackaged ? 'Production' : 'Development',
-        };
-        if (logContent) customData = { Log: logContent, ...customData };
-      } catch (error) {
-        logger.warn('Failed to set custom data for Usersnap form:', error);
-        // Provide fallback data
-        customData = {
-          App: 'Unknown',
-          Environment: globalThis.isPackaged ? 'Production' : 'Development',
-        };
-      }
-    };
-
-    api.on('open', (event) => {
-      const shouldIncludeLog = event.apiKey === USERSNAP_PROJECT_REPORT_ISSUE_API_KEY;
-      setCustomData(shouldIncludeLog);
-
-      isUsersnapFormOpen = true;
-      apiKeyOfOpenForm = event.apiKey;
-
-      startShadowRootStyling();
-    });
-    api.on('beforeSubmit', async (event) => {
-      event.api.setValue('custom', customData);
-    });
-    api.on('close', () => {
-      isUsersnapFormOpen = false;
-      apiKeyOfOpenForm = undefined;
-
-      stopShadowRootStyling();
-    });
-
-    globalUsersnapApi = api;
-  } catch (error) {
-    logger.warn('Failed to initialize UserSnap API; feedback forms will be unavailable:', error);
-    globalUsersnapApi = undefined;
-  }
+  const api = await waitForSpaceApi(USERSNAP_INIT_TIMEOUT_MS);
+  if (!api && pendingSpaceApiLoad)
+    logger.info(
+      `Usersnap is still loading after ${USERSNAP_INIT_TIMEOUT_MS}ms; startup carries on, and the feedback forms work once it finishes`,
+    );
 }
 
+/**
+ * Opens a Usersnap feedback form. If the Usersnap space has not loaded yet, because startup could
+ * not load it or is still loading it, waits for a load (starting a new one after a failure) for at
+ * most {@link USERSNAP_OPEN_TIMEOUT_MS}.
+ *
+ * @param apiKey The Usersnap project key of the form to open
+ */
 export async function openUsersnapForm(apiKey: string) {
   if (!USERSNAP_SPACE_API_KEY || !apiKey) {
     logger.info(
@@ -262,8 +327,9 @@ export async function openUsersnapForm(apiKey: string) {
     return;
   }
 
-  if (!globalUsersnapApi) {
-    logger.warn('Cannot open Usersnap form: UserSnap API is not initialized.');
+  const spaceApi = globalUsersnapApi ?? (await waitForSpaceApi(USERSNAP_OPEN_TIMEOUT_MS));
+  if (!spaceApi) {
+    logger.warn('Cannot open Usersnap form: the Usersnap space could not be loaded');
     await notificationService.send({
       message: FEEDBACK_UNAVAILABLE_MESSAGE_KEY,
       severity: 'warning',
@@ -273,7 +339,7 @@ export async function openUsersnapForm(apiKey: string) {
   }
 
   try {
-    const widgetApi = await globalUsersnapApi.show(apiKey);
+    const widgetApi = await spaceApi.show(apiKey);
     await widgetApi.open();
   } catch (error) {
     logger.warn(`Failed to open Usersnap widget: ${error}`);
