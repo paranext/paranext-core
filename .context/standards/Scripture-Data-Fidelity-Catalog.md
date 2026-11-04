@@ -203,7 +203,7 @@ also pastes with Ctrl+V as the app delivers it (the copy's html, with its attrib
 hidden-marker views, and its plain text), as a paste the browser runs itself (every flavor) and as
 another program's html, and pastes a copy from each other view into paragraph-structure: 1561 rows,
 1460 pass, 101 pinned — 80 under the accepted html rule (CB-14), 2 plain-text leading-space rows
-(CB-16) and 19 under PT-4388. As of 2026-11-04 (scripture-editors at `6f59fce8`, with PT-4911 and
+(CB-16) and 19 under PT-4388. As of 2026-11-04 (scripture-editors at `d6fb9396`, with PT-4911 and
 main) Standard and the footnotes pane's row editor run the native-paste rows too (CB-18): 1629 rows,
 1533 pass, 96 pinned — 80 under CB-14, 2 under CB-16 and 14 under PT-4388.
 
