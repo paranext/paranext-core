@@ -377,10 +377,11 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   // The paste and cut themselves are the scripture-editors repo's ClipboardPlugin (Ctrl+V reads the
   // clipboard, Ctrl+X dispatches a cut command); `usePauseEditing` holds the chords off while the
   // editor still shows the chapter being left, as it does typing, undo and caret moves. The
-  // right-click menu's Cut and Paste are not held off. The hold-off starts a moment after the
-  // chapter changes: a paste or cut in that moment, or a paste whose clipboard read finishes then,
-  // still shows in the chapter being left but is not saved, or can land in the new chapter if the
-  // load is short (`usePauseEditing` says why).
+  // right-click menu does not open then (it holds off `contextmenu` too), so its Cut and Paste are
+  // not offered; a menu already open when the load begins still runs them, unsaved. The hold-off
+  // starts a moment after the chapter changes: a paste or cut in that moment, or a paste whose
+  // clipboard read finishes then, still shows in the chapter being left but is not saved, or can
+  // land in the new chapter if the load is short (`usePauseEditing` says why).
   {
     id: 'scripture-cut-paste-held-off-chapter-loading',
     purpose:
@@ -682,7 +683,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
     id: 'scripture-editor-context-menu',
     purpose:
-      'Open the editor’s own right-click menu (Cut/Copy/Paste and the Insert footnote/cross-reference/comment/endnote items). While open, the menu holds the keyboard: it is the only keyboard mode on screen, and every other key does nothing until the menu is dismissed or its highlighted item runs',
+      'Open the editor’s own right-click menu (Cut/Copy/Paste and the Insert footnote/cross-reference/comment/endnote items). While open, the menu holds the keyboard: it is the only keyboard mode on screen, and every other key does nothing until the menu is dismissed or its highlighted item runs. In the main text it does not open while the next chapter is loading',
     category: 'Menus',
     // Not a shortcut this repo registers: the browser raises `contextmenu` inside the editor,
     // which the editor package's `ContextMenuPlugin` (`@eten-tech-foundation/platform-editor`)
@@ -703,6 +704,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
+      'extensions/src/platform-scripture-editor/src/use-pause-editing.hook.ts',
       'lib/platform-bible-react/src/components/advanced/editor-context-menu.util.ts',
       'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
     ],

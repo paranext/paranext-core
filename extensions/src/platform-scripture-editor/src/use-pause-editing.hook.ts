@@ -1,7 +1,11 @@
 import { useEffect } from 'react';
 
-/** The editing events held off while editing is paused, besides the keys themselves. */
-const PAUSED_EDIT_EVENTS = ['beforeinput', 'paste', 'cut', 'drop'] as const;
+/**
+ * The editing events held off while editing is paused, besides the keys themselves. `contextmenu`
+ * opens the editor's right-click menu, whose Cut and Paste run as editor commands with no `cut` or
+ * `paste` event to hold off.
+ */
+const PAUSED_EDIT_EVENTS = ['beforeinput', 'paste', 'cut', 'drop', 'contextmenu'] as const;
 
 /** Keys that move the caret, with or without a modifier. */
 const CARET_KEYS = new Set([
@@ -66,9 +70,11 @@ function isHeldOffKey(event: KeyboardEvent): boolean {
  * not make them either. Copying and the application's shortcuts go on working.
  *
  * A paste the browser runs itself is held off as the `paste` event it raises, and the Edit flyout's
- * Paste is refused by the web view's read-only check while a chapter loads. Nothing holds off the
- * right-click menu's Paste or Cut; what they do is not saved, and cut text returns when the new
- * chapter loads.
+ * Paste is refused by the web view's read-only check while a chapter loads. A right-click opens
+ * neither the editor's own menu nor the browser's, so its Cut and Paste (and Copy) are not offered
+ * until the chapter loads. Nothing here closes a right-click menu already open when the load
+ * begins, and its items still run: what its Cut or Paste does then is not saved, and cut text
+ * returns when the new chapter loads.
  *
  * The hold-off starts after the chapter's last save. The chapter-switch flush runs in the commit
  * that changes the chapter selector, the loading flag is set in an effect after it, and this hook

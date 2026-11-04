@@ -2969,8 +2969,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     CB-14; open work on PT-4984).
   - The read raises no `paste` event, so during a chapter load `usePauseEditing` holds off the paste
     chords by key (and the cut chord, which raises no `cut` event), and the Edit flyout's Paste is
-    refused by the web view's read-only check. The right-click menu's Paste and Cut are not held
-    off; what they do is not saved, and cut text returns when the new chapter loads.
+    refused by the web view's read-only check. The right-click menu runs its Paste and Cut as editor
+    commands, with no event to hold off, so `usePauseEditing` holds off `contextmenu` instead and the
+    menu does not open during the load. A menu already open when the load begins still runs its
+    items; what they do is not saved, and cut text returns when the new chapter loads.
   - The hold-off starts after the chapter's last save. The chapter-switch flush runs in the commit
     that changes the chapter selector, the loading flag is set in an effect after it, and
     `usePauseEditing` attaches its listeners a commit later. A paste or keystroke in that gap, or a
