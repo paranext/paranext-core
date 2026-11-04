@@ -24,7 +24,7 @@ export const USERSNAP_INIT_TIMEOUT_MS = 5 * 1000;
  *
  * Exported so the test can advance fake timers by exactly this amount.
  */
-export const USERSNAP_OPEN_TIMEOUT_MS = 10 * 1000;
+export const USERSNAP_OPEN_TIMEOUT_MS = 5 * 1000;
 
 const USERSNAP_INIT_OPTIONS: InitOptions = {
   enableScreenshot: true,
@@ -38,7 +38,7 @@ const USERSNAP_INIT_OPTIONS: InitOptions = {
 };
 
 /** Shown when a configured feedback form cannot be reached, e.g. because Usersnap failed to load */
-const FEEDBACK_UNAVAILABLE_MESSAGE_KEY = '%mainMenu_feedback_unavailable%' satisfies LocalizeKey;
+const FEEDBACK_UNAVAILABLE_MESSAGE_KEY = '%mainMenu_feedback_unavailable_2%' satisfies LocalizeKey;
 /** Shown when this build has no Usersnap keys, so there are no feedback forms to open */
 const FEEDBACK_NOT_CONFIGURED_MESSAGE_KEY =
   '%mainMenu_feedback_notConfigured%' satisfies LocalizeKey;
