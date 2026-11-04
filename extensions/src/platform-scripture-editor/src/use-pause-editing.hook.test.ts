@@ -18,7 +18,7 @@ function mountEditorRoot() {
 
   const editorSaw = vi.fn();
   const applicationSaw = vi.fn();
-  ['keydown', 'beforeinput', 'paste', 'cut', 'drop'].forEach((type) => {
+  ['keydown', 'beforeinput', 'paste', 'cut', 'drop', 'contextmenu'].forEach((type) => {
     root.addEventListener(type, (event) => editorSaw(event.type));
     document.addEventListener(type, (event) => applicationSaw(event.type));
   });
@@ -90,9 +90,29 @@ describe('usePauseEditing', () => {
     expect(editor.editorSaw).not.toHaveBeenCalled();
   });
 
-  it.each(['beforeinput', 'paste', 'cut', 'drop'])('holds off %s while paused', (type) => {
+  it.each(['beforeinput', 'paste', 'cut', 'drop', 'contextmenu'])(
+    'holds off %s while paused',
+    (type) => {
+      pause();
+      expect(fire(type).defaultPrevented).toBe(true);
+      expect(editor.editorSaw).not.toHaveBeenCalled();
+    },
+  );
+
+  // The editor's right-click menu opens from a `contextmenu` listener on its root and runs its Cut
+  // and Paste as editor commands, which raise no `cut` or `paste` event; so the menu is kept shut.
+  it("opens neither the editor's right-click menu nor the browser's while paused", () => {
+    const word = document.createElement('span');
+    editor.root.appendChild(word);
+    const editorCapturing = vi.fn();
+    editor.root.addEventListener('contextmenu', editorCapturing, true);
     pause();
-    expect(fire(type).defaultPrevented).toBe(true);
+
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    word.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(editorCapturing).not.toHaveBeenCalled();
     expect(editor.editorSaw).not.toHaveBeenCalled();
   });
 
@@ -127,8 +147,10 @@ describe('usePauseEditing', () => {
     pause(false);
     expect(press('a').defaultPrevented).toBe(false);
     expect(fire('beforeinput').defaultPrevented).toBe(false);
+    expect(fire('contextmenu').defaultPrevented).toBe(false);
     expect(editor.editorSaw).toHaveBeenCalledWith('keydown');
     expect(editor.editorSaw).toHaveBeenCalledWith('beforeinput');
+    expect(editor.editorSaw).toHaveBeenCalledWith('contextmenu');
   });
 
   it('lets edits through again once the pause ends', () => {
