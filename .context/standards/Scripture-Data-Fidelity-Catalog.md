@@ -203,9 +203,9 @@ also pastes with Ctrl+V as the app delivers it (the copy's html, with its attrib
 hidden-marker views, and its plain text), as a paste the browser runs itself (every flavor) and as
 another program's html, and pastes a copy from each other view into paragraph-structure: 1561 rows,
 1460 pass, 101 pinned — 80 under the accepted html rule (CB-14), 2 plain-text leading-space rows
-(CB-16) and 19 under PT-4388. As of 2026-11-03 (scripture-editors at `6e17d10c`) Standard and the
-footnotes pane's row editor run the native-paste rows too (CB-18): 1629 rows, 1522 pass, 107 pinned
-— 80 under CB-14, 2 under CB-16 and 25 under PT-4388.
+(CB-16) and 19 under PT-4388. As of 2026-11-03 (scripture-editors at `dab2ba4f`, with PT-4911 and
+main) Standard and the footnotes pane's row editor run the native-paste rows too (CB-18): 1629 rows,
+1533 pass, 96 pinned — 80 under CB-14, 2 under CB-16 and 14 under PT-4388.
 
 | ID | View(s) | Finding | Status |
 | --- | --- | --- | --- |
@@ -235,11 +235,11 @@ is a marker edit (a copy carries an opener with no closer and pastes a span `clo
 that takes the opener unwraps the span and its closer goes too: see EV-2; a cut that takes the closer
 leaves the span unclosed to the paragraph end). In 2SA-5 (deliberately damaged USFM) Standard's
 text path reads a nameless marker back as text, and a pasted run holding a bare backslash stays a
-pending literal until the caret leaves, so `\v 9 x` reads back as text (pinned under PT-4388, 19
-rows as of 2026-10-30 with PT-4921: the plain-text pastes holding `\` or `//`, copies pasted as html
-and plain, with Ctrl+V or as plain text, and cuts across or spanning a paragraph pasted back, also
-with Ctrl+V: Standard view's Ctrl+V reads the clipboard's html and plain text, since the html
-attribute holding the node copy is for the hidden-marker views only). In 2SA-3, `\v 9 x` pasted in
+pending literal until the caret leaves, so `\v 9 x` reads back as text (pinned under PT-4388, 14
+rows as of 2026-11-03 with PT-4921: copies and cuts across or spanning a paragraph pasted back with
+Ctrl+V, as a native paste, as another program's html, and, for a copy, as plain text: Standard
+view's Ctrl+V reads the clipboard's html and plain text, since the html attribute holding the node
+copy is for the hidden-marker views only). In 2SA-3, `\v 9 x` pasted in
 Standard re-derives the rebuilt paragraph's verses without the fixture's empty `sid`; dropping
 derived metadata is accepted (F-8), so the suite's oracle allows it and nothing is pinned.
 
