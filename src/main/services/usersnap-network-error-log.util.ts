@@ -7,8 +7,8 @@
  * - A network error, for a request that got no answer: `net::ERR_NAME_NOT_RESOLVED`,
  *   `net::ERR_ADDRESS_INVALID` for a name a DNS blocker answers with `0.0.0.0`,
  *   `net::ERR_CERT_...`. This is what tells a blocked network from an outage.
- * - An HTTP error status, for a request Usersnap answered with one, as it answers a space key it does
- *   not accept (404).
+ * - An HTTP error status, for a request Usersnap answered with one. It answers a space key it does
+ *   not accept with 404.
  */
 
 import { logger } from '@shared/services/logger.service';
@@ -19,6 +19,8 @@ const USERSNAP_URL_PATTERN = 'https://*.usersnap.com/*';
 const CANCELLED_REQUEST_ERROR = 'net::ERR_ABORTED';
 /** The lowest HTTP status that is an error */
 const FIRST_HTTP_ERROR_STATUS = 400;
+/** The HTTP status Usersnap answers a space key it does not accept with */
+const HTTP_NOT_FOUND = 404;
 
 /** The parts of Electron's `OnErrorOccurredListenerDetails` the log reads */
 export type UsersnapNetworkErrorDetails = { url: string; error: string; resourceType: string };
@@ -69,14 +71,16 @@ export function registerUsersnapNetworkErrorLogging(
       return;
     }
     logger.warn(
-      `${describeRequest(details)} failed with ${details.error}; the feedback forms cannot load while it does`,
+      `${describeRequest(details)} failed with ${details.error}; the feedback forms may not work while it does`,
     );
   });
   session.webRequest.onCompleted({ urls: [USERSNAP_URL_PATTERN] }, (details) => {
     if (details.statusCode < FIRST_HTTP_ERROR_STATUS) return;
-    logger.warn(
-      `${describeRequest(details)} was answered with HTTP ${details.statusCode} (Usersnap answers 404 to a space key it does not accept)`,
-    );
+    const hint =
+      details.statusCode === HTTP_NOT_FOUND
+        ? ' (Usersnap answers 404 to a space key it does not accept)'
+        : '';
+    logger.warn(`${describeRequest(details)} was answered with HTTP ${details.statusCode}${hint}`);
   });
   return true;
 }
