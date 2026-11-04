@@ -86,12 +86,6 @@ const DEFAULT_TEXT_DIRECTION = 'ltr';
  */
 export const MODEL_TEXT_EDITOR_CONTAINER_TEST_ID = 'model-text-editor-container';
 
-// The editor's default view options never change, so build them once at module scope. Rebuilding a
-// fresh `view` object inside the `options` memo would give `options` a new identity on every fetch,
-// and the editor reloads (re-serialize + setEditorState) whenever the `view` object's identity
-// changes — so a refetch of identical content would force a pointless full reload.
-const VIEW_OPTIONS = getDefaultViewOptions();
-
 export {
   MODEL_TEXT_PANEL_STRING_KEYS,
   type ModelTextPanelLocalizedStringKey,
@@ -179,6 +173,13 @@ export type ModelTextPanelProps = {
    * copying while the chapter text loads.
    */
   resourceCopyLimit: number | undefined;
+  /**
+   * Whether the displayed resource's project keeps `~` and a no-break space distinct
+   * (`platformScripture.allowInvisibleCharacters`). The editor copies a no-break space as `~`
+   * unless this is `true`. Pass `false` while the setting is loading or unreadable: the panel is
+   * read-only, so a stand-in can never be saved.
+   */
+  allowInvisibleCharacters: boolean;
   /** Logger forwarded to the editor (the webview supplies the PAPI logger; stories may omit it). */
   logger?: ComponentProps<typeof Editorial>['logger'];
   /**
@@ -210,6 +211,7 @@ export function ModelTextPanel({
   showResourcePicker,
   getResourceChapter,
   resourceCopyLimit,
+  allowInvisibleCharacters,
   logger,
   copyrightNotice,
 }: ModelTextPanelProps) {
@@ -441,6 +443,13 @@ export function ModelTextPanel({
   // doesn't churn (and reload the editor) on every fetch of identical content.
   const extraValidMarkers = useExtraValidMarkers(usj);
 
+  // Memoized on the boolean alone: the editor reloads (re-serialize + setEditorState) whenever the
+  // `view` object's identity changes, so a refetch of identical content must not rebuild it.
+  const view = useMemo(
+    () => ({ ...getDefaultViewOptions(), allowInvisibleCharacters }),
+    [allowInvisibleCharacters],
+  );
+
   const options: EditorOptions = useMemo(
     () => ({
       isReadonly: true,
@@ -452,10 +461,10 @@ export function ModelTextPanel({
       // declares one of the two (direction cannot be guessed for a minority language), so the
       // editor's `auto` is not a mode core passes; anything else falls back to ltr.
       textDirection: textDirection === 'rtl' ? 'rtl' : 'ltr',
-      view: VIEW_OPTIONS,
+      view,
       copyLimit,
     }),
-    [textDirection, extraValidMarkers, copyLimit],
+    [textDirection, extraValidMarkers, copyLimit, view],
   );
 
   // Read-only: push incoming USJ directly into the editor whenever it changes. This effect is the

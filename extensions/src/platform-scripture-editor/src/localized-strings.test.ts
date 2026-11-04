@@ -658,6 +658,27 @@ describe.each([...HIDDEN_CONTENT_DELETE_STRING_KEYS])('hidden content delete lab
   });
 });
 
+// The guarded two-press delete's "press again" hint: one message per armed kind.
+describe.each([...TWO_STEP_DELETE_MESSAGE_STRING_KEYS])('two-step delete hint %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+
+  // The confirming key's name is substituted into `{key}`; a translation that drops it would not
+  // say which key to press.
+  it.each(['en', 'es'] as const)('keeps {key} in %s', (locale) => {
+    expect(localizedStrings[locale][key]).toContain('{key}');
+  });
+});
+
 // The prompt names the hidden content through `{markers}`; a translation that drops it would stop
 // saying what is about to be deleted.
 it.each(['en', 'es'] as const)('hidden content delete prompt keeps {markers} in %s', (locale) => {

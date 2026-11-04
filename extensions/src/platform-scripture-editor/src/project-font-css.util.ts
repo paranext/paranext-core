@@ -23,6 +23,15 @@ export const FOOTNOTE_ROWS_SELECTOR =
  */
 const FONT_FALLBACK = 'var(--usj-font-fallback, serif)';
 
+/**
+ * The editor's no-break-space stand-in face, which leads every Scripture `font-family`: a browser
+ * draws a control character as a box unless the first family has a glyph for it. It covers U+001A
+ * alone, so every other character falls through to the fonts after it. The library does not export
+ * the name; see "A no-break space has one spelling per project" in the editor's Standard View
+ * invariants.
+ */
+const NBSP_STAND_IN_FONT_FAMILY = 'PlatformEditorNbspStandIn';
+
 // TODO(PT-4974): Use the editor package's generateUsjFontCss(styleInfo, { containerSelector }) for
 // both the editor scope and the footnote rows scope, and delete this file. Until then the parity
 // tests in project-font-css.util.test.ts pin this output to generateUsjCss.
@@ -46,11 +55,11 @@ function escapeCssIdentifier(value: string): string {
 }
 
 /**
- * A `font-family` declaration: the font, then the project's default font when it differs, then the
- * fallback stack.
+ * A `font-family` declaration: the no-break-space stand-in, the font, then the project's default
+ * font when it differs, then the fallback stack.
  */
 function fontFamilyDeclaration(fontName: string, projectDefaultFont?: string): string {
-  const families = [fontName];
+  const families = [NBSP_STAND_IN_FONT_FAMILY, fontName];
   if (projectDefaultFont && projectDefaultFont !== fontName) families.push(projectDefaultFont);
   const quoted = families.map((family) => `"${escapeCssString(family)}"`).join(', ');
   return `font-family: ${quoted}, ${FONT_FALLBACK}`;

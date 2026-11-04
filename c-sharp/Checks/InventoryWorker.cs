@@ -55,7 +55,11 @@ internal sealed class InventoryWorker
         };
         // It is possible for ChecksDataSource to change the ScrText
         _scrText = _dataSource.ScrText;
-        _inventory = InventoryFactory.CreateInventory(inventoryId, _dataSource);
+        _inventory = InventoryFactory.CreateInventoryInItsOwnWriteScope(
+            ProjectId,
+            inventoryId,
+            _dataSource
+        );
         _inputRangesFilter = new InputRangesFilter<TextInventoryItem>(
             inputRanges,
             item =>

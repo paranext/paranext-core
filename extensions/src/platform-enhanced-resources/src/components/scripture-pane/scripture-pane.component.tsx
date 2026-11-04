@@ -489,6 +489,10 @@ function useLatestRef<T>(value: T): MutableRefObject<T> {
 // `editor.setAnnotation`). Inlining the object literal in JSX caused marks to silently disappear
 // on every parent re-render (e.g. when the MarbleGuide modal opens/closes). See
 // working-docs/2026-05-06-er-hover-regression-design.md.
+//
+// No `allowInvisibleCharacters` here: this pane shows an enhanced resource, not a Paratext project,
+// so there is no `platformScripture.allowInvisibleCharacters` to read. Copying therefore behaves as
+// it does in a project with the setting off, writing each no-break space as `~`.
 const EDITORIAL_OPTIONS = {
   isReadonly: true,
   hasExternalUI: true,

@@ -117,8 +117,12 @@ test.describe('scripture editor default view', () => {
             const { fontFamily, fontSize } = getComputedStyle(element);
             return { fontFamily, fontSize: parseFloat(fontSize) };
           });
+      // The no-break-space stand-in's face leads every Scripture family; the project font is next.
       const startsWithProjectFont = (fontFamily: string) =>
-        fontFamily.replace(/^"/, '').startsWith(PROJECT_FONT_NAME);
+        fontFamily
+          .replace(/^"?PlatformEditorNbspStandIn"?,\s*/, '')
+          .replace(/^"/, '')
+          .startsWith(PROJECT_FONT_NAME);
 
       // The editor root carries the project's family and size.
       await expect

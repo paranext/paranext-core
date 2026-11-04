@@ -1,4 +1,9 @@
-import { Editorial, EditorOptions, EditorRef } from '@eten-tech-foundation/platform-editor';
+import {
+  Editorial,
+  EditorOptions,
+  EditorRef,
+  getDefaultViewOptions,
+} from '@eten-tech-foundation/platform-editor';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
@@ -321,6 +326,13 @@ export type ResourceTextPanelProps = {
   /** The editor's copy limit for the chapter on screen. See `EditorOptions.copyLimit`. */
   copyLimit: EditorOptions['copyLimit'];
   /**
+   * Whether the displayed resource's project keeps `~` and a no-break space distinct
+   * (`platformScripture.allowInvisibleCharacters`). The editor copies a no-break space as `~`
+   * unless this is `true`. Pass `false` while the setting is loading or unreadable: the panel is
+   * read-only, so a stand-in can never be saved.
+   */
+  allowInvisibleCharacters: boolean;
+  /**
    * Whether a user-initiated pick is in flight, which this panel renders as "Selecting…". Distinct
    * from `isInstalling`, where the user picked nothing and a configured resource is just
    * downloading.
@@ -391,6 +403,7 @@ export function ResourceTextPanel({
   isUsjLoading,
   textDirection,
   copyLimit,
+  allowInvisibleCharacters,
   isSelecting,
   isInstalling,
   installFailed,
@@ -485,9 +498,10 @@ export function ResourceTextPanel({
       hasSpellCheck: false,
       textDirection,
       copyLimit,
+      view: { ...getDefaultViewOptions(), allowInvisibleCharacters },
       ...(extraValidMarkers.length > 0 ? { nodes: { extraValidMarkers } } : {}),
     }),
-    [textDirection, copyLimit, extraValidMarkers],
+    [textDirection, copyLimit, allowInvisibleCharacters, extraValidMarkers],
   );
 
   // `contentState` and `isBlankChapter` are deps because the content-area branches below UNMOUNT

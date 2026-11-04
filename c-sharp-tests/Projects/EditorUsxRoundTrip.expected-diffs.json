@@ -1,0 +1,167 @@
+{
+  "about": "Shrink-only list of the bytes the editor's own USX changes on disk, keyed by editor-usx capture name. See UsfmUsxRoundTripCorpusSweepTests.EditorUsx.cs for the legs and the rules.",
+  "entries": [
+    {
+      "fixture": "testUSFM-2SA-1-ch1.formatted.insert-footnote.usx",
+      "chapter": 1,
+      "leg": "write",
+      "line": 11,
+      "before": "",
+      "after": "\\f + \\fr 1:1 \\ft \\f*",
+      "reason": "The edit itself: a footnote inserted after the word (\\fr filled with the reference, \\ft left for the user to type)."
+    },
+    {
+      "fixture": "testUSFM-2SA-1-ch1.formatted.split-paragraph-q1.usx",
+      "chapter": 1,
+      "leg": "write",
+      "line": 11,
+      "before": "",
+      "after": "\r\n\\q1",
+      "reason": "The edit itself: the paragraph split at the caret, the second half a \\q1."
+    },
+    {
+      "fixture": "testUSFM-2SA-1-ch1.formatted.wrap-in-nd.usx",
+      "chapter": 1,
+      "leg": "write",
+      "line": 8,
+      "before": "challenging",
+      "after": "\\nd challenging\\nd*",
+      "reason": "The edit itself: the selected word wrapped in \\nd."
+    },
+    {
+      "fixture": "testUSFM-2SA-1-ch1.paragraph-structure.insert-footnote.usx",
+      "chapter": 1,
+      "leg": "write",
+      "line": 11,
+      "before": "",
+      "after": "\\f + \\fr 1:1 \\ft \\f*",
+      "reason": "The edit itself: a footnote inserted after the word (\\fr filled with the reference, \\ft left for the user to type)."
+    },
+    {
+      "fixture": "testUSFM-2SA-1-ch1.paragraph-structure.split-paragraph-q1.usx",
+      "chapter": 1,
+      "leg": "write",
+      "line": 11,
+      "before": "",
+      "after": "\r\n\\q1",
+      "reason": "The edit itself: the paragraph split at the caret, the second half a \\q1."
+    },
+    {
+      "fixture": "testUSFM-2SA-1-ch1.paragraph-structure.wrap-in-nd.usx",
+      "chapter": 1,
+      "leg": "write",
+      "line": 8,
+      "before": "challenging",
+      "after": "\\nd challenging\\nd*",
+      "reason": "The edit itself: the selected word wrapped in \\nd."
+    },
+    {
+      "fixture": "testUSFM-2SA-1-ch1.standard.insert-footnote.usx",
+      "chapter": 1,
+      "leg": "write",
+      "line": 11,
+      "before": "",
+      "after": "\\f + \\fr 1:1 \\ft \\f*",
+      "reason": "The edit itself: a footnote inserted after the word (\\fr filled with the reference, \\ft left for the user to type)."
+    },
+    {
+      "fixture": "testUSFM-2SA-1-ch1.standard.split-paragraph-q1.usx",
+      "chapter": 1,
+      "leg": "write",
+      "line": 11,
+      "before": "",
+      "after": "\r\n\\q1",
+      "reason": "The edit itself: the paragraph split at the caret, the second half a \\q1."
+    },
+    {
+      "fixture": "testUSFM-2SA-1-ch1.standard.wrap-in-nd.usx",
+      "chapter": 1,
+      "leg": "write",
+      "line": 8,
+      "before": "challenging",
+      "after": "\\nd challenging\\nd*",
+      "reason": "The edit itself: the selected word wrapped in \\nd."
+    },
+    {
+      "fixture": "web-matthew-1-and-2-ch1.formatted.insert-footnote.usx",
+      "chapter": 1,
+      "leg": "write",
+      "line": 11,
+      "before": "",
+      "after": "\\f + \\fr 1:1 \\ft \\f*",
+      "reason": "The edit itself: a footnote inserted after the word (\\fr filled with the reference, \\ft left for the user to type)."
+    },
+    {
+      "fixture": "web-matthew-1-and-2-ch1.formatted.split-paragraph-q1.usx",
+      "chapter": 1,
+      "leg": "write",
+      "line": 11,
+      "before": "",
+      "after": "\r\n\\q1",
+      "reason": "The edit itself: the paragraph split at the caret, the second half a \\q1."
+    },
+    {
+      "fixture": "web-matthew-1-and-2-ch1.formatted.wrap-in-nd.usx",
+      "chapter": 1,
+      "leg": "write",
+      "line": 11,
+      "before": "book",
+      "after": "\\nd book\\nd*",
+      "reason": "The edit itself: the selected word wrapped in \\nd."
+    },
+    {
+      "fixture": "web-matthew-1-and-2-ch1.paragraph-structure.insert-footnote.usx",
+      "chapter": 1,
+      "leg": "write",
+      "line": 11,
+      "before": "",
+      "after": "\\f + \\fr 1:1 \\ft \\f*",
+      "reason": "The edit itself: a footnote inserted after the word (\\fr filled with the reference, \\ft left for the user to type)."
+    },
+    {
+      "fixture": "web-matthew-1-and-2-ch1.paragraph-structure.split-paragraph-q1.usx",
+      "chapter": 1,
+      "leg": "write",
+      "line": 11,
+      "before": "",
+      "after": "\r\n\\q1",
+      "reason": "The edit itself: the paragraph split at the caret, the second half a \\q1."
+    },
+    {
+      "fixture": "web-matthew-1-and-2-ch1.paragraph-structure.wrap-in-nd.usx",
+      "chapter": 1,
+      "leg": "write",
+      "line": 11,
+      "before": "book",
+      "after": "\\nd book\\nd*",
+      "reason": "The edit itself: the selected word wrapped in \\nd."
+    },
+    {
+      "fixture": "web-matthew-1-and-2-ch1.standard.insert-footnote.usx",
+      "chapter": 1,
+      "leg": "write",
+      "line": 11,
+      "before": "",
+      "after": "\\f + \\fr 1:1 \\ft \\f*",
+      "reason": "The edit itself: a footnote inserted after the word (\\fr filled with the reference, \\ft left for the user to type)."
+    },
+    {
+      "fixture": "web-matthew-1-and-2-ch1.standard.split-paragraph-q1.usx",
+      "chapter": 1,
+      "leg": "write",
+      "line": 11,
+      "before": "",
+      "after": "\r\n\\q1",
+      "reason": "The edit itself: the paragraph split at the caret, the second half a \\q1."
+    },
+    {
+      "fixture": "web-matthew-1-and-2-ch1.standard.wrap-in-nd.usx",
+      "chapter": 1,
+      "leg": "write",
+      "line": 11,
+      "before": "book",
+      "after": "\\nd book\\nd*",
+      "reason": "The edit itself: the selected word wrapped in \\nd."
+    }
+  ]
+}

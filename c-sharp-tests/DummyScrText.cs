@@ -108,6 +108,19 @@ namespace TestParanextDataProvider
         public void SetFrontBackStylesheet(ScrStylesheet stylesheet) =>
             cachedFrontBackStylesheet.Set(stylesheet);
 
+        /// <summary>
+        /// Replaces the minimal <see cref="DummyScrStylesheet"/> served for canonical books with the
+        /// stylesheet a real project with no custom.sty resolves: <c>usfm.sty</c> read from the
+        /// Paratext settings directory, which <see cref="FixtureSetup"/> fills from
+        /// <c>c-sharp/assets/usfm.sty</c>. Use it when a test feeds real-world USFM whose markers the
+        /// dummy stylesheet does not define, so ParatextData does not degrade them to unknown markers.
+        /// </summary>
+        public void UseStandardStylesheet()
+        {
+            Settings.DefaultStylesheetFileName = "usfm.sty";
+            cachedDefaultStylesheet.Set(new ScrStylesheet(this));
+        }
+
         protected override void Load(bool ignoreLoadErrors = false)
         {
             // Nothing to do
