@@ -153,7 +153,9 @@ export type BookChapterControlProps = {
    * or DropdownMenu) — the transient focus blip that happens when the picker transitions between
    * book/chapter/verse views would otherwise collide with the outer scope's focus trap and dismiss
    * the popover. Modal mode gives the popover its own FocusScope that pauses the outer scope while
-   * it's open, avoiding the collision.
+   * it's open, avoiding the collision. A modal picker makes everything outside inert, its trigger
+   * included, so it does not use the compact stay-open behavior after a quick-nav step: it closes
+   * on an outside press and on Escape like any other modal popover.
    */
   modal?: boolean;
   /**
