@@ -484,7 +484,7 @@ describe('openUsersnapForm', () => {
   describe('after startup could not load the space', () => {
     const REPORT_ISSUE_KEY = 'test-report-issue-key';
     const UNAVAILABLE_NOTIFICATION = {
-      message: '%mainMenu_feedback_unavailable%',
+      message: '%mainMenu_feedback_unavailable_2%',
       severity: 'warning',
     };
 
