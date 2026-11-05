@@ -2987,9 +2987,8 @@ function PlatformScriptureEditor({
         // Enter is claimed in EVERY modifier state, which is why this tests the key alone (PT9
         // parity: KeyPressEditHandler has no modifier check). An unclaimed Ctrl/Alt/Meta+Enter
         // would let Lexical plain-split the paragraph — the unmarked empty-paragraph merge problem
-        // this palette exists to prevent — and Shift+Enter's soft line break has no USFM
-        // representation, so it serializes as a plain space: the same data problem as an unmarked
-        // split.
+        // this palette exists to prevent — and Shift+Enter is Enter here too: the editor library
+        // runs a line break as Enter, since one has no USFM representation.
         if (event.key === 'Enter') {
           // The editor's own right-click menu is up: HANDED DOWN rather than claimed here, so the
           // menu's own listener gets the press. See `isEditorContextMenuOpen`.

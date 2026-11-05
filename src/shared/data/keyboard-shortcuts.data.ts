@@ -712,15 +712,18 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
     id: 'scripture-paragraph-markers-menu',
     purpose:
-      'In Standard view, open the paragraph markers menu to split the paragraph. In other views, creates a new paragraph marker whose style matches the current paragraph marker style. While the editor’s right-click menu is open, that menu owns Enter instead: it invokes the highlighted item, or does nothing.',
+      'In Standard view, open the paragraph markers menu to split the paragraph. In other views, creates a new paragraph marker whose style matches the current paragraph marker style. Shift+Enter does the same as Enter: the editor has no line break inside a paragraph. While the editor’s right-click menu is open, that menu owns Enter instead: it invokes the highlighted item, or does nothing.',
     category: 'Editing',
     context: 'Scripture editor web view',
     // Enter is claimed in EVERY modifier state, matching PT9's KeyPressEditHandler (no modifier
-    // check): any modifier chord with Enter — including Shift+Enter, which would otherwise insert
-    // a soft line break with no USFM representation — opens the same menu.
+    // check): any modifier chord with Enter — Shift+Enter included — opens the same menu.
     // Not claimed while the editor's right-click context menu is open: that menu owns Enter for as
     // long as it is up (see `isEditorContextMenuOpen`).
-    keys: { macOS: '⏎', windows: 'Enter', linux: 'Enter' },
+    // Where the web view does not claim it (the views that hide markers), Shift+Enter is handled
+    // inside the editor library that ships as the `@eten-tech-foundation/platform-editor` package:
+    // its `LineBreakPlugin` runs every line break as Enter, since a line break has no USFM
+    // representation.
+    keys: { macOS: '⏎ / ⇧⏎', windows: 'Enter / Shift+Enter', linux: 'Enter / Shift+Enter' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
@@ -876,10 +879,10 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
     id: 'footnote-new-paragraph',
     purpose:
-      'Insert a new paragraph (\\fp) within the footnote being edited. In views other than Standard, Enter and Shift+Enter do nothing there',
+      'Insert a new paragraph (\\fp) within the footnote being edited; Shift+Enter does the same. In views other than Standard, Enter and Shift+Enter do nothing there',
     category: 'Editing',
     context: 'Footnote editor',
-    keys: { macOS: '⏎', windows: 'Enter', linux: 'Enter' },
+    keys: { macOS: '⏎ / ⇧⏎', windows: 'Enter / Shift+Enter', linux: 'Enter / Shift+Enter' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
     ],
