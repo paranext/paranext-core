@@ -558,9 +558,9 @@ describe('useEditorPdpSync', () => {
      * Mounts the hook on an UNFOCUSED editor showing LEV 14's typed content, with the initial
      * delivery already applied. `events` logs 'flush' and 'replace' in call order; `setFlushImpl`
      * installs what the flush callback does (the callback's identity stays stable, as in the web
-     * view).
+     * view). `reportHeldEditsReplaced`, when given, is wired through to the hook.
      */
-    function setUpUnfocusedEditorShowingLev14() {
+    function setUpUnfocusedEditorShowingLev14(reportHeldEditsReplaced?: () => void) {
       const events: string[] = [];
       let flushImpl: () => Promise<void> | undefined = () => undefined;
       const flushPendingDebouncedSave = vi.fn(() => flushImpl());
@@ -591,6 +591,7 @@ describe('useEditorPdpSync', () => {
             setEditorUsj,
             saveUsjToPdpIfUpdated,
             flushPendingDebouncedSave,
+            reportHeldEditsReplaced,
           });
         },
         { initialProps: { usjFromPdp: levUsj } },
@@ -657,6 +658,29 @@ describe('useEditorPdpSync', () => {
       expect(setUsjSpy).toHaveBeenCalledWith(externalChange);
       expect(usjSentToPdp.current).toBe(externalChange);
       expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled();
+    });
+
+    it('reports held edits after the flush and before the replace discards them', () => {
+      const events: string[] = [];
+      const reportHeldEditsReplaced = vi.fn(() => {
+        events.push('report');
+      });
+      const harness = setUpUnfocusedEditorShowingLev14(reportHeldEditsReplaced);
+      // The initial delivery's own replace reported too; only the external change matters here.
+      events.length = 0;
+      harness.setFlushImpl(() => {
+        events.push('flush');
+        return Promise.resolve();
+      });
+      harness.setUsjSpy.mockImplementation(() => {
+        events.push('replace');
+      });
+
+      act(() => harness.rerender({ usjFromPdp: externalChange }));
+
+      // The flush can itself be held back behind a write in flight, so the report must come after
+      // it; and it must come before the replace, while the held edits are still the editor's.
+      expect(events).toEqual(['flush', 'report', 'replace']);
     });
 
     it('does not flush while the FOCUSED editor defers the delivery (the push-back path is untouched)', () => {
