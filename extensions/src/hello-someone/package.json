@@ -1,6 +1,6 @@
 {
   "name": "hello-someone",
-  "version": "0.6.0-rc.5",
+  "version": "0.6.0",
   "description": "Simple hello someone extension for Platform.Bible",
   "main": "src/main.js",
   "types": "src/types/hello-someone.d.ts",
