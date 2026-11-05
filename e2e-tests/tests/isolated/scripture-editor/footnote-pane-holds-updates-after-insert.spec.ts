@@ -73,7 +73,8 @@ test.describe('footnotes pane: incoming updates around a new footnote', () => {
     await editorFrame.locator('.editor-container').waitFor({ timeout: 60_000 });
     await navigateToolbarBcv(mainPage, 'Jonah 1:2');
 
-    const editorInput = editorFrame.locator('.editor-input.marker-editable');
+    // `.first()`: the pane's row editor renders an editor input of its own, after the text's.
+    const editorInput = editorFrame.locator('.editor-input.marker-editable').first();
     await expect(editorInput).toContainText('preach against it', { timeout: 60_000 });
     const pane = editorFrame.locator(FOOTNOTES_PANE_SELECTOR);
     const editingRow = pane.locator('li[data-state="editing"]');
@@ -90,6 +91,12 @@ test.describe('footnotes pane: incoming updates around a new footnote', () => {
         (paneSelector) => !!document.activeElement?.closest(paneSelector),
         FOOTNOTES_PANE_SELECTOR,
       );
+    // The pane's row editor renders an editor input of its own, so the pane is ruled out.
+    const isFocusInText = () =>
+      frame.evaluate((paneSelector) => {
+        const focused = document.activeElement;
+        return !!focused?.closest('.editor-input') && !focused.closest(paneSelector);
+      }, FOOTNOTES_PANE_SELECTOR);
 
     await test.step('Insert Footnote at the end of verse 2 opens the new footnote in the pane', async () => {
       // The end of the verse 2 paragraph: just before the next paragraph's marker, then left.
@@ -139,9 +146,10 @@ test.describe('footnotes pane: incoming updates around a new footnote', () => {
       await plainVersePara.click();
       await mainPage.keyboard.type('wvw');
       const textEditAt = Date.now();
-      await expect(editorInput).toContainText('wvw', { timeout: 10_000 });
+      // Only what the write must follow happens before it: the click, focus reaching the pane, and
+      // the text edit's own save (which would otherwise overwrite the write on its own). Locator
+      // checks cost seconds each on a loaded runner, so the rest wait until after the write.
       await newNoteRow.click();
-      await expect(editingRow).toHaveCount(1, { timeout: 20_000 });
       await expect.poll(isFocusInPane, { timeout: 10_000 }).toBe(true);
       await expect
         .poll(() => getSampleProjectChapterUsfm(JONAH_1), { timeout: 10_000 })
@@ -156,6 +164,7 @@ test.describe('footnotes pane: incoming updates around a new footnote', () => {
         .not.toContain('EXTERNALC');
       await expect(editingRow).toHaveCount(1);
       expect(await isFocusInPane()).toBe(true);
+      await expect(editorInput).toContainText('wvw');
     });
 
     await test.step('the text clicked right after typing in a row holds an external write back', async () => {
@@ -163,9 +172,9 @@ test.describe('footnotes pane: incoming updates around a new footnote', () => {
       // The row editor from the last step is still open with focus in it.
       await mainPage.keyboard.type('kjk');
       const rowEditAt = Date.now();
-      await expect(editingRow).toContainText('kjk', { timeout: 10_000 });
+      // As above, only what the write must follow happens before it.
       await plainVersePara.click();
-      await expect(editingRow).toHaveCount(0, { timeout: 20_000 });
+      await expect.poll(isFocusInText, { timeout: 10_000 }).toBe(true);
       await expect
         .poll(() => getSampleProjectChapterUsfm(JONAH_1), { timeout: 10_000 })
         .toContain('kjk');
@@ -178,6 +187,9 @@ test.describe('footnotes pane: incoming updates around a new footnote', () => {
         .poll(() => getSampleProjectChapterUsfm(JONAH_1), { timeout: 15_000 })
         .not.toContain('EXTERNALD');
       await expect(editorInput).not.toContainText('EXTERNALD');
+      await expect(editingRow).toHaveCount(0);
+      expect(await isFocusInText()).toBe(true);
+      await expect(editorInput).toContainText('kjk');
     });
   });
 });
