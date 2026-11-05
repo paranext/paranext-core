@@ -9,10 +9,10 @@ namespace Paranext.DataProvider.Users;
 /// <c>{ errorCode, message }</c>.
 /// </summary>
 /// <remarks>
-/// Failures are returned rather than thrown because a code thrown from C# does not reach the
-/// TypeScript caller today.
-/// TODO(PT-4750): throw <see cref="PlatformErrorCodes"/> exceptions instead once codes survive the
-/// RPC boundary, and drop the failure members.
+/// Failures are returned rather than thrown, a contract set while a code thrown from C# could not
+/// reach the TypeScript caller. A thrown code now reaches it (see <see cref="PapiJsonRpc"/>).
+/// TODO(PT-4884): throw <see cref="PlatformErrorCodes"/> exceptions instead, and drop the failure
+/// members.
 /// </remarks>
 public sealed record RegistryAccessTokenResult(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? AccessToken,

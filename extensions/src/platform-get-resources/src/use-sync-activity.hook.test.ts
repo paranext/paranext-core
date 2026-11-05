@@ -37,20 +37,24 @@ describe('useSyncActivity', () => {
   it('reports idle until the first answer', () => {
     mockSendCommand.mockReturnValue(new Promise(() => {}));
     const { result } = renderHook(() => useSyncActivity());
-    expect(result.current).toEqual({ isSyncing: false, projectIds: [] });
+    expect(result.current).toEqual({ isSyncing: false, projectIds: [], resourceIds: [] });
   });
 
   it('reports the seeded snapshot', async () => {
-    mockSendCommand.mockResolvedValue({ isSyncing: true, projectIds: ['RH3'] });
+    mockSendCommand.mockResolvedValue({ isSyncing: true, projectIds: ['RH3'], resourceIds: [] });
     const { result } = renderHook(() => useSyncActivity());
-    await waitFor(() => expect(result.current).toEqual({ isSyncing: true, projectIds: ['RH3'] }));
+    await waitFor(() =>
+      expect(result.current).toEqual({ isSyncing: true, projectIds: ['RH3'], resourceIds: [] }),
+    );
     expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.getSyncActivity');
   });
 
   it('accepts null projectIds', async () => {
     mockSendCommand.mockResolvedValue({ isSyncing: true, projectIds: null });
     const { result } = renderHook(() => useSyncActivity());
-    await waitFor(() => expect(result.current).toEqual({ isSyncing: true, projectIds: [] }));
+    await waitFor(() =>
+      expect(result.current).toEqual({ isSyncing: true, projectIds: [], resourceIds: [] }),
+    );
   });
 
   it('treats a rejecting command as idle', async () => {
@@ -58,29 +62,31 @@ describe('useSyncActivity', () => {
     const { result } = renderHook(() => useSyncActivity());
     await waitFor(() => expect(mockSendCommand).toHaveBeenCalled());
     await act(async () => {});
-    expect(result.current).toEqual({ isSyncing: false, projectIds: [] });
+    expect(result.current).toEqual({ isSyncing: false, projectIds: [], resourceIds: [] });
   });
 
   it('follows the change event', async () => {
-    mockSendCommand.mockResolvedValue({ isSyncing: true, projectIds: ['RH3'] });
+    mockSendCommand.mockResolvedValue({ isSyncing: true, projectIds: ['RH3'], resourceIds: [] });
     const { result } = renderHook(() => useSyncActivity());
     await waitFor(() => expect(result.current.isSyncing).toBe(true));
     act(() => emitter.emit({ isSyncing: false }));
-    expect(result.current).toEqual({ isSyncing: false, projectIds: [] });
+    expect(result.current).toEqual({ isSyncing: false, projectIds: [], resourceIds: [] });
   });
 
   it('stays busy when a malformed event follows a busy seed', async () => {
-    mockSendCommand.mockResolvedValue({ isSyncing: true, projectIds: ['RH3'] });
+    mockSendCommand.mockResolvedValue({ isSyncing: true, projectIds: ['RH3'], resourceIds: [] });
     const { result } = renderHook(() => useSyncActivity());
     await waitFor(() => expect(result.current.isSyncing).toBe(true));
     act(() => emitter.emit({ isSyncing: 'yes' }));
-    expect(result.current).toEqual({ isSyncing: true, projectIds: ['RH3'] });
+    expect(result.current).toEqual({ isSyncing: true, projectIds: ['RH3'], resourceIds: [] });
   });
 
   it('never marks projects busy for an idle snapshot that carries ids', async () => {
-    mockSendCommand.mockResolvedValue({ isSyncing: false, projectIds: ['RH3'] });
+    mockSendCommand.mockResolvedValue({ isSyncing: false, projectIds: ['RH3'], resourceIds: [] });
     const { result } = renderHook(() => useSyncActivity());
-    await waitFor(() => expect(result.current).toEqual({ isSyncing: false, projectIds: [] }));
+    await waitFor(() =>
+      expect(result.current).toEqual({ isSyncing: false, projectIds: [], resourceIds: [] }),
+    );
   });
 
   describe('recheck while syncing', () => {
