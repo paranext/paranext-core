@@ -3231,10 +3231,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - The block outlasts the write gate by `HIDE_GRACE_MS` (1000 ms, in
     `auto-sync-blocking-store.ts`), because the merged chapter's delivery and the gate's clear race
     to the web view, and a keystroke between them would claim the chapter again.
-  - The footnotes pane claims on the same terms (`isFootnotesPaneOwner`), from the same last edit:
-    a pane row edit stamps it as a text edit does, so moving between the text and a row (inserting a
-    footnote, clicking a row) keeps the claim. Another web view ends it, a Send/Receive ends it, and
-    a delivery is held while focus settles.
+  - The footnotes pane claims on the same terms (`isFootnotesPaneOwner`): another web view ends its
+    claim, a Send/Receive ends it, and a delivery is held while focus settles.
 - **Alternatives:** `document.hasFocus()` as the release test: rejected, because menus and overlays
   outside the iframe also clear it, so the editor would give up its copy while the user is still
   working in it. Asking where focus is only when a delivery arrives: rejected, because a replacement
@@ -3260,6 +3258,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   Alt-tabbing away mid-edit in the footnotes pane applies a delivery once the grace period ends,
   after flushing pending saves, as the text editor does.
   Revisit the grace period if the window service's focus debounce changes.
+- **Amended 2026-11-05:** the footnotes pane claims from the same last-edit stamp as the text
+  (`lastLocalEditTimestamp`) rather than from a pane-only one. A pane row edit stamps it as a text
+  edit does, so moving between the text and a row (inserting a footnote, clicking a row, clicking
+  back into the text) keeps the claim, and the Send/Receive and other-web-view releases clear one
+  ref for both surfaces.
 - **Source:** PT-4968
 
 ## adr-empty-is-zero-state-primitive: shadcn `Empty` is the zero-state-with-action primitive; `EmptyState` stays message-only

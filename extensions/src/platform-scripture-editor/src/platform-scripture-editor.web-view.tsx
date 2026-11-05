@@ -3884,10 +3884,11 @@ function PlatformScriptureEditor({
         // the chapter line, far from wherever the user has started typing. `document.hasFocus()`
         // rather than the editor's own `isFocused()`: this web view is an iframe, and the editor
         // element stays its document's `activeElement` after the window it lives in has lost focus.
-        // An open palette or note editor never stamps that edit time, so it is asked about
-        // directly, with the same staleness bound the PDP sync uses — and unconditionally, since a
-        // focused palette is an overlay outside this iframe, so the window is blurred exactly when
-        // the session most needs protecting. Resolved here rather than through
+        // An open palette or footnote popover never stamps that edit time (a pane row's edits do,
+        // but not while the row sits idle), so an open session is asked about directly, with the
+        // same staleness bound the PDP sync uses — and unconditionally, since a focused palette is
+        // an overlay outside this iframe, so the window is blurred exactly when the session most
+        // needs protecting. Resolved here rather than through
         // `isEditingSessionActive`, which also closes a stale note session: a save is no place to
         // close the user's editor.
         isUserEditing:

@@ -2425,7 +2425,7 @@ describe('useEditorPdpSync', () => {
             };
           }
 
-          it('still defers while the pane edit is remembered', () => {
+          it('still defers while the edit in this view is remembered', () => {
             const { update, setUsjSpy, saveUsjToPdpIfUpdated } = renderWithFocusLocation(
               panePredicates(() => 'thisEditor'),
             );

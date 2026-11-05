@@ -460,13 +460,13 @@ export function useEditorPdpSync({
       // `\`).
       //
       // THE CONTRACT: the editor owns the chapter's data for EDITOR_OWNERSHIP_WINDOW_MS after the
-      // user's last edit in this view (in the text or in a footnotes-pane row), while focused. Inside that window a differing same-document
-      // incoming is deferred (kept unapplied) and the editor's newer content is pushed back up
-      // instead; an incoming that equals the editor is a pure confirmation (nothing to do —
-      // replacing would still reset the selection). Once typing rests, well-formed USJ round-trips
-      // stably, the echo matches the editor, and this settles. Focus is asked of the editor
-      // instance itself via `editorRef.current.isFocused()`, so the answer is scoped to THIS
-      // editor's own content-editable root rather than a global
+      // user's last edit in this view (in the text or in a footnotes-pane row), while focused.
+      // Inside that window a differing same-document incoming is deferred (kept unapplied) and the
+      // editor's newer content is pushed back up instead; an incoming that equals the editor is a
+      // pure confirmation (nothing to do — replacing would still reset the selection). Once typing
+      // rests, well-formed USJ round-trips stably, the echo matches the editor, and this settles.
+      // Focus is asked of the editor instance itself via `editorRef.current.isFocused()`, so the
+      // answer is scoped to THIS editor's own content-editable root rather than a global
       // `document.querySelector('.editor-input')` that couples to the CSS class name and to DOM
       // order (a footnote-editor popover renders its own `.editor-input`).
       //

@@ -48,9 +48,6 @@ const PAST_OWNERSHIP_WINDOW_MS = 17_000;
  * held back: under `EDITOR_OWNERSHIP_WINDOW_MS`, with room for the write and its push-back.
  */
 const WITHIN_OWNERSHIP_WINDOW_MS = 12_000;
-/** The row editor places its caret over a timeout and an animation frame after it loads. */
-const ROW_CARET_PLACED_MS = 600;
-
 /**
  * Fails with a plain message when a slow runner took so long getting to the external write that the
  * window had already passed, rather than as a misleading "the write was not held back".
@@ -164,7 +161,6 @@ test.describe('footnotes pane: incoming updates around a new footnote', () => {
     await test.step('the text clicked right after typing in a row holds an external write back', async () => {
       await mainPage.waitForTimeout(PAST_OWNERSHIP_WINDOW_MS);
       // The row editor from the last step is still open with focus in it.
-      await mainPage.waitForTimeout(ROW_CARET_PLACED_MS);
       await mainPage.keyboard.type('kjk');
       const rowEditAt = Date.now();
       await expect(editingRow).toContainText('kjk', { timeout: 10_000 });
