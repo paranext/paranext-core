@@ -145,7 +145,7 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
     it('gives the verse badge background only to the views without editable markers', () => {
       expect(css).toMatch(
         rule(
-          ['.formatted-font:not(.marker-editable) .verse'],
+          ['.formatted-font:where(:not(.marker-editable)) .verse'],
           'background-color: rgba(222, 222, 222, 1);',
         ),
       );

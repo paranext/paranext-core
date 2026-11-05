@@ -53,10 +53,11 @@ $find-current-result-highlight-bg: rgb(255 213 0 / 40%);
 
 // Find/Replace current-result highlight.
 // Applied to the matched text via setAnnotation(range, 'find-result-highlight',
-// 'find-current-result') from the Find web view (platform-scripture/src/find.web-view.tsx), which
-// wraps the match in a TypedMarkNode carrying this class. Semi-transparent amber so it reads on top
-// of the ::selection color above (selectRange selects the same match) and stays distinct from the
-// focused and unfocused selection in both light and dark mode.
+// 'find-current-result') from the Find web view (platform-scripture/src/find.web-view.tsx). The
+// editor puts this class on every element the match covers: a TypedMarkNode `<mark>` around its
+// plain text, and any verse number, marker glyph or read-only span it also holds. Semi-transparent
+// amber so it reads on top of the ::selection color above (selectRange selects the same match) and
+// stays distinct from the focused and unfocused selection in both light and dark mode.
 .editor-typed-mark-external-find-result-highlight {
   background-color: $find-current-result-highlight-bg;
 }
@@ -335,7 +336,9 @@ button.toolbar-item {
   background: var(--background);
 }
 
-.formatted-font .verse {
+// The verse badge, in the theme's colour. Standard view (`marker-editable`) has none, as in PT9,
+// so an annotation's own background can paint a verse number it holds.
+.formatted-font:where(:not(.marker-editable)) .verse {
   background-color: var(--secondary);
 }
 
