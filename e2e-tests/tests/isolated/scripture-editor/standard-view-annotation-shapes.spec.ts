@@ -170,6 +170,12 @@ test.describe('scripture editor annotation shapes', () => {
     await expect(editorInput).toBeAttached({ timeout: 60_000 });
     // Positive control, and the gate that the chapter finished loading before its USJ is read.
     await expect(editorInput).toContainText(CHAPTER_CONTROL_TEXT, { timeout: 60_000 });
+    // Standard view draws no badge behind a verse number, as in PT9, so an annotation's own
+    // background is what paints one it holds.
+    await expect(editorInput.locator('span.verse').first()).toHaveCSS(
+      'background-color',
+      'rgba(0, 0, 0, 0)',
+    );
     await waitForEditorControllerMethod(editorId, 'setAnnotation');
 
     const chapterUsj = await getChapterUsj(johnVerse(2, 1));

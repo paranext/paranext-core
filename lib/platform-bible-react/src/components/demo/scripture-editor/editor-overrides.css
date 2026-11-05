@@ -258,7 +258,9 @@ button.toolbar-item {
   background: var(--background);
 }
 
-.formatted-font .verse {
+/* The verse badge, in the theme's colour. Standard view (`marker-editable`) has none, as in PT9,
+   so an annotation's own background can paint a verse number it holds. */
+.formatted-font:where(:not(.marker-editable)) .verse {
   background-color: var(--secondary);
 }
 
