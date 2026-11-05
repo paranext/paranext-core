@@ -16,20 +16,29 @@ import { execFileSync, spawnSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
-/** Pathspec limiting which tracked MDX files to check, relative to the current working directory. */
-const PATHSPEC = process.argv[2] ?? 'src/**/*.mdx';
+/**
+ * Pathspec limiting which tracked MDX files to check, relative to the current working directory.
+ *
+ * `:(glob)` lets `**` match zero directories, as it does in the root `format:core` remark run that
+ * formats these files; git's default pathspec rules would skip MDX directly under `src/`.
+ */
+const PATHSPEC = process.argv[2] ?? ':(glob)src/**/*.mdx';
 
 /** Matches remark's refusal to process a file excluded by `.remarkignore`. */
 const IGNORED_MESSAGE = /Cannot process specified file: it.s ignored/;
 
 /**
- * Finds the remark CLI by walking up from the current working directory, so this works from the
- * repository root and from a workspace whose binaries are hoisted.
+ * Finds the remark CLI's entry script by walking up from this script's directory, so it is found
+ * from the repository root and from any workspace.
+ *
+ * This runs the JavaScript entry point with Node rather than `node_modules/.bin/remark`: on Windows
+ * that is a shell script `spawnSync` cannot start, and the `remark.cmd` beside it needs a shell.
+ * `require.resolve` cannot find it either, because remark-cli's package exports nothing.
  */
-function resolveRemarkBin(): string {
-  let dir = process.cwd();
+function resolveRemarkCli(): string {
+  let dir = __dirname;
   for (;;) {
-    const candidate = path.join(dir, 'node_modules', '.bin', 'remark');
+    const candidate = path.join(dir, 'node_modules', 'remark-cli', 'cli.js');
     if (fs.existsSync(candidate)) return candidate;
     const parent = path.dirname(dir);
     if (parent === dir)
@@ -39,18 +48,32 @@ function resolveRemarkBin(): string {
 }
 
 function checkMdxFormatting(): void {
-  const remarkBin = resolveRemarkBin();
+  const remarkCli = resolveRemarkCli();
 
-  const files = execFileSync('git', ['ls-files', '--', PATHSPEC], { encoding: 'utf8' })
-    .split('\n')
+  // `-z` so git does not C-quote paths with non-ASCII characters into names remark cannot open.
+  const files = execFileSync('git', ['ls-files', '-z', '--', PATHSPEC], { encoding: 'utf8' })
+    .split('\0')
     .filter(Boolean);
+
+  // Checking nothing must not pass: that is the silent no-op this script replaces.
+  if (files.length === 0) {
+    console.error(`No tracked MDX files match ${PATHSPEC} in ${process.cwd()}.`);
+    process.exit(1);
+  }
 
   const unformatted: string[] = [];
   const failed: string[] = [];
   let ignoredCount = 0;
 
   files.forEach((file) => {
-    const result = spawnSync(remarkBin, ['--no-color', '--quiet', file], { encoding: 'utf8' });
+    const result = spawnSync(process.execPath, [remarkCli, '--no-color', '--quiet', file], {
+      encoding: 'utf8',
+    });
+
+    if (result.error) {
+      failed.push(`${file}\n${result.error.message}`);
+      return;
+    }
 
     if (result.status !== 0) {
       if (IGNORED_MESSAGE.test(result.stderr)) ignoredCount += 1;
@@ -72,7 +95,8 @@ function checkMdxFormatting(): void {
         ...unformatted.map((file) => `  ${file}`),
         '',
         'Run `npm run format` to fix them. If remark is the one that is wrong (it strips the',
-        'indentation of JSX inside attribute values), add the file to .remarkignore instead.',
+        'indentation of JSX inside attribute values and puts multi-line JSX attributes on one',
+        'line), add the file to .remarkignore instead.',
       ].join('\n'),
     );
   }
