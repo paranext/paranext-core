@@ -1158,3 +1158,121 @@ describe('opening a tab as a panel in a right-to-left UI', () => {
     });
   });
 });
+
+describe('opening a tab as a panel beside a tab', () => {
+  it('puts the tab just after the target in its tab group, as the active tab', () => {
+    const dockLayout = renderDock({
+      dockbox: {
+        mode: 'horizontal',
+        children: [tabGroup('target-group', ['home', 'project-a', 'notes'])],
+      },
+    });
+
+    openPanel(dockLayout, 'find', {
+      type: 'panel',
+      direction: 'after-tab',
+      targetTabId: 'project-a',
+    });
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'horizontal',
+      children: [['home', 'project-a', 'find', 'notes']],
+    });
+    expect(tabGroupOf(dockLayout, 'find').activeId).toBe('find');
+  });
+
+  it('puts the tab just before the target in its tab group', () => {
+    const dockLayout = renderDock({
+      dockbox: {
+        mode: 'horizontal',
+        children: [tabGroup('target-group', ['home', 'project-a', 'notes'])],
+      },
+    });
+
+    openPanel(dockLayout, 'find', {
+      type: 'panel',
+      direction: 'before-tab',
+      targetTabId: 'project-a',
+    });
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'horizontal',
+      children: [['home', 'find', 'project-a', 'notes']],
+    });
+  });
+
+  it('keeps the tab in a floating target tab group', () => {
+    const dockLayout = renderDock(dockedAndFloatingLayout());
+
+    openPanel(dockLayout, 'find', {
+      type: 'panel',
+      direction: 'after-tab',
+      targetTabId: 'project-f',
+    });
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'horizontal',
+      children: [['project-a']],
+    });
+    expect(shapeOf(rootBox(dockLayout, 'floatbox'))).toEqual({
+      mode: 'float',
+      children: [['project-f', 'find']],
+    });
+  });
+
+  it('keeps the tab in a maximized target tab group, through its restore', () => {
+    const dockLayout = renderDock({
+      dockbox: {
+        mode: 'horizontal',
+        children: [tabGroup('docked-group', ['project-a']), tabGroup('other-group', ['notes'])],
+      },
+    });
+    maximize(dockLayout, 'docked-group');
+
+    openPanel(dockLayout, 'find', {
+      type: 'panel',
+      direction: 'after-tab',
+      targetTabId: 'project-a',
+    });
+    expect(shapeOf(rootBox(dockLayout, 'maxbox'))).toEqual({
+      mode: 'maximize',
+      children: [['project-a', 'find']],
+    });
+    maximize(dockLayout, 'docked-group');
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'horizontal',
+      children: [['project-a', 'find'], ['notes']],
+    });
+  });
+
+  it('adds a tab group beside a fixed column of Simple mode instead of joining it', () => {
+    const dockLayout = renderDock(simpleShapedLayout());
+
+    openPanel(dockLayout, 'headless-new', {
+      type: 'panel',
+      direction: 'after-tab',
+      targetTabId: 'headless-model',
+    });
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'horizontal',
+      children: [['headless-model'], ['headless-new'], ['headless-editor'], ['resources-bible']],
+    });
+  });
+
+  it('adds a tab group on the reading-start side when asked for before a tab it cannot join', () => {
+    const dockLayout = renderDock(simpleShapedLayout());
+
+    openPanel(dockLayout, 'headless-new', {
+      type: 'panel',
+      direction: 'before-tab',
+      targetTabId: 'headless-editor',
+    });
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'horizontal',
+      children: [['headless-model'], ['headless-new'], ['headless-editor'], ['resources-bible']],
+    });
+  });
+});

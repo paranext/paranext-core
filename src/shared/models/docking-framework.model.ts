@@ -235,18 +235,23 @@ export type PanelDirection =
   | 'right'
   | 'bottom'
   | 'top'
-  // TODO: The following produce a panel but probably aren't useful for panels - IJH 2023-05-5
   | 'before-tab'
   | 'after-tab'
+  // TODO: The following produce a panel but probably aren't useful for panels - IJH 2023-05-5
   | 'maximize'
   | 'move'
   | 'active'
   | 'update';
 
 /**
- * Information about a panel: a tab opened beside the tab group holding `targetTabId`. When no
- * `targetTabId` is given (or it is not in this window), the tab opens beside the tab group of the
- * tab most recently opened as a `'tab'` or re-opened in this window, else of the first tab in it.
+ * Information about a panel: a tab opened beside the tab group holding `targetTabId`, or beside
+ * that tab itself. When no `targetTabId` is given (or it is not in this window), the target is the
+ * tab most recently opened as a `'tab'` or re-opened in this window, else the first tab in it.
+ *
+ * `before-tab` and `after-tab` add the tab, as the active tab, to the target's own tab group, just
+ * before or after the target. This holds whether that group is docked, floating, or maximized. A
+ * group that cannot take the tab gets it beside the group instead, as `left` or `right` would. Such
+ * a group is one of Simple mode's fixed columns, or a group that holds another kind of tab.
  *
  * When the target's tab group is docked, the tab is added, as its active tab, to the tab group
  * directly on the `direction` side instead of a new group being created, if that group can take it:
@@ -256,16 +261,17 @@ export type PanelDirection =
  * Otherwise the tab opens as a new group beside the target's group.
  *
  * When the target's tab group is floating or maximized, the tab opens as a new group at the
- * reading-end edge of the dock area (the right, or the left in a right-to-left UI), whichever
- * `direction` was asked for, and a floating target that would cover that group is moved aside.
- * `left` and `right` are mirrored in a right-to-left UI. A target in another application window is
- * placed by these same rules in the window that holds it.
+ * reading-end edge of the dock area (the right, or the left in a right-to-left UI), whichever side
+ * was asked for, and a floating target that would cover that group is moved aside. `left` and
+ * `right` are mirrored in a right-to-left UI. A target in another application window is placed by
+ * these same rules in the window that holds it.
  */
 interface PanelLayout {
   type: 'panel';
   /**
-   * The side of the target's tab group to open on, in reading order: `right` is the reading-end
-   * side, which is the left in a right-to-left UI
+   * Where to open, in reading order. A side opens beside the target's tab group: `right` is the
+   * reading-end side, which is the left in a right-to-left UI. `before-tab` and `after-tab` open in
+   * the target's own tab group, beside the target.
    */
   direction?: PanelDirection;
   /**
