@@ -27,8 +27,8 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
     /// which case listing and reading fail as for a missing archive. Opened directly to list entry
     /// names, since the file manager lists one directory at a time and finds a directory only
     /// through the files directly in it, so it cannot reach a file whose parent directories hold
-    /// nothing else; and to check an entry opens before the file manager reads it (see
-    /// <see cref="GetDataStream"/>).
+    /// nothing else; and to read an entry in full and check its CRC against the archive's record
+    /// before the file manager reads it (see <see cref="GetDataStream"/>).
     /// </param>
     /// <param name="passwordProvider">
     /// The password provider <paramref name="fileManager"/> was given, or null if none. ParatextData
@@ -86,7 +86,7 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
 
     /// <exception cref="InvalidDataException">
     /// The entry exists but cannot be read: it is not encrypted in a resource whose entries must
-    /// be, or it cannot be decrypted or opened.
+    /// be, or it cannot be decrypted, or its data does not read back intact.
     /// </exception>
     public Stream? GetDataStream(string streamName, bool createIfNotExists = false)
     {
@@ -100,7 +100,9 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
         // So the entry is read here first, on an archive with no lock, using the password
         // provider the file manager was given and the rule it applies, and the file manager is
         // handed only an entry whose data reads back intact. Its read then happens inside a
-        // using, so data found corrupt partway through still releases the lock.
+        // using, so data found corrupt partway through still releases the lock. The entry is
+        // therefore decrypted and inflated twice; the returned bytes still come from the file
+        // manager's read so its decryption rule stays the only one applied to them.
         // TODO: drop this check once we consume a ParatextData with ubsicap/Paratext#678
         using (ZipFile archive = OpenArchive())
         {
