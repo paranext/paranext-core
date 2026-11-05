@@ -2188,9 +2188,6 @@
 .formatted-font.marker-editable .verse {
   white-space: nowrap;
   unicode-bidi: embed;
-  /* PT9 Standard view has no background badge on verse tokens; the formatted
-     (non-editable) view keeps its badge. */
-  background-color: transparent;
 }
 
 /* `.text-spacing .verse` (below) gives the verse token 2px of margin and 1px of padding on
@@ -2565,9 +2562,15 @@
 /* VerseNode, ImmutableVerseNode */
 
 .formatted-font .verse {
-  background-color: rgba(222, 222, 222, 1);
   vertical-align: super;
   font-size: 0.66em;
+}
+/* The grey badge is for the views whose verse is a read-only number. PT9's Standard view has no
+   badge on verse tokens, and leaving the badge out there, rather than overriding it with a
+   transparent background, leaves an annotation's own background free to paint a verse number it
+   holds. */
+.formatted-font:not(.marker-editable) .verse {
+  background-color: rgba(222, 222, 222, 1);
 }
 .text-spacing .verse {
   margin: 0px 2px 0px 2px;
