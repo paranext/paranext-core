@@ -83,6 +83,28 @@ describe('AnnotationStyleDataProviderEngine stylesheet', () => {
     );
   });
 
+  it('keeps a padding, margin or radius with a priority whole on every element', async () => {
+    expect(
+      await stylesheetFor({
+        padding: '2px !important',
+        margin: '1px 2px !important',
+        borderRadius: '4px !important',
+      }),
+    ).toBe(
+      '.editor-typed-mark-external-check {\n' +
+        '  padding: 2px !important;\n' +
+        '  margin: 1px 2px !important;\n' +
+        '  border-radius: 4px !important;\n' +
+        '}',
+    );
+  });
+
+  it('keeps an empty padding or margin as written instead of splitting nothing', async () => {
+    expect(await stylesheetFor({ padding: '', margin: ' ' })).toBe(
+      '.editor-typed-mark-external-check {\n  padding: ;\n  margin:  ;\n}',
+    );
+  });
+
   it('writes no start or end rule for a style with no box property', async () => {
     expect(
       await stylesheetFor({ textDecorationLine: 'underline', textDecorationStyle: 'wavy' }),
