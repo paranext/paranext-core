@@ -116,10 +116,14 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
       );
     });
 
-    it('drops the verse badge background in Standard view (PT9 has no verse badge)', () => {
+    // Left out, not overridden: an override would also paint over an annotation's own background
+    // on a verse number it holds.
+    it('gives the verse badge background only to the views without editable markers', () => {
       expect(scss).toMatch(
-        /\.formatted-font\.marker-editable \.verse \{[^}]*background-color: transparent;[^}]*\}/,
+        /\.formatted-font:not\(\.marker-editable\) \.verse \{[^}]*background-color: rgba\(222, 222, 222, 1\);[^}]*\}/,
       );
+      expect(scss).not.toMatch(/\.formatted-font \.verse \{[^}]*background-color/);
+      expect(scss).not.toMatch(/\.formatted-font\.marker-editable \.verse \{[^}]*background-color/);
     });
 
     it('scopes marker validation status rules to editable marker modes', () => {

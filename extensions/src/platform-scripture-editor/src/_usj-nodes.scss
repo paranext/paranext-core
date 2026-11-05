@@ -2539,9 +2539,14 @@
 /* VerseNode, ImmutableVerseNode */
 
 .formatted-font .verse {
-  background-color: rgba(222, 222, 222, 1);
   vertical-align: super;
   font-size: 0.66em;
+}
+/* The grey badge is for the views whose verse is a read-only number (see the Standard view rule
+   below). Leaving the badge out of Standard view, rather than overriding it with a transparent
+   background there, leaves an annotation's own background free to paint a verse number it holds. */
+.formatted-font:not(.marker-editable) .verse {
+  background-color: rgba(222, 222, 222, 1);
 }
 .text-spacing .verse {
   margin: 0px 2px 0px 2px;
@@ -2554,13 +2559,11 @@
    been missed in this vendored copy — the app therefore painted the badge in a view the library
    does not, which is a real app-vs-demo difference at the one element the caret rests in here.
    In standard view (`marker-editable`) a verse is a VerseNode, i.e. editable text whose content is
-   literally `\v 4 `, so the caret can and does come to rest INSIDE this span; the grey badge from
-   `.formatted-font .verse` above then sits directly behind that caret. PT9's Standard view has no
-   background badge on verse tokens (the formatted, non-editable views keep theirs). */
+   literally `\v 4 `, so the caret can and does come to rest INSIDE this span, and PT9's Standard
+   view has no background badge on verse tokens: the badge rule above leaves this view out. */
 .formatted-font.marker-editable .verse {
   white-space: nowrap;
   unicode-bidi: embed;
-  background-color: transparent;
 }
 
 /* `.text-spacing .verse` above gives the verse token 2px of margin and 1px of padding on each side.
