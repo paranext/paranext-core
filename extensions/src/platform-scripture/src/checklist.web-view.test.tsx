@@ -8,6 +8,7 @@ import type { WebViewProps } from '@papi/core';
 import type { IChecklistService } from 'platform-scripture';
 import { newPlatformError } from 'platform-bible-utils';
 import { useEvaluatedMenu } from '@papi/frontend/react';
+import { ChecklistTool } from './components/checklist.component';
 import { useChecklistService } from './hooks/use-checklist';
 import { localizedValueFor } from './project-selector.test-utils';
 
@@ -206,6 +207,13 @@ vi.mock('platform-bible-react', async (importOriginal) => {
   };
 });
 
+// Wraps the real ChecklistTool in a spy so a test can read the props the web view hands it, while
+// every other test still renders the real component.
+vi.mock('./components/checklist.component', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./components/checklist.component')>();
+  return { ...original, ChecklistTool: vi.fn(original.ChecklistTool) };
+});
+
 vi.mock('./hooks/use-checklist', () => ({
   useChecklistService: vi.fn(() => ({ service: mockChecklistService.value })),
 }));
@@ -288,6 +296,18 @@ describe('ChecklistWebView top menu evaluation', () => {
       webViewType: 'platformScripture.markersChecklist',
       projectId: 'PROJECT-1',
     });
+  });
+
+  it('hands the evaluated menu, not the raw one, to the toolbar', async () => {
+    mockRecentProjects.value = [];
+    const ChecklistWebView = getChecklistWebView();
+    await act(async () => {
+      render(<ChecklistWebView {...makeProps()} />);
+    });
+
+    const toolProps = vi.mocked(ChecklistTool).mock.calls.at(-1)?.[0];
+    expect(toolProps?.projectMenuData).toBe(EVALUATED_SENTINEL);
+    expect(toolProps?.projectMenuData).not.toBe(TOP_MENU_FIXTURE);
   });
 });
 
