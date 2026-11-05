@@ -27,16 +27,16 @@ export const NON_CONVERGENCE_WARN_THRESHOLD = 25;
  * in this view (in the text or in a footnotes-pane row) — the ownership contract for the
  * focused-editor deferral below.
  *
- * While the editor is focused and the last local edit is more recent than this window, an incoming
- * same-document PDP update that differs from the editor is deferred (kept unapplied) and the
- * editor's content is pushed back up instead: mid-typing, the editor is the authority, and the
+ * While the editor is focused and the last edit in this view is more recent than this window, an
+ * incoming same-document PDP update that differs from the editor is deferred (kept unapplied) and
+ * the editor's content is pushed back up instead: mid-typing, the editor is the authority, and the
  * differing incoming is almost always the editor's own USFM-normalized echo.
  *
- * Once the last local edit is OLDER than this window, focus alone no longer confers ownership: an
- * incoming update is applied exactly as if the editor were unfocused. The bound is what keeps a
- * caret parked in the editor from deferring every external write indefinitely, which would let the
- * focused editor's pre-merge content overwrite a Send/Receive merge or another app's concurrent
- * edit no matter how long ago the user last typed.
+ * Once the last edit in this view is OLDER than this window, focus alone no longer confers
+ * ownership: an incoming update is applied exactly as if the editor were unfocused. The bound is
+ * what keeps a caret parked in the editor from deferring every external write indefinitely, which
+ * would let the focused editor's pre-merge content overwrite a Send/Receive merge or another app's
+ * concurrent edit no matter how long ago the user last typed.
  *
  * Sized far above the real echo round-trip (700ms save debounce + save + echo, low seconds) so a
  * typing pause never lets an echo clobber the caret, while still bounding how long a parked caret
@@ -220,10 +220,10 @@ export function useEditorPdpSync({
    * updates back for the focused Scripture editor. Applying an incoming PDP update must NOT refresh
    * this: the editor loads external content under a change-suppression tag, so external applies
    * never reach the stamping path (see the web view's `handleEditorialUsjChange`). Drives the
-   * {@link EDITOR_OWNERSHIP_WINDOW_MS} ownership contract — focus alone, with no local edit inside
-   * the window, no longer defers incoming updates. This hook clears it when `isSyncBlocked` turns
-   * true and when focus moves to another web view, so every reader of the ref sees no recent edit
-   * until the next local one.
+   * {@link EDITOR_OWNERSHIP_WINDOW_MS} ownership contract — focus alone, with no edit in this view
+   * inside the window, no longer defers incoming updates. This hook clears it when `isSyncBlocked`
+   * turns true and when focus moves to another web view, so every reader of the ref sees no recent
+   * edit until the next edit in this view.
    */
   lastLocalEditTimestamp: MutableRefObject<number | undefined>;
   /**

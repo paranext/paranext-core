@@ -139,6 +139,8 @@ test.describe('footnotes pane: incoming updates around a new footnote', () => {
         usfm.replace('that great city', 'that great city EXTERNALB'),
       );
       await expect(editorInput).toContainText('EXTERNALB', { timeout: 15_000 });
+      // Replacing the document ends the row session.
+      await expect(editingRow).toHaveCount(0);
       expect(await getSampleProjectChapterUsfm(JONAH_1)).toContain('EXTERNALB');
     });
 
