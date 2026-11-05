@@ -231,6 +231,42 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
+        public void GetDataStream_EntryWhoseDataDoesNotMatchItsCrc_Throws()
+        {
+            // Stored and unencrypted, so nothing but the CRC can tell the damaged bytes from data
+            WriteArchive(
+                [($"{ExtensionPath}/damaged.json", "intact contents", null)],
+                CompressionMethod.Stored
+            );
+            var archiveBytes = File.ReadAllBytes(ArchivePath);
+            var dataOffset = archiveBytes.AsSpan().IndexOf("intact contents"u8);
+            archiveBytes[dataOffset] = (byte)'D';
+            File.WriteAllBytes(ArchivePath, archiveBytes);
+            var streamManager = CreateStreamManager(passwordProtected: false);
+
+            Assert.Throws<InvalidDataException>(
+                () => streamManager.GetDataStream($"{ExtensionPath}/damaged.json")
+            );
+        }
+
+        [Test]
+        public void GetDataStream_AesEncryptedEntry_ReadsBack()
+        {
+            // An AES entry may record no CRC, since its stream authenticates the data instead
+            WriteArchive(
+                [($"{ExtensionPath}/sealed.json", "sealed", ArchivePassword)],
+                CompressionMethod.Deflated,
+                aesKeySize: 256
+            );
+            var streamManager = CreateStreamManager(passwordProtected: true);
+
+            Assert.That(
+                ReadStream(streamManager, $"{ExtensionPath}/sealed.json"),
+                Is.EqualTo("sealed")
+            );
+        }
+
+        [Test]
         public void GetExistingDataStreamNames_NameGetDataStreamRefuses_IsNotListed()
         {
             var streamManager = CreateStreamManager(
@@ -343,14 +379,20 @@ namespace TestParanextDataProvider.Projects
             bool passwordProtected
         )
         {
-            var fileManager = CreateFileManager(entries, passwordProtected);
+            WriteArchive(entries, CompressionMethod.Deflated);
+            return CreateStreamManager(passwordProtected);
+        }
+
+        /// <summary>
+        /// A stream manager over the archive already written at <see cref="ArchivePath"/>
+        /// </summary>
+        private ResourceProjectStreamManager CreateStreamManager(bool passwordProtected) =>
             // The same provider the file manager was given, as the PDP passes it
-            return new ResourceProjectStreamManager(
-                fileManager,
+            new(
+                CreateFileManager(passwordProtected),
                 ArchivePath,
                 passwordProtected ? new FixedPasswordProvider() : null
             );
-        }
 
         /// <summary>
         /// A password-protected resource holding sealed.json, encrypted with its password, and
@@ -368,6 +410,8 @@ namespace TestParanextDataProvider.Projects
                 ($"{ExtensionPath}/sealed.json", "sealed", ArchivePassword),
                 ($"{ExtensionPath}/foreign.json", "foreign", "another password"),
             ];
+            // A wrong password passes about 1 try in 256, so the odds of all of them failing are
+            // about e^-39
             for (var attempt = 0; attempt < 10_000; attempt++)
             {
                 WriteArchive(entries, compression);
@@ -375,11 +419,7 @@ namespace TestParanextDataProvider.Projects
                     PassesHeaderPasswordCheck($"{ExtensionPath}/foreign.json")
                     == wrongPasswordPassesHeaderCheck
                 )
-                    return new ResourceProjectStreamManager(
-                        CreateFileManager(passwordProtected: true),
-                        ArchivePath,
-                        new FixedPasswordProvider()
-                    );
+                    return CreateStreamManager(passwordProtected: true);
             }
             throw new AssertionException(
                 "Could not write an archive with the header check asked for"
@@ -413,9 +453,13 @@ namespace TestParanextDataProvider.Projects
             return CreateFileManager(passwordProtected);
         }
 
+        /// <param name="aesKeySize">
+        /// The AES key size to encrypt entries with, or 0 for ZipCrypto, which real resources use
+        /// </param>
         private void WriteArchive(
             IEnumerable<(string Name, string Contents, string? Password)> entries,
-            CompressionMethod compression
+            CompressionMethod compression,
+            int aesKeySize = 0
         )
         {
             using ZipOutputStream archive = new(File.Create(ArchivePath));
@@ -423,7 +467,13 @@ namespace TestParanextDataProvider.Projects
             foreach (var (name, contents, password) in entries)
             {
                 archive.Password = password;
-                archive.PutNextEntry(new ZipEntry(name) { CompressionMethod = compression });
+                archive.PutNextEntry(
+                    new ZipEntry(name)
+                    {
+                        CompressionMethod = compression,
+                        AESKeySize = password == null ? 0 : aesKeySize,
+                    }
+                );
                 var bytes = Encoding.UTF8.GetBytes(contents);
                 archive.Write(bytes, 0, bytes.Length);
             }

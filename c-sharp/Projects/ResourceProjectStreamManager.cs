@@ -118,7 +118,8 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
                 isIntact = IsIntact(archive, entry);
             }
             // Data decrypted with the wrong password fails to inflate in more ways than
-            // ZipException, such as an IndexOutOfRangeException
+            // ZipException, such as an IndexOutOfRangeException. Any failure here, I/O included,
+            // means the entry cannot be read; the cause stays on as the inner exception.
             catch (Exception e)
             {
                 throw new InvalidDataException($"'{streamName}' cannot be read", e);
@@ -146,6 +147,7 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
     {
         using Stream data = archive.GetInputStream(entry);
         Crc32 crc = new();
+        // Stream.CopyTo's default buffer size
         byte[] buffer = new byte[81920];
         int count;
         while ((count = data.Read(buffer, 0, buffer.Length)) > 0)
