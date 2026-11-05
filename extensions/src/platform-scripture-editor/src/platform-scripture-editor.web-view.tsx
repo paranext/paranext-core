@@ -4335,6 +4335,12 @@ function PlatformScriptureEditor({
    * instance — nothing reaches this main editor (and its `handleEditorialUsjChange` refresh) until
    * an apply lands on the parent — so without this stamp a user composing a note for longer than
    * the staleness bound would have a LIVE session reaped as orphaned mid-edit.
+   *
+   * An edit in a footnotes-pane row also stamps `lastLocalEditTimestamp`, since the row applies its
+   * edits to the text as they are made. That stamp is what holds incoming PDP updates back for
+   * `EDITOR_OWNERSHIP_WINDOW_MS` while focus is in the pane or back in the text (see
+   * `resolveEditingSessionActivity` and `useEditorPdpSync`); dropping it lets an update replace a
+   * row the user is typing in.
    */
   const onFootnoteEditorNoteEdit = useCallback(() => {
     editingNoteSessionRefreshedAt.current = Date.now();
@@ -4685,9 +4691,12 @@ function PlatformScriptureEditor({
     (usj: Usj, ops?: DeltaOp[], source?: DeltaSource, insertedNodeKey?: string) => {
       // Stamp the last LOCAL edit — the recency signal behind useEditorPdpSync's
       // EDITOR_OWNERSHIP_WINDOW_MS focused-deferral contract. Gated on the editor's own change
-      // source: `'local'` is what typing, marker applies, and other user-originated editor
-      // updates report, while programmatic applies (e.g. the footnote popover's
-      // `replaceEmbedUpdate` save) report `'remote'`. An EXTERNAL apply (`setEditorUsj` →
+      // source: `'local'` is what typing, marker applies, inserting a footnote, cross reference or
+      // endnote (`insertMarker`), and other user-originated editor updates report, while
+      // programmatic applies (e.g. the footnote popover's `replaceEmbedUpdate` save) report
+      // `'remote'`. The insert's stamp is the only edit that holds a new note's pane row before
+      // anything is typed in it; `footnote-pane-holds-updates-after-insert.spec.ts` fails if the
+      // insert stops reporting `'local'`. An EXTERNAL apply (`setEditorUsj` →
       // `EditorRef.setUsj`) must never refresh this stamp, and it cannot: the editor loads
       // external content under its change-suppression tag (`EXTERNAL_USJ_MUTATION_TAG`, skipped by
       // the editor's own single commit listener, `handleCommit` in `Editor.tsx`), so it never
