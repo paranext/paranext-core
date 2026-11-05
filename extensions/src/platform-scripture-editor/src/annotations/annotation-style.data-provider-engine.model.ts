@@ -55,6 +55,9 @@ type EdgeDeclarations = {
  *   on the first element's start and the last element's end. Three or four values stay on every
  *   element.
  *
+ * A value with a priority (`!important`), or an empty one, is not split: it stays on every element
+ * as written, since a longhand cannot take the priority on its own.
+ *
  * An annotation that paints one element gets all three rules, so it is drawn as the unsplit style
  * draws it. Logical properties put the start on the right in right-to-left text.
  */
@@ -67,6 +70,7 @@ function stylesToCss(properties: AnnotationStyleProperties): EdgeDeclarations {
     if (value === undefined) return;
     const cssProperty = toKebabCase(key);
     const values = shorthandValues(String(value));
+    const isSplittable = values.length > 0 && !values.some((part) => part.startsWith('!'));
 
     if (key === 'border') {
       every.push(declaration('border-block', value));
@@ -74,7 +78,7 @@ function stylesToCss(properties: AnnotationStyleProperties): EdgeDeclarations {
       end.push(declaration('border-inline-end', value));
       return;
     }
-    if (key === 'borderRadius' && values.length === 1 && !values[0].includes('/')) {
+    if (key === 'borderRadius' && isSplittable && values.length === 1 && !values[0].includes('/')) {
       start.push(
         declaration('border-start-start-radius', value),
         declaration('border-end-start-radius', value),
@@ -85,7 +89,7 @@ function stylesToCss(properties: AnnotationStyleProperties): EdgeDeclarations {
       );
       return;
     }
-    if ((key === 'padding' || key === 'margin') && values.length <= 2) {
+    if ((key === 'padding' || key === 'margin') && isSplittable && values.length <= 2) {
       const [block, inline = block] = values;
       every.push(declaration(`${cssProperty}-block`, block));
       start.push(declaration(`${cssProperty}-inline-start`, inline));
