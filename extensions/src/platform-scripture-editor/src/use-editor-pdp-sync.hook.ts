@@ -155,6 +155,7 @@ export function useEditorPdpSync({
   setEditorUsj,
   saveUsjToPdpIfUpdated,
   flushPendingDebouncedSave,
+  reportHeldEditsReplaced,
   isEditingSessionActive,
   isFootnotesPaneOwner,
   lastLocalEditTimestamp,
@@ -194,6 +195,13 @@ export function useEditorPdpSync({
    * overwrites the editor — see the "recent typing wins" comment there.
    */
   flushPendingDebouncedSave?: () => Promise<void> | undefined;
+  /**
+   * Reports edits the replace path below is about to discard: edits whose save was held back
+   * because another write was in flight, and so have not reached the PDP. Called after
+   * `flushPendingDebouncedSave` (whose own save may be held back) and before the editor is
+   * replaced; a no-op when nothing is held.
+   */
+  reportHeldEditsReplaced?: () => void;
   /**
    * Extends the "actively editing" deferral beyond DOM focus: returns true while an editing SESSION
    * owns the editor's content even though the editor itself is blurred — a marker-palette session
@@ -670,6 +678,7 @@ export function useEditorPdpSync({
       //     this update; in the moment the block outlasts the gate, it would overwrite the merge.
       if (!isSyncBlocked && flushPendingDebouncedSave?.() !== undefined)
         usjSentToPdp.current = usjFromPdp;
+      reportHeldEditsReplaced?.();
       lastAppliedDocumentSelector.current = documentSelector;
       setEditorUsj.current(usjFromPdp);
     }
@@ -706,6 +715,7 @@ export function useEditorPdpSync({
     focusLocationKey,
     getFocusLocation,
     graceExpiryCount,
+    reportHeldEditsReplaced,
     isEditingSessionActive,
     isFootnotesPaneOwner,
     isSyncBlocked,
