@@ -5941,8 +5941,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
 - **Date:** 2026-10-28
 - **Status:** Accepted, amended 2026-11-02, with the D3 amendment (menus updating while open, and
-  the `when` vs `enabledWhen`/`checkedWhen` authoring rule) provisional until UX review confirms it
-  (see D3)
+  the `when` vs `enabledWhen`/`checkedWhen` authoring rule) provisional until UX review (PT-5037)
+  confirms it (see D3)
 - **Context:** Menu items that cannot act (Insert footnote in a read-only project, Sync on a
   resource, Insert comment without the comment role) were clickable and failed only at submission
   with an error, which users read as a dead click. The earlier decision
@@ -5980,8 +5980,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   a gate on that key reads as false, so an item gated on a positive fact is disabled for a moment
   after startup; a gate on a negated fact is enabled for that moment. **Amended 2026-11-02
   (D3, provisional).** Originally: "Revisit when a second surface needs `enabledWhen` (overlay
-  context menus) or when key volume becomes noticeable." Tab menus and overlay context menus now honor `enabledWhen`
-  on command items; revisit when key volume becomes noticeable.
+  context menus) or when key volume becomes noticeable." Tab menus and overlay context menus now
+  honor `enabledWhen` on command items; revisit when key volume becomes noticeable.
 - **Amendments (2026-11-02, review of #2959):**
   - **D1:** A producer's `remove` releases its key for any process. A `set` refused because another
     live process owns the key is held (and logged at info on each refused set) and applied when that key is released
@@ -6000,10 +6000,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - **D3 (provisional until UX review confirms it; as of 2026-11-05 that review has not
     happened):** what follows is what the code does, not yet a settled convention. UX is to decide
     whether a menu may change under the pointer while it is open, and with it whether the authoring
-    rule below stands. TODO(PT-5037): settle or change D3 per that review, then drop this
-    note. Every surface updates while open: toolbar, web view top menus, self-rendered
-    menus, tab menus and overlay context menus. On the macOS menubar, enabled/checked update in place on
-    the existing native items; a visibility or structure change rebuilds the menubar, because
+    rule below stands. TODO(PT-5037): settle or change D3 per that review, then drop this note.
+    Every surface updates while open: toolbar, web view top menus, self-rendered menus, tab menus
+    and overlay context menus. On the macOS menubar, enabled/checked update in place on the
+    existing native items; a visibility or structure change rebuilds the menubar, because
     evaluation removes hidden items and prunes emptied containers. Behaviour while a native menu is
     open is unverified on a real Mac as of 2026-11-02. `enabledWhen` became allowed on tab-menu and
     overlay-context-menu command items; `checkedWhen` there, and `enabledWhen` on their submenu
