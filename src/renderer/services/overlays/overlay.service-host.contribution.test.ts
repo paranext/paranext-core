@@ -384,6 +384,59 @@ describe('showContextMenu contribution integration', () => {
       await promise;
     });
 
+    it('picks up a short-circuited key once the key before it changes', async () => {
+      const { promise, overlay } = await openMenu({
+        groups: { 'ext.group1': { order: 1 } },
+        items: [
+          {
+            command: 'ext.cmd',
+            group: 'ext.group1',
+            label: 'Cmd',
+            order: 1,
+            localizeNotes: '',
+            enabledWhen: 'ext.a && ext.b',
+          },
+        ],
+      });
+      emitKey('ext.a', true);
+      expect(currentOverlay(overlay.id).items[0]).toMatchObject({ disabled: true });
+
+      emitKey('ext.b', true);
+
+      expect(currentOverlay(overlay.id).items[0]).not.toHaveProperty('disabled');
+      overlay.resolve(undefined);
+      await promise;
+    });
+
+    it('looks up the web view project when only enabledWhen uses {projectId}', async () => {
+      const definition: SavedWebViewDefinition = {
+        id: 'live-webview',
+        webViewType: 'ext.myWebView',
+        projectId: 'proj1',
+      };
+      vi.mocked(webViewService.getOpenWebViewDefinition).mockResolvedValue(definition);
+      keyValues.set('ext.project.PROJ1.flag', true);
+
+      const { promise, overlay } = await openMenu({
+        groups: { 'ext.group1': { order: 1 } },
+        items: [
+          {
+            command: 'ext.cmd',
+            group: 'ext.group1',
+            label: 'Cmd',
+            order: 1,
+            localizeNotes: '',
+            enabledWhen: 'ext.project.{projectId}.flag',
+          },
+        ],
+      });
+
+      expect(webViewService.getOpenWebViewDefinition).toHaveBeenCalledTimes(1);
+      expect(overlay.items[0]).not.toHaveProperty('disabled');
+      overlay.resolve(undefined);
+      await promise;
+    });
+
     it('ignores a key the menu did not read', async () => {
       const { promise, overlay } = await openMenu(fixtureMenu);
       const before = getOverlayById(overlay.id);
