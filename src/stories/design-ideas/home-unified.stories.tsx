@@ -133,7 +133,7 @@ export const DownloadMoreModal: Story = {
         story:
           'S/R integration variant + hidden DBL rows. The inline table shows only projects and ' +
           'resources on the computer plus new-on-server projects — the definite catalog. A ' +
-          '"Download more resources" button sits below the list with a count of DBL items ' +
+          '"Get resources" button sits below the list with a count of DBL items ' +
           'matching the current search/filter; clicking it opens a near-full-screen modal that ' +
           'browses the DBL catalog with independent search + type + language filters. The modal ' +
           'groups its list into "On this computer" (expanded) and "Available for download" ' +
@@ -194,9 +194,9 @@ export const Unified: Story = {
           'by last use. Hover (or keyboard-focus) the icon and short name for a tooltip with the ' +
           'full name, language and type, as on the production Home. Every row action is the same ' +
           'width whatever its label, so the split chevrons line up in one column — in the download ' +
-          'modal too, which also drops its Type column. Choosing "Paratext projects" in the ' +
-          'dropdown hides the type buttons (only one type is left) and replaces the "Download ' +
-          'resources" button below the list with Clear filters.',
+          'Get resources overlay too. Choosing "Paratext projects" in the dropdown hides the type ' +
+          'buttons (only one type is left) and replaces the "Get resources" button below the list ' +
+          'with Clear filters.',
       },
     },
   },
@@ -214,7 +214,7 @@ export const UnifiedSimple: Story = {
     docs: {
       description: {
         story:
-          'Unified in Simple interface mode, scoped to Paratext projects with no "Download ' +
+          'Unified in Simple interface mode, scoped to Paratext projects with no "Get ' +
           'resources" button — the shape the Simple-mode "More projects…" dialog shows. Open is ' +
           'the primary action of every row on this computer, including rows that need a Sync and ' +
           'resources with an Update: that action moves to the top of the chevron menu, and the ' +
@@ -253,14 +253,14 @@ export const HiddenItems: Story = {
 };
 
 // The download modal on its own, opened by a button outside it — the shape another surface (e.g.
-// a resource panel's "Download resources" button) would use.
+// a resource panel's "Get resources" button) would use.
 function DownloadOverlayOnlyStory() {
   const { items, inFlightIds, hasMore, fetchMore, applyAction, dblAvailableCount } =
     useUnifiedCatalog(FULL_CATALOG);
   const [isOpen, setIsOpen] = useState(false);
   return (
     <div className="tw:p-4">
-      <Button onClick={() => setIsOpen(true)}>Download resources</Button>
+      <Button onClick={() => setIsOpen(true)}>Get resources</Button>
       <HomeUnified
         items={items}
         inFlightIds={inFlightIds}

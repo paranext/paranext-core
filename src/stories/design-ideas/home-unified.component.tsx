@@ -73,19 +73,34 @@ import {
   ChevronsUpDown,
   ChevronUp,
   Ellipsis,
-  Globe,
+  ExternalLink,
+  Languages,
   Minus,
+  Plus,
   ScrollText,
   Star,
+  PanelsTopLeft,
+  WifiOff,
+  Wrench,
   X,
 } from 'lucide-react';
-import { ReactNode, UIEvent, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ReactNode,
+  SVGProps,
+  UIEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   isShownByProjectResourceFilter,
   ProjectResourceFilter,
   ProjectResourceFilterOption,
   ProjectResourceFilterValue,
 } from '../../../extensions/src/platform-get-resources/src/project-resource-filter.component';
+import { ParatextProjectLogo } from './paratext-project-logo.component';
 
 // User-facing strings collected in one place. In production these would be pulled from the
 // localization store; the prototype uses English defaults so the design idea is legible in isolation.
@@ -94,12 +109,14 @@ const STRINGS = {
   searchPlaceholder: 'Search projects & resources by name, language, or type',
   filterLanguage: 'Language',
   anyLanguage: 'Any language',
-  onlyMyLanguages: 'Only my languages',
+  onlyMyLanguages: 'Your languages',
   onlyMyLanguagesTooltip:
     'Filter to languages that are already installed among your projects and resources.',
-  myLanguagesHeading: 'Your languages:',
+  myLanguagesHeading: 'Languages of your projects and resources:',
+  myLanguagesMore: '{count} more',
   myLanguagesNone: 'No projects or resources are installed yet.',
   clearAll: 'Clear filters',
+  usedBy: 'Used by',
   filtersActive: 'Filters:',
   shortName: 'Short name',
   fullName: 'Full name',
@@ -114,6 +131,7 @@ const STRINGS = {
   sync: 'Sync',
   update: 'Update',
   remove: 'Remove',
+  showInDbl: 'Show in DBL',
   hide: 'Hide',
   unhide: 'Unhide',
   hiddenGroup: 'Hidden ({count})',
@@ -122,10 +140,9 @@ const STRINGS = {
   moreActions: 'More actions',
   moreActionsUpdateAvailable: 'More actions — update available',
   installed: 'Installed',
-  itemsSuffix: 'items',
   onComputerSuffix: 'on this computer',
   hiddenSuffix: 'hidden',
-  ofSuffix: 'of',
+  clearFiltersToShowAll: 'Clear filters to show all',
   selectionSuffix: 'selected',
   clearSelection: 'Select None',
   clearSelectionAria: 'Select None',
@@ -140,11 +157,11 @@ const STRINGS = {
   presetNewTooltip: 'Projects new for you',
   presetOnComputer: 'On this computer',
   presetOnComputerTooltip: 'Projects and resources installed on this computer',
-  downloadPrefix: 'Download',
+  downloadPrefix: 'Get',
   downloadAvailableSuffix: 'available',
   downloadTypeResourcesPlural: 'resources',
   typeProjectPlural: 'Projects',
-  typeScripturePlural: 'Scriptures',
+  typeScripturePlural: 'Bible texts',
   typeCommentaryPlural: 'Commentaries',
   typeERPlural: 'Enhanced Resources',
   typeSLRPlural: 'Source Languages',
@@ -155,7 +172,7 @@ const STRINGS = {
   modalRowUiOpenPrimary: 'Open on right',
   modalRowUiOpenInline: 'Open inline + actions right',
   modalRowUiActionInline: 'Action inline',
-  downloadModalTitle: 'Download/install resources',
+  downloadModalTitle: 'Get resources',
   downloadModalDescription:
     'Browse resources from DBL and manage the ones already installed on this computer. Search and filter to find what you need.',
   downloadModalInstall: 'Install',
@@ -176,18 +193,23 @@ const STRINGS = {
   languageSelectedSingular: 'language selected',
   languageSelectedPlural: 'languages selected',
   noResults: 'No projects or resources match your filters.',
-  clearFiltersCta: 'Clear filters',
   browseDblCta: 'Nothing local yet — search or browse resources on DBL to get started.',
   loadingMore: 'Loading more…',
   actionTipInstall: 'Available on DBL — install to open.',
   actionTipGet: 'Available on the send/receive server — get to work with it locally.',
   actionTipUpdate: 'A newer version is available on DBL.',
+  newVersionFrom: 'New version from {date}',
   actionTipOpenProject: 'Editable project on this machine.',
   actionTipOpenResource: 'Read-only resource on this machine.',
+  readOnlyProject: 'Read-only',
+  admin: 'Your role: admin',
+  hasTeamLayout: 'Has a team layout',
+  localOnly: 'Only on this computer, not on the Send/Receive server',
+  teamLayoutNotSent: 'Team layout not sent',
+  editTeamLayout: 'Edit team layout',
   editedOnServer: 'Edited on the server:',
   editedLocally: 'Edited locally:',
   syncNoDetails: 'Local edits are not yet on the send/receive server.',
-  updateInMenuTip: 'Update is in the menu.',
   removeConfirmTitlePrefix: 'Remove',
   removeConfirmBody: 'This deletes the local copy. You can re-download it from DBL later.',
   removeConfirmBodyProject:
@@ -195,7 +217,7 @@ const STRINGS = {
   cancel: 'Cancel',
   confirmRemove: 'Remove',
   sizeMbSuffix: 'MB',
-  typeScripture: 'Scripture',
+  typeScripture: 'Bible text',
   typeCommentary: 'Commentary',
   typeER: 'Enhanced Resource',
   typeSLR: 'Source Language',
@@ -260,6 +282,27 @@ export type UnifiedItem = {
    * Hidden group. Hiding is the only way to unlist an item; Remove uninstalls it.
    */
   isHidden?: boolean;
+  /** Resources with an update: when the newer version was published on DBL. */
+  newVersionIso?: string;
+  /** Projects only: the project's administrator has set a team layout for it. */
+  hasTeamLayout?: boolean;
+  /** Projects only: the user is one of the project's administrators. */
+  isAdmin?: boolean;
+  /**
+   * Projects only: the ISO date a team layout was saved on this computer that has not been sent
+   * yet. The project needs a Sync, whose reason names the layout.
+   */
+  teamLayoutSavedIso?: string;
+  /**
+   * Projects only: the project is on this computer alone, not on the Send/Receive server. Whoever
+   * created it administers it, so it is never also marked as administered (`isAdmin`).
+   */
+  isLocalOnly?: boolean;
+  /**
+   * Projects only: the user cannot edit this project's text. Its Paratext logo is monochrome rather
+   * than colored, which says so without a separate lock icon.
+   */
+  isReadOnly?: boolean;
 };
 
 export type UnifiedItemAction =
@@ -270,7 +313,11 @@ export type UnifiedItemAction =
   | { kind: 'update'; batch?: boolean }
   | { kind: 'remove' }
   | { kind: 'hide' }
-  | { kind: 'unhide' };
+  | { kind: 'unhide' }
+  /** Opens the resource's page on the DBL website, outside the app. */
+  | { kind: 'showInDbl' }
+  /** Opens the Team layout dialog for a project the user administers. */
+  | { kind: 'editTeamLayout' };
 
 export type HomeUnifiedProps = {
   items: UnifiedItem[];
@@ -299,9 +346,9 @@ export type HomeUnifiedProps = {
   onFetchMore?: () => void;
   // downloadMore variant only. Total count of DBL-not-installed resources available for
   // download, supplied by the caller via a lightweight count-only backend call (not by iterating
-  // `items`). Lets the Home view show `Download resources {n} available` without paging in the
+  // `items`). Lets the Home view show `Get resources {n} available` without paging in the
   // full DBL catalog upfront — the catalog is only fetched when the user opens the modal. If
-  // omitted, the button falls back to "Download resources" with no count.
+  // omitted, the button falls back to "Get resources" with no count.
   dblAvailableCount?: number;
   /** Layout variant. See the exported `HomeUnifiedVariant` doc for behavior differences. */
   variant?: HomeUnifiedVariant;
@@ -317,10 +364,12 @@ export type HomeUnifiedProps = {
   isDownloadOverlayOpen?: boolean;
   /** Fires whenever the download modal asks to open or close. */
   onDownloadOverlayOpenChange?: (open: boolean) => void;
+  /** The types the download modal's type filter starts on when `isDownloadOverlayOpen` opens it. */
+  downloadOverlayTypes?: UnifiedItemType[];
   /**
    * Render only the download modal and the remove-confirmation dialog, with no Home card, so
-   * another surface (e.g. a resource panel's "Download resources" button) can open the modal
-   * through `isDownloadOverlayOpen`.
+   * another surface (e.g. a resource panel's "Get resources" button) can open the modal through
+   * `isDownloadOverlayOpen`.
    */
   overlayOnly?: boolean;
   /**
@@ -328,8 +377,40 @@ export type HomeUnifiedProps = {
    * it to All.
    */
   initialProjectResourceFilter?: ProjectResourceFilterValue;
-  /** `false` leaves out the header's "Download resources" button. Defaults to `true`. */
+  /**
+   * For a download modal opened to choose something: on each resource on this computer, the split
+   * button's primary half becomes this action — "Use in left column" when opened from the model
+   * text column, "Use in text collection" from the text collection — and Open moves into its menu.
+   * `tooltip` explains it; `onUse` gets the row's item.
+   */
+  rowUseAction?: {
+    label: string;
+    tooltip: string;
+    onUse: (item: UnifiedItem) => void;
+    /** Whether a row is already used; such a row shows `usedLabel`, disabled, instead. */
+    isUsed?: (item: UnifiedItem) => boolean;
+    usedLabel?: string;
+    /** Whether a row can be used at all; other rows keep their usual buttons. Defaults to all. */
+    isUsable?: (item: UnifiedItem) => boolean;
+  };
+  /**
+   * For Home used to open something (Power's New Tab): every row on this computer's primary button
+   * is Open, with Sync and Update only in its menu, as in Simple.
+   */
+  isOpenFocused?: boolean;
+  /** `false` leaves out the header's "Get resources" button. Defaults to `true`. */
   showDownloadButton?: boolean;
+  /**
+   * Gives each row of Home and Get resources its primary button and, beside it, a separate "…"
+   * button for the row's other actions, instead of one split button with a chevron.
+   */
+  isRowMenuSeparate?: boolean;
+  /**
+   * `false` leaves out the header's filters (the type filters and the project / resource scope),
+   * keeping only the search box — for Home used to open something (Power's New Tab). Defaults to
+   * `true`.
+   */
+  showFilters?: boolean;
   /**
    * Set when Home is hosted in a dialog: the header keeps its end clear of the dialog's own close
    * X, and a Close button in the footer calls this.
@@ -355,8 +436,7 @@ export type HomeUnifiedProps = {
 //   'downloadMore'     — S/R integration + hides DBL rows from the main table. The table shows
 //                        only projects/resources on the computer plus new-on-server projects. A
 //                        "Download more" button below the list opens a near-full-screen modal
-//                        with the full DBL catalog and its own filters. The summary switches
-//                        from `x of y+ items` to the definite `x of y (+z)` form.
+//                        with the full DBL catalog and its own filters.
 //   'downloadMoreTabs' — Same as 'downloadMore' outside the modal. Inside the modal, a Tabs bar
 //                        at the top switches the row-action UI between three shapes:
 //                          - Open-primary: row button is always Open (disabled for DBL); every
@@ -372,7 +452,7 @@ export type HomeUnifiedProps = {
 //                        (carrying the explanatory tooltip, as in 'default') and a chevron that
 //                        opens the remaining actions. Home rows add Remove for projects and Hide
 //                        for every row. The modal's language combobox has no tooltip; the
-//                        "Only my languages" tooltip lists the user's languages instead.
+//                        "Your languages" tooltip lists the user's languages instead.
 //   'unified'          — Same as 'downloadMoreSplit', with no Type or Last used column (the list
 //                        still opens sorted by last use). The type moves into a tooltip on the icon
 //                        and short name, with the full name and language, as on the production
@@ -386,8 +466,91 @@ export type HomeUnifiedVariant =
   | 'downloadMoreSplit'
   | 'unified';
 
+/** Simple mode's slot for a row's leading Sync / Update button: wide enough for "Update". */
+const LEADING_BUTTON_SLOT_CLASS = 'tw:flex tw:w-16 tw:shrink-0 tw:justify-start';
+/**
+ * The "Short name" heading, started where the names do when rows have that slot: the first column's
+ * `ps-6`, the slot's `w-16`, then the cell's `gap-3`.
+ */
+const SHORT_NAME_HEAD_PAST_LEADING_SLOT_CLASS =
+  'tw:ps-[calc(--spacing(6)+--spacing(16)+--spacing(3))]';
+
+/**
+ * A footer summary — "12 on this computer (1 hidden)" in Home, "246 resources (1 hidden)" in Get
+ * resources — counting everything, whatever the filters show. The hidden part is left out at zero.
+ */
+function footerSummary(count: number, suffix: string, hidden: number): string {
+  const base = `${count} ${suffix}`;
+  return hidden > 0 ? `${base} (${hidden} ${STRINGS.hiddenSuffix})` : base;
+}
+
+/** The date in an Update button's tooltip, e.g. "New version from Nov 2, 2026". */
+const NEW_VERSION_DATE_FORMAT = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
+
+/** How many of the user's languages the "Your languages" tooltip names before "n more". */
+const MAX_LANGUAGES_IN_TOOLTIP = 5;
+
+/**
+ * Widths, in pixels, below which Home's and Get resources' tables give up room, in this order: the
+ * Type column, then Language, then Full name, and last the row's buttons, which fold into one "…"
+ * menu.
+ */
+const MIN_WIDTH_FOR = { type: 960, language: 780, fullName: 600, actionButtons: 300 } as const;
+
+/**
+ * Width below which Home's "Select & filter" label goes, leaving the preset buttons: after the Full
+ * name column, before the row buttons fold.
+ */
+const MIN_WIDTH_FOR_PRESET_LABEL = 580;
+
+type ColumnVisibility = {
+  type: boolean;
+  language: boolean;
+  fullName: boolean;
+  /** `false`: the action cell is one "…" menu holding every action. */
+  actionButtons: boolean;
+};
+
+function columnsForWidth(width: number): ColumnVisibility {
+  return {
+    type: width >= MIN_WIDTH_FOR.type,
+    language: width >= MIN_WIDTH_FOR.language,
+    fullName: width >= MIN_WIDTH_FOR.fullName,
+    actionButtons: width >= MIN_WIDTH_FOR.actionButtons,
+  };
+}
+
+/**
+ * An element's own width, rather than the viewport's: in Power, Home sits in a dock panel that can
+ * be much narrower than the window. Attach the returned ref to the element; until it is measured
+ * the width reads as unlimited.
+ */
+function useElementWidth(): [(element: HTMLElement | null) => void, number] {
+  const [element, setElement] = useState<HTMLElement | undefined>(undefined);
+  const ref = useCallback((next: HTMLElement | null) => setElement(next ?? undefined), []);
+  const [width, setWidth] = useState(Number.POSITIVE_INFINITY);
+  useEffect(() => {
+    if (!element || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setWidth(entry.contentRect.width);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [element]);
+  return [ref, width];
+}
+
+/** The scope dropdown's icon for Paratext projects: the same logo a project row shows. */
+function ParatextProjectsFilterIcon({ className }: SVGProps<SVGSVGElement>) {
+  return <ParatextProjectLogo isEditable className={className} />;
+}
+
 const PROJECT_RESOURCE_FILTER_OPTIONS: ProjectResourceFilterOption[] = [
-  { key: 'paratextProject', label: STRINGS.filterParatextProjects, icon: ScrollText },
+  {
+    key: 'paratextProject',
+    label: STRINGS.filterParatextProjects,
+    icon: ParatextProjectsFilterIcon,
+  },
   { key: 'resource', label: STRINGS.filterResources, icon: BookOpen },
 ];
 
@@ -402,6 +565,12 @@ const PROJECT_RESOURCE_FILTER_OPTIONS: ProjectResourceFilterOption[] = [
 // background destructive.
 const DESTRUCTIVE_MENU_ITEM_CLASS =
   'tw:[[data-slot=dropdown-menu-content]_&[data-variant=destructive]]:text-destructive! tw:[[data-slot=dropdown-menu-content]_&[data-variant=destructive]:focus]:bg-destructive/10!';
+// The same forcing reaches every element inside a destructive item, so a label and hint nested in
+// one (Power's Remove on a resource other projects use) restate their colors the same way.
+const DESTRUCTIVE_MENU_ITEM_LABEL_CLASS =
+  'tw:[[data-slot=dropdown-menu-content]_[data-variant=destructive]_&]:text-destructive!';
+const DESTRUCTIVE_MENU_ITEM_HINT_CLASS =
+  'tw:[[data-slot=dropdown-menu-content]_[data-variant=destructive]_&]:text-muted-foreground!';
 
 const SIDE_TOOLTIP_ARROW_CLASS = 'tw:translate-y-[calc(-50%-1px)]';
 
@@ -413,19 +582,24 @@ const TOOLTIP_TRIGGER_BUTTON_CLASS =
   'tw:cursor-default tw:rounded-sm tw:text-start tw:outline-hidden tw:focus-visible:ring-2 tw:focus-visible:ring-ring';
 
 // The download modal's sections: resources on this computer (update-available ones included), then
-// the DBL resources not yet installed.
-type ModalSectionId = 'installed' | 'available';
+// the DBL resources not yet installed, then — as in Home — the hidden ones, wherever they are.
+type ModalSectionId = 'installed' | 'available' | 'hidden';
 const MODAL_SECTIONS: readonly { id: ModalSectionId; label: string }[] = [
   { id: 'installed', label: STRINGS.modalSectionInstalled },
   { id: 'available', label: STRINGS.modalSectionAvailable },
+  { id: 'hidden', label: STRINGS.hiddenLabel },
 ];
 const DEFAULT_MODAL_OPEN_SECTIONS: Record<ModalSectionId, boolean> = {
-  installed: true,
-  available: false,
+  installed: false,
+  available: true,
+  hidden: false,
 };
+// What a search opens: every section a match could be in. A search leaves the Hidden section as it
+// is, as Home's search leaves its Hidden group.
 const ALL_MODAL_SECTIONS_OPEN: Record<ModalSectionId, boolean> = {
   installed: true,
   available: true,
+  hidden: false,
 };
 
 type SortKey = 'shortName' | 'fullName' | 'language' | 'type' | 'lastUsed' | 'status' | 'action';
@@ -479,49 +653,138 @@ const typeLabelPlural = (value: string): string => {
  * not depend on seeing the icon or hovering the row. The trigger is a button so the keyboard
  * reaches it; with no Type column this tooltip is the only place the type appears.
  */
-function NameWithDetails({ item }: { item: UnifiedItem }) {
-  const Icon = item.type === 'Project' ? ScrollText : BookOpen;
-  const typeLabel = TYPE_LABEL[item.type];
+function NameWithDetails({
+  item,
+  hasLeadingButton = false,
+  usedByLabel,
+}: {
+  item: UnifiedItem;
+  /** The row shows its own Sync or Update button before the name, which takes the dot's place. */
+  hasLeadingButton?: boolean;
+  /**
+   * "Used by NNB, WEB" for a resource some project's team shares: a muted project icon at the end
+   * of the cell, named by this text, which is also a line of the name's tooltip.
+   */
+  usedByLabel?: string;
+}) {
+  const isProject = item.type === 'Project';
+  // As in the project picker: a wifi-off icon for a project on this computer alone, which its
+  // creator administers anyway, otherwise a wrench for one the user administers.
+  const role = (() => {
+    if (!isProject) return undefined;
+    if (item.isLocalOnly) return { Icon: WifiOff, label: STRINGS.localOnly };
+    if (item.isAdmin) return { Icon: Wrench, label: STRINGS.admin };
+    return undefined;
+  })();
+  const hasTeamLayoutIcon = isProject && Boolean(item.hasTeamLayout);
+  const typeLabel =
+    isProject && item.isReadOnly
+      ? `${TYPE_LABEL[item.type]}, ${STRINGS.readOnlyProject}`
+      : TYPE_LABEL[item.type];
   // Main's unsynced dot (`home-project-unsynced-dot`), here for anything waiting on a Sync or an
   // Update. Positioned absolutely in the gap before the icon, so rows with and without a dot keep
   // their icons in one column.
   const hasPendingChange =
-    item.status === 'installedNeedsSync' || item.status === 'installedNeedsUpdate';
-  return (
+    !hasLeadingButton &&
+    (item.status === 'installedNeedsSync' || item.status === 'installedNeedsUpdate');
+  // The secondary icons sit at the end of the cell, under one tooltip naming each of them.
+  const secondaryLabels: string[] = [];
+  if (role) secondaryLabels.push(role.label);
+  if (hasTeamLayoutIcon) secondaryLabels.push(STRINGS.hasTeamLayout);
+  if (usedByLabel) secondaryLabels.push(usedByLabel);
+  const secondaryIcons = secondaryLabels.length > 0 && (
     <Tooltip>
-      <TooltipTrigger className={TOOLTIP_TRIGGER_BUTTON_CLASS}>
-        <span className="tw:flex tw:flex-row tw:items-center tw:gap-3">
-          <span className="tw:relative tw:flex tw:items-center">
-            {hasPendingChange && (
-              <span
-                data-testid="home-project-unsynced-dot"
-                className="tw:absolute tw:-start-3 tw:top-1/2 tw:h-2 tw:w-2 tw:-translate-y-1/2 tw:rounded-full tw:bg-primary"
+      <TooltipTrigger
+        className={cn(
+          TOOLTIP_TRIGGER_BUTTON_CLASS,
+          'tw:ms-auto tw:flex tw:items-center tw:gap-1.5 tw:text-muted-foreground',
+        )}
+      >
+        {/* Projects keep fixed slots, so every row's role icon (wrench or wifi-off) lines up in
+            one column and its team layout icon in the next, whichever a row lacks. */}
+        {isProject && (
+          <span className="tw:flex tw:w-3.5 tw:justify-center">
+            {role && (
+              <role.Icon role="img" aria-label={role.label} size={14} className="tw:shrink-0" />
+            )}
+          </span>
+        )}
+        {isProject && (
+          <span className="tw:flex tw:w-3.5 tw:justify-center">
+            {hasTeamLayoutIcon && (
+              <PanelsTopLeft
+                role="img"
+                aria-label={STRINGS.hasTeamLayout}
+                size={14}
+                className="tw:shrink-0"
               />
             )}
-            <span role="img" aria-label={typeLabel} className="tw:flex tw:items-center">
-              <Icon className="tw:shrink-0" size={16} aria-hidden />
-            </span>
           </span>
-          <span className="tw:font-medium tw:whitespace-nowrap">{item.shortName}</span>
-        </span>
+        )}
+        {usedByLabel && (
+          <span role="img" aria-label={usedByLabel} className="tw:flex tw:items-center">
+            <ParatextProjectLogo isEditable={false} size={14} />
+          </span>
+        )}
       </TooltipTrigger>
-      {/* Capped to the room beside the trigger, so a long full name wraps rather than clipping. */}
-      <TooltipContent
-        side="right"
-        className="tw:max-w-(--radix-tooltip-content-available-width)"
-        arrowClassName={SIDE_TOOLTIP_ARROW_CLASS}
-      >
+      <TooltipContent side="left" arrowClassName={SIDE_TOOLTIP_ARROW_CLASS}>
         <div className="tw:flex tw:flex-col tw:gap-0.5">
-          {hasDistinctFullName({ shortName: item.shortName, fullName: item.fullName }) && (
-            <div className="tw:font-bold tw:wrap-anywhere">{item.fullName}</div>
-          )}
-          <div>{item.language}</div>
-          {/* The tooltip is inverted (`bg-foreground`), so its caption dims the tooltip's own text
-              color rather than using `muted-foreground`, which is meant for the page. */}
-          <div className="tw:text-background/80">{typeLabel}</div>
+          {secondaryLabels.map((label) => (
+            <div key={label}>{label}</div>
+          ))}
         </div>
       </TooltipContent>
     </Tooltip>
+  );
+  // The name's trigger is the icon and short name — not the empty rest of the cell, so the
+  // tooltip opens over what it describes.
+  return (
+    <>
+      <Tooltip>
+        <TooltipTrigger className={cn(TOOLTIP_TRIGGER_BUTTON_CLASS, 'tw:flex tw:items-center')}>
+          <span className="tw:flex tw:flex-row tw:items-center tw:gap-3">
+            <span className="tw:relative tw:flex tw:items-center">
+              {hasPendingChange && (
+                <span
+                  data-testid="home-project-unsynced-dot"
+                  className="tw:absolute tw:-start-3 tw:top-1/2 tw:h-2 tw:w-2 tw:-translate-y-1/2 tw:rounded-full tw:bg-primary"
+                />
+              )}
+              {/* A project shows the Paratext logo, colored if editable and monochrome if not; a
+                resource shows the open book. */}
+              <span role="img" aria-label={typeLabel} className="tw:flex tw:items-center">
+                {isProject ? (
+                  <ParatextProjectLogo isEditable={!item.isReadOnly} size={18} />
+                ) : (
+                  <BookOpen className="tw:shrink-0" size={16} aria-hidden />
+                )}
+              </span>
+            </span>
+            <span className="tw:font-medium tw:whitespace-nowrap">{item.shortName}</span>
+          </span>
+        </TooltipTrigger>
+        {/* Capped to the room beside the trigger, so a long full name wraps rather than clipping. */}
+        <TooltipContent
+          side="right"
+          className="tw:max-w-(--radix-tooltip-content-available-width)"
+          arrowClassName={SIDE_TOOLTIP_ARROW_CLASS}
+        >
+          <div className="tw:flex tw:flex-col tw:gap-0.5">
+            {hasDistinctFullName({ shortName: item.shortName, fullName: item.fullName }) && (
+              <div className="tw:font-bold tw:wrap-anywhere">{item.fullName}</div>
+            )}
+            <div>{item.language}</div>
+            {/* The tooltip is inverted (`bg-foreground`), so its caption dims the tooltip's own text
+            color rather than using `muted-foreground`, which is meant for the page. */}
+            <div className="tw:text-background/80">{typeLabel}</div>
+            {usedByLabel && <div>{usedByLabel}</div>}
+            {role && <div>{role.label}</div>}
+            {hasTeamLayoutIcon && <div>{STRINGS.hasTeamLayout}</div>}
+          </div>
+        </TooltipContent>
+      </Tooltip>
+      {secondaryIcons}
+    </>
   );
 }
 
@@ -547,11 +810,25 @@ function primaryActionFor(status: UnifiedStatus): UnifiedItemAction['kind'] {
   }
 }
 
-/** Actions listed in the overflow menu, per status. */
-function secondaryActionsFor(status: UnifiedStatus): UnifiedItemAction['kind'][] {
-  switch (status) {
+/**
+ * Actions listed in the overflow menu: by status, then Edit team layout for a project on this
+ * computer the user administers, read-only ones included.
+ */
+function secondaryActionsFor(item: UnifiedItem): UnifiedItemAction['kind'][] {
+  const actions = secondaryActionsForStatus(item);
+  const canEditTeamLayout =
+    item.type === 'Project' &&
+    item.isAdmin &&
+    (item.status === 'installedProject' || item.status === 'installedNeedsSync');
+  return canEditTeamLayout ? [...actions, 'editTeamLayout'] : actions;
+}
+
+/** The overflow menu's actions by status (and whether a project is on the server). */
+function secondaryActionsForStatus(item: UnifiedItem): UnifiedItemAction['kind'][] {
+  switch (item.status) {
     case 'installedProject':
-      return ['sync'];
+      // A project only on this computer has no Send/Receive server to sync with.
+      return item.isLocalOnly ? [] : ['sync'];
     case 'installedResource':
       return ['remove'];
     case 'installedNeedsUpdate':
@@ -585,6 +862,10 @@ function actionLabel(kind: UnifiedItemAction['kind']): string {
       return STRINGS.hide;
     case 'unhide':
       return STRINGS.unhide;
+    case 'showInDbl':
+      return STRINGS.showInDbl;
+    case 'editTeamLayout':
+      return STRINGS.editTeamLayout;
     default:
       return kind;
   }
@@ -642,7 +923,7 @@ function buildLanguageOptions(items: UnifiedItem[]): MultiSelectComboBoxEntry[] 
 
 /**
  * A resource a project's team shares: a project administrator put it on the project's resource
- * list, so the user can neither hide nor remove it.
+ * list, so the user cannot remove it. Hiding it is still the user's own choice.
  */
 function isTeamSharedResource(item: UnifiedItem): boolean {
   return item.type !== 'Project' && (item.teamProjectIds ?? []).length > 0;
@@ -672,8 +953,10 @@ function orderMenuKinds(kinds: UnifiedItemAction['kind'][]): {
 function menuDisabledReason(
   item: UnifiedItem,
   kind: UnifiedItemAction['kind'],
+  isSimpleMode: boolean,
 ): string | undefined {
-  if ((kind === 'hide' || kind === 'remove') && isTeamSharedResource(item))
+  // Power lets the user remove a team-shared resource too; its menu item says whose it is instead.
+  if (kind === 'remove' && isSimpleMode && isTeamSharedResource(item))
     return STRINGS.teamSharedReason;
   return undefined;
 }
@@ -718,10 +1001,15 @@ export function HomeUnified({
   dblAvailableCount,
   className: cardClassName,
   isDownloadOverlayOpen,
+  downloadOverlayTypes,
   onDownloadOverlayOpenChange,
   overlayOnly = false,
   initialProjectResourceFilter = 'all',
   showDownloadButton = true,
+  rowUseAction,
+  isOpenFocused = false,
+  isRowMenuSeparate = false,
+  showFilters = true,
   onClose,
   interfaceMode = 'power',
 }: HomeUnifiedProps) {
@@ -738,6 +1026,9 @@ export function HomeUnified({
   // Simple mode: every Home row has its own actions, so the list selects one row at a time and has
   // no checkboxes or batch footer.
   const isSimpleMode = interfaceMode === 'simple';
+  // One row at a time, with no checkboxes, batch actions or Select & filter: Simple, and Home used
+  // to open something (Power's New Tab). The footer's count is centered, as in Simple.
+  const isSingleSelect = isSimpleMode || isOpenFocused;
   const [textFilter, setTextFilter] = useState<string>('');
   // The two type filters work as a scope and a refinement. The All / Paratext projects / Resources
   // dropdown (`projectResourceFilter`) sets the scope; the type-toggle buttons (`selectedTypes`)
@@ -782,7 +1073,10 @@ export function HomeUnified({
   // collapsed hover preview stays pinned to that scope and the clicked button flips to an
   // in-progress spinner. See `runBatchAction` below for the lifecycle.
   type PendingBatch = {
-    kind: Exclude<UnifiedItemAction['kind'], 'remove' | 'hide' | 'unhide'>;
+    kind: Exclude<
+      UnifiedItemAction['kind'],
+      'remove' | 'hide' | 'unhide' | 'showInDbl' | 'editTeamLayout'
+    >;
     ids: Set<string>;
   };
   const [pendingBatch, setPendingBatch] = useState<PendingBatch | undefined>(undefined);
@@ -799,8 +1093,8 @@ export function HomeUnified({
     onDownloadOverlayOpenChange?.(open);
   };
   const [modalTextFilter, setModalTextFilter] = useState<string>('');
-  // The modal's two collapsible sections. Opens with the user's library expanded and the DBL
-  // catalog collapsed, so the modal starts short; a search expands both (see `handleModalSearch`).
+  // The modal's two collapsible sections. Opens on what there is to download, with the resources
+  // already on this computer collapsed above it; a search expands both (see `handleModalSearch`).
   const [modalOpenSections, setModalOpenSections] = useState<Record<ModalSectionId, boolean>>(
     DEFAULT_MODAL_OPEN_SECTIONS,
   );
@@ -808,14 +1102,23 @@ export function HomeUnified({
   // the search leaves them as they are.
   const handleModalSearch = (next: string) => {
     setModalTextFilter(next);
-    if (next.trim() !== '') setModalOpenSections(ALL_MODAL_SECTIONS_OPEN);
+    if (next.trim() !== '')
+      setModalOpenSections((prev) => ({ ...ALL_MODAL_SECTIONS_OPEN, hidden: prev.hidden }));
   };
   const [modalSelectedTypes, setModalSelectedTypes] = useState<string[]>([]);
+  // A parent opening the modal for one kind of resource starts it filtered to that kind.
+  const wasDownloadOverlayOpenRef = useRef(isDownloadOverlayOpen ?? false);
+  useEffect(() => {
+    const isOpen = isDownloadOverlayOpen ?? false;
+    if (isOpen && !wasDownloadOverlayOpenRef.current && downloadOverlayTypes)
+      setModalSelectedTypes(downloadOverlayTypes);
+    wasDownloadOverlayOpenRef.current = isOpen;
+  }, [isDownloadOverlayOpen, downloadOverlayTypes]);
   const [modalSelectedLanguages, setModalSelectedLanguages] = useState<string[]>([]);
   // Modal-local selection. Kept separate from the outer table's selection so opening the modal
   // doesn't perturb whatever the user had selected on the Home view. Cleared on modal close.
   const [modalSelectedIds, setModalSelectedIds] = useState<Set<string>>(new Set());
-  // "Only my languages" is only exposed inside the modal in the downloadMore variant — see the
+  // "Your languages" is only exposed inside the modal in the downloadMore variant — see the
   // note next to where it was suppressed on the outer view. Sticky flag: true only right after
   // the user flipped it on; any manual removal of a language turns it back off (matches the
   // outer view's semantics).
@@ -885,6 +1188,25 @@ export function HomeUnified({
   // than done in the close handler, so a parent closing a controlled modal resets it too.
   // `modalRowUi` intentionally persists across opens — the tab bar lives outside the modal so the
   // user's sub-variant choice should stay the same whether or not the modal is open.
+  // Resources installed while the modal is open — one at a time or as a batch — are revealed where
+  // they now live: "On this computer" opens and they join the selection, so the next step (Open,
+  // say) is one click away. Watches the catalog rather than each install path (row button, menu,
+  // double-click, batch), since every one of them ends in the same status change.
+  const previousStatusesRef = useRef<ReadonlyMap<string, UnifiedStatus>>(new Map());
+  useEffect(() => {
+    const previous = previousStatusesRef.current;
+    previousStatusesRef.current = new Map(items.map((item) => [item.id, item.status]));
+    if (!isDownloadModalOpen) return;
+    const installedIds = items
+      .filter(
+        (item) => previous.get(item.id) === 'dblNotInstalled' && isLocallyInstalled(item.status),
+      )
+      .map((item) => item.id);
+    if (installedIds.length === 0) return;
+    setModalOpenSections((open) => ({ ...open, installed: true }));
+    setModalSelectedIds((selected) => new Set([...selected, ...installedIds]));
+  }, [items, isDownloadModalOpen]);
+
   const wasDownloadModalOpenRef = useRef(isDownloadModalOpen);
   useEffect(() => {
     const wasOpen = wasDownloadModalOpenRef.current;
@@ -919,11 +1241,49 @@ export function HomeUnified({
     return () => mql.removeEventListener('change', update);
   }, []);
 
+  // Home and Get resources each follow their own width, in Simple and Power alike: the table's
+  // columns go in `MIN_WIDTH_FOR` order. When Language goes, the type-toggle buttons collapse into
+  // one multi-select dropdown (and Get resources moves its language filters into that row); when
+  // the row buttons fold into "…", the header's title goes too.
+  const [cardRef, homeWidth] = useElementWidth();
+  const [modalRef, modalWidth] = useElementWidth();
+  const homeColumns = columnsForWidth(homeWidth);
+  const modalColumns = columnsForWidth(modalWidth);
+  const isCompact = !homeColumns.language;
+  const isModalCompact = !modalColumns.language;
+  const isNarrowest = !homeColumns.actionButtons;
+  const isPresetLabelShown = homeWidth >= MIN_WIDTH_FOR_PRESET_LABEL;
+  const isModalNarrowest = !modalColumns.actionButtons;
+  // Get resources moves its language filters into the type row when its Full name column goes.
+  const isModalLanguageInTypeRow = !modalColumns.fullName;
+
+  // "Used by NNB, WEB" for a resource some project's team shares, as the resource pickers say it.
+  const shortNamesById = useMemo(
+    () => new Map(items.map((item) => [item.id, item.shortName])),
+    [items],
+  );
+  const usedByLabel = (item: UnifiedItem): string | undefined => {
+    if (!isTeamSharedResource(item)) return undefined;
+    const names = (item.teamProjectIds ?? []).map((id) => shortNamesById.get(id) ?? id);
+    return `${STRINGS.usedBy} ${names.join(', ')}`;
+  };
+
   const myLanguages = useMemo(
     () =>
       new Set(items.filter((item) => isLocallyInstalled(item.status)).map((item) => item.language)),
     [items],
   );
+  // The user's languages, the one with the most projects and resources on this computer first;
+  // ties alphabetical.
+  const myLanguagesByUse = useMemo(() => {
+    const counts = new Map<string, number>();
+    items
+      .filter((item) => isLocallyInstalled(item.status))
+      .forEach((item) => counts.set(item.language, (counts.get(item.language) ?? 0) + 1));
+    return Array.from(counts.keys()).sort(
+      (a, b) => (counts.get(b) ?? 0) - (counts.get(a) ?? 0) || a.localeCompare(b),
+    );
+  }, [items]);
 
   // Items not hidden by the user. Hidden items are left out of batch selection, the presets, and
   // every count; Home lists them only in the collapsed Hidden group.
@@ -1079,6 +1439,8 @@ export function HomeUnified({
             remove: 5,
             hide: 6,
             unhide: 7,
+            showInDbl: 8,
+            editTeamLayout: 9,
           };
           cmp = rank[primaryActionFor(a.status)] - rank[primaryActionFor(b.status)];
           break;
@@ -1118,18 +1480,6 @@ export function HomeUnified({
     setIsDownloadModalOpen(true);
   };
 
-  // Global counts for the definite "x of y (+z)" summary line the downloadMore variant uses in
-  // place of "x of N+ items". These count the whole `items` array, not the filtered subset, so
-  // the y/z halves of the ratio stay stable as the user narrows the filter.
-  const onComputerCount = useMemo(
-    () => visibleItems.filter((item) => isLocallyInstalled(item.status)).length,
-    [visibleItems],
-  );
-  const sharedNotInstalledCount = useMemo(
-    () => visibleItems.filter((item) => item.status === 'sharedNotInstalled').length,
-    [visibleItems],
-  );
-
   const relativeFormatter = useMemo(
     () => new Intl.RelativeTimeFormat(undefined, { style: 'long', numeric: 'auto' }),
     [],
@@ -1166,14 +1516,14 @@ export function HomeUnified({
   // badge strip stays readable no matter what order the user picked things in.
   const sortLanguages = (langs: string[]) => [...langs].sort((a, b) => a.localeCompare(b));
 
-  // Controls the language combobox's own tooltip so that toggling "Only my languages" ON
+  // Controls the language combobox's own tooltip so that toggling "Your languages" ON
   // programmatically shows the list of languages that were just seeded. Left uncontrolled at rest
   // so normal hover/focus still works.
   const [isLanguageTooltipOpen, setIsLanguageTooltipOpen] = useState<boolean | undefined>(
     undefined,
   );
 
-  // Selecting "Only my languages" seeds the language filter with the languages of the user's
+  // Selecting "Your languages" seeds the language filter with the languages of the user's
   // locally-installed items. Turning it off always clears the language filter.
   const handleOnlyMyLanguagesToggle = (checked: boolean) => {
     if (checked) {
@@ -1190,7 +1540,7 @@ export function HomeUnified({
   };
 
   // Changes to selectedLanguages that don't come from the toggle turn the toggle off — the moment
-  // the user starts curating the list by hand, the "only my languages" invariant is gone.
+  // the user starts curating the list by hand, the "your languages" invariant is gone.
   const handleLanguagesChange = (next: string[]) => {
     setSelectedLanguages(sortLanguages(next));
     if (onlyMyLanguages) setOnlyMyLanguages(false);
@@ -1199,7 +1549,7 @@ export function HomeUnified({
   const toggleSelected = (item: UnifiedItem) => {
     if (item.isHidden) return;
     // Single select: the clicked row replaces the selection, and clicking it again keeps it.
-    if (isSimpleMode) {
+    if (isSingleSelect) {
       setSelectedIds((prev) => (prev.size === 1 && prev.has(item.id) ? prev : new Set([item.id])));
       return;
     }
@@ -1296,7 +1646,10 @@ export function HomeUnified({
   // to re-select. Also clears the hover preview so opacity resets even if the pointer stays
   // parked on the button.
   const runBatchAction = async (
-    kind: Exclude<UnifiedItemAction['kind'], 'remove' | 'hide' | 'unhide'>,
+    kind: Exclude<
+      UnifiedItemAction['kind'],
+      'remove' | 'hide' | 'unhide' | 'showInDbl' | 'editTeamLayout'
+    >,
     predicate: (item: UnifiedItem) => boolean,
   ) => {
     if (pendingBatch !== undefined) return;
@@ -1352,13 +1705,19 @@ export function HomeUnified({
       case 'get':
         return STRINGS.actionTipGet;
       case 'update':
-        return STRINGS.actionTipUpdate;
+        return item.newVersionIso
+          ? STRINGS.newVersionFrom.replace(
+              '{date}',
+              NEW_VERSION_DATE_FORMAT.format(new Date(item.newVersionIso)),
+            )
+          : STRINGS.actionTipUpdate;
       case 'sync': {
         const serverDate = formatRelative(item.editedOnServerIso, relativeFormatter);
         const localDate = formatRelative(item.editedLocallyIso, relativeFormatter);
-        if (!serverDate && !localDate) return STRINGS.syncNoDetails;
+        if (!serverDate && !localDate && !item.teamLayoutSavedIso) return STRINGS.syncNoDetails;
         return (
           <div className="tw:flex tw:flex-col tw:gap-1">
+            {item.teamLayoutSavedIso && <div>{STRINGS.teamLayoutNotSent}</div>}
             {serverDate && (
               <div>
                 {STRINGS.editedOnServer} {serverDate}
@@ -1383,29 +1742,65 @@ export function HomeUnified({
 
   // A Home row's primary action. Simple mode opens every row on this computer, including ones that
   // need a Sync or have an Update; rows not on this computer keep Get / Install.
+  // Simple, and Home opened to open something, put Open first on everything on this computer.
+  const prefersOpen = isSimpleMode || isOpenFocused;
   const homePrimaryKind = (item: UnifiedItem): UnifiedItemAction['kind'] =>
-    isSimpleMode && isLocallyInstalled(item.status) ? 'open' : primaryActionFor(item.status);
+    prefersOpen && isLocallyInstalled(item.status) ? 'open' : primaryActionFor(item.status);
+
+  // Simple mode's leading button, before the icon in place of the dot: Sync for a project with
+  // changes to sync, Update for a resource with a new version. The row's primary button stays Open.
+  const simpleLeadingKind = (item: UnifiedItem): 'sync' | 'update' | undefined => {
+    if (!isSimpleMode) return undefined;
+    if (item.status === 'installedNeedsSync') return 'sync';
+    if (item.status === 'installedNeedsUpdate') return 'update';
+    return undefined;
+  };
+  const simpleLeadingButton = (item: UnifiedItem) => {
+    const kind = simpleLeadingKind(item);
+    if (!kind) return undefined;
+    const isInFlight = inFlightIds.includes(item.id);
+    const button = (
+      <Button
+        size="sm"
+        className="tw:h-6 tw:px-2"
+        disabled={isInFlight}
+        onClick={(e) => {
+          e.stopPropagation();
+          onItemAction(item, { kind });
+        }}
+      >
+        {isInFlight ? <Spinner className="tw:h-4" /> : actionLabel(kind)}
+      </Button>
+    );
+    // Sync's tooltip has the edit dates that tell which way it will go; Update's, when the new
+    // version came out.
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>{button}</TooltipTrigger>
+        <TooltipContent side="top">{actionTooltip(item)}</TooltipContent>
+      </Tooltip>
+    );
+  };
 
   // The Update a Simple-mode row moved from its primary half into its menu, if any. A needed Sync
   // gets its own button in the short-name column's margin instead (see `renderHomeRow`).
   const simpleMenuStateKind = (item: UnifiedItem): 'update' | undefined => {
-    if (!isSimpleMode) return undefined;
+    if (!prefersOpen) return undefined;
     if (item.status === 'installedNeedsUpdate') return 'update';
     return undefined;
   };
 
-  // A Home row's primary-half tooltip. A Simple-mode row whose Sync / Update moved into the menu
-  // keeps that action's explanation and says where to find it.
-  const homeActionTooltip = (item: UnifiedItem): ReactNode => {
-    const stateKind = simpleMenuStateKind(item);
-    if (!stateKind) return actionTooltip(item);
-    return (
-      <div className="tw:flex tw:flex-col tw:gap-1">
-        {actionTooltip(item)}
-        <div>{STRINGS.updateInMenuTip}</div>
-      </div>
-    );
-  };
+  // An action button's tooltip. Sync has the edit dates that tell the user which way it will go,
+  // Update the new version's date; Open, Get and Install say all there is in their labels.
+  const actionButtonTooltip = (
+    item: UnifiedItem,
+    kind: UnifiedItemAction['kind'],
+  ): ReactNode | undefined =>
+    kind === 'sync' || kind === 'update' ? actionTooltip(item) : undefined;
+
+  // A Home row's primary-half tooltip.
+  const homeActionTooltip = (item: UnifiedItem): ReactNode | undefined =>
+    actionButtonTooltip(item, homePrimaryKind(item));
 
   const primaryButton = (item: UnifiedItem) => {
     const kind = homePrimaryKind(item);
@@ -1430,11 +1825,17 @@ export function HomeUnified({
     // name-cell rendering), so the action button is bare. Everywhere else the tooltip anchors to
     // the button itself, flipping from left → top at the narrowest breakpoint (sm-) where the
     // table only shows short-name + action columns.
-    if (isButtonsChrome) return button;
+    const tooltip = homeActionTooltip(item);
+    if (isButtonsChrome || tooltip === undefined) return button;
     return (
       <Tooltip>
         <TooltipTrigger asChild>{button}</TooltipTrigger>
-        <TooltipContent side={isNarrow ? 'top' : 'left'}>{homeActionTooltip(item)}</TooltipContent>
+        <TooltipContent
+          side={isNarrow ? 'top' : 'left'}
+          arrowClassName={isNarrow ? undefined : SIDE_TOOLTIP_ARROW_CLASS}
+        >
+          {tooltip}
+        </TooltipContent>
       </Tooltip>
     );
   };
@@ -1459,8 +1860,22 @@ export function HomeUnified({
   };
 
   const renderMenuItem = (item: UnifiedItem, kind: UnifiedItemAction['kind']) => {
-    const disabledReason = menuDisabledReason(item, kind);
+    const disabledReason = menuDisabledReason(item, kind, isSimpleMode);
+    // A hint under the label: why the item is disabled, or — for Power's Remove on a team-shared
+    // resource — which projects use it.
+    const hint =
+      disabledReason ??
+      (kind === 'remove' && isTeamSharedResource(item) ? usedByLabel(item) : undefined);
     const isDestructive = kind === 'remove';
+    const label =
+      kind === 'showInDbl' ? (
+        <span className="tw:flex tw:items-center tw:gap-2">
+          {actionLabel(kind)}
+          <ExternalLink className="tw:h-3.5 tw:w-3.5 tw:text-muted-foreground" aria-hidden />
+        </span>
+      ) : (
+        actionLabel(kind)
+      );
     return (
       <DropdownMenuItem
         key={kind}
@@ -1469,22 +1884,25 @@ export function HomeUnified({
         disabled={disabledReason !== undefined}
         onClick={() => runMenuAction(item, kind)}
       >
-        {disabledReason === undefined ? (
-          actionLabel(kind)
+        {hint === undefined ? (
+          label
         ) : (
           <div className="tw:flex tw:max-w-56 tw:flex-col">
-            <span>{actionLabel(kind)}</span>
-            <span className="tw:text-xs tw:text-muted-foreground">{disabledReason}</span>
+            <span className={DESTRUCTIVE_MENU_ITEM_LABEL_CLASS}>{label}</span>
+            <span
+              className={cn(
+                'tw:text-xs tw:text-muted-foreground',
+                DESTRUCTIVE_MENU_ITEM_HINT_CLASS,
+              )}
+            >
+              {hint}
+            </span>
           </div>
         )}
       </DropdownMenuItem>
     );
   };
 
-  // Row-menu entries shared by every menu, in `orderMenuKinds` order: state and secondary actions,
-  // a separator, then Hide / Unhide and Remove (destructive). The separator is left out when either
-  // side is empty. A kind `menuDisabledReason` rejects for this item shows disabled, with its reason
-  // under the label.
   const renderMenuItems = (item: UnifiedItem, kinds: UnifiedItemAction['kind'][]) => {
     const { head, tail } = orderMenuKinds(kinds);
     return (
@@ -1495,6 +1913,30 @@ export function HomeUnified({
       </>
     );
   };
+
+  // The narrowest layout's action cell: one "…" button whose menu also holds the row's buttons,
+  // `kinds[0]` (the primary action) first.
+  const actionsOnlyMenu = (item: UnifiedItem, kinds: UnifiedItemAction['kind'][]) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="tw:h-7 tw:w-7"
+          disabled={inFlightIds.includes(item.id)}
+          aria-label={`${STRINGS.moreActions}: ${item.shortName}`}
+        >
+          <Ellipsis className="tw:h-4 tw:w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">{renderMenuItems(item, kinds)}</DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  // Row-menu entries shared by every menu, in `orderMenuKinds` order: state and secondary actions,
+  // a separator, then Hide / Unhide and Remove (destructive). The separator is left out when either
+  // side is empty. A kind `menuDisabledReason` rejects for this item shows disabled, with its reason
+  // under the label.
 
   // Hide sits in every Home row's menu (disabled with its reason for team-shared resources).
   // `renderMenuItems` places it below the status-based secondary actions, above Remove.
@@ -1508,7 +1950,7 @@ export function HomeUnified({
     const stateKind = simpleMenuStateKind(item);
     const extras = withHide([
       ...(stateKind ? [stateKind] : []),
-      ...secondaryActionsFor(item.status).filter(
+      ...secondaryActionsFor(item).filter(
         (kind) => !(homePrimaryKind(item) === 'open' && kind === 'open'),
       ),
     ]);
@@ -1537,13 +1979,16 @@ export function HomeUnified({
   const homeSplitMenuKinds = (item: UnifiedItem): UnifiedItemAction['kind'][] => {
     const stateKind = simpleMenuStateKind(item);
     const leading: UnifiedItemAction['kind'][] = stateKind ? [stateKind] : [];
+    // Simple mode's leading Sync button is repeated first in the menu, so the menu lists every
+    // action the row offers.
+    if (prefersOpen && item.status === 'installedNeedsSync') leading.unshift('sync');
     if (item.isHidden)
       return [
         ...leading,
         'unhide',
         ...(isLocallyInstalled(item.status) ? ['remove' as const] : []),
       ];
-    const secondary = secondaryActionsFor(item.status).filter(
+    const secondary = secondaryActionsFor(item).filter(
       (kind) => kind !== 'remove' && !(homePrimaryKind(item) === 'open' && kind === 'open'),
     );
     const kinds: UnifiedItemAction['kind'][] = [...leading, ...secondary, 'hide'];
@@ -1567,38 +2012,78 @@ export function HomeUnified({
     item: UnifiedItem,
     primary: { kind: UnifiedItemAction['kind']; label: ReactNode; disabled: boolean },
     menuKinds: UnifiedItemAction['kind'][],
-    options: { attention?: 'update'; tooltip?: ReactNode } = {},
+    options: {
+      attention?: 'update';
+      tooltip?: ReactNode;
+      /** Replaces the primary half's action (`primary.kind` then only picks its look). */
+      onPrimary?: () => void;
+    } = {},
   ) => {
     const isOpen = primary.kind === 'open';
     const buttonVariant = isOpen ? 'ghost' : 'default';
     const hasMenu = menuKinds.length > 0;
     const isChevronMuted = isOpen;
+    // An explicit `tooltip: undefined` leaves the primary half without one.
+    const tooltip =
+      'tooltip' in options ? options.tooltip : actionButtonTooltip(item, primary.kind);
+    const primaryButtonElement = (
+      <Button
+        size="sm"
+        variant={buttonVariant}
+        disabled={primary.disabled}
+        className={cn('tw:h-7 tw:flex-1', {
+          'tw:bg-muted': isOpen,
+          'tw:rounded-e-none': hasMenu && !isRowMenuSeparate,
+        })}
+        onClick={() =>
+          options.onPrimary ? options.onPrimary() : onItemAction(item, { kind: primary.kind })
+        }
+      >
+        {primary.label}
+      </Button>
+    );
     const chevronLabel = (() => {
       if (options.attention === 'update') return STRINGS.moreActionsUpdateAvailable;
       return STRINGS.moreActions;
     })();
     return (
-      <div className="tw:flex tw:w-full" onClick={(e) => e.stopPropagation()} role="presentation">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              size="sm"
-              variant={buttonVariant}
-              disabled={primary.disabled}
-              className={cn('tw:h-7 tw:flex-1', {
-                'tw:bg-muted': isOpen,
-                'tw:rounded-e-none': hasMenu,
-              })}
-              onClick={() => onItemAction(item, { kind: primary.kind })}
+      <div
+        className={cn('tw:flex tw:w-full', { 'tw:gap-1': isRowMenuSeparate })}
+        onClick={(e) => e.stopPropagation()}
+        role="presentation"
+      >
+        {tooltip === undefined ? (
+          primaryButtonElement
+        ) : (
+          <Tooltip>
+            <TooltipTrigger asChild>{primaryButtonElement}</TooltipTrigger>
+            <TooltipContent
+              side={isNarrow ? 'top' : 'left'}
+              arrowClassName={isNarrow ? undefined : SIDE_TOOLTIP_ARROW_CLASS}
             >
-              {primary.label}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side={isNarrow ? 'top' : 'left'}>
-            {options.tooltip ?? actionTooltip(item)}
-          </TooltipContent>
-        </Tooltip>
-        {hasMenu && (
+              {tooltip}
+            </TooltipContent>
+          </Tooltip>
+        )}
+        {hasMenu && isRowMenuSeparate && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={chevronLabel}
+                disabled={inFlightIds.includes(item.id)}
+                className="tw:h-7 tw:w-7"
+              >
+                <Ellipsis className="tw:h-4 tw:w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {renderMenuItems(item, menuKinds)}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+        {hasMenu && !isRowMenuSeparate && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -1628,7 +2113,11 @@ export function HomeUnified({
   // The action column takes only the width of its widest control (`w-1` lets a table column shrink
   // to its content), which every row's split button then fills, so no variant leaves empty space
   // after the buttons.
-  const actionColumnClass = 'tw:w-1 tw:whitespace-nowrap';
+  // `pe-3` ends the buttons in line with the header's and footer's controls (the dialog's X and Close).
+  const actionColumnClass = 'tw:w-1 tw:whitespace-nowrap tw:pe-3';
+  // Without a checkbox column (Simple), the first column's padding makes room for the pending-change
+  // dot that sits before the type icon, and puts that dot in line with the header above the table.
+  const homeFirstColumnClass = isSingleSelect ? 'tw:ps-6' : 'tw:ps-4';
 
   const isModalRowUi = (value: string): value is ModalRowUi =>
     value === 'openPrimary' || value === 'openInline' || value === 'actionInline';
@@ -1643,7 +2132,13 @@ export function HomeUnified({
   // Every Home column, hidden-at-this-width ones included, so the Hidden group heading spans the row.
   // Simple mode has no checkbox column.
   const homeColumnCount =
-    7 + (hasInlineActionColumn ? 1 : 0) - (isUnifiedVariant ? 2 : 0) - (isSimpleMode ? 1 : 0);
+    (isSingleSelect ? 0 : 1) +
+    2 +
+    (hasInlineActionColumn ? 1 : 0) +
+    (homeColumns.fullName ? 1 : 0) +
+    (homeColumns.language ? 1 : 0) +
+    (homeColumns.type ? 1 : 0) +
+    (isUnifiedVariant ? 0 : 1);
 
   // The download modal and the remove confirmation. Rendered inside the Home card, or on their own
   // with `overlayOnly`.
@@ -1658,13 +2153,15 @@ export function HomeUnified({
             other row uses. */}
       <Dialog open={isDownloadModalOpen} onOpenChange={setIsDownloadModalOpen}>
         <DialogContent
+          ref={modalRef}
           className="tw:h-[90vh] tw:max-h-[90vh] tw:!max-w-[min(1100px,calc(100%-2rem))] tw:!p-0"
           style={{ display: 'flex', flexDirection: 'column' }}
         >
-          <DialogHeader className="tw:shrink-0 tw:px-4 tw:pt-4">
-            <DialogTitle>{STRINGS.downloadModalTitle}</DialogTitle>
-            <DialogDescription>{STRINGS.downloadModalDescription}</DialogDescription>
-          </DialogHeader>
+          {/* The title shows in the header row below, beside the search box, as Home's does; the
+              description is for assistive technology only. */}
+          <DialogDescription className="tw:sr-only">
+            {STRINGS.downloadModalDescription}
+          </DialogDescription>
           {(() => {
             // Modal scope: every "resource" (i.e. anything that isn't a Project). Downloadable
             // DBL rows appear alongside already-installed resources and update-available
@@ -1679,11 +2176,7 @@ export function HomeUnified({
               (modalRowUi === 'openInline' || modalRowUi === 'actionInline');
             const modalTypeOptions: MultiSelectComboBoxEntry[] = ALL_UNIFIED_ITEM_TYPES.filter(
               (type) => type !== 'Project' && resourceItems.some((item) => item.type === type),
-            ).map((type) => ({
-              value: type,
-              label: TYPE_LABEL[type],
-              secondaryLabel: String(resourceItems.filter((item) => item.type === type).length),
-            }));
+            ).map((type) => ({ value: type, label: TYPE_LABEL[type] }));
             const modalLanguageOptions: MultiSelectComboBoxEntry[] = (() => {
               const localLanguages = new Set(
                 items
@@ -1795,7 +2288,7 @@ export function HomeUnified({
                 </div>
               </TableHead>
             );
-            // Clear-all also drops the "Only my languages" flag — otherwise the toggle would
+            // Clear-all also drops the "Your languages" flag — otherwise the toggle would
             // stay on while the languages it seeded are gone, leaving the switch out of sync
             // with the visible filter state.
             const modalClearFilters = () => {
@@ -1806,7 +2299,23 @@ export function HomeUnified({
             };
             const modalActiveFilterCount =
               (modalTextFilter ? 1 : 0) + modalSelectedTypes.length + modalSelectedLanguages.length;
+            // Simple mode's overlay has no checkboxes and no batch buttons: each row's own button
+            // installs, updates or opens it. Its rows still show as selected after an install.
+            const isModalMultiSelect = !isSimpleMode;
+            // The footer counts every resource, on this computer or not; its sections' headings
+            // count each part.
+            const modalHiddenCount = resourceItems.filter((item) => item.isHidden).length;
+            const modalResourceCount = resourceItems.length - modalHiddenCount;
+            // Simple's leading Update slot, as in Home, whenever any resource has an update.
+            const modalHasLeadingSlot = resourceItems.some(
+              (item) => simpleLeadingKind(item) !== undefined,
+            );
+            let modalShortNameHeadClass = 'tw:ps-6';
+            if (isModalMultiSelect) modalShortNameHeadClass = 'tw:ps-4';
+            else if (modalHasLeadingSlot)
+              modalShortNameHeadClass = SHORT_NAME_HEAD_PAST_LEADING_SLOT_CLASS;
             const toggleModalSelected = (item: UnifiedItem) => {
+              if (!isModalMultiSelect) return;
               setModalSelectedIds((prev) => {
                 const next = new Set(prev);
                 if (next.has(item.id)) next.delete(item.id);
@@ -1931,24 +2440,35 @@ export function HomeUnified({
                     if (e.detail > 1) e.preventDefault();
                   }}
                   className={cn('tw:cursor-default', {
-                    // Suppress the "selected" highlight on dimmed rows so the
-                    // disabled state reads as inert, not just muted.
-                    'tw:bg-muted/40': isModalSelected && !isDimmedByHover,
+                    // A selected row is marked like keyboard focus — the focus ring, inset —
+                    // rather than by its background. Left off dimmed rows so the disabled state
+                    // reads as inert, not just muted.
+                    'tw:outline-2 tw:-outline-offset-2 tw:outline-ring tw:outline-solid':
+                      isModalSelected && !isDimmedByHover,
                     'tw:pointer-events-none tw:line-through tw:opacity-50 tw:grayscale':
                       isDimmedByHover,
                   })}
                 >
-                  <TableCell className="tw:ps-3 tw:pe-0" onClick={(e) => e.stopPropagation()}>
-                    <Checkbox
-                      checked={isModalSelected}
-                      onCheckedChange={() => toggleModalSelected(item)}
-                      aria-label={item.shortName}
-                    />
-                  </TableCell>
-                  <TableCell className="tw:ps-4">
+                  {isModalMultiSelect && (
+                    <TableCell className="tw:ps-3 tw:pe-0" onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={isModalSelected}
+                        onCheckedChange={() => toggleModalSelected(item)}
+                        aria-label={item.shortName}
+                      />
+                    </TableCell>
+                  )}
+                  <TableCell className={isModalMultiSelect ? 'tw:ps-4' : 'tw:ps-6'}>
                     <div className="tw:flex tw:items-center tw:gap-3">
+                      {modalHasLeadingSlot && (
+                        <div className={LEADING_BUTTON_SLOT_CLASS}>{simpleLeadingButton(item)}</div>
+                      )}
                       {isUnifiedVariant ? (
-                        <NameWithDetails item={item} />
+                        <NameWithDetails
+                          item={item}
+                          hasLeadingButton={simpleLeadingKind(item) !== undefined}
+                          usedByLabel={usedByLabel(item)}
+                        />
                       ) : (
                         <>
                           <BookOpen className="tw:shrink-0" size={16} />
@@ -1957,10 +2477,7 @@ export function HomeUnified({
                           </span>
                         </>
                       )}
-                      {/* The modal manages installs, so it lists hidden resources
-                                        too, marked so the user knows Home keeps them out of the
-                                        way. */}
-                      {item.isHidden && (
+                      {!isUnifiedVariant && item.isHidden && (
                         <span className="tw:text-xs tw:text-muted-foreground">
                           {STRINGS.hiddenLabel}
                         </span>
@@ -2023,15 +2540,13 @@ export function HomeUnified({
                       )}
                     </TableCell>
                   )}
-                  <TableCell className="tw:hidden tw:wrap-anywhere tw:whitespace-normal tw:md:!table-cell">
-                    {item.fullName}
-                  </TableCell>
-                  <TableCell className="tw:hidden tw:sm:!table-cell">{item.language}</TableCell>
-                  {!isUnifiedVariant && (
-                    <TableCell className="tw:hidden tw:lg:!table-cell">
-                      {TYPE_LABEL[item.type]}
+                  {modalColumns.fullName && (
+                    <TableCell className="tw:wrap-anywhere tw:whitespace-normal">
+                      {item.fullName}
                     </TableCell>
                   )}
+                  {modalColumns.language && <TableCell>{item.language}</TableCell>}
+                  {modalColumns.type && <TableCell>{TYPE_LABEL[item.type]}</TableCell>}
                   <TableCell
                     className={actionColumnClass}
                     onClick={(e) => e.stopPropagation()}
@@ -2043,9 +2558,12 @@ export function HomeUnified({
                       //   openPrimary (#1) + actionInline (#3) → always Open
                       //     (disabled for DBL rows), with the state action moved
                       //     into the ellipsis alongside Remove.
-                      const primaryKind: UnifiedItemAction['kind'] = useOpenPrimary
-                        ? 'open'
-                        : stateBasedKind;
+                      // Simple opens what is on this computer, as Home does; a needed Update has
+                      // its own button before the name.
+                      const primaryKind: UnifiedItemAction['kind'] =
+                        useOpenPrimary || (isSimpleMode && isLocallyInstalled(item.status))
+                          ? 'open'
+                          : stateBasedKind;
                       const primaryLabel = (() => {
                         if (primaryKind === 'update') return STRINGS.downloadModalUpdate;
                         if (primaryKind === 'install') return STRINGS.downloadModalInstall;
@@ -2055,11 +2573,11 @@ export function HomeUnified({
                         inFlight || (primaryKind === 'open' && !isLocallyInstalled(item.status));
                       const overflowKinds: UnifiedItemAction['kind'][] = (() => {
                         if (useOpenPrimary) {
-                          // Ellipsis carries the state action (install/update)
-                          // and Remove for installed rows. DBL rows list just
-                          // Install.
+                          // Ellipsis carries the state action (install/update),
+                          // Hide or Unhide, and Remove for installed rows.
                           const kinds: UnifiedItemAction['kind'][] = [];
                           if (stateBasedKind !== 'open') kinds.push(stateBasedKind);
+                          kinds.push('showInDbl', item.isHidden ? 'unhide' : 'hide');
                           if (
                             item.status === 'installedResource' ||
                             item.status === 'installedNeedsUpdate'
@@ -2069,11 +2587,47 @@ export function HomeUnified({
                         }
                         // Default modal behavior: Update rows carry both Open
                         // (jump to the current install) and Remove; installed
-                        // rows carry just Remove; DBL rows have no overflow.
-                        if (item.status === 'installedNeedsUpdate') return ['open', 'remove'];
-                        if (item.status === 'installedResource') return ['remove'];
-                        return [];
+                        // rows carry just Remove. Every row can be hidden (or
+                        // unhidden), DBL rows included.
+                        const visibilityKind = item.isHidden ? 'unhide' : 'hide';
+                        if (item.status === 'installedNeedsUpdate')
+                          return [
+                            primaryKind === 'open' ? 'update' : 'open',
+                            'showInDbl',
+                            visibilityKind,
+                            'remove',
+                          ];
+                        if (item.status === 'installedResource')
+                          return ['showInDbl', visibilityKind, 'remove'];
+                        return ['showInDbl', visibilityKind];
                       })();
+                      if (isSplitButtonVariant && !modalColumns.actionButtons)
+                        return actionsOnlyMenu(item, [primaryKind, ...overflowKinds]);
+                      // Opened to choose something (`rowUseAction`): the split button's primary half
+                      // uses the resource — or says it is already used — and Open moves into the
+                      // menu.
+                      if (
+                        isSplitButtonVariant &&
+                        rowUseAction &&
+                        isLocallyInstalled(item.status) &&
+                        item.type !== 'Project' &&
+                        (rowUseAction.isUsable?.(item) ?? true)
+                      ) {
+                        const isUsed = rowUseAction.isUsed?.(item) ?? false;
+                        return splitActionButton(
+                          item,
+                          {
+                            kind: 'open',
+                            label: isUsed ? rowUseAction.usedLabel : rowUseAction.label,
+                            disabled: inFlight || isUsed,
+                          },
+                          ['open', ...overflowKinds.filter((menuKind) => menuKind !== 'open')],
+                          {
+                            tooltip: isUsed ? undefined : rowUseAction.tooltip,
+                            onPrimary: () => rowUseAction.onUse(item),
+                          },
+                        );
+                      }
                       if (isSplitButtonVariant)
                         return splitActionButton(
                           item,
@@ -2142,10 +2696,20 @@ export function HomeUnified({
             // batch's scope. Sorting applies within each section. A section that is the only one
             // with matches stays expanded, since collapsing it would leave nothing to see.
             const modalColumnCount =
-              6 + (modalHasInlineActionColumn ? 1 : 0) - (isUnifiedVariant ? 1 : 0);
+              (isModalMultiSelect ? 1 : 0) +
+              2 +
+              (modalHasInlineActionColumn ? 1 : 0) +
+              (modalColumns.fullName ? 1 : 0) +
+              (modalColumns.language ? 1 : 0) +
+              (modalColumns.type ? 1 : 0);
             const modalSectionItems: Record<ModalSectionId, UnifiedItem[]> = {
-              installed: modalFiltered.filter((item) => isLocallyInstalled(item.status)),
-              available: modalFiltered.filter((item) => !isLocallyInstalled(item.status)),
+              installed: modalFiltered.filter(
+                (item) => !item.isHidden && isLocallyInstalled(item.status),
+              ),
+              available: modalFiltered.filter(
+                (item) => !item.isHidden && !isLocallyInstalled(item.status),
+              ),
+              hidden: modalFiltered.filter((item) => item.isHidden),
             };
             const renderModalSections = () =>
               MODAL_SECTIONS.flatMap(({ id, label }) => {
@@ -2180,24 +2744,36 @@ export function HomeUnified({
                 );
                 return isOpen ? [heading, ...sectionItems.map(renderModalRow)] : [heading];
               });
-            return (
+            // The language combobox and "Your languages" toggle: beside the search box, or — when
+            // the modal is narrow — in the type filter's row, after its dropdown.
+            const modalLanguageControls = (
               <>
-                <div className="tw:flex tw:shrink-0 tw:flex-col tw:gap-2 tw:border-b tw:px-4 tw:pb-3">
-                  {/* Row 1: search takes the remaining flex space; language combobox and
-                        "Only my languages" toggle live inline to its right so language-driven
-                        narrowing sits next to the free-text filter it complements. */}
-                  <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
-                    <div className="tw:min-w-64 tw:flex-1">
-                      <SearchBar
-                        value={modalTextFilter}
-                        onSearch={handleModalSearch}
-                        placeholder={STRINGS.searchPlaceholder}
-                      />
-                    </div>
-                    {/* downloadMoreSplit variant: no tooltip on the language combobox — the
-                          selected count is already on the trigger, and the user's own languages
-                          are listed on the "Only my languages" tooltip next to it. */}
-                    {isSplitButtonVariant ? (
+                {/* downloadMoreSplit variant: no tooltip on the language combobox — the
+                      selected count is already on the trigger, and the user's own languages
+                      are listed on the "Your languages" tooltip next to it. */}
+                {isSplitButtonVariant ? (
+                  <div>
+                    <MultiSelectComboBox
+                      entries={modalLanguageOptions.map((option) => ({
+                        value: option.value,
+                        label: option.label,
+                        starred: option.starred,
+                      }))}
+                      selected={modalSelectedLanguages}
+                      onChange={handleModalLanguagesChange}
+                      placeholder={STRINGS.filterLanguage}
+                      icon={<Languages />}
+                      sortSelected
+                      customSelectedText={
+                        modalSelectedLanguages.length > 0
+                          ? `${STRINGS.filterLanguage} · ${modalSelectedLanguages.length}`
+                          : undefined
+                      }
+                    />
+                  </div>
+                ) : (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
                       <div>
                         <MultiSelectComboBox
                           entries={modalLanguageOptions.map((option) => ({
@@ -2208,7 +2784,7 @@ export function HomeUnified({
                           selected={modalSelectedLanguages}
                           onChange={handleModalLanguagesChange}
                           placeholder={STRINGS.filterLanguage}
-                          icon={<Globe />}
+                          icon={<Languages />}
                           sortSelected
                           customSelectedText={
                             modalSelectedLanguages.length > 0
@@ -2217,106 +2793,139 @@ export function HomeUnified({
                           }
                         />
                       </div>
-                    ) : (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div>
-                            <MultiSelectComboBox
-                              entries={modalLanguageOptions.map((option) => ({
-                                value: option.value,
-                                label: option.label,
-                                starred: option.starred,
-                              }))}
-                              selected={modalSelectedLanguages}
-                              onChange={handleModalLanguagesChange}
-                              placeholder={STRINGS.filterLanguage}
-                              icon={<Globe />}
-                              sortSelected
-                              customSelectedText={
-                                modalSelectedLanguages.length > 0
-                                  ? `${STRINGS.filterLanguage} · ${modalSelectedLanguages.length}`
-                                  : undefined
-                              }
-                            />
-                          </div>
-                        </TooltipTrigger>
-                        {modalSelectedLanguages.length > 0 && (
-                          <TooltipContent side="bottom">
-                            <div className="tw:flex tw:flex-col tw:gap-0.5">
-                              <div className="tw:text-xs tw:opacity-70">
-                                {modalSelectedLanguages.length}{' '}
-                                {modalSelectedLanguages.length === 1
-                                  ? STRINGS.languageSelectedSingular
-                                  : STRINGS.languageSelectedPlural}
-                              </div>
-                              {modalSelectedLanguages.map((lang) => (
-                                <div key={lang}>{lang}</div>
-                              ))}
-                            </div>
-                          </TooltipContent>
-                        )}
-                      </Tooltip>
-                    )}
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="tw:flex tw:items-center tw:gap-2">
-                          <Switch
-                            id="modal-only-my-langs"
-                            checked={modalOnlyMyLanguages}
-                            onCheckedChange={handleModalOnlyMyLanguagesToggle}
-                            disabled={myLanguages.size === 0}
-                          />
-                          <Label htmlFor="modal-only-my-langs">{STRINGS.onlyMyLanguages}</Label>
-                        </div>
-                      </TooltipTrigger>
+                    </TooltipTrigger>
+                    {modalSelectedLanguages.length > 0 && (
                       <TooltipContent side="bottom">
-                        {(() => {
-                          if (!isSplitButtonVariant) return STRINGS.onlyMyLanguagesTooltip;
-                          if (myLanguages.size === 0) return STRINGS.myLanguagesNone;
-                          return (
-                            <div className="tw:flex tw:flex-col tw:gap-0.5">
-                              <div className="tw:text-xs tw:opacity-70">
-                                {STRINGS.myLanguagesHeading}
-                              </div>
-                              {sortLanguages(Array.from(myLanguages)).map((lang) => (
-                                <div key={lang}>{lang}</div>
-                              ))}
-                            </div>
-                          );
-                        })()}
+                        <div className="tw:flex tw:flex-col tw:gap-0.5">
+                          <div className="tw:text-xs tw:opacity-70">
+                            {modalSelectedLanguages.length}{' '}
+                            {modalSelectedLanguages.length === 1
+                              ? STRINGS.languageSelectedSingular
+                              : STRINGS.languageSelectedPlural}
+                          </div>
+                          {modalSelectedLanguages.map((lang) => (
+                            <div key={lang}>{lang}</div>
+                          ))}
+                        </div>
                       </TooltipContent>
-                    </Tooltip>
+                    )}
+                  </Tooltip>
+                )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="tw:flex tw:items-center tw:gap-2">
+                      <Switch
+                        id="modal-only-my-langs"
+                        checked={modalOnlyMyLanguages}
+                        onCheckedChange={handleModalOnlyMyLanguagesToggle}
+                        disabled={myLanguages.size === 0}
+                      />
+                      <Label htmlFor="modal-only-my-langs">{STRINGS.onlyMyLanguages}</Label>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {(() => {
+                      if (!isSplitButtonVariant) return STRINGS.onlyMyLanguagesTooltip;
+                      if (myLanguages.size === 0) return STRINGS.myLanguagesNone;
+                      return (
+                        <div className="tw:flex tw:flex-col tw:gap-0.5">
+                          <div className="tw:text-xs tw:opacity-70">
+                            {STRINGS.myLanguagesHeading}
+                          </div>
+                          {/* The five most used, then how many more, so a long list does not
+                              outgrow the tooltip. */}
+                          {myLanguagesByUse.slice(0, MAX_LANGUAGES_IN_TOOLTIP).map((lang) => (
+                            <div key={lang}>{lang}</div>
+                          ))}
+                          {myLanguagesByUse.length > MAX_LANGUAGES_IN_TOOLTIP && (
+                            <div className="tw:text-xs tw:opacity-70">
+                              {STRINGS.myLanguagesMore.replace(
+                                '{count}',
+                                String(myLanguagesByUse.length - MAX_LANGUAGES_IN_TOOLTIP),
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </TooltipContent>
+                </Tooltip>
+              </>
+            );
+            return (
+              <>
+                {/* Laid out like Home's header: same top and start padding, and the end padding
+                    keeps the row clear of the dialog's close X. */}
+                <div className="tw:flex tw:shrink-0 tw:flex-col tw:gap-3 tw:border-b tw:ps-6 tw:pe-12 tw:pt-6 tw:pb-3">
+                  {/* Row 1: icon and title, as in Home's header, then the search box in the
+                        remaining flex space; the language combobox and "Your languages" toggle
+                        live inline to its right so language-driven narrowing sits next to the
+                        free-text filter it complements. */}
+                  <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+                    <DialogTitle
+                      className={cn(
+                        'tw:me-2 tw:flex tw:items-center tw:gap-2',
+                        isModalNarrowest && 'tw:sr-only',
+                      )}
+                    >
+                      <Plus size={28} aria-hidden />
+                      {STRINGS.downloadModalTitle}
+                    </DialogTitle>
+                    <div className="tw:min-w-64 tw:flex-1">
+                      <SearchBar
+                        value={modalTextFilter}
+                        onSearch={handleModalSearch}
+                        placeholder={STRINGS.searchPlaceholder}
+                      />
+                    </div>
+                    {!isModalLanguageInTypeRow && modalLanguageControls}
                   </div>
                   {/* Row 2: type toggle buttons, then Clear filters. Placing Clear next to the
                         type buttons keeps it close to the filter it most often needs to reset —
                         row 1's filters are lightweight (single input, single combobox, single
                         switch) and are cleared inline by the user. */}
                   <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
-                    {modalTypeOptions.map((option) => {
-                      const isSelected = modalSelectedTypes.includes(option.value);
-                      return (
-                        <Button
-                          key={option.value}
-                          variant="outline"
-                          size="sm"
-                          aria-pressed={isSelected}
-                          data-state={isSelected ? 'on' : 'off'}
-                          className="tw:data-[state=on]:bg-muted tw:data-[state=on]:text-foreground"
-                          onClick={() => {
-                            setModalSelectedTypes(
-                              isSelected
-                                ? modalSelectedTypes.filter((t) => t !== option.value)
-                                : [...modalSelectedTypes, option.value],
-                            );
-                          }}
-                        >
-                          {typeLabelPlural(option.value)}
-                          <span className="tw:ms-1 tw:text-muted-foreground">
-                            {option.secondaryLabel}
-                          </span>
-                        </Button>
-                      );
-                    })}
+                    {isModalCompact && (
+                      <MultiSelectComboBox
+                        entries={modalTypeOptions.map((option) => ({
+                          value: option.value,
+                          label: typeLabelPlural(option.value),
+                        }))}
+                        selected={modalSelectedTypes}
+                        onChange={setModalSelectedTypes}
+                        placeholder={STRINGS.type}
+                        customSelectedText={
+                          modalSelectedTypes.length > 0
+                            ? `${STRINGS.type} · ${modalSelectedTypes.length}`
+                            : undefined
+                        }
+                      />
+                    )}
+                    {/* Narrow: the language filters join the type dropdown's row. */}
+                    {isModalLanguageInTypeRow && modalLanguageControls}
+                    {!isModalCompact &&
+                      modalTypeOptions.map((option) => {
+                        const isSelected = modalSelectedTypes.includes(option.value);
+                        return (
+                          <Button
+                            key={option.value}
+                            variant="outline"
+                            size="sm"
+                            aria-pressed={isSelected}
+                            data-state={isSelected ? 'on' : 'off'}
+                            className="tw:rounded-full tw:data-[state=on]:bg-muted tw:data-[state=on]:text-foreground"
+                            onClick={() => {
+                              setModalSelectedTypes(
+                                isSelected
+                                  ? modalSelectedTypes.filter((t) => t !== option.value)
+                                  : [...modalSelectedTypes, option.value],
+                              );
+                            }}
+                          >
+                            {typeLabelPlural(option.value)}
+                          </Button>
+                        );
+                      })}
                     {modalActiveFilterCount > 0 && (
                       // Primary variant to match the outer Home view's inline Clear filters
                       // button. Sits at the end of the type-filter row, same shape as the
@@ -2335,7 +2944,7 @@ export function HomeUnified({
                       </Label>
                       {modalActiveFilterCount > 0 && (
                         <Button variant="ghost" onClick={modalClearFilters}>
-                          {STRINGS.clearFiltersCta}
+                          {STRINGS.clearFiltersToShowAll}
                         </Button>
                       )}
                     </div>
@@ -2343,50 +2952,51 @@ export function HomeUnified({
                     <Table stickyHeader>
                       <TableHeader stickyHeader>
                         <TableRow>
-                          <TableHead className="tw:w-8 tw:ps-3 tw:pe-0">
-                            {(() => {
-                              // Header checkbox is *clear-only* in the modal — selection is
-                              // made row-by-row (or via a batch button hover-preview flow),
-                              // so a "Select all visible" affordance here would nudge users
-                              // toward mass-selecting DBL rows they haven't reviewed. When
-                              // nothing is selected the cell is empty; otherwise the checkbox
-                              // shows as checked/indeterminate and clicking clears.
-                              if (modalSelectedIds.size === 0) return undefined;
-                              const allSelected =
-                                modalFiltered.length > 0 &&
-                                modalFiltered.every((item) => modalSelectedIds.has(item.id));
-                              const someSelected = !allSelected;
-                              return (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <div className="tw:relative tw:inline-flex">
-                                      <Checkbox
-                                        checked={allSelected}
-                                        onCheckedChange={() => setModalSelectedIds(new Set())}
-                                        aria-label={STRINGS.headerClearAll}
-                                      />
-                                      {someSelected && (
-                                        <Minus
-                                          className="tw:pointer-events-none tw:absolute tw:inset-0 tw:m-auto tw:size-3"
-                                          aria-hidden
+                          {isModalMultiSelect && (
+                            <TableHead className="tw:w-8 tw:ps-3 tw:pe-0">
+                              {(() => {
+                                // Header checkbox is *clear-only* in the modal — selection is
+                                // made row-by-row (or via a batch button hover-preview flow),
+                                // so a "Select all visible" affordance here would nudge users
+                                // toward mass-selecting DBL rows they haven't reviewed. When
+                                // nothing is selected the cell is empty; otherwise the checkbox
+                                // shows as checked/indeterminate and clicking clears.
+                                if (modalSelectedIds.size === 0) return undefined;
+                                const allSelected =
+                                  modalFiltered.length > 0 &&
+                                  modalFiltered.every((item) => modalSelectedIds.has(item.id));
+                                const someSelected = !allSelected;
+                                return (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="tw:relative tw:inline-flex">
+                                        <Checkbox
+                                          checked={allSelected}
+                                          onCheckedChange={() => setModalSelectedIds(new Set())}
+                                          aria-label={STRINGS.headerClearAll}
                                         />
-                                      )}
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent>{STRINGS.headerClearAll}</TooltipContent>
-                                </Tooltip>
-                              );
-                            })()}
-                          </TableHead>
-                          {modalHead('shortName', STRINGS.shortName, 'tw:ps-4')}
+                                        {someSelected && (
+                                          <Minus
+                                            className="tw:pointer-events-none tw:absolute tw:inset-0 tw:m-auto tw:size-3"
+                                            aria-hidden
+                                          />
+                                        )}
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent>{STRINGS.headerClearAll}</TooltipContent>
+                                  </Tooltip>
+                                );
+                              })()}
+                            </TableHead>
+                          )}
+                          {modalHead('shortName', STRINGS.shortName, modalShortNameHeadClass)}
                           {/* Empty header for the modal's inline-action column — only in
                                 the openInline / actionInline sub-variants. */}
                           {modalHasInlineActionColumn && <TableHead className="tw:w-1" />}
-                          {modalHead('fullName', STRINGS.fullName, 'tw:hidden tw:md:!table-cell')}
-                          {modalHead('language', STRINGS.language, 'tw:hidden tw:sm:!table-cell')}
+                          {modalColumns.fullName && modalHead('fullName', STRINGS.fullName)}
+                          {modalColumns.language && modalHead('language', STRINGS.language)}
                           {/* Unified variant: the type is in the name cell's tooltip. */}
-                          {!isUnifiedVariant &&
-                            modalHead('type', STRINGS.type, 'tw:hidden tw:lg:!table-cell')}
+                          {modalColumns.type && modalHead('type', STRINGS.type)}
                           {modalHead('action', STRINGS.action, actionColumnClass)}
                         </TableRow>
                       </TableHeader>
@@ -2427,11 +3037,30 @@ export function HomeUnified({
                       p-0 for edge-to-edge search + table layout, so those negative margins would
                       push the footer past the container edge and clip the Close button. This div
                       pins to the container edges cleanly. */}
-                <div className="tw:flex tw:shrink-0 tw:flex-wrap tw:items-center tw:justify-end tw:gap-2 tw:rounded-b-xl tw:border-t tw:bg-muted/50 tw:px-4 tw:py-3">
-                  <Label className="tw:me-auto tw:text-xs tw:text-muted-foreground">
-                    {modalFiltered.length} {STRINGS.ofSuffix} {resourceItems.length}{' '}
-                    {STRINGS.downloadModalCount}
-                    {modalSelectedIds.size > 0 && (
+                <div
+                  className={cn(
+                    'tw:shrink-0 tw:items-center tw:gap-2 tw:rounded-b-xl tw:border-t tw:bg-muted/50 tw:px-4 tw:py-3',
+                    // Simple centers its count between nothing and Close, as Home's footer does.
+                    isModalMultiSelect
+                      ? 'tw:flex tw:flex-wrap tw:justify-end'
+                      : 'tw:grid tw:grid-cols-3',
+                  )}
+                >
+                  {!isModalMultiSelect && <div />}
+                  {/* As in Home, a count whatever the filters show: every resource (and how many of
+                      them are hidden). */}
+                  <Label
+                    className={cn(
+                      'tw:text-xs tw:text-muted-foreground',
+                      isModalMultiSelect ? 'tw:me-auto' : 'tw:justify-self-center',
+                    )}
+                  >
+                    {footerSummary(
+                      modalResourceCount,
+                      STRINGS.downloadModalCount,
+                      modalHiddenCount,
+                    )}
+                    {isModalMultiSelect && modalSelectedIds.size > 0 && (
                       <>
                         {' '}
                         ({modalSelectedIds.size} {STRINGS.selectionSuffix})
@@ -2442,7 +3071,7 @@ export function HomeUnified({
                         acts on the user's existing library; Update then Install to the right
                         for downloads/refreshes. Each button has its own hover preview that
                         filters the table to only the selected rows that button will run on. */}
-                  {modalBatchOpenIds.size > 0 && (
+                  {isModalMultiSelect && modalBatchOpenIds.size > 0 && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -2460,7 +3089,7 @@ export function HomeUnified({
                       <span className="tw:ms-1">{modalBatchOpenIds.size}</span>
                     </Button>
                   )}
-                  {modalBatchUpdateIds.size > 0 && (
+                  {isModalMultiSelect && modalBatchUpdateIds.size > 0 && (
                     <Button
                       size="sm"
                       disabled={modalPendingBatch !== undefined}
@@ -2476,7 +3105,7 @@ export function HomeUnified({
                       <span className="tw:ms-1">{modalBatchUpdateIds.size}</span>
                     </Button>
                   )}
-                  {modalBatchInstallIds.size > 0 && (
+                  {isModalMultiSelect && modalBatchInstallIds.size > 0 && (
                     <Button
                       size="sm"
                       disabled={modalPendingBatch !== undefined}
@@ -2492,7 +3121,11 @@ export function HomeUnified({
                       <span className="tw:ms-1">{modalBatchInstallIds.size}</span>
                     </Button>
                   )}
-                  <Button variant="outline" onClick={() => setIsDownloadModalOpen(false)}>
+                  <Button
+                    variant="outline"
+                    className={cn(!isModalMultiSelect && 'tw:justify-self-end')}
+                    onClick={() => setIsDownloadModalOpen(false)}
+                  >
                     {STRINGS.downloadModalClose}
                   </Button>
                 </div>
@@ -2540,6 +3173,35 @@ export function HomeUnified({
     </>
   );
 
+  // Simple mode's leading Sync / Update slot, kept on every row whenever any listed row has a
+  // button for it, so every icon and name stays in one column.
+  const hasLeadingButton = (item: UnifiedItem) => simpleLeadingKind(item) !== undefined;
+  const hasSimpleSyncSlot =
+    displayedItems.some(hasLeadingButton) || hiddenDisplayedItems.some(hasLeadingButton);
+  const homeShortNameHeadClass = hasSimpleSyncSlot
+    ? SHORT_NAME_HEAD_PAST_LEADING_SLOT_CLASS
+    : homeFirstColumnClass;
+
+  // A Home row's split button, or — when Home is too narrow for buttons — its "…" menu.
+  const homeRowSplitAction = (
+    item: UnifiedItem,
+    kind: UnifiedItemAction['kind'],
+    rowInFlight: boolean,
+  ) => {
+    if (!homeColumns.actionButtons)
+      return actionsOnlyMenu(item, [kind, ...homeSplitMenuKinds(item)]);
+    return splitActionButton(
+      item,
+      {
+        kind,
+        label: rowInFlight ? <Spinner className="tw:h-4" /> : actionLabel(kind),
+        disabled: rowInFlight,
+      },
+      homeSplitMenuKinds(item),
+      { attention: simpleMenuStateKind(item), tooltip: homeActionTooltip(item) },
+    );
+  };
+
   // One Home table row. Shared by the main list and the Hidden group.
   const renderHomeRow = (item: UnifiedItem) => {
     const kind = homePrimaryKind(item);
@@ -2586,7 +3248,7 @@ export function HomeUnified({
                             stopping propagation here avoids the row-level click also toggling and
                             landing us back where we started. Simple mode is single-select by row
                             click and has no checkbox column. */}
-        {!isSimpleMode && (
+        {!isSingleSelect && (
           <TableCell className="tw:ps-3 tw:pe-0" onClick={(e) => e.stopPropagation()}>
             {/* Hidden rows are excluded from batch selection, so they get no
                                 checkbox. */}
@@ -2599,10 +3261,20 @@ export function HomeUnified({
             )}
           </TableCell>
         )}
-        <TableCell className="tw:ps-4">
+        <TableCell className={homeFirstColumnClass}>
           <div className="tw:flex tw:items-center tw:gap-3">
+            {/* Simple mode: a needed Sync or Update leads the row, before the icon, in place of the
+                dot. The slot keeps its width on rows without one whenever any listed row has one,
+                so every icon and name stays in one column. */}
+            {hasSimpleSyncSlot && (
+              <div className={LEADING_BUTTON_SLOT_CLASS}>{simpleLeadingButton(item)}</div>
+            )}
             {isUnifiedVariant ? (
-              <NameWithDetails item={item} />
+              <NameWithDetails
+                item={item}
+                hasLeadingButton={simpleLeadingKind(item) !== undefined}
+                usedByLabel={usedByLabel(item)}
+              />
             ) : (
               <>
                 {item.type === 'Project' ? (
@@ -2650,29 +3322,6 @@ export function HomeUnified({
                   </Tooltip>
                 );
               })()}
-            {/* Simple mode: a needed Sync sits right after the name, right-aligned at the end of
-                the Short name column, so the pending action stays beside the name it belongs to
-                while the row's primary button stays Open. */}
-            {isSimpleMode && item.status === 'installedNeedsSync' && (
-              <div className="tw:ms-auto">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="sm"
-                      className="tw:h-6 tw:px-2"
-                      disabled={rowInFlight}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onItemAction(item, { kind: 'sync' });
-                      }}
-                    >
-                      {rowInFlight ? <Spinner className="tw:h-4" /> : STRINGS.sync}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">{actionTooltip(item)}</TooltipContent>
-                </Tooltip>
-              </div>
-            )}
           </div>
         </TableCell>
         {/* Inline-action column — dedicated cell for the openInline / actionInline
@@ -2712,39 +3361,32 @@ export function HomeUnified({
               })()}
           </TableCell>
         )}
-        <TableCell className="tw:hidden tw:wrap-anywhere tw:whitespace-normal tw:md:!table-cell">
-          {item.fullName}
-        </TableCell>
-        <TableCell className="tw:hidden tw:sm:!table-cell">
-          <div className="tw:flex tw:items-center tw:gap-1">
-            {myLanguages.has(item.language) && (
-              <Star className="tw:h-3 tw:w-3 tw:text-muted-foreground" />
-            )}
-            {item.language}
-          </div>
-        </TableCell>
+        {homeColumns.fullName && (
+          <TableCell className="tw:wrap-anywhere tw:whitespace-normal">{item.fullName}</TableCell>
+        )}
+        {homeColumns.language && (
+          <TableCell>
+            <div className="tw:flex tw:items-center tw:gap-1">
+              {/* The unified Home and New Tab show the language alone, without the star marking
+                  the user's languages. */}
+              {!isUnifiedVariant && myLanguages.has(item.language) && (
+                <Star className="tw:h-3 tw:w-3 tw:text-muted-foreground" />
+              )}
+              {item.language}
+            </div>
+          </TableCell>
+        )}
+        {homeColumns.type && <TableCell>{TYPE_LABEL[item.type]}</TableCell>}
         {!isUnifiedVariant && (
-          <>
-            <TableCell className="tw:hidden tw:lg:!table-cell">{TYPE_LABEL[item.type]}</TableCell>
-            <TableCell className="tw:hidden tw:xl:!table-cell">
-              {formatLastUsed(item.lastUsedIso, relativeFormatter)}
-            </TableCell>
-          </>
+          <TableCell className="tw:hidden tw:xl:!table-cell">
+            {formatLastUsed(item.lastUsedIso, relativeFormatter)}
+          </TableCell>
         )}
         <TableCell className={cn('tw:px-2', actionColumnClass)}>
           {/* Hidden rows use the split button in every variant: the state-based
                                 primary action, then Unhide (and Remove where allowed). */}
           {isSplitButtonVariant || isHiddenRow ? (
-            splitActionButton(
-              item,
-              {
-                kind,
-                label: rowInFlight ? <Spinner className="tw:h-4" /> : actionLabel(kind),
-                disabled: rowInFlight,
-              },
-              homeSplitMenuKinds(item),
-              { attention: simpleMenuStateKind(item), tooltip: homeActionTooltip(item) },
-            )
+            homeRowSplitAction(item, kind, rowInFlight)
           ) : (
             <div className="tw:flex tw:items-center tw:gap-1">
               {outerOpenPrimary ? (
@@ -2813,17 +3455,107 @@ export function HomeUnified({
   };
 
   // downloadMore variants scoped to Paratext projects: there is nothing to download, so the
-  // "Download resources" button below the list becomes a Clear filters button that returns to All,
+  // "Get resources" button below the list becomes a Clear filters button that returns to All,
   // and the inline Clear filters goes with it.
   const isProjectsScope = isDownloadMoreVariant && projectResourceFilter === 'paratextProject';
   // A single type button cannot narrow anything, so downloadMore variants show the type buttons only
   // when the scope holds more than one type. The row goes with them unless it still carries the
   // inline Clear filters.
-  const showTypeButtons = !isDownloadMoreVariant || typeOptions.length > 1;
-  const showInlineClearFilters = isDownloadMoreVariant && !isProjectsScope && activeFilterCount > 0;
+  const showTypeButtons = showFilters && (!isDownloadMoreVariant || typeOptions.length > 1);
+  const showInlineClearFilters =
+    showFilters && isDownloadMoreVariant && !isProjectsScope && activeFilterCount > 0;
   const showTypeButtonRow = showTypeButtons || showInlineClearFilters;
 
   if (overlayOnly) return <TooltipProvider>{dialogs}</TooltipProvider>;
+
+  // Home's "Get resources" button: after the search box, or — once the type buttons have
+  // collapsed into a dropdown — right after that dropdown.
+  const getResourcesButton = isDownloadMoreVariant && showDownloadButton && (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button onClick={openDownloadModal} disabled={dblAvailableCount === 0}>
+          <Plus />
+          {STRINGS.downloadPrefix} {STRINGS.downloadTypeResourcesPlural}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">
+        {dblAvailableCount === 0 ? STRINGS.downloadMoreZero : STRINGS.downloadMoreTooltip}
+      </TooltipContent>
+    </Tooltip>
+  );
+
+  // "Select & filter" presets select and narrow to a subset, for acting on several rows at once.
+  // Simple selects one row at a time, and its Sync button and dot already mark what needs
+  // attention; a New Tab is for opening one thing. Neither has them.
+  const showPresets =
+    isButtonsChrome && !isSimpleMode && !isOpenFocused && !isLoading && displayedItems.length > 0;
+  const presetButtons = showPresets && (
+    <div className="tw:ms-auto tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-1">
+      {isPresetLabelShown && (
+        <Label className="tw:me-2 tw:text-xs tw:text-muted-foreground tw:uppercase">
+          {STRINGS.presetLabel}
+        </Label>
+      )}
+      {(() => {
+        // "Select & filter" presets: each button both selects the matching subset AND
+        // narrows the visible list to that same subset. Counts are *global* — computed
+        // from the whole catalog, not the current filter — so the user can see the true
+        // category size before clicking. `data-state=on` marks the active preset so its
+        // pressed styling reads at a glance. Clicking an already-active preset toggles it
+        // off (same behavior as None for that filter).
+        const renderPreset = (label: string, tooltip: string, presetId: PresetFilterId) => {
+          // Hidden items never count toward or join a preset.
+          const matches = visibleItems.filter(presetMatchers[presetId]);
+          const isActive = presetStatusFilter === presetId;
+          return (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-pressed={isActive}
+                  data-state={isActive ? 'on' : 'off'}
+                  className="tw:h-6 tw:data-[state=on]:bg-muted tw:data-[state=on]:text-foreground"
+                  onClick={() => {
+                    // Simple mode is single-select, so its presets only filter.
+                    if (isActive) {
+                      setPresetStatusFilter(undefined);
+                      if (!isSimpleMode) setSelectedIds(new Set());
+                      return;
+                    }
+                    setPresetStatusFilter(presetId);
+                    if (!isSimpleMode) setSelectedIds(new Set(matches.map((item) => item.id)));
+                  }}
+                >
+                  {label}
+                  <span className="tw:ms-1 tw:text-muted-foreground">{matches.length}</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{tooltip}</TooltipContent>
+            </Tooltip>
+          );
+        };
+        return (
+          <>
+            {renderPreset(STRINGS.presetEdited, STRINGS.presetEditedTooltip, 'installedNeedsSync')}
+            {renderPreset(
+              STRINGS.presetUpdated,
+              STRINGS.presetUpdatedTooltip,
+              'installedNeedsUpdate',
+            )}
+            {renderPreset(STRINGS.presetNew, STRINGS.presetNewTooltip, 'sharedNotInstalled')}
+            {/* "On this computer" is redundant in the downloadMore variant — the inline
+                  table already only shows on-computer + new-on-server rows, so a preset that
+                  further narrows to "on this computer" duplicates most of the default view.
+                  Hidden here; still shown in the plain buttons variant where the outer list
+                  also contains DBL rows to filter away. */}
+            {!isDownloadMoreVariant &&
+              renderPreset(STRINGS.presetOnComputer, STRINGS.presetOnComputerTooltip, 'onComputer')}
+          </>
+        );
+      })()}
+    </div>
+  );
 
   return (
     <TooltipProvider>
@@ -2851,51 +3583,76 @@ export function HomeUnified({
         </div>
       )}
       <Card
+        ref={cardRef}
         className={cn('tw:flex tw:h-screen tw:flex-col tw:rounded-none tw:border-0', cardClassName)}
       >
         {/* Hosted in a dialog (`onClose`): the end padding keeps the search bar and filters clear of
             the dialog's own close X, which sits absolutely at the top end corner. */}
-        <CardHeader className={cn('tw:shrink-0 tw:gap-3', { 'tw:pe-12': onClose })}>
-          <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-4">
-            {headerContent}
-            <div className="tw:min-w-72 tw:flex-1">
-              <SearchBar
-                value={textFilter}
-                onSearch={setTextFilter}
-                placeholder={STRINGS.searchPlaceholder}
-              />
+        {/* `pt-2` adds to the card's own top padding, balancing the space below the header; `ps-6`
+            sets the header in from the table's edge. */}
+        <CardHeader className={cn('tw:shrink-0 tw:gap-3 tw:ps-6 tw:pt-2', { 'tw:pe-12': onClose })}>
+          {/* The header packs into as few rows as fit: title, search, and Get resources first.
+              Wide, the type pills get the next row with the presets at its end; once the pills
+              have collapsed into one dropdown, the dropdown, Get resources and the presets follow
+              the search box in the same row and wrap below it only when they do not fit. */}
+          <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-4 tw:gap-y-2">
+            {!isNarrowest && headerContent}
+            {/* The search box and the production Home's single-choice scope dropdown stay
+                together, the dropdown always right after the box; the type filters refine within
+                its scope. */}
+            <div className="tw:flex tw:min-w-0 tw:flex-1 tw:basis-72 tw:items-center tw:gap-2">
+              <div className="tw:min-w-0 tw:flex-1">
+                <SearchBar
+                  value={textFilter}
+                  onSearch={setTextFilter}
+                  placeholder={STRINGS.searchPlaceholder}
+                />
+              </div>
+              {showFilters && (
+                <ProjectResourceFilter
+                  value={projectResourceFilter}
+                  onChange={handleProjectResourceFilterChange}
+                  options={PROJECT_RESOURCE_FILTER_OPTIONS}
+                  localizedAllText={STRINGS.filterAll}
+                  localizedFilterByValueText={STRINGS.filterByValue}
+                />
+              )}
             </div>
-            {/* The production Home's single-choice scope dropdown, beside the search box in every
-                variant. The type-toggle buttons below refine within its scope. */}
-            <ProjectResourceFilter
-              value={projectResourceFilter}
-              onChange={handleProjectResourceFilterChange}
-              options={PROJECT_RESOURCE_FILTER_OPTIONS}
-              localizedAllText={STRINGS.filterAll}
-              localizedFilterByValueText={STRINGS.filterByValue}
-            />
-            {/* Primary "Download resources" entry point in the header — pinned to the right of
-                the search bar so the affordance is discoverable without scrolling past the list.
-                Kept label-only (no count) so the header stays scannable; the mid-list secondary
-                button below the table still carries the available-count badge. Shares the
-                mid-list tooltip so hover explanation is identical from either entry point. */}
-            {isDownloadMoreVariant && showDownloadButton && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button onClick={openDownloadModal} disabled={dblAvailableCount === 0}>
-                    {STRINGS.downloadPrefix} {STRINGS.downloadTypeResourcesPlural}
+            {isCompact ? (
+              // One group, so the dropdown and Get resources wrap together.
+              <div className="tw:flex tw:items-center tw:gap-2">
+                {showTypeButtons && (
+                  <MultiSelectComboBox
+                    entries={typeOptions.map((option) => ({
+                      value: option.value,
+                      label: typeLabelPlural(option.value),
+                    }))}
+                    selected={selectedTypes}
+                    onChange={setSelectedTypes}
+                    placeholder={STRINGS.type}
+                    customSelectedText={
+                      selectedTypes.length > 0
+                        ? `${STRINGS.type} · ${selectedTypes.length}`
+                        : undefined
+                    }
+                  />
+                )}
+                {showInlineClearFilters && (
+                  <Button size="sm" className="tw:h-6 tw:text-xs" onClick={clearFilters}>
+                    {STRINGS.clearAll}
                   </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  {dblAvailableCount === 0 ? STRINGS.downloadMoreZero : STRINGS.downloadMoreTooltip}
-                </TooltipContent>
-              </Tooltip>
+                )}
+                {getResourcesButton}
+              </div>
+            ) : (
+              getResourcesButton
             )}
+            {isCompact && presetButtons}
           </div>
-          {/* Type-toggle buttons (outline, aria-pressed), in every variant and at every width —
-              the row wraps when narrow. Only types inside the dropdown's scope get a button. */}
-          {showTypeButtonRow && (
+          {!isCompact && (showTypeButtonRow || presetButtons) && (
             <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+              {/* Type-toggle buttons (outline, aria-pressed); only types inside the scope
+                  dropdown's scope get a button. */}
               {showTypeButtons &&
                 typeOptions.map((option) => {
                   const isSelected = selectedTypes.includes(option.value);
@@ -2906,7 +3663,7 @@ export function HomeUnified({
                       size={isNarrow ? 'sm' : 'default'}
                       aria-pressed={isSelected}
                       data-state={isSelected ? 'on' : 'off'}
-                      className="tw:data-[state=on]:bg-muted tw:data-[state=on]:text-foreground"
+                      className="tw:rounded-full tw:data-[state=on]:bg-muted tw:data-[state=on]:text-foreground"
                       onClick={() => {
                         setSelectedTypes(
                           isSelected
@@ -2921,15 +3678,16 @@ export function HomeUnified({
                 })}
               {/* downloadMore variants: Clear filters lives inline with the type-toggle buttons —
                 they have no language row for it to trail. Other variants keep Clear on the
-                trailing row next to the language filter and "Only my languages" toggle. */}
+                trailing row next to the language filter and "Your languages" toggle. */}
               {showInlineClearFilters && (
                 <Button size="sm" className="tw:h-6 tw:text-xs" onClick={clearFilters}>
                   {STRINGS.clearAll}
                 </Button>
               )}
+              {presetButtons}
             </div>
           )}
-          {/* downloadMore variants: the language filter and "Only my languages" are exposed only
+          {/* downloadMore variants: the language filter and "Your languages" are exposed only
               inside the modal; the outer view has no DBL rows to filter by language, so a language
               set picked to narrow the DBL catalog would restrict projects/S-R rows — the wrong
               scope. */}
@@ -2939,7 +3697,7 @@ export function HomeUnified({
                 /* Buttons variant: the language selector is a plain combobox whose trigger shows
                    only a count (no badges). A Tooltip on the whole trigger enumerates the selected
                    language names on hover — and pops open programmatically when the user toggles
-                   "Only my languages" on, so they immediately see which languages were seeded.
+                   "Your languages" on, so they immediately see which languages were seeded.
                    Any hover/focus change hands control back over via onOpenChange. */
                 <Tooltip
                   open={isLanguageTooltipOpen}
@@ -2956,7 +3714,7 @@ export function HomeUnified({
                         selected={selectedLanguages}
                         onChange={handleLanguagesChange}
                         placeholder={STRINGS.filterLanguage}
-                        icon={<Globe />}
+                        icon={<Languages />}
                         sortSelected
                         customSelectedText={
                           selectedLanguages.length > 0
@@ -2994,7 +3752,7 @@ export function HomeUnified({
                     selected={selectedLanguages}
                     onChange={handleLanguagesChange}
                     placeholder={STRINGS.filterLanguage}
-                    icon={<Globe />}
+                    icon={<Languages />}
                     sortSelected
                     badgesPlaceholder={STRINGS.anyLanguage}
                   />
@@ -3022,85 +3780,6 @@ export function HomeUnified({
           )}
         </CardHeader>
 
-        {/* Preselection row lives outside the scrollable CardContent so it never scrolls away.
-            `-mb-4` cancels the Card's default `gap-4` between children so the preset row sits
-            flush against the list below. Simple mode has no Select & filter row: it selects one
-            row at a time, and the Sync button and dot already mark what needs attention. */}
-        {isButtonsChrome && !isSimpleMode && !isLoading && displayedItems.length > 0 && (
-          <div className="tw:-mb-4 tw:flex tw:shrink-0 tw:flex-wrap tw:items-center tw:justify-end tw:gap-x-1 tw:gap-y-1 tw:px-3 tw:pb-2">
-            <Label className="tw:me-2 tw:text-xs tw:text-muted-foreground tw:uppercase">
-              {STRINGS.presetLabel}
-            </Label>
-            {(() => {
-              // "Select & filter" presets: each button both selects the matching subset AND
-              // narrows the visible list to that same subset. Counts are *global* — computed
-              // from the whole catalog, not the current filter — so the user can see the true
-              // category size before clicking. `data-state=on` marks the active preset so its
-              // pressed styling reads at a glance. Clicking an already-active preset toggles it
-              // off (same behavior as None for that filter).
-              const renderPreset = (label: string, tooltip: string, presetId: PresetFilterId) => {
-                // Hidden items never count toward or join a preset.
-                const matches = visibleItems.filter(presetMatchers[presetId]);
-                const isActive = presetStatusFilter === presetId;
-                return (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        aria-pressed={isActive}
-                        data-state={isActive ? 'on' : 'off'}
-                        className="tw:h-6 tw:data-[state=on]:bg-muted tw:data-[state=on]:text-foreground"
-                        onClick={() => {
-                          // Simple mode is single-select, so its presets only filter.
-                          if (isActive) {
-                            setPresetStatusFilter(undefined);
-                            if (!isSimpleMode) setSelectedIds(new Set());
-                            return;
-                          }
-                          setPresetStatusFilter(presetId);
-                          if (!isSimpleMode)
-                            setSelectedIds(new Set(matches.map((item) => item.id)));
-                        }}
-                      >
-                        {label}
-                        <span className="tw:ms-1 tw:text-muted-foreground">{matches.length}</span>
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">{tooltip}</TooltipContent>
-                  </Tooltip>
-                );
-              };
-              return (
-                <>
-                  {renderPreset(
-                    STRINGS.presetEdited,
-                    STRINGS.presetEditedTooltip,
-                    'installedNeedsSync',
-                  )}
-                  {renderPreset(
-                    STRINGS.presetUpdated,
-                    STRINGS.presetUpdatedTooltip,
-                    'installedNeedsUpdate',
-                  )}
-                  {renderPreset(STRINGS.presetNew, STRINGS.presetNewTooltip, 'sharedNotInstalled')}
-                  {/* "On this computer" is redundant in the downloadMore variant — the inline
-                      table already only shows on-computer + new-on-server rows, so a preset that
-                      further narrows to "on this computer" duplicates most of the default view.
-                      Hidden here; still shown in the plain buttons variant where the outer list
-                      also contains DBL rows to filter away. */}
-                  {!isDownloadMoreVariant &&
-                    renderPreset(
-                      STRINGS.presetOnComputer,
-                      STRINGS.presetOnComputerTooltip,
-                      'onComputer',
-                    )}
-                </>
-              );
-            })()}
-          </div>
-        )}
-
         {isLoading ? (
           <CardContent className="tw:flex tw:flex-grow tw:items-center tw:justify-center">
             <Spinner />
@@ -3117,7 +3796,7 @@ export function HomeUnified({
                 </Label>
                 {activeFilterCount > 0 && (
                   <Button variant="ghost" onClick={clearFilters}>
-                    {STRINGS.clearFiltersCta}
+                    {STRINGS.clearFiltersToShowAll}
                   </Button>
                 )}
                 {/* Even with no on-computer/S-R rows to show, the downloadMore variant surfaces the
@@ -3129,8 +3808,9 @@ export function HomeUnified({
                     onClick={openDownloadModal}
                     disabled={dblAvailableCount === 0}
                   >
+                    <Plus />
                     {STRINGS.downloadPrefix} {STRINGS.downloadTypeResourcesPlural}
-                    {dblAvailableCount !== undefined && (
+                    {dblAvailableCount !== undefined && !isNarrowest && (
                       <span className="tw:ms-2 tw:text-muted-foreground">
                         {dblAvailableCount} {STRINGS.downloadAvailableSuffix}
                       </span>
@@ -3146,7 +3826,7 @@ export function HomeUnified({
                         all-checked) that toggles the whole visible selection. Other variants
                         keep the plain X clear-selection button that only appears when something
                         is selected. Simple mode is single-select and has no checkbox column. */}
-                    {!isSimpleMode && (
+                    {!isSingleSelect && (
                       <TableHead className="tw:w-8 tw:ps-3 tw:pe-0">
                         {(() => {
                           // downloadMore variant: 3-state header checkbox (empty / indeterminate /
@@ -3212,17 +3892,16 @@ export function HomeUnified({
                         })()}
                       </TableHead>
                     )}
-                    {buildHead('shortName', STRINGS.shortName, 'tw:ps-4')}
+                    {buildHead('shortName', STRINGS.shortName, homeShortNameHeadClass)}
                     {/* Empty header for the inline-action column — only present in the
                         openInline / actionInline sub-variants of downloadMoreTabs. Keeps the
                         buttons vertically aligned across rows. */}
                     {hasInlineActionColumn && <TableHead className="tw:w-1" />}
-                    {buildHead('fullName', STRINGS.fullName, 'tw:hidden tw:md:!table-cell')}
-                    {buildHead('language', STRINGS.language, 'tw:hidden tw:sm:!table-cell')}
-                    {/* Unified variant: no Type or Last used column. The type is in the name
-                        cell's tooltip, and the list still opens sorted by last use. */}
-                    {!isUnifiedVariant &&
-                      buildHead('type', STRINGS.type, 'tw:hidden tw:lg:!table-cell')}
+                    {homeColumns.fullName && buildHead('fullName', STRINGS.fullName)}
+                    {homeColumns.language && buildHead('language', STRINGS.language)}
+                    {homeColumns.type && buildHead('type', STRINGS.type)}
+                    {/* Unified variant: no Last used column; the list still opens sorted by last
+                        use. */}
                     {!isUnifiedVariant &&
                       buildHead('lastUsed', STRINGS.lastUsed, 'tw:hidden tw:xl:!table-cell')}
                     {buildHead('action', STRINGS.action, actionColumnClass)}
@@ -3316,7 +3995,7 @@ export function HomeUnified({
             {isProjectsScope && displayedItems.length > 0 && hoveredBatchKind === undefined && (
               <div className="tw:flex tw:items-center tw:justify-center tw:gap-2 tw:py-4">
                 <Button variant="outline" size="sm" onClick={clearFilters}>
-                  {STRINGS.clearFiltersCta}
+                  {STRINGS.clearFiltersToShowAll}
                 </Button>
               </div>
             )}
@@ -3333,8 +4012,9 @@ export function HomeUnified({
                         onClick={openDownloadModal}
                         disabled={dblAvailableCount === 0}
                       >
+                        <Plus />
                         {STRINGS.downloadPrefix} {STRINGS.downloadTypeResourcesPlural}
-                        {dblAvailableCount !== undefined && (
+                        {dblAvailableCount !== undefined && !isNarrowest && (
                           <span className="tw:ms-2 tw:text-muted-foreground">
                             {dblAvailableCount} {STRINGS.downloadAvailableSuffix}
                           </span>
@@ -3360,7 +4040,7 @@ export function HomeUnified({
           //   - the list is empty (the "no matches" placeholder already tells the same story more
           //     clearly, so a second warning would be noise), OR
           //   - in Simple mode, which has no batch buttons.
-          if (isSimpleMode) return undefined;
+          if (isSingleSelect) return undefined;
           if (hoveredBatchKind !== undefined) return undefined;
           if (displayedItems.length === 0) return undefined;
           const visibleIds = new Set(displayedItems.map((item) => item.id));
@@ -3395,7 +4075,7 @@ export function HomeUnified({
           // selection, so the footer just names the count. Other variants keep the trailing X
           // as a redundant fast-path.
           // Simple mode has neither: each row carries its own actions.
-          const selectionContent = !isSimpleMode && selectedIds.size > 0 && (
+          const selectionContent = !isSingleSelect && selectedIds.size > 0 && (
             <div className="tw:flex tw:items-center tw:gap-2">
               <Label className="tw:text-xs">
                 {selectedIds.size} {STRINGS.selectionSuffix}
@@ -3422,7 +4102,7 @@ export function HomeUnified({
           // Update, Install) — any subset can appear depending on what's in the selection. The
           // Open button, when applicable, is rendered last so it sits at the right. Hidden when
           // the list is empty ("no filter matches") since there's nothing to act on.
-          const batchContent = !isSimpleMode && (
+          const batchContent = !isSingleSelect && (
             <div className="tw:flex tw:items-center tw:justify-center tw:gap-2">
               {/* Open sits leftmost — it acts on the user's existing library and reads as the
                   "safe" action; the state-changing batches (Get/Sync/Update/Install) come to
@@ -3477,61 +4157,20 @@ export function HomeUnified({
                 })}
             </div>
           );
-          // Summary line. Three shapes, picked from most-specific to least:
-          //   - downloadMore variant → "x of y (+z) items". DBL rows are hidden from the inline
-          //     list, so both halves of the ratio are stable regardless of preset state:
-          //     y = on-computer, z = new on the S/R server. Takes precedence over the preset
-          //     shape below because the counts remain meaningful even under a preset filter.
-          //   - Preset filter active (non-downloadMore) → "x items". The preset narrows to a
-          //     bounded local + S/R subset, so contrasting against the total no longer means
-          //     anything useful.
-          //   - Otherwise → "x of Y+ items", the original mixed-catalog framing where the `+`
-          //     reflects that more DBL rows may still be fetched.
-          const countContent = (
-            <Label className="tw:text-xs tw:text-muted-foreground">
-              {(() => {
-                if (isDownloadMoreVariant)
-                  return (
-                    <>
-                      {displayedItems.length} {STRINGS.ofSuffix} {onComputerCount} (+
-                      {sharedNotInstalledCount}) {STRINGS.itemsSuffix}
-                    </>
-                  );
-                if (presetStatusFilter)
-                  return (
-                    <>
-                      {displayedItems.length} {STRINGS.itemsSuffix}
-                    </>
-                  );
-                return (
-                  <>
-                    {displayedItems.length} {STRINGS.ofSuffix} {visibleItems.length}
-                    {hasMore ? '+' : ''} {STRINGS.itemsSuffix}
-                  </>
-                );
-              })()}
-            </Label>
-          );
-          // Simple mode's summary: how many items of the current scope are on this computer, and
-          // how many of those the user hid — the two numbers a single-select list needs, centered
-          // in the footer.
+          // The summary, in Simple and Power alike: how many items of the current scope are on this
+          // computer, and how many of those the user hid, whatever the other filters show. Simple
+          // centers it; Power puts it at the end, past the batch actions.
           const isInFilterScope = (item: UnifiedItem) =>
             isShownByProjectResourceFilter(projectResourceFilter, item.type !== 'Project');
-          const simpleOnComputerCount = visibleItems.filter(
+          const onComputerInScopeCount = visibleItems.filter(
             (item) => isLocallyInstalled(item.status) && isInFilterScope(item),
           ).length;
-          const simpleHiddenCount = items.filter(
+          const hiddenInScopeCount = items.filter(
             (item) => item.isHidden && isInFilterScope(item),
           ).length;
-          const simpleSummary = (
+          const summary = (
             <Label className="tw:text-xs tw:text-muted-foreground">
-              {simpleOnComputerCount} {STRINGS.onComputerSuffix}
-              {simpleHiddenCount > 0 && (
-                <>
-                  {' '}
-                  ({simpleHiddenCount} {STRINGS.hiddenSuffix})
-                </>
-              )}
+              {footerSummary(onComputerInScopeCount, STRINGS.onComputerSuffix, hiddenInScopeCount)}
             </Label>
           );
           const closeButton = onClose && (
@@ -3539,11 +4178,13 @@ export function HomeUnified({
               {STRINGS.close}
             </Button>
           );
-          if (isSimpleMode) {
+          if (isSingleSelect) {
             return (
-              <CardFooter className="tw:grid tw:shrink-0 tw:grid-cols-3 tw:items-center tw:gap-2 tw:border-t tw:p-3">
+              // The middle column takes the summary's full width, so it stays on one line; the
+              // side columns share what is left, keeping it centered while there is room.
+              <CardFooter className="tw:grid tw:shrink-0 tw:grid-cols-[1fr_auto_1fr] tw:items-center tw:gap-2 tw:border-t tw:p-3">
                 <div />
-                <div className="tw:justify-self-center">{simpleSummary}</div>
+                <div className="tw:justify-self-center tw:whitespace-nowrap">{summary}</div>
                 <div className="tw:justify-self-end">{closeButton}</div>
               </CardFooter>
             );
@@ -3551,7 +4192,7 @@ export function HomeUnified({
           // Hosted in a dialog: Close sits after the count, at the footer's end.
           const countAndCloseContent = (
             <div className="tw:flex tw:items-center tw:gap-3">
-              {countContent}
+              {summary}
               {closeButton}
             </div>
           );

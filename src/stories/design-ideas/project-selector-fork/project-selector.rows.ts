@@ -8,6 +8,7 @@ import {
   normalizeProjectId,
   type ScrollGroupId,
 } from 'platform-bible-utils';
+import type { ReactNode } from 'react';
 
 // #region Types
 
@@ -149,6 +150,34 @@ export type ProjectSelectorGrouping = {
    * `undefined` for no caption.
    */
   getSectionCaption?: (key: string) => string | undefined;
+  /**
+   * Fork-only: true for a bucket listed only while a search is typed, so the unsearched list stays
+   * short and a search still reaches every row (e.g. the title bar's "Projects" under "Recent").
+   */
+  isSectionListedOnlyWhileSearching?: (key: string) => boolean;
+  /**
+   * Fork-only: true for a bucket whose heading shows only while a search is typed — for a list
+   * that, unsearched, is that bucket alone, so the heading would label nothing (e.g. the title
+   * bar's "Recent").
+   */
+  isSectionHeadingShownOnlyWhileSearching?: (key: string) => boolean;
+  /**
+   * Fork-only: every section starts collapsed, for a grouping with many small buckets (by
+   * language). A search still expands them all.
+   */
+  areSectionsCollapsedByDefault?: boolean;
+  /**
+   * Fork-only: true for a section that starts collapsed even when the others do not (e.g. the model
+   * text, listed for context rather than to be picked). A search still expands it.
+   */
+  isSectionCollapsedByDefault?: (key: string) => boolean;
+  /** Fork-only: true for a section whose heading takes no `formatSectionCount` count. */
+  isSectionCountHidden?: (key: string) => boolean;
+  /**
+   * Fork-only: a glyph after a section's heading, with its own tooltip — such as a lock on a
+   * section whose rows cannot be unpicked.
+   */
+  getSectionHeadingIndicator?: (key: string) => { node: ReactNode; label: string } | undefined;
   /**
    * Heading for the "unknown" bucket — rows where `getGroupKey` returned `undefined`. When absent,
    * the unknown bucket is not emitted (its rows are dropped from the grouping's output).

@@ -14,7 +14,18 @@
 // Also fork-only: `getSearchOnlySectionHeading` (a heading built from the search-only row count),
 // and `searchOnlyPaging` — a footer row that, instead of leaving the popover, lists the search-only
 // rows in batches inside it, loading the next batch (after a simulated delay) whenever the end of
-// the list scrolls into view; see `ProjectSelectorSearchOnlyPaging`.
+// the list scrolls into view; see `ProjectSelectorSearchOnlyPaging`. Also fork-only:
+// `formatSectionCount` (a count after every section heading, "(x of y)" while searching), a
+// grouping's `isSectionListedOnlyWhileSearching`, `isSectionHeadingShownOnlyWhileSearching` and
+// `areSectionsCollapsedByDefault`, a list that scrolls to its top when the grouping changes, an X
+// that clears the search box, a shadcn `Empty` zero state, a footer row that is also a Tab stop,
+// `renderProjectTrailingIndicator` (a glyph at a row's end), tooltips that open leftward on
+// everything at a row's end (`TrailingTooltip`), a ⋮ menu for its "Compact" view option (each row
+// on one line: short name, then the muted full name; on from the start with
+// `isCompactViewByDefault`, left out with `hasViewOptions`), and in `project-multi` mode an unselect-all checkbox
+// beside the search box, with a trigger that names the selection without counting it (or shows a
+// fixed `triggerLabel`, the names moving to its tooltip). The fork draws no rules
+// between sections — the headings alone divide the list — only one above the footer row.
 //
 // ProjectSelector accepts a discriminated union of props (mode: 'project' | 'project-multi' |
 // 'projectScrollGroup'). Destructuring at the parameter level loses TypeScript's type narrowing
@@ -40,7 +51,10 @@ import {
   ChevronDown,
   ChevronsUpDown,
   EllipsisVertical,
+  ArrowUpToLine,
+  Minus,
   Loader2,
+  X,
 } from 'lucide-react';
 import {
   formatProjectName,
@@ -62,12 +76,17 @@ import {
   CommandItem,
   CommandList,
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  Empty,
+  EmptyContent,
+  EmptyHeader,
+  EmptyTitle,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -79,7 +98,6 @@ import {
   Z_INDEX_ABOVE_POPOVER,
 } from 'platform-bible-react';
 import { resolveLocalizedString } from 'platform-bible-react/experimental';
-import { CommandSeparator } from './command-separator.component';
 import {
   computeRows,
   DEFAULT_SELECTED_SECTION_HEADING,
@@ -147,6 +165,8 @@ export type ProjectSelectorIndicator = {
 export type ProjectSelectorSearchOnlyProject = ProjectSelectorProject & {
   /** Short muted text on the row's trailing edge naming what selecting it does ("Get"). */
   hint?: string;
+  /** The hint's own tooltip, saying more ("Install from DBL, 12 MB"). */
+  hintTooltip?: string;
 };
 
 /**
@@ -282,10 +302,24 @@ export type ProjectSelectorLocalizedStrings = {
   boundButClosedTooltip?: string;
   /** Label of the "Open" button shown on bound-but-closed rows. */
   openButtonLabel?: string;
-  /** Multi-select: "Clear all" button (shown only when at least one pair is selected). */
+  /** Multi-select: the checkbox before the search box that unselects everything. */
   clearAll?: string;
+  /** Fork-only: name of the button that scrolls a scrolled list back to its top. */
+  scrollToTop?: string;
   /** Heading over the search-only rows (see `searchOnlyProjects`). */
   searchOnlySectionHeading?: string;
+  /** Accessible name of the X button that clears the search box. */
+  clearSearchAriaLabel?: string;
+  /** Tooltip of a row's scroll-group letter; `{group}` is replaced by the letter. */
+  scrollGroupTooltip?: string;
+  /** Accessible name of the ⋮ menu button when it offers no grouping choice, only the view. */
+  viewOptionsAriaLabel?: string;
+  /** The ⋮ menu's heading over its view options. */
+  viewSectionLabel?: string;
+  /** The ⋮ menu's checkbox that lists each row on one line. */
+  compactView?: string;
+  /** Fork-only: the ⋮ menu's option listing only the selected rows. */
+  showOnlySelected?: string;
 };
 
 /**
@@ -319,8 +353,15 @@ export const PROJECT_SELECTOR_DEFAULT_STRINGS: Required<ProjectSelectorLocalized
   autoSelectionUnselectedSectionHeading: DEFAULT_UNSELECTED_SECTION_HEADING,
   boundButClosedTooltip: 'Bound to {group} · not currently open',
   openButtonLabel: 'Open',
-  clearAll: 'Clear all',
+  clearAll: 'Unselect all',
+  scrollToTop: 'Scroll to top',
   searchOnlySectionHeading: 'Not on this computer',
+  clearSearchAriaLabel: 'Clear search',
+  scrollGroupTooltip: 'Scroll group {group}',
+  viewOptionsAriaLabel: 'View options',
+  viewSectionLabel: 'View',
+  compactView: 'Compact',
+  showOnlySelected: 'Show only selected',
 };
 
 function resolveStrings(
@@ -402,9 +443,37 @@ function resolveStrings(
       PROJECT_SELECTOR_DEFAULT_STRINGS.openButtonLabel,
     ),
     clearAll: resolveLocalizedString(given.clearAll, PROJECT_SELECTOR_DEFAULT_STRINGS.clearAll),
+    scrollToTop: resolveLocalizedString(
+      given.scrollToTop,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.scrollToTop,
+    ),
     searchOnlySectionHeading: resolveLocalizedString(
       given.searchOnlySectionHeading,
       PROJECT_SELECTOR_DEFAULT_STRINGS.searchOnlySectionHeading,
+    ),
+    clearSearchAriaLabel: resolveLocalizedString(
+      given.clearSearchAriaLabel,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.clearSearchAriaLabel,
+    ),
+    scrollGroupTooltip: resolveLocalizedString(
+      given.scrollGroupTooltip,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.scrollGroupTooltip,
+    ),
+    viewOptionsAriaLabel: resolveLocalizedString(
+      given.viewOptionsAriaLabel,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.viewOptionsAriaLabel,
+    ),
+    viewSectionLabel: resolveLocalizedString(
+      given.viewSectionLabel,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.viewSectionLabel,
+    ),
+    compactView: resolveLocalizedString(
+      given.compactView,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.compactView,
+    ),
+    showOnlySelected: resolveLocalizedString(
+      given.showOnlySelected,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.showOnlySelected,
     ),
   };
 }
@@ -507,6 +576,39 @@ type CommonProps = {
    */
   isLoading?: boolean;
   /**
+   * Fork-only: opens the dropdown as a modal popover. Needed inside a dialog: the dialog blocks
+   * wheel and touch scrolling outside itself, which includes the portalled dropdown list, unless
+   * the popover holds its own scroll lock.
+   */
+  isModal?: boolean;
+  /**
+   * Fork-only: opens at the top of the list rather than scrolled to the first selected row — for a
+   * list whose first section is the one to see (the Bible texts picker's team resources).
+   */
+  opensAtTop?: boolean;
+  /**
+   * Fork-only, `project-multi`: the groupings that list an open project once per scroll group, with
+   * its letter. Every other grouping lists each project once, picked when any of its scroll groups
+   * is. Omit to list per scroll group in every grouping.
+   */
+  scrollGroupGroupingIds?: readonly string[];
+  /** Fork-only: `false` leaves the trigger without its tooltip. Defaults to `true`. */
+  hasTriggerTooltip?: boolean;
+  /**
+   * Fork-only, `project-multi`: selected rows the trigger does not name — picked for the list's
+   * sake but shown elsewhere (the team layout's model text in its Bible texts).
+   */
+  triggerHiddenIds?: readonly string[];
+  /** Fork-only: whether the dropdown is open, for a parent that opens it from elsewhere. */
+  open?: boolean;
+  /** Fork-only: reports every request to open or close the dropdown. */
+  onOpenChange?: (open: boolean) => void;
+  /**
+   * Fork-only, `project-multi`: the ⋮ menu offers "Show only selected", which lists only the picked
+   * rows (and still searches within them).
+   */
+  hasShowOnlySelected?: boolean;
+  /**
    * All user-facing strings. Optional keys fall back to English defaults. Consumers should wire
    * this from the platform's central `%projectSelector_*%` localization block plus any
    * consumer-specific overrides (typically `ariaLabel` and `buttonPlaceholder`, which vary per
@@ -573,9 +675,8 @@ type CommonProps = {
     project: ProjectSelectorProject,
   ) => ProjectSelectorIndicator | undefined;
   /**
-   * An action row pinned below every section, with a separator above it whenever the list has rows
-   * to divide it from. Use it for an affordance that opens a different surface — the sections
-   * partition rows, so they cannot express one.
+   * An action row pinned below every section. Use it for an affordance that opens a different
+   * surface — the sections partition rows, so they cannot express one.
    *
    * The row stays available when the list is empty, which is when an escape hatch matters most, and
    * the "no projects" empty state still renders alongside it.
@@ -609,13 +710,57 @@ type CommonProps = {
    * projects use a resource). A row with one always shows its tooltip on hover. Same purity rules
    * as `renderProjectIndicator`.
    */
-  getProjectTooltipLine?: (project: ProjectSelectorProject) => string | undefined;
+  getProjectTooltipLine?: (
+    project: ProjectSelectorProject,
+    activeGrouping: string,
+  ) => string | undefined;
+  /**
+   * A glyph at the end of a listed row (not a search-only one), for a fact about the row that the
+   * active grouping does not already show — hence the grouping id, which is {@link NO_GROUPING} for
+   * a flat list. Its `label` is the glyph's own tooltip, not a line in the row's. Same purity rules
+   * as `renderProjectIndicator`.
+   */
+  renderProjectTrailingIndicator?: (
+    project: ProjectSelectorProject,
+    activeGrouping: string,
+  ) => ProjectSelectorIndicator | undefined;
+  /**
+   * Fork-only: a second muted glyph at the end of a listed row, just before the trailing indicator,
+   * with its own tooltip — such as the user's role in the project. Same purity rules as
+   * `renderProjectIndicator`.
+   */
+  renderProjectRoleIndicator?: (
+    project: ProjectSelectorProject,
+  ) => ProjectSelectorIndicator | undefined;
   /**
    * Builds the search-only section's heading from the number of rows the section holds for the
    * current search — every match while searching, or every row of `searchOnlyPaging.pagedProjects`
    * once revealed (loaded or not). Defaults to `localizedStrings.searchOnlySectionHeading`.
    */
   getSearchOnlySectionHeading?: (count: number) => string;
+  /**
+   * Appends a count to every section heading (the search-only one included). Called with the number
+   * of rows the section lists, and — only while a search is typed — the number it lists without the
+   * search, so the caller can say "(3 of 12)" while filtering and "(12)" otherwise. An empty string
+   * leaves that heading uncounted. Takes precedence over `getSearchOnlySectionHeading`. Omit for
+   * uncounted headings.
+   */
+  formatSectionCount?: (shown: number, totalWhileSearching: number | undefined) => string;
+  /**
+   * Fork-only: whether the ⋮ menu offers the "Compact" view. Defaults to `true`. Without it the ⋮
+   * menu shows only when there is more than one grouping to choose from.
+   */
+  hasViewOptions?: boolean;
+  /** Fork-only: the Compact view is on when the picker mounts. Defaults to `false`. */
+  isCompactViewByDefault?: boolean;
+  /**
+   * Fork-only: called with a listed row's project and scroll group while the pointer is over the
+   * row, and with `undefined` when it leaves (or the picker closes) — so the caller can point at
+   * the tab that row stands for.
+   */
+  onRowHoverChange?: (
+    row: { projectId: string; scrollGroupId: ScrollGroupId | undefined } | undefined,
+  ) => void;
   /**
    * Browse the search-only rows in batches from a footer row; see
    * {@link ProjectSelectorSearchOnlyPaging}. Takes the footer's place, so `footerAction` is ignored
@@ -661,6 +806,11 @@ export type ProjectSelectorProps =
       selection: ProjectMultiSelection;
       onChangeSelection: (selection: { pairs: ProjectSelectorProjectPair[] }) => void;
       /**
+       * Fork-only: a fixed trigger label (e.g. "Text collection (4)") in place of the picked short
+       * names, which then move to the trigger's tooltip.
+       */
+      triggerLabel?: string;
+      /**
        * Called when the user clicks the "Open" button on a bound-but-closed row (or the row
        * itself). The caller is expected to open a tab via `papi.webViews.openWebView(...)`.
        */
@@ -692,6 +842,35 @@ type ScrollGroupChipProps = {
   isBoundButClosed: boolean;
 };
 
+/**
+ * Centers a side tooltip's caret on its trigger: the arrow's own transform leaves it a pixel off
+ * vertically when the tooltip opens to the side.
+ */
+const SIDE_TOOLTIP_ARROW_CLASS = 'tw:translate-y-[calc(-50%-1px)]';
+
+/**
+ * Fork-only: a tooltip for something at a row's trailing edge — its scroll-group letter, hint or
+ * trailing icon — opening to the left, into the row, rather than over the rows above.
+ */
+function TrailingTooltip({ label, children }: { label: string | undefined; children: ReactNode }) {
+  if (!label) return children;
+  return (
+    <Tooltip delayDuration={400}>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      {/* `aria-hidden`: what it says is already the row's own text or its element's name. Each
+          line of `label` is a line of the tooltip. */}
+      <TooltipContent
+        side="left"
+        aria-hidden
+        className="tw:whitespace-pre-line"
+        arrowClassName={SIDE_TOOLTIP_ARROW_CLASS}
+      >
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 function ScrollGroupChip({ scrollGroupId, isBoundButClosed }: ScrollGroupChipProps) {
   const letter = scrollGroupLetterFromMap(scrollGroupId);
   if (isBoundButClosed) {
@@ -705,7 +884,12 @@ function ScrollGroupChip({ scrollGroupId, isBoundButClosed }: ScrollGroupChipPro
       </Badge>
     );
   }
-  return <Badge variant="secondary">{letter}</Badge>;
+  // Muted and narrow: it says which scroll group, and should not compete with the row's name.
+  return (
+    <Badge variant="secondary" className="tw:px-1 tw:text-muted-foreground">
+      {letter}
+    </Badge>
+  );
 }
 
 // #endregion
@@ -734,14 +918,78 @@ type RowRenderProps = {
   reserveIconSlot: boolean;
   /** Resolved by the parent from `getProjectTooltipLine`. */
   tooltipLine?: string;
+  /** Resolved by the parent from `renderProjectTrailingIndicator`. */
+  trailingIndicator?: ProjectSelectorIndicator;
+  /** Resolved by the parent from `renderProjectRoleIndicator`. */
+  roleIndicator?: ProjectSelectorIndicator;
+  /**
+   * Some listed row has a trailing indicator (or a role glyph): rows without one keep its slot
+   * empty, so each kind of glyph stays in its own column — the role first, the trailing one last.
+   */
+  reserveTrailingSlot?: boolean;
+  reserveRoleSlot?: boolean;
+  /** The ⋮ menu's compact view: the short and full names on one line. */
+  isCompact: boolean;
+  /** See {@link ProjectSelectorProps} `onRowHoverChange`. */
+  onHoverChange?: ProjectSelectorProps['onRowHoverChange'];
 };
 
+/**
+ * A row's name: the short name over the muted full name, or — in the compact view — both on one
+ * line. The full name is left out whenever `hasDistinctFullName` says it adds nothing. `labelRef`
+ * is what the truncation tooltip measures.
+ */
+function RowLabel({
+  project,
+  isCompact,
+  labelRef,
+  fullNameClassName,
+}: {
+  project: { shortName: string; fullName?: string };
+  isCompact: boolean;
+  labelRef: RefObject<HTMLSpanElement | null>;
+  fullNameClassName: string;
+}) {
+  const fullName = hasDistinctFullName(project) ? project.fullName : undefined;
+  if (isCompact)
+    return (
+      <span
+        ref={labelRef}
+        className="tw:flex tw:min-w-0 tw:flex-1 tw:items-baseline tw:gap-2 tw:overflow-hidden tw:text-start"
+      >
+        <span className="tw:shrink-0 tw:font-medium tw:whitespace-nowrap">{project.shortName}</span>
+        {fullName && (
+          <span className={cn('tw:min-w-0 tw:truncate tw:text-xs', fullNameClassName)}>
+            {fullName}
+          </span>
+        )}
+      </span>
+    );
+  return (
+    <span
+      ref={labelRef}
+      className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:items-start tw:overflow-hidden tw:text-start"
+    >
+      <span className="tw:w-full tw:truncate tw:font-medium">{project.shortName}</span>
+      {fullName && (
+        <span className={cn('tw:w-full tw:truncate tw:text-xs', fullNameClassName)}>
+          {fullName}
+        </span>
+      )}
+    </span>
+  );
+}
+
 /** Fixed-width leading slot shared by every row kind, so labels line up. */
-function IconSlot({ children }: { children?: ReactNode }) {
+function IconSlot({ children, isDimmed = false }: { children?: ReactNode; isDimmed?: boolean }) {
   return (
     <span
       aria-hidden
-      className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center"
+      className={cn(
+        'tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center',
+        // A muted row's icon fades with its text, so a colored icon does not stand out.
+        isDimmed && 'tw:opacity-50',
+      )}
     >
       {children}
     </span>
@@ -760,6 +1008,12 @@ function ProjectRowView({
   icon,
   reserveIconSlot,
   tooltipLine,
+  trailingIndicator,
+  roleIndicator,
+  reserveTrailingSlot = false,
+  reserveRoleSlot = false,
+  isCompact,
+  onHoverChange,
 }: RowRenderProps) {
   // We control Radix Tooltip's `open` prop manually because Radix's built-in pointer/focus
   // auto-detection does not fire on cmdk's `<CommandItem>` trigger (data-state stays "closed"
@@ -796,22 +1050,40 @@ function ProjectRowView({
   const isHovered = isTruncatedHovered || isExtraContentHovered;
 
   const handlePointerEnter = useCallback(() => {
+    onHoverChange?.({ projectId: row.projectId, scrollGroupId: row.scrollGroupId });
     if (hasExtraTooltipContent) {
       setIsExtraContentHovered(true);
       return;
     }
     // Otherwise only open the tooltip if the visible row text is actually truncated.
     onTruncationPointerEnter();
-  }, [hasExtraTooltipContent, onTruncationPointerEnter]);
+  }, [onHoverChange, row, hasExtraTooltipContent, onTruncationPointerEnter]);
 
   const handlePointerLeave = useCallback(() => {
+    onHoverChange?.(undefined);
     setIsExtraContentHovered(false);
     onTruncationPointerLeave();
-  }, [onTruncationPointerLeave]);
+  }, [onHoverChange, onTruncationPointerLeave]);
 
-  const leftCheck = (
-    <Check className={cn('tw:h-4 tw:w-4', row.isSelected ? 'tw:opacity-100' : 'tw:opacity-0')} />
-  );
+  // Multi-select rows draw a checkbox, so picking several reads as ticking boxes; single-select
+  // rows keep a bare check mark on the picked row. The box is only drawn: the row is the control.
+  const leftCheck =
+    mode === 'project-multi' ? (
+      <span
+        aria-hidden
+        className={cn(
+          'tw:flex tw:h-4 tw:w-4 tw:items-center tw:justify-center tw:rounded-[4px] tw:border tw:shadow-xs',
+          row.isSelected
+            ? 'tw:border-primary tw:bg-primary tw:text-primary-foreground'
+            : 'tw:border-input tw:bg-background',
+        )}
+      >
+        {/* `size-3`: the row sizes every icon without a size- class to 16px. */}
+        {row.isSelected && <Check className="tw:size-3" />}
+      </span>
+    ) : (
+      <Check className={cn('tw:h-4 tw:w-4', row.isSelected ? 'tw:opacity-100' : 'tw:opacity-0')} />
+    );
 
   // Right-side content: chip(s) and, for bound-but-closed rows that are not disabled, an "Open"
   // button. A disabled row still takes the pointer (for its tooltip), so the button must not render.
@@ -831,10 +1103,23 @@ function ProjectRowView({
   } else if (row.scrollGroupId !== undefined) {
     rightContent = (
       <span className="tw:ms-auto tw:flex tw:shrink-0 tw:items-center tw:gap-2">
-        <ScrollGroupChip
-          scrollGroupId={row.scrollGroupId}
-          isBoundButClosed={row.isBoundButClosed}
-        />
+        <TrailingTooltip
+          label={
+            row.isBoundButClosed
+              ? undefined
+              : strings.scrollGroupTooltip.replace(
+                  '{group}',
+                  scrollGroupLetterFromMap(row.scrollGroupId),
+                )
+          }
+        >
+          <span className="tw:flex">
+            <ScrollGroupChip
+              scrollGroupId={row.scrollGroupId}
+              isBoundButClosed={row.isBoundButClosed}
+            />
+          </span>
+        </TrailingTooltip>
         {row.isBoundButClosed && !row.isDisabled && onOpen && (
           <Button
             size="sm"
@@ -858,6 +1143,7 @@ function ProjectRowView({
   const rowNode = (
     <CommandItem
       ref={row.isSelected ? selectedRowRef : undefined}
+      data-picked={row.isSelected || undefined}
       value={`${row.rowKey} ${row.shortName} ${row.fullName ?? ''}`}
       onSelect={() => {
         if (row.isDisabled) return;
@@ -871,10 +1157,14 @@ function ProjectRowView({
       // points at the open tooltip on every other row.
       {...(hasDisabledReason && { 'aria-describedby': disabledReasonId })}
       className={cn(
-        'tw:flex tw:items-center tw:gap-2 tw:pe-4',
+        // `[&>svg:last-child]:hidden` drops the check mark `CommandItem` appends for its own
+        // checked state, which this row never uses (its check is at the start); left in, it holds
+        // empty space after the row's end icons.
+        'tw:flex tw:items-center tw:gap-2 tw:pe-2 tw:[&>svg:last-child]:hidden',
         // `CommandItem` turns pointer events off on disabled items, which would keep the tooltip
         // explaining why from ever opening. cmdk itself still ignores clicks on disabled items.
-        'tw:data-[disabled=true]:pointer-events-auto tw:data-[disabled=true]:cursor-not-allowed',
+        // A disabled row keeps the plain cursor; its tooltip says why it cannot be picked.
+        'tw:data-[disabled=true]:pointer-events-auto',
       )}
     >
       <span className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center">
@@ -899,17 +1189,32 @@ function ProjectRowView({
           says there is nothing distinct to show, so the row reads as a
           single name rather than repeating it — edit that helper, not this
           condition, to change what counts as distinct. */}
-      <span
-        ref={labelRef}
-        className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:items-start tw:overflow-hidden tw:text-start"
-      >
-        <span className="tw:w-full tw:truncate tw:font-medium">{row.shortName}</span>
-        {hasDistinctFullName(row) && (
-          <span className="tw:w-full tw:truncate tw:text-xs tw:text-muted-foreground">
-            {row.fullName}
+      <RowLabel
+        project={row}
+        isCompact={isCompact}
+        labelRef={labelRef}
+        fullNameClassName="tw:text-muted-foreground"
+      />
+      {(roleIndicator || trailingIndicator) && (
+        // The glyphs name themselves; the one tooltip over both, a line each, is the sighted-user
+        // half.
+        <TrailingTooltip
+          label={[roleIndicator?.label, trailingIndicator?.label].filter(Boolean).join('\n')}
+        >
+          <span className="tw:ms-auto tw:flex tw:shrink-0 tw:items-center tw:gap-1.5 tw:text-muted-foreground">
+            {(roleIndicator || reserveRoleSlot) && (
+              <span className="tw:flex tw:h-4 tw:w-4 tw:items-center tw:justify-center">
+                {roleIndicator?.node}
+              </span>
+            )}
+            {(trailingIndicator || reserveTrailingSlot) && (
+              <span className="tw:flex tw:h-4 tw:w-4 tw:items-center tw:justify-center">
+                {trailingIndicator?.node}
+              </span>
+            )}
           </span>
-        )}
-      </span>
+        </TrailingTooltip>
+      )}
       {rightContent}
       {/* `hidden` rather than `sr-only`: the option's name comes from its content, which must not
           include the reason. A hidden element still supplies the text `aria-describedby` points at. */}
@@ -1010,6 +1315,8 @@ type SearchOnlyRowRenderProps = {
   reserveIconSlot: boolean;
   /** Same meaning as on {@link ProjectRowView}. */
   tooltipLine?: string;
+  /** Same meaning as on {@link ProjectRowView}. */
+  isCompact: boolean;
 };
 
 /**
@@ -1025,6 +1332,7 @@ function SearchOnlyRowView({
   icon,
   reserveIconSlot,
   tooltipLine,
+  isCompact,
 }: SearchOnlyRowRenderProps) {
   const {
     ref: labelRef,
@@ -1047,31 +1355,27 @@ function SearchOnlyRowView({
         setIsExtraContentHovered(false);
         onPointerLeave();
       }}
-      className="tw:flex tw:items-center tw:gap-2 tw:pe-4 tw:text-muted-foreground"
+      // Without `CommandItem`'s unused end check mark, as on listed rows.
+      className="tw:flex tw:items-center tw:gap-2 tw:pe-2 tw:text-muted-foreground tw:[&>svg:last-child]:hidden"
     >
       <span
         aria-hidden
         className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center"
       />
-      {reserveIconSlot && <IconSlot>{icon}</IconSlot>}
+      {reserveIconSlot && <IconSlot isDimmed>{icon}</IconSlot>}
       {reserveIndicatorSlot && (
         <span className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center">
           {indicator?.node}
         </span>
       )}
-      <span
-        ref={labelRef}
-        className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:items-start tw:overflow-hidden tw:text-start"
-      >
-        <span className="tw:w-full tw:truncate tw:font-medium">{project.shortName}</span>
-        {hasDistinctFullName(project) && (
-          <span className="tw:w-full tw:truncate tw:text-xs">{project.fullName}</span>
-        )}
-      </span>
+      {/* The whole row is already muted, so the full name takes no further dimming. */}
+      <RowLabel project={project} isCompact={isCompact} labelRef={labelRef} fullNameClassName="" />
       {project.hint && (
-        <span className="tw:ms-auto tw:shrink-0 tw:text-xs tw:whitespace-nowrap">
-          {project.hint}
-        </span>
+        <TrailingTooltip label={project.hintTooltip}>
+          <span className="tw:ms-auto tw:shrink-0 tw:text-xs tw:whitespace-nowrap">
+            {project.hint}
+          </span>
+        </TrailingTooltip>
       )}
     </CommandItem>
   );
@@ -1117,6 +1421,8 @@ function sectionCollapseKey(section: RowSection): string {
 
 type SectionHeadingToggleProps = {
   heading: string;
+  /** A glyph after the heading, named by its own tooltip. */
+  indicator?: { node: ReactNode; label: string };
   isExpanded: boolean;
   onToggle: () => void;
   /** Id of the element holding the section's rows, for `aria-controls`. */
@@ -1140,12 +1446,19 @@ type SectionHeadingToggleProps = {
  */
 function SectionHeadingToggle({
   heading,
+  indicator,
   isExpanded,
   onToggle,
   controlsId,
 }: SectionHeadingToggleProps) {
   return (
-    <div role="presentation" className="tw:px-1 tw:pt-1">
+    // Sticky, so the heading of the section the rows on screen belong to stays in view; each
+    // heading is opaque and stacks over the one before it as the list scrolls.
+    <div
+      role="presentation"
+      data-section-heading=""
+      className="tw:sticky tw:top-0 tw:z-10 tw:bg-popover tw:px-1 tw:pt-1"
+    >
       <button
         type="button"
         aria-expanded={isExpanded}
@@ -1157,18 +1470,61 @@ function SectionHeadingToggle({
           event.preventDefault();
           onToggle();
         }}
-        className="tw:flex tw:w-full tw:items-center tw:gap-1 tw:rounded-sm tw:px-2 tw:py-1.5 tw:text-start tw:text-xs tw:font-medium tw:text-muted-foreground tw:hover:text-foreground tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:outline-none"
+        className="tw:group/heading tw:flex tw:w-full tw:items-center tw:gap-1 tw:rounded-sm tw:px-2 tw:py-1.5 tw:text-start tw:text-xs tw:font-medium tw:text-muted-foreground tw:hover:text-foreground tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:outline-none"
       >
+        {/* Shown only while the heading is hovered or focused, keeping its place: next to the
+            rows' check marks, an always-visible chevron reads as one more checkbox. */}
         <ChevronDown
           aria-hidden
           className={cn(
-            'tw:h-3.5 tw:w-3.5 tw:shrink-0 tw:transition-transform',
+            'tw:h-3.5 tw:w-3.5 tw:shrink-0 tw:opacity-0 tw:transition tw:group-hover/heading:opacity-100 tw:group-focus-visible/heading:opacity-100',
             !isExpanded && 'tw:-rotate-90 tw:rtl:rotate-90',
           )}
         />
         <span className="tw:min-w-0 tw:truncate">{heading}</span>
+        {indicator && (
+          <Tooltip delayDuration={400}>
+            <TooltipTrigger asChild>
+              <span className="tw:flex tw:shrink-0 tw:items-center">{indicator.node}</span>
+            </TooltipTrigger>
+            <TooltipContent>{indicator.label}</TooltipContent>
+          </Tooltip>
+        )}
       </button>
     </div>
+  );
+}
+
+/** Puts focus in the search box of the picker `element` sits in. */
+function focusSearchInput(element: HTMLElement) {
+  element.closest('[cmdk-root]')?.querySelector<HTMLInputElement>('[cmdk-input]')?.focus();
+}
+
+type ClearSearchButtonProps = {
+  label: string;
+  onClear: () => void;
+  className?: string;
+};
+
+/**
+ * The X at the end of the search box. Clears the query and puts focus back in the search box, so
+ * the user can type again straight away.
+ */
+function ClearSearchButton({ label, onClear, className }: ClearSearchButtonProps) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      aria-label={label}
+      className={cn('tw:size-6 tw:text-muted-foreground', className)}
+      onClick={(event) => {
+        onClear();
+        focusSearchInput(event.currentTarget);
+      }}
+    >
+      <X className="tw:size-3.5" />
+    </Button>
   );
 }
 
@@ -1183,6 +1539,16 @@ function SectionHeadingToggle({
  */
 export const NO_GROUPING = 'none';
 
+/**
+ * Fork-only: in a multi-select picker the search row sits under the rows' columns — checkbox, then
+ * icon, then name — so the search icon and the text start where a row's icon and name do. The
+ * search box's own inset and its icon's padding are shrunk to get there.
+ */
+const MULTI_SEARCH_ALIGNMENT_CLASS =
+  'tw:ms-0.5 tw:[&_[data-slot=input-group]>[data-slot=input-group-addon]]:ps-px! tw:[&_[data-slot=command-input]]:ps-2!';
+
+const NO_OPEN_TABS: readonly ProjectSelectorOpenTab[] = [];
+
 type ActiveGroupingId = string;
 
 type GroupByMenuProps = {
@@ -1190,6 +1556,10 @@ type GroupByMenuProps = {
   activeGrouping: ActiveGroupingId;
   onChangeGrouping: (value: ActiveGroupingId) => void;
   strings: Required<ProjectSelectorLocalizedStrings>;
+  /** The "Compact" view checkbox, listed last under "View"; left out without it. */
+  compactView?: { isOn: boolean; onChange: (isOn: boolean) => void };
+  /** The "Show only selected" checkbox, under "View"; left out without it. */
+  showOnlySelected?: { isOn: boolean; onChange: (isOn: boolean) => void };
 };
 
 function GroupByMenu({
@@ -1197,10 +1567,14 @@ function GroupByMenu({
   activeGrouping,
   onChangeGrouping,
   strings,
+  compactView,
+  showOnlySelected,
 }: GroupByMenuProps) {
   // The button reads as a toggle that is "on" whenever a grouping is applied, so the active state
   // is conveyed by the control itself rather than only by the section headings in the list.
-  const isGroupingActive = activeGrouping !== NO_GROUPING;
+  const hasGroupingChoice = availableGroupings.length > 1;
+  const isGroupingActive = hasGroupingChoice && activeGrouping !== NO_GROUPING;
+  const buttonLabel = hasGroupingChoice ? strings.groupByAriaLabel : strings.viewOptionsAriaLabel;
 
   return (
     <DropdownMenu>
@@ -1220,7 +1594,7 @@ function GroupByMenu({
                 isGroupingActive &&
                   'tw:bg-accent tw:text-accent-foreground tw:hover:bg-accent/80 tw:data-[state=open]:bg-accent',
               )}
-              aria-label={strings.groupByAriaLabel}
+              aria-label={buttonLabel}
               aria-pressed={isGroupingActive}
               onMouseDown={(event: MouseEvent) => event.preventDefault()}
             >
@@ -1230,7 +1604,7 @@ function GroupByMenu({
         </TooltipTrigger>
         {/* No `zIndex` override: `TooltipContent` sets the tooltip tier itself, which is above both
             the host popover and this menu. */}
-        <TooltipContent>{strings.groupByAriaLabel}</TooltipContent>
+        <TooltipContent>{buttonLabel}</TooltipContent>
       </Tooltip>
       {/* One of the few places a consumer legitimately overrides an overlay's own tier, so the
           reason is recorded here: this menu opens from inside this component's own
@@ -1245,20 +1619,44 @@ function GroupByMenu({
         className="tw:w-56"
         style={{ zIndex: Z_INDEX_ABOVE_POPOVER }}
       >
-        <DropdownMenuLabel>{strings.groupSectionLabel}</DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={activeGrouping} onValueChange={onChangeGrouping}>
-          {/* No `onSelect={preventDefault}` here — picking a grouping should close the menu
+        {hasGroupingChoice && <DropdownMenuLabel>{strings.groupSectionLabel}</DropdownMenuLabel>}
+        {hasGroupingChoice && (
+          <DropdownMenuRadioGroup value={activeGrouping} onValueChange={onChangeGrouping}>
+            {/* No `onSelect={preventDefault}` here — picking a grouping should close the menu
               immediately, so the user sees the newly grouped list without a second click. */}
-          <DropdownMenuRadioItem value={NO_GROUPING}>{strings.groupByNone}</DropdownMenuRadioItem>
-          {/* Visually separate "None" from the real grouping options — "None" is the "off state"
+            <DropdownMenuRadioItem value={NO_GROUPING}>{strings.groupByNone}</DropdownMenuRadioItem>
+            {/* Visually separate "None" from the real grouping options — "None" is the "off state"
               and the actual grouping choices sit below the divider. */}
-          <DropdownMenuSeparator />
-          {availableGroupings.map((grouping) => (
-            <DropdownMenuRadioItem key={grouping.id} value={grouping.id}>
-              {grouping.label}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
+            <DropdownMenuSeparator />
+            {availableGroupings.map((grouping) => (
+              <DropdownMenuRadioItem key={grouping.id} value={grouping.id}>
+                {grouping.label}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        )}
+        {(compactView || showOnlySelected) && (
+          <>
+            {hasGroupingChoice && <DropdownMenuSeparator />}
+            <DropdownMenuLabel>{strings.viewSectionLabel}</DropdownMenuLabel>
+            {showOnlySelected && (
+              <DropdownMenuCheckboxItem
+                checked={showOnlySelected.isOn}
+                onCheckedChange={(checked) => showOnlySelected.onChange(checked === true)}
+              >
+                {strings.showOnlySelected}
+              </DropdownMenuCheckboxItem>
+            )}
+            {compactView && (
+              <DropdownMenuCheckboxItem
+                checked={compactView.isOn}
+                onCheckedChange={(checked) => compactView.onChange(checked === true)}
+              >
+                {strings.compactView}
+              </DropdownMenuCheckboxItem>
+            )}
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -1300,7 +1698,18 @@ function resolveDefaultActiveGrouping(
  * row with a diagonally-struck chip and an "Open" button.
  */
 export function ProjectSelector(props: ProjectSelectorProps) {
-  const [open, setOpen] = useState(false);
+  // Open state is the parent's when it passes `open` (a button elsewhere can open the dropdown),
+  // and the selector's own otherwise; every change is reported through `onOpenChange`.
+  const [openInternal, setOpenInternal] = useState(false);
+  const open = props.open ?? openInternal;
+  const { onOpenChange } = props;
+  const setOpen = useCallback(
+    (next: boolean) => {
+      setOpenInternal(next);
+      onOpenChange?.(next);
+    },
+    [onOpenChange],
+  );
   const [query, setQuery] = useState('');
   // Memoized on the prop's identity, which is all a component can key on. Note it does NOT hold on
   // the unresolved path: `useLocalizedStrings` rebuilds its seed object in the render body and
@@ -1313,7 +1722,8 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   // - When the caller passes `availableGroupings` (even `[]`), it is taken LITERALLY. This is the
   //   contract for "I know exactly what groupings this picker should offer" cases like the
   //   manage-books Create "Based on" picker, which passes `[versificationGrouping]` and expects
-  //   to be locked into that single option with no group-by menu.
+  //   to be locked into that single option, with no grouping choice in the ⋮ menu (the fork
+  //   still shows the menu, for its view options).
   // - When the caller OMITS `availableGroupings`, the component auto-derives a sensible default
   //   from the runtime state:
   //     - `openTabs` when any tab is open (so pickers that show scroll-group chips also expose
@@ -1365,6 +1775,11 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   // The user's choice wins permanently once made; until then the resolved default tracks the props.
   // A picked id that later leaves `availableGroupings` degrades to flat (see `sections` below).
   const activeGrouping = pickedGrouping ?? resolvedGrouping;
+  const { scrollGroupGroupingIds } = props;
+  const isOneRowPerProject =
+    props.mode === 'project-multi' &&
+    scrollGroupGroupingIds !== undefined &&
+    !scrollGroupGroupingIds.includes(activeGrouping);
 
   // Clear the search filter when the popover closes so the next open starts
   // fresh — a persisted query across open/close confuses users who typed a
@@ -1377,15 +1792,8 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   // value for React DOM refs.
   // eslint-disable-next-line no-null/no-null
   const selectedRowRef = useRef<HTMLDivElement>(null);
-  // cmdk highlights an item by its `value`, and only items it has REGISTERED are candidates. The
-  // footer action is `forceMount`ed and so never registers (that is what keeps `filtered.count` at
-  // 0 so `CommandEmpty` can render), which means that when no project row is registered either —
-  // an empty list, or a search that matches nothing — cmdk has nothing to highlight and its Enter
-  // handler, which acts on the highlighted item, does nothing at all. That is precisely the case
-  // the footer exists to serve, so the highlight is seeded here instead. Arrow keys are unaffected
-  // either way: they walk `getValidItems()` in the DOM rather than the registered set.
-  const [highlightedValue, setHighlightedValue] = useState<string | undefined>(undefined);
-  // Keys of the sections the user has closed. Empty means everything is expanded.
+  // Keys of the sections the user has toggled away from their starting state: closed, or — under
+  // a grouping whose sections start collapsed — opened. Empty means every section is as it starts.
   const [collapsedSections, setCollapsedSections] =
     useState<ReadonlySet<string>>(NO_COLLAPSED_SECTIONS);
   const sectionIdPrefix = useId();
@@ -1397,10 +1805,19 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     });
   }, []);
   // Every edit to the query expands all sections, so a collapsed section never hides a match.
+  // null is the canonical initial value for React DOM refs.
+  // eslint-disable-next-line no-null/no-null
+  const commandListRef = useRef<HTMLDivElement>(null);
   const handleQueryChange = useCallback((nextQuery: string) => {
     setQuery(nextQuery);
     setCollapsedSections(NO_COLLAPSED_SECTIONS);
+    // Every change to the search starts the list from its top, where the best matches are.
+    window.requestAnimationFrame(() => {
+      if (commandListRef.current) commandListRef.current.scrollTop = 0;
+    });
   }, []);
+  // Whether the list is scrolled away from its top, for the Scroll to top button.
+  const [isListScrolled, setIsListScrolled] = useState(false);
   // `searchOnlyPaging` state: how many paged rows are listed (0 = not revealed yet), and whether a
   // batch is on its way.
   const [pagedRowCount, setPagedRowCount] = useState(0);
@@ -1415,28 +1832,48 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     setIsLoadingBatch(false);
   }, []);
   useEffect(() => cancelBatch, [cancelBatch]);
+  const { onRowHoverChange } = props;
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
       setOpen(nextOpen);
       if (!nextOpen) {
+        onRowHoverChange?.(undefined);
         setQuery('');
-        setHighlightedValue(undefined);
         setCollapsedSections(NO_COLLAPSED_SECTIONS);
         cancelBatch();
         setPagedRowCount(0);
         setRevealHighlight(undefined);
+        setIsListScrolled(false);
       }
     },
-    [cancelBatch],
+    [cancelBatch, onRowHoverChange, setOpen],
   );
+  // Read when the picker opens, without making the scroll effect rerun.
+  const opensAtTopRef = useRef(props.opensAtTop ?? false);
+  opensAtTopRef.current = props.opensAtTop ?? false;
   useEffect(() => {
     if (!open) return;
-    // Defer to the next microtask so the popover content has rendered and the row
-    // refs are attached. requestAnimationFrame works the same; microtask is enough.
+    // Defer to the next frame so the popover content has rendered and the row refs are attached.
     const id = window.requestAnimationFrame(() => {
-      const el = selectedRowRef.current;
-      if (!el) return;
-      el.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+      // Every picker opens with its first selected row at the top of the list, just under its
+      // sticky section heading, or at the list's top when nothing is selected. The list is
+      // scrolled directly: `scrollIntoView` would also scroll any scrollable ancestor.
+      const list = commandListRef.current;
+      if (!list) return;
+      const picked = opensAtTopRef.current
+        ? undefined
+        : list.querySelector<HTMLElement>('[data-picked]');
+      if (!picked) {
+        list.scrollTop = 0;
+        return;
+      }
+      const headingHeight =
+        list.querySelector<HTMLElement>('[data-section-heading]')?.offsetHeight ?? 0;
+      // The popover is still scaled by its opening animation, so screen distances are divided by
+      // that scale to get the list's own.
+      const listRect = list.getBoundingClientRect();
+      const scale = list.offsetHeight > 0 ? listRect.height / list.offsetHeight : 1;
+      list.scrollTop += (picked.getBoundingClientRect().top - listRect.top) / scale - headingHeight;
     });
     return () => window.cancelAnimationFrame(id);
   }, [open]);
@@ -1451,6 +1888,17 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       });
     }
     if (props.mode === 'project-multi') {
+      // One row per project: no open tabs to split it by, and a project picked in any scroll
+      // group shows picked.
+      if (isOneRowPerProject)
+        return computeRows({
+          mode: 'project-multi',
+          projects: props.projects,
+          openTabs: NO_OPEN_TABS,
+          selection: {
+            pairs: props.selection.pairs.map((pair) => ({ projectId: pair.projectId })),
+          },
+        });
       return computeRows({
         mode: 'project-multi',
         projects: props.projects,
@@ -1464,13 +1912,26 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       openTabs: props.openTabs,
       selection: props.selection,
     });
-  }, [props.mode, props.projects, props.openTabs, props.selection]);
+  }, [props.mode, props.projects, props.openTabs, props.selection, isOneRowPerProject]);
 
+  // The ⋮ menu's "Compact" view, one line per row; kept across opens like the picked grouping.
+  const hasViewOptions = props.hasViewOptions ?? true;
+  const [isCompactViewPicked, setIsCompactView] = useState(props.isCompactViewByDefault ?? false);
+  // Without the ⋮ menu's view option, the view is fixed at its default.
+  const isCompactView = hasViewOptions
+    ? isCompactViewPicked
+    : (props.isCompactViewByDefault ?? false);
+
+  const hasShowOnlySelected =
+    props.mode === 'project-multi' && (props.hasShowOnlySelected ?? false);
+  const [isShowingOnlySelected, setIsShowingOnlySelected] = useState(false);
+  const isOnlySelectedListed = hasShowOnlySelected && isShowingOnlySelected;
   const filteredRows = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return rows;
-    return rows.filter((r) => matchesSearch(r, needle));
-  }, [rows, query]);
+    const shownRows = isOnlySelectedListed ? rows.filter((r) => r.isSelected) : rows;
+    if (!needle) return shownRows;
+    return shownRows.filter((r) => matchesSearch(r, needle));
+  }, [rows, query, isOnlySelectedListed]);
 
   const { searchOnlyPaging } = props;
   const pagedProjects = useMemo<readonly ProjectSelectorSearchOnlyProject[]>(
@@ -1506,18 +1967,33 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   const searchOnlySectionCount = isPagingBrowsing
     ? pagedProjects.length
     : filteredSearchOnlyProjects.length;
-  const searchOnlySectionHeading = props.getSearchOnlySectionHeading
-    ? props.getSearchOnlySectionHeading(searchOnlySectionCount)
-    : strings.searchOnlySectionHeading;
+  const { formatSectionCount } = props;
+  let searchOnlySectionHeading: string;
+  if (formatSectionCount) {
+    const count = formatSectionCount(
+      searchOnlySectionCount,
+      hasQuery ? (props.searchOnlyProjects?.length ?? 0) : undefined,
+    );
+    searchOnlySectionHeading = count
+      ? `${strings.searchOnlySectionHeading} ${count}`
+      : strings.searchOnlySectionHeading;
+  } else if (props.getSearchOnlySectionHeading)
+    searchOnlySectionHeading = props.getSearchOnlySectionHeading(searchOnlySectionCount);
+  else searchOnlySectionHeading = strings.searchOnlySectionHeading;
 
   const revealPagedRows = useCallback(() => {
     if (!searchOnlyPaging || pagedProjects.length === 0) return;
     setPagedRowCount(searchOnlyPaging.batchSize);
     setRevealHighlight(searchOnlyRowValue(pagedProjects[0]));
   }, [searchOnlyPaging, pagedProjects]);
-  // null is the canonical initial value for React DOM refs.
-  // eslint-disable-next-line no-null/no-null
-  const commandListRef = useRef<HTMLDivElement>(null);
+  // Switching the grouping starts the reordered list from its top, and every section as it starts.
+  const previousGroupingRef = useRef(activeGrouping);
+  useEffect(() => {
+    if (previousGroupingRef.current === activeGrouping) return;
+    previousGroupingRef.current = activeGrouping;
+    setCollapsedSections(NO_COLLAPSED_SECTIONS);
+    if (commandListRef.current) commandListRef.current.scrollTop = 0;
+  }, [activeGrouping]);
   // After a reveal, scroll the newly listed section's heading to the top of the list, so the user
   // sees what was added rather than one row of it at the bottom, and put focus in the search box so
   // they can go straight on to narrowing it (a click on the footer row may have taken focus off it).
@@ -1605,19 +2081,82 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     [renderProjectIndicator],
   );
   const reserveIndicatorSlot = Boolean(renderProjectIndicator);
-  const { renderProjectIcon, getProjectTooltipLine } = props;
+  const {
+    renderProjectIcon,
+    getProjectTooltipLine,
+    renderProjectTrailingIndicator,
+    renderProjectRoleIndicator,
+  } = props;
   const reserveIconSlot = Boolean(renderProjectIcon);
+  const reserveTrailingSlot = useMemo(
+    () =>
+      Boolean(renderProjectTrailingIndicator) &&
+      rows.some((row) => renderProjectTrailingIndicator?.(row.project, activeGrouping)),
+    [rows, renderProjectTrailingIndicator, activeGrouping],
+  );
+  const reserveRoleSlot = useMemo(
+    () =>
+      Boolean(renderProjectRoleIndicator) &&
+      rows.some((row) => renderProjectRoleIndicator?.(row.project)),
+    [rows, renderProjectRoleIndicator],
+  );
 
   const sections = useMemo<RowSection[]>(() => {
     if (activeGrouping === NO_GROUPING) return partitionFlat(filteredRows);
     const grouping = availableGroupings.find((g) => g.id === activeGrouping);
     if (!grouping) return partitionFlat(filteredRows);
-    return partitionByGrouping(filteredRows, grouping);
-  }, [filteredRows, activeGrouping, availableGroupings]);
+    const partitioned = partitionByGrouping(filteredRows, grouping);
+    const isListedOnlyWhileSearching = grouping.isSectionListedOnlyWhileSearching;
+    if (hasQuery || !isListedOnlyWhileSearching) return partitioned;
+    return partitioned.filter(
+      (section) => section.key === undefined || !isListedOnlyWhileSearching(section.key),
+    );
+  }, [filteredRows, activeGrouping, availableGroupings, hasQuery]);
+  const listedRowCount = sections.reduce((count, section) => count + section.rows.length, 0);
+
+  // Each section's row count without the search, keyed like the collapse state, for
+  // `formatSectionCount`'s "(x of y)".
+  const unfilteredSectionCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    if (!formatSectionCount || activeGrouping === NO_GROUPING) return counts;
+    const grouping = availableGroupings.find((g) => g.id === activeGrouping);
+    if (!grouping) return counts;
+    partitionByGrouping(rows, grouping).forEach((section) =>
+      counts.set(sectionCollapseKey(section), section.rows.length),
+    );
+    return counts;
+  }, [formatSectionCount, rows, activeGrouping, availableGroupings]);
+  const activeGroupingDefinition = availableGroupings.find((g) => g.id === activeGrouping);
+  const withSectionCount = (
+    heading: string,
+    shown: number,
+    total: number | undefined,
+    key: string | undefined,
+  ) => {
+    if (key !== undefined && activeGroupingDefinition?.isSectionCountHidden?.(key)) return heading;
+    const count = formatSectionCount?.(shown, hasQuery ? (total ?? shown) : undefined);
+    return count ? `${heading} ${count}` : heading;
+  };
+
+  // A section's heading, unless its grouping keeps it for searches only.
+  const shownSectionHeading = (section: RowSection) => {
+    const isHeadingHidden =
+      !hasQuery &&
+      section.key !== undefined &&
+      activeGroupingDefinition?.isSectionHeadingShownOnlyWhileSearching?.(section.key);
+    return isHeadingHidden ? undefined : sectionHeading(section, strings);
+  };
 
   // A section without a heading (the flat list) has no toggle, so it is always expanded.
+  // A search starts every section expanded, whatever the grouping's default.
+  const isSectionCollapsedByDefault = (section: RowSection) =>
+    !hasQuery &&
+    (Boolean(activeGroupingDefinition?.areSectionsCollapsedByDefault) ||
+      (section.key !== undefined &&
+        Boolean(activeGroupingDefinition?.isSectionCollapsedByDefault?.(section.key))));
   const isSectionExpanded = (section: RowSection) =>
-    !sectionHeading(section, strings) || !collapsedSections.has(sectionCollapseKey(section));
+    !shownSectionHeading(section) ||
+    collapsedSections.has(sectionCollapseKey(section)) === isSectionCollapsedByDefault(section);
   const isSearchOnlySectionExpanded = !collapsedSections.has(SEARCH_ONLY_SECTION_KEY);
 
   // The footer row actually rendered: `searchOnlyPaging`'s reveal row until it is used (hidden
@@ -1631,19 +2170,21 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         opensDialog: false,
       };
   } else if (props.footerAction) footerAction = { ...props.footerAction, opensDialog: true };
+  const runFooterAction = () => {
+    footerAction?.onSelect();
+    // Close through the handler rather than `setOpen`, so the search query is cleared and the next
+    // open starts from the full list.
+    if (footerAction?.opensDialog) handleOpenChange(false);
+  };
   // The paging config, once its last batch is listed; drives the "all loaded" footer note.
   const fullyLoadedPaging =
     isPagingBrowsing && !hasMoreBatches && pagedProjects.length > 0 ? searchOnlyPaging : undefined;
-  const hasAnyRows = filteredRows.length + filteredSearchOnlyProjects.length > 0;
+  const hasAnyRows = listedRowCount + filteredSearchOnlyProjects.length > 0;
   const mountedRowCount =
     sections.reduce(
       (count, section) => count + (isSectionExpanded(section) ? section.rows.length : 0),
       0,
     ) + (isSearchOnlySectionExpanded ? filteredSearchOnlyProjects.length : 0);
-
-  // The only state in which cmdk has no registered item to highlight — no rows, or every section
-  // with rows collapsed — so the footer's Enter handling has to be seeded by hand.
-  const seedFooterHighlight = Boolean(footerAction) && mountedRowCount === 0;
 
   const handleOpenProjectInGroup = (row: ProjectRow) => {
     if (row.scrollGroupId === undefined) return;
@@ -1669,6 +2210,24 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         // lowercased tab-derived ids; see normalizeProjectId). Guarantees that clicking a
         // row toggles the SAME pair regardless of casing on either side.
         const normalizedRowId = normalizeProjectId(row.projectId);
+        if (isOneRowPerProject) {
+          // The row stands for the project in every scroll group: unpicking drops them all;
+          // picking adds the project in the first scroll group it is open in, if any.
+          const isOfRow = (p: { projectId: string }) =>
+            normalizeProjectId(p.projectId) === normalizedRowId;
+          if (current.some(isOfRow)) {
+            props.onChangeSelection({ pairs: current.filter((p) => !isOfRow(p)) });
+            return;
+          }
+          const openTab = props.openTabs.find(isOfRow);
+          props.onChangeSelection({
+            pairs: [
+              ...current,
+              { projectId: row.projectId, scrollGroupId: openTab?.scrollGroupId },
+            ],
+          });
+          return;
+        }
         const match = (p: ProjectSelectorProjectPair) =>
           normalizeProjectId(p.projectId) === normalizedRowId &&
           p.scrollGroupId === row.scrollGroupId;
@@ -1725,6 +2284,8 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   const handleClearAll = () => {
     if (props.mode !== 'project-multi') return;
     props.onChangeSelection({ pairs: [] });
+    // With nothing selected, "Show only selected" would list nothing, so it goes off too.
+    setIsShowingOnlySelected(false);
   };
 
   // Narrowed out of the union here rather than read inside the memo below: `props` itself is a
@@ -1733,6 +2294,8 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   // directly.
   const renderTriggerLabel = props.mode === 'project' ? props.renderTriggerLabel : undefined;
   const triggerLabelFormat = props.mode === 'project' ? props.triggerLabelFormat : undefined;
+  const multiTriggerLabel = props.mode === 'project-multi' ? props.triggerLabel : undefined;
+  const { triggerHiddenIds } = props;
 
   const triggerContent = useMemo<{
     node: ReactNode;
@@ -1758,17 +2321,18 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       case 'project-multi': {
         const { pairs } = props.selection;
         if (pairs.length === 0) {
-          const text = strings.buttonPlaceholder;
+          const text = multiTriggerLabel ?? strings.buttonPlaceholder;
           return { node: text, title: text, hasSelection: false };
         }
         type Tuple = { project: ProjectSelectorProject; scrollGroupId?: ScrollGroupId };
         const tuples: Tuple[] = [];
         pairs.forEach((pair) => {
+          if (triggerHiddenIds?.includes(pair.projectId)) return;
           const project = lookUpProject(pair.projectId);
           if (project) tuples.push({ project, scrollGroupId: pair.scrollGroupId });
         });
         if (tuples.length === 0) {
-          const text = strings.buttonPlaceholder;
+          const text = multiTriggerLabel ?? strings.buttonPlaceholder;
           return { node: text, title: text, hasSelection: false };
         }
         const items = tuples
@@ -1778,21 +2342,29 @@ export function ProjectSelector(props: ProjectSelectorProps) {
               : `${project.shortName} (${scrollGroupLetterFromMap(scrollGroupId)})`,
           )
           .join(', ');
-        // Always render the count badge (even at 1) so the trigger is visually consistent across
-        // selection counts and stays distinguishable from single-select mode's bare-label trigger.
-        const countText = tuples.length.toString();
-        return {
-          node: (
-            <>
-              <Badge variant="muted" className="tw:shrink-0">
-                {countText}
-              </Badge>
-              <span className="tw:min-w-0 tw:truncate">{items}</span>
-            </>
-          ),
-          title: `${countText} ${items}`,
-          hasSelection: true,
-        };
+        // Each name followed by the same scroll-group chip its row shows (without the row's
+        // tooltip); the trigger's own tooltip spells the letters out in `title`.
+        const chips = (
+          // A row of name-and-chip pairs, each centered on one line; the row clips at the trigger's
+          // end, where the trigger's tooltip has the full list.
+          <span className="tw:flex tw:min-w-0 tw:items-center tw:overflow-hidden" dir="auto">
+            {tuples.map(({ project, scrollGroupId }, index) => (
+              <span
+                key={`${project.id}:${scrollGroupId ?? ''}`}
+                className="tw:flex tw:shrink-0 tw:items-center"
+              >
+                {index > 0 && <span className="tw:me-1">,</span>}
+                {project.shortName}
+                {scrollGroupId !== undefined && (
+                  <span className="tw:ms-1 tw:flex">
+                    <ScrollGroupChip scrollGroupId={scrollGroupId} isBoundButClosed={false} />
+                  </span>
+                )}
+              </span>
+            ))}
+          </span>
+        );
+        return { node: multiTriggerLabel ?? chips, title: items, hasSelection: true };
       }
       case 'projectScrollGroup': {
         const selected = lookUpProject(props.selection.projectId);
@@ -1823,6 +2395,8 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     props.selection,
     renderTriggerLabel,
     triggerLabelFormat,
+    multiTriggerLabel,
+    triggerHiddenIds,
     strings.buttonPlaceholder,
   ]);
 
@@ -1922,7 +2496,17 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     >
       <span className="tw:flex tw:min-w-0 tw:flex-1 tw:items-baseline tw:gap-2 tw:overflow-hidden tw:text-start tw:whitespace-nowrap">
         {typeof triggerContent.node === 'string' ? (
-          <span className="tw:min-w-0 tw:truncate" dir="auto">
+          // Muted while it is a placeholder, with nothing selected.
+          <span
+            className={cn(
+              'tw:min-w-0 tw:truncate',
+              // A filled (primary) trigger keeps its own text color: it is a call to pick.
+              !triggerContent.hasSelection &&
+                props.buttonVariant !== 'default' &&
+                'tw:text-muted-foreground',
+            )}
+            dir="auto"
+          >
             {triggerContent.node}
           </span>
         ) : (
@@ -1936,25 +2520,22 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   // (in stories, tests, and consumers that haven't installed a TooltipProvider). Consumers that
   // DO install one — like the manage-books dialog — see no behavioral difference: Radix nests
   // providers fine.
-  const triggerWithTooltip = triggerContent.title ? (
-    <TooltipProvider delayDuration={400}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <PopoverTrigger asChild>{triggerButton}</PopoverTrigger>
-        </TooltipTrigger>
-        <TooltipContent dir="auto">{triggerContent.title}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  ) : (
-    <PopoverTrigger asChild>{triggerButton}</PopoverTrigger>
-  );
-
-  // The group-by menu only exists to let the user switch between groupings. With 0 or 1 groupings
-  // there is nothing to switch between (single-grouping lock), so drop the funnel button entirely.
-  const showGroupByMenu = availableGroupings.length > 1;
+  const triggerWithTooltip =
+    triggerContent.title && (props.hasTriggerTooltip ?? true) ? (
+      <TooltipProvider delayDuration={400}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>{triggerButton}</PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent dir="auto">{triggerContent.title}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    ) : (
+      <PopoverTrigger asChild>{triggerButton}</PopoverTrigger>
+    );
 
   return (
-    <Popover open={open} onOpenChange={handleOpenChange}>
+    <Popover open={open} onOpenChange={handleOpenChange} modal={props.isModal}>
       {triggerWithTooltip}
       <PopoverContent
         align="start"
@@ -1964,229 +2545,375 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         <TooltipProvider delayDuration={400}>
           <Command
             shouldFilter={false}
-            // Controlled ONLY while no row is registered — see `highlightedValue`. With rows
-            // present this is `undefined`, which leaves cmdk uncontrolled and keeps its own
-            // "highlight the first item" behavior intact.
-            // Also controlled for the one render after the paging reveal row is picked — see
-            // `revealHighlight`. cmdk keeps the value once it is released back to `undefined`.
-            value={
-              seedFooterHighlight ? (highlightedValue ?? FOOTER_ACTION_VALUE) : revealHighlight
-            }
-            onValueChange={(nextValue) => {
-              setHighlightedValue(nextValue);
-              setRevealHighlight(undefined);
-            }}
+            // Controlled only for the one render after the paging reveal row is picked — see
+            // `revealHighlight`. cmdk keeps the value once it is released back to `undefined`, and
+            // otherwise keeps its own "highlight the first item" behavior.
+            value={revealHighlight}
+            onValueChange={() => setRevealHighlight(undefined)}
           >
             {/* No `border-b` here — CommandInput's own InputGroup carries a full 1px border, and
                 stacking the two draws an unexpected second horizontal line just below the pill. */}
-            <div className="tw:flex tw:items-center tw:pe-2">
-              <div className="tw:flex-1">
+            {/* End padding only before the ⋮ menu; without it the box runs to the same inset as its
+                start. */}
+            <div
+              className={cn(
+                'tw:flex tw:items-center',
+                (hasViewOptions || hasShowOnlySelected || availableGroupings.length > 1) &&
+                  'tw:pe-2',
+              )}
+            >
+              {/* Multi-select: a checkbox before the search box, in line with the rows' boxes,
+                  that unselects everything. It only ever unselects — there is deliberately no
+                  "Select all": selecting every project mounts a data subscription per project, so
+                  on a large installation it is a performance hazard rather than a convenience. */}
+              {props.mode === 'project-multi' && (
+                <Tooltip delayDuration={400}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={strings.clearAll}
+                      disabled={props.selection.pairs.length === 0}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={handleClearAll}
+                      className={cn(
+                        'tw:ms-3 tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center tw:rounded-[4px] tw:border tw:shadow-xs tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:outline-none',
+                        // Uncolored, unlike the rows' ticked boxes: it is an action, not a pick.
+                        'tw:border-input tw:bg-background tw:text-foreground tw:disabled:opacity-50',
+                      )}
+                    >
+                      {props.selection.pairs.length > 0 && <Minus className="tw:size-3" />}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>{strings.clearAll}</TooltipContent>
+                </Tooltip>
+              )}
+              {/* Multi-select: the search box's icon and text line up with the rows' icons and names
+                  below, as the checkbox before it lines up with theirs. */}
+              <div
+                className={cn(
+                  'tw:relative tw:flex-1',
+                  props.mode === 'project-multi' && MULTI_SEARCH_ALIGNMENT_CLASS,
+                )}
+              >
                 <CommandInput
                   value={query}
                   onValueChange={handleQueryChange}
                   placeholder={strings.searchPlaceholder}
-                  className="tw:border-0"
+                  // End padding keeps typed text clear of the clear-search X laid over the input.
+                  // The placeholder stays for assistive technology but is drawn by the overlay below.
+                  className={cn('tw:border-0 tw:placeholder:text-transparent', query && 'tw:pe-7')}
                   // Picker semantics: with nothing typed, Space picks the highlighted project
                   // (the Enter UX) — the project list is the whole point here and a leading space
                   // is meaningless in a project name search.
                   spaceSelectsHighlightedItem
+                  // With no row mounted (none listed, none matching, or every section collapsed)
+                  // cmdk has nothing to act on, so Enter runs the footer row, the list's way out.
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter' || mountedRowCount > 0 || !footerAction) return;
+                    event.preventDefault();
+                    runFooterAction();
+                  }}
                 />
+                {/* The visible placeholder. A focused input never ends its placeholder with an
+                    ellipsis — and this one has focus whenever the picker opens — so a long one
+                    ("Search projects and resources…") is drawn here, truncating, instead.
+                    `start-[35px]` is where the input's text starts, past the search icon. */}
+                {!query && (
+                  <span
+                    aria-hidden
+                    className={cn(
+                      'tw:pointer-events-none tw:absolute tw:end-2 tw:top-[calc(50%+2px)] tw:-translate-y-1/2 tw:truncate tw:text-sm tw:text-muted-foreground',
+                      // Where the input's text starts, past the search icon.
+                      props.mode === 'project-multi' ? 'tw:start-[30px]' : 'tw:start-[35px]',
+                    )}
+                  >
+                    {strings.searchPlaceholder}
+                  </span>
+                )}
+                {query && (
+                  <ClearSearchButton
+                    label={strings.clearSearchAriaLabel}
+                    onClear={() => handleQueryChange('')}
+                    // `top-[calc(50%+2px)]`: the input wrapper pads its top but not its bottom.
+                    className="tw:absolute tw:end-2 tw:top-[calc(50%+2px)] tw:-translate-y-1/2"
+                  />
+                )}
               </div>
-              {showGroupByMenu && (
+              {/* Offered for its view options, and for the groupings when there is more than
+                  one to choose from. */}
+              {(hasViewOptions || hasShowOnlySelected || availableGroupings.length > 1) && (
                 <GroupByMenu
                   availableGroupings={availableGroupings}
                   activeGrouping={activeGrouping}
                   onChangeGrouping={setPickedGrouping}
                   strings={strings}
+                  compactView={
+                    hasViewOptions ? { isOn: isCompactView, onChange: setIsCompactView } : undefined
+                  }
+                  showOnlySelected={
+                    hasShowOnlySelected
+                      ? { isOn: isShowingOnlySelected, onChange: setIsShowingOnlySelected }
+                      : undefined
+                  }
                 />
               )}
             </div>
-            {props.mode === 'project-multi' && props.selection.pairs.length > 0 && (
-              // Right-aligned "Clear all" only. There is deliberately no "Select all": selecting every
-              // project mounts a data subscription per project, so on a large installation it is a
-              // performance hazard rather than a convenience. Clear all is hidden while nothing is selected.
-              <div className="tw:flex tw:justify-end tw:border-b tw:py-2 tw:ps-2 tw:pe-4">
-                <Button variant="ghost" size="sm" onClick={handleClearAll}>
-                  {`${strings.clearAll} (${props.selection.pairs.length.toString()})`}
-                </Button>
-              </div>
-            )}
-            <CommandList ref={commandListRef}>
-              {/* Gated on the rows themselves, not left to cmdk's registered count: with every
+            {/* `relative` places the Scroll to top button over the list's bottom end corner. */}
+            <div className="tw:relative">
+              <CommandList
+                ref={commandListRef}
+                onScroll={(event) => setIsListScrolled(event.currentTarget.scrollTop > 0)}
+              >
+                {/* Gated on the rows themselves, not left to cmdk's registered count: with every
                   section collapsed nothing is registered, yet "No projects found" would be false. */}
-              {!hasAnyRows && <CommandEmpty>{strings.commandEmptyMessage}</CommandEmpty>}
-              {sections.map((section, index) => {
-                const collapseKey = sectionCollapseKey(section);
-                const heading = sectionHeading(section, strings);
-                const isExpanded = isSectionExpanded(section);
-                const controlsId = `${sectionIdPrefix}-section-${index}`;
-                return (
-                  // Custom groupings yield multiple 'grouping' sections, so the section key must
-                  // include the label (or key) to stay stable across re-orders.
-                  <Fragment key={collapseKey}>
-                    {heading && (
-                      <SectionHeadingToggle
-                        heading={heading}
-                        isExpanded={isExpanded}
-                        onToggle={() => toggleSection(collapseKey)}
-                        controlsId={controlsId}
-                      />
-                    )}
-                    {/* A collapsed section unmounts its rows, which is what takes them out of
+                {!hasAnyRows && (
+                  <CommandEmpty className="tw:p-0">
+                    <Empty role="status" className="tw:gap-3 tw:p-4">
+                      <EmptyHeader>
+                        <EmptyTitle className="tw:text-sm">
+                          {strings.commandEmptyMessage}
+                        </EmptyTitle>
+                      </EmptyHeader>
+                      {hasQuery && (
+                        <EmptyContent>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(event) => {
+                              // Focus first: the button unmounts with the empty state it sits in.
+                              focusSearchInput(event.currentTarget);
+                              handleQueryChange('');
+                            }}
+                          >
+                            {strings.clearSearchAriaLabel}
+                          </Button>
+                        </EmptyContent>
+                      )}
+                    </Empty>
+                  </CommandEmpty>
+                )}
+                {sections.map((section, index) => {
+                  const collapseKey = sectionCollapseKey(section);
+                  const baseHeading = shownSectionHeading(section);
+                  const heading =
+                    baseHeading &&
+                    withSectionCount(
+                      baseHeading,
+                      section.rows.length,
+                      unfilteredSectionCounts.get(collapseKey),
+                      section.key,
+                    );
+                  const isExpanded = isSectionExpanded(section);
+                  const controlsId = `${sectionIdPrefix}-section-${index}`;
+                  return (
+                    // Custom groupings yield multiple 'grouping' sections, so the section key must
+                    // include the label (or key) to stay stable across re-orders.
+                    <Fragment key={collapseKey}>
+                      {heading && (
+                        <SectionHeadingToggle
+                          heading={heading}
+                          indicator={
+                            section.key === undefined
+                              ? undefined
+                              : activeGroupingDefinition?.getSectionHeadingIndicator?.(section.key)
+                          }
+                          isExpanded={isExpanded}
+                          onToggle={() => toggleSection(collapseKey)}
+                          controlsId={controlsId}
+                        />
+                      )}
+                      {/* A collapsed section unmounts its rows, which is what takes them out of
                         cmdk's arrow-key navigation. The wrapper stays as `aria-controls`' target. */}
-                    <div id={controlsId} role="presentation">
-                      {isExpanded && (
-                        <CommandGroup className={heading ? 'tw:pt-0' : undefined}>
-                          {section.caption && (
-                            <p className="tw:px-2 tw:pb-1 tw:text-xs tw:text-muted-foreground">
-                              {section.caption}
-                            </p>
-                          )}
-                          {section.rows.map((row) => (
-                            <ProjectRowView
-                              key={row.rowKey}
-                              row={row}
-                              mode={props.mode}
-                              strings={strings}
-                              onClick={handleRowClick}
-                              onOpen={openButtonHandler}
-                              selectedRowRef={selectedRowRef}
-                              indicator={renderIndicator(row)}
+                      <div id={controlsId} role="presentation">
+                        {isExpanded && (
+                          <CommandGroup className={heading ? 'tw:pt-0' : undefined}>
+                            {section.caption && (
+                              <p className="tw:px-2 tw:pb-1 tw:text-xs tw:text-muted-foreground">
+                                {section.caption}
+                              </p>
+                            )}
+                            {section.rows.map((row) => (
+                              <ProjectRowView
+                                isCompact={isCompactView}
+                                onHoverChange={props.onRowHoverChange}
+                                key={row.rowKey}
+                                row={row}
+                                mode={props.mode}
+                                strings={strings}
+                                onClick={handleRowClick}
+                                onOpen={openButtonHandler}
+                                selectedRowRef={selectedRowRef}
+                                indicator={renderIndicator(row)}
+                                reserveIndicatorSlot={reserveIndicatorSlot}
+                                icon={renderProjectIcon?.(row.project)}
+                                reserveIconSlot={reserveIconSlot}
+                                tooltipLine={getProjectTooltipLine?.(row.project, activeGrouping)}
+                                roleIndicator={renderProjectRoleIndicator?.(row.project)}
+                                reserveTrailingSlot={reserveTrailingSlot}
+                                reserveRoleSlot={reserveRoleSlot}
+                                trailingIndicator={renderProjectTrailingIndicator?.(
+                                  row.project,
+                                  activeGrouping,
+                                )}
+                              />
+                            ))}
+                          </CommandGroup>
+                        )}
+                      </div>
+                    </Fragment>
+                  );
+                })}
+                {filteredSearchOnlyProjects.length > 0 && (
+                  <>
+                    <SectionHeadingToggle
+                      heading={searchOnlySectionHeading}
+                      isExpanded={isSearchOnlySectionExpanded}
+                      onToggle={() => toggleSection(SEARCH_ONLY_SECTION_KEY)}
+                      controlsId={`${sectionIdPrefix}-section-search-only`}
+                    />
+                    <div id={`${sectionIdPrefix}-section-search-only`} role="presentation">
+                      {isSearchOnlySectionExpanded && (
+                        <CommandGroup className="tw:pt-0">
+                          {filteredSearchOnlyProjects.map((project) => (
+                            <SearchOnlyRowView
+                              isCompact={isCompactView}
+                              key={`${SEARCH_ONLY_VALUE_PREFIX}${project.id}`}
+                              project={project}
+                              onSelect={handleSearchOnlySelect}
+                              indicator={renderProjectIndicator?.(project)}
                               reserveIndicatorSlot={reserveIndicatorSlot}
-                              icon={renderProjectIcon?.(row.project)}
+                              icon={renderProjectIcon?.(project)}
                               reserveIconSlot={reserveIconSlot}
-                              tooltipLine={getProjectTooltipLine?.(row.project)}
+                              tooltipLine={getProjectTooltipLine?.(project, activeGrouping)}
                             />
                           ))}
                         </CommandGroup>
                       )}
+                      {/* Collapsed, the section has no end to scroll to, so nothing loads. */}
+                      {isSearchOnlySectionExpanded && hasMoreBatches && (
+                        <div
+                          ref={pagingSentinelRef}
+                          role="presentation"
+                          className="tw:flex tw:min-h-8 tw:items-center tw:gap-2 tw:px-2 tw:ps-8 tw:text-xs tw:text-muted-foreground"
+                        >
+                          {isLoadingBatch && (
+                            <>
+                              <Loader2 aria-hidden className="tw:h-3.5 tw:w-3.5 tw:animate-spin" />
+                              <span role="status">
+                                {searchOnlyPaging?.loadingLabel ?? DEFAULT_PAGING_LOADING_LABEL}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    {/* The fork's `CommandSeparator` always renders. Production passes cmdk's
-                        `alwaysRender` here, because a plain cmdk separator returns null as soon as
-                        `state.search` is non-empty and one keystroke would drop the rule between
-                        two sections that are both still on screen. */}
-                    {index < sections.length - 1 && <CommandSeparator />}
-                  </Fragment>
-                );
-              })}
-              {filteredSearchOnlyProjects.length > 0 && (
-                <>
-                  {filteredRows.length > 0 && <CommandSeparator />}
-                  <SectionHeadingToggle
-                    heading={searchOnlySectionHeading}
-                    isExpanded={isSearchOnlySectionExpanded}
-                    onToggle={() => toggleSection(SEARCH_ONLY_SECTION_KEY)}
-                    controlsId={`${sectionIdPrefix}-section-search-only`}
-                  />
-                  <div id={`${sectionIdPrefix}-section-search-only`} role="presentation">
-                    {isSearchOnlySectionExpanded && (
-                      <CommandGroup className="tw:pt-0">
-                        {filteredSearchOnlyProjects.map((project) => (
-                          <SearchOnlyRowView
-                            key={`${SEARCH_ONLY_VALUE_PREFIX}${project.id}`}
-                            project={project}
-                            onSelect={handleSearchOnlySelect}
-                            indicator={renderProjectIndicator?.(project)}
-                            reserveIndicatorSlot={reserveIndicatorSlot}
-                            icon={renderProjectIcon?.(project)}
-                            reserveIconSlot={reserveIconSlot}
-                            tooltipLine={getProjectTooltipLine?.(project)}
-                          />
-                        ))}
-                      </CommandGroup>
-                    )}
-                    {/* Collapsed, the section has no end to scroll to, so nothing loads. */}
-                    {isSearchOnlySectionExpanded && hasMoreBatches && (
-                      <div
-                        ref={pagingSentinelRef}
-                        role="presentation"
-                        className="tw:flex tw:min-h-8 tw:items-center tw:gap-2 tw:px-2 tw:ps-8 tw:text-xs tw:text-muted-foreground"
-                      >
-                        {isLoadingBatch && (
-                          <>
-                            <Loader2 aria-hidden className="tw:h-3.5 tw:w-3.5 tw:animate-spin" />
-                            <span role="status">
-                              {searchOnlyPaging?.loadingLabel ?? DEFAULT_PAGING_LOADING_LABEL}
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    )}
+                  </>
+                )}
+                {fullyLoadedPaging && (
+                  <div role="presentation" className="tw:sticky tw:bottom-0 tw:z-10 tw:bg-popover">
+                    <p className="tw:px-2 tw:py-1.5 tw:ps-8 tw:text-xs tw:text-muted-foreground">
+                      {fullyLoadedPaging.allLoadedLabel}
+                    </p>
                   </div>
-                </>
-              )}
-              {fullyLoadedPaging && (
-                <div role="presentation" className="tw:sticky tw:bottom-0 tw:z-10 tw:bg-popover">
-                  <CommandSeparator />
-                  <p className="tw:px-2 tw:py-1.5 tw:ps-8 tw:text-xs tw:text-muted-foreground">
-                    {fullyLoadedPaging.allLoadedLabel}
-                  </p>
-                </div>
-              )}
-              {footerAction && (
-                // Stuck to the bottom of the scroll box rather than merely last in it. The footer
-                // is the list's escape hatch, and `CommandList` is `max-h-72 overflow-y-auto`, so
-                // as a plain last child it scrolls out of reach on any list long enough to need
-                // it — which is the state a user is most likely to be looking for it in. It stays
-                // INSIDE `CommandList` because that is the subtree cmdk's `getValidItems()` walks
-                // for arrow-key, Home/End and Enter navigation; moving it out would make it
-                // pointer-only. Opaque background so rows scroll behind it rather than through it.
-                // `role="presentation"` because this wrapper exists only to position the row:
-                // without it the div breaks `CommandList`'s `role="listbox"` ownership of the
-                // footer's `role="option"`, and some assistive tech stops counting the footer in
-                // "1 of N".
-                <div role="presentation" className="tw:sticky tw:bottom-0 tw:z-10 tw:bg-popover">
-                  {/* Only rendered when a section above it actually has rows — with none, the
-                      empty message is the only thing above the footer, and a rule under it with
-                      nothing to divide reads as a stray line rather than a separator. */}
-                  {hasAnyRows && (
-                    <CommandSeparator data-testid="project-selector-footer-separator" />
-                  )}
-                  {/* `forceMount` keeps this out of cmdk's registered-item set, so `filtered.count`
+                )}
+                {footerAction && (
+                  // Stuck to the bottom of the scroll box rather than merely last in it. The footer
+                  // is the list's escape hatch, and `CommandList` is `max-h-72 overflow-y-auto`, so
+                  // as a plain last child it scrolls out of reach on any list long enough to need
+                  // it — which is the state a user is most likely to be looking for it in. It stays
+                  // INSIDE `CommandList` because that is the subtree cmdk's `getValidItems()` walks
+                  // for arrow-key, Home/End and Enter navigation; moving it out would make it
+                  // pointer-only. Opaque background so rows scroll behind it rather than through it.
+                  // `role="presentation"` because this wrapper exists only to position the row:
+                  // without it the div breaks `CommandList`'s `role="listbox"` ownership of the
+                  // footer's `role="option"`, and some assistive tech stops counting the footer in
+                  // "1 of N". The rule above it shows only when there are rows to divide it from.
+                  <div
+                    role="presentation"
+                    className={cn(
+                      'tw:sticky tw:bottom-0 tw:z-10 tw:bg-popover',
+                      hasAnyRows && 'tw:border-t',
+                    )}
+                  >
+                    {/* `forceMount` keeps this out of cmdk's registered-item set, so `filtered.count`
                       stays 0 on an empty list and CommandEmpty still renders — while the node
                       remains inside CommandList, where `getValidItems()` finds it for arrow-key,
                       Home/End and Enter navigation. See {@link FOOTER_ACTION_VALUE} for why the
                       value is explicit. */}
-                  <CommandItem
-                    forceMount
-                    value={FOOTER_ACTION_VALUE}
-                    data-testid="project-selector-footer-action"
-                    // cmdk renders every CommandItem as `role="option"`, which promises a screen
-                    // reader that activating it selects a value from this list. A `footerAction`
-                    // closes the popover and opens a modal dialog instead, so it says so; the
-                    // paging reveal row stays in this list.
-                    aria-haspopup={footerAction.opensDialog ? 'dialog' : undefined}
-                    className="tw:flex tw:items-center tw:gap-2 tw:pe-4"
-                    onSelect={() => {
-                      footerAction?.onSelect();
-                      // Close through the handler rather than `setOpen`, so the search query is
-                      // cleared and the next open starts from the full list.
-                      if (footerAction?.opensDialog) handleOpenChange(false);
-                    }}
-                  >
-                    {/* Empty stand-ins for the check and indicator slots every project row leads
+                    <CommandItem
+                      forceMount
+                      value={FOOTER_ACTION_VALUE}
+                      data-testid="project-selector-footer-action"
+                      // cmdk renders every CommandItem as `role="option"`, which promises a screen
+                      // reader that activating it selects a value from this list. A `footerAction`
+                      // closes the popover and opens a modal dialog instead, so it says so; the
+                      // paging reveal row stays in this list.
+                      aria-haspopup={footerAction.opensDialog ? 'dialog' : undefined}
+                      // Also a Tab stop, so the footer is reachable without arrowing through every
+                      // row. Enter and Space on the focused footer run it and are default-prevented,
+                      // because cmdk's root `keydown` handler would otherwise pick whichever row it
+                      // has highlighted — the same contract as `SectionHeadingToggle`.
+                      tabIndex={0}
+                      onKeyDown={(event) => {
+                        if (event.key !== 'Enter' && event.key !== ' ') return;
+                        event.preventDefault();
+                        runFooterAction();
+                      }}
+                      className="tw:flex tw:items-center tw:gap-2 tw:pe-4 tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:outline-none tw:focus-visible:ring-inset"
+                      onSelect={runFooterAction}
+                    >
+                      {/* Empty stand-ins for the check and indicator slots every project row leads
                         with. Without them the footer's text starts ~40px to the left of every
                         label above it — the same ragged edge `reserveIndicatorSlot` exists to
                         prevent between rows. Mirrors `ProjectRowView`'s leading spans, so the two
                         stay aligned if that layout changes. */}
-                    <span
-                      aria-hidden
-                      className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center"
-                    />
-                    {reserveIconSlot && <IconSlot />}
-                    {Boolean(props.renderProjectIndicator) && (
                       <span
                         aria-hidden
                         className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center"
                       />
+                      {reserveIconSlot && <IconSlot />}
+                      {Boolean(props.renderProjectIndicator) && (
+                        <span
+                          aria-hidden
+                          className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center"
+                        />
+                      )}
+                      <span className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-start">
+                        {footerAction.label}
+                      </span>
+                    </CommandItem>
+                  </div>
+                )}
+              </CommandList>
+              {isListScrolled && (
+                // Outside every row, so a click scrolls and never picks anything; `mousedown` is
+                // default-prevented so focus stays in the search box.
+                <TrailingTooltip label={strings.scrollToTop}>
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    aria-label={strings.scrollToTop}
+                    // Above the footer row ("More resources…"), when there is one, so it never
+                    // covers it.
+                    className={cn(
+                      'tw:absolute tw:end-2 tw:z-20 tw:h-7 tw:w-7 tw:shadow-md',
+                      footerAction ? 'tw:bottom-12' : 'tw:bottom-2',
                     )}
-                    <span className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-start">
-                      {footerAction.label}
-                    </span>
-                  </CommandItem>
-                </div>
+                    // The pointer over the button is not over a row: none of a row's hover effects
+                    // (its highlight, the hovered tab's pulse) follow it here.
+                    onPointerEnter={() => props.onRowHoverChange?.(undefined)}
+                    onPointerMove={(event) => event.stopPropagation()}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      commandListRef.current?.scrollTo({ top: 0 });
+                    }}
+                  >
+                    <ArrowUpToLine className="tw:h-4 tw:w-4" />
+                  </Button>
+                </TrailingTooltip>
               )}
-            </CommandList>
+            </div>
           </Command>
         </TooltipProvider>
       </PopoverContent>

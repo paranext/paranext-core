@@ -28,17 +28,30 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   EmptyState,
+  Label,
   Popover,
   PopoverContent,
   PopoverTrigger,
   Tooltip,
   TooltipContent,
   TooltipProvider,
+  ToggleGroup,
+  ToggleGroupItem,
   TooltipTrigger,
 } from 'platform-bible-react';
 import { formatProjectName, formatReplacementString } from 'platform-bible-utils';
 import { ChevronDown, Lock, Settings2 } from 'lucide-react';
-import { type ComponentProps, Fragment, type ReactNode, useId, useMemo, useState } from 'react';
+import {
+  type ComponentProps,
+  Fragment,
+  type KeyboardEvent,
+  type ReactNode,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useScrollGroupScrRef } from '@renderer/hooks/papi-hooks';
 import type { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { getLocalizedStrings } from '../../../.storybook/localization.utils';
@@ -53,6 +66,7 @@ import { ResourceTextUnavailable } from '../../../extensions/src/platform-script
 import {
   RESOURCE_COLLECTION_OPTIONS_KEYS,
   RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
+  isResourceCollectionViewMode,
   type ResourceCollectionViewMode,
 } from '../../../extensions/src/platform-scripture-editor/src/resource-collection-options/resource-collection-options.types';
 import { ResourceCollectionOptions } from '../../../extensions/src/platform-scripture-editor/src/resource-collection-options/resource-collection-options.component';
@@ -185,6 +199,8 @@ const STRINGS = getLocalizedStrings([
   '%webView_scriptureTextGrid_emptyState_prompt%',
   '%webView_scriptureTextGrid_title_multiple%',
   '%webView_scriptureTextGrid_viewOptions_removeFromList%',
+  '%webView_scriptureTextGrid_cell_reorderHandle%',
+  '%webView_scriptureTextGrid_cell_reorderHint%',
 ]);
 const t = (key: string) => STRINGS[key] ?? key;
 
@@ -572,6 +588,22 @@ function toViewOptionsRow(resource: MockTextResource, isChecked: boolean): ViewO
   };
 }
 
+/** For `isNameAlwaysLeft`: line 1 of every text, right-to-left ones too, makes room on the left. */
+const NAME_ALWAYS_LEFT_CSS = `
+[data-name-always-left] .stg-verse-content .editor-input::before { float: left; }
+[data-name-always-left] .stg-verse-name-reserve {
+  padding-inline-start: 0;
+  padding-left: calc(var(--stg-text-start) / var(--stg-zoom, 1));
+}`;
+
+/** How far a reorder key on a text's grip moves it: back with up / left, on with down / right. */
+const REORDER_KEY_STEPS: Readonly<Record<string, number>> = {
+  ArrowUp: -1,
+  ArrowLeft: -1,
+  ArrowDown: 1,
+  ArrowRight: 1,
+};
+
 export type MockTextCollectionPanelProps = {
   /** The texts in the collection, in display order. `source` decides the View Options section. */
   resources: MockTextResource[];
@@ -580,6 +612,16 @@ export type MockTextCollectionPanelProps = {
    * story can plug in its own picker there.
    */
   addResourceSlot?: ReactNode;
+  /**
+   * Fills the header's start, before the View Options button, so a design story can put a picker on
+   * the toolbar.
+   */
+  toolbarSlot?: ReactNode;
+  /**
+   * View Options holds only the View toggle — no TEXTS list and no "Get resources…" — for a design
+   * story whose toolbar picker chooses the texts instead.
+   */
+  isViewOnlyOptions?: boolean;
   /**
    * The hover-✕ on a user row in View Options. Without it the panel drops the row from its own
    * state, so the story still responds.
@@ -595,7 +637,55 @@ export type MockTextCollectionPanelProps = {
   isGrouped?: boolean;
   /** Names shown as "Installing {name}…" rows in View Options. */
   installingResourceNames?: string[];
+  /**
+   * Each text leads with the real cell's reorder grip: drag it, or press the arrow keys on it, to
+   * move the text. The order is the panel's own state.
+   */
+  isReorderable?: boolean;
+  /**
+   * The name sits at the left of every text, right-to-left ones included, with only the text itself
+   * running right to left.
+   */
+  isNameAlwaysLeft?: boolean;
+  /** Replaces the body when no text is shown (the real panel points to View Options). */
+  emptyState?: ReactNode;
 };
+
+/**
+ * The View section of `ResourceCollectionOptions` on its own (Verse / Chapter / Grid), for
+ * `isViewOnlyOptions`. Same strings and controls; Chapter is enabled, as the panel enables it.
+ */
+function ViewModeOptions({
+  viewMode,
+  onViewModeChange,
+}: {
+  viewMode: ResourceCollectionViewMode;
+  onViewModeChange: (mode: ResourceCollectionViewMode) => void;
+}) {
+  return (
+    <section className="tw:flex tw:w-64 tw:flex-col tw:gap-2">
+      <Label className="tw:text-xs tw:font-semibold tw:text-muted-foreground">
+        {t(RESOURCE_COLLECTION_OPTIONS_KEYS.viewHeader)}
+      </Label>
+      <ToggleGroup
+        type="single"
+        variant="outline"
+        value={viewMode}
+        onValueChange={(value) => {
+          if (isResourceCollectionViewMode(value)) onViewModeChange(value);
+        }}
+      >
+        <ToggleGroupItem value="verse">{t(RESOURCE_COLLECTION_OPTIONS_KEYS.verse)}</ToggleGroupItem>
+        <ToggleGroupItem value="chapter">
+          {t(RESOURCE_COLLECTION_OPTIONS_KEYS.chapter)}
+        </ToggleGroupItem>
+        <ToggleGroupItem value="aligned">
+          {t(RESOURCE_COLLECTION_OPTIONS_KEYS.grid)}
+        </ToggleGroupItem>
+      </ToggleGroup>
+    </section>
+  );
+}
 
 /**
  * The **Text Collection** tab (`platformScriptureEditor.scriptureTextGrid`): a header holding only
@@ -608,18 +698,24 @@ export type MockTextCollectionPanelProps = {
  * - **Chapter**: side-by-side full-chapter columns with a name header band (`divide-x`).
  * - **Grid**: the real view aligns verses across columns; here it renders as Chapter.
  *
- * Unchecking a text hides it from the body only. Clicking a verse row (the chapter-context split),
- * reordering and zoom are not wired; the zoom ⋮ buttons show so the cells look as in the app.
+ * Unchecking a text hides it from the body only. Reordering is wired only with `isReorderable` (the
+ * real cell's grip, by drag or arrow keys). Clicking a verse row (the chapter-context split) and
+ * zoom are not wired; the zoom ⋮ buttons show so the cells look as in the app.
  */
 export function MockTextCollectionPanel({
   resources,
   addResourceSlot,
+  toolbarSlot,
+  isViewOnlyOptions = false,
   onRemoveResource,
   onGetResources,
   verseNum,
   defaultViewMode = 'verse',
   isGrouped = true,
   installingResourceNames,
+  isReorderable = false,
+  isNameAlwaysLeft = false,
+  emptyState,
 }: MockTextCollectionPanelProps) {
   const [viewMode, setViewMode] = useState<ResourceCollectionViewMode>(defaultViewMode);
   const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(new Set());
@@ -637,7 +733,103 @@ export function MockTextCollectionPanel({
   const bottom = listed
     .filter((resource) => resource.source !== 'team')
     .map((resource) => toViewOptionsRow(resource, !hiddenIds.has(resource.id)));
-  const shown = listed.filter((resource) => !hiddenIds.has(resource.id));
+  // The user's order: ids moved by a reorder, in order. Texts it does not name keep their place
+  // after the ones it does.
+  const [orderIds, setOrderIds] = useState<string[]>([]);
+  const shown = useMemo(() => {
+    const visible = listed.filter((resource) => !hiddenIds.has(resource.id));
+    const rank = (id: string) => {
+      const index = orderIds.indexOf(id);
+      return index === -1 ? orderIds.length : index;
+    };
+    return visible
+      .map((resource, index) => ({ resource, index }))
+      .sort((a, b) => rank(a.resource.id) - rank(b.resource.id) || a.index - b.index)
+      .map(({ resource }) => resource);
+  }, [listed, hiddenIds, orderIds]);
+  const moveResource = (id: string, toIndex: number) => {
+    const ids = shown.map((resource) => resource.id).filter((other) => other !== id);
+    ids.splice(Math.max(0, Math.min(toIndex, ids.length)), 0, id);
+    setOrderIds(ids);
+  };
+  // Drag and drop: a drag starts only from a text's grip, so dragging across the text still
+  // selects it. `dropTarget` marks where the dragged text would land.
+  const isDragFromGripRef = useRef(false);
+  // Where the last press landed, read when a drag starts: a listener rather than a handler on the
+  // list items, which are not controls themselves.
+  useEffect(() => {
+    if (!isReorderable) return undefined;
+    const notePress = (event: PointerEvent) => {
+      isDragFromGripRef.current =
+        event.target instanceof Element &&
+        Boolean(event.target.closest('[data-reorder-handle-id]'));
+    };
+    window.addEventListener('pointerdown', notePress, true);
+    return () => window.removeEventListener('pointerdown', notePress, true);
+  }, [isReorderable]);
+  const [draggedId, setDraggedId] = useState<string>();
+  const [dropTarget, setDropTarget] = useState<{ id: string; isAfter: boolean }>();
+  // Props for a text's list item (the drag source and drop target) and for its cell (the grip).
+  const itemReorderProps = (resource: MockTextResource) =>
+    isReorderable
+      ? {
+          onDragStart: (event: { preventDefault: () => void; dataTransfer: DataTransfer }) => {
+            if (!isDragFromGripRef.current) {
+              event.preventDefault();
+              return;
+            }
+            event.dataTransfer.effectAllowed = 'move';
+            setDraggedId(resource.id);
+          },
+          onDragOver: (event: {
+            preventDefault: () => void;
+            clientX: number;
+            clientY: number;
+            currentTarget: Element;
+          }) => {
+            if (!draggedId) return;
+            event.preventDefault();
+            const rect = event.currentTarget.getBoundingClientRect();
+            const isAfter =
+              viewMode === 'verse'
+                ? event.clientY > rect.top + rect.height / 2
+                : event.clientX > rect.left + rect.width / 2;
+            setDropTarget({ id: resource.id, isAfter });
+          },
+          onDrop: (event: { preventDefault: () => void }) => {
+            event.preventDefault();
+            if (draggedId && dropTarget && draggedId !== dropTarget.id) {
+              const without = shown.filter((other) => other.id !== draggedId);
+              const targetIndex = without.findIndex((other) => other.id === dropTarget.id);
+              moveResource(draggedId, targetIndex + (dropTarget.isAfter ? 1 : 0));
+            }
+            setDraggedId(undefined);
+            setDropTarget(undefined);
+          },
+          onDragEnd: () => {
+            setDraggedId(undefined);
+            setDropTarget(undefined);
+          },
+        }
+      : undefined;
+  const cellReorderProps = (resource: MockTextResource, index: number) =>
+    isReorderable
+      ? {
+          showDragHandle: true,
+          reorderHandleId: resource.id,
+          reorderHandleLabel: t('%webView_scriptureTextGrid_cell_reorderHandle%').replace(
+            '{resourceName}',
+            resource.shortName,
+          ),
+          reorderHint: t('%webView_scriptureTextGrid_cell_reorderHint%'),
+          onReorderKeyDown: (event: KeyboardEvent) => {
+            const step = REORDER_KEY_STEPS[event.key];
+            if (step === undefined) return;
+            event.preventDefault();
+            moveResource(resource.id, index + step);
+          },
+        }
+      : undefined;
 
   const handleRemove = (id: string) => {
     if (onRemoveResource) onRemoveResource(id);
@@ -652,7 +844,9 @@ export function MockTextCollectionPanel({
     });
 
   const viewOptionsLabel = t(VIEW_OPTIONS_BUTTON_KEY);
-  const options = (
+  const options = isViewOnlyOptions ? (
+    <ViewModeOptions viewMode={viewMode} onViewModeChange={setViewMode} />
+  ) : (
     <ResourceCollectionOptions
       viewMode={viewMode}
       onViewModeChange={setViewMode}
@@ -668,7 +862,19 @@ export function MockTextCollectionPanel({
     />
   );
 
-  const renderCell = (resource: MockTextResource, mode: 'verse' | 'chapter') => {
+  // A line on the side the dragged text would land.
+  const dropIndicatorClass = (resource: MockTextResource) => {
+    if (dropTarget?.id !== resource.id || draggedId === resource.id) return '';
+    if (viewMode === 'verse')
+      return dropTarget.isAfter
+        ? 'tw:shadow-[inset_0_-2px_0_var(--primary)]'
+        : 'tw:shadow-[inset_0_2px_0_var(--primary)]';
+    return dropTarget.isAfter
+      ? 'tw:shadow-[inset_-2px_0_0_var(--primary)]'
+      : 'tw:shadow-[inset_2px_0_0_var(--primary)]';
+  };
+
+  const renderCell = (resource: MockTextResource, mode: 'verse' | 'chapter', index: number) => {
     const verseText = resource.verses[shownVerseNum - 1];
     let editor: ReactNode;
     if (mode === 'chapter')
@@ -682,7 +888,10 @@ export function MockTextCollectionPanel({
         state="ready"
         label={resource.shortName}
         zoomArea={`resource-${resource.id}`}
-        textDirection={resource.dir ?? 'ltr'}
+        // The cell lays its name out at the inline start of its direction; left-to-right keeps it
+        // at the left, while the text itself still runs in the resource's direction.
+        textDirection={isNameAlwaysLeft ? 'ltr' : (resource.dir ?? 'ltr')}
+        {...cellReorderProps(resource, index)}
         localizedStrings={STRINGS}
         copyLimit={undefined}
         editor={editor}
@@ -695,6 +904,7 @@ export function MockTextCollectionPanel({
   };
 
   const renderBody = () => {
+    if (shown.length === 0 && emptyState) return emptyState;
     if (shown.length === 0)
       return (
         <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:p-4">
@@ -712,16 +922,27 @@ export function MockTextCollectionPanel({
         <div
           role="list"
           aria-label={t('%webView_scriptureTextGrid_title_multiple%')}
+          data-name-always-left={isNameAlwaysLeft || undefined}
           className="tw:flex tw:h-full tw:min-h-0 tw:flex-col tw:divide-y tw:overflow-y-auto"
         >
-          {shown.map((resource) => (
+          {isNameAlwaysLeft && (
+            // The cell reserves the name's room at the start of the text's own direction, which is
+            // the right for a right-to-left text; with the name at the left, reserve it there.
+            <style>{NAME_ALWAYS_LEFT_CSS}</style>
+          )}
+          {shown.map((resource, index) => (
             <div
               key={resource.id}
               role="listitem"
               data-resource-id={resource.id}
-              className="tw:flex tw:min-h-0 tw:min-w-0 tw:shrink-0 tw:cursor-pointer tw:flex-col tw:transition-colors tw:hover:bg-muted"
+              className={`tw:flex tw:min-h-0 tw:min-w-0 tw:shrink-0 tw:cursor-pointer tw:flex-col tw:transition-colors tw:hover:bg-muted ${dropIndicatorClass(resource)}`}
+              draggable={isReorderable}
+              onDragStart={itemReorderProps(resource)?.onDragStart}
+              onDragOver={itemReorderProps(resource)?.onDragOver}
+              onDrop={itemReorderProps(resource)?.onDrop}
+              onDragEnd={itemReorderProps(resource)?.onDragEnd}
             >
-              {renderCell(resource, 'verse')}
+              {renderCell(resource, 'verse', index)}
             </div>
           ))}
         </div>
@@ -732,15 +953,20 @@ export function MockTextCollectionPanel({
         aria-label={t('%webView_scriptureTextGrid_title_multiple%')}
         className="tw:flex tw:h-full tw:flex-row tw:divide-x tw:overflow-x-auto tw:overflow-y-hidden"
       >
-        {shown.map((resource) => (
+        {shown.map((resource, index) => (
           <div
             key={resource.id}
             role="region"
             aria-label={resource.shortName}
             data-resource-id={resource.id}
-            className="tw:flex tw:min-w-3xs tw:flex-1 tw:shrink-0"
+            className={`tw:flex tw:min-w-3xs tw:flex-1 tw:shrink-0 ${dropIndicatorClass(resource)}`}
+            draggable={isReorderable}
+            onDragStart={itemReorderProps(resource)?.onDragStart}
+            onDragOver={itemReorderProps(resource)?.onDragOver}
+            onDrop={itemReorderProps(resource)?.onDrop}
+            onDragEnd={itemReorderProps(resource)?.onDragEnd}
           >
-            {renderCell(resource, 'chapter')}
+            {renderCell(resource, 'chapter', index)}
           </div>
         ))}
       </div>
@@ -749,7 +975,8 @@ export function MockTextCollectionPanel({
 
   return (
     <MockWebViewRoot testId="scripture-text-grid">
-      <div className="tw:flex tw:items-center tw:justify-end tw:border-b tw:p-1">
+      <div className="tw:flex tw:items-center tw:justify-end tw:gap-1 tw:border-b tw:p-1">
+        {toolbarSlot && <div className="tw:flex tw:min-w-0 tw:flex-1">{toolbarSlot}</div>}
         <Popover>
           <TooltipProvider>
             <Tooltip>

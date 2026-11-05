@@ -37,7 +37,7 @@ import { INTERFACE_MODE_CACHE_KEY } from '@renderer/hooks/use-interface-mode.hoo
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service';
 import { TAB_TYPE_WEBVIEW, type TabInfo } from '@shared/models/docking-framework.model';
 import type { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
-import { HomeIcon } from 'lucide-react';
+import { Bookmark, HomeIcon } from 'lucide-react';
 import {
   Badge,
   BOOK_CHAPTER_CONTROL_STRING_KEYS,
@@ -58,7 +58,11 @@ import {
   type ProjectSelectorGrouping,
   type ProjectSelectorProject,
 } from 'platform-bible-react/experimental';
-import { getLocalizeKeysForScrollGroupIds, type LocalizeKey } from 'platform-bible-utils';
+import {
+  formatScrRef,
+  getLocalizeKeysForScrollGroupIds,
+  type LocalizeKey,
+} from 'platform-bible-utils';
 import DockLayout, {
   type BoxBase,
   type DropDirection,
@@ -142,7 +146,11 @@ function isShellPanel(
   return 'tabs' in node;
 }
 
-function toRcDockTab(tab: CurrentAppShellTab, panelGroup: string | undefined): TabData {
+/**
+ * An rc-dock tab for `tab`, as the shell builds its own — exported so a story can add a tab at run
+ * time (a new tab from a panel's "+", say) that renders like the layout's.
+ */
+export function toRcDockTab(tab: CurrentAppShellTab, panelGroup: string | undefined): TabData {
   const tabInfo: TabInfo = {
     id: tab.id,
     tabType: tab.webViewType ? TAB_TYPE_WEBVIEW : 'storybook.mockPanel',
@@ -326,6 +334,31 @@ export function CurrentAppProjectPicker({
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
 const bookChapterControlLocalizedStringKeys: LocalizeKey[] = [...BOOK_CHAPTER_CONTROL_STRING_KEYS];
 
+/** Lucide's `user-round`, as a mask for the PT-5001 user menu trigger in Power. */
+const USER_ROUND_MASK = `url("data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>',
+)}")`;
+
+/**
+ * PT-5001 on the real user menu trigger: no accent color in either mode, Power's circled icon
+ * swapped for `user-round` (drawn in the trigger's text color through a mask), and the reminder dot
+ * in `--sidebar-ring` rather than the primary color.
+ */
+const USER_MENU_DESIGN_CSS = `
+[data-user-menu-design] [data-testid='user-profile-popover-trigger'] svg { color: inherit; }
+[data-user-menu-design='power'] [data-testid='user-profile-popover-trigger'] svg.lucide-circle-user-round { display: none; }
+[data-user-menu-design='power'] [data-testid='user-profile-popover-trigger']::before {
+  content: '';
+  width: 1rem;
+  height: 1rem;
+  background-color: currentColor;
+  mask: ${USER_ROUND_MASK} center / contain no-repeat;
+}
+[data-user-menu-design] [data-testid='user-profile-registration-dot'] { background-color: var(--sidebar-ring); }`;
+
+/** What the back/forward buttons read as the interface mode when they take Power's look. */
+const POWER_MODE_FOR_HISTORY_BUTTONS = { mode: 'power' as const, setMode: () => {} };
+
 /**
  * The title bar composed from the same components, props and classes `PlatformBibleToolbar` uses,
  * in the same order — so a story can put its own project picker in the Simple-mode slot, and so the
@@ -340,9 +373,27 @@ export function CurrentAppToolbar({
   projectPickerSlot,
   versionLabel,
   onOpenHome,
+  appLogo,
+  isBookChapterControlBookmarked = false,
+  isHistoryButtonsPowerStyle = false,
+  isUserMenuIconPerMode = false,
 }: {
+  /**
+   * Design idea (PT-5001): Power's user menu shows the open `user-round` icon and Simple keeps the
+   * circled one, both in the plain foreground color, and the reminder dot uses `--sidebar-ring`.
+   */
+  isUserMenuIconPerMode?: boolean;
+  /**
+   * Design idea: the book/chapter/verse control's trigger is outlined in both modes and ends in a
+   * bookmark instead of the up/down chevron.
+   */
+  isBookChapterControlBookmarked?: boolean;
+  /** Design idea: Simple's back/forward buttons take Power's look (no pill, no divider). */
+  isHistoryButtonsPowerStyle?: boolean;
   /** Interface mode to draw. */
   mode: CurrentAppMode;
+  /** Replaces the app icon at the title bar's start, for a design story's own logo. */
+  appLogo?: ReactNode;
   /** Replaces the Simple-mode project picker. Ignored in Power mode, which has none. */
   projectPickerSlot?: ReactNode;
   /** The marketing-version badge. The app hides it when the build has no marketing version. */
@@ -380,7 +431,9 @@ export function CurrentAppToolbar({
         className={cn(isPowerMode ? 'tw:h-12' : 'tw:h-14', 'tw:bg-transparent')}
         menubarVariant="muted"
         shouldUseAsAppDragArea
-        appMenuAreaChildren={<img width={24} height={24} src={`${logo}`} alt="Application Logo" />}
+        appMenuAreaChildren={
+          appLogo ?? <img width={24} height={24} src={`${logo}`} alt="Application Logo" />
+        }
         configAreaChildren={
           <>
             <div data-testid="toolbar-sync-area" className="tw:min-w-0 tw:shrink tw:empty:hidden">
@@ -394,7 +447,15 @@ export function CurrentAppToolbar({
                 {versionLabel}
               </Badge>
             )}
-            <UserProfilePopover />
+            {isUserMenuIconPerMode ? (
+              // Restyles the real menu's trigger from outside, so the component stays as shipped.
+              <span data-user-menu-design={mode} className="tw:contents">
+                <style>{USER_MENU_DESIGN_CSS}</style>
+                <UserProfilePopover />
+              </span>
+            ) : (
+              <UserProfilePopover />
+            )}
           </>
         }
       >
@@ -420,15 +481,38 @@ export function CurrentAppToolbar({
           </TooltipProvider>
         )}
         {!isPowerMode && (projectPickerSlot ?? <CurrentAppProjectPicker />)}
-        {typeof scrollGroupId === 'number' && (
-          <ReferenceHistoryButtons key={scrollGroupId} scrollGroupId={scrollGroupId} />
-        )}
+        {typeof scrollGroupId === 'number' &&
+          (isHistoryButtonsPowerStyle && !isPowerMode ? (
+            // The buttons choose their look from the interface mode, so they are told it is Power.
+            <InterfaceModeMockContext.Provider value={POWER_MODE_FOR_HISTORY_BUTTONS}>
+              <ReferenceHistoryButtons key={scrollGroupId} scrollGroupId={scrollGroupId} />
+            </InterfaceModeMockContext.Provider>
+          ) : (
+            <ReferenceHistoryButtons key={scrollGroupId} scrollGroupId={scrollGroupId} />
+          ))}
         <BookChapterControl
           scrRef={scrRef}
           handleSubmit={setScrRef}
-          className={isPowerMode ? 'tw:w-96' : 'tw:w-fit'}
-          triggerVariant={isPowerMode ? undefined : 'ghost'}
-          showTriggerChevron={!isPowerMode}
+          className={cn(
+            isPowerMode ? 'tw:w-96' : 'tw:w-fit',
+            // Wide enough for the whole reference, which the bookmark design shows in Simple too.
+            isBookChapterControlBookmarked &&
+              !isPowerMode &&
+              'tw:max-w-none tw:min-w-40 tw:shrink-0',
+          )}
+          triggerVariant={isPowerMode || isBookChapterControlBookmarked ? undefined : 'ghost'}
+          showTriggerChevron={!isPowerMode && !isBookChapterControlBookmarked}
+          triggerContent={
+            isBookChapterControlBookmarked ? (
+              <>
+                <Bookmark className="tw:me-2 tw:size-4 tw:shrink-0 tw:opacity-50" aria-hidden />
+                <ToolbarCompoundLabel
+                  primary={formatScrRef(scrRef, 'English')}
+                  fullText={formatScrRef(scrRef, 'English')}
+                />
+              </>
+            ) : undefined
+          }
           localizedStrings={bookChapterControlLocalizedStrings}
           recentSearches={recentScriptureRefs}
           onAddRecentSearch={addRecentScriptureRef}
@@ -472,6 +556,14 @@ export type CurrentAppShellProps = {
    * mode has no picker.
    */
   toolbarProjectPickerSlot?: ReactNode;
+  /** Replaces the title bar's app icon. Only used with `toolbar: 'composed'`. */
+  toolbarAppLogo?: ReactNode;
+  /** Passed to {@link CurrentAppToolbar}. Only used with `toolbar: 'composed'`. */
+  isBookChapterControlBookmarked?: boolean;
+  /** Passed to {@link CurrentAppToolbar}. Only used with `toolbar: 'composed'`. */
+  isHistoryButtonsPowerStyle?: boolean;
+  /** Passed to {@link CurrentAppToolbar}. Only used with `toolbar: 'composed'`. */
+  isUserMenuIconPerMode?: boolean;
   /**
    * Content for a column at the window's leading edge, between the title bar and the dock. The
    * current app has none; this is for design stories that add one.
@@ -518,6 +610,10 @@ function ShellBody({
   layout,
   groups,
   toolbarProjectPickerSlot,
+  toolbarAppLogo,
+  isBookChapterControlBookmarked = false,
+  isHistoryButtonsPowerStyle = false,
+  isUserMenuIconPerMode = false,
   sidebarExtra,
   toolbar = 'composed',
   versionLabel,
@@ -605,8 +701,12 @@ function ShellBody({
           <CurrentAppToolbar
             mode={mode}
             projectPickerSlot={toolbarProjectPickerSlot}
+            appLogo={toolbarAppLogo}
             versionLabel={versionLabel}
             onOpenHome={onOpenHome}
+            isBookChapterControlBookmarked={isBookChapterControlBookmarked}
+            isHistoryButtonsPowerStyle={isHistoryButtonsPowerStyle}
+            isUserMenuIconPerMode={isUserMenuIconPerMode}
           />
         )}
       </div>

@@ -118,8 +118,16 @@ const shortNameFor = (i: number): string => {
   return `${a}${b}${c}`;
 };
 
+// `hasTeamLayout` marks the projects whose administrator set a team layout (an icon in the title bar
+// picker); `isReadOnly` the projects the user cannot edit (a monochrome Paratext logo); `isAdmin`
+// the ones the user administers (a wrench) and `isLocalOnly` one not on the Send/Receive server
+// (wifi off).
 // `teamProjectIds` / `isUserChoice` drive Home's context grouping: a resource a project's team
-// shares, one the user picked, both, or neither (BDAG: installed but on no list).
+// shares, one the user picked, both, or neither (BDAG: installed but on no list). Team resources
+// come from a team layout, so `teamProjectIds` names only projects with `hasTeamLayout` — never a
+// local-only one, which has no team.
+// Sample: NNB (ESV, OHB), MRSYR (NTComm) and SW-OBT (ESV, WEB-A) have team layouts; the user
+// administers NNB, MRSYR, HNF and the read-only TPTS, but not SW-OBT; WEB is local-only.
 // A representative selection of locally-installed rows (mix of projects, resources, sync-needed and
 // update-available) plus a couple of S/R-server-only projects. These always come first in the mock
 // dataset so the "recent first" behavior and the star-my-languages behavior are visible without
@@ -127,6 +135,8 @@ const shortNameFor = (i: number): string => {
 export const LOCAL_ITEMS: UnifiedItem[] = [
   {
     id: 'p-nnb',
+    hasTeamLayout: true,
+    isAdmin: true,
     shortName: 'NNB',
     fullName: 'New Norwegian Bible — Working Draft',
     language: 'Norwegian (Nynorsk)',
@@ -136,8 +146,32 @@ export const LOCAL_ITEMS: UnifiedItem[] = [
     editedOnServerIso: daysAgo(4),
     editedLocallyIso: hoursAgo(2),
   },
+  // The two projects Power's layout opens in editor tabs.
+  {
+    id: 'p-hnf',
+    isAdmin: true,
+    shortName: 'HNF',
+    fullName: 'Hunde New Testament',
+    language: 'Hunde',
+    type: 'Project',
+    status: 'installedProject',
+    lastUsedIso: hoursAgo(1),
+  },
+  {
+    id: 'p-tpts',
+    isReadOnly: true,
+    // Read-only, yet administered: Home still offers Edit team layout.
+    isAdmin: true,
+    shortName: 'TPTS',
+    fullName: 'Tok Pisin Translation Sample',
+    language: 'Tok Pisin',
+    type: 'Project',
+    status: 'installedProject',
+    lastUsedIso: hoursAgo(5),
+  },
   {
     id: 'p-web',
+    isLocalOnly: true,
     shortName: 'WEB',
     fullName: 'World English Bible',
     language: 'English',
@@ -147,6 +181,8 @@ export const LOCAL_ITEMS: UnifiedItem[] = [
   },
   {
     id: 'p-mrsyr',
+    hasTeamLayout: true,
+    isAdmin: true,
     shortName: 'MRSYR',
     fullName: 'Marathi Working Draft',
     language: 'Marathi',
@@ -164,7 +200,7 @@ export const LOCAL_ITEMS: UnifiedItem[] = [
     type: 'ScriptureResource',
     status: 'installedResource',
     lastUsedIso: daysAgo(5),
-    teamProjectIds: ['p-nnb', 'p-web'],
+    teamProjectIds: ['p-nnb', 'p-sw-obt'],
   },
   {
     id: 'r-nt-comm',
@@ -173,16 +209,17 @@ export const LOCAL_ITEMS: UnifiedItem[] = [
     language: 'English',
     type: 'CommentaryResource',
     status: 'installedNeedsUpdate',
+    newVersionIso: daysAgo(3),
     lastUsedIso: daysAgo(30),
     teamProjectIds: ['p-mrsyr'],
     isUserChoice: true,
   },
   {
-    id: 'r-sdbh',
-    shortName: 'SDBH',
-    fullName: 'Semantic Dictionary of Biblical Hebrew',
+    id: 'r-ohb',
+    shortName: 'OHB',
+    fullName: 'Open Hebrew Bible',
     language: 'Hebrew',
-    type: 'EnhancedResource',
+    type: 'SourceLanguageResource',
     status: 'installedResource',
     teamProjectIds: ['p-nnb'],
   },
@@ -210,6 +247,7 @@ export const LOCAL_ITEMS: UnifiedItem[] = [
   },
   {
     id: 'p-sw-obt',
+    hasTeamLayout: true,
     shortName: 'SW-OBT',
     fullName: 'Swahili Old Testament Draft',
     language: 'Swahili',
@@ -229,6 +267,54 @@ export const LOCAL_ITEMS: UnifiedItem[] = [
     editedLocallyIso: daysAgo(2),
     isHidden: true,
   },
+  // More up-to-date local projects, so the title bar picker has more projects than its "Recent"
+  // section holds and shows both of its sections.
+  {
+    id: 'p-es-rvr',
+    shortName: 'RVR-Rev',
+    fullName: 'Reina-Valera Revision',
+    language: 'Spanish',
+    type: 'Project',
+    status: 'installedProject',
+    lastUsedIso: daysAgo(4),
+  },
+  {
+    id: 'p-pt-nvt',
+    shortName: 'NVT-PT',
+    fullName: 'Nova Versão Portuguese Draft',
+    language: 'Portuguese',
+    type: 'Project',
+    status: 'installedProject',
+    lastUsedIso: daysAgo(9),
+  },
+  {
+    id: 'p-id-tb',
+    isReadOnly: true,
+    shortName: 'TB-ID',
+    fullName: 'Indonesian Terjemahan Baru Study Draft',
+    language: 'Indonesian',
+    type: 'Project',
+    status: 'installedProject',
+    lastUsedIso: daysAgo(21),
+  },
+  {
+    id: 'p-am-nt',
+    shortName: 'AMH-NT',
+    fullName: 'Amharic New Testament Revision',
+    language: 'Amharic',
+    type: 'Project',
+    status: 'installedProject',
+    lastUsedIso: daysAgo(45),
+  },
+  {
+    id: 'p-ko-back',
+    isReadOnly: true,
+    shortName: 'KOR-BT',
+    fullName: 'Korean Back Translation',
+    language: 'Korean',
+    type: 'Project',
+    status: 'installedProject',
+  },
   // A few more "Updated" (installedNeedsUpdate) resources so the Updated preset is meaningful.
   {
     id: 'r-web-audio',
@@ -237,8 +323,9 @@ export const LOCAL_ITEMS: UnifiedItem[] = [
     language: 'English',
     type: 'ScriptureResource',
     status: 'installedNeedsUpdate',
+    newVersionIso: daysAgo(12),
     lastUsedIso: daysAgo(12),
-    teamProjectIds: ['p-web'],
+    teamProjectIds: ['p-sw-obt'],
   },
   {
     id: 'r-net-notes',
@@ -247,6 +334,7 @@ export const LOCAL_ITEMS: UnifiedItem[] = [
     language: 'English',
     type: 'EnhancedResource',
     status: 'installedNeedsUpdate',
+    newVersionIso: daysAgo(6),
     lastUsedIso: daysAgo(22),
     isUserChoice: true,
   },
@@ -257,6 +345,7 @@ export const LOCAL_ITEMS: UnifiedItem[] = [
     language: 'Greek (Ancient)',
     type: 'SourceLanguageResource',
     status: 'installedNeedsUpdate',
+    newVersionIso: daysAgo(40),
     isHidden: true,
   },
   {

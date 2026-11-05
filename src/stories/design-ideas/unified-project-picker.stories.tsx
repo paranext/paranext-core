@@ -45,6 +45,12 @@ const MORE_RESOURCES =
   'section; clearing the search goes back to the loaded batches. Closing the picker hides the ' +
   'section again.';
 
+const USED_BY_ICON =
+  'Power opens on "Last used" (Opened, Recent, Other); the ⋮ button switches to Language (its ' +
+  'sections start collapsed), Context or Type, and the list scrolls back to the top. Under ' +
+  'Context, a resource some project uses ends in a muted project icon; hovering the icon (not ' +
+  'the row) names those projects.';
+
 const meta: Meta<typeof UnifiedProjectPicker> = {
   title: 'Design ideas/Unified project picker',
   component: UnifiedProjectPicker,
@@ -72,10 +78,14 @@ function Harness({
   catalog,
   initialSelectedId,
   isTitlebar,
-}: Pick<UnifiedProjectPickerProps, 'kind' | 'interfaceMode' | 'currentProjectId'> & {
+  groupings,
+  isMulti,
+}: Pick<UnifiedProjectPickerProps, 'kind' | 'interfaceMode' | 'currentProjectId' | 'groupings'> & {
   catalog?: UnifiedItem[];
   initialSelectedId?: string;
   isTitlebar?: boolean;
+  /** Multi-select, as on the text collection's toolbar. */
+  isMulti?: boolean;
 }) {
   const { items, inFlightIds, applyAction, fetchMore } = useUnifiedCatalog(catalog);
   // Page in the whole catalog once, so a search reaches every DBL resource.
@@ -83,6 +93,7 @@ function Harness({
     fetchMore();
   }, [fetchMore]);
   const [selectedId, setSelectedId] = useState<string | undefined>(initialSelectedId);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [lastEvent, setLastEvent] = useState<string>('');
 
   const picker = (
@@ -91,7 +102,17 @@ function Harness({
       kind={kind}
       interfaceMode={interfaceMode}
       currentProjectId={currentProjectId}
+      groupings={groupings}
       selectedId={selectedId}
+      selectedIds={selectedIds}
+      onChangeSelectedIds={
+        isMulti
+          ? (ids) => {
+              setSelectedIds(ids);
+              setLastEvent(`Selected ${ids.length}`);
+            }
+          : undefined
+      }
       onSelect={(item) => {
         setSelectedId(item.id);
         setLastEvent(`Selected ${item.shortName}`);
@@ -131,9 +152,10 @@ export const ProjectsTitleBar: Story = {
     docs: {
       description: {
         story:
-          'Simple mode’s title bar project picker, matching main’s: "Recent" (the five most ' +
-          'recently used projects, newest first), then "Your projects on this computer" ' +
-          '(alphabetical), then "More projects…", which opens Home. There is no group-by menu. ' +
+          'Simple mode’s title bar project picker: the five most recently used projects, newest ' +
+          'first, with no heading, then "More projects…", which opens Home. A search labels them ' +
+          '"Recent" and adds the other matching projects under "Projects" ' +
+          '(alphabetical), counting every heading. Simple’s pickers have no ⋮ menu. ' +
           'A search also reaches the projects on the Send/Receive server: matches are listed ' +
           'last, muted, under "On the server", each with a "Get" hint, and picking one runs ' +
           'Get. **Type "SW" or "QUE" to see server matches** ("SW" also matches a local ' +
@@ -182,16 +204,48 @@ export const ResourcesSimple: Story = {
 
 export const ResourcesPower: Story = {
   name: 'Resources – Power',
-  render: () => <Harness kind="resources" interfaceMode="power" currentProjectId="p-nnb" />,
+  render: () => (
+    <Harness
+      kind="resources"
+      interfaceMode="power"
+      currentProjectId="p-nnb"
+      groupings={['lastUsed', 'language', 'type']}
+    />
+  ),
   parameters: {
     docs: {
       description: {
         story:
-          'The resource picker in Power mode, in the same order as Simple: resources first, ' +
-          'then projects. "Used by projects (n)" lists resources some project’s team shares, ' +
-          'whose tooltip names those projects; then "Your resources (n)"; then "Projects (n)". ' +
+          'The resource picker in Power mode. Its Context grouping lists resources first, then ' +
+          'projects: "Team resources (n)" lists resources some project’s team shares, each ' +
+          'ending in a project icon whose tooltip names those projects; then "User resources ' +
+          '(n)"; then "Projects (n)" — the same names as Simple’s. ' +
           `${COUNTED_HEADINGS} Searching adds the same "Available for download (n)" section as ` +
-          `Simple, last. ${MORE_RESOURCES} ${ALIGNMENT_WITH_HOME} ${COLLAPSIBLE_SECTIONS}`,
+          `Simple, last. ${USED_BY_ICON} ${MORE_RESOURCES} ${ALIGNMENT_WITH_HOME} ` +
+          `${COLLAPSIBLE_SECTIONS}`,
+      },
+    },
+  },
+};
+
+export const ResourcesMultiSelect: Story = {
+  name: 'Resources – multi-select (text collection)',
+  render: () => (
+    <Harness
+      kind="resources"
+      interfaceMode="power"
+      currentProjectId="p-nnb"
+      groupings={['lastUsed', 'language', 'type']}
+      isMulti
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The multi-select picker on the text collection’s toolbar. Picking a row toggles it and ' +
+          'keeps the dropdown open; the trigger names what is picked. While anything is picked, ' +
+          `A checkbox before the search box unpicks everything. ${USED_BY_ICON}`,
       },
     },
   },

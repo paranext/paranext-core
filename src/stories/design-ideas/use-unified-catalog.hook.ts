@@ -2,8 +2,8 @@
  * Mock catalog state shared by the unified Home, project picker, and full-app design-ideas stories.
  * Actions visibly mutate the list: Install/Get/Update go in-flight then land as installed, Sync
  * clears the "needs sync" state, Open bumps last-used, Hide/Unhide flip `isHidden`, Remove drops the
- * row. Only the first page is
- * loaded up front; `fetchMore` pages in the rest after a simulated round-trip.
+ * row, and saving a team layout sets which resources are that project's team resources. Only the
+ * first page is loaded up front; `fetchMore` pages in the rest after a simulated round-trip.
  */
 
 import { useCallback, useMemo, useState } from 'react';
@@ -20,6 +20,16 @@ export type UnifiedCatalog = {
   applyAction: (item: UnifiedItem, action: UnifiedItemAction) => Promise<void>;
   /** Total DBL-not-installed count in the whole catalog — the fast count-only backend call. */
   dblAvailableCount: number;
+  /**
+   * Makes exactly these resources the project's team resources, as saving its team layout does; the
+   * project then has a team layout.
+   */
+  setTeamResources: (projectId: string, resourceIds: string[]) => void;
+  /**
+   * Records a team layout saved on this computer and not sent yet: the project then needs a Sync,
+   * and its next successful one sends the layout.
+   */
+  markTeamLayoutUnsent: (projectId: string) => void;
 };
 
 export function useUnifiedCatalog(catalog: UnifiedItem[] = FULL_CATALOG): UnifiedCatalog {
@@ -76,6 +86,7 @@ export function useUnifiedCatalog(catalog: UnifiedItem[] = FULL_CATALOG): Unifie
                         // stays where it was and the row doesn't jump.
                         editedLocallyIso: undefined,
                         editedOnServerIso: undefined,
+                        teamLayoutSavedIso: undefined,
                       }
                     : current,
                 ),
@@ -120,5 +131,37 @@ export function useUnifiedCatalog(catalog: UnifiedItem[] = FULL_CATALOG): Unifie
     [],
   );
 
-  return { items, inFlightIds, hasMore, fetchMore, applyAction, dblAvailableCount };
+  const setTeamResources = useCallback((projectId: string, resourceIds: string[]) => {
+    setItems((prev) =>
+      prev.map((current) => {
+        if (current.id === projectId) return { ...current, hasTeamLayout: true };
+        // Another project can be a team resource as well as any resource.
+        const others = (current.teamProjectIds ?? []).filter((id) => id !== projectId);
+        const teamProjectIds = resourceIds.includes(current.id) ? [...others, projectId] : others;
+        return { ...current, teamProjectIds };
+      }),
+    );
+  }, []);
+
+  const markTeamLayoutUnsent = useCallback((projectId: string) => {
+    const savedIso = new Date().toISOString();
+    setItems((prev) =>
+      prev.map((current) =>
+        current.id === projectId
+          ? { ...current, status: 'installedNeedsSync', teamLayoutSavedIso: savedIso }
+          : current,
+      ),
+    );
+  }, []);
+
+  return {
+    items,
+    inFlightIds,
+    hasMore,
+    fetchMore,
+    applyAction,
+    dblAvailableCount,
+    setTeamResources,
+    markTeamLayoutUnsent,
+  };
 }

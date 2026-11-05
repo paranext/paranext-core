@@ -128,16 +128,24 @@ export function MockModelTextPanel() {
   );
 }
 
-/** The Scripture editor. `withToolbar` adds the per-web-view row Power mode shows. */
+/**
+ * The Scripture editor. `withToolbar` adds the per-web-view row Power mode shows; `toolbar` puts a
+ * caller's own toolbar row there instead. `verses` replaces the default draft of Genesis 1.
+ */
 export function MockScriptureEditorPanel({
   projectName = 'HNF',
   withToolbar = false,
+  toolbar,
+  verses = DRAFT_GENESIS_1,
 }: {
   projectName?: string;
   withToolbar?: boolean;
+  toolbar?: ReactNode;
+  verses?: string[];
 }) {
   return (
     <PanelBody>
+      {toolbar}
       {withToolbar && (
         <PowerWebViewToolbar>
           <Badge variant="outline" className="tw:font-normal">
@@ -146,7 +154,7 @@ export function MockScriptureEditorPanel({
         </PowerWebViewToolbar>
       )}
       <div className="tw:flex-1 tw:overflow-auto">
-        <ChapterText heading="Genesis" verses={DRAFT_GENESIS_1} />
+        <ChapterText heading="Genesis" verses={verses} />
         <div className="tw:mx-auto tw:max-w-[42rem] tw:px-6 tw:text-sm tw:text-muted-foreground">
           <span className="tw:rounded tw:bg-muted tw:px-1">\v 7</span>
           <span className="tw:ms-1 tw:inline-block tw:h-4 tw:w-px tw:animate-pulse tw:bg-foreground tw:align-middle" />
@@ -224,10 +232,12 @@ export function MockDictionaryPanel() {
   );
 }
 
-export function MockFindPanel() {
+/** The Find tab. `projectPickerSlot` puts a design story's project picker before the search box. */
+export function MockFindPanel({ projectPickerSlot }: { projectPickerSlot?: ReactNode } = {}) {
   return (
     <PanelBody>
       <div className="tw:flex tw:shrink-0 tw:items-center tw:gap-2 tw:border-b tw:p-2">
+        {projectPickerSlot}
         <div className="tw:relative tw:flex-1">
           <Search className="tw:absolute tw:start-2 tw:top-2 tw:size-4 tw:text-muted-foreground" />
           <Input defaultValue="light" className="tw:h-8 tw:ps-8" />
@@ -253,13 +263,19 @@ export function MockFindPanel() {
   );
 }
 
-export function MockCommentsPanel() {
+/** The Comments tab. `projectPickerSlot` adds a design story's project picker above the list. */
+export function MockCommentsPanel({ projectPickerSlot }: { projectPickerSlot?: ReactNode } = {}) {
   const comments = [
     { who: 'JD', ref: 'GEN 1:2', text: 'Is “deep water” the best rendering for tehom here?' },
     { who: 'AM', ref: 'GEN 1:5', text: 'Consistent with 1:8 now — resolved?' },
   ];
   return (
     <PanelBody>
+      {projectPickerSlot && (
+        <div className="tw:flex tw:shrink-0 tw:items-center tw:border-b tw:p-2">
+          {projectPickerSlot}
+        </div>
+      )}
       <ul className="tw:flex-1 tw:space-y-2 tw:overflow-auto tw:p-2">
         {comments.map((comment) => (
           <li key={comment.ref} className="tw:rounded-md tw:border tw:p-2 tw:text-sm">
