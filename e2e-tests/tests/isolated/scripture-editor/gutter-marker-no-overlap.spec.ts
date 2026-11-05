@@ -134,6 +134,11 @@ test.describe('gutter marker glyphs versus paragraph text', () => {
     );
     await expect(editorRoot).toHaveClass(/\bpsc-gutter-markers\b/);
     await expect(editorRoot).toHaveClass(/\btext-spacing\b/);
+    // The gutter view's own verse rule clears the formatted views' badge behind a verse number.
+    await expect(editorRoot.locator('span.verse').first()).toHaveCSS(
+      'background-color',
+      'rgba(0, 0, 0, 0)',
+    );
     // The sample project is left-to-right, so the measurement below takes its LTR branch. Pinned so
     // a run that ever came up RTL fails here rather than switching to arithmetic no run has
     // exercised; the RTL branch stays for the follow-up that flips the project's text direction.

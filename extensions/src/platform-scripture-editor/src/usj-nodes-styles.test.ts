@@ -120,7 +120,7 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
     // on a verse number it holds.
     it('gives the verse badge background only to the views without editable markers', () => {
       expect(scss).toMatch(
-        /\.formatted-font:not\(\.marker-editable\) \.verse \{[^}]*background-color: rgba\(222, 222, 222, 1\);[^}]*\}/,
+        /\.formatted-font:where\(:not\(\.marker-editable\)\) \.verse \{[^}]*background-color: rgba\(222, 222, 222, 1\);[^}]*\}/,
       );
       expect(scss).not.toMatch(/\.formatted-font \.verse \{[^}]*background-color/);
       expect(scss).not.toMatch(/\.formatted-font\.marker-editable \.verse \{[^}]*background-color/);

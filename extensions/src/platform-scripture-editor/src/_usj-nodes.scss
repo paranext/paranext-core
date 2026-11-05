@@ -2544,8 +2544,10 @@
 }
 /* The grey badge is for the views whose verse is a read-only number (see the Standard view rule
    below). Leaving the badge out of Standard view, rather than overriding it with a transparent
-   background there, leaves an annotation's own background free to paint a verse number it holds. */
-.formatted-font:not(.marker-editable) .verse {
+   background there, leaves an annotation's own background free to paint a verse number it holds.
+   `:where` keeps the rule at the specificity of a plain `.formatted-font .verse`, so a view's own
+   verse rule (the gutter view's `background: none`) still outranks the badge. */
+.formatted-font:where(:not(.marker-editable)) .verse {
   background-color: rgba(222, 222, 222, 1);
 }
 .text-spacing .verse {
