@@ -708,20 +708,28 @@ export interface InsertContextMenuState {
   isReadOnly: boolean;
   canUserCreateComments: boolean;
   isSyncBlocked: boolean;
+  /**
+   * Whether the project is a resource (`platform.isPublished`). A resource can never be edited or
+   * commented on, so it gets no insert items at all rather than disabled ones.
+   */
+  isResource: boolean;
 }
 
 /**
  * Build the editor context-menu insert items. MUST stay in parity with the Insert top-menu's
  * `platformScriptureEditor.insert` column (`contributions/menus.json`, every group in that column)
  * — same items, same order; pinned by the parity test in
- * `platform-scripture-editor.web-view.utils.test.ts`.
+ * `platform-scripture-editor.web-view.utils.test.ts`. A resource gets none of them, mirroring the
+ * `when` that removes the same items from the top menu; the editor then shows only its built-in
+ * clipboard entries.
  */
 export function createInsertContextMenuItems(
   localizedStrings: LanguageStrings,
   actions: InsertContextMenuActions,
   state: InsertContextMenuState,
 ): ContextMenuOptionConfig[] {
-  const { isReadOnly, canUserCreateComments, isSyncBlocked } = state;
+  const { isReadOnly, canUserCreateComments, isSyncBlocked, isResource } = state;
+  if (isResource) return [];
   return [
     {
       title: localizedStrings[INSERT_COMMENT_TITLE_KEY],

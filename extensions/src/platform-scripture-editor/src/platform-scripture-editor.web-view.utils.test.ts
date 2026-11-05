@@ -1098,6 +1098,7 @@ describe('createInsertContextMenuItems', () => {
     group: string;
     order: number;
     hiddenInterfaceModes?: string[];
+    when?: string;
   }[] = topMenuItems
     .filter((item: { group: string }) => insertGroupOrders.has(item.group))
     .sort(
@@ -1118,7 +1119,12 @@ describe('createInsertContextMenuItems', () => {
     insertMenuItems.map((item) => [item.label, `LOC:${item.label}`]),
   );
 
-  const ENABLED = { isReadOnly: false, canUserCreateComments: true, isSyncBlocked: false };
+  const ENABLED = {
+    isReadOnly: false,
+    canUserCreateComments: true,
+    isSyncBlocked: false,
+    isResource: false,
+  };
 
   it('offers exactly the Insert-menu items, localized, in the same order', () => {
     const items = createInsertContextMenuItems(strings, makeActions(), ENABLED);
@@ -1182,6 +1188,30 @@ describe('createInsertContextMenuItems', () => {
       isSyncBlocked: true,
     });
     expect(syncBlocked.map((i) => !!i.isDisabled)).toEqual([true, false, false, false]);
+  });
+
+  // Mirrors the top menu, where every insert item carries `when: !…isResource` and so is removed
+  // (not greyed out) for a resource.
+  it('omits every insert item for a resource, whatever the other state says', () => {
+    const resource = createInsertContextMenuItems(strings, makeActions(), {
+      ...ENABLED,
+      isResource: true,
+    });
+    expect(resource).toEqual([]);
+    const readOnlyResource = createInsertContextMenuItems(strings, makeActions(), {
+      isReadOnly: true,
+      canUserCreateComments: false,
+      isSyncBlocked: true,
+      isResource: true,
+    });
+    expect(readOnlyResource).toEqual([]);
+  });
+
+  it('gates every Insert-column item in the top menu on the project not being a resource', () => {
+    expect(insertMenuItems.length).toBeGreaterThan(0);
+    insertMenuItems.forEach((item) => {
+      expect(item.when).toBe('!platform.project.{projectId}.isResource');
+    });
   });
 
   // Per-item, not aggregate: calling every item's onSelect and counting each action's TOTAL calls
@@ -1343,6 +1373,12 @@ describe('menus.json dynamic conditions', () => {
     'platformScriptureEditor.insertEndnoteAtSelection',
   ];
   const INSERT_COMMENT_COMMAND = 'platformScriptureEditor.insertCommentAtSelection';
+  const EDIT_COMMANDS = [
+    'platformScriptureEditor.undo',
+    'platformScriptureEditor.redo',
+    'platformScriptureEditor.cutSelection',
+    'platformScriptureEditor.pasteAtSelection',
+  ];
   const COMMENTS_COMMANDS = [
     'legacyCommentManager.openCommentList',
     'legacyCommentManager.showCommentListPanel',
@@ -1382,12 +1418,43 @@ describe('menus.json dynamic conditions', () => {
     expect(noPermission(INSERT_COMMENT_COMMAND)).toBe(true);
   });
 
-  it('disables Comments for a resource', () => {
-    const enabled = isDisabledFn(evaluate());
-    COMMENTS_COMMANDS.forEach((command) => expect(enabled(command)).toBe(false));
+  it('removes the Insert items, the Comments items and the editing Edit items for a resource', () => {
+    const commandsOf = (menu: { items: { command?: string }[] }) =>
+      menu.items.map((item) => item.command);
+    const REMOVED_FOR_RESOURCE = [
+      ...INSERT_NOTE_COMMANDS,
+      INSERT_COMMENT_COMMAND,
+      ...COMMENTS_COMMANDS,
+      ...EDIT_COMMANDS,
+    ];
+    const project = commandsOf(evaluate());
+    REMOVED_FOR_RESOURCE.forEach((command) => expect(project).toContain(command));
 
-    const resource = isDisabledFn(evaluate({ 'platform.project.p1.isResource': true }));
-    COMMENTS_COMMANDS.forEach((command) => expect(resource(command)).toBe(true));
+    const resource = commandsOf(evaluate({ 'platform.project.p1.isResource': true }));
+    REMOVED_FOR_RESOURCE.forEach((command) => expect(resource).not.toContain(command));
+    // Copy and Find read without editing, so a resource keeps them.
+    expect(resource).toContain('platformScriptureEditor.copySelection');
+    expect(resource).toContain('platformScripture.openFind');
+  });
+
+  it('disables Undo, Redo, Cut and Paste exactly when Insert footnote is disabled', () => {
+    const FACTS_THAT_DISABLE = [
+      { 'platform.project.p1.isEditable': false },
+      { 'platformScripture.project.p1.canEditScripture': false },
+      { 'platformScriptureEditor.webView.wv.isPreview': true },
+      { 'platformScriptureEditor.webView.wv.isSyncBlocked': true },
+    ];
+    const enabled = isDisabledFn(evaluate());
+    EDIT_COMMANDS.forEach((command) => expect(enabled(command)).toBe(false));
+    FACTS_THAT_DISABLE.forEach((facts) => {
+      const disabled = isDisabledFn(evaluate(facts));
+      EDIT_COMMANDS.forEach((command) => expect(disabled(command)).toBe(true));
+    });
+  });
+
+  it('leaves Copy enabled when the project cannot be edited', () => {
+    const readOnly = isDisabledFn(evaluate({ 'platform.project.p1.isEditable': false }));
+    expect(readOnly('platformScriptureEditor.copySelection')).toBe(false);
   });
 
   it('checks Show footnotes from the footnotes pane fact', () => {

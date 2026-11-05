@@ -960,6 +960,29 @@ function PlatformScriptureEditor({
     return isProjectEditablePossiblyError;
   }, [isProjectEditablePossiblyError]);
 
+  // `platform.isPublished` is the project-kind classification (resource vs project); `isReadOnly` /
+  // `platform.isEditable` is Scripture-text edit PERMISSION and says nothing about kind. Only the
+  // former may decide whether the user is told "this book is not in this resource", which is a
+  // statement of fact with no remedy. Same distinction the open path draws in this extension's
+  // `main.ts`, where the comment on `isPublished` spells out why the two must not be conflated.
+  // Defaults to false so an unresolved setting shows the actionable project message rather than
+  // wrongly telling a project owner their project is a resource.
+  const [isPublishedPossiblyError, , , isIsPublishedLoading] = useProjectSetting(
+    projectId,
+    'platform.isPublished',
+    false,
+  );
+
+  const isResource = useMemo(() => {
+    if (isPlatformError(isPublishedPossiblyError)) {
+      logger.warn(
+        `Error getting whether the project is published: ${getErrorMessage(isPublishedPossiblyError)}`,
+      );
+      return false;
+    }
+    return isPublishedPossiblyError;
+  }, [isPublishedPossiblyError]);
+
   const [canUserEditScripturePossiblyError, , canUserEditScriptureLoading] = useProjectData(
     'platformScripture.scriptureEditPermissions',
     projectId,
@@ -2164,7 +2187,7 @@ function PlatformScriptureEditor({
           ),
           insertComment: insertCommentAtCurrentSelection,
         },
-        { isReadOnly: isReadOnlyEffective, canUserCreateComments, isSyncBlocked },
+        { isReadOnly: isReadOnlyEffective, canUserCreateComments, isSyncBlocked, isResource },
       ),
     }),
     [
@@ -2173,6 +2196,7 @@ function PlatformScriptureEditor({
       handleHiddenContentDelete,
       canUserCreateComments,
       isSyncBlocked,
+      isResource,
       textDirectionEffective,
       nodeOptions,
       viewOptions,
@@ -5246,29 +5270,6 @@ function PlatformScriptureEditor({
     'platformScripture.booksPresent',
     BOOKS_PRESENT_DEFAULT,
   );
-
-  // `platform.isPublished` is the project-kind classification (resource vs project); `isReadOnly` /
-  // `platform.isEditable` is Scripture-text edit PERMISSION and says nothing about kind. Only the
-  // former may decide whether the user is told "this book is not in this resource", which is a
-  // statement of fact with no remedy. Same distinction the open path draws in this extension's
-  // `main.ts`, where the comment on `isPublished` spells out why the two must not be conflated.
-  // Defaults to false so an unresolved setting shows the actionable project message rather than
-  // wrongly telling a project owner their project is a resource.
-  const [isPublishedPossiblyError, , , isIsPublishedLoading] = useProjectSetting(
-    projectId,
-    'platform.isPublished',
-    false,
-  );
-
-  const isResource = useMemo(() => {
-    if (isPlatformError(isPublishedPossiblyError)) {
-      logger.warn(
-        `Error getting whether the project is published: ${getErrorMessage(isPublishedPossiblyError)}`,
-      );
-      return false;
-    }
-    return isPublishedPossiblyError;
-  }, [isPublishedPossiblyError]);
 
   const booksPresent = useMemo(() => {
     if (isPlatformError(booksPresentPossiblyError)) {
