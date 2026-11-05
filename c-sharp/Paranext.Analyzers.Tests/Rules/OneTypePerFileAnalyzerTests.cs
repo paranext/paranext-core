@@ -8,12 +8,12 @@ using Verifier = CSharpAnalyzerVerifier<OneTypePerFileAnalyzer, DefaultVerifier>
 [TestFixture]
 public class OneTypePerFileAnalyzerTests
 {
-    private static async Task VerifyNet80Async(string source, params DiagnosticResult[] expected)
+    private static async Task VerifyNet100Async(string source, params DiagnosticResult[] expected)
     {
         var test = new CSharpAnalyzerTest<OneTypePerFileAnalyzer, DefaultVerifier>
         {
             TestCode = source,
-            ReferenceAssemblies = ReferenceAssemblies.Net.Net80,
+            ReferenceAssemblies = ReferenceAssemblies.Net.Net100,
         };
         test.ExpectedDiagnostics.AddRange(expected);
         await test.RunAsync();
@@ -42,7 +42,7 @@ public class OneTypePerFileAnalyzerTests
             record Foo(int X);
             """;
 
-        await VerifyNet80Async(source);
+        await VerifyNet100Async(source);
     }
 
     [Test]
@@ -106,7 +106,7 @@ public class OneTypePerFileAnalyzerTests
             record Helper(int X);
             """;
 
-        await VerifyNet80Async(source);
+        await VerifyNet100Async(source);
     }
 
     [Test]
@@ -121,7 +121,7 @@ public class OneTypePerFileAnalyzerTests
             record C(int Value);
             """;
 
-        await VerifyNet80Async(source);
+        await VerifyNet100Async(source);
     }
 
     [Test]
@@ -134,7 +134,7 @@ public class OneTypePerFileAnalyzerTests
             record Beta(Alpha A);
             """;
 
-        await VerifyNet80Async(source);
+        await VerifyNet100Async(source);
     }
 
     [Test]
@@ -150,7 +150,7 @@ public class OneTypePerFileAnalyzerTests
             record Helper(int X);
             """;
 
-        await VerifyNet80Async(source);
+        await VerifyNet100Async(source);
     }
 
     // --- Violations ---
@@ -225,7 +225,7 @@ public class OneTypePerFileAnalyzerTests
             .WithLocation(0)
             .WithArguments(2);
 
-        await VerifyNet80Async(source, expected);
+        await VerifyNet100Async(source, expected);
     }
 
     [Test]
@@ -244,7 +244,7 @@ public class OneTypePerFileAnalyzerTests
             .WithLocation(0)
             .WithArguments(2);
 
-        await VerifyNet80Async(source, expected);
+        await VerifyNet100Async(source, expected);
     }
 
     [Test]
@@ -264,7 +264,7 @@ public class OneTypePerFileAnalyzerTests
             .WithLocation(0)
             .WithArguments(3);
 
-        await VerifyNet80Async(source, expected);
+        await VerifyNet100Async(source, expected);
     }
 
     [Test]
@@ -284,7 +284,7 @@ public class OneTypePerFileAnalyzerTests
             .WithLocation(0)
             .WithArguments(2);
 
-        await VerifyNet80Async(source, expected);
+        await VerifyNet100Async(source, expected);
     }
 
     [Test]
@@ -303,6 +303,6 @@ public class OneTypePerFileAnalyzerTests
             .WithLocation(0)
             .WithArguments(2);
 
-        await VerifyNet80Async(source, expected);
+        await VerifyNet100Async(source, expected);
     }
 }

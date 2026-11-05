@@ -245,10 +245,10 @@ describe('collectNugetPackages checks each RID before merging them', () => {
         const count = currentRid === SHORT_RID ? SHORT_COUNT : FULL_COUNT;
         const entries = {};
         names(count).forEach((name) => {
-          entries[name + '/1.0.0'] = { runtime: { ['lib/net8.0/' + name + '.dll']: {} } };
+          entries[name + '/1.0.0'] = { runtime: { ['lib/net10.0/' + name + '.dll']: {} } };
         });
         return JSON.stringify({
-          targets: { 'net8.0': entries, ['net8.0/' + currentRid]: entries },
+          targets: { 'net10.0': entries, ['net10.0/' + currentRid]: entries },
           packageFolders: { [PACKAGE_FOLDER]: {} },
         });
       };
@@ -309,13 +309,13 @@ describe('collectNugetPackages checks each RID before merging them', () => {
 // ships", applying two filters (shipsSomething, isFrameworkPackage) to whichever RID's assets file
 // the caller just restored.
 const assetsWithTarget = (entries: Record<string, object>) => ({
-  targets: { 'net8.0/linux-x64': entries },
+  targets: { 'net10.0/linux-x64': entries },
 });
 
 describe('parseShippingSet', () => {
   it('includes a package that ships a real runtime asset, keyed by lowercased id@version', () => {
     const assets = assetsWithTarget({
-      'Newtonsoft.Json/13.0.3': { runtime: { 'lib/net8.0/Newtonsoft.Json.dll': {} } },
+      'Newtonsoft.Json/13.0.3': { runtime: { 'lib/net10.0/Newtonsoft.Json.dll': {} } },
     });
     const ships = parseShippingSet(assets, 'linux-x64');
     expect(ships.has('newtonsoft.json@13.0.3')).toBe(true);
@@ -326,7 +326,7 @@ describe('parseShippingSet', () => {
     // used by analyzer-only and MSBuild-tooling packages, which the restore closure includes but no
     // file under `dotnet/` ever comes from.
     const assets = assetsWithTarget({
-      'SomeAnalyzer/1.0.0': { runtime: { 'lib/net8.0/_._': {} } },
+      'SomeAnalyzer/1.0.0': { runtime: { 'lib/net10.0/_._': {} } },
     });
     const ships = parseShippingSet(assets, 'linux-x64');
     expect(ships.has('someanalyzer@1.0.0')).toBe(false);
@@ -336,24 +336,24 @@ describe('parseShippingSet', () => {
     // A compile-only / analyzer entry: it has a `compile` group but never contributes a shipped
     // file, the same as an all-placeholder entry above.
     const assets = assetsWithTarget({
-      'CompileOnly/1.0.0': { compile: { 'lib/net8.0/CompileOnly.dll': {} } },
+      'CompileOnly/1.0.0': { compile: { 'lib/net10.0/CompileOnly.dll': {} } },
     });
     const ships = parseShippingSet(assets, 'linux-x64');
     expect(ships.has('compileonly@1.0.0')).toBe(false);
   });
 
-  it('excludes a package the .NET 8 shared framework supersedes', () => {
+  it('excludes a package the .NET 10 shared framework supersedes', () => {
     // Delegates to isFrameworkPackage (below in this module) rather than re-deriving the override
     // table here; `runtime.*` ids are always
     // superseded regardless of version, which keeps this fixture stable if the override table
     // itself is ever refreshed for a later .NET version.
     const assets = assetsWithTarget({
-      'runtime.linux-x64.Microsoft.NETCore.App/8.0.0': {
-        runtime: { 'runtimes/linux-x64/lib/net8.0/System.Private.CoreLib.dll': {} },
+      'runtime.linux-x64.Microsoft.NETCore.App/10.0.0': {
+        runtime: { 'runtimes/linux-x64/lib/net10.0/System.Private.CoreLib.dll': {} },
       },
     });
     const ships = parseShippingSet(assets, 'linux-x64');
-    expect(ships.has('runtime.linux-x64.microsoft.netcore.app@8.0.0')).toBe(false);
+    expect(ships.has('runtime.linux-x64.microsoft.netcore.app@10.0.0')).toBe(false);
   });
 
   it('records assemblies a package ships under a name other than its own id', () => {
@@ -361,11 +361,11 @@ describe('parseShippingSet', () => {
     const assets = assetsWithTarget({
       'SharpZipLib/1.4.2': {
         runtime: {
-          'lib/net8.0/ICSharpCode.SharpZipLib.dll': {},
+          'lib/net10.0/ICSharpCode.SharpZipLib.dll': {},
           // Same id as the package (case-insensitive, extension-insensitive): excluded from the
           // recorded mismatches, since a reader does not need a "ships itself" note.
-          'lib/net8.0/SharpZipLib.dll': {},
-          'lib/net8.0/_._': {},
+          'lib/net10.0/SharpZipLib.dll': {},
+          'lib/net10.0/_._': {},
         },
       },
     });
@@ -380,16 +380,16 @@ describe('parseShippingSet', () => {
 
   it('includes a package that ships only via the RID-agnostic target, not the RID-specific one', () => {
     // The real Icu4c.Win.Min@59.1.7 case: its native win7-x64 ICU DLLs resolve under
-    // runtimeTargets on the RID-agnostic "net8.0" target. The package's "net8.0/win-x64" entry
+    // runtimeTargets on the RID-agnostic "net10.0" target. The package's "net10.0/win-x64" entry
     // contributes only a `_._` placeholder - reading that target alone would miss it entirely,
     // which is exactly the bug this fixture pins against a regression.
     const assets = {
       targets: {
-        'net8.0/win-x64': {
+        'net10.0/win-x64': {
           'Icu4c.Win.Min/59.1.7': { build: { 'build/_._': {} } },
         },
-        // Sorts before "net8.0/win-x64", matching Object.keys(...).sort() order in production.
-        'net8.0': {
+        // Sorts before "net10.0/win-x64", matching Object.keys(...).sort() order in production.
+        'net10.0': {
           'Icu4c.Win.Min/59.1.7': {
             build: { 'build/_._': {} },
             runtimeTargets: {
@@ -491,7 +491,7 @@ describe('assertClosureCoversShippingSet', () => {
 describe('isFrameworkPackage', () => {
   const FRAMEWORK: [string, string][] = [
     // Per-RID asset shims carry no code of their own; their payload belongs to the .NET runtime.
-    ['runtime.linux-x64.Microsoft.NETCore.App', '8.0.0'],
+    ['runtime.linux-x64.Microsoft.NETCore.App', '10.0.0'],
     ['runtime.native.System.IO.Ports', '7.0.0'],
     // Superseded up to and including the version the override names, which is the comparison the
     // SDK's own PackageOverrides handling makes.
@@ -499,6 +499,11 @@ describe('isFrameworkPackage', () => {
     ['System.Buffers', '4.3.0'],
     ['System.Net.Http', '4.3.0'],
     ['Microsoft.CSharp', '4.4.0'],
+    ['System.Buffers', '5.0.0'],
+    ['System.Net.Http', '4.3.4'],
+    ['Microsoft.CSharp', '4.7.0'],
+    ['System.Collections.Immutable', '8.0.0'],
+    ['System.Collections.Immutable', '10.0.0'],
     // The override list is matched case-insensitively, as NuGet ids are.
     ['system.buffers', '4.4.0'],
   ];
@@ -509,23 +514,26 @@ describe('isFrameworkPackage', () => {
 
   const SHIPPED: [string, string][] = [
     ['System.Security.Cryptography.Xml', '9.0.0'],
-    ['System.Collections.Immutable', '8.0.0'],
+    ['System.Collections.Immutable', '11.0.0'],
     ['Newtonsoft.Json', '13.0.3'],
     ['SharpZipLib', '1.4.2'],
     // Anything NEWER than the version the override names is not superseded: its assembly is the one
     // that lands in the publish output. Comparing majors alone drops these before they ever reach
     // the copyleft gate, and no count in the generated file reveals the loss.
-    ['System.Buffers', '4.6.1'],
-    ['System.Net.Http', '4.3.4'],
+    ['System.Buffers', '5.0.1'],
+    ['System.Net.Http', '4.3.5'],
     ['System.ValueTuple', '4.6.1'],
-    ['Microsoft.CSharp', '4.7.0'],
+    ['Microsoft.CSharp', '4.7.1'],
     ['System.Security.Cryptography.Xml', '4.7.1'],
+    // A patch above 10.0.0, the oldest runtime `global.json` allows. A newer SDK may drop it, but
+    // keeping it only over-discloses, which is the safe direction.
+    ['System.Collections.Immutable', '10.0.1'],
     // A version this comparison cannot order. `compareVersions` is a total order, so a component
-    // it cannot read sorts as 0 and `4.4.x` compares EQUAL to the 4.4.0 the framework supersedes -
+    // it cannot read sorts as 0 and `5.0.x` compares EQUAL to the 5.0.0 the framework supersedes -
     // which `<=` reads as superseded. Dropping is the irreversible direction: the package leaves
     // the closure before the copyleft gate sees it, and no count reveals the loss.
-    ['System.Buffers', '4.4.x'],
-    ['Microsoft.CSharp', '4.4.0final'],
+    ['System.Buffers', '5.0.x'],
+    ['Microsoft.CSharp', '4.7.0final'],
   ];
 
   it.each(SHIPPED)('reports %s@%s as a package that still ships', (id, version) => {

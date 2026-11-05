@@ -24,7 +24,7 @@ on:
 
 jobs:
   publish:
-    name: Main on ${{ matrix.os }}, .Net ${{ matrix.dotnet_version }}
+    name: Main on ${{ matrix.os }}
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 180
@@ -33,7 +33,7 @@ jobs:
       matrix:
         # Make sure these match with the env values above
         os: [windows-latest, macos-15, ubuntu-22.04]
-        dotnet_version: [8.0.x]
+        dotnet_version: [10.0.x]
 
     steps:
       - name: Install MacPorts
