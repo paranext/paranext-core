@@ -5940,7 +5940,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 ## adr-menus-gate-declaratively-with-context-keys: Menu items may be gated by when-expressions over context keys; handlers keep submission-time checks
 
 - **Date:** 2026-10-28
-- **Status:** Accepted, amended 2026-11-02
+- **Status:** Accepted, amended 2026-11-02, with the D3 amendment (menus updating while open, and
+  the `when` vs `enabledWhen`/`checkedWhen` authoring rule) provisional until UX review confirms it
+  (see D3)
 - **Context:** Menu items that cannot act (Insert footnote in a read-only project, Sync on a
   resource, Insert comment without the comment role) were clickable and failed only at submission
   with an error, which users read as a dead click. The earlier decision
@@ -5964,8 +5966,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     would otherwise wonder where an item went.
   - Command handlers keep their own guards and `PlatformError`s: keyboard shortcuts and direct
     PAPI calls bypass menus, and a key can lag the state it describes.
-  - **Amended 2026-11-02 (D3).** Originally: overlay context menus applied `when` only and tab
-    menus evaluated once when read, with `enabledWhen`/`checkedWhen` rejected there.
+  - **Amended 2026-11-02 (D3, provisional).** Originally: overlay context menus applied `when` only
+    and tab menus evaluated once when read, with `enabledWhen`/`checkedWhen` rejected there.
   - A key that no producer has published reads as unknown, which counts as false.
 - **Alternatives:** Evaluate expressions in the menu data provider (producer side): rejected, since
   it would need every key change to travel to the provider and back to every window, and the
@@ -5977,7 +5979,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   a disconnected process's keys so a restarted producer can republish. Until a producer publishes,
   a gate on that key reads as false, so an item gated on a positive fact is disabled for a moment
   after startup; a gate on a negated fact is enabled for that moment. **Amended 2026-11-02
-  (D3).** Originally: "Revisit when a second surface needs `enabledWhen` (overlay context menus) or
+  (D3, provisional).** Originally: "Revisit when a second surface needs `enabledWhen` (overlay context menus) or
   when key volume becomes noticeable." Tab menus and overlay context menus now honor `enabledWhen`
   on command items; revisit when key volume becomes noticeable.
 - **Amendments (2026-11-02, review of #2959):**
@@ -5995,7 +5997,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     self-rendered menu uses `useEvaluatedMenu`, and menus re-evaluate only when a key they READ
     changes (`evaluateMenuRecordingReads` records the keys; the same holds for the tab menu, the
     overlay context menu and the macOS menubar).
-  - **D3:** Every surface updates while open: toolbar, web view top menus, self-rendered menus,
+  - **D3 (provisional until UX review confirms it; as of 2026-11-05 that review has not
+    happened):** what follows is what the code does, not yet a settled convention. UX is to decide
+    whether a menu may change under the pointer while it is open, and with it whether the authoring
+    rule below stands. Every surface updates while open: toolbar, web view top menus, self-rendered menus,
     tab menus and overlay context menus. On the macOS menubar, enabled/checked update in place on
     the existing native items; a visibility or structure change rebuilds the menubar, because
     evaluation removes hidden items and prunes emptied containers. Behaviour while a native menu is

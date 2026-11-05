@@ -151,7 +151,9 @@ contribution'). So is `checkedWhen` on an item of a tab menu or overlay context 
 | Web view tab menu | `{webViewId}`, `{webViewType}` | `when`, `enabledWhen` (command items); re-evaluated whenever a key it reads changes, including while open; `checkedWhen` rejected at load |
 | Web view overlay context menu | `{webViewId}`, `{webViewType}`, `{projectId}` | `when`, `enabledWhen` (command items); re-evaluated whenever a key it reads changes, including while open; `checkedWhen` rejected at load. `{projectId}` is looked up once per open, only when an item uses it |
 
-**Choosing `when` vs `enabledWhen`.** Use `enabledWhen` and `checkedWhen` for state that can change
+**Choosing `when` vs `enabledWhen`.** Provisional until UX review confirms it (as of 2026-11-05 that
+review has not happened), together with menus updating while open, which the table above
+describes; see D3 in `adr-menus-gate-declaratively-with-context-keys`. Use `enabledWhen` and `checkedWhen` for state that can change
 while a menu is open, and `when` for state that does not. The one exception is tab menus and overlay
 context menus, which show no check marks: there only `when` and `enabledWhen` (on command items)
 apply. Menus re-evaluate only when a key they read changes.
