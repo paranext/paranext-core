@@ -17,6 +17,7 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
     private readonly ProjectFileManager _fileManager;
     private readonly string? _archivePath;
     private readonly IZippedResourcePasswordProvider? _passwordProvider;
+    private readonly Func<string, Stream>? _openArchiveFile;
 
     /// <param name="fileManager">
     /// The resource's own file manager. Every read of an entry's data goes through it, so it applies
@@ -40,10 +41,23 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
         string? archivePath,
         IZippedResourcePasswordProvider? passwordProvider
     )
+        : this(fileManager, archivePath, passwordProvider, openArchiveFile: null) { }
+
+    /// <param name="openArchiveFile">
+    /// Opens the file at <paramref name="archivePath"/> for this class's own reads of the archive,
+    /// so a test can make reading it fail, or null to let SharpZipLib open it
+    /// </param>
+    internal ResourceProjectStreamManager(
+        ProjectFileManager fileManager,
+        string? archivePath,
+        IZippedResourcePasswordProvider? passwordProvider,
+        Func<string, Stream>? openArchiveFile
+    )
     {
         _fileManager = fileManager;
         _archivePath = archivePath;
         _passwordProvider = passwordProvider;
+        _openArchiveFile = openArchiveFile;
     }
 
     public void Initialize()
@@ -88,6 +102,7 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
     /// The entry exists but cannot be read: it is not encrypted in a resource whose entries must
     /// be, or it cannot be decrypted, or its data does not read back intact.
     /// </exception>
+    /// <exception cref="IOException">The archive file could not be read.</exception>
     public Stream? GetDataStream(string streamName, bool createIfNotExists = false)
     {
         if (createIfNotExists)
@@ -118,11 +133,12 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
                 isIntact = IsIntact(archive, entry);
             }
             // Data decrypted with the wrong password fails to inflate in more ways than
-            // ZipException, such as an IndexOutOfRangeException. Any failure here, I/O included,
-            // means the entry cannot be read; the cause stays on as the inner exception.
-            catch (Exception e)
+            // ZipException, such as an IndexOutOfRangeException, so this converts any exception
+            // except those that say nothing about the entry's data: a failure to read the archive
+            // file may pass on a retry, and running out of memory is not bad data
+            catch (Exception e) when (e is not IOException and not OutOfMemoryException)
             {
-                throw new InvalidDataException($"'{streamName}' cannot be read", e);
+                throw new InvalidDataException($"'{streamName}' cannot be read: {e.Message}", e);
             }
             if (!isIntact)
                 throw new InvalidDataException($"'{streamName}' cannot be read");
@@ -164,14 +180,16 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
     /// The archive is missing or could not be located: the resource itself is unreachable, which
     /// is not the same as having no data.
     /// </exception>
-    private ZipFile OpenArchive() =>
-        new(
+    private ZipFile OpenArchive()
+    {
+        var archivePath =
             _archivePath
-                ?? throw new FileNotFoundException("The resource's archive could not be located")
-        )
-        {
-            Password = _passwordProvider?.GetPassword(),
-        };
+            ?? throw new FileNotFoundException("The resource's archive could not be located");
+        ZipFile archive =
+            _openArchiveFile == null ? new(archivePath) : new(_openArchiveFile(archivePath));
+        archive.Password = _passwordProvider?.GetPassword();
+        return archive;
+    }
 
     private static string GetEntryNameFromStreamName(string streamName)
     {

@@ -250,6 +250,28 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
+        public void GetDataStream_ArchiveFileFailsPartwayThroughTheEntry_ThrowsTheIOException()
+        {
+            WriteArchive(
+                [($"{ExtensionPath}/mine.json", "intact contents", null)],
+                CompressionMethod.Stored
+            );
+            var dataOffset = File.ReadAllBytes(ArchivePath).AsSpan().IndexOf("intact contents"u8);
+            var streamManager = new ResourceProjectStreamManager(
+                CreateFileManager(passwordProtected: false),
+                ArchivePath,
+                passwordProvider: null,
+                path => new StreamFailingAt(File.OpenRead(path), dataOffset)
+            );
+
+            // Not reported as bad data: a failure to read the file says nothing about the entry's
+            // data, and may pass on a retry
+            Assert.Throws<IOException>(
+                () => streamManager.GetDataStream($"{ExtensionPath}/mine.json")
+            );
+        }
+
+        [Test]
         public void GetDataStream_AesEncryptedEntry_ReadsBack()
         {
             // An AES entry may record no CRC, since its stream authenticates the data instead
@@ -496,6 +518,45 @@ namespace TestParanextDataProvider.Projects
                 ?? throw new AssertionException($"'{name}' names no stream");
             using StreamReader reader = new(stream, Encoding.UTF8);
             return reader.ReadToEnd();
+        }
+
+        /// <summary>
+        /// A read-only stream that throws an IOException on any read reaching one position
+        /// </summary>
+        private sealed class StreamFailingAt(Stream inner, long failingPosition) : Stream
+        {
+            public override bool CanRead => true;
+            public override bool CanSeek => true;
+            public override bool CanWrite => false;
+            public override long Length => inner.Length;
+            public override long Position
+            {
+                get => inner.Position;
+                set => inner.Position = value;
+            }
+
+            public override int Read(byte[] buffer, int offset, int count)
+            {
+                if (Position <= failingPosition && failingPosition < Position + count)
+                    throw new IOException("The archive file could not be read");
+                return inner.Read(buffer, offset, count);
+            }
+
+            public override long Seek(long offset, SeekOrigin origin) => inner.Seek(offset, origin);
+
+            public override void Flush() { }
+
+            public override void SetLength(long value) => throw new NotSupportedException();
+
+            public override void Write(byte[] buffer, int offset, int count) =>
+                throw new NotSupportedException();
+
+            protected override void Dispose(bool disposing)
+            {
+                if (disposing)
+                    inner.Dispose();
+                base.Dispose(disposing);
+            }
         }
 
         private sealed class FixedPasswordProvider : IZippedResourcePasswordProvider
