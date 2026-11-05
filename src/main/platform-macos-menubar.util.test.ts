@@ -382,6 +382,36 @@ describe('subscribeCurrentMacosMenubar', () => {
     expect(Menu.buildFromTemplate).toHaveBeenCalledTimes(1);
   });
 
+  it('picks up a short-circuited key once the key before it changes', async () => {
+    const deliver = await subscribe();
+    await deliver(
+      menuWithGatedItems([
+        {
+          label: '%test_both%',
+          group: 'test.group',
+          order: 4,
+          command: 'test.both',
+          localizeNotes: 'Fixture item enabled by two keys.',
+          enabledWhen: 'test.a && test.b',
+        },
+      ]),
+    );
+    const applied = lastAppliedMenu();
+    const bothId = 'platformMenu:test.group:test.both';
+
+    mockKeyValues.set('test.a', true);
+    emitKey('test.a', true);
+    await flushRebuilds();
+    expect(applied.getMenuItemById(bothId).enabled).toBe(false);
+
+    mockKeyValues.set('test.b', true);
+    emitKey('test.b', true);
+    await flushRebuilds();
+
+    expect(applied.getMenuItemById(bothId).enabled).toBe(true);
+    expect(Menu.buildFromTemplate).toHaveBeenCalledTimes(1);
+  });
+
   describe('clicking a command item', () => {
     const CHECKED_ID = 'platformMenu:test.group:test.checked';
     const GATED_ID = 'platformMenu:test.group:test.gated';
