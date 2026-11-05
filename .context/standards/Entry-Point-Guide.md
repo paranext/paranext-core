@@ -144,7 +144,7 @@ contribution'). So is `checkedWhen` on an item of a tab menu or overlay context 
 (`when` hides, `enabledWhen` disables, `checkedWhen` unchecks).
 
 **Template variables per surface.** Re-evaluation "including while open" is provisional until UX
-review confirms it; see "Choosing `when` vs `enabledWhen`" below.
+review (PT-5037) confirms it; see "Choosing `when` vs `enabledWhen`" below.
 
 | Surface | Variables | Honors |
 |---|---|---|
@@ -156,8 +156,10 @@ review confirms it; see "Choosing `when` vs `enabledWhen`" below.
 
 **Choosing `when` vs `enabledWhen`.** Provisional until UX review confirms it (as of 2026-11-05 that
 review has not happened), together with menus updating while open, which the table above
-describes; see D3 in `adr-menus-gate-declaratively-with-context-keys` and the UX review in PT-5037. Use `enabledWhen` and `checkedWhen` for state that can change
-while a menu is open, and `when` for state that does not. The one exception is tab menus and overlay
+describes; see D3 in `adr-menus-gate-declaratively-with-context-keys`. TODO(PT-5037): settle or
+change this rule per that review, then drop the provisional wording here and above. Use
+`enabledWhen` and `checkedWhen` for state that can change while a menu is open, and `when` for
+state that does not. The one exception is tab menus and overlay
 context menus, which show no check marks: there only `when` and `enabledWhen` (on command items)
 apply. Menus re-evaluate only when a key they read changes.
 
