@@ -126,21 +126,27 @@
             "localizeNotes": "Scripture editor top menu > Edit > Undo",
             "group": "platformScriptureEditor.editActions",
             "order": 1,
-            "command": "platformScriptureEditor.undo"
+            "command": "platformScriptureEditor.undo",
+            "when": "!platform.project.{projectId}.isResource",
+            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
             "label": "%webView_platformScriptureEditor_redo%",
             "localizeNotes": "Scripture editor top menu > Edit > Redo",
             "group": "platformScriptureEditor.editActions",
             "order": 2,
-            "command": "platformScriptureEditor.redo"
+            "command": "platformScriptureEditor.redo",
+            "when": "!platform.project.{projectId}.isResource",
+            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
             "label": "%webView_platformScriptureEditor_cut%",
             "localizeNotes": "Scripture editor top menu > Edit > Cut (the selected text)",
             "group": "platformScriptureEditor.editActions",
             "order": 3,
-            "command": "platformScriptureEditor.cutSelection"
+            "command": "platformScriptureEditor.cutSelection",
+            "when": "!platform.project.{projectId}.isResource",
+            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
             "label": "%webView_platformScriptureEditor_copy%",
@@ -154,7 +160,9 @@
             "localizeNotes": "Scripture editor top menu > Edit > Paste",
             "group": "platformScriptureEditor.editActions",
             "order": 5,
-            "command": "platformScriptureEditor.pasteAtSelection"
+            "command": "platformScriptureEditor.pasteAtSelection",
+            "when": "!platform.project.{projectId}.isResource",
+            "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
             "label": "%webView_platformScriptureEditor_openFind%",
@@ -238,6 +246,7 @@
             "group": "platformScriptureEditor.insertTextualNotes",
             "order": 1,
             "command": "platformScriptureEditor.insertCommentAtSelection",
+            "when": "!platform.project.{projectId}.isResource",
             "enabledWhen": "platformScripture.project.{projectId}.canCreateComments && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
@@ -247,6 +256,7 @@
             "group": "platformScriptureEditor.insertTextualNotes",
             "order": 2,
             "command": "platformScriptureEditor.insertFootnoteAtSelection",
+            "when": "!platform.project.{projectId}.isResource",
             "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
@@ -256,6 +266,7 @@
             "group": "platformScriptureEditor.insertTextualNotes",
             "order": 3,
             "command": "platformScriptureEditor.insertCrossReferenceAtSelection",
+            "when": "!platform.project.{projectId}.isResource",
             "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
@@ -265,6 +276,7 @@
             "group": "platformScriptureEditor.insertTextualNotes",
             "order": 4,
             "command": "platformScriptureEditor.insertEndnoteAtSelection",
+            "when": "!platform.project.{projectId}.isResource",
             "enabledWhen": "platform.project.{projectId}.isEditable && platformScripture.project.{projectId}.canEditScripture && !platformScriptureEditor.webView.{webViewId}.isPreview && !platformScriptureEditor.webView.{webViewId}.isSyncBlocked"
           },
           {
@@ -275,7 +287,7 @@
             "group": "platformScriptureEditor.comments",
             "order": 1,
             "command": "legacyCommentManager.openCommentList",
-            "enabledWhen": "!platform.project.{projectId}.isResource"
+            "when": "!platform.project.{projectId}.isResource"
           },
           {
             "label": "%webView_platformScriptureEditor_charactersInventory%",
@@ -379,7 +391,7 @@
             "group": "platformScriptureEditor.simpleToolsPanels",
             "order": 6,
             "command": "legacyCommentManager.showCommentListPanel",
-            "enabledWhen": "!platform.project.{projectId}.isResource"
+            "when": "!platform.project.{projectId}.isResource"
           }
         ]
       },
