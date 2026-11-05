@@ -118,7 +118,10 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
         // using, so data found corrupt partway through still releases the lock. The entry is
         // therefore decrypted and inflated twice; the returned bytes still come from the file
         // manager's read so its decryption rule stays the only one applied to them.
-        // TODO: drop this check once we consume a ParatextData with ubsicap/Paratext#678
+        // TODO: once we consume a ParatextData with ubsicap/Paratext#678, which releases the lock,
+        // read through the file manager first and CRC-check the bytes it returns, so each entry is
+        // decrypted once. The CRC check itself stays: nothing else makes it. See
+        // ResourceProjectStreamManagerTests.ParatextDataUpgrade_ReadEachEntryOnceIfTheLockFixShipped
         using (ZipFile archive = OpenArchive())
         {
             // Case-insensitive, like the file manager's lookup

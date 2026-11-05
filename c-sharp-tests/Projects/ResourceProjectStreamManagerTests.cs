@@ -288,6 +288,30 @@ namespace TestParanextDataProvider.Projects
             );
         }
 
+        /// <summary>
+        /// Upgrade tripwire. GetDataStream decrypts each entry twice only because this
+        /// ParatextData's file manager never releases its archive lock when an entry fails to open.
+        /// ubsicap/Paratext#678 fixes that; it merged into the 9.5 branch (3ea2cf56c3) after
+        /// 9.5.0.24 was published. Fails on any ParatextData upgrade so the order is revisited.
+        /// </summary>
+        [Test]
+        public void ParatextDataUpgrade_ReadEachEntryOnceIfTheLockFixShipped()
+        {
+            Assert.That(
+                typeof(Paratext.Data.ScrText).Assembly.GetName().Version,
+                Is.EqualTo(new Version(9, 5, 0, 24)),
+                "ParatextData was upgraded. If it includes ubsicap/Paratext#678 (merge commit "
+                    + "3ea2cf56c3 on the 9.5 branch), make ResourceProjectStreamManager.GetDataStream "
+                    + "read each entry once: read through the file manager, report a failure to "
+                    + "open (ParatextData throws FileNotFoundException for one) or to inflate as "
+                    + "InvalidDataException, then compare the CRC of the bytes it returned with the "
+                    + "entry's recorded CRC. Keep the CRC check: ZipCrypto's header check accepts "
+                    + "about 1 wrong password in 256, and neither ParatextData nor SharpZipLib's "
+                    + "ZipFile checks the CRC. Then delete this test. If the upgrade does not "
+                    + "include #678, change the version here."
+            );
+        }
+
         [Test]
         public void GetExistingDataStreamNames_NameGetDataStreamRefuses_IsNotListed()
         {
