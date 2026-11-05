@@ -6040,8 +6040,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   a disconnected process's keys so a restarted producer can republish. Until a producer publishes,
   a gate on that key reads as false, so an item gated on a positive fact is disabled for a moment
   after startup; a gate on a negated fact is enabled for that moment. **Amended 2026-11-02
-  (D3, provisional).** Originally: "Revisit when a second surface needs `enabledWhen` (overlay context menus) or
-  when key volume becomes noticeable." Tab menus and overlay context menus now honor `enabledWhen`
+  (D3, provisional).** Originally: "Revisit when a second surface needs `enabledWhen` (overlay
+  context menus) or when key volume becomes noticeable." Tab menus and overlay context menus now honor `enabledWhen`
   on command items; revisit when key volume becomes noticeable.
 - **Amendments (2026-11-02, review of #2959):**
   - **D1:** A producer's `remove` releases its key for any process. A `set` refused because another
@@ -6061,8 +6061,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - **D3 (provisional until UX review confirms it; as of 2026-11-05 that review has not
     happened):** what follows is what the code does, not yet a settled convention. UX is to decide
     whether a menu may change under the pointer while it is open, and with it whether the authoring
-    rule below stands. Every surface updates while open: toolbar, web view top menus, self-rendered menus,
-    tab menus and overlay context menus. On the macOS menubar, enabled/checked update in place on
+    rule below stands. Every surface updates while open: toolbar, web view top menus, self-rendered
+    menus, tab menus and overlay context menus. On the macOS menubar, enabled/checked update in place on
     the existing native items; a visibility or structure change rebuilds the menubar, because
     evaluation removes hidden items and prunes emptied containers. Behaviour while a native menu is
     open is unverified on a real Mac as of 2026-11-02. `enabledWhen` became allowed on tab-menu and

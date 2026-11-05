@@ -143,7 +143,8 @@ contribution'). So is `checkedWhen` on an item of a tab menu or overlay context 
 `enabledWhen` on a submenu item there. At runtime an expression that still fails to evaluate fails safe
 (`when` hides, `enabledWhen` disables, `checkedWhen` unchecks).
 
-**Template variables per surface.**
+**Template variables per surface.** Re-evaluation "including while open" is provisional until UX
+review confirms it; see "Choosing `when` vs `enabledWhen`" below.
 
 | Surface | Variables | Honors |
 |---|---|---|
