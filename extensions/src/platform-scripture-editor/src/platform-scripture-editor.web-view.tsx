@@ -3960,11 +3960,13 @@ function PlatformScriptureEditor({
         logger.debug(
           `Not saving the editor's content for ${editorDocumentKey} to ${savedChapterKey}: the editor has not loaded that chapter yet`,
         );
-        // After navigation the editor keeps showing, and editing, the chapter it is leaving until the
-        // next one loads, and a save of what is typed there is scheduled for the next chapter. If it
-        // fires first, it lands here and the typing is lost, so it is reported like any other edits
-        // lost to leaving a chapter. `usjSentToPdp` holds the last chapter delivered or sent for the
-        // document the editor holds.
+        // After navigation the editor keeps showing the chapter it is leaving until the next one
+        // loads, and a save of an edit made there is scheduled for the next chapter. Typing, pasting
+        // and the like are held off meanwhile (`usePauseEditing`), but an edit that does not come
+        // through the editor's own keyboard, such as one from the footnotes pane, still lands. If its
+        // save fires before the next chapter arrives, it lands here and the edit is lost, so it is
+        // reported like any other edits lost to leaving a chapter. `usjSentToPdp` holds the last
+        // chapter delivered or sent for the document the editor holds.
         if (
           editorDocument &&
           editorDocumentKey &&

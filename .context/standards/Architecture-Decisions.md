@@ -3291,10 +3291,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   claim ends", which is usually a fraction of a second. A save the backend reformats (Unicode
   normalization, some invisible characters; see `Scripture-Data-Fidelity-Catalog.md`) comes back
   looking like an outside change, so held edits behind it are thrown away and reported even though
-  nothing else changed the chapter. Typing into the chapter being left, after navigation starts and
-  before the next chapter loads, is lost too and reported either way: thrown away if the next
-  chapter arrives first, or refused by the save if the debounce fires first
-  (`isTypingLostToNavigation`); PT-5043 is to send it to the chapter it was typed in.
+  nothing else changed the chapter. While the next chapter loads after navigation, the editor holds
+  off typing, pasting and the like (`usePauseEditing`), but an edit that does not come through its
+  own keyboard (for example from the footnotes pane) can still reach the chapter being left.
+  It is lost and reported either way: thrown away if the next chapter arrives first, or refused by
+  the save if the debounce fires first (`isTypingLostToNavigation`); PT-5043 is to send it to the
+  chapter it was made in.
 - **Source:** PT-5043; paranext-core PR #2998.
 
 ## adr-editor-yields-to-window-focus-subject: The Scripture editor's typing hold yields to the window focus subject
