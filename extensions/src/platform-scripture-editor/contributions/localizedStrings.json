@@ -1319,9 +1319,6 @@
     "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip_2%": {
       "fallbackKey": "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip%"
     },
-    "%webView_platformScriptureEditor_error_bookNotFoundProject%": {
-      "fallbackKey": "%webView_platformScriptureEditor_bookNotAvailable_simpleMessage%"
-    },
     "%webView_platformScriptureEditor_error_syncEditBlocked%": {
       "deprecationInfo": {
         "date": "2026-10-13",

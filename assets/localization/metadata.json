@@ -203,6 +203,27 @@
   "%product_shortName%": {
     "fallbackKey": "%product_name%"
   },
+  "%projectSelector_boundButClosedTooltip%": {
+    "fallbackKey": "%manageBooks_projectSelector_boundButClosedTooltip%"
+  },
+  "%projectSelector_clearAll%": {
+    "fallbackKey": "%manageBooks_projectSelector_clearAll%"
+  },
+  "%projectSelector_groupSectionLabel%": {
+    "fallbackKey": "%manageBooks_projectSelector_groupSectionLabel%"
+  },
+  "%projectSelector_openButtonLabel%": {
+    "fallbackKey": "%manageBooks_projectSelector_openButtonLabel%"
+  },
+  "%projectSelector_openTabsSectionHeading%": {
+    "fallbackKey": "%manageBooks_projectSelector_openTabsSectionHeading%"
+  },
+  "%projectSelector_otherProjectsSectionHeading%": {
+    "fallbackKey": "%manageBooks_projectSelector_otherProjectsSectionHeading%"
+  },
+  "%projectSelector_searchPlaceholder%": {
+    "fallbackKey": "%manageBooks_projectSelector_searchPlaceholder%"
+  },
   "%project_settings_platform_isEditable_description%": {
     "deprecationInfo": {
       "date": "2026-05-26",

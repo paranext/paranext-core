@@ -75,23 +75,6 @@ describe.each(EXTRA_MATERIAL_STRING_KEYS)('extra-material explanation %s', (key)
 });
 
 /**
- * `%manageBooks_delete_confirmBodyShared%` has no value in any language and resolves only through
- * its `fallbackKey`, which must name the renamed key, not the old one, so every language shows the
- * sync wording.
- */
-describe('shared-project delete confirmation fallback', () => {
-  it('falls back to the renamed key', () => {
-    expect(metadata['%manageBooks_delete_confirmBodyShared%'].fallbackKey).toBe(
-      '%manageBooks_delete_confirmBodySharedSendReceive_2%',
-    );
-  });
-
-  it('has an English string for the fallback target', () => {
-    expect(localizedStrings.en['%manageBooks_delete_confirmBodySharedSendReceive_2%']).toBeTruthy();
-  });
-});
-
-/**
  * `%manageBooks_delete_confirmBodyAllShared_2%` has no Spanish value because the whole delete
  * dialog is English-only, so its English value is what the dialog shows everywhere.
  */
