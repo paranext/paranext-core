@@ -73,3 +73,8 @@ export function useCommentaryMarkerStyles(projectId: string | undefined): void {
   // when a commentary actually matched, so it never leaks into other projects/resources.
   useStylesheet(css ? `${css}\n${commentaryOverrides}` : undefined);
 }
+
+/** This is an internal-only export for testing purposes and should not be used in development */
+export const testingUseCommentaryMarkerStyles = {
+  COMMENTARY_STYLES_BY_DBL_ENTRY_UID,
+};
