@@ -84,6 +84,7 @@ import {
   showNewCommentThread,
   createCommentThreadClickHandlerFactory,
 } from './platform-scripture-editor.utils';
+import { getEditorViewOptions } from './editor-view-options.util';
 import { restoreSelectionIfLost } from './platform-scripture-editor.web-view.utils';
 
 /**
@@ -5320,12 +5321,6 @@ describe('resolveFootnotesPaneViewOptions', () => {
     hasSpacing: true,
     isFormattedFont: true,
   };
-  const standardViewOptions: ViewOptions = {
-    markerMode: 'editable',
-    noteMode: 'collapsed',
-    hasSpacing: true,
-    isFormattedFont: true,
-  };
 
   it('leaves Power on the main editor’s view options', () => {
     expect(
@@ -5333,7 +5328,7 @@ describe('resolveFootnotesPaneViewOptions', () => {
         isPowerMode: true,
         isInterfaceModeLoading: false,
         mainViewOptions,
-        standardViewOptions,
+        allowInvisibleCharacters: false,
       }),
     ).toBe(mainViewOptions);
   });
@@ -5344,10 +5339,25 @@ describe('resolveFootnotesPaneViewOptions', () => {
         isPowerMode: false,
         isInterfaceModeLoading: false,
         mainViewOptions,
-        standardViewOptions,
+        allowInvisibleCharacters: false,
       }),
-    ).toBe(standardViewOptions);
+    ).toEqual(getEditorViewOptions('standard', false, false));
   });
+
+  it.each([true, false])(
+    'spells no-break spaces in Simple’s pane as the project does (allowInvisibleCharacters %s)',
+    (allowInvisibleCharacters) => {
+      // Without it, Standard view reads a literal `~` in such a project as a no-break space.
+      expect(
+        resolveFootnotesPaneViewOptions({
+          isPowerMode: false,
+          isInterfaceModeLoading: false,
+          mainViewOptions,
+          allowInvisibleCharacters,
+        })?.allowInvisibleCharacters,
+      ).toBe(allowInvisibleCharacters);
+    },
+  );
 
   it('keeps the main editor’s view options while the interface mode is still loading', () => {
     // `isPowerMode` reads false until the mode loads, so a Power user's pane must not take
@@ -5357,7 +5367,7 @@ describe('resolveFootnotesPaneViewOptions', () => {
         isPowerMode: false,
         isInterfaceModeLoading: true,
         mainViewOptions,
-        standardViewOptions,
+        allowInvisibleCharacters: false,
       }),
     ).toBe(mainViewOptions);
   });

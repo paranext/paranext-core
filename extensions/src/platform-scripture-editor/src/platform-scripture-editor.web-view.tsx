@@ -179,6 +179,13 @@ import {
 } from './caret-restore.util';
 import { getEditorViewOptions } from './editor-view-options.util';
 import {
+  getPaneRowEditorOptions,
+  runPaneNoteEditRequest,
+  settleRowEditorBeforeClose,
+} from './pane-row-editor.utils';
+import { useHeldPaneRowEditor } from './use-held-pane-row-editor.hook';
+import { useReapplyCallerHighlight } from './use-reapply-caller-highlight.hook';
+import {
   applyChapterSavePreparation,
   CARET_AT_DOCUMENT_END,
   ChapterMarkerCaretTarget,
@@ -3200,39 +3207,19 @@ function PlatformScriptureEditor({
         isPowerMode,
         isInterfaceModeLoading,
         mainViewOptions: options.view,
-        standardViewOptions: getEditorViewOptions(
-          'standard',
-          isPowerMode,
-          allowInvisibleCharacters,
-        ),
+        allowInvisibleCharacters,
       }),
     [isPowerMode, isInterfaceModeLoading, options.view, allowInvisibleCharacters],
   );
-  /**
-   * {@link footnotesPaneViewOptions}, held while a row-editor session ends. When the pane stops
-   * being the editing surface, the row editor stays mounted until the effect that closes its
-   * session runs, and by then the pane's options can already be another view's: Power's Formatted
-   * view hides markers. The editor runs its marker engine only in editable marker mode and tears it
-   * down before any effect of that commit runs, so the close could no longer settle a marker rename
-   * still pending under the caret. Written during render so the row editor never renders a commit
-   * on the next view's options.
-   */
-  const rowEditorViewOptionsRef = useRef(footnotesPaneViewOptions);
-  if (noteEditingSurface === 'pane' || paneEditingIndex === undefined)
-    rowEditorViewOptionsRef.current = footnotesPaneViewOptions;
-  const rowEditorViewOptions = rowEditorViewOptionsRef.current;
-  /**
-   * `options` with the pane's view options, for the pane's row editor. Structure protection is off
-   * there, as it is in Power mode: a note has no verse or paragraph structure of its own to
-   * protect, its edits only ever replace the note itself, and 'protected' would claim Enter before
-   * the note's own `\fp` handling could run.
-   */
-  const paneFootnoteEditorOptions = useMemo<EditorOptions>(
-    () => ({
-      ...options,
-      view: rowEditorViewOptions,
-      structureProtectionMode: 'off',
-    }),
+  /** The row editor the pane renders, held while a session ended from outside closes */
+  const heldPaneRowEditor = useHeldPaneRowEditor(
+    footnotesPaneViewOptions,
+    noteEditingSurface,
+    paneEditingIndex,
+  );
+  const rowEditorViewOptions = heldPaneRowEditor.viewOptions;
+  const paneFootnoteEditorOptions = useMemo(
+    () => getPaneRowEditorOptions(options, rowEditorViewOptions),
     [options, rowEditorViewOptions],
   );
   // What the failure in hand IS, independent of what is on screen. Parsed once per failure, and
@@ -3630,35 +3617,26 @@ function PlatformScriptureEditor({
       // The old chapter's note, while the new chapter loads (see `navigateToNote`): its session
       // would only be ended by the load.
       if (editorChapterKeyRef.current !== toBookChapterKey(scrRefRef.current)) return;
-      // A popover that outlived a switch into this view still holds its session, and it applies its
-      // text only on Save: opening a row editor would close it and discard what was typed. The text
-      // still moves to the note, as Space on the row does, but the row is left merely selected
-      // until the popover is saved or closed.
-      if (showFootnoteEditorRef.current) {
-        navigateToNote(index);
-        return;
-      }
-      // A row editor open on another note is ended through the normal close path BEFORE this note
-      // is read, as Space on another row does. The row editor stays mounted and simply loads the
-      // next note, and a load flushes the outgoing note unsettled: a marker rename still pending
-      // under its caret would be lost. The close also lands that flush while its session still
-      // owns it, and the key and op read below then come from the document it produced.
-      if (
-        shouldEndPaneNoteEditOnRowSelect({
-          paneEditingIndex: paneEditingIndexRef.current,
-          selectedIndex: index,
-        })
-      )
-        closeFootnoteEditorRef.current(false);
-      navigateToNote(index);
-      const noteKey = editorRef.current?.getNoteKey(index);
-      const noteOp = editorRef.current?.getNoteOps(index)?.at(0);
-      if (!noteKey || !noteOp || !isInsertEmbedOpOfType('note', noteOp)) {
-        // Nothing valid to load into a row editor, so the row is left merely selected.
-        logger.warn(`footnotes pane: note ${index} produced no valid note op; selecting only`);
-        return;
-      }
-      startPaneNoteEdit(index, noteKey, noteOp, caretPosition);
+      runPaneNoteEditRequest(index, {
+        isPopoverOpen: showFootnoteEditorRef.current,
+        paneEditingIndex: paneEditingIndexRef.current,
+        navigateToNote,
+        // The close lands the outgoing note's flush while its session still owns it, so the key and
+        // op read below come from the document it produced.
+        endPaneNoteEdit: () => closeFootnoteEditorRef.current(false),
+        startPaneNoteEdit: (noteIndex) => {
+          const noteKey = editorRef.current?.getNoteKey(noteIndex);
+          const noteOp = editorRef.current?.getNoteOps(noteIndex)?.at(0);
+          if (!noteKey || !noteOp || !isInsertEmbedOpOfType('note', noteOp)) {
+            // Nothing valid to load into a row editor, so the row is left merely selected.
+            logger.warn(
+              `footnotes pane: note ${noteIndex} produced no valid note op; selecting only`,
+            );
+            return;
+          }
+          startPaneNoteEdit(noteIndex, noteKey, noteOp, caretPosition);
+        },
+      });
     },
     [navigateToNote, startPaneNoteEdit],
   );
@@ -4204,16 +4182,8 @@ function PlatformScriptureEditor({
     // brand-new note and re-opens an editor on it. Flushing here keeps every close path going
     // through the same session-integrity branch every other change does.
     //
-    // The flush settles every pending marker except the one under the caret of a FOCUSED editor,
-    // so focus is released first, as the row editor's own close does: a session ended from outside
-    // while the user is still typing in the row (a switch to Power mode, the text turning
-    // read-only) is the user leaving that marker too.
-    if (paneEditingIndexRef.current !== undefined) {
-      const rowEditor = paneNoteEditorRef.current;
-      if (rowEditor?.containsFocus() && document.activeElement instanceof HTMLElement)
-        document.activeElement.blur();
-      rowEditor?.flushPendingEdits();
-    }
+    if (paneEditingIndexRef.current !== undefined)
+      settleRowEditorBeforeClose(paneNoteEditorRef.current, document);
     if (deleteIfNew && editingNoteIsNew.current && editingNoteKey.current)
       editorRef.current?.replaceEmbedUpdate(editingNoteKey.current, []);
     editingNoteIsNew.current = false;
@@ -4334,9 +4304,7 @@ function PlatformScriptureEditor({
   // rule's inputs can still hold on return with nothing else to re-apply the border.
   // `usesPaneModelRef` is updated by an effect declared above this one, so the resolver reads the
   // model this effect is reacting to.
-  useEffect(() => {
-    applyCallerHighlight();
-  }, [viewType, usesPaneModel, applyCallerHighlight]);
+  useReapplyCallerHighlight(applyCallerHighlight, viewType, usesPaneModel);
 
   // The row editor exists only where the pane IS the editing surface, so leaving a pane-model view
   // or losing editability ends the session. The row stays mounted, on the view options it was
@@ -5661,11 +5629,8 @@ function PlatformScriptureEditor({
                 onClose={hideFootnotesPane}
                 showMarkers={footnotesPaneViewOptions?.markerMode !== 'hidden'}
                 focusRequest={footnotePaneFocusRequest}
-                // Not gated on `noteEditingSurface`: when the pane stops being the editing surface,
-                // the row editor has to stay mounted until the effect that ends the session runs,
-                // so that close can settle a marker rename still pending under its caret (see
-                // `rowEditorViewOptionsRef` and `closeFootnoteEditor`).
-                editingFootnoteIndex={paneEditingIndex}
+                // Held until the session ends, whatever the editing surface (`useHeldPaneRowEditor`)
+                editingFootnoteIndex={heldPaneRowEditor.editingFootnoteIndex}
                 renderEditingFootnote={renderPaneFootnoteEditor}
                 // Only where the pane IS the editing surface: elsewhere (and in a read-only text)
                 // a row click selects rather than opens a row editor.

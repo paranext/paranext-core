@@ -76,7 +76,7 @@ function describeReachableView(persistedViewType: PersistedViewType, isPowerMode
       isPowerMode,
       isInterfaceModeLoading,
       mainViewOptions: mainViewOptions(allowInvisibleCharacters),
-      standardViewOptions: getEditorViewOptions('standard', isPowerMode, allowInvisibleCharacters),
+      allowInvisibleCharacters,
     });
   // A normal project the user can edit, with every setting loaded and no sync in progress, so only
   // the view itself can make the text read-only.

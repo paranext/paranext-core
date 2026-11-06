@@ -57,6 +57,7 @@ import type { MutableRefObject } from 'react';
 // extension activation. See platform-scripture-editor.web-view.utils.ts's header.
 import type { DeltaOp, EditorRef, ViewOptions } from '@eten-tech-foundation/platform-editor';
 import type { MarkerMenuItem } from 'platform-bible-react';
+import { getEditorViewOptions } from './editor-view-options.util';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 import { SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE } from './scripture-text-grid-web-view-type.const';
 
@@ -549,24 +550,29 @@ export function resolveNoteEditingSurface({
  * whatever the mode really is, so the pane follows the main editor then: a Power user's pane never
  * briefly takes Simple's answer.
  *
+ * Standard view's options carry the project's `allowInvisibleCharacters`, so Simple's pane reads a
+ * literal `~` as the project spells it rather than as a no-break space.
+ *
  * @param options.isPowerMode Whether `platform.interfaceMode` is 'power'
  * @param options.isInterfaceModeLoading Whether `platform.interfaceMode` is still loading
  * @param options.mainViewOptions The main editor's view options
- * @param options.standardViewOptions Standard view's view options
+ * @param options.allowInvisibleCharacters The project's
+ *   `platformScripture.allowInvisibleCharacters`
  * @returns The view options for the footnotes pane and its row editor
  */
 export function resolveFootnotesPaneViewOptions({
   isPowerMode,
   isInterfaceModeLoading,
   mainViewOptions,
-  standardViewOptions,
+  allowInvisibleCharacters,
 }: {
   isPowerMode: boolean;
   isInterfaceModeLoading: boolean;
   mainViewOptions: ViewOptions | undefined;
-  standardViewOptions: ViewOptions;
+  allowInvisibleCharacters: boolean;
 }): ViewOptions | undefined {
-  return isPowerMode || isInterfaceModeLoading ? mainViewOptions : standardViewOptions;
+  if (isPowerMode || isInterfaceModeLoading) return mainViewOptions;
+  return getEditorViewOptions('standard', isPowerMode, allowInvisibleCharacters);
 }
 
 /**

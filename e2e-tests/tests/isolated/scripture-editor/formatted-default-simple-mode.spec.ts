@@ -206,6 +206,15 @@ test.describe('scripture editor default view', () => {
       expect(await noteStyle()).toEqual(readOnlyStyle);
     });
 
+    await test.step('the footnotes pane shows markers while the text hides them', async () => {
+      // Simple's pane renders with Standard view's options (`resolveFootnotesPaneViewOptions`);
+      // the text keeps Simple's own and hides its markers. The pane is visible from the step above.
+      const rows = editorFrame.locator('[data-footnotes-pane] li[role="option"]');
+      await expect(rows.first().locator('.marker').first()).toBeAttached({ timeout: 20_000 });
+      await expect(editorFrame.locator('.editor-input.marker-hidden').first()).toBeAttached();
+      await expect(editorFrame.locator('span.opening[data-marker]')).toHaveCount(0);
+    });
+
     await test.step('Ctrl+E changes nothing in Simple', async () => {
       const mainInput = editorFrame.locator('.editor-input.marker-hidden');
       // A verse paragraph with no note, so the click moves the caret rather than opening a note.
