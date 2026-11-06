@@ -47,7 +47,6 @@ import {
   Button,
   COMMENT_EDITOR_STRING_KEYS,
   CommentEditor,
-  ContentZoomRoot,
   EditorKeyboardShortcuts,
   FOOTNOTE_EDITOR_STRING_KEYS,
   type FootnoteCaretPosition,
@@ -291,9 +290,8 @@ import {
 } from './platform-scripture-editor.web-view.utils';
 import { matchEditorChord, runEditorChord, shouldRunEditorChord } from './editor-chords.util';
 import { useGuardedProjectSetting } from './use-guarded-project-setting.hook';
-import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component';
-import { TwoStepDeleteTooltipOverlay } from './two-step-delete-tooltip/two-step-delete-tooltip-overlay.component';
-import { CharacterMarkerBarOverlay } from './character-marker-bar/character-marker-bar-overlay.component';
+import { EditorSurface } from './editor-surface.component';
+import { FootnoteEditorPopover } from './footnote-editor-popover.component';
 import { CharacterMarkerBar } from './character-marker-bar/character-marker-bar.component';
 import { shouldShowCharacterMarkerBar } from './character-marker-bar/character-marker-bar.utils';
 import { REMOVE_CHARACTER_MARKER_STRING_KEYS } from './character-marker-bar/use-remove-character-marker.hook';
@@ -420,18 +418,6 @@ const ANNOTATION_TYPE_TRANSLATOR_COMMENT = 'translator-comment';
 
 /** Annotation ID used for a pending comment that hasn't been saved yet */
 const PENDING_COMMENT_ANNOTATION_ID = 'pending-comment';
-
-/**
- * The footnote editor popover's minimum width: 500 px, yielding to the pane's available width so
- * the popover still fits a narrow pane. Until Radix has published the available width, the viewport
- * width stands in for it: the footnote editor locks its own width on its first layout, which
- * happens before that.
- *
- * Set inline rather than as a Tailwind arbitrary class: the web view's SCSS + PostCSS pipeline
- * drops a rule whose value is this `min()` expression, so the minimum is an inline style.
- */
-const FOOTNOTE_POPOVER_MIN_WIDTH =
-  'min(500px, var(--radix-popover-content-available-width, 100vw))';
 
 /** Prefix the editor puts on annotation type when calling the annotation's callbacks */
 const EDITOR_ANNOTATION_TYPE_PREFIX = 'external-';
@@ -5297,38 +5283,6 @@ function PlatformScriptureEditor({
       );
     }
 
-    const editorTree = (
-      <TwoStepDeleteTooltipOverlay>
-        {/* The Scripture text's `main` zoom area holds the editor and nothing else. The overlays
-            around it — this one's Backspace/Delete hint, the paragraph-marker tooltips and the
-            Simple-mode character-marker bar — stay at interface scale and place themselves from
-            rect differences, which a zoomed element reports in the same viewport pixels. The area
-            sits INSIDE this overlay rather than around it because the overlay positions its hint
-            relative to its own wrapper: inside the zoom, the hint's CSS offsets would be multiplied
-            by the zoom factor and land away from the verse. The wrapper holds no text itself. */}
-        <ContentZoomRoot>
-          <EditorKeyboardShortcuts editorRef={editorRef}>
-            <Editorial
-              ref={editorRef}
-              scrRef={scrRef}
-              onScrRefChange={setScrRefNoScroll}
-              options={options}
-              logger={logger}
-              onUsjChange={isReadOnlyEffective ? undefined : handleEditorialUsjChange}
-              onSelectionChange={handleSelectionChange}
-              onParaMarkerMenuRequest={handleParagraphMarkerMenuRequest}
-              onStateChange={(state) => {
-                setCanUndo(state.canUndo);
-                setCanRedo(state.canRedo);
-                setBlockMarker(state.blockMarker);
-                setContextMarker(state.contextMarker);
-              }}
-            />
-          </EditorKeyboardShortcuts>
-        </ContentZoomRoot>
-      </TwoStepDeleteTooltipOverlay>
-    );
-
     // Simple mode only. This view REPLACES the editing surface (the subtree below is
     // `display: none`, which takes it out of both the accessibility tree and the tab order), and the
     // scaffold button is the only way back in — but `showButton` withholds it for read-only
@@ -5340,74 +5294,70 @@ function PlatformScriptureEditor({
     return (
       <>
         {workaround}
-        {showEmptyChapterView && (
-          <EmptyChapterView
-            localizedStrings={localizedStrings}
-            isAddChapterNumberProtected={isAddChapterNumberProtected}
-            isResource={isResource}
-            showButton={
-              !isReadOnlyEffective &&
-              lastVersesInCurrentBook !== undefined &&
-              canAddChapterNumber(lastVerse) &&
-              bookHoldsChapters(scrRef.book)
-            }
-            onAddChapterNumber={handleAddChapterNumber}
-            announcementKey={`${projectId}:${scrRef.book} ${scrRef.chapterNum}`}
-          />
-        )}
-        {/* The empty-chapter view HIDES this subtree rather than replacing it, for the same reason
-            the overlay below is mounted in both modes: unmounting would take Lexical's undo history
-            and the scroll position with it, and a blank chapter is transient — adding a chapter
-            number flips `isBlankChapter` straight back. The overlay lives INSIDE this wrapper so the
-            bar is hidden along with the text it annotates rather than painting beside an empty
-            chapter.
-
-            Being hidden HERE is not the case the overlay's `useViewVisibility` deferral handles:
-            that hook reports on this iframe's own visibility (whether the tab is active), so it
-            still reads visible while this inner subtree is `display: none`. What covers this case
-            is the overlay's zero-geometry guard — it declines to position, and crucially declines
-            to latch `hasPositionedRef`, when the editor root has no layout — plus its
-            ResizeObserver, which fires when the subtree regains layout because `display: none`
-            collapses the observed anchor to a 0x0 box. */}
-        <div className={showEmptyChapterView ? 'tw:hidden' : undefined}>
-          {/* The overlay is mounted in BOTH modes and only its `bar` slot is gated, so the element type
-            at this position never changes. Choosing between two different wrappers here would make
-            React unmount and remount `editorTree` whenever the mode changes — including the very
-            first resolution of `platform.interfaceMode`, which starts at its 'simple' default before
-            the stored value arrives — taking Lexical's undo history and the scroll position with it.
-            An empty slot renders nothing beside the editor.
-
-            `shouldShowCharacterMarkerBar` gates the bar on the same two conditions the gutter
-            reservation in `_simple-mode.scss` matches on, so the bar and the space it occupies stay
-            inseparable: if this view ever stops using the paragraph-structure preset — a Simple
-            view-option chooser would do it — the reservation and the bar disappear together instead
-            of leaving the bar painting over project text. */}
-          <CharacterMarkerBarOverlay
-            bar={
-              shouldShowCharacterMarkerBar(isPowerMode, viewOptions) ? (
-                <CharacterMarkerBar
-                  editorRef={editorRef}
-                  getSelection={getSelection}
-                  blockMarker={blockMarker}
-                  contextMarker={contextMarker}
-                  isSyncBlocked={isSyncBlocked}
-                  // Snapshotted into version history before a removal; absent means no snapshot.
-                  projectId={projectId}
-                  isChapterLoading={isChapterLoading}
-                  // The same direction the editor itself is given below. The marker menu portals to
-                  // `document.body`, outside that `dir` element, so it can only mirror its alignment for
-                  // an RTL project if the direction is handed to it explicitly.
-                  textDirection={textDirectionEffective}
-                  localizedStrings={localizedStrings}
-                />
-              ) : undefined
-            }
-          >
-            <ParagraphMarkerTooltipOverlay enabled={!isPowerMode}>
-              {editorTree}
-            </ParagraphMarkerTooltipOverlay>
-          </CharacterMarkerBarOverlay>
-        </div>
+        <EditorSurface
+          editor={
+            <EditorKeyboardShortcuts editorRef={editorRef}>
+              <Editorial
+                ref={editorRef}
+                scrRef={scrRef}
+                onScrRefChange={setScrRefNoScroll}
+                options={options}
+                logger={logger}
+                onUsjChange={isReadOnlyEffective ? undefined : handleEditorialUsjChange}
+                onSelectionChange={handleSelectionChange}
+                onParaMarkerMenuRequest={handleParagraphMarkerMenuRequest}
+                onStateChange={(state) => {
+                  setCanUndo(state.canUndo);
+                  setCanRedo(state.canRedo);
+                  setBlockMarker(state.blockMarker);
+                  setContextMarker(state.contextMarker);
+                }}
+              />
+            </EditorKeyboardShortcuts>
+          }
+          characterMarkerBar={
+            // Gated on the same two conditions the gutter reservation in `_simple-mode.scss`
+            // matches on, so the bar and the space it occupies stay inseparable: if this view ever
+            // stops using the paragraph-structure preset — a Simple view-option chooser would do
+            // it — the reservation and the bar disappear together instead of leaving the bar
+            // painting over project text.
+            shouldShowCharacterMarkerBar(isPowerMode, viewOptions) ? (
+              <CharacterMarkerBar
+                editorRef={editorRef}
+                getSelection={getSelection}
+                blockMarker={blockMarker}
+                contextMarker={contextMarker}
+                isSyncBlocked={isSyncBlocked}
+                // Snapshotted into version history before a removal; absent means no snapshot.
+                projectId={projectId}
+                isChapterLoading={isChapterLoading}
+                // The same direction the editor itself is given below. The marker menu portals to
+                // `document.body`, outside that `dir` element, so it can only mirror its alignment for
+                // an RTL project if the direction is handed to it explicitly.
+                textDirection={textDirectionEffective}
+                localizedStrings={localizedStrings}
+              />
+            ) : undefined
+          }
+          areParagraphMarkerTooltipsEnabled={!isPowerMode}
+          emptyChapterView={
+            showEmptyChapterView ? (
+              <EmptyChapterView
+                localizedStrings={localizedStrings}
+                isAddChapterNumberProtected={isAddChapterNumberProtected}
+                isResource={isResource}
+                showButton={
+                  !isReadOnlyEffective &&
+                  lastVersesInCurrentBook !== undefined &&
+                  canAddChapterNumber(lastVerse) &&
+                  bookHoldsChapters(scrRef.book)
+                }
+                onAddChapterNumber={handleAddChapterNumber}
+                announcementKey={`${projectId}:${scrRef.book} ${scrRef.chapterNum}`}
+              />
+            ) : undefined
+          }
+        />
       </>
     );
   }
@@ -5675,27 +5625,21 @@ function PlatformScriptureEditor({
         </PopoverContent>
       </Popover>
       {/** Footnote editor components */}
-      <Popover open={showFootnoteEditor}>
-        <PopoverAnchor virtualRef={notePopoverAnchor.virtualRef} />
-        <PopoverContent
-          className="tw:w-max tw:p-[10px]"
-          style={{ minWidth: FOOTNOTE_POPOVER_MIN_WIDTH }}
-        >
-          <FootnoteEditor
-            classNameForEditor="scripture-font"
-            noteOps={editingNoteOps.current}
-            noteKey={editingNoteKey.current}
-            onClose={onFootnoteEditorClose}
-            onNoteEdit={onFootnoteEditorNoteEdit}
-            scrRef={scrRef}
-            editorOptions={options}
-            defaultMarkerMenuTrigger={INLINE_MARKERS_MENU_TRIGGER}
-            localizedStrings={localizedStrings}
-            parentEditorRef={editorRef}
-            markerPalette={footnoteMarkerPalette}
-          />
-        </PopoverContent>
-      </Popover>
+      <FootnoteEditorPopover open={showFootnoteEditor} anchorRef={notePopoverAnchor.virtualRef}>
+        <FootnoteEditor
+          classNameForEditor="scripture-font"
+          noteOps={editingNoteOps.current}
+          noteKey={editingNoteKey.current}
+          onClose={onFootnoteEditorClose}
+          onNoteEdit={onFootnoteEditorNoteEdit}
+          scrRef={scrRef}
+          editorOptions={options}
+          defaultMarkerMenuTrigger={INLINE_MARKERS_MENU_TRIGGER}
+          localizedStrings={localizedStrings}
+          parentEditorRef={editorRef}
+          markerPalette={footnoteMarkerPalette}
+        />
+      </FootnoteEditorPopover>
       {/** Comment editor for creating new comment threads */}
       <Popover open={showCommentEditor}>
         <PopoverAnchor virtualRef={commentPopoverAnchor.virtualRef} />
