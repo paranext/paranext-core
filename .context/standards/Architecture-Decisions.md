@@ -3292,9 +3292,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   normalization, some invisible characters; see `Scripture-Data-Fidelity-Catalog.md`) comes back
   looking like an outside change, so held edits behind it are thrown away and reported even though
   nothing else changed the chapter. Typing into the chapter being left, after navigation starts and
-  before the next chapter loads, is thrown away and reported only if the next chapter arrives while
-  it is still waiting to be saved; if the debounce fires first, that save is dropped with a debug
-  line, as before.
+  before the next chapter loads, is lost too and reported either way: thrown away if the next
+  chapter arrives first, or refused by the save if the debounce fires first
+  (`isTypingLostToNavigation`); PT-5043 is to send it to the chapter it was typed in.
 - **Source:** PT-5043; paranext-core PR #2998.
 
 ## adr-editor-yields-to-window-focus-subject: The Scripture editor's typing hold yields to the window focus subject
