@@ -51,12 +51,6 @@
     "%webView_find_allBooks%": {
       "fallbackKey": "%comment_filter_scope_all_books%"
     },
-    "%webView_find_noOpenProjects_results%": {
-      "fallbackKey": "%webView_find_noOpenProjectsOrResources_results%"
-    },
-    "%webView_find_projectFilter_noOpenProjects%": {
-      "fallbackKey": "%webView_find_projectFilter_noOpenProjectsOrResources%"
-    },
     "%webView_find_projectFilter_noProjectsFound%": {
       "fallbackKey": "%webView_checksSidePanel_projectFilter_noProjectsFound%"
     },
@@ -64,21 +58,18 @@
       "fallbackKey": "%webView_checksSidePanel_projectFilter_label%"
     },
     "%webView_find_projectSelector_searchPlaceholder%": {
-      "fallbackKey": "%projectSelector_searchPlaceholder%",
       "deprecationInfo": {
         "date": "2026-09-11",
         "message": "Superseded by the platform-wide %projectSelector_searchPlaceholder% key."
       }
     },
     "%webView_find_projectSelector_openTabsSectionHeading%": {
-      "fallbackKey": "%projectSelector_openTabsSectionHeading%",
       "deprecationInfo": {
         "date": "2026-09-11",
         "message": "Superseded by the platform-wide %projectSelector_openTabsSectionHeading% key."
       }
     },
     "%webView_find_projectSelector_otherProjectsSectionHeading%": {
-      "fallbackKey": "%projectSelector_otherProjectsSectionHeading%",
       "deprecationInfo": {
         "date": "2026-09-11",
         "message": "Superseded by the platform-wide %projectSelector_otherProjectsSectionHeading% key."
@@ -163,38 +154,15 @@
       "notes": "Toast after Replace All in the Find tab, when nothing was replaced: each result either changed after the search or would delete a marker if replaced."
     },
     "%manageBooks_projectSelector_boundButClosedTooltip%": {
-      "fallbackKey": "%projectSelector_boundButClosedTooltip%",
       "deprecationInfo": {
         "date": "2026-09-11",
         "message": "Superseded by the platform-wide %projectSelector_boundButClosedTooltip% key."
       }
     },
     "%manageBooks_projectSelector_clearAll%": {
-      "fallbackKey": "%projectSelector_clearAll%",
       "deprecationInfo": {
         "date": "2026-09-11",
         "message": "Superseded by the platform-wide %projectSelector_clearAll% key."
-      }
-    },
-    "%manageBooks_projectSelector_filterAriaLabel%": {
-      "fallbackKey": "%projectSelector_groupByAriaLabel%",
-      "deprecationInfo": {
-        "date": "2026-09-11",
-        "message": "The Filter menu is now the Group by menu. Superseded by the platform-wide %projectSelector_groupByAriaLabel% key."
-      }
-    },
-    "%manageBooks_projectSelector_filterGroupByOpenTabs%": {
-      "fallbackKey": "%projectSelector_grouping_openTabs_label%",
-      "deprecationInfo": {
-        "date": "2026-09-11",
-        "message": "Superseded by the platform-wide %projectSelector_grouping_openTabs_label% key, which labels the built-in openTabs grouping."
-      }
-    },
-    "%manageBooks_projectSelector_filterSectionLabel%": {
-      "fallbackKey": "%projectSelector_groupSectionLabel%",
-      "deprecationInfo": {
-        "date": "2026-09-11",
-        "message": "Superseded by the platform-wide %projectSelector_groupSectionLabel% key."
       }
     },
     "%manageBooks_projectSelector_filterShowSelectedOnly%": {
@@ -204,35 +172,30 @@
       }
     },
     "%manageBooks_projectSelector_groupSectionLabel%": {
-      "fallbackKey": "%projectSelector_groupSectionLabel%",
       "deprecationInfo": {
         "date": "2026-09-11",
         "message": "Superseded by the platform-wide %projectSelector_groupSectionLabel% key."
       }
     },
     "%manageBooks_projectSelector_openButtonLabel%": {
-      "fallbackKey": "%projectSelector_openButtonLabel%",
       "deprecationInfo": {
         "date": "2026-09-11",
         "message": "Superseded by the platform-wide %projectSelector_openButtonLabel% key."
       }
     },
     "%manageBooks_projectSelector_openTabsSectionHeading%": {
-      "fallbackKey": "%projectSelector_openTabsSectionHeading%",
       "deprecationInfo": {
         "date": "2026-09-11",
         "message": "Superseded by the platform-wide %projectSelector_openTabsSectionHeading% key."
       }
     },
     "%manageBooks_projectSelector_otherProjectsSectionHeading%": {
-      "fallbackKey": "%projectSelector_otherProjectsSectionHeading%",
       "deprecationInfo": {
         "date": "2026-09-11",
         "message": "Superseded by the platform-wide %projectSelector_otherProjectsSectionHeading% key."
       }
     },
     "%manageBooks_projectSelector_searchPlaceholder%": {
-      "fallbackKey": "%projectSelector_searchPlaceholder%",
       "deprecationInfo": {
         "date": "2026-09-11",
         "message": "Superseded by the platform-wide %projectSelector_searchPlaceholder% key."
@@ -245,26 +208,13 @@
       }
     },
     "%markersChecklist_toolbar_comparativeTexts%": {
-      "fallbackKey": "%markersChecklist_toolbar_comparativeProjects%",
       "deprecationInfo": {
         "date": "2026-09-14",
         "message": "Superseded by %markersChecklist_toolbar_comparativeProjects%, which says \"projects\" rather than \"texts\" to match what the picker selects."
       }
     },
-    "%manageBooks_copy_confirmMergeFromSource%": {
-      "fallbackKey": "%manageBooks_copy_onlyNonExistingChapters%"
-    },
-    "%manageBooks_import_mergeFromFiles%": {
-      "fallbackKey": "%manageBooks_import_onlyNonExistingChapters%"
-    },
-    "%manageBooks_delete_confirmBodyShared%": {
-      "fallbackKey": "%manageBooks_delete_confirmBodySharedSendReceive_2%"
-    },
-    "%manageBooks_copy_confirmBody%": {
-      "fallbackKey": "%manageBooks_copy_confirmBodyWithBooks_other%"
-    },
-    "%manageBooks_view_diff_label%": {
-      "fallbackKey": "%manageBooks_view_compareVersions_label%"
+    "%markersChecklist_toolbar_comparativeProjects%": {
+      "fallbackKey": "%markersChecklist_toolbar_comparativeTexts%"
     },
     "%inventoryName_Character%": {
       "fallbackKey": "%CheckType_3%"
@@ -343,9 +293,6 @@
     },
     "%inventoryOptionName_SentenceFinalCapitalization_Abbreviations%": {
       "fallbackKey": "%SentenceFinalPunctCapitalizationCheck_5%"
-    },
-    "%webView_checksSidePanel_projectFilter_projectsAndResources%": {
-      "fallbackKey": "%webView_checksSidePanel_projectFilter_label%"
     },
     "%webView_platformScripture_error_syncEditBlocked%": {
       "deprecationInfo": {

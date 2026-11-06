@@ -1,10 +1,10 @@
 ---
 title: Localization Guide
 description: Mandatory localization patterns for all user-facing text in paranext-core — UI web views (TS) and C# backend services.
-version: 1.8.0
+version: 1.9.0
 status: active
 created: 2026-03-04
-last_updated: 2026-10-19
+last_updated: 2026-11-06
 toc: true
 ---
 
@@ -406,14 +406,13 @@ Common reusable keys (check if they exist first):
 
 ### If a String Needs Replacement
 
-When a string needs a different value, add a new key; the old key and its values stay exactly as they are. This is the one replacement recipe, whether a single label changes or a term changes across the whole product:
+When a string's meaning or wording must change, add a new key. The old key keeps all its values, and its metadata gets `deprecationInfo`. This is the one replacement recipe, whether a single label changes or a term changes across the whole product:
 
 1. **Add the NEW key** with the new value in every language the old key has a value in.
-2. **Put `fallbackKey` on the NEW key**, pointing at the OLD key.
+2. **Decide whether the NEW key falls back to the OLD key.** Give the new key `fallbackKey` → the old key only if the meanings are close enough that the old translation is acceptable for the new text: a light rewording, a name change for the same thing, the same label moved to a shared key. If a translation of the old text would say something the new text does not, give the new key no `fallbackKey`; English is a better fallback than a translation that means something else.
 3. **Switch every consumer** to the new key.
 4. **Verify the old key has no remaining consumer** in implementation code: the only hits for it should be the strings file and the metadata.
-5. **Re-point any `fallbackKey` that targets the old key** (an older key that has no value of its own and resolves through it) at the new key.
-6. **Add `deprecationInfo` to the OLD key's metadata**, recording that it was superseded and naming the new key. The old key and all its values stay.
+5. **Add `deprecationInfo` to the OLD key's metadata**, recording that it was superseded and naming the new key. The old key and all its values stay, and the old key gets no `fallbackKey`.
 
 ```json
 {
@@ -440,20 +439,31 @@ When a string needs a different value, add a new key; the old key and its values
 The example shows English only for brevity; every language the old key has a value in gets the new key too.
 
 **What this achieves:**
-- A language that has not translated the new key yet shows its old translation (in the user's first interface language that has strings — see [Fallback Chain](#fallback-chain-how-missing-translations-are-handled)).
-- Anyone still requesting the old key — a third-party extension, a translator working from an older export — keeps getting the old text, unchanged.
+- When the new key falls back to the old key, a language that has not translated the new key yet shows its old translation (in the user's first interface language that has strings — see [Fallback Chain](#fallback-chain-how-missing-translations-are-handled)). That includes a third-party localization that only ever translated the old key.
+- Anyone still requesting the old key — a third-party extension, a translator working from an older export — keeps getting the old text, unchanged, and the request logs the deprecation warning.
 
-**Why the `fallbackKey` sits on the new key:** the lookup reads a key's `fallbackKey` only in a language where the key itself has no value. The old key has a value in every language the new key has, so a `fallbackKey` on the OLD key never fires; the one on the NEW key is what carries the fallback. `deprecationInfo` is where "superseded by" is recorded, and it only logs a warning when the old key is requested. The same shape — a key borrowing an existing key's translations — is the house pattern for `fallbackKey` across the repo, most often a Paratext 10 key falling back to its Paratext 9 counterpart.
+#### `fallbackKey` Points From New to Old, Never From Old to New
+
+`fallbackKey` lets a key borrow an existing key's translations, so it always sits on the newer key and names the older one. It has two uses: a lightly reworded key keeps showing the translations that third-party localizations supplied for the key it replaces, and a Paratext 10 key bridges forward the translation of its Paratext 9 counterpart.
+
+**Never put a `fallbackKey` on an old key pointing at a new one**, and never retire a key by deleting its values and redirecting it to its successor. To retire a key, keep its values and add `deprecationInfo`. A redirect from old to new is harmful wherever it can fire:
+
+- The lookup reads a key's `fallbackKey` only in a language where the key itself has no value. In a language this repo ships, the old key keeps its values, so the redirect can fire there only if those values were deleted — which the immutability rule above forbids.
+- It fires in a language this repo does not maintain, where a third-party localization has the new key but not the old one. Anyone still requesting the old key for its old meaning then silently gets the new meaning, rather than the old text in English.
+
+**Targets and hops:**
+- The target can be any key in the combined store: a platform key in `assets/localization/`, any extension's key, or a Paratext 9 key (e.g. `%inventoryName_Character%` → `%CheckType_3%`). A platform key can fall back to an extension's key and the reverse, because the platform metadata and every extension's strings are combined before any lookup.
+- Exactly **one** hop is followed. The new key reaches the old key's own values, not whatever the old key falls back to, so point the `fallbackKey` at the key that actually holds the translation you want.
 
 ### Renaming Terminology Users See
 
 A product-wide wording change (for example "Send/Receive" becoming "sync") is the worked example of the recipe above. It changes what the user reads, so it is a replacement, not a style fix — and the old key stays intact, because third-party extensions and translators may still reference it, and the old value is still correct for anyone who has not adopted the new term:
 
 1. **Add the new key** with the new wording in every language the old key has a value in (for most keys `en` and `es`; a key this repo ships in English only gets its new key in English only). Leave the old key and all its values untouched.
-2. **Add `fallbackKey` on the NEW key**, pointing at the old key, so a language that has not translated the new key yet still shows its old translation instead of the English fallback. This holds for the user's first interface language that has strings; for a second interface language the new key's value from a later interface language, or English, wins over the old translation, because the key is looked up across the remaining languages before the `fallbackKey` is (see [Fallback Chain](#fallback-chain-how-missing-translations-are-handled)).
+2. **Add `fallbackKey` on the NEW key**, pointing at the old key, when the meanings are close enough that the old translation is acceptable for the new text (a renamed term usually is: "Sync this project" and "Send/Receive this project" name the same action). A language that has not translated the new key yet then still shows its old translation instead of the English fallback. This holds for the user's first interface language that has strings; for a second interface language the new key's value from a later interface language, or English, wins over the old translation, because the key is looked up across the remaining languages before the `fallbackKey` is (see [Fallback Chain](#fallback-chain-how-missing-translations-are-handled)).
 3. **Switch every consumer** in this repo to the new key — `t()` calls, menu contributions, English fallback literals in TSX and C#, `displayData.json`.
-4. **Verify the old key has no remaining consumer** in implementation code: search the repo for it and confirm the only hits are the strings file and the metadata. Record the search in the PR. Also search `metadata` for any `fallbackKey` that targets the old key (an older key that has no value of its own and resolves through it) and re-point it at the new key.
-5. **Add `deprecationInfo`** (date + "the new key is …") to the old key's metadata entry.
+4. **Verify the old key has no remaining consumer** in implementation code: search the repo for it and confirm the only hits are the strings file and the metadata. Record the search in the PR.
+5. **Add `deprecationInfo`** (date + "the new key is …") to the old key's metadata entry. Do not give the old key a `fallbackKey`.
 
 ```json
 {
@@ -489,7 +499,7 @@ The immutability rule above protects a key's **meaning** — not the exact chara
 - Spelling, grammar, or punctuation corrections.
 - Bringing an existing string in line with a style rule that was revised or newly clarified after the string shipped (e.g. a capitalization or verb-mood rule changed).
 
-**If the meaning changes at all** — including a "clarification" that changes what the user understands, not just how it's phrased — that's not a correction. Treat it as a replacement and follow the recipe in [If a String Needs Replacement](#if-a-string-needs-replacement) above (a new key whose `fallbackKey` points at the old key, with the old key and its values left as they are) instead of editing in place. In-place edits are invisible to anyone (a downstream consumer, a third-party translator working from an old export) holding a reference to the old value; only a meaning-preserving fix is safe to make silently.
+**If the meaning changes at all** — including a "clarification" that changes what the user understands, not just how it's phrased — that's not a correction. Treat it as a replacement and follow the recipe in [If a String Needs Replacement](#if-a-string-needs-replacement) above (a new key, with the old key and its values left as they are and the old key marked with `deprecationInfo`) instead of editing in place. In-place edits are invisible to anyone (a downstream consumer, a third-party translator working from an old export) holding a reference to the old value; only a meaning-preserving fix is safe to make silently.
 
 **Process for revising a documented decision:**
 1. For a language whose decisions are sourced from an external document (e.g. the [Spanish tab of the Localization Decisions Google Doc](#spanish-es-localization-decisions)), update the source document first — it is the authoritative record, and this guide is a synced snapshot of it.
@@ -586,7 +596,8 @@ Before completing any UI work:
 - [ ] Spanish translations added to `localizedStrings.json`
 - [ ] No hardcoded English strings in JSX
 - [ ] Dynamic values use `formatReplacementString`
-- [ ] NO existing key/value pairs were modified (if replacement was needed, followed [If a String Needs Replacement](#if-a-string-needs-replacement): a new key with `fallbackKey` → the old key)
+- [ ] NO existing key/value pairs were modified (if replacement was needed, followed [If a String Needs Replacement](#if-a-string-needs-replacement): a new key, the old key and its values kept and marked with `deprecationInfo`)
+- [ ] Every `fallbackKey` added sits on a NEW key and names an OLD (or Paratext 9) key whose translation is acceptable for the new text; none sits on an old key pointing at a new one
 
 ---
 
@@ -596,8 +607,9 @@ The following are **blocking issues** that must be resolved before the work can 
 
 1. **Hardcoded English text** - Any user-visible text not going through localization
 2. **Missing translations** - Keys exist in `en` but not `es` (or vice versa) — except a new key that replaces a key which is itself English-only; see [If a String Needs Replacement](#if-a-string-needs-replacement)
-3. **Modified existing strings** - Changing values of existing keys (add a new key whose `fallbackKey` points at the old key instead — see [If a String Needs Replacement](#if-a-string-needs-replacement))
-4. **Duplicate keys** - Creating new keys for strings that already exist
+3. **Modified existing strings** - Changing values of existing keys, or deleting them (add a new key instead and keep the old key's values — see [If a String Needs Replacement](#if-a-string-needs-replacement))
+4. **An old→new `fallbackKey`** - A `fallbackKey` on an old key pointing at its replacement, or a retired key whose values were deleted and replaced by a redirect (see [`fallbackKey` Points From New to Old, Never From Old to New](#fallbackkey-points-from-new-to-old-never-from-old-to-new))
+5. **Duplicate keys** - Creating new keys for strings that already exist
 
 ---
 
@@ -742,6 +754,7 @@ This was learned the hard way: the markers-checklist port shipped two backend st
 
 | Version | Date       | Change          |
 | ------- | ---------- | --------------- |
+| 1.9.0   | 2026-11-06 | "If a String Needs Replacement": the new key gets `fallbackKey` → the old key only when the old translation is acceptable for the new text; added "`fallbackKey` Points From New to Old, Never From Old to New" (why an old→new redirect is harmful, retiring a key keeps its values and adds `deprecationInfo`, Paratext 9 and cross-extension targets, one hop). Dropped the step that re-pointed older redirects at the new key. Added the direction to the checklist and Blocking Issues. |
 | 1.8.0   | 2026-10-13 | Added "Renaming Terminology Users See" under Existing Strings Are Immutable: a product-wide wording change (first case: "Send/Receive" → "sync", PT-4810) adds a new key with `fallbackKey` pointing at the OLD key, leaves the old key and values untouched, switches every consumer, and verifies the old key has no remaining consumer; corrected the Fallback Chain order and made the forward fallback (new key → old key, old values untouched) the one replacement recipe. |
 | 1.7.0   | 2026-07-28 | Ported from the embedded profile (authored 2026-06-18, landed via #2438): Added "Testing Localized C# Backends" section: `DummyPapiClient.SendRequestAsync<T>` returns `default(T)` for unregistered services, so `GetLocalizedString` falls back to its `defaultValue` and wire integration tests still see English when a fallback is supplied — a green literal-asserting test does not prove resolution works. Added "Porting PT9 Features" section: don't inherit PT9's English-only surfaces (e.g. early-startup error dialogs shown before the localizer bootstraps) — the PT10 equivalent MUST be internationalized; catalogue PT9 `Localizer.Str` user-facing strings during discovery so all keys are known before backend TDD (markers-checklist shipped two strings as English literals because the gap was found late). Cross-referenced `pt9-archaeologist.md` and `test-runner/reference.md`. |
 | 1.6.0   | 2026-07-28 | Code-review pass on the 1.5.0 additions. Fixed TOC section order (Spanish now listed before Text Direction, matching the body). Added the source Google Doc link and a "Last synced" date to the Spanish section. Split out language-agnostic content into a new "Translation Style (All Languages)" subsection under Conventions (terminology priority, plain vocabulary, non-literal clarity, length, neutral error tone, sentence-case capitalization, classifying ambiguous UI text, placeholder-text categorization) so it's not scoped to Spanish only. Closed a gap in Spanish verb-mood rules for tooltips/placeholders/progress indicators/status-bar labels (gerund for in-progress, past participle for current-state, infinitive as the default fallback), with Spanish examples. Reworded the "Favor de + infinitive" guidance from "non-standard" to a regional-preference note, since it's a well-established Mexican/Latin American variant the team simply isn't adopting. Added a "Flag Unclear or Non-Standard English Source Text" step to the Localization Pattern. Documented `getLocalizeKeyForPhysicalKey`/`NameablePhysicalKey` (landed via [#2590](https://github.com/paranext/paranext-core/pull/2590), merged 2026-07-30) and the per-language policy for translating vs. preserving physical key names. Moved "Revising an Existing Localization Decision" under "Existing Strings Are Immutable" as a named, meaning-preservation-scoped exception (`Exception: Fixing Errors or Applying a Revised Style Rule`), and clarified the sync direction (Google Doc first, then this guide, then shipped strings). Fixed the `formatReplacementStringToArray` example's placeholder count to match its cited reference implementation and added the missing `.map`/`Fragment` key-wrapping it also uses. Documented a real correctness defect in the `interleavePlaceholders` duplicate helper (its `\w+` regex silently drops hyphenated placeholder names) and filed [PT-4269](https://paratextstudio.atlassian.net/browse/PT-4269) to track migrating it to the shared utility. |
