@@ -287,10 +287,12 @@ describe('ScriptureTextGrid content zoom', () => {
   it('marks nothing of its own, so its headers and grips keep their size', () => {
     // Each cell marks its own text with its resource's area (see `resource-cell-view`). A marker
     // around the cells would also be ignored by the platform, which disregards a nested one.
-    const { container } = renderGrid(resources);
+    renderGrid(resources);
+    const marker = '[data-platform-content-zoom-root]';
 
-    expect(screen.getAllByRole('listitem')).toHaveLength(resources.length);
-    expect(container.querySelectorAll('[data-platform-content-zoom-root]')).toHaveLength(0);
+    const rows = screen.getAllByRole('listitem');
+    expect(rows).toHaveLength(resources.length);
+    rows.forEach((row) => expect(row.closest(marker)).toBeNull());
   });
 
   it('lets Ctrl/⌘+wheel over a resource reach the platform’s content zoom', () => {
