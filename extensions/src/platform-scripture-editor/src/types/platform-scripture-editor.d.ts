@@ -560,8 +560,11 @@ declare module 'platform-scripture-editor' {
    * sides of a character style's edge. `border`, a one-value `borderRadius`, and one- or two-value
    * `padding` and `margin` are split across them so the annotation draws one box: the top and
    * bottom on every element, and the leading and trailing sides (and corners) only on its first and
-   * last element. An annotation that paints one element is drawn as the style reads. A `var()`
-   * counts as one value when splitting, so a custom property used there must hold one value.
+   * last element. Each element's top and bottom follow its own font size and baseline, so over a
+   * raised, smaller verse number they sit inside the text's. An annotation that paints one element
+   * is drawn as the style reads. A `padding`, `margin` or `borderRadius` with `!important`, or an
+   * empty one, is not split: it applies to every element as written. A `var()` counts as one value
+   * when splitting, so a custom property used there must hold one value.
    */
   export type AnnotationStyleProperties = {
     /**
