@@ -422,14 +422,16 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'Open the inline markers menu. Does nothing while the editor’s right-click menu is open, in every view. In a view that hides markers, with no menu to open, the editor refuses the key and shows a notice',
     category: 'Editing',
     context: 'Scripture editor web view',
-    // In a view that hides markers the web view claims this key in the capture phase, so the editor
-    // (the scripture-editors repo's UnstorableTextPlugin), which refuses a typed `\` and a typed `/`
-    // beside a `/`, sees it only when no menu opens.
+    // In a view that hides markers the web view, and the footnote editor for its own editor, claim
+    // this key in the capture phase, so the editor (the scripture-editors repo's
+    // UnstorableTextPlugin), which refuses a typed `\` and a typed `/` beside a `/`, sees it only
+    // when no menu opens.
     keys: { macOS: '\\', windows: '\\', linux: '\\' },
     locations: [
       'extensions/src/platform-scripture-editor/src/palette-key-routing.util.ts',
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
+      'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
       'lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts',
     ],
   },
