@@ -160,26 +160,27 @@ export function isEditorContentForChapter(
 
 /**
  * Whether a save {@link isEditorContentForChapter} refuses throws away the user's typing, so the
- * loss is reported. True only while the editor is behind the selection (the refused save targets
- * the chapter selected now) and holds something the backend does not have for the chapter it shows.
- * A late save from a chapter left earlier is not a loss: by then the editor shows the next chapter,
- * and any typing it holds there is that chapter's own, which that chapter's save sends. Nor is a
- * save with nothing new to write, judged as {@link resolveUsjToSaveToPdp} judges it.
+ * loss is reported. True only while the editor is behind the selection (it still shows a chapter
+ * the user has left, however many chapters ago) and holds something the backend does not have for
+ * that chapter. A late save from a chapter left earlier is not a loss once the editor shows the
+ * selected chapter: any typing it holds there is that chapter's own, which that chapter's save
+ * sends. Nor is a save with nothing new to write, judged as {@link resolveUsjToSaveToPdp} judges
+ * it.
  *
- * @param saveChapterKey Chapter key of the chapter the refused save writes to
+ * @param editorDocumentKey Chapter key of the chapter the editor shows
  * @param selectedChapterKey Chapter key of the chapter selected now
  * @param editorUsj What the editor holds
  * @param lastSavedUsj The last chapter delivered to or sent from the editor for the document it
  *   holds
  */
 export function isTypingLostToNavigation(
-  saveChapterKey: string,
+  editorDocumentKey: string,
   selectedChapterKey: string,
   editorUsj: Usj,
   lastSavedUsj: Usj | undefined,
 ): boolean {
   return (
-    saveChapterKey === selectedChapterKey &&
+    editorDocumentKey !== selectedChapterKey &&
     resolveUsjToSaveToPdp(editorUsj, lastSavedUsj) !== undefined
   );
 }
