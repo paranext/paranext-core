@@ -11345,14 +11345,16 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   these guards protected a decision that a unit test reaches directly once it is extracted.
 - **Consequences:** Code that a test could only reach by reading it gets a small extraction or seam
   (for example `startPendingComment`, `runPaletteSessionKeyDown`, `renderWebViewInErrorBoundary`,
-  `testingExtensionService.setAvailableExtensions`). Some source scans remain where no behavioral
-  test was reachable yet — the renderer's startup order (`index.startup-order.test.ts`), the
-  DOM-globals polyfill's position in `extension-host.ts`, and the Scripture editor's popover and
-  non-text-state zoom checks (`content-zoom-markers.contract.test.ts`) — each with a comment naming
-  the smallest real fix. The source checks that `adr-packaged-extensions-are-discovered` and
-  `adr-web-view-error-boundary-placement` describe are among those replaced: the packaged list is
-  now checked by calling `getInstalledExtensions`, and the web view mount site is the typed
-  `renderWebViewInErrorBoundary` rather than a `createElement` call inside the generated script.
+  `startRendererServices`, `testingExtensionService.setAvailableExtensions`), and a value that was
+  easy to leave out becomes a required parameter (`prepareUsjForChapterSave`'s caret). Two source
+  scans remain, each with a comment naming the smallest real fix: the DOM-globals polyfill's
+  position in `extension-host.ts`, and the sweep for comparisons with `'standard'` across the
+  Scripture editor extension (`note-pane-model-wiring.contract.test.ts`), a rule about how code is
+  written that an ESLint rule would replace. The source checks that
+  `adr-packaged-extensions-are-discovered` and `adr-web-view-error-boundary-placement` describe
+  are among those replaced: the packaged list is now checked by calling `getInstalledExtensions`,
+  and the web view mount site is the typed `renderWebViewInErrorBoundary` rather than a
+  `createElement` call inside the generated script.
   Revisit if a whole category turns out to need source reading.
 
 ## adr-text-collection-resources-are-zoom-areas: Each Text Collection resource is its own content zoom area; a click scope and an area label let the platform target and name it
