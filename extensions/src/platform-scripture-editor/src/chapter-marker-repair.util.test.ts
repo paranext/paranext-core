@@ -260,7 +260,7 @@ describe('prepareUsjForChapterSave', () => {
   it('reports the repair and the repaired document to save', () => {
     const fromPdp = usjOf(chapter('3'), para('p', 'body'));
     const fromEditor = usjOf(chapter('5'), para('p', 'body edited'));
-    const { repairedUsj, usjToSave } = prepareUsjForChapterSave(fromEditor, fromPdp, 3);
+    const { repairedUsj, usjToSave } = prepareUsjForChapterSave(fromEditor, fromPdp, 3, undefined);
     expect(repairedUsj?.content).toEqual([chapter('3'), para('p', 'body edited')]);
     expect(usjToSave?.content).toEqual([chapter('3'), para('p', 'body edited')]);
   });
@@ -268,7 +268,7 @@ describe('prepareUsjForChapterSave', () => {
   it('still reports the repair when the repaired document matches the PDP (nothing to save)', () => {
     const fromPdp = usjOf(chapter('3'), para('p', 'body'));
     const fromEditor = usjOf(chapter('5'), para('p', 'body'));
-    const { repairedUsj, usjToSave } = prepareUsjForChapterSave(fromEditor, fromPdp, 3);
+    const { repairedUsj, usjToSave } = prepareUsjForChapterSave(fromEditor, fromPdp, 3, undefined);
     expect(repairedUsj?.content).toEqual([chapter('3'), para('p', 'body')]);
     expect(usjToSave).toBeUndefined();
   });
@@ -276,7 +276,7 @@ describe('prepareUsjForChapterSave', () => {
   it("saves a repair without a zero-width no-break space, and keeps it in the editor's own document", () => {
     const fromPdp = usjOf(chapter('3'), para('p', 'body'));
     const fromEditor = usjOf(chapter('5'), para('p', 'bo\uFEFFdy edited'));
-    const { repairedUsj, usjToSave } = prepareUsjForChapterSave(fromEditor, fromPdp, 3);
+    const { repairedUsj, usjToSave } = prepareUsjForChapterSave(fromEditor, fromPdp, 3, undefined);
     expect(repairedUsj?.content).toEqual([chapter('3'), para('p', 'bo\uFEFFdy edited')]);
     expect(usjToSave?.content).toEqual([chapter('3'), para('p', 'body edited')]);
   });
@@ -284,7 +284,7 @@ describe('prepareUsjForChapterSave', () => {
   it('reports no repair and saves normally for an ordinary edit', () => {
     const fromPdp = usjOf(chapter('3'), para('p', 'body'));
     const fromEditor = usjOf(chapter('3'), para('p', 'body edited'));
-    const { repairedUsj, usjToSave } = prepareUsjForChapterSave(fromEditor, fromPdp, 3);
+    const { repairedUsj, usjToSave } = prepareUsjForChapterSave(fromEditor, fromPdp, 3, undefined);
     expect(repairedUsj).toBeUndefined();
     expect(usjToSave?.content).toEqual([chapter('3'), para('p', 'body edited')]);
   });
@@ -304,7 +304,7 @@ describe('prepareUsjForChapterSave', () => {
 
     it.each(storedShapes)('%s', (_label, content) => {
       const stored = usjOf(...content);
-      const preparation = prepareUsjForChapterSave(usjOf(...content), stored, 5);
+      const preparation = prepareUsjForChapterSave(usjOf(...content), stored, 5, undefined);
       expect(preparation.repairedUsj).toBeUndefined();
       expect(preparation.usjToSave).toBeUndefined();
       expect(preparation.caretTarget).toBeUndefined();
@@ -317,6 +317,7 @@ describe('prepareUsjForChapterSave', () => {
       usjOf(para('p', 'first words')),
       stored,
       5,
+      undefined,
     );
     expect(repairedUsj?.content).toEqual([chapter('5'), para('p', 'first words')]);
     expect(usjToSave?.content).toEqual([chapter('5'), para('p', 'first words')]);
@@ -338,6 +339,7 @@ describe('prepareUsjForChapterSave', () => {
         usjOf(para('p', 'bo\uFEFFdy'), para('q1', 'poem')),
         stored,
         2,
+        undefined,
       );
       expect(caretTarget).toEqual(RESTORED_CHAPTER_2_NUMBER);
     });
@@ -356,12 +358,22 @@ describe('prepareUsjForChapterSave', () => {
     });
 
     it('to the end of the text when a chapter that never had a marker is typed into', () => {
-      const { caretTarget } = prepareUsjForChapterSave(usjOf(para('p', 'typed')), usjOf(), 2);
+      const { caretTarget } = prepareUsjForChapterSave(
+        usjOf(para('p', 'typed')),
+        usjOf(),
+        2,
+        undefined,
+      );
       expect(caretTarget).toBe(CARET_AT_DOCUMENT_END);
     });
 
     it('to the end of the text when more than the marker changed', () => {
-      const { caretTarget } = prepareUsjForChapterSave(usjOf(para('p', 'typed over')), stored, 2);
+      const { caretTarget } = prepareUsjForChapterSave(
+        usjOf(para('p', 'typed over')),
+        stored,
+        2,
+        undefined,
+      );
       expect(caretTarget).toBe(CARET_AT_DOCUMENT_END);
     });
   });
@@ -604,12 +616,14 @@ describe('prepareUsjForChapterSave', () => {
       usjOf(chapter('5'), para('p', 'body edited')),
       fromPdp,
       3,
+      undefined,
     );
     const pdpAfterFirstSave = firstPass.usjToSave;
     const secondPass = prepareUsjForChapterSave(
       usjOf(chapter('3'), para('p', 'body edited twice')),
       pdpAfterFirstSave,
       3,
+      undefined,
     );
     expect(secondPass.repairedUsj).toBeUndefined();
     expect(secondPass.usjToSave?.content).toEqual([chapter('3'), para('p', 'body edited twice')]);
@@ -938,6 +952,7 @@ describe('the caret target on the way to the editor', () => {
       usjOf(chapter('5'), para('p', 'body')),
       usjOf(chapter('3'), para('p', 'body')),
       3,
+      undefined,
     );
     expect(caretTarget).toEqual({
       start: { jsonPath: "$.content[0]['number']", propertyOffset: 1 },
@@ -949,6 +964,7 @@ describe('the caret target on the way to the editor', () => {
       usjOf(chapter('3'), para('p', 'edited')),
       usjOf(chapter('3'), para('p', 'body')),
       3,
+      undefined,
     );
     expect(caretTarget).toBeUndefined();
   });
