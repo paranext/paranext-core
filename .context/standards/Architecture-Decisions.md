@@ -11332,9 +11332,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   precedent its successor cited.
 - **Decision:** A test exercises the behavior it protects: a pure function or a function with
   injected steps extracted from the call site, a component rendered with Testing Library, the real
-  function behind a narrow test seam, or an e2e step for wiring only the running app shows. An
-  import boundary is a lint rule, and two values that must match across bundles are compared by
-  importing both. Reading files stays fine where the file itself is the subject: data (JSON,
+  function behind a narrow test seam, or an e2e step for wiring only the running app shows. A rule
+  about how code is written (allowed imports, banned patterns) is a build check or an ESLint rule,
+  never a source scan, and two values that must match across bundles are compared by importing
+  both. Reading files stays fine where the file itself is the subject: data (JSON,
   localized strings, manifests), stylesheets, built output, cross-language parity that cannot share
   an import, and build-tooling invariants. The rule and its replacements are in `Testing-Guide.md`
   ("Reading production source as text").

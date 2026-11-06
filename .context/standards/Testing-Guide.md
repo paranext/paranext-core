@@ -322,7 +322,7 @@ Test the behavior instead, in roughly this order:
 | What renders, or where a marker sits            | Render it with Testing Library. When a whole web view cannot mount, render the piece that matters (`RendererRoot`, the Enhanced Resources shell)                                     |
 | Module state a test cannot reach                | Call the real function behind a narrow test seam (`testingExtensionService.setAvailableExtensions`)                                                                                  |
 | Two values that must match across bundles       | Keep the value in an import-free module and import it into the test                                                                                                                 |
-| An import boundary                              | A lint rule (`no-restricted-imports` in a per-file `.eslintrc.js` override)                                                                                                          |
+| A rule about how code is written (allowed imports, banned patterns) | A build check or an ESLint rule, never a source scan |
 | A wrong value that is easy to pass              | Remove the variant, so there is nothing wrong to pass (one options object, not two of the same type)                                                                                 |
 | Wiring only the running app shows               | An isolated e2e step                                                                                                                                                                 |
 
