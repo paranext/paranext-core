@@ -81,6 +81,8 @@ import {
   selectableParagraphMarkers,
   PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
   showCommentThreadForInterfaceMode,
+  showNewCommentThread,
+  createCommentThreadClickHandlerFactory,
 } from './platform-scripture-editor.utils';
 import { restoreSelectionIfLost } from './platform-scripture-editor.web-view.utils';
 
@@ -7242,6 +7244,98 @@ describe('showCommentThreadForInterfaceMode', () => {
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('thread-1'));
     },
   );
+});
+
+describe('createCommentThreadClickHandlerFactory', () => {
+  it('reads the interface mode when the highlight is clicked, not when its handler is made', async () => {
+    const sendCommand = vi.fn().mockResolvedValue('web-view-id');
+    // Mock literal cannot satisfy the full PAPI interface — cast for test isolation.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const papi = {
+      commands: { sendCommand },
+      logger: { warn: vi.fn() },
+    } as unknown as typeof PapiBackend;
+    let isPowerMode = false;
+    const onClick = createCommentThreadClickHandlerFactory(
+      papi,
+      () => isPowerMode,
+      'editor-1',
+    )('thread-1');
+
+    isPowerMode = true;
+    await onClick();
+
+    expect(sendCommand).toHaveBeenCalledTimes(1);
+    expect(sendCommand).toHaveBeenCalledWith('legacyCommentManager.openCommentList', 'editor-1', {
+      threadIdToSelect: 'thread-1',
+    });
+  });
+});
+
+describe('showNewCommentThread', () => {
+  /** A PAPI whose navigation commands stay pending until {@link finish} is called */
+  function makePendingPapi() {
+    let finish = () => {};
+    const sendCommand = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          finish = () => resolve('web-view-id');
+        }),
+    );
+    // Mock literal cannot satisfy the full PAPI interface — cast for test isolation.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const papi = {
+      commands: { sendCommand },
+      logger: { warn: vi.fn() },
+    } as unknown as typeof PapiBackend;
+    return { papi, sendCommand, finish: () => finish() };
+  }
+
+  /** Whether `promise` has settled once pending callbacks have run */
+  async function hasSettled(promise: Promise<unknown>): Promise<boolean> {
+    const pending = Symbol('pending');
+    const outcome = await Promise.race([
+      promise.then(
+        () => 'settled',
+        () => 'settled',
+      ),
+      new Promise((resolve) => {
+        setTimeout(() => resolve(pending), 0);
+      }),
+    ]);
+    return outcome !== pending;
+  }
+
+  const options = { editorWebViewId: 'editor-1', threadId: 'thread-1' };
+
+  it('selects the thread in the Comments tab in Simple mode without waiting for it or bringing the tab forward', async () => {
+    const { papi, sendCommand } = makePendingPapi();
+
+    const shown = showNewCommentThread(papi, { ...options, isPowerMode: false });
+
+    expect(await hasSettled(shown)).toBe(true);
+    expect(sendCommand).toHaveBeenCalledTimes(1);
+    expect(sendCommand).toHaveBeenCalledWith(
+      'legacyCommentManager.selectCommentThreadInPanel',
+      'thread-1',
+      false,
+      'editor-1',
+    );
+  });
+
+  it('opens the comment list on the thread in Power mode and waits until it has', async () => {
+    const { papi, sendCommand, finish } = makePendingPapi();
+
+    const shown = showNewCommentThread(papi, { ...options, isPowerMode: true });
+
+    expect(await hasSettled(shown)).toBe(false);
+    expect(sendCommand).toHaveBeenCalledTimes(1);
+    expect(sendCommand).toHaveBeenCalledWith('legacyCommentManager.openCommentList', 'editor-1', {
+      threadIdToSelect: 'thread-1',
+    });
+    finish();
+    expect(await hasSettled(shown)).toBe(true);
+  });
 });
 
 // #endregion showCommentThreadForInterfaceMode

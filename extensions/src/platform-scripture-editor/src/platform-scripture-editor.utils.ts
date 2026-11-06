@@ -1115,6 +1115,70 @@ export async function showCommentThreadForInterfaceMode(
   await selectCommentThreadInPanelSafe(papi, threadId, true, editorWebViewId);
 }
 
+/**
+ * Creates the click handler for a comment thread's highlight in the text, which shows the thread
+ * through {@link showCommentThreadForInterfaceMode}. The interface mode is read when the highlight
+ * is clicked, not when the handler is created: a highlight keeps its handler across a switch
+ * between Simple and Power.
+ *
+ * @param papi The PAPI to send the navigation command through
+ * @param getIsPowerMode Reads whether the app is in Power interface mode right now
+ * @param editorWebViewId The ID of the editor web view the threads belong to
+ * @returns A function that creates the click handler for one thread
+ */
+export function createCommentThreadClickHandlerFactory(
+  papi: typeof PapiBackend | typeof PapiFrontend,
+  getIsPowerMode: () => boolean,
+  editorWebViewId: string,
+): (threadId: string) => () => Promise<void> {
+  return (threadId) => () =>
+    showCommentThreadForInterfaceMode(papi, {
+      isPowerMode: getIsPowerMode(),
+      editorWebViewId,
+      threadId,
+    });
+}
+
+/**
+ * Shows a comment thread the user just created, as confirmation that saving worked. Resolves when
+ * the comment editor may close.
+ *
+ * Power mode opens (or focuses) the editor-anchored comment list on the thread and resolves once it
+ * has, so the list takes focus while the comment editor is still up rather than after the user is
+ * typing again.
+ *
+ * Simple mode selects the thread in the fixed Column 3 Comments tab without bringing that tab to
+ * the front, which would interrupt a user working in another Column 3 tab, and resolves at once,
+ * without waiting for the select. The comment is already saved, and the select can take seconds: a
+ * Comments tab that has not been shown this session is not mounted yet (rc-dock renders a tab only
+ * once it is first shown), so the message is retried for several seconds and applies only if the
+ * user opens the tab in that time. Waiting would make Save look like it did nothing.
+ *
+ * Logs and swallows any failure, like the two functions it chooses between.
+ *
+ * @param papi The PAPI to send the navigation command through
+ * @param options.isPowerMode Whether the app is in Power interface mode
+ * @param options.editorWebViewId The ID of the editor web view the thread belongs to. In Simple
+ *   mode, the Comments tab is first pointed at that editor's project if it shows another one.
+ * @param options.threadId The ID of the new thread
+ */
+export async function showNewCommentThread(
+  papi: typeof PapiBackend | typeof PapiFrontend,
+  {
+    isPowerMode,
+    editorWebViewId,
+    threadId,
+  }: { isPowerMode: boolean; editorWebViewId: string; threadId: string },
+): Promise<void> {
+  if (isPowerMode) {
+    await openCommentListAndSelectThreadSafe(papi, editorWebViewId, threadId);
+    return;
+  }
+
+  // Not awaited: see above. It logs and swallows its own failures.
+  selectCommentThreadInPanelSafe(papi, threadId, false, editorWebViewId);
+}
+
 // #region USJ location conversion helper functions
 
 /**
