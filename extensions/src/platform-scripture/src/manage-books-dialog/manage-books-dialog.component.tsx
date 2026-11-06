@@ -1715,6 +1715,9 @@ export function ManageBooksDialog({
     // fetched (the brief load gap). Without this branch it falls through to the misleading "...has
     // no books to copy" message below. Show a loading hint instead.
     if (action === 'copy' && copySourceId && !booksByProjectId[copySourceId]) {
+      // Transient loading message already leads with the short name; the full name is a defensive
+      // fallback for a project with an empty short name, not a composed label.
+      // eslint-disable-next-line paranext/no-inline-project-name
       const sourceName = copySourceProject?.shortName ?? copySourceProject?.fullName;
       return sourceName
         ? fmtTemplate(

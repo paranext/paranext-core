@@ -8239,6 +8239,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `parseProjectNameTemplate`. Hardcoding the visible order beside a localizable joined form is the
   failure this guards against: a locale that reorders the string would make the label and its own
   tooltip disagree.
+- **Amended 2026-11-06:** the sweep test is replaced by the ESLint rule
+  `paranext/no-inline-project-name`, which matches the same compositions on the syntax tree
+  rather than line by line, so a composition split across lines is caught and a string that merely
+  contains `fullName` is not. A site that is not a project-name label disables the rule on its own
+  line with the reason, in place of the test's `EXEMPT` list. It still does not see a re-inlined
+  sort.
 
 ## adr-project-selector-consumer-driven-groupings: ProjectSelector groupings are consumer-supplied descriptors over an untyped `customData` bag
 

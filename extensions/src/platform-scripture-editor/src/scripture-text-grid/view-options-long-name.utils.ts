@@ -18,6 +18,11 @@ export function resolveDblLongName(
 ): string | undefined {
   if (!isDblResourceReference(reference)) return undefined;
   const fullName = findCachedDblResource(reference, cachedResources)?.fullName;
+  // Fills View Options' long-name slot, composing no label. The row itself is joined downstream in
+  // `resource-collection-options.component.tsx`, short name first, with an em dash rather than
+  // `PROJECT_NAME_SEPARATOR` — a deliberate difference for that panel, and the order this rule is
+  // about is already correct there.
+  // eslint-disable-next-line paranext/no-inline-project-name
   if (!fullName || fullName === reference.name) return undefined;
   return fullName;
 }

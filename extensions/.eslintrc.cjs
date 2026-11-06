@@ -223,3 +223,19 @@ module.exports = {
 };
 
 // #endregion
+
+// paranext-core only, so it stays outside the region shared with the extension template: the
+// `paranext` plugin is not available in the template's repositories. It reaches these files through
+// the repo root's `.eslintrc.js`, which ESLint merges in because neither this file nor the
+// per-extension ones declare `root: true`.
+module.exports.overrides.push({
+  // Project names are composed, compared and de-duped only through the helpers in
+  // `lib/platform-bible-utils/src/project-util.ts`. The root `.eslintrc.js` enables the same rule
+  // for `src` and the `lib` workspaces. Tests are excluded: their fixtures deliberately construct
+  // the mirrored and equal-name shapes the helpers exist to handle.
+  files: ['src/**/*.ts', 'src/**/*.tsx'],
+  excludedFiles: ['*.test.ts', '*.test.tsx'],
+  rules: {
+    'paranext/no-inline-project-name': 'error',
+  },
+});
