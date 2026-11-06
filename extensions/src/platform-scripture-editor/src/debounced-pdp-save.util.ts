@@ -143,7 +143,8 @@ export function editorHoldsUnsavedChanges(editorUsj: Usj | undefined, savedUsj: 
  * chapter-marker repair renumbers the marker to the chapter being written, so Paratext's own
  * chapter-number check passes too. So the save is dropped. Its keystrokes are not written to the
  * chapter being left either: they were typed after the user had already asked to move on, and the
- * editor replaces them with the new chapter as soon as it arrives.
+ * editor replaces them with the new chapter as soon as it arrives. They are lost, and
+ * {@link isTypingLostToNavigation} decides when the loss is reported.
  *
  * @param editorDocumentKey Chapter key (`getChapterKey`) of the document the editor holds, or
  *   `undefined` when no document has been applied to it yet — nothing then contradicts the save's
@@ -155,6 +156,32 @@ export function isEditorContentForChapter(
   saveChapterKey: string,
 ): boolean {
   return editorDocumentKey === undefined || editorDocumentKey === saveChapterKey;
+}
+
+/**
+ * Whether a save {@link isEditorContentForChapter} refuses throws away the user's typing, so the
+ * loss is reported. True only while the editor is behind the selection (the refused save targets
+ * the chapter selected now) and holds something the backend does not have for the chapter it shows.
+ * A late save from a chapter left earlier is not a loss: by then the editor shows the next chapter,
+ * and any typing it holds there is that chapter's own, which that chapter's save sends. Nor is a
+ * save with nothing new to write, judged as {@link resolveUsjToSaveToPdp} judges it.
+ *
+ * @param saveChapterKey Chapter key of the chapter the refused save writes to
+ * @param selectedChapterKey Chapter key of the chapter selected now
+ * @param editorUsj What the editor holds
+ * @param lastSavedUsj The last chapter delivered to or sent from the editor for the document it
+ *   holds
+ */
+export function isTypingLostToNavigation(
+  saveChapterKey: string,
+  selectedChapterKey: string,
+  editorUsj: Usj,
+  lastSavedUsj: Usj | undefined,
+): boolean {
+  return (
+    saveChapterKey === selectedChapterKey &&
+    resolveUsjToSaveToPdp(editorUsj, lastSavedUsj) !== undefined
+  );
 }
 
 /**
