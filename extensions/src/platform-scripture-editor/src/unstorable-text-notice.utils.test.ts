@@ -16,6 +16,7 @@ import {
   UNSTORABLE_TEXT_BLOCKED_TYPING_KEY,
   UNSTORABLE_TEXT_NOTIFICATION_ID,
   UNSTORABLE_TEXT_REFUSED_DELETION_KEY,
+  UNSTORABLE_TEXT_REFUSED_MOVE_KEY,
   UNSTORABLE_TEXT_REMOVED_FROM_PASTE_KEY,
 } from './unstorable-text-notice.utils';
 
@@ -65,6 +66,20 @@ describe('createUnstorableTextNotifier', () => {
       severity: 'info',
       notificationId: UNSTORABLE_TEXT_NOTIFICATION_ID,
       webViewId: 'web-view-3',
+    });
+  });
+
+  it('sends the refused-move notice for a drag-move refused for losing a / where it lands', () => {
+    const send = vi.fn().mockResolvedValue(1);
+
+    createUnstorableTextNotifier(send, 'web-view-5')({ source: 'move', removed: ['//'] });
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith({
+      message: UNSTORABLE_TEXT_REFUSED_MOVE_KEY,
+      severity: 'info',
+      notificationId: UNSTORABLE_TEXT_NOTIFICATION_ID,
+      webViewId: 'web-view-5',
     });
   });
 
