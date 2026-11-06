@@ -2,9 +2,10 @@ import papi, { logger } from '@papi/backend';
 import type { OpenWebViewOptions } from '@papi/core';
 import { getErrorMessage, includes, LocalizeKey } from 'platform-bible-utils';
 import { SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE } from './platform-scripture-editor.utils';
+import { BIBLE_TEXTS_PANEL_WEBVIEW_TYPE } from './bible-texts-panel-web-view-type.const';
+import { COMMENTARIES_PANEL_WEBVIEW_TYPE } from './commentaries-panel-web-view-type.const';
 
-export const BIBLE_TEXTS_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.bibleTexts';
-export const COMMENTARIES_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.commentaries';
+export { BIBLE_TEXTS_PANEL_WEBVIEW_TYPE, COMMENTARIES_PANEL_WEBVIEW_TYPE };
 
 const TEXT_COLLECTION_UNAVAILABLE_KEY: LocalizeKey =
   '%webView_platformScriptureEditor_textCollectionNotOpen%';

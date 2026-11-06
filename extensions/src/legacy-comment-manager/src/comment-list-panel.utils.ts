@@ -1,9 +1,6 @@
-/**
- * Web view type for the fixed Column 3 Comment List Panel. Shared between `main.ts` (which
- * registers the provider) and the web view itself (which reads its own `webViewType` prop to tell
- * the panel apart from the editor-anchored comment list).
- */
-export const COMMENT_LIST_PANEL_WEB_VIEW_TYPE = 'legacyCommentManager.commentListPanel';
+import { COMMENT_LIST_PANEL_WEB_VIEW_TYPE } from './comment-list-panel-web-view-type.const';
+
+export { COMMENT_LIST_PANEL_WEB_VIEW_TYPE };
 
 /**
  * Resolves the projectId to display in the Comment List Panel.

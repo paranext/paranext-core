@@ -1,7 +1,16 @@
 // @vitest-environment jsdom
 
+import {
+  getDefaultViewOptions,
+  getViewOptions,
+  PARAGRAPH_STRUCTURE_VIEW_MODE,
+} from '@eten-tech-foundation/platform-editor';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { computeBarTop, resolveActiveLineRect } from './character-marker-bar.utils';
+import {
+  computeBarTop,
+  resolveActiveLineRect,
+  shouldShowCharacterMarkerBar,
+} from './character-marker-bar.utils';
 
 // Mock rect/element factories — mirrors paragraph-marker-tooltip.utils.test.ts. Only
 // getBoundingClientRect is implemented; the pure functions under test need nothing else.
@@ -193,5 +202,31 @@ describe('resolveActiveLineRect', () => {
     const textNode = bare.firstChild ?? null;
     if (!textNode) throw new Error('expected a text node');
     expect(resolveActiveLineRect(selectionAt(textNode, 2), editorRoot)).toBeUndefined();
+  });
+});
+
+describe('shouldShowCharacterMarkerBar', () => {
+  // The bar's space is reserved by `.editor-container-simple .usfm.psc-gutter-markers` in
+  // `_simple-mode.scss`. Anywhere that selector does not match, a bar would paint over project text.
+
+  it('shows the bar in Simple mode when paragraph markers are in the gutter', () => {
+    expect(shouldShowCharacterMarkerBar(false, { hasGutterParaMarkers: true })).toBe(true);
+  });
+
+  it('hides the bar in Power mode, even with paragraph markers in the gutter', () => {
+    expect(shouldShowCharacterMarkerBar(true, { hasGutterParaMarkers: true })).toBe(false);
+  });
+
+  it('hides the bar in Simple mode when the view has no gutter markers', () => {
+    expect(shouldShowCharacterMarkerBar(false, { hasGutterParaMarkers: false })).toBe(false);
+    expect(shouldShowCharacterMarkerBar(false, {})).toBe(false);
+  });
+
+  it("shows the bar with Simple mode's paragraph-structure preset, and not with the defaults", () => {
+    const paragraphStructure = getViewOptions(PARAGRAPH_STRUCTURE_VIEW_MODE);
+    if (!paragraphStructure) throw new Error('the editor has no paragraph-structure view mode');
+
+    expect(shouldShowCharacterMarkerBar(false, paragraphStructure)).toBe(true);
+    expect(shouldShowCharacterMarkerBar(false, getDefaultViewOptions())).toBe(false);
   });
 });

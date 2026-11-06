@@ -1,7 +1,16 @@
 import { reloadWebView } from '@renderer/services/web-view.service-shard';
+import { WebViewProps } from '@shared/models/web-view.model';
 import { logger } from '@shared/services/logger.service';
 import { getErrorMessage } from 'platform-bible-utils';
-import { Component, ErrorInfo, PropsWithChildren, ReactNode } from 'react';
+import {
+  Component,
+  ComponentType,
+  createElement,
+  ErrorInfo,
+  PropsWithChildren,
+  ReactNode,
+} from 'react';
+import type { Root } from 'react-dom/client';
 import { WebViewCrashedView } from './web-view-crashed-view.component';
 
 export type WebViewErrorBoundaryProps = PropsWithChildren<{
@@ -50,10 +59,10 @@ function reloadCrashedWebView(webViewId: string, webViewType: string) {
  * Catches render failures inside a single web view so the pane shows {@link WebViewCrashedView}
  * instead of going blank, and reports them to the app log.
  *
- * Every React web view mounts through one `root.render` call in the web view service, with nothing
- * above it, so an uncaught render throw tears down that iframe's whole React root and leaves an
- * empty pane with nothing in the log a user could report. This is the only thing standing between
- * that throw and the blank pane.
+ * Every React web view mounts through {@link renderWebViewInErrorBoundary}, with nothing above this
+ * boundary, so without it an uncaught render throw tears down that iframe's whole React root and
+ * leaves an empty pane with nothing in the log a user could report. This is the only thing standing
+ * between that throw and the blank pane.
  *
  * Deliberately hook-free. Any hook added here would run ABOVE the catch, so if it threw, the pane
  * would blank exactly as it does without this component — the net would have the hole it exists to
@@ -114,6 +123,38 @@ export class WebViewErrorBoundary extends Component<
 
     return children;
   }
+}
+
+/**
+ * Renders a React web view's component into the root its iframe created, as the only child of a
+ * {@link WebViewErrorBoundary}. Every React web view's generated bootstrap script calls this,
+ * through the `renderWebViewInErrorBoundary` global, each time it renders, so no web view mounts
+ * without the boundary.
+ *
+ * The boundary's id, type and title come from `webViewProps`, the same saved definition the
+ * component is rendered with, so a definition update cannot leave the boundary reporting one web
+ * view's id against another's type or title.
+ *
+ * @param root The React root the web view's iframe created for its `#root` element
+ * @param webViewComponent The component the web view's bundle provides
+ * @param webViewProps The props to render the component with, built from its saved definition
+ */
+export function renderWebViewInErrorBoundary(
+  root: Root,
+  webViewComponent: ComponentType<WebViewProps>,
+  webViewProps: WebViewProps,
+): void {
+  root.render(
+    createElement(
+      WebViewErrorBoundary,
+      {
+        webViewId: webViewProps.id,
+        webViewType: webViewProps.webViewType,
+        webViewTitle: webViewProps.title,
+      },
+      createElement(webViewComponent, webViewProps),
+    ),
+  );
 }
 
 export default WebViewErrorBoundary;

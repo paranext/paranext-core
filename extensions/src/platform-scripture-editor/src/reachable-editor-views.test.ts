@@ -7,12 +7,11 @@ import {
 } from '@eten-tech-foundation/platform-editor';
 import { deepEqual } from 'platform-bible-utils';
 import { describe, expect, it } from 'vitest';
-import { getEditorViewOptions } from './editor-view-options.util';
+import { getEditorViewOptions, resolveFootnotesPaneViewOptions } from './editor-view-options.util';
 import {
   getDisplayedViewType,
   getNextViewTypeInCycle,
   type PersistedViewType,
-  resolveFootnotesPaneViewOptions,
   resolveNoteEditingSurface,
   usesPaneNoteModel,
   VIEW_TYPE_UNSET,
@@ -76,7 +75,7 @@ function describeReachableView(persistedViewType: PersistedViewType, isPowerMode
       isPowerMode,
       isInterfaceModeLoading,
       mainViewOptions: mainViewOptions(allowInvisibleCharacters),
-      standardViewOptions: getEditorViewOptions('standard', isPowerMode, allowInvisibleCharacters),
+      allowInvisibleCharacters,
     });
   // A normal project the user can edit, with every setting loaded and no sync in progress, so only
   // the view itself can make the text read-only.

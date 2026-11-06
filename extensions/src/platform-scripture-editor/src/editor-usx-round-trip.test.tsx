@@ -212,7 +212,7 @@ async function editAndSave(
   });
   await waitFor(() => expect(changes.length).toBeGreaterThan(0));
   const edited = editor.getUsj() ?? changes[changes.length - 1];
-  const { usjToSave } = prepareUsjForChapterSave(edited, usjFromPdp, chapterNum);
+  const { usjToSave } = prepareUsjForChapterSave(edited, usjFromPdp, chapterNum, undefined);
   if (!usjToSave) throw new Error(`${gesture.name} changed nothing to save`);
   return usjToSave;
 }

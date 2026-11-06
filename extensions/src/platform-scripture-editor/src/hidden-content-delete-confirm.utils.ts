@@ -1,4 +1,5 @@
 import type {
+  EditorOptions,
   HiddenContentDeleteHandler,
   HiddenContentDeleteRequest,
   HiddenContentItem,
@@ -127,4 +128,52 @@ export function createHiddenContentDeleteHandler(
     const isConfirmed = await confirm(buildHiddenContentDeleteConfirm(request, promptTemplate));
     return isConfirmed === true ? 'delete' : 'keep';
   };
+}
+
+/** The parts of PAPI {@link createPlatformHiddenContentDeleteHandler} asks through */
+export type HiddenContentDeleteServices = {
+  localization: { getLocalizedString: (selector: { localizeKey: LocalizeKey }) => Promise<string> };
+  dialogs: {
+    showDialog: (
+      dialogType: 'platform.confirm',
+      options: HiddenContentDeleteConfirmOptions,
+    ) => Promise<boolean | undefined>;
+  };
+};
+
+/**
+ * {@link createHiddenContentDeleteHandler}, looking the prompt up through the localization service
+ * and asking through the platform's `platform.confirm` dialog.
+ *
+ * @param getLiveStrings - The web view's current localized strings. See
+ *   {@link createHiddenContentDeleteHandler}.
+ * @param services - `papi`, or the parts of it this asks through
+ */
+export function createPlatformHiddenContentDeleteHandler(
+  getLiveStrings: () => LanguageStrings,
+  services: HiddenContentDeleteServices,
+): HiddenContentDeleteHandler {
+  return createHiddenContentDeleteHandler(
+    getLiveStrings,
+    (localizeKey) => services.localization.getLocalizedString({ localizeKey }),
+    (confirmOptions) => services.dialogs.showDialog('platform.confirm', confirmOptions),
+  );
+}
+
+/**
+ * The editor options that follow from whether the editor can be edited: read-only, or editable and
+ * asking before an edit removes hidden content. Decided together so an editable editor always gets
+ * the guard: without `onHiddenContentDelete`, Backspace and Delete remove figures, sidebars and
+ * other hidden content silently. A read-only editor makes no edits, so there is nothing to ask.
+ *
+ * @param isReadOnly - Whether the editor is read-only
+ * @param onHiddenContentDelete - Asks before an edit removes hidden content
+ */
+export function getEditabilityOptions(
+  isReadOnly: boolean,
+  onHiddenContentDelete: HiddenContentDeleteHandler,
+): Pick<EditorOptions, 'isReadonly' | 'onHiddenContentDelete'> {
+  return isReadOnly
+    ? { isReadonly: true, onHiddenContentDelete: undefined }
+    : { isReadonly: false, onHiddenContentDelete };
 }

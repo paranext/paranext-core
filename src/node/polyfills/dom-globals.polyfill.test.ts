@@ -179,6 +179,10 @@ describe('dom-globals.polyfill', () => {
   // The globals only help if they land before anything that converts at load time, and no tooling
   // enforces that: there is no import-sorting lint rule or Prettier plugin, so an editor's
   // "Organize Imports" or a hand edit could reorder it silently. This is the guard.
+  //
+  // Reading source text is a last resort here (see `adr-tests-exercise-behavior-not-source-text`).
+  // The smallest real fix: have each module that converts scripture at load time import the polyfill
+  // itself, so module evaluation order guarantees it and no entry point's import order needs pinning.
   test('is the first module the extension host entry point evaluates', () => {
     const entryPoint = readFileSync(
       resolve(__dirname, '../../extension-host/extension-host.ts'),

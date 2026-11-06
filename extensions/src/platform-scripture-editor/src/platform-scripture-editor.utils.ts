@@ -55,20 +55,12 @@ import type { MutableRefObject } from 'react';
 // import type ONLY: this module is reachable from main.ts (the extension host), and any RUNTIME
 // import from the editor package drags its React-bundling dist into the main bundle, breaking
 // extension activation. See platform-scripture-editor.web-view.utils.ts's header.
-import type { DeltaOp, EditorRef, ViewOptions } from '@eten-tech-foundation/platform-editor';
+import type { DeltaOp, EditorRef } from '@eten-tech-foundation/platform-editor';
 import type { MarkerMenuItem } from 'platform-bible-react';
+import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
+import { SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE } from './scripture-text-grid-web-view-type.const';
 
-// Note: src/main/shutdown-tasks.ts has a copy of this value — keep them in sync.
-export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
-
-/**
- * Web view type of the Text Collection panel (the Scripture Text Grid) in Column 3.
- *
- * Note: the renderer has copies of this value it cannot import —
- * `src/renderer/components/docking/default-layout-supplement.json` and
- * `platform-dock-layout-positioning.util.ts` — keep them in sync.
- */
-export const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptureTextGrid';
+export { SCRIPTURE_EDITOR_WEBVIEW_TYPE, SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE };
 
 /**
  * `objectType` of a project data provider factory's network object. Mirrors core's
@@ -547,34 +539,6 @@ export function resolveNoteEditingSurface({
 }): NoteEditingSurface {
   if (isReadOnly) return 'none';
   return usesPaneModel ? 'pane' : 'popover';
-}
-
-/**
- * Decides the view options the footnotes pane and its row editor render with. Power mode's pane
- * follows the main editor's view (in Standard view they are Standard's already). Simple mode's pane
- * shows markers as Standard view's does, while the main text keeps Simple's own view options and
- * goes on hiding them. While `platform.interfaceMode` is still loading, `isPowerMode` reads `false`
- * whatever the mode really is, so the pane follows the main editor then: a Power user's pane never
- * briefly takes Simple's answer.
- *
- * @param options.isPowerMode Whether `platform.interfaceMode` is 'power'
- * @param options.isInterfaceModeLoading Whether `platform.interfaceMode` is still loading
- * @param options.mainViewOptions The main editor's view options
- * @param options.standardViewOptions Standard view's view options
- * @returns The view options for the footnotes pane and its row editor
- */
-export function resolveFootnotesPaneViewOptions({
-  isPowerMode,
-  isInterfaceModeLoading,
-  mainViewOptions,
-  standardViewOptions,
-}: {
-  isPowerMode: boolean;
-  isInterfaceModeLoading: boolean;
-  mainViewOptions: ViewOptions | undefined;
-  standardViewOptions: ViewOptions;
-}): ViewOptions | undefined {
-  return isPowerMode || isInterfaceModeLoading ? mainViewOptions : standardViewOptions;
 }
 
 /**
@@ -1121,6 +1085,70 @@ export async function showCommentThreadForInterfaceMode(
   }
 
   await selectCommentThreadInPanelSafe(papi, threadId, true, editorWebViewId);
+}
+
+/**
+ * Creates the click handler for a comment thread's highlight in the text, which shows the thread
+ * through {@link showCommentThreadForInterfaceMode}. The interface mode is read when the highlight
+ * is clicked, not when the handler is created: a highlight keeps its handler across a switch
+ * between Simple and Power.
+ *
+ * @param papi The PAPI to send the navigation command through
+ * @param getIsPowerMode Reads whether the app is in Power interface mode right now
+ * @param editorWebViewId The ID of the editor web view the threads belong to
+ * @returns A function that creates the click handler for one thread
+ */
+export function createCommentThreadClickHandlerFactory(
+  papi: typeof PapiBackend | typeof PapiFrontend,
+  getIsPowerMode: () => boolean,
+  editorWebViewId: string,
+): (threadId: string) => () => Promise<void> {
+  return (threadId) => () =>
+    showCommentThreadForInterfaceMode(papi, {
+      isPowerMode: getIsPowerMode(),
+      editorWebViewId,
+      threadId,
+    });
+}
+
+/**
+ * Shows a comment thread the user just created, as confirmation that saving worked. Resolves when
+ * the comment editor may close.
+ *
+ * Power mode opens (or focuses) the editor-anchored comment list on the thread and resolves once it
+ * has, so the list takes focus while the comment editor is still up rather than after the user is
+ * typing again.
+ *
+ * Simple mode selects the thread in the fixed Column 3 Comments tab without bringing that tab to
+ * the front, which would interrupt a user working in another Column 3 tab, and resolves at once,
+ * without waiting for the select. The comment is already saved, and the select can take seconds: a
+ * Comments tab that has not been shown this session is not mounted yet (rc-dock renders a tab only
+ * once it is first shown), so the message is retried for several seconds and applies only if the
+ * user opens the tab in that time. Waiting would make Save look like it did nothing.
+ *
+ * Logs and swallows any failure, like the two functions it chooses between.
+ *
+ * @param papi The PAPI to send the navigation command through
+ * @param options.isPowerMode Whether the app is in Power interface mode
+ * @param options.editorWebViewId The ID of the editor web view the thread belongs to. In Simple
+ *   mode, the Comments tab is first pointed at that editor's project if it shows another one.
+ * @param options.threadId The ID of the new thread
+ */
+export async function showNewCommentThread(
+  papi: typeof PapiBackend | typeof PapiFrontend,
+  {
+    isPowerMode,
+    editorWebViewId,
+    threadId,
+  }: { isPowerMode: boolean; editorWebViewId: string; threadId: string },
+): Promise<void> {
+  if (isPowerMode) {
+    await openCommentListAndSelectThreadSafe(papi, editorWebViewId, threadId);
+    return;
+  }
+
+  // Not awaited: see above. It logs and swallows its own failures.
+  selectCommentThreadInPanelSafe(papi, threadId, false, editorWebViewId);
 }
 
 // #region USJ location conversion helper functions
