@@ -99,6 +99,19 @@ describe('AnnotationStyleDataProviderEngine stylesheet', () => {
     );
   });
 
+  it('keeps a padding with a priority written without a space whole on every element', async () => {
+    const stylesheet = await stylesheetFor({ padding: '2px 4px!important' });
+    expect(stylesheet).toContain('  padding: 2px 4px!important;');
+    expect(stylesheet).not.toContain('padding-block');
+  });
+
+  it('splits a border with a priority, each side taking the value as written', async () => {
+    const stylesheet = await stylesheetFor({ border: '1px solid red !important' });
+    expect(stylesheet).toContain('  border-block: 1px solid red !important;');
+    expect(stylesheet).toContain('  border-inline-start: 1px solid red !important;');
+    expect(stylesheet).toContain('  border-inline-end: 1px solid red !important;');
+  });
+
   it('keeps an empty padding or margin as written instead of splitting nothing', async () => {
     expect(await stylesheetFor({ padding: '', margin: ' ' })).toBe(
       '.editor-typed-mark-external-check {\n  padding: ;\n  margin:  ;\n}',

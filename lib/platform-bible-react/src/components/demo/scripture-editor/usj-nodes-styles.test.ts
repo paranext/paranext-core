@@ -282,6 +282,16 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
     });
   });
 
+  // A collapsed note hides its content's text but not a `<mark>` around it, so an annotation's box
+  // style would draw an empty sliver beside the caller.
+  describe('collapsed note content', () => {
+    it('draws no box on an annotation mark inside it', () => {
+      ['margin: 0;', 'padding: 0;', 'border: none;', 'outline: none;', 'box-shadow: none;'].forEach(
+        (declaration) => expect(css).toMatch(rule(['.note.collapsed mark'], declaration)),
+      );
+    });
+  });
+
   describe('real-table box', () => {
     // PT9 boxes every table it renders (ScriptureBase.css `table`/`td`/`td.markercell`), and so
     // does the editor library. `th` is named alongside `td` because ImmutableTableCellNode emits a

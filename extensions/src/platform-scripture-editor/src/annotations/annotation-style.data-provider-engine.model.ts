@@ -72,7 +72,7 @@ function stylesToCss(properties: AnnotationStyleProperties): EdgeDeclarations {
     if (value === undefined) return;
     const cssProperty = toKebabCase(key);
     const values = shorthandValues(String(value));
-    const isSplittable = values.length > 0 && !values.some((part) => part.startsWith('!'));
+    const isSplittable = values.length > 0 && !values.some((part) => part.includes('!'));
 
     if (key === 'border') {
       every.push(declaration('border-block', value));
