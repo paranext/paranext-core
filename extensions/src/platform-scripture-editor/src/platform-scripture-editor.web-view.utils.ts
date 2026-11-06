@@ -230,7 +230,7 @@ export function returnFocusToScriptureTextIfDocumentFocused(
 /**
  * Lands a footnotes-pane row editor's pending edits in the document, then flushes the debounced
  * save that reads the document — for the paths that must not lose the last few keystrokes (page
- * teardown, and an external replace about to overwrite the document).
+ * teardown, and the editor losing its claim on the chapter).
  *
  * The order matters: the row's latest keystrokes sit in the row editor's own live-apply debounce,
  * not yet in the document, so a save flushed first would write the document without them. Landing
@@ -248,6 +248,43 @@ export function flushRowEditsThenSave(
   rowEditor?.flushPendingEdits();
   if (!save.isPending()) return undefined;
   return save.flush();
+}
+
+/**
+ * Throws away the edits the editor has not started saving, for an incoming chapter that is about to
+ * replace the document while the editor has no claim on it: the incoming chapter wins, so these
+ * edits are lost rather than written over it. A footnotes-pane row editor's pending edits are
+ * landed in the document first, so they count as unsaved edits too.
+ *
+ * @param rowEditor The open row editor, or `undefined`/`null` when no row session is open
+ * @param save The web view's debounced save
+ * @returns Whether any unsaved edits were thrown away
+ */
+export function discardRowEditsAndPendingSave(
+  rowEditor: Pick<FootnoteEditorHandle, 'flushPendingEdits'> | null | undefined,
+  save: Pick<FlushableDebouncer<unknown[]>, 'isPending' | 'cancel'>,
+): boolean {
+  rowEditor?.flushPendingEdits();
+  if (!save.isPending()) return false;
+  save.cancel();
+  return true;
+}
+
+/**
+ * Whether a `focusout` event moves focus from inside `container` to somewhere outside it, including
+ * out of the window altogether (the event's `relatedTarget` is `null` then).
+ *
+ * @param container The element focus is leaving, or `null` when it is not rendered
+ * @param target The `focusout` event's target: the element losing focus
+ * @param relatedTarget The `focusout` event's `relatedTarget`: the element gaining focus, if any
+ */
+export function isFocusLeavingContainer(
+  container: Pick<Node, 'contains'> | null | undefined,
+  target: EventTarget | null | undefined,
+  relatedTarget: EventTarget | null | undefined,
+): boolean {
+  if (!container || !(target instanceof Node) || !container.contains(target)) return false;
+  return !(relatedTarget instanceof Node) || !container.contains(relatedTarget);
 }
 
 /**

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   editorHoldsUnsavedChanges,
   isEditorContentForChapter,
+  isTypingLostToNavigation,
   performDebouncedPdpSave,
   resolveUsjToSaveToPdp,
   withoutZeroWidthNoBreakSpaces,
@@ -415,5 +416,37 @@ describe('isEditorContentForChapter', () => {
 
   it('allows the save when nothing has been applied to the editor yet', () => {
     expect(isEditorContentForChapter(undefined, 'JON|2|')).toBe(true);
+  });
+});
+
+describe('isTypingLostToNavigation', () => {
+  const lastSaved = usjWith('In the beginning');
+
+  // The window after navigation: the editor still shows JON 1, JON 2 is selected, and the user
+  // typed into JON 1, so the save scheduled for JON 2 is refused and the typing is gone.
+  it('is true when the editor lags the selection and holds typing the backend lacks', () => {
+    expect(
+      isTypingLostToNavigation('JON|2|', 'JON|2|', usjWith('In the beginning God'), lastSaved),
+    ).toBe(true);
+  });
+
+  // A declined save from JON 1 retries after JON 2 has loaded: the editor's typing is JON 2's own,
+  // and JON 2's save sends it.
+  it('is false for a save from a chapter left earlier', () => {
+    expect(
+      isTypingLostToNavigation('JON|1|', 'JON|2|', usjWith('In the beginning God'), lastSaved),
+    ).toBe(false);
+  });
+
+  it('is false when the editor holds nothing new for its chapter', () => {
+    expect(
+      isTypingLostToNavigation('JON|2|', 'JON|2|', usjWith('In the  beginning'), lastSaved),
+    ).toBe(false);
+  });
+
+  it('is false when the only difference is a zero-width no-break space, which is never a change', () => {
+    expect(
+      isTypingLostToNavigation('JON|2|', 'JON|2|', usjWith('In the\uFEFF beginning'), lastSaved),
+    ).toBe(false);
   });
 });
