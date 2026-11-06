@@ -17,6 +17,7 @@ import {
   type LucideIcon as LucideIconComponent,
   MessageSquare,
   MessageSquarePlus,
+  NotebookTabs,
   PanelBottom,
   Pencil,
   RefreshCw,
@@ -24,6 +25,7 @@ import {
   Search,
   Settings,
   Sparkles,
+  SquareDashedText,
   SquareSigma,
   SquareX,
   Users,
@@ -68,6 +70,8 @@ const LUCIDE_ICON_COMPONENTS = {
   'circle-check-big': CircleCheckBig,
   'clipboard-check': ClipboardCheck,
   sparkles: Sparkles,
+  'notebook-tabs': NotebookTabs,
+  'square-dashed-text': SquareDashedText,
 } as const satisfies Record<string, LucideIconComponent>;
 
 /** Name of an icon in the curated set */
