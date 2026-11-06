@@ -193,11 +193,10 @@ describe.each(['%webView_platformScriptureEditor_error_syncEditBlocked_2%'])(
   },
 );
 
-// Same guard for the book-not-available zero-state. This one matters more than most: the string family
-// it replaced (`%webView_platformScriptureEditor_error_bookNotFoundProject%`) already shipped with a
-// Spanish value, so an en-only replacement would have been a REGRESSION for Spanish users rather than
-// merely a gap — English title, description, button and tooltips where they previously had a
-// localized sentence.
+// Same guard for the book-not-available zero-state. The string it replaced
+// (`%webView_platformScriptureEditor_error_bookNotFoundProject%`) had a Spanish value, so an en-only
+// replacement would show Spanish users English title, description, button and tooltips where they
+// had a localized sentence.
 describe.each([...BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS])(
   'book-not-available view label %s',
   (key) => {

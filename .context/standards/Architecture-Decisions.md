@@ -5448,9 +5448,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Consequences:** The two purposes `fallbackKey` serves keep working: a lightly reworded key still
   shows what third-party localizations supplied for the old key, and Paratext 9 translations bridge
   forward. Old→new redirects whose old key had no value anywhere and never shipped in a release were
-  removed outright; identical-text and close-meaning pairs were flipped to new→old with the old
-  keys' values and `deprecationInfo` kept. A replacement whose old text means something different
-  gets no fallback, so a language that has not translated the new key shows English. The rule lives
+  removed outright; a retired key that shipped with values in a release got those values back,
+  with `deprecationInfo` and no redirect; identical-text and close-meaning pairs were flipped to
+  new→old with the old keys' values and `deprecationInfo` kept. A replacement whose old text means
+  something different gets no fallback, so a language that has not translated the new key shows
+  English; existing new→old entries whose texts clearly differ lost their `fallbackKey`. The rule lives
   in the Localization Guide ("`fallbackKey` Points From New to Old, Never From Old to New"), its
   checklist and Blocking Issues, and `.claude/rules/localization-locale-files.md`.
 

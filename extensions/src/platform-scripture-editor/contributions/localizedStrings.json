@@ -1449,9 +1449,6 @@
         "date": "2026-10-20",
         "message": "The Zoom items moved into the View section of the editor menu, so there is no Zoom heading. Retired with no replacement key."
       }
-    },
-    "%webView_scriptureTextGrid_viewOptions_teamSharedLock%": {
-      "fallbackKey": "%webView_scriptureTextGrid_viewOptions_adminSharedLock%"
     }
   }
 }

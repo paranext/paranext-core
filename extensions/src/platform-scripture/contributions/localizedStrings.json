@@ -294,9 +294,6 @@
     "%inventoryOptionName_SentenceFinalCapitalization_Abbreviations%": {
       "fallbackKey": "%SentenceFinalPunctCapitalizationCheck_5%"
     },
-    "%webView_checksSidePanel_projectFilter_projectsAndResources%": {
-      "fallbackKey": "%webView_checksSidePanel_projectFilter_label%"
-    },
     "%webView_platformScripture_error_syncEditBlocked%": {
       "deprecationInfo": {
         "date": "2026-10-13",
