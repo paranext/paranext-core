@@ -27,7 +27,7 @@ on:
 
 jobs:
   test:
-    name: Build on ${{ matrix.os }}, .Net ${{ matrix.dotnet_version }}
+    name: Build on ${{ matrix.os }}
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 180
@@ -39,7 +39,7 @@ jobs:
       matrix:
         # Make sure these match with the env values above and the `include` entries below
         os: [windows-latest, macos-15, ubuntu-22.04]
-        dotnet_version: [8.0.x]
+        dotnet_version: [10.0.x]
         # The name each leg uploads its app under, and the name its cleanup step deletes by
         include:
           - os: windows-latest

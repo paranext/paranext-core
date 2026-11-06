@@ -49,77 +49,92 @@ export const RIDS = ['linux-x64', 'win-x64', 'osx-x64', 'osx-arm64'];
 export const DOTNET_MIN_PACKAGES = 40;
 
 /**
- * Packages the .NET 8 shared framework supersedes, as `<id>|<version>`.
+ * Packages the .NET 10 shared framework supersedes, as `<id>|<version>`.
  *
- * Verbatim from `packs/Microsoft.NETCore.App.Ref/8.0.x/data/PackageOverrides.txt` in the .NET 8
- * SDK, which is the same list the SDK itself uses to discard a package's assembly in favour of the
- * framework's. The `runtime.*` entries are omitted because those are dropped wholesale (see
- * `isFrameworkPackage`). Refresh this if the data provider ever retargets past net8.0.
+ * Verbatim, in file order, from `data/PackageOverrides.txt` in the `Microsoft.NETCore.App.Ref`
+ * 10.0.0 targeting pack, which is the same list the SDK itself uses to discard a package's assembly
+ * in favour of the framework's. The `runtime.*` entries are omitted because those are dropped
+ * wholesale (see `isFrameworkPackage`). Refresh this if the data provider ever retargets past
+ * net10.0.
+ *
+ * Keep it at 10.0.0, the oldest runtime `global.json` allows. The entries versioned `10.0.0` rise
+ * with each patch release in the SDK's own copy, so a newer SDK can only drop a package this list
+ * keeps (over-disclosure), never ship one this list drops.
  */
-const NET8_FRAMEWORK_OVERRIDES = `
-Microsoft.CSharp|4.4.0 Microsoft.Win32.Primitives|4.3.0 Microsoft.Win32.Registry|4.4.0
-System.AppContext|4.3.0 System.Buffers|4.4.0 System.Collections.Concurrent|4.3.0
-System.Collections.Immutable|1.4.0 System.Collections.NonGeneric|4.3.0
-System.Collections.Specialized|4.3.0 System.Collections|4.3.0
-System.ComponentModel.EventBasedAsync|4.3.0 System.ComponentModel.Primitives|4.3.0
-System.ComponentModel.TypeConverter|4.3.0 System.ComponentModel|4.3.0 System.Console|4.3.0
-System.Data.Common|4.3.0 System.Diagnostics.Contracts|4.3.0 System.Diagnostics.Debug|4.3.0
-System.Diagnostics.DiagnosticSource|4.4.0 System.Diagnostics.FileVersionInfo|4.3.0
+const NET10_FRAMEWORK_OVERRIDES = `
+Microsoft.CSharp|4.7.0 Microsoft.VisualBasic|10.4.0 Microsoft.Win32.Primitives|4.3.0
+Microsoft.Win32.Registry|5.0.0 System.AppContext|4.3.0 System.Buffers|5.0.0 System.Collections|4.3.0
+System.Collections.Concurrent|4.3.0 System.Collections.Immutable|10.0.0
+System.Collections.NonGeneric|4.3.0 System.Collections.Specialized|4.3.0 System.ComponentModel|4.3.0
+System.ComponentModel.Annotations|4.3.0 System.ComponentModel.EventBasedAsync|4.3.0
+System.ComponentModel.Primitives|4.3.0 System.ComponentModel.TypeConverter|4.3.0
+System.Console|4.3.1 System.Data.Common|4.3.0 System.Data.DataSetExtensions|4.4.0
+System.Diagnostics.Contracts|4.3.0 System.Diagnostics.Debug|4.3.0
+System.Diagnostics.DiagnosticSource|10.0.0 System.Diagnostics.FileVersionInfo|4.3.0
 System.Diagnostics.Process|4.3.0 System.Diagnostics.StackTrace|4.3.0
 System.Diagnostics.TextWriterTraceListener|4.3.0 System.Diagnostics.Tools|4.3.0
 System.Diagnostics.TraceSource|4.3.0 System.Diagnostics.Tracing|4.3.0
-System.Dynamic.Runtime|4.3.0 System.Globalization.Calendars|4.3.0
-System.Globalization.Extensions|4.3.0 System.Globalization|4.3.0
-System.IO.Compression.ZipFile|4.3.0 System.IO.Compression|4.3.0
-System.IO.FileSystem.AccessControl|4.4.0 System.IO.FileSystem.DriveInfo|4.3.0
+System.Drawing.Primitives|4.3.0 System.Dynamic.Runtime|4.3.0 System.Formats.Asn1|10.0.0
+System.Formats.Tar|10.0.0 System.Globalization|4.3.0 System.Globalization.Calendars|4.3.0
+System.Globalization.Extensions|4.3.0 System.IO|4.3.0 System.IO.Compression|4.3.0
+System.IO.Compression.ZipFile|4.3.0 System.IO.FileSystem|4.3.0
+System.IO.FileSystem.AccessControl|4.4.0 System.IO.FileSystem.DriveInfo|4.3.1
 System.IO.FileSystem.Primitives|4.3.0 System.IO.FileSystem.Watcher|4.3.0
-System.IO.FileSystem|4.3.0 System.IO.IsolatedStorage|4.3.0 System.IO.MemoryMappedFiles|4.3.0
-System.IO.Pipes|4.3.0 System.IO.UnmanagedMemoryStream|4.3.0 System.IO|4.3.0
-System.Linq.Expressions|4.3.0 System.Linq.Queryable|4.3.0 System.Linq|4.3.0
-System.Net.Http|4.3.0 System.Net.NameResolution|4.3.0 System.Net.Primitives|4.3.0
-System.Net.Requests|4.3.0 System.Net.Security|4.3.0 System.Net.Sockets|4.3.0
-System.Net.WebHeaderCollection|4.3.0 System.ObjectModel|4.3.0
-System.Private.DataContractSerialization|4.3.0 System.Reflection.Emit.ILGeneration|4.3.0
-System.Reflection.Emit.Lightweight|4.3.0 System.Reflection.Emit|4.3.0
-System.Reflection.Extensions|4.3.0 System.Reflection.Metadata|1.5.0
+System.IO.IsolatedStorage|4.3.0 System.IO.MemoryMappedFiles|4.3.0 System.IO.Pipelines|10.0.0
+System.IO.Pipes|4.3.0 System.IO.Pipes.AccessControl|5.0.0 System.IO.UnmanagedMemoryStream|4.3.0
+System.Linq|4.3.0 System.Linq.AsyncEnumerable|10.0.0 System.Linq.Expressions|4.3.0
+System.Linq.Parallel|4.3.0 System.Linq.Queryable|4.3.0 System.Memory|5.0.0 System.Net.Http|4.3.4
+System.Net.Http.Json|10.0.0 System.Net.NameResolution|4.3.0 System.Net.NetworkInformation|4.3.0
+System.Net.Ping|4.3.0 System.Net.Primitives|4.3.1 System.Net.Requests|4.3.0
+System.Net.Security|4.3.2 System.Net.ServerSentEvents|10.0.0 System.Net.Sockets|4.3.0
+System.Net.WebHeaderCollection|4.3.0 System.Net.WebSockets|4.3.0 System.Net.WebSockets.Client|4.3.2
+System.Numerics.Vectors|5.0.0 System.ObjectModel|4.3.0
+System.Private.DataContractSerialization|4.3.0 System.Private.Uri|4.3.2 System.Reflection|4.3.0
+System.Reflection.DispatchProxy|6.0.0 System.Reflection.Emit|4.7.0
+System.Reflection.Emit.ILGeneration|4.7.0 System.Reflection.Emit.Lightweight|4.7.0
+System.Reflection.Extensions|4.3.0 System.Reflection.Metadata|10.0.0
 System.Reflection.Primitives|4.3.0 System.Reflection.TypeExtensions|4.3.0
-System.Reflection|4.3.0 System.Resources.ResourceManager|4.3.0 System.Runtime.Extensions|4.3.0
-System.Runtime.Handles|4.3.0 System.Runtime.InteropServices.RuntimeInformation|4.3.0
-System.Runtime.InteropServices|4.3.0 System.Runtime.Loader|4.3.0 System.Runtime.Numerics|4.3.0
-System.Runtime.Serialization.Formatters|4.3.0 System.Runtime.Serialization.Json|4.3.0
-System.Runtime.Serialization.Primitives|4.3.0 System.Runtime|4.3.0
-System.Security.AccessControl|4.4.0 System.Security.Claims|4.3.0
-System.Security.Cryptography.Algorithms|4.3.0 System.Security.Cryptography.Cng|4.4.0
-System.Security.Cryptography.Csp|4.3.0 System.Security.Cryptography.Encoding|4.3.0
-System.Security.Cryptography.OpenSsl|4.4.0 System.Security.Cryptography.Primitives|4.3.0
-System.Security.Cryptography.X509Certificates|4.3.0 System.Security.Cryptography.Xml|4.4.0
-System.Security.Principal.Windows|4.4.0 System.Security.Principal|4.3.0
-System.Text.Encoding.Extensions|4.3.0 System.Text.Encoding|4.3.0
-System.Text.RegularExpressions|4.3.0 System.Threading.Overlapped|4.3.0
-System.Threading.Tasks.Extensions|4.3.0 System.Threading.Tasks.Parallel|4.3.0
-System.Threading.Tasks|4.3.0 System.Threading.ThreadPool|4.3.0 System.Threading.Thread|4.3.0
-System.Threading.Timer|4.3.0 System.Threading|4.3.0 System.ValueTuple|4.3.0
-System.Xml.ReaderWriter|4.3.0 System.Xml.XDocument|4.3.0 System.Xml.XPath.XDocument|4.3.0
-System.Xml.XPath|4.3.0 System.Xml.XmlDocument|4.3.0 System.Xml.XmlSerializer|4.3.0
+System.Resources.Reader|4.3.0 System.Resources.ResourceManager|4.3.0 System.Resources.Writer|4.3.0
+System.Runtime|4.3.1 System.Runtime.CompilerServices.Unsafe|7.0.0
+System.Runtime.CompilerServices.VisualC|4.3.0 System.Runtime.Extensions|4.3.1
+System.Runtime.Handles|4.3.0 System.Runtime.InteropServices|4.3.0
+System.Runtime.InteropServices.RuntimeInformation|4.3.0 System.Runtime.Loader|4.3.0
+System.Runtime.Numerics|4.3.0 System.Runtime.Serialization.Formatters|4.3.0
+System.Runtime.Serialization.Json|4.3.0 System.Runtime.Serialization.Primitives|4.3.0
+System.Runtime.Serialization.Xml|4.3.0 System.Security.AccessControl|6.0.1
+System.Security.Claims|4.3.0 System.Security.Cryptography.Algorithms|4.3.1
+System.Security.Cryptography.Cng|5.0.0 System.Security.Cryptography.Csp|4.3.0
+System.Security.Cryptography.Encoding|4.3.0 System.Security.Cryptography.OpenSsl|5.0.0
+System.Security.Cryptography.Primitives|4.3.0 System.Security.Cryptography.X509Certificates|4.3.2
+System.Security.Principal|4.3.0 System.Security.Principal.Windows|5.0.0
+System.Security.SecureString|4.3.0 System.Text.Encoding|4.3.0 System.Text.Encoding.CodePages|10.0.0
+System.Text.Encoding.Extensions|4.3.0 System.Text.Encodings.Web|10.0.0 System.Text.Json|10.0.0
+System.Text.RegularExpressions|4.3.1 System.Threading|4.3.0 System.Threading.AccessControl|10.0.0
+System.Threading.Channels|10.0.0 System.Threading.Overlapped|4.3.0 System.Threading.Tasks|4.3.0
+System.Threading.Tasks.Dataflow|10.0.0 System.Threading.Tasks.Extensions|5.0.0
+System.Threading.Tasks.Parallel|4.3.0 System.Threading.Thread|4.3.0
+System.Threading.ThreadPool|4.3.0 System.Threading.Timer|4.3.0 System.ValueTuple|4.5.0
+System.Xml.ReaderWriter|4.3.1 System.Xml.XDocument|4.3.0 System.Xml.XmlDocument|4.3.0
+System.Xml.XmlSerializer|4.3.0 System.Xml.XPath|4.3.0 System.Xml.XPath.XDocument|5.0.0
 `;
 
 const frameworkOverrides = new Map(
-  NET8_FRAMEWORK_OVERRIDES.trim()
+  NET10_FRAMEWORK_OVERRIDES.trim()
     .split(/\s+/)
     .map((entry) => entry.split('|'))
     .map(([id, version]): [string, string] => [id.toLowerCase(), version]),
 );
 
 /**
- * Whether a NuGet package's assemblies come from the .NET 8 shared framework rather than the
+ * Whether a NuGet package's assemblies come from the .NET 10 shared framework rather than the
  * package.
  *
  * The SDK discards such a package's assembly at publish time in favour of the framework's, so it
  * contributes nothing to the shipped output and is not a separately-licensed component.
  *
  * The comparison is `<=` over the whole version, which is what the SDK's own `PackageOverrides`
- * handling does. Comparing majors alone drops packages that genuinely ship: `System.Buffers 4.6.1`
- * is newer than the 4.4.0 the framework supersedes, so its assembly is the one that lands in the
+ * handling does. Comparing majors alone drops packages that genuinely ship: `System.Buffers 5.0.1`
+ * is newer than the 5.0.0 the framework supersedes, so its assembly is the one that lands in the
  * publish output - and dropping it removes a real component from the notices _before_ it reaches
  * the copyleft gate, silently and with no count that would reveal the loss.
  */
@@ -130,8 +145,8 @@ export function isFrameworkPackage(id: string, version: string): boolean {
   if (/^runtime\./i.test(id)) return true;
   const supersededThrough = frameworkOverrides.get(id.toLowerCase());
   if (supersededThrough === undefined) return false;
-  // `compareVersions` is a total order, so a component it cannot read sorts as `0` and `4.4.x`
-  // compares EQUAL to `4.4.0` - which `<=` reads as superseded. Dropping is the irreversible
+  // `compareVersions` is a total order, so a component it cannot read sorts as `0` and `5.0.x`
+  // compares EQUAL to `5.0.0` - which `<=` reads as superseded. Dropping is the irreversible
   // direction here: the package leaves the closure before the copyleft gate ever sees it, and no
   // count reveals the loss. A version this comparison cannot actually order is kept and disclosed.
   if (!isNumericVersion(version) || !isNumericVersion(supersededThrough)) return false;
@@ -175,11 +190,11 @@ function shipsSomething(assetGroup: Record<string, unknown> | undefined): boolea
  * The shipping determination `nuget-license -t` does not make.
  *
  * `nuget-license` answers "what is in the restore closure" - every package the closure resolves,
- * including analyzers, MSBuild-only tooling, metapackages, and packages the .NET 8 shared framework
- * supersedes. None of those contribute a file to the published app, so listing them would assert
- * this project redistributes ~100 Microsoft framework components it does not - over-disclosure that
- * misstates the closure as badly as under-disclosure does. This mirrors the two filters the old
- * project.assets.json walk applies:
+ * including analyzers, MSBuild-only tooling, metapackages, and packages the .NET 10 shared
+ * framework supersedes. None of those contribute a file to the published app, so listing them would
+ * assert this project redistributes ~100 Microsoft framework components it does not -
+ * over-disclosure that misstates the closure as badly as under-disclosure does. This mirrors the
+ * two filters the old project.assets.json walk applies:
  *
  * 1. The package must contribute a real (non-placeholder) asset in `runtime`, `runtimeTargets`,
  *    `native`, or `resource`.
@@ -193,12 +208,13 @@ function shipsSomething(assetGroup: Record<string, unknown> | undefined): boolea
  *
  * Every target in the assets file is scanned, not only the RID-specific one, and a package ships if
  * ANY target shows a real asset. This matters because a single-RID restore's assets file has (at
- * least) two targets: a RID-agnostic one (e.g. `net8.0`) and a RID-specific one (e.g.
- * `net8.0/win-x64`), and `runtimeTargets` - exactly where cross-platform native assets live - hangs
- * off the RID-agnostic target, not the RID-specific one. `Icu4c.Win.Min` is the concrete case: its
- * win7-x64 native ICU DLLs resolve under the `net8.0` target's `runtimeTargets`, while its
- * `net8.0/<rid>` target entry contributes only a `_._` placeholder. Reading only the RID-specific
- * target would silently drop it, and every other package shipping a native asset the same way.
+ * least) two targets: a RID-agnostic one (e.g. `net10.0`) and a RID-specific one (e.g.
+ * `net10.0/win-x64`), and `runtimeTargets` - exactly where cross-platform native assets live -
+ * hangs off the RID-agnostic target, not the RID-specific one. `Icu4c.Win.Min` is the concrete
+ * case: its win7-x64 native ICU DLLs resolve under the `net10.0` target's `runtimeTargets`, while
+ * its `net10.0/<rid>` target entry contributes only a `_._` placeholder. Reading only the
+ * RID-specific target would silently drop it, and every other package shipping a native asset the
+ * same way.
  *
  * @param assets Parsed project.assets.json.
  * @param rid Used only to sanity-check the assets file was actually restored for this RID.

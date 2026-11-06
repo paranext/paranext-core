@@ -13,9 +13,8 @@ namespace TestParanextDataProvider.EnhancedResources;
 /// success with non-empty data is covered by the developer smoke check (Chunk 14),
 /// not here, because real encrypted marble zips cannot be checked in.
 ///
-/// Catastrophic-failure path uses an embedded-null-character path. Directory.Exists
-/// throws ArgumentException for that input on Linux/.NET 8, which drives the top-level
-/// try-catch in LoadAsync without requiring a test-only seam.
+/// The catastrophic-failure path is driven through the LoadCore subclass seam (see
+/// MarbleDataLoader.LoadCore for why no input can force it).
 /// </summary>
 [TestFixture]
 [ExcludeFromCodeCoverage]
@@ -85,9 +84,7 @@ internal class MarbleDataLoaderTests
     [Test]
     public async Task LoadAsync_CatastrophicFailure_LogsFailureAndReturnsNull()
     {
-        // The null-character path trick doesn't actually throw on .NET 8 Linux
-        // (Directory.Exists just returns false), so we use the subclass seam
-        // documented in the plan: override LoadCore to throw.
+        // Force the failure through the subclass seam: LoadCore throws.
         var originalOut = Console.Out;
         using var captured = new StringWriter();
         Console.SetOut(captured);
