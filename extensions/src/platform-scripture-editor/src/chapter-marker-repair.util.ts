@@ -666,13 +666,16 @@ function isStoredChapterWithoutItsMarker(usjFromEditor: Usj, usjFromPdp: Usj | u
  * @param usjFromEditor The editor's settled document.
  * @param usjFromPdp What the PDP currently holds for this chapter, if anything.
  * @param expectedChapterNum The chapter the editor is editing.
- * @param caret The editor's caret, if it has one, so a line of text the repair moves keeps it.
+ * @param caret The editor's caret, so a line of text the repair moves keeps it. `undefined` when
+ *   the editor has no caret. Required rather than optional so a call site cannot leave it out by
+ *   accident: without it, a caret in what is left of a chapter line (`\ 2`, `\sc 2`) is not kept in
+ *   that line when the repair moves it.
  */
 export function prepareUsjForChapterSave(
   usjFromEditor: Usj,
   usjFromPdp: Usj | undefined,
   expectedChapterNum: number,
-  caret?: SelectionRange,
+  caret: SelectionRange | undefined,
 ): ChapterSavePreparation {
   const editorUsjToSave = resolveUsjToSaveToPdp(usjFromEditor, usjFromPdp);
   if (!editorUsjToSave)
