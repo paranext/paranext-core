@@ -4,8 +4,11 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   buildHiddenContentDeleteConfirm,
   createHiddenContentDeleteHandler,
+  createPlatformHiddenContentDeleteHandler,
   describeHiddenContent,
+  getEditabilityOptions,
   HiddenContentDeleteConfirmOptions,
+  HiddenContentDeleteServices,
 } from './hidden-content-delete-confirm.utils';
 
 const PROMPT_KEY = '%webView_platformScriptureEditor_hiddenContentDelete_prompt%';
@@ -141,5 +144,65 @@ describe('createHiddenContentDeleteHandler', () => {
 
     await expect(handler(skippable)).rejects.toThrow(PROMPT_KEY);
     expect(confirm).not.toHaveBeenCalled();
+  });
+});
+
+describe('createPlatformHiddenContentDeleteHandler', () => {
+  const request: HiddenContentDeleteRequest = {
+    items: [{ tag: 'figure', marker: 'fig' }],
+    action: 'deleteBackward',
+    canSkip: true,
+  };
+
+  function fakeServices(answer: boolean | undefined) {
+    const services = {
+      localization: { getLocalizedString: vi.fn(async () => promptTemplate) },
+      dialogs: { showDialog: vi.fn(async () => answer) },
+    } satisfies HiddenContentDeleteServices;
+    return services;
+  }
+
+  it('asks through the platform confirm dialog and deletes only on confirm', async () => {
+    const services = fakeServices(true);
+    const handler = createPlatformHiddenContentDeleteHandler(
+      () => ({ [PROMPT_KEY]: promptTemplate }),
+      services,
+    );
+
+    await expect(handler(request)).resolves.toBe('delete');
+    expect(services.dialogs.showDialog).toHaveBeenCalledWith(
+      'platform.confirm',
+      buildHiddenContentDeleteConfirm(request, promptTemplate),
+    );
+    expect(services.localization.getLocalizedString).not.toHaveBeenCalled();
+  });
+
+  it('looks the prompt up through the localization service until the live strings load', async () => {
+    const services = fakeServices(false);
+
+    await expect(
+      createPlatformHiddenContentDeleteHandler(() => ({}), services)(request),
+    ).resolves.toBe('keep');
+    expect(services.localization.getLocalizedString).toHaveBeenCalledWith({
+      localizeKey: PROMPT_KEY,
+    });
+  });
+});
+
+describe('getEditabilityOptions', () => {
+  const handler = vi.fn(async () => 'keep' as const);
+
+  it('guards hidden content in an editable editor', () => {
+    expect(getEditabilityOptions(false, handler)).toEqual({
+      isReadonly: false,
+      onHiddenContentDelete: handler,
+    });
+  });
+
+  it('asks nothing in a read-only editor, which makes no edits', () => {
+    expect(getEditabilityOptions(true, handler)).toEqual({
+      isReadonly: true,
+      onHiddenContentDelete: undefined,
+    });
   });
 });

@@ -319,7 +319,8 @@ import {
   UnsupportedProjectGate,
 } from './unsupported-project-gate.component';
 import {
-  createHiddenContentDeleteHandler,
+  createPlatformHiddenContentDeleteHandler,
+  getEditabilityOptions,
   HIDDEN_CONTENT_DELETE_PROMPT_KEY,
 } from './hidden-content-delete-confirm.utils';
 
@@ -571,12 +572,7 @@ function PlatformScriptureEditor({
    * identity never changes.
    */
   const handleHiddenContentDelete = useMemo(
-    () =>
-      createHiddenContentDeleteHandler(
-        () => localizedStringsRef.current,
-        (localizeKey) => papi.localization.getLocalizedString({ localizeKey }),
-        (confirmOptions) => papi.dialogs.showDialog('platform.confirm', confirmOptions),
-      ),
+    () => createPlatformHiddenContentDeleteHandler(() => localizedStringsRef.current, papi),
     [],
   );
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
@@ -3144,10 +3140,8 @@ function PlatformScriptureEditor({
   // from it. There is no variant without the copy limit to pass by mistake.
   const options = useMemo<EditorOptions>(
     () => ({
-      isReadonly: isReadOnlyEffective,
+      ...getEditabilityOptions(isReadOnlyEffective, handleHiddenContentDelete),
       structureProtectionMode,
-      // A read-only editor makes no edits, so there is nothing to ask about.
-      onHiddenContentDelete: isReadOnlyEffective ? undefined : handleHiddenContentDelete,
       hasSpellCheck: false,
       nodes: nodeOptions,
       textDirection: textDirectionEffective,
@@ -3229,10 +3223,10 @@ function PlatformScriptureEditor({
     rowEditorViewOptionsRef.current = footnotesPaneViewOptions;
   const rowEditorViewOptions = rowEditorViewOptionsRef.current;
   /**
-   * `options` with the pane's view options, for the pane's row editor. Structure
-   * protection is off there, as it is in Power mode: a note has no verse or paragraph structure of
-   * its own to protect, its edits only ever replace the note itself, and 'protected' would claim
-   * Enter before the note's own `\fp` handling could run.
+   * `options` with the pane's view options, for the pane's row editor. Structure protection is off
+   * there, as it is in Power mode: a note has no verse or paragraph structure of its own to
+   * protect, its edits only ever replace the note itself, and 'protected' would claim Enter before
+   * the note's own `\fp` handling could run.
    */
   const paneFootnoteEditorOptions = useMemo<EditorOptions>(
     () => ({
