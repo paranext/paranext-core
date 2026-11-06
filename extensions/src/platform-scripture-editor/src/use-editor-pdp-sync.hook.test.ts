@@ -545,11 +545,10 @@ describe('useEditorPdpSync', () => {
     expect(setUsjSpy).toHaveBeenCalledWith(externalChange);
   });
 
-  // Recent typing wins: keystrokes still inside the debounce's trailing window when an external
-  // delivery replaces the UNFOCUSED editor must be WRITTEN (the flush fires them through the save
-  // pipeline before the replace), not silently discarded. The mirror case — focus still in the
-  // editor — pushes them via the deferral branch, so without the flush, focus at the delivery
-  // instant decided between "pushed" and "lost".
+  // Without a claim, the incoming chapter wins: keystrokes still inside the debounce's trailing
+  // window when an external delivery replaces the UNFOCUSED editor are thrown away
+  // (`discardUnsavedEdits`) before the replace, and the user is told. The mirror case — focus still
+  // in the editor — pushes them via the deferral branch.
   describe('unsaved edits on the replace path', () => {
     const typedContent = makeChapterUsj('14', 'This is the law of the leper. plus fresh typing');
     const externalChange = makeChapterUsj('14', 'Externally edited text.');
