@@ -167,6 +167,7 @@ import { createFlushableDebouncer } from './flushable-debouncer.util';
 import {
   editorHoldsUnsavedChanges,
   isEditorContentForChapter,
+  isTypingLostToNavigation,
   performDebouncedPdpSave,
 } from './debounced-pdp-save.util';
 import {
@@ -3379,6 +3380,84 @@ function PlatformScriptureEditor({
   // that write carries the editor's latest content. Read by `reportLostEdits` at the
   // moments held edits are lost: leaving the chapter, closing, or being replaced by an update.
   const chapterWithEditsHeldBehindWrite = useRef<EditsLostInChapter | undefined>(undefined);
+
+  /**
+   * Tells the user that their latest edits in a chapter were not saved, so they can check it and
+   * type them again.
+   *
+   * @param replacedByUpdate Whether a change made outside the editor replaced them, which the
+   *   notice then names as the reason
+   * @param routeToThisEditor Whether to show it in the window holding this editor. False when the
+   *   editor is closing, since a notice routed to it might never be shown.
+   */
+  const notifyLostEdits = useCallback(
+    (book: string, chapterNum: number, replacedByUpdate: boolean, routeToThisEditor: boolean) =>
+      papi.notifications
+        .send({
+          message: formatReplacementString(
+            localizedStrings[
+              replacedByUpdate
+                ? '%webView_platformScriptureEditor_error_editsReplacedByUpdate_format%'
+                : '%webView_platformScriptureEditor_error_heldEditsLost_format%'
+            ],
+            { projectName, book, chapter: chapterNum },
+          ),
+          severity: 'error',
+          webViewId: routeToThisEditor ? webViewId : undefined,
+        })
+        .catch((error) => {
+          logger.warn(`Error notifying about edits that were not saved: ${getErrorMessage(error)}`);
+        }),
+    [localizedStrings, projectName, webViewId],
+  );
+  // Behind a ref so `reportLostEdits` keeps a stable identity: the chapter-switch flush runs in the
+  // cleanup of an effect that depends on it, so a new identity would flush mid-chapter.
+  const notifyLostEditsRef = useRef(notifyLostEdits);
+  useEffect(() => {
+    notifyLostEditsRef.current = notifyLostEdits;
+  }, [notifyLostEdits]);
+
+  /**
+   * Warns and notifies the user, once, that their latest edits in a chapter were lost:
+   *
+   * - Edits held behind an in-flight write (`chapterWithEditsHeldBehindWrite`). The push-back that
+   *   would have sent them runs only when that write's update reaches an editor still showing the
+   *   chapter and still holding them, so they are lost when the editor leaves the chapter, closes,
+   *   or is replaced by an incoming update first. Call this straight after flushing the pending
+   *   save, so a flush the in-flight write holds back is counted.
+   * - Edits whose save had not started, thrown away by `discardUnsavedEdits` (`discardedIn`).
+   *
+   * TODO(PT-5043): send the held edits instead of losing them when the editor leaves the chapter or
+   * closes.
+   *
+   * @param cause What took the edits away
+   * @param discardedIn The chapter whose not-yet-started save was just thrown away, if any
+   */
+  const reportLostEdits = useCallback(
+    (
+      cause: 'leftChapter' | 'editorClosed' | 'replacedByUpdate',
+      discardedIn?: EditsLostInChapter,
+    ) => {
+      const held = chapterWithEditsHeldBehindWrite.current;
+      const lost = held ?? discardedIn;
+      if (!lost) return;
+      chapterWithEditsHeldBehindWrite.current = undefined;
+      const what = {
+        leftChapter: `Left ${lost.chapterKey}`,
+        editorClosed: `The editor closed on ${lost.chapterKey}`,
+        replacedByUpdate: `A change made outside the editor replaced ${lost.chapterKey}`,
+      }[cause];
+      const why = held ? 'a save of it was still in progress' : 'their save had not started';
+      logger.warn(`${what} before its latest edits were saved (${why}); those edits are lost`);
+      notifyLostEditsRef.current(
+        lost.book,
+        lost.chapterNum,
+        cause === 'replacedByUpdate',
+        cause !== 'editorClosed',
+      );
+    },
+    [],
+  );
   // Which save rejection the user has already been told about. A chapter the backend refuses is
   // refused again on every save for as long as the user keeps typing, so this is what turns that
   // run of identical rejections into one report; a write that completes clears it. Both transitions
@@ -3882,6 +3961,26 @@ function PlatformScriptureEditor({
         logger.debug(
           `Not saving the editor's content for ${editorDocumentKey} to ${savedChapterKey}: the editor has not loaded that chapter yet`,
         );
+        // After navigation the editor keeps showing, and editing, the chapter it is leaving until the
+        // next one loads, and a save of what is typed there is scheduled for the next chapter. If it
+        // fires first, it lands here and the typing is lost, so it is reported like any other edits
+        // lost to leaving a chapter. `usjSentToPdp` holds the last chapter delivered or sent for the
+        // document the editor holds.
+        if (
+          editorDocument &&
+          editorDocumentKey &&
+          isTypingLostToNavigation(
+            savedChapterKey,
+            chapterKeyRef.current,
+            usjFromEditor,
+            usjSentToPdp.current,
+          )
+        )
+          reportLostEdits('leftChapter', {
+            chapterKey: editorDocumentKey,
+            book: localizedBookNames.current.get(editorDocument.book) ?? editorDocument.book,
+            chapterNum: editorDocument.chapterNum,
+          });
         return Promise.resolve(false);
       }
 
@@ -4268,6 +4367,7 @@ function PlatformScriptureEditor({
     notifyChapterMarkerCorrected,
     saveNotificationIds,
     webViewId,
+    reportLostEdits,
   ]);
 
   // #endregion PDP Save Write Path
@@ -4647,84 +4747,6 @@ function PlatformScriptureEditor({
         },
         PDP_SAVE_DEBOUNCE_MS,
       ),
-    [],
-  );
-
-  /**
-   * Tells the user that their latest edits in a chapter were not saved, so they can check it and
-   * type them again.
-   *
-   * @param replacedByUpdate Whether a change made outside the editor replaced them, which the
-   *   notice then names as the reason
-   * @param routeToThisEditor Whether to show it in the window holding this editor. False when the
-   *   editor is closing, since a notice routed to it might never be shown.
-   */
-  const notifyLostEdits = useCallback(
-    (book: string, chapterNum: number, replacedByUpdate: boolean, routeToThisEditor: boolean) =>
-      papi.notifications
-        .send({
-          message: formatReplacementString(
-            localizedStrings[
-              replacedByUpdate
-                ? '%webView_platformScriptureEditor_error_editsReplacedByUpdate_format%'
-                : '%webView_platformScriptureEditor_error_heldEditsLost_format%'
-            ],
-            { projectName, book, chapter: chapterNum },
-          ),
-          severity: 'error',
-          webViewId: routeToThisEditor ? webViewId : undefined,
-        })
-        .catch((error) => {
-          logger.warn(`Error notifying about edits that were not saved: ${getErrorMessage(error)}`);
-        }),
-    [localizedStrings, projectName, webViewId],
-  );
-  // Behind a ref so `reportLostEdits` keeps a stable identity: the chapter-switch flush runs in the
-  // cleanup of an effect that depends on it, so a new identity would flush mid-chapter.
-  const notifyLostEditsRef = useRef(notifyLostEdits);
-  useEffect(() => {
-    notifyLostEditsRef.current = notifyLostEdits;
-  }, [notifyLostEdits]);
-
-  /**
-   * Warns and notifies the user, once, that their latest edits in a chapter were lost:
-   *
-   * - Edits held behind an in-flight write (`chapterWithEditsHeldBehindWrite`). The push-back that
-   *   would have sent them runs only when that write's update reaches an editor still showing the
-   *   chapter and still holding them, so they are lost when the editor leaves the chapter, closes,
-   *   or is replaced by an incoming update first. Call this straight after flushing the pending
-   *   save, so a flush the in-flight write holds back is counted.
-   * - Edits whose save had not started, thrown away by `discardUnsavedEdits` (`discardedIn`).
-   *
-   * TODO(PT-5043): send the held edits instead of losing them when the editor leaves the chapter or
-   * closes.
-   *
-   * @param cause What took the edits away
-   * @param discardedIn The chapter whose not-yet-started save was just thrown away, if any
-   */
-  const reportLostEdits = useCallback(
-    (
-      cause: 'leftChapter' | 'editorClosed' | 'replacedByUpdate',
-      discardedIn?: EditsLostInChapter,
-    ) => {
-      const held = chapterWithEditsHeldBehindWrite.current;
-      const lost = held ?? discardedIn;
-      if (!lost) return;
-      chapterWithEditsHeldBehindWrite.current = undefined;
-      const what = {
-        leftChapter: `Left ${lost.chapterKey}`,
-        editorClosed: `The editor closed on ${lost.chapterKey}`,
-        replacedByUpdate: `A change made outside the editor replaced ${lost.chapterKey}`,
-      }[cause];
-      const why = held ? 'a save of it was still in progress' : 'their save had not started';
-      logger.warn(`${what} before its latest edits were saved (${why}); those edits are lost`);
-      notifyLostEditsRef.current(
-        lost.book,
-        lost.chapterNum,
-        cause === 'replacedByUpdate',
-        cause !== 'editorClosed',
-      );
-    },
     [],
   );
 
