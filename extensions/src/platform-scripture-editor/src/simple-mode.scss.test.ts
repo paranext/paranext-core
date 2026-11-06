@@ -2,14 +2,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import postcss, { type Rule } from 'postcss';
 import { compile } from 'sass';
-import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
-import {
-  descendants,
-  parseSource,
-  parseWebViewSource,
-  propExpressions,
-} from './web-view-source.test-utils';
 
 /**
  * The marker classes that scope a rule to Simple mode. `_simple-mode.scss` explains why the scoping
@@ -259,31 +252,6 @@ describe('_simple-mode.scss', () => {
       expect(hoverColor).not.toBe('transparent');
       expect(Math.max(0, ...transitionDelaysMs(resting))).toBe(0);
       expect(Math.max(0, ...transitionDelaysMs(hovered))).toBeGreaterThan(0);
-    });
-
-    it('is switched on from the Scripture editor root only, not the read-only Simple panels', () => {
-      // When the class applies is unit-tested on `getSimpleModeRootClassNames`; this checks the
-      // editor root uses it and the panels do not.
-      expect(
-        propExpressions(parseWebViewSource(), 'div', 'className').some((expression) =>
-          expression.includes('getSimpleModeRootClassNames('),
-        ),
-      ).toBe(true);
-      ['model-text-panel.component.tsx', 'resource-text-panel.component.tsx'].forEach((panel) => {
-        const nodes = descendants(parseSource(panel));
-        const strings = nodes.flatMap((node) =>
-          ts.isStringLiteral(node) || ts.isTemplateLiteralToken(node) || ts.isJsxText(node)
-            ? [node.text]
-            : [],
-        );
-        expect(strings.some((text) => text.includes('editor-container-simple'))).toBe(true);
-        expect(strings.some((text) => text.includes('character-marker-indicators'))).toBe(false);
-        expect(
-          nodes.some(
-            (node) => ts.isIdentifier(node) && node.text === 'getSimpleModeRootClassNames',
-          ),
-        ).toBe(false);
-      });
     });
   });
 });

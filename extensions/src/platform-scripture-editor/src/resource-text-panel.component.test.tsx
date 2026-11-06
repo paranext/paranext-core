@@ -711,6 +711,20 @@ describe('ResourceTextPanel content zoom placement', () => {
   });
 });
 
+describe('ResourceTextPanel Simple mode styling', () => {
+  it("uses Simple mode's editor styling without the typing indicators of the editable editor", () => {
+    // `.character-marker-indicators` tints text inside invisible character markers to warn against
+    // typing in them, which means nothing in a read-only panel.
+    const { container } = renderPanel();
+    expectEditorShowing();
+
+    expect(container.querySelector('.editor-container-simple')).toContainElement(
+      screen.getByTestId('editorial'),
+    );
+    expect(container.querySelector('.character-marker-indicators')).toBeNull();
+  });
+});
+
 describe('ResourceTextPanel logging', () => {
   it('logs a missing book at debug and any other failure at error', () => {
     // A named, terminal message looks the same whatever went wrong, so the log is the only place
