@@ -18,7 +18,8 @@ locale file at all, so their presence is not a signal that a new key belongs in 
   string never belongs here.
 - **`metadata.json`** — not a locale file. It carries per-key metadata: `fallbackKey` names the key
   whose translations this key borrows (most often a Paratext 9 key; for a replaced string it is the
-  NEW key that carries a `fallbackKey` pointing at the OLD key — see "If a String Needs
+  NEW key that carries a `fallbackKey` pointing at the OLD key, and only when the old translation is
+  acceptable for the new text — never an old key pointing at a new one; see "If a String Needs
   Replacement" in [the Localization Guide](../../.context/standards/Localization-Guide.md));
   `deprecationInfo` records when a key was deprecated (superseded by a new key, or no longer used)
   and what, if anything, replaced it. A new key needs an entry here only if it borrows another
