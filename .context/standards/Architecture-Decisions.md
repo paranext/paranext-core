@@ -3209,6 +3209,46 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   documents is `insertCommentAtCurrentSelection` in
   `extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx`.
 
+## adr-editor-unsaved-edits-lose-to-unclaimed-updates: Without a claim on the chapter, an incoming chapter wins over the editor's unsaved edits, and the user is told
+
+- **Date:** 2026-11-06
+- **Status:** Accepted
+- **Context:** The Scripture editor claims its chapter while the user is actively editing it (see
+  `adr-editor-yields-to-window-focus-subject`); a differing incoming chapter is then held back and
+  the editor's copy is pushed over it. Without the claim, the incoming chapter replaces the editor.
+  But edits the editor had not saved yet were treated two ways: a save still waiting out the 700 ms
+  debounce was flushed first, so it overwrote the outside change on disk ("recent typing wins"),
+  while a save held back behind a write still in flight was thrown away with only a log line that
+  alarmed testers even in the harmless case.
+- **Decision:**
+  - The claim decides who wins. With it, the editor's edits win (unchanged). Without it, the
+    incoming chapter wins: unsaved edits, whether still waiting on the debounce or held back
+    behind a write in flight, are thrown away, and the user is warned in the log and notified
+    (`discardUnsavedEdits` in the web view, called by `useEditorPdpSync`'s replace path). A
+    Send/Receive merge is treated the same way.
+  - To keep that loss rare, the editor sends its waiting edits as soon as it loses the claim
+    instead of waiting out the debounce: on window blur, on focus leaving the editor for something
+    else in its web view, on a chapter switch, and on page teardown. A save already in flight
+    still holds the new one back; the held edits reach the backend when that save's update comes
+    back to an editor still showing the chapter.
+  - Edits lost because the editor left the chapter or closed while a save was in flight are
+    warned about and notified the same way, until PT-5043 sends them instead.
+- **Alternatives:** Keep "recent typing wins" (flush before replacing): rejected, because it
+  silently overwrites a change made outside the editor (Find & Replace, a merge) with a copy that
+  predates it. Merge the unsaved edits onto the incoming chapter: not done; several days of work
+  and a team/UX decision on overlapping changes (PT-4992 records it as an option). Send waiting
+  edits on claim loss even while a save is in flight: rejected, because the two saves would race to
+  disk in either order.
+- **Consequences:** The window in which typing can be lost shrinks to "a save is in flight when the
+  claim ends", which is usually a fraction of a second. A save the backend reformats (Unicode
+  normalization, some invisible characters; see `Scripture-Data-Fidelity-Catalog.md`) comes back
+  looking like an outside change, so held edits behind it are thrown away and reported even though
+  nothing else changed the chapter. Typing into the chapter being left, after navigation starts and
+  before the next chapter loads, is thrown away and reported only if the next chapter arrives while
+  it is still waiting to be saved; if the debounce fires first, that save is dropped with a debug
+  line, as before.
+- **Source:** PT-5043; paranext-core PR #2998.
+
 ## adr-editor-yields-to-window-focus-subject: The Scripture editor's typing hold yields to the window focus subject
 
 - **Date:** 2026-10-29
@@ -3259,6 +3299,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   after flushing pending saves, as the text editor does.
   Revisit the grace period if the window service's focus debounce changes.
 - **Source:** PT-4968
+- **Amended 2026-11-06:** an incoming chapter the editor has no claim on no longer flushes pending
+  saves before it replaces the editor; the edits are thrown away and the user is told. Losing the
+  claim sends waiting edits at once instead. See `adr-editor-unsaved-edits-lose-to-unclaimed-updates`.
 
 ## adr-empty-is-zero-state-primitive: shadcn `Empty` is the zero-state-with-action primitive; `EmptyState` stays message-only
 
