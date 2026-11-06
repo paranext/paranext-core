@@ -262,7 +262,9 @@ import {
   CONTEXT_MENU_ACTION_TO_NOTE_KIND,
   createInsertContextMenuItems,
   deriveReadOnlyFlags,
+  discardRowEditsAndPendingSave,
   flushRowEditsThenSave,
+  isFocusLeavingContainer,
   forgetCaretSnapshotIfParaMarkerSelected,
   isEditorContextMenuOpen,
   generateInlineMarkerMenuListItems,
@@ -385,6 +387,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%versionHistoryCommit_beforeInsertEndnote%',
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
   '%webView_platformScriptureEditor_error_chapterMarkerCorrected_format%',
+  '%webView_platformScriptureEditor_error_editsReplacedByUpdate_format%',
   '%webView_platformScriptureEditor_error_heldEditsLost_format%',
   '%webView_platformScriptureEditor_error_permissions_format%',
   '%webView_platformScriptureEditor_error_saveFailed_format%',
@@ -541,6 +544,15 @@ type MarkerMenuAnchorContext = MarkerMenuContext & {
  * down another editor's still-standing "could not be saved" notice while that editor goes on
  * failing, with its report already spent.
  */
+/** A chapter whose latest edits were lost, as the warning and the user's notification name it. */
+type EditsLostInChapter = {
+  /** The chapter's key from `getChapterKey`, for the log */
+  chapterKey: string;
+  /** Localized name of the chapter's book, for the notification */
+  book: string;
+  chapterNum: number;
+};
+
 function getSaveNotificationIds(webViewId: string) {
   return {
     chapterMarkerCorrected: `platform-scripture-editor-chapter-marker-corrected-${webViewId}`,
@@ -1804,10 +1816,10 @@ function PlatformScriptureEditor({
     // A reload replaces every Lexical key, the note the open editor is bound to included, so no
     // note session survives it on EITHER surface — one left open would keep applying into a note
     // that is gone, and `replaceEmbedUpdate` can only log the stale key and drop the edit. A pane
-    // row's pending edits are saved before an external replace gets here
-    // (`flushPendingDebouncedSave`, which `useEditorPdpSync` calls first); anything else the note
-    // editor had not applied yet is overwritten, exactly as the incoming document overwrites the
-    // rest of the chapter.
+    // row's pending edits are landed and reported as lost before an external replace gets here
+    // (`discardUnsavedEdits`, which `useEditorPdpSync` calls first); anything else the note editor
+    // had not applied yet is overwritten, exactly as the incoming document overwrites the rest of
+    // the chapter.
     if (editingNoteKey.current) closeFootnoteEditorRef.current(false);
     // An external apply never reaches `onUsjChange`, so a pending comment is checked here too.
     discardPendingCommentIfAnchorChanged.current(usj);
@@ -3200,6 +3212,10 @@ function PlatformScriptureEditor({
     const localized = bookNameLocalizedStrings[`%Book.${scrRef.book}%`];
     return localized && !isLocalizeKey(localized) ? localized : scrRef.book;
   }, [bookNameLocalizedStrings, scrRef.book]);
+  // Localized names of the books this editor has shown, for naming a chapter it has since moved off
+  // (the editor keeps showing the chapter it is leaving until the next one loads).
+  const localizedBookNames = useRef(new Map<string, string>());
+  localizedBookNames.current.set(scrRef.book, localizedBookName);
 
   const [usjFromPdpPossiblyError, saveUsjToPdpRaw, isUsjFromPdpLoading] = useProjectData(
     'platformScripture.USJ_Chapter',
@@ -3368,11 +3384,9 @@ function PlatformScriptureEditor({
   const currentlyWritingUsjToPdp = useRef(false);
   // The chapter whose latest edits are waiting behind a write still in flight, if any. Set when a
   // save is held back by that write; cleared when a later write for the same chapter starts, since
-  // that write carries the editor's latest content. Read by `reportEditsHeldBehindWrite` at the
+  // that write carries the editor's latest content. Read by `reportLostEdits` at the
   // moments held edits are lost: leaving the chapter, closing, or being replaced by an update.
-  const chapterWithEditsHeldBehindWrite = useRef<
-    { chapterKey: string; book: string; chapterNum: number } | undefined
-  >(undefined);
+  const chapterWithEditsHeldBehindWrite = useRef<EditsLostInChapter | undefined>(undefined);
   // Which save rejection the user has already been told about. A chapter the backend refuses is
   // refused again on every save for as long as the user keeps typing, so this is what turns that
   // run of identical rejections into one report; a write that completes clears it. Both transitions
@@ -4097,7 +4111,7 @@ function PlatformScriptureEditor({
       // editor stays on this chapter: when the in-flight write's update comes back,
       // `useEditorPdpSync` sends whatever the editor holds by then. It is lost only if the editor
       // leaves the chapter, closes, or is replaced by an update first, which
-      // `reportEditsHeldBehindWrite` warns about. Checked here, ahead of the guard's own identical
+      // `reportLostEdits` warns about. Checked here, ahead of the guard's own identical
       // check, so the held chapter is recorded synchronously: a flush on leaving reads it straight
       // after flushing, before any await.
       if (currentlyWritingUsjToPdp.current) {
@@ -4646,15 +4660,21 @@ function PlatformScriptureEditor({
    * Tells the user that their latest edits in a chapter were not saved, so they can check it and
    * type them again.
    *
+   * @param replacedByUpdate Whether a change made outside the editor replaced them, which the
+   *   notice then names as the reason
    * @param routeToThisEditor Whether to show it in the window holding this editor. False when the
    *   editor is closing, since a notice routed to it might never be shown.
    */
-  const notifyHeldEditsLost = useCallback(
-    (book: string, chapterNum: number, routeToThisEditor: boolean) =>
+  const notifyLostEdits = useCallback(
+    (book: string, chapterNum: number, replacedByUpdate: boolean, routeToThisEditor: boolean) =>
       papi.notifications
         .send({
           message: formatReplacementString(
-            localizedStrings['%webView_platformScriptureEditor_error_heldEditsLost_format%'],
+            localizedStrings[
+              replacedByUpdate
+                ? '%webView_platformScriptureEditor_error_editsReplacedByUpdate_format%'
+                : '%webView_platformScriptureEditor_error_heldEditsLost_format%'
+            ],
             { projectName, book, chapter: chapterNum },
           ),
           severity: 'error',
@@ -4665,35 +4685,51 @@ function PlatformScriptureEditor({
         }),
     [localizedStrings, projectName, webViewId],
   );
-  // Behind a ref so `reportEditsHeldBehindWrite` keeps a stable identity: the chapter-switch flush
-  // runs in the cleanup of an effect that depends on it, so a new identity would flush mid-chapter.
-  const notifyHeldEditsLostRef = useRef(notifyHeldEditsLost);
+  // Behind a ref so `reportLostEdits` keeps a stable identity: the chapter-switch flush runs in the
+  // cleanup of an effect that depends on it, so a new identity would flush mid-chapter.
+  const notifyLostEditsRef = useRef(notifyLostEdits);
   useEffect(() => {
-    notifyHeldEditsLostRef.current = notifyHeldEditsLost;
-  }, [notifyHeldEditsLost]);
+    notifyLostEditsRef.current = notifyLostEdits;
+  }, [notifyLostEdits]);
 
   /**
-   * Warns and notifies the user, once, that edits held behind an in-flight write
-   * (`chapterWithEditsHeldBehindWrite`) are lost. The push-back that would have sent them runs only
-   * when that write's update reaches an editor still showing the chapter and still holding them, so
-   * they are lost when the editor leaves the chapter, closes, or is replaced by an incoming update
-   * first. Call it straight after flushing the pending save, so a flush the in-flight write holds
-   * back is counted.
+   * Warns and notifies the user, once, that their latest edits in a chapter were lost:
    *
-   * TODO(PT-5043): send the held edits instead of losing them.
+   * - Edits held behind an in-flight write (`chapterWithEditsHeldBehindWrite`). The push-back that
+   *   would have sent them runs only when that write's update reaches an editor still showing the
+   *   chapter and still holding them, so they are lost when the editor leaves the chapter, closes,
+   *   or is replaced by an incoming update first. Call this straight after flushing the pending
+   *   save, so a flush the in-flight write holds back is counted.
+   * - Edits whose save had not started, thrown away by `discardUnsavedEdits` (`discardedIn`).
+   *
+   * TODO(PT-5043): send the held edits instead of losing them when the editor leaves the chapter or
+   * closes.
+   *
+   * @param cause What took the edits away
+   * @param discardedIn The chapter whose not-yet-started save was just thrown away, if any
    */
-  const reportEditsHeldBehindWrite = useCallback(
-    (cause: 'leftChapter' | 'editorClosed' | 'replacedByUpdate') => {
+  const reportLostEdits = useCallback(
+    (
+      cause: 'leftChapter' | 'editorClosed' | 'replacedByUpdate',
+      discardedIn?: EditsLostInChapter,
+    ) => {
       const held = chapterWithEditsHeldBehindWrite.current;
-      if (!held) return;
+      const lost = held ?? discardedIn;
+      if (!lost) return;
       chapterWithEditsHeldBehindWrite.current = undefined;
       const what = {
-        leftChapter: `Left ${held.chapterKey} while a save of it was still in progress`,
-        editorClosed: `The editor closed while a save of ${held.chapterKey} was still in progress`,
-        replacedByUpdate: `An update to ${held.chapterKey} replaced the editor's content while a save of it was still in progress`,
+        leftChapter: `Left ${lost.chapterKey}`,
+        editorClosed: `The editor closed on ${lost.chapterKey}`,
+        replacedByUpdate: `A change made outside the editor replaced ${lost.chapterKey}`,
       }[cause];
-      logger.warn(`${what}: edits made after that save started were not saved`);
-      notifyHeldEditsLostRef.current(held.book, held.chapterNum, cause !== 'editorClosed');
+      const why = held ? 'a save of it was still in progress' : 'their save had not started';
+      logger.warn(`${what} before its latest edits were saved (${why}); those edits are lost`);
+      notifyLostEditsRef.current(
+        lost.book,
+        lost.chapterNum,
+        cause === 'replacedByUpdate',
+        cause !== 'editorClosed',
+      );
     },
     [],
   );
@@ -4714,20 +4750,25 @@ function PlatformScriptureEditor({
   useEffect(() => {
     return () => {
       saveUsjToPdpDebounced.flush();
-      reportEditsHeldBehindWrite('leftChapter');
+      reportLostEdits('leftChapter');
     };
   }, [
     saveUsjToPdpDebounced,
-    reportEditsHeldBehindWrite,
+    reportLostEdits,
     scrRef.book,
     scrRef.chapterNum,
     scrRef.versificationStr,
   ]);
 
-  // (2) Focus loss / page teardown: best-effort flush on window blur and pagehide/beforeunload.
-  // The underlying save is async (a papi network send); on teardown paths there is no guarantee
-  // the send completes before the renderer dies — this is deliberately best-effort, matching the
-  // reliability of any async work in these events. On plain blur the send proceeds normally.
+  // (2) Focus loss / page teardown: best-effort flush on window blur, on focus leaving the editor
+  // for something else in this web view, and on pagehide/beforeunload. Each of these ends the
+  // editor's claim on the chapter (see `useEditorPdpSync`), and an incoming chapter the editor has
+  // no claim on throws away edits still waiting to be saved, so they are sent at once rather than
+  // when the debounce would fire. A save already in flight still holds the flushed one back, as
+  // anywhere else. The underlying save is async (a papi network send); on teardown paths there is
+  // no guarantee the send completes before the renderer dies — this is deliberately best-effort,
+  // matching the reliability of any async work in these events. On plain blur the send proceeds
+  // normally.
   //
   // Held edits are reported on `pagehide`, which fires when the editor closes, reloads, or the app
   // quits, and runs after `beforeunload` and before the unmount's chapter-switch cleanup.
@@ -4741,7 +4782,7 @@ function PlatformScriptureEditor({
     };
     const flushOnPageHide = () => {
       flush();
-      reportEditsHeldBehindWrite('editorClosed');
+      reportLostEdits('editorClosed');
     };
     const flushOnBlur = () => {
       // A FOCUSED marker palette is an overlay OUTSIDE this iframe, so opening one blurs this
@@ -4753,36 +4794,54 @@ function PlatformScriptureEditor({
       if (paletteSession.current !== undefined) return;
       flush();
     };
+    // Focus moving to a toolbar or another control in this web view leaves the window focused, so
+    // `blur` does not fire, but the editor no longer has focus and so no longer claims the chapter.
+    const flushOnLeavingEditor = (event: FocusEvent) => {
+      if (isFocusLeavingContainer(editorContainerRef.current, event.target, event.relatedTarget))
+        flushOnBlur();
+    };
     window.addEventListener('blur', flushOnBlur);
+    window.addEventListener('focusout', flushOnLeavingEditor);
     window.addEventListener('pagehide', flushOnPageHide);
     window.addEventListener('beforeunload', flush);
     return () => {
       window.removeEventListener('blur', flushOnBlur);
+      window.removeEventListener('focusout', flushOnLeavingEditor);
       window.removeEventListener('pagehide', flushOnPageHide);
       window.removeEventListener('beforeunload', flush);
     };
-  }, [saveUsjToPdpDebounced, reportEditsHeldBehindWrite]);
+  }, [saveUsjToPdpDebounced, reportLostEdits]);
 
   /**
-   * (3) External replace: fires the pending debounced save, if one is pending, and returns that
-   * invocation's promise (`undefined` when nothing was pending). Passed to `useEditorPdpSync`,
-   * whose replace path calls it just before an external PDP update overwrites the editor — so
-   * recent keystrokes still inside the trailing window are written through the normal save pipeline
-   * instead of being silently discarded (see the "recent typing wins" comment there). Stable
-   * identity (reads only the stable debouncer) so it never re-triggers the sync effect.
+   * (3) External replace: throws away edits the editor has not saved, and reports them, just before
+   * an incoming chapter the editor has no claim on replaces it. Passed to `useEditorPdpSync`, whose
+   * replace path explains why the incoming chapter wins. The edits are named after the chapter the
+   * editor holds, which is the one they were typed in. Stable identity, so it never re-triggers the
+   * sync effect.
    */
-  const flushPendingDebouncedSave = useCallback(
-    () =>
-      flushRowEditsThenSave(
+  const discardUnsavedEdits = useCallback(
+    (cause: 'replacedByUpdate' | 'leftChapter') => {
+      const discarded = discardRowEditsAndPendingSave(
         paneEditingIndexRef.current !== undefined ? paneNoteEditorRef.current : undefined,
         saveUsjToPdpDebounced,
-      ),
-    [saveUsjToPdpDebounced],
-  );
-
-  const reportHeldEditsReplaced = useCallback(
-    () => reportEditsHeldBehindWrite('replacedByUpdate'),
-    [reportEditsHeldBehindWrite],
+      );
+      const editorDocument = editorDocumentSelector.current;
+      reportLostEdits(
+        cause,
+        discarded && editorDocument
+          ? {
+              chapterKey: getChapterKey(
+                editorDocument.book,
+                editorDocument.chapterNum,
+                editorDocument.versificationStr,
+              ),
+              book: localizedBookNames.current.get(editorDocument.book) ?? editorDocument.book,
+              chapterNum: editorDocument.chapterNum,
+            }
+          : undefined,
+      );
+    },
+    [saveUsjToPdpDebounced, reportLostEdits],
   );
 
   const handleEditorialUsjChange = useCallback(
@@ -5034,8 +5093,7 @@ function PlatformScriptureEditor({
     usjSentToPdp,
     setEditorUsj,
     saveUsjToPdpIfUpdated,
-    flushPendingDebouncedSave,
-    reportHeldEditsReplaced,
+    discardUnsavedEdits,
     isEditingSessionActive,
     isFootnotesPaneOwner,
     lastLocalEditTimestamp,
