@@ -18,7 +18,7 @@ function mountEditorRoot() {
 
   const editorSaw = vi.fn();
   const applicationSaw = vi.fn();
-  ['keydown', 'beforeinput', 'paste', 'cut', 'drop'].forEach((type) => {
+  ['keydown', 'beforeinput', 'paste', 'cut', 'drop', 'contextmenu'].forEach((type) => {
     root.addEventListener(type, (event) => editorSaw(event.type));
     document.addEventListener(type, (event) => applicationSaw(event.type));
   });
@@ -74,6 +74,15 @@ describe('usePauseEditing', () => {
     ['going to the line end', 'End', {}],
     ['paging down', 'PageDown', {}],
     ['selecting everything', 'a', { ctrlKey: true }],
+    // The editor takes the paste chords itself and reads the clipboard, which raises no `paste`
+    // event, so only the chord can be held off.
+    ['pasting', 'v', { ctrlKey: true }],
+    ['pasting as plain text', 'V', { ctrlKey: true, shiftKey: true }],
+    ['pasting on macOS', 'v', { metaKey: true }],
+    ['pasting as plain text on macOS', 'V', { metaKey: true, shiftKey: true }],
+    // The editor takes the cut chord itself and dispatches its cut command, with no `cut` event.
+    ['cutting', 'x', { ctrlKey: true }],
+    ['cutting on macOS', 'x', { metaKey: true }],
   ])('holds off %s while paused', (_label, key, init) => {
     pause();
     const event = press(key, init);
@@ -81,14 +90,37 @@ describe('usePauseEditing', () => {
     expect(editor.editorSaw).not.toHaveBeenCalled();
   });
 
-  it.each(['beforeinput', 'paste', 'cut', 'drop'])('holds off %s while paused', (type) => {
+  it.each(['beforeinput', 'paste', 'cut', 'drop', 'contextmenu'])(
+    'holds off %s while paused',
+    (type) => {
+      pause();
+      expect(fire(type).defaultPrevented).toBe(true);
+      expect(editor.editorSaw).not.toHaveBeenCalled();
+    },
+  );
+
+  // The editor's right-click menu opens from a `contextmenu` listener on its root and runs its Cut
+  // and Paste as editor commands, which raise no `cut` or `paste` event; so the menu is kept shut.
+  it("opens neither the editor's right-click menu nor the browser's while paused", () => {
+    const word = document.createElement('span');
+    editor.root.appendChild(word);
+    const editorCapturing = vi.fn();
+    editor.root.addEventListener('contextmenu', editorCapturing, true);
     pause();
-    expect(fire(type).defaultPrevented).toBe(true);
+
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    word.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(editorCapturing).not.toHaveBeenCalled();
     expect(editor.editorSaw).not.toHaveBeenCalled();
   });
 
   it.each([
     ['copying', 'c', { ctrlKey: true }],
+    ['a Ctrl+Shift+X chord, which is not a cut', 'X', { ctrlKey: true, shiftKey: true }],
+    ['a Ctrl+Alt+X chord, which is not a cut', 'x', { ctrlKey: true, altKey: true }],
+    ['a Ctrl+Alt+V chord, which is not a paste', 'v', { ctrlKey: true, altKey: true }],
     ['an application shortcut', 'f', { ctrlKey: true }],
     ['a function key', 'F8', {}],
     ['an Alt chord', 'd', { altKey: true }],
@@ -115,8 +147,10 @@ describe('usePauseEditing', () => {
     pause(false);
     expect(press('a').defaultPrevented).toBe(false);
     expect(fire('beforeinput').defaultPrevented).toBe(false);
+    expect(fire('contextmenu').defaultPrevented).toBe(false);
     expect(editor.editorSaw).toHaveBeenCalledWith('keydown');
     expect(editor.editorSaw).toHaveBeenCalledWith('beforeinput');
+    expect(editor.editorSaw).toHaveBeenCalledWith('contextmenu');
   });
 
   it('lets edits through again once the pause ends', () => {
